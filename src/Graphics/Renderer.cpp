@@ -554,7 +554,7 @@ namespace EmEn::Graphics
 		/* NOTE: Create the main descriptor pool. */
 		{
 			// TODO: Sizes management is maybe in the wrong place !
-			const auto sizes = std::vector< VkDescriptorPoolSize >{
+			auto sizes = std::vector< VkDescriptorPoolSize >{
 				/* NOTE: Texture filtering alone. */
 				{VK_DESCRIPTOR_TYPE_SAMPLER, 16},
 				/* NOTE: Texture (that can be sampled). */
@@ -581,8 +581,6 @@ namespace EmEn::Graphics
 				// TODO: Check to enable this for re-usable UBO between render calls.
 				//{VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK, 512},
 				/* NOTE:  */
-				{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 16},
-				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 0},
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM, 0},
@@ -591,6 +589,11 @@ namespace EmEn::Graphics
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_MUTABLE_EXT, 0}
 			};
+
+			if ( m_device->rayTracingEnabled() )
+			{
+				sizes.emplace_back(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 16);
+			}
 
 			m_descriptorPool = std::make_shared< DescriptorPool >(m_device, sizes, 4096, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 			m_descriptorPool->setIdentifier(ClassId, "Main", "DescriptorPool");

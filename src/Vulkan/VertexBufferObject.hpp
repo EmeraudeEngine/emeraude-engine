@@ -53,19 +53,7 @@ namespace EmEn::Vulkan
 			 * @param vertexElementCount The number of sub-elements that composes one vertex.
 			 * @param hostVisible Defines if the VBO must be host visible.
 			 */
-			VertexBufferObject (const std::shared_ptr< Device > & device, uint32_t vertexCount, uint32_t vertexElementCount, bool hostVisible) noexcept
-				: Buffer{
-					device,
-					0,
-					vertexCount * vertexElementCount * sizeof(float),
-					VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-					hostVisible
-				},
-				m_vertexCount{vertexCount},
-				m_vertexElementCount{vertexElementCount}
-			{
-
-			}
+			VertexBufferObject (const std::shared_ptr< Device > & device, uint32_t vertexCount, uint32_t vertexElementCount, bool hostVisible) noexcept;
 
 			/**
 			 * @brief Returns the number of vertices in the buffer.

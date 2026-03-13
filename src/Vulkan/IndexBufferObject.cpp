@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/IndexBufferObject.hpp
+ * src/Vulkan/IndexBufferObject.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,45 +24,23 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#pragma once
+#include "IndexBufferObject.hpp"
 
-/* STL inclusions. */
-#include <cstdint>
-#include <memory>
-
-/* Local inclusions for inheritances. */
-#include "Buffer.hpp"
+/* Local inclusions. */
+#include "Device.hpp"
 
 namespace EmEn::Vulkan
 {
-	/**
-	 * @brief Defines a convenient way to build an index buffer object (IBO).
-	 * @extends EmEn::Vulkan::Buffer This is a buffer.
-	 */
-	class IndexBufferObject final : public Buffer
+	IndexBufferObject::IndexBufferObject (const std::shared_ptr< Device > & device, uint32_t indexCount) noexcept
+		: Buffer{
+			device,
+			0,
+			indexCount * sizeof(uint32_t),
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | (device->rayTracingEnabled() ? (VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR) : 0U),
+			false
+		},
+		m_indexCount{indexCount}
 	{
-		public:
 
-			/**
-			 * @brief Constructs an index buffer object (IBO).
-			 * @param device A reference to the device smart pointer.
-			 * @param indexCount The number of indices the buffer will hold
-			 */
-			IndexBufferObject (const std::shared_ptr< Device > & device, uint32_t indexCount) noexcept;
-
-			/**
-			 * @brief Returns the number of indices in this buffer.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			indexCount () const noexcept
-			{
-				return m_indexCount;
-			}
-
-		private:
-
-			uint32_t m_indexCount;
-	};
+	}
 }

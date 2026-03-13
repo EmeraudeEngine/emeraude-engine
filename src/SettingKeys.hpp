@@ -247,7 +247,7 @@ namespace EmEn
 
 			/* Ray Tracing */
 			constexpr auto GraphicsRayTracingEnabledKey{"Core/Graphics/RayTracing/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingEnabled{true};
+			constexpr auto DefaultGraphicsRayTracingEnabled{false};
 			constexpr auto GraphicsRayTracingEnableReflectionKey{"Core/Graphics/RayTracing/EnableReflection"};
 			constexpr auto DefaultGraphicsRayTracingEnableReflection{true};
 			constexpr auto GraphicsRayTracingEnableAmbientOcclusionKey{"Core/Graphics/RayTracing/EnableAmbientOcclusion"};
