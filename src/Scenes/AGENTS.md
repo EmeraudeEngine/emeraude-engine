@@ -158,7 +158,7 @@ ctest -R Scenes
 - `Scene.hpp` - Scene class declaration (~2260 lines), organized by concept
 - `Scene.cpp` - Core lifecycle, audio, octree management
 - `Scene.entities.cpp` - Node tree, static entities, modifiers
-- `Scene.physics.cpp` - Collision detection, boundary clipping
+- `Scene.physics.cpp` - Collision detection, boundary clipping, sleep/wake collision. See [`@Physics/AGENTS.md`](../Physics/AGENTS.md) for normal convention
 - `Scene.rendering.cpp` - Render targets, shadow casting, rendering pipeline
 - `Node.cpp/.hpp` - Hierarchical dynamic entity (tree)
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)
@@ -397,8 +397,11 @@ The debug system visualizes all collision model types with appropriate transform
 
 - **Point**: Identity transform (axis gizmo used)
 - **Sphere**: Uniform scaling by diameter
-- **AABB**: Translation to centroid + scaling by dimensions
+- **AABB**: World-space axis-aligned box (always aligned to scene axes, not entity rotation)
 - **Capsule**: Translation to center + scaling (diameter, height, diameter)
+
+**AABB debug shows the world AABB**, not the local one. For rotated entities, the world AABB
+is larger than the geometry. The instance transform uses `inverseEntityMatrix * translation(worldAABBCentroid) * scaling(worldAABBDims)` to counter-rotate the debug mesh so it remains axis-aligned in world space.
 
 See: `AbstractEntity.debug.cpp:enableVisualDebug()`, `AbstractEntity.debug.cpp:updateVisualDebug()`
 

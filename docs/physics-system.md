@@ -152,7 +152,9 @@ For each movable entity in the physics octree:
 
 ```
 1. Iterate octree leaf sectors
-   → For each movable pair in same sector
+   → Skip non-movable entities
+   → Skip pairs where BOTH entities are simulation-paused (sleep optimization)
+   → Active-vs-paused pairs ARE tested (paused nodes are still solid)
 
 2. Detect collisions:
    → detectCollisionMovableToMovable() creates ContactManifolds
@@ -168,6 +170,39 @@ For each movable entity in the physics octree:
    → Impulse resolution may push entities outside boundaries
    → clipInsideBoundaries() for all involved entities
 ```
+
+### Node Sleep/Wake System
+
+Nodes at rest are automatically paused by `checkSimulationInertia()` to avoid unnecessary
+collision testing (critical for scenes with many settled objects, e.g., ball pits).
+
+**Sleep rules:**
+- A Node is paused when its velocity drops below threshold for long enough
+- **Paused ≠ non-collidable.** Paused nodes are still solid bodies in the physics octree
+- Phase 2 only skips pairs where **both** entities are paused
+- An active entity (with velocity) always tests against paused nodes
+
+**Wake rules:**
+- Collision impulses call `addForce()` → `pauseSimulation(false)` → Node wakes up
+- A sleeping cube hit by a moving player wakes up and receives the impulse normally
+
+### Collision Normal Convention
+
+`isCollidingWith(frameA, modelB, frameB)` returns:
+- `m_MTV`: direction to push **A out of B** (separation vector for A)
+- `m_impactNormal`: normalized MTV (points from B toward A)
+
+The `ConstraintSolver` uses the convention `relativeVelocity = velocityB - velocityA` and
+expects normals pointing **from A toward B**. Therefore, all collision detection functions
+**negate** the normal before passing it to `ContactManifold::addContact()`.
+
+```
+isCollidingWith() normal:  B ──→ A  (push A away)
+Solver convention normal:  A ──→ B  (from first body toward second)
+Fix: manifold.addContact(contact, -impactNormal, depth)
+```
+
+See: `Physics/AGENTS.md` → "Critical: Collision Normal Convention" for bug pattern details.
 
 ### Key Implementation Details
 

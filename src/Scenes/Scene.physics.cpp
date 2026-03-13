@@ -222,11 +222,13 @@ namespace EmEn::Scenes
 			{
 				const auto & entityA = *elementIt;
 
-				/* Skip non-movable or paused entities. */
-				if ( !entityA->hasMovableAbility() || entityA->isSimulationPaused() )
+				/* Skip non-movable entities. */
+				if ( !entityA->hasMovableAbility() )
 				{
 					continue;
 				}
+
+				const bool entityAPaused = entityA->isSimulationPaused();
 
 				auto elementItCopy = elementIt;
 
@@ -234,8 +236,10 @@ namespace EmEn::Scenes
 				{
 					const auto & entityB = *elementItCopy;
 
-					/* Skip non-movable or paused entities. */
-					if ( !entityB->hasMovableAbility() || entityB->isSimulationPaused() )
+					/* Skip non-movable entities, or pairs where both are paused
+					 * (two sleeping bodies don't need collision testing).
+					 * An active entity must still collide with paused ones. */
+					if ( !entityB->hasMovableAbility() || (entityAPaused && entityB->isSimulationPaused()) )
 					{
 						continue;
 					}

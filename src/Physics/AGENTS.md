@@ -64,10 +64,17 @@ The Node is the active subject; other entities are parameters influencing the co
 
 **Phase 2: Dynamic Collisions** (Node ↔ Node)
 1. Iterate octree leaf sectors
-2. Test movable pairs via `detectCollisionMovableToMovable()`
-3. Collect ContactManifolds
-4. Resolve via `ConstraintSolver::solve()` (Sequential Impulse)
-5. Re-clip involved entities to boundaries
+2. Skip non-movable entities; skip pairs where **both** are simulation-paused
+3. Test movable pairs via `detectCollisionMovableToMovable()`
+4. Collect ContactManifolds
+5. Resolve via `ConstraintSolver::solve()` (Sequential Impulse)
+6. Re-clip involved entities to boundaries
+
+**Sleep/Wake behavior:** Nodes at rest are paused by `checkSimulationInertia()`. A paused
+Node is still a solid body — active entities (with velocity) collide against it normally.
+Only pairs where both are paused are skipped (optimization for scenes with many resting
+objects, e.g., settled balls). When a collision impulse is applied, `addForce()` resumes
+simulation automatically via `pauseSimulation(false)`.
 
 See: `Scene.physics.cpp:simulatePhysics()`
 
@@ -93,6 +100,52 @@ ctest -R Physics
 - `Particle.hpp/.cpp` - Physics particle with velocity, lifetime, and modifier integration
 - `@docs/physics-system.md` - Detailed architecture
 - `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
+
+## Critical: Collision Normal Convention
+
+> [!CRITICAL]
+> **`isCollidingWith()` returns `m_impactNormal` pointing from B toward A** (direction to push A out of B).
+> **`m_MTV`** follows the same convention (Minimum Translation Vector to separate A from B).
+>
+> The `ConstraintSolver` expects normals **from A toward B** (standard physics convention:
+> `relativeVelocity = velocityB - velocityA`, separating impulse when `Vn < 0`).
+>
+> **Consequence:** All code passing normals to `ContactManifold::addContact()` must **negate** the normal.
+>
+> | Function | Normal passed to manifold | Why |
+> |----------|---------------------------|-----|
+> | `detectCollisionMovableToMovable()` | `-results.m_impactNormal` | Solver expects A→B |
+> | `detectCollisionMovableToStatic()` | `-results.m_impactNormal` | Same convention |
+> | `accumulateStaticEntityCorrections()` | `-results.m_impactNormal` (as `dominantNormal`) | For velocity bounce |
+>
+> **Bug pattern (fixed Mar 2026):**
+> ```cpp
+> // BROKEN - normal points B→A, solver pushes A INTO B (attraction loop)
+> manifold.addContact(results.m_contact, results.m_impactNormal, results.m_depth);
+>
+> // CORRECT - negate to get A→B convention
+> manifold.addContact(results.m_contact, -results.m_impactNormal, results.m_depth);
+> ```
+>
+> **Code references:**
+> - `CollisionDetection.cpp:detectCollisionMovableToMovable()` - Negates normal
+> - `CollisionDetection.cpp:detectCollisionMovableToStatic()` - Negates normal
+> - `Scene.physics.cpp:accumulateStaticEntityCorrections()` - Negates for bounce
+> - `Libs/Math/Space3D/Collisions/SamePrimitive.hpp:isColliding(AACuboid, AACuboid)` - MTV pushes A out of B
+
+## Critical: AABB World Transform with OrientedCuboid
+
+> [!CRITICAL]
+> **`AABBCollisionModel::getAABB(worldFrame)` must handle rotation and scale, not just translation.**
+>
+> Rotated entities need their local AABB transformed through the full model matrix.
+> `OrientedCuboid` transforms all 8 corners, then `getAxisAlignedBox()` rebuilds the
+> world-space axis-aligned bounding box from the transformed corners.
+>
+> **Code references:**
+> - `AABBCollisionModel.hpp:getAABB()` - Uses `OrientedCuboid` for full transform
+> - `Libs/Math/OrientedCuboid.hpp:getAxisAlignedBox()` - Rebuilds AABB from transformed corners
+> - `Scenes/AbstractEntity.debug.cpp` - Visual debug uses inverse entity matrix to show world AABB
 
 ## Development Patterns
 

@@ -73,8 +73,11 @@ namespace EmEn::Physics
 		/* Create contact manifold for both movable bodies. */
 		ContactManifold manifold{movableA, movableB};
 
-		/* Add contact from collision results. */
-		manifold.addContact(results.m_contact, results.m_impactNormal, results.m_depth);
+		/* Add contact from collision results.
+		 * NOTE: isCollidingWith() returns m_impactNormal pointing from B toward A
+		 * (the direction to push A out of B). The solver convention expects the
+		 * normal pointing from A toward B, so we negate it. */
+		manifold.addContact(results.m_contact, -results.m_impactNormal, results.m_depth);
 
 		/* Add manifold to output vector. */
 		outManifolds.push_back(manifold);
