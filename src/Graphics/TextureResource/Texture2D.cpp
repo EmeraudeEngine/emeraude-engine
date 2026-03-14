@@ -32,6 +32,7 @@
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
 
 namespace EmEn::Graphics::TextureResource
@@ -81,14 +82,34 @@ namespace EmEn::Graphics::TextureResource
 
 		if ( useBC7 )
 		{
-			/* BC7 compressed path: compress on CPU, upload all mip levels. */
+			/* BC7 compressed path: try disk cache first, compress on CPU if miss. */
 			TextureCompressor::initialize();
 
-			auto compressedMips = TextureCompressor::compress(
-				m_localData->data(),
-				mipLevels,
-				*renderer.primaryServices().threadPool()
-			);
+			auto & fileSystem = renderer.primaryServices().fileSystem();
+			TextureCache::initialize(fileSystem.cacheDirectory());
+
+			/* Compute source file identity for cache invalidation. */
+			const auto sourceFileSize = static_cast< uint64_t >(m_localData->data().bytes());
+			const auto sourceModTime = static_cast< uint64_t >(m_localData->data().width()) * 1000000ULL
+				+ static_cast< uint64_t >(m_localData->data().height());
+
+			/* Try loading from disk cache. */
+			auto compressedMips = TextureCache::tryLoad(this->name(), sourceFileSize, sourceModTime);
+
+			if ( compressedMips.empty() )
+			{
+				/* Cache miss: compress and store. */
+				compressedMips = TextureCompressor::compress(
+					m_localData->data(),
+					mipLevels,
+					*renderer.primaryServices().threadPool()
+				);
+
+				if ( !compressedMips.empty() )
+				{
+					[[maybe_unused]] const auto cached = TextureCache::store(this->name(), sourceFileSize, sourceModTime, compressedMips);
+				}
+			}
 
 			if ( !compressedMips.empty() )
 			{
