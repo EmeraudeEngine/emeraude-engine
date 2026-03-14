@@ -29,3 +29,6 @@
 	path = dependencies/renderdoc
 	url = https://github.com/baldurk/renderdoc.git
 	branch = v1.x
+[submodule "dependencies/bc7enc_rdo"]
+	path = dependencies/bc7enc_rdo
+	url = https://github.com/richgel999/bc7enc_rdo.git
