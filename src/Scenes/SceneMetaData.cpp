@@ -80,7 +80,7 @@ namespace EmEn::Scenes
 		m_meshMetaDataSSBOs.clear();
 		m_materialDataSSBOs.clear();
 		m_TLAS.reset();
-		m_retiredTLAS.clear();
+		m_retiredRequests.clear();
 		m_accelerationStructureBuilder.reset();
 	}
 
@@ -390,7 +390,7 @@ namespace EmEn::Scenes
 		{
 			m_pendingTLASBuild.reset();
 			m_TLAS.reset();
-			m_retiredTLAS.clear();
+			m_retiredRequests.clear();
 			m_instanceCount = 0;
 			m_materialCount = 0;
 
@@ -424,16 +424,11 @@ namespace EmEn::Scenes
 		m_instanceCount = meshEntries.size();
 		m_materialCount = materialEntries.size();
 
-		/* --- Retire current TLAS and prepare the new one (deferred GPU build) --- */
-		if ( m_TLAS != nullptr )
+		/* Keep at most 3 retired requests (covers typical 2-3 frames-in-flight).
+		 * Each request owns instance/scratch buffers still referenced by in-flight command buffers. */
+		while ( m_retiredRequests.size() > 3 )
 		{
-			m_retiredTLAS.emplace_back(std::move(m_TLAS));
-		}
-
-		/* Keep at most 3 retired TLAS (covers typical 2-3 frames-in-flight). */
-		while ( m_retiredTLAS.size() > 3 )
-		{
-			m_retiredTLAS.pop_front();
+			m_retiredRequests.pop_front();
 		}
 
 		/* Prepare the TLAS build (CPU-side only). The GPU build commands will be
@@ -451,8 +446,11 @@ namespace EmEn::Scenes
 
 		m_accelerationStructureBuilder->recordTLASBuild(cmdBuf, *m_pendingTLASBuild);
 
-		/* Transfer ownership of the built TLAS. */
+		/* Swap the old TLAS into the retiring request so it stays alive alongside
+		 * the instance/scratch buffers while in-flight command buffers reference them. */
+		auto oldTLAS = std::move(m_TLAS);
 		m_TLAS = std::move(m_pendingTLASBuild->tlas);
-		m_pendingTLASBuild.reset();
+		m_pendingTLASBuild->tlas = std::move(oldTLAS);
+		m_retiredRequests.emplace_back(std::move(m_pendingTLASBuild));
 	}
 }

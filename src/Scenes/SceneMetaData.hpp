@@ -231,8 +231,9 @@ namespace EmEn::Scenes
 			std::unique_ptr< Vulkan::AccelerationStructure > m_TLAS;
 			/** @brief Pending TLAS build request (prepared by rebuild, consumed by recordTLASBuild). */
 			std::unique_ptr< Vulkan::TLASBuildRequest > m_pendingTLASBuild;
-			/** @brief Retired TLAS objects kept alive until frames-in-flight have completed. */
-			std::deque< std::unique_ptr< Vulkan::AccelerationStructure > > m_retiredTLAS;
+			/** @brief Retired TLAS build requests kept alive until frames-in-flight have completed.
+			 * @note The requests own the instance/scratch buffers referenced by in-flight command buffers. */
+			std::deque< std::unique_ptr< Vulkan::TLASBuildRequest > > m_retiredRequests;
 			/** @brief Per-frame mesh metadata SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_meshMetaDataSSBOs;
 			/** @brief Per-frame material data SSBOs (one per frame-in-flight). */

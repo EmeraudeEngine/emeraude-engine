@@ -48,8 +48,6 @@ namespace EmEn::Vulkan
 
 	AccelerationStructureBuilder::~AccelerationStructureBuilder () noexcept
 	{
-		m_tlasScratchBuffer.reset();
-		m_tlasInstanceBuffer.reset();
 		m_commandBuffer.reset();
 		m_fence.reset();
 		m_commandPool.reset();
@@ -411,28 +409,19 @@ namespace EmEn::Vulkan
 			vkInstances.emplace_back(instance);
 		}
 
-		/* 2. Reuse or grow the persistent instance buffer. */
+		/* 2. Create and upload instance buffer (local, destroyed after synchronous fence wait). */
 		const auto instanceBufferSize = static_cast< VkDeviceSize >(vkInstances.size() * sizeof(VkAccelerationStructureInstanceKHR));
 
-		if ( instanceBufferSize > m_tlasInstanceBufferCapacity )
+		Buffer instanceBuffer{m_device, 0, instanceBufferSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true};
+
+		if ( !instanceBuffer.createOnHardware() )
 		{
-			m_tlasInstanceBuffer.reset();
-			m_tlasInstanceBuffer = std::make_unique< Buffer >(m_device, 0, instanceBufferSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true);
+			Tracer::error(ClassId, "Unable to create TLAS instance buffer !");
 
-			if ( !m_tlasInstanceBuffer->createOnHardware() )
-			{
-				Tracer::error(ClassId, "Unable to create TLAS instance buffer !");
-
-				m_tlasInstanceBuffer.reset();
-				m_tlasInstanceBufferCapacity = 0;
-
-				return nullptr;
-			}
-
-			m_tlasInstanceBufferCapacity = instanceBufferSize;
+			return nullptr;
 		}
 
-		if ( !m_tlasInstanceBuffer->writeData(MemoryRegion{vkInstances.data(), instanceBufferSize}) )
+		if ( !instanceBuffer.writeData(MemoryRegion{vkInstances.data(), instanceBufferSize}) )
 		{
 			Tracer::error(ClassId, "Unable to write TLAS instance data !");
 
@@ -441,7 +430,7 @@ namespace EmEn::Vulkan
 
 		VkBufferDeviceAddressInfo instanceAddressInfo{};
 		instanceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		instanceAddressInfo.buffer = m_tlasInstanceBuffer->handle();
+		instanceAddressInfo.buffer = instanceBuffer.handle();
 		const auto instanceAddress = m_fpGetBufferDeviceAddress(deviceHandle, &instanceAddressInfo);
 
 		/* 3. Describe the instances geometry. */
@@ -485,31 +474,22 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		/* 6. Reuse or grow the persistent scratch buffer. */
+		/* 6. Create scratch buffer (local, destroyed after synchronous fence wait). */
 		constexpr VkDeviceSize ScratchAlignment = 256;
 		const auto scratchAllocSize = buildSizesInfo.buildScratchSize + ScratchAlignment;
 
-		if ( scratchAllocSize > m_tlasScratchBufferCapacity )
+		Buffer scratchBuffer{m_device, 0, scratchAllocSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, false};
+
+		if ( !scratchBuffer.createOnHardware() )
 		{
-			m_tlasScratchBuffer.reset();
-			m_tlasScratchBuffer = std::make_unique< Buffer >(m_device, 0, scratchAllocSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, false);
+			Tracer::error(ClassId, "Unable to create TLAS scratch buffer !");
 
-			if ( !m_tlasScratchBuffer->createOnHardware() )
-			{
-				Tracer::error(ClassId, "Unable to create TLAS scratch buffer !");
-
-				m_tlasScratchBuffer.reset();
-				m_tlasScratchBufferCapacity = 0;
-
-				return nullptr;
-			}
-
-			m_tlasScratchBufferCapacity = scratchAllocSize;
+			return nullptr;
 		}
 
 		VkBufferDeviceAddressInfo scratchAddressInfo{};
 		scratchAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		scratchAddressInfo.buffer = m_tlasScratchBuffer->handle();
+		scratchAddressInfo.buffer = scratchBuffer.handle();
 		const auto scratchAddress = m_fpGetBufferDeviceAddress(deviceHandle, &scratchAddressInfo);
 		const auto alignedScratchAddress = (scratchAddress + ScratchAlignment - 1) & ~(ScratchAlignment - 1);
 
@@ -576,28 +556,19 @@ namespace EmEn::Vulkan
 			vkInstances.emplace_back(instance);
 		}
 
-		/* 2. Reuse or grow the persistent instance buffer. */
+		/* 2. Create per-request instance buffer (owned by the request to survive until GPU is done). */
 		const auto instanceBufferSize = static_cast< VkDeviceSize >(vkInstances.size() * sizeof(VkAccelerationStructureInstanceKHR));
 
-		if ( instanceBufferSize > m_tlasInstanceBufferCapacity )
+		auto instanceBuffer = std::make_unique< Buffer >(m_device, 0, instanceBufferSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true);
+
+		if ( !instanceBuffer->createOnHardware() )
 		{
-			m_tlasInstanceBuffer.reset();
-			m_tlasInstanceBuffer = std::make_unique< Buffer >(m_device, 0, instanceBufferSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true);
+			Tracer::error(ClassId, "Unable to create TLAS instance buffer !");
 
-			if ( !m_tlasInstanceBuffer->createOnHardware() )
-			{
-				Tracer::error(ClassId, "Unable to create TLAS instance buffer !");
-
-				m_tlasInstanceBuffer.reset();
-				m_tlasInstanceBufferCapacity = 0;
-
-				return nullptr;
-			}
-
-			m_tlasInstanceBufferCapacity = instanceBufferSize;
+			return nullptr;
 		}
 
-		if ( !m_tlasInstanceBuffer->writeData(MemoryRegion{vkInstances.data(), instanceBufferSize}) )
+		if ( !instanceBuffer->writeData(MemoryRegion{vkInstances.data(), instanceBufferSize}) )
 		{
 			Tracer::error(ClassId, "Unable to write TLAS instance data !");
 
@@ -606,11 +577,12 @@ namespace EmEn::Vulkan
 
 		VkBufferDeviceAddressInfo instanceAddressInfo{};
 		instanceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		instanceAddressInfo.buffer = m_tlasInstanceBuffer->handle();
+		instanceAddressInfo.buffer = instanceBuffer->handle();
 		const auto instanceAddress = m_fpGetBufferDeviceAddress(deviceHandle, &instanceAddressInfo);
 
 		/* 3. Build the request object. Keep structs alive for deferred recording. */
 		auto request = std::make_unique< TLASBuildRequest >();
+		request->instanceBuffer = std::move(instanceBuffer);
 
 		request->instancesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 		request->instancesData.pNext = nullptr;
@@ -649,33 +621,26 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		/* 6. Reuse or grow the persistent scratch buffer. */
+		/* 6. Create per-request scratch buffer (owned by the request to survive until GPU is done). */
 		constexpr VkDeviceSize ScratchAlignment = 256;
 		const auto scratchAllocSize = buildSizesInfo.buildScratchSize + ScratchAlignment;
 
-		if ( scratchAllocSize > m_tlasScratchBufferCapacity )
+		auto scratchBuffer = std::make_unique< Buffer >(m_device, 0, scratchAllocSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, false);
+
+		if ( !scratchBuffer->createOnHardware() )
 		{
-			m_tlasScratchBuffer.reset();
-			m_tlasScratchBuffer = std::make_unique< Buffer >(m_device, 0, scratchAllocSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, false);
+			Tracer::error(ClassId, "Unable to create TLAS scratch buffer !");
 
-			if ( !m_tlasScratchBuffer->createOnHardware() )
-			{
-				Tracer::error(ClassId, "Unable to create TLAS scratch buffer !");
-
-				m_tlasScratchBuffer.reset();
-				m_tlasScratchBufferCapacity = 0;
-
-				return nullptr;
-			}
-
-			m_tlasScratchBufferCapacity = scratchAllocSize;
+			return nullptr;
 		}
 
 		VkBufferDeviceAddressInfo scratchAddressInfo{};
 		scratchAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		scratchAddressInfo.buffer = m_tlasScratchBuffer->handle();
+		scratchAddressInfo.buffer = scratchBuffer->handle();
 		const auto scratchAddress = m_fpGetBufferDeviceAddress(deviceHandle, &scratchAddressInfo);
 		const auto alignedScratchAddress = (scratchAddress + ScratchAlignment - 1) & ~(ScratchAlignment - 1);
+
+		request->scratchBuffer = std::move(scratchBuffer);
 
 		/* 7. Fill build info with the created AS and scratch buffer. */
 		request->buildGeometryInfo.dstAccelerationStructure = request->tlas->handle();
@@ -696,7 +661,10 @@ namespace EmEn::Vulkan
 
 		m_fpCmdBuild(cmdBuf, 1, &request.buildGeometryInfo, &pBuildRangeInfo);
 
-		/* Memory barrier: ensure the TLAS build completes before any ray tracing shader reads. */
+		/* Memory barrier: ensure the TLAS build completes before fragment shaders read it.
+		 * NOTE: The engine uses ray queries (GL_EXT_ray_query) in fragment/compute shaders,
+		 * NOT dedicated ray tracing pipelines. The correct dst stage is FRAGMENT_SHADER,
+		 * not RAY_TRACING_SHADER (which requires VK_KHR_ray_tracing_pipeline). */
 		VkMemoryBarrier memoryBarrier{};
 		memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 		memoryBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
@@ -705,7 +673,7 @@ namespace EmEn::Vulkan
 		vkCmdPipelineBarrier(
 			cmdBuf,
 			VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-			VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			0,
 			1, &memoryBarrier,
 			0, nullptr,

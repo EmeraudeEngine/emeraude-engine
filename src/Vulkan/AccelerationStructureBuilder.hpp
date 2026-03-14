@@ -89,6 +89,9 @@ namespace EmEn::Vulkan
 	struct TLASBuildRequest final
 	{
 		std::unique_ptr< AccelerationStructure > tlas;
+		/** @brief Instance and scratch buffers owned by this request, kept alive until the GPU is done. */
+		std::unique_ptr< Buffer > instanceBuffer;
+		std::unique_ptr< Buffer > scratchBuffer;
 		VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo{};
 		VkAccelerationStructureGeometryKHR asGeometry{};
 		VkAccelerationStructureGeometryInstancesDataKHR instancesData{};
@@ -202,12 +205,6 @@ namespace EmEn::Vulkan
 			std::mutex m_buildAccess;
 			uint32_t m_graphicsFamilyIndex{0};
 			uint32_t m_transferFamilyIndex{0};
-
-			/* Persistent TLAS build buffers (grow-only, reused across frames). */
-			std::unique_ptr< Buffer > m_tlasInstanceBuffer;
-			VkDeviceSize m_tlasInstanceBufferCapacity{0};
-			std::unique_ptr< Buffer > m_tlasScratchBuffer;
-			VkDeviceSize m_tlasScratchBufferCapacity{0};
 
 			/* Extension function pointers. */
 			PFN_vkGetAccelerationStructureBuildSizesKHR m_fpGetBuildSizes{nullptr};
