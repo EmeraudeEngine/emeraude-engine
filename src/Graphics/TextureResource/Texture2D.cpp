@@ -32,6 +32,7 @@
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/TextureCompressor.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -74,25 +75,84 @@ namespace EmEn::Graphics::TextureResource
 			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
-		/* Create a Vulkan image. */
-		m_image = std::make_shared< Vulkan::Image >(
-			renderer.device(),
-			VK_IMAGE_TYPE_2D,
-			Image::getFormat< uint8_t >(m_localData->data().colorCount(), this->isSRGB()),
-			VkExtent3D{m_localData->width(), m_localData->height(), 1U},
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			0,
-			mipLevels
-		);
-		m_image->setIdentifier(ClassId, this->name(), "Image");
+		/* Check if BC7 hardware compression is supported. */
+		const auto useBC7 = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
+		bool imageCreated = false;
 
-		if ( !m_image->create(renderer.transferManager(), m_localData) )
+		if ( useBC7 )
 		{
-			Tracer::error(ClassId, "Unable to create an image !");
+			/* BC7 compressed path: compress on CPU, upload all mip levels. */
+			TextureCompressor::initialize();
 
-			m_image.reset();
+			auto compressedMips = TextureCompressor::compress(
+				m_localData->data(),
+				mipLevels,
+				*renderer.primaryServices().threadPool()
+			);
 
-			return false;
+			if ( !compressedMips.empty() )
+			{
+				const auto bc7Format = this->isSRGB() ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK;
+
+				m_image = std::make_shared< Vulkan::Image >(
+					renderer.device(),
+					VK_IMAGE_TYPE_2D,
+					bc7Format,
+					VkExtent3D{m_localData->width(), m_localData->height(), 1U},
+					VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+					0,
+					static_cast< uint32_t >(compressedMips.size())
+				);
+				m_image->setIdentifier(ClassId, this->name(), "Image");
+
+				/* Build CompressedMip descriptors for the upload. */
+				std::vector< Vulkan::Image::CompressedMip > mipDescs;
+				mipDescs.reserve(compressedMips.size());
+
+				for ( const auto & mip : compressedMips )
+				{
+					mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
+				}
+
+				if ( m_image->createFromCompressed(renderer.transferManager(), mipDescs) )
+				{
+					imageCreated = true;
+				}
+				else
+				{
+					TraceWarning{ClassId} << "BC7 upload failed for '" << this->name() << "', falling back to uncompressed.";
+
+					m_image.reset();
+				}
+			}
+			else
+			{
+				TraceWarning{ClassId} << "BC7 compression failed for '" << this->name() << "', falling back to uncompressed.";
+			}
+		}
+
+		if ( !imageCreated )
+		{
+			/* Uncompressed path (fallback or no BC7 support). */
+			m_image = std::make_shared< Vulkan::Image >(
+				renderer.device(),
+				VK_IMAGE_TYPE_2D,
+				Image::getFormat< uint8_t >(m_localData->data().colorCount(), this->isSRGB()),
+				VkExtent3D{m_localData->width(), m_localData->height(), 1U},
+				VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				0,
+				mipLevels
+			);
+			m_image->setIdentifier(ClassId, this->name(), "Image");
+
+			if ( !m_image->create(renderer.transferManager(), m_localData) )
+			{
+				Tracer::error(ClassId, "Unable to create an image !");
+
+				m_image.reset();
+
+				return false;
+			}
 		}
 
 		/* Create a Vulkan image view. */

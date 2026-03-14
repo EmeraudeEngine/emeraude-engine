@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 
 /* 3rd party inclusions. */
@@ -122,9 +123,18 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Calculate total compressed size for logging. */
+		size_t totalCompressedBytes = 0;
+
+		for ( const auto & mip : result )
+		{
+			totalCompressedBytes += mip.data.size();
+		}
+
 		TraceSuccess{ClassId} <<
 			"Compressed " << pixmap.width() << "x" << pixmap.height() <<
-			" texture to BC7 (" << result.size() << " mip levels).";
+			" texture to BC7 (" << result.size() << " mip levels, " <<
+			(totalCompressedBytes / 1024) << " KB).";
 
 		return result;
 	}
@@ -167,6 +177,8 @@ namespace EmEn::Graphics
 		Libs::ThreadPool & threadPool
 	) noexcept
 	{
+		const auto startTime = std::chrono::steady_clock::now();
+
 		const auto width = static_cast< uint32_t >(pixmap.width());
 		const auto height = static_cast< uint32_t >(pixmap.height());
 		const auto blocksX = (width + BlockSize - 1) / BlockSize;
@@ -184,14 +196,18 @@ namespace EmEn::Graphics
 		bc7enc_compress_block_params params;
 		bc7enc_compress_block_params_init(&params);
 
-		/* Use uber level 1 (good balance between speed and quality).
-		 * Range: 0 (fastest) to 4 (best quality). */
+		/* Fast quality preset: uber_level 0 (no extra refinement passes),
+		 * 16 partitions (vs 64 max). Good quality with ~5x faster compression.
+		 * The disk cache will make this a one-time cost anyway. */
 		bc7enc_compress_block_params_init_linear_weights(&params);
-		params.m_max_partitions = BC7ENC_MAX_PARTITIONS;
-		params.m_uber_level = 1;
+		params.m_max_partitions = 16;
+		params.m_uber_level = 0;
 
-		/* Compress all blocks in parallel. */
-		threadPool.parallelFor(static_cast< size_t >(0), static_cast< size_t >(totalBlocks), [&] (size_t blockIndex) {
+		/* Compress blocks sequentially within this worker thread.
+		 * Parallelism comes from the resource manager loading multiple
+		 * textures concurrently on different thread pool workers. */
+		for ( size_t blockIndex = 0; blockIndex < totalBlocks; ++blockIndex )
+		{
 			const auto blockX = static_cast< uint32_t >(blockIndex % blocksX);
 			const auto blockY = static_cast< uint32_t >(blockIndex / blocksX);
 			const auto pixelX = blockX * BlockSize;
@@ -218,7 +234,11 @@ namespace EmEn::Graphics
 			auto * outputBlock = &result.data[blockIndex * BlockBytes];
 
 			bc7enc_compress_block(outputBlock, blockPixels, &params);
-		});
+		}
+
+		const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - startTime).count();
+
+		TraceInfo{ClassId} << "Compressed " << width << "x" << height << " mip level (" << totalBlocks << " blocks) in " << elapsed << " ms.";
 
 		return result;
 	}
