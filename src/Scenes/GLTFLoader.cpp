@@ -381,7 +381,7 @@ namespace EmEn::Scenes
 			 * This defers Texture2D creation to material loading time so the material semantic
 			 * (color vs data) is known before GPU resources are created. Uses m_textures as cache
 			 * since multiple materials may reference the same texture. */
-			const auto resolveTexture = [&] (size_t textureIndex) -> std::shared_ptr< TextureResource::Texture2D > {
+			const auto resolveTexture = [&] (size_t textureIndex, bool sRGB = false) -> std::shared_ptr< TextureResource::Texture2D > {
 				if ( textureIndex >= asset.textures.size() )
 				{
 					return nullptr;
@@ -422,7 +422,11 @@ namespace EmEn::Scenes
 				}
 
 				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResource(texName, [image = m_images[imageIndex]] (auto & textureResource) {
+					->getOrCreateResource(texName, [image = m_images[imageIndex], sRGB] (auto & textureResource) {
+						/* Set sRGB BEFORE load() so the flag is in place when
+						 * onDependenciesLoaded() fires and creates the VkImage. */
+						textureResource.enableSRGB(sRGB);
+
 						return textureResource.load(image);
 					});
 
@@ -433,9 +437,9 @@ namespace EmEn::Scenes
 
 			const auto & PBRData = glTFMaterial.pbrData;
 
-			/* Albedo. */
+			/* Albedo (sRGB: perceptual color data). */
 			auto albedoTex = PBRData.baseColorTexture.has_value()
-				? resolveTexture(PBRData.baseColorTexture->textureIndex) : nullptr;
+				? resolveTexture(PBRData.baseColorTexture->textureIndex, true) : nullptr;
 
 			const auto & bc = PBRData.baseColorFactor;
 			Color< float > albedoColor{
@@ -466,9 +470,9 @@ namespace EmEn::Scenes
 			const auto aoStrength = glTFMaterial.occlusionTexture.has_value()
 				? static_cast< float >(glTFMaterial.occlusionTexture->strength) : 0.0F;
 
-			/* Emissive. */
+			/* Emissive (sRGB: perceptual color data). */
 			auto emissiveTex = glTFMaterial.emissiveTexture.has_value()
-				? resolveTexture(glTFMaterial.emissiveTexture->textureIndex) : nullptr;
+				? resolveTexture(glTFMaterial.emissiveTexture->textureIndex, true) : nullptr;
 
 			const auto emissiveStrength = static_cast< float >(glTFMaterial.emissiveStrength);
 

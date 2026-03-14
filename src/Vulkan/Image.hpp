@@ -259,6 +259,7 @@ namespace EmEn::Vulkan
 				{
 					/* NOTE: RGBA */
 					case VK_FORMAT_R8G8B8A8_UNORM :
+					case VK_FORMAT_R8G8B8A8_SRGB :
 					case VK_FORMAT_R8G8B8A8_SNORM :
 					case VK_FORMAT_R64G64B64A64_SFLOAT :
 					case VK_FORMAT_R32G32B32A32_SFLOAT :
@@ -266,6 +267,7 @@ namespace EmEn::Vulkan
 
 					/* NOTE: RGB */
 					case VK_FORMAT_R8G8B8_UNORM :
+					case VK_FORMAT_R8G8B8_SRGB :
 					case VK_FORMAT_R8G8B8_SNORM :
 					case VK_FORMAT_R64G64B64_SFLOAT :
 					case VK_FORMAT_R32G32B32_SFLOAT :
@@ -273,6 +275,7 @@ namespace EmEn::Vulkan
 
 					/* NOTE: GRAY+ALPHA */
 					case VK_FORMAT_R8G8_UNORM :
+					case VK_FORMAT_R8G8_SRGB :
 					case VK_FORMAT_R8G8_SNORM :
 					case VK_FORMAT_R64G64_SFLOAT :
 					case VK_FORMAT_R32G32_SFLOAT :
@@ -280,6 +283,7 @@ namespace EmEn::Vulkan
 
 					/* NOTE: GRAY */
 					case VK_FORMAT_R8_UNORM :
+					case VK_FORMAT_R8_SRGB :
 					case VK_FORMAT_R8_SNORM :
 					case VK_FORMAT_R64_SFLOAT :
 					case VK_FORMAT_R32_SFLOAT :
@@ -304,6 +308,7 @@ namespace EmEn::Vulkan
 				{
 					/* NOTE: RGBA */
 					case VK_FORMAT_R8G8B8A8_UNORM :
+					case VK_FORMAT_R8G8B8A8_SRGB :
 						return 4 * sizeof(uint8_t);
 					case VK_FORMAT_R8G8B8A8_SNORM :
 						return 4 * sizeof(int8_t);
@@ -314,6 +319,7 @@ namespace EmEn::Vulkan
 
 					/* NOTE: RGB */
 					case VK_FORMAT_R8G8B8_UNORM :
+					case VK_FORMAT_R8G8B8_SRGB :
 						return 3 * sizeof(uint8_t);
 					case VK_FORMAT_R8G8B8_SNORM :
 						return 3 * sizeof(int8_t);
@@ -324,6 +330,7 @@ namespace EmEn::Vulkan
 
 					/* NOTE: GRAY+ALPHA */
 					case VK_FORMAT_R8G8_UNORM :
+					case VK_FORMAT_R8G8_SRGB :
 						return 2 * sizeof(uint8_t);
 					case VK_FORMAT_R8G8_SNORM :
 						return 2 * sizeof(int8_t);
@@ -334,6 +341,7 @@ namespace EmEn::Vulkan
 
 					/* NOTE: GRAY */
 					case VK_FORMAT_R8_UNORM :
+					case VK_FORMAT_R8_SRGB :
 						return sizeof(uint8_t);
 					case VK_FORMAT_R8_SNORM :
 						return sizeof(int8_t);
@@ -485,7 +493,7 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			static
 			VkFormat
-			getFormat (size_t colorCount) noexcept requires (std::is_arithmetic_v< precision_t >)
+			getFormat (size_t colorCount, bool sRGB = false) noexcept requires (std::is_arithmetic_v< precision_t >)
 			{
 				/* Reminder :
 				 * [Numeric format][SPIR-V Sampled Type][Description]
@@ -556,6 +564,27 @@ namespace EmEn::Vulkan
 					/* NOTE: uint8_t (1 byte). */
 					if constexpr ( std::is_unsigned_v< precision_t > )
 					{
+						if ( sRGB )
+						{
+							switch ( colorCount )
+							{
+								case 4 :
+									return VK_FORMAT_R8G8B8A8_SRGB;
+
+								case 3 :
+									return VK_FORMAT_R8G8B8_SRGB;
+
+								case 2 :
+									return VK_FORMAT_R8G8_SRGB;
+
+								case 1 :
+									return VK_FORMAT_R8_SRGB;
+
+								default :
+									return VK_FORMAT_UNDEFINED;
+							}
+						}
+
 						switch ( colorCount )
 						{
 							case 4 :

@@ -78,7 +78,7 @@ namespace EmEn::Graphics::TextureResource
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
-			Image::getFormat< uint8_t >(m_localData->data().colorCount()),
+			Image::getFormat< uint8_t >(m_localData->data().colorCount(), this->isSRGB()),
 			VkExtent3D{m_localData->width(), m_localData->height(), 1U},
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			0,

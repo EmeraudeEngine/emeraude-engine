@@ -125,6 +125,30 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			static bool validatePixmap (const char * classId, const std::string & resourceName, Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
+			/**
+			 * @brief Enables sRGB format for this texture resource.
+			 * @note Must be called before createTexture(). Color textures (albedo, emissive, etc.)
+			 * should use sRGB so the GPU automatically converts sRGB to linear on sampling.
+			 * Data textures (normal, roughness, metallic, AO) must remain UNORM (linear).
+			 * @param enable True for sRGB, false for linear (UNORM).
+			 */
+			void
+			enableSRGB (bool enable) noexcept
+			{
+				m_sRGB = enable;
+			}
+
+			/**
+			 * @brief Returns whether this texture uses sRGB format.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSRGB () const noexcept
+			{
+				return m_sRGB;
+			}
+
 		protected:
 
 			/**
@@ -153,5 +177,7 @@ namespace EmEn::Graphics::TextureResource
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
+
+			bool m_sRGB{false};
 	};
 }

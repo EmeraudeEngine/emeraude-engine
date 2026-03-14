@@ -107,6 +107,11 @@ namespace EmEn::Graphics::Material::Component
 		/* NOTE: Make a copy for the texture interface smart-point. */
 		m_texture = m_textureResource;
 
+		/* Convention: material variable names ending with "Color" represent
+		 * perceptual color data (albedo, emissive, etc.) encoded in sRGB.
+		 * The GPU will automatically convert sRGB to linear on sampling. */
+		m_textureResource->enableSRGB(m_variableName.ends_with("Color"));
+
 		/* Check the optional UVW channel. */
 		if ( data.isMember(JKChannel) )
 		{

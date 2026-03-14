@@ -76,7 +76,13 @@ namespace EmEn::Graphics::Material::Component
 				m_UVWChannel{UVWChannel},
 				m_alphaEnabled{enableAlpha}
 			{
-
+				/* Convention: material variable names ending with "Color" represent
+				 * perceptual color data (albedo, emissive, etc.) encoded in sRGB.
+				 * The GPU will automatically convert sRGB to linear on sampling. */
+				if ( m_textureResource != nullptr )
+				{
+					m_textureResource->enableSRGB(m_variableName.ends_with("Color"));
+				}
 			}
 
 			/**
