@@ -477,8 +477,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	bool
 	RTGI::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
 	{
-		const auto halfW = (width > 1) ? width / 2 : 1U;
-		const auto halfH = (height > 1) ? height / 2 : 1U;
+		/* Pixel doubling: half-res for performance (default), full-res for quality. */
+		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(
+			GraphicsRayTracingGIPixelDoublingKey, DefaultGraphicsRayTracingGIPixelDoubling
+		);
+		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
+		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )
