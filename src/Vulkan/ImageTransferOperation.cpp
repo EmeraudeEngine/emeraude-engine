@@ -348,4 +348,107 @@ namespace EmEn::Vulkan
 
 		return true;
 	}
+
+	bool
+	ImageTransferOperation::transferCompressed (const std::shared_ptr< Device > & device, Image & dstImage, const std::vector< VkBufferImageCopy > & mipRegions) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !m_transferCommandBuffer->isCreated() )
+			{
+				Tracer::error(ClassId, "The transfer command buffer is not created!");
+
+				return false;
+			}
+		}
+
+		/* Step 1: Upload all mip levels from staging buffer to image. */
+		if ( !m_transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			return false;
+		}
+
+		{
+			/* Transition entire image to TRANSFER_DST. */
+			Sync::ImageMemoryBarrier barrier{
+				dstImage,
+				VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			};
+			barrier.setIdentifier(ClassId, "CompressedPreTransfer", "ImageMemoryBarrier");
+
+			m_transferCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		}
+
+		/* Copy all mip levels in one batch. */
+		vkCmdCopyBufferToImage(
+			m_transferCommandBuffer->handle(),
+			m_stagingBuffer->handle(),
+			dstImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			static_cast< uint32_t >(mipRegions.size()), mipRegions.data()
+		);
+
+		if ( m_transferCommandBuffer->end() )
+		{
+			const auto * queue = device->getGraphicsTransferQueue(QueuePriority::High);
+
+			VkSemaphore semaphoreHandle = m_semaphore->handle();
+
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+			{
+				Tracer::error(ClassId, "Unable to transfer compressed image (1/2) !");
+
+				return false;
+			}
+		}
+		else
+		{
+			Tracer::error(ClassId, "Unable to finish the command buffer for compressed image transfer !");
+
+			return false;
+		}
+
+		/* Step 2: Transition to SHADER_READ_ONLY (no mipmap blit). */
+		if ( !m_graphicsCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			return false;
+		}
+
+		{
+			Sync::ImageMemoryBarrier barrier{
+				dstImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			};
+			barrier.setIdentifier(ClassId, "CompressedFinalImage", "ImageMemoryBarrier");
+
+			m_graphicsCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+		}
+
+		if ( m_graphicsCommandBuffer->end() )
+		{
+			auto * queue = device->getGraphicsQueue(QueuePriority::High);
+
+			VkSemaphore semaphoreHandle = m_semaphore->handle();
+			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle())) )
+			{
+				Tracer::error(ClassId, "Unable to transfer compressed image (2/2) !");
+
+				return false;
+			}
+
+			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
+		else
+		{
+			Tracer::error(ClassId, "Unable to finish the command buffer for compressed image finalization !");
+
+			return false;
+		}
+
+		return true;
+	}
 }

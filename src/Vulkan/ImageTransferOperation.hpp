@@ -112,6 +112,18 @@ namespace EmEn::Vulkan
 			bool transfer (const std::shared_ptr< Device > & device, Image & dstImage, size_t offset = 0) const noexcept;
 
 			/**
+			 * @brief Transfers pre-compressed multi-mip data from staging buffer to GPU.
+			 * @note This uploads all mip levels and transitions to SHADER_READ_ONLY_OPTIMAL
+			 * without generating mipmaps via vkCmdBlitImage (compressed formats don't support blit).
+			 * @param device A reference to the device smart-pointer.
+			 * @param dstImage A reference to the destination image (GPU side, must have BC7 format).
+			 * @param mipRegions A vector of buffer-to-image copy regions, one per mip level.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool transferCompressed (const std::shared_ptr< Device > & device, Image & dstImage, const std::vector< VkBufferImageCopy > & mipRegions) const noexcept;
+
+			/**
 			 * @brief Returns whether the image transfer operation is valid for usage.
 			 * @return bool
 			 */

@@ -32,6 +32,7 @@
 #include <cmath>
 #include <array>
 #include <memory>
+#include <span>
 
 /* Third-party inclusions. */
 #include "vk_mem_alloc.h"
@@ -417,6 +418,27 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool create (TransferManager & transferManager, const std::shared_ptr< Graphics::CubemapMovieResource > & cubemapMovieResource) noexcept;
+
+			/**
+			 * @brief Describes one mip level of pre-compressed texture data for upload.
+			 */
+			struct CompressedMip
+			{
+				const uint8_t * data;
+				uint32_t size;
+				uint32_t width;
+				uint32_t height;
+			};
+
+			/**
+			 * @brief Creates the image and uploads pre-compressed multi-mip data.
+			 * @note For BC7 (or other block-compressed formats). Skips GPU mipmap generation.
+			 * @param transferManager A reference to the transfer manager.
+			 * @param mips A span of compressed mip level descriptors (level 0 first).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips) noexcept;
 
 			/**
 			 * @brief Writes raw data to this image using a staging buffer.

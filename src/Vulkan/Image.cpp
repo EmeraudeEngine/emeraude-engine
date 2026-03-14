@@ -413,6 +413,64 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	Image::createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips) noexcept
+	{
+		if ( mips.empty() )
+		{
+			Tracer::error(ClassId, "No compressed mip levels provided !");
+
+			return false;
+		}
+
+		if ( !this->createOnHardware() )
+		{
+			return false;
+		}
+
+		/* Calculate total bytes and build VkBufferImageCopy regions. */
+		size_t totalBytes = 0;
+		std::vector< VkBufferImageCopy > regions;
+		regions.reserve(mips.size());
+
+		for ( uint32_t level = 0; level < static_cast< uint32_t >(mips.size()); ++level )
+		{
+			VkBufferImageCopy region{};
+			region.bufferOffset = totalBytes;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = level;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = 1;
+			region.imageOffset = {0, 0, 0};
+			region.imageExtent = {mips[level].width, mips[level].height, 1};
+
+			regions.emplace_back(region);
+
+			totalBytes += mips[level].size;
+		}
+
+		/* Write all compressed mip data sequentially to the staging buffer. */
+		return transferManager.uploadCompressedImage(*this, totalBytes, [&mips] (const Buffer & stagingBuffer) {
+			size_t offset = 0;
+
+			for ( const auto & mip : mips )
+			{
+				if ( !stagingBuffer.writeData({mip.data, mip.size, offset}) )
+				{
+					TraceError{ClassId} << "Unable to write " << mip.size << " bytes of compressed mip data !";
+
+					return false;
+				}
+
+				offset += mip.size;
+			}
+
+			return true;
+		}, regions);
+	}
+
+	bool
 	Image::writeData (TransferManager & transferManager, const MemoryRegion & memoryRegion) noexcept
 	{
 		if ( !this->isCreated() )

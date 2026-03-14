@@ -195,6 +195,53 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Transfer pre-compressed multi-mip data to an image inside the GPU memory.
+			 * @tparam function_t The type of lambda to describe the data to write. Signature: bool (const Buffer &).
+			 * @param targetImage A writable reference to the destination image.
+			 * @param requiredBytes The total amount of compressed data to write in bytes.
+			 * @param writeData A reference to a function to write data into the staging buffer.
+			 * @param mipRegions A vector of buffer-to-image copy regions, one per mip level.
+			 * @return bool
+			 */
+			template< typename function_t >
+			bool
+			uploadCompressedImage (Image & targetImage, size_t requiredBytes, function_t && writeData, const std::vector< VkBufferImageCopy > & mipRegions) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
+			{
+				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
+				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+
+				if ( !this->usable() )
+				{
+					TraceError{ClassId} << "The transfer manager is not usable !";
+
+					return false;
+				}
+
+				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+
+				if ( transferOperation == nullptr )
+				{
+					return false;
+				}
+
+				auto * stagingBuffer = transferOperation->stagingBuffer();
+
+				if ( stagingBuffer == nullptr )
+				{
+					return false;
+				}
+
+				if ( !writeData(*stagingBuffer) )
+				{
+					TraceError{ClassId} << "Unable to write " << requiredBytes << " bytes of compressed data in the staging buffer !";
+
+					return false;
+				}
+
+				return transferOperation->transferCompressed(m_device, targetImage, mipRegions);
+			}
+
+			/**
 			 * @brief Transitions the layout of a Vulkan image.
 			 * @param image A reference to an image.
 			 * @param aspectMask The type of image.
