@@ -247,13 +247,59 @@ barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
 - `AccelerationStructureBuilder.cpp:buildBLAS()` — Acquire barrier before AS build
 - `AccelerationStructureBuilder.hpp` — `m_graphicsFamilyIndex`, `m_transferFamilyIndex` members
 
+## TLAS Async Build (Inline Command Buffer Recording)
+
+> [!CRITICAL]
+> **TLAS builds MUST be recorded inline into the render command buffer, NOT submitted synchronously.**
+>
+> The old `buildTLAS()` method used a dedicated command buffer with a fence wait per frame,
+> causing massive scheduler overhead (`sched_yield` dominated profiles). The new async API
+> splits TLAS building into CPU-side preparation and GPU-side command recording.
+>
+> **API:**
+> - `prepareTLAS(instances, instanceCount)` — CPU-side: creates/resizes buffers, uploads instance data. Returns `TLASBuildRequest`.
+> - `recordTLASBuild(commandBuffer, request)` — GPU-side: records `vkCmdBuildAccelerationStructuresKHR` + barrier into an external command buffer.
+>
+> **TLASBuildRequest** owns the TLAS + instance buffer + scratch buffer for the current build.
+> After recording, the request is moved into a retirement deque for frames-in-flight safety.
+>
+> **Buffer lifetime:** TLAS buffers are per-request (not persistent). Each build creates fresh
+> buffers. Retired requests are kept in a `std::deque` and popped from the front when the
+> deque exceeds `framesInFlight()` entries.
+>
+> **Pipeline barrier:** The barrier after TLAS build uses `FRAGMENT_SHADER_BIT | COMPUTE_SHADER_BIT`
+> as destination stage (NOT `RAY_TRACING_SHADER_BIT_KHR`). The engine uses **ray queries**
+> (`GL_EXT_ray_query`) in fragment/compute shaders, not RT pipelines. Using
+> `VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR` requires `VK_KHR_ray_tracing_pipeline` which
+> is not enabled.
+>
+> **Measured impact:** `sched_yield` -79%, scheduler overhead -88% (perf profiling).
+>
+> **Code references:**
+> - `AccelerationStructureBuilder.hpp` — `TLASBuildRequest` struct, `prepareTLAS()`, `recordTLASBuild()`
+> - `AccelerationStructureBuilder.cpp` — Implementation with retired request deque
+> - `Scenes/SceneMetaData.cpp:recordTLASBuild()` — Delegates to builder
+> - `Graphics/Renderer.cpp:renderFrameWithInternal/renderFrameDirect` — Calls `scene->recordTLASBuild()` after `prepareRender()`, before `beginRenderPass()`
+
+## Critical: Ray Query vs RT Pipeline Stage Flags
+
+> [!CRITICAL]
+> **The engine uses `GL_EXT_ray_query` (ray queries in fragment/compute shaders), NOT `VK_KHR_ray_tracing_pipeline`.**
+>
+> This means:
+> - TLAS access happens in **fragment shaders** and **compute shaders**
+> - Pipeline barriers must use `VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT`
+> - **NEVER use** `VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR` — it requires enabling the RT pipeline extension
+> - Access mask: `VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR` is correct for both approaches
+
 ## Critical Points
 
 - **Ordered destruction**: Destroy resources in reverse creation order
 - **Thread safety**: CommandPool per thread, CommandBuffers not shared
 - **Memory barriers**: Correct state transitions for images
 - **Queue family ownership**: Two-sided barriers for exclusive-mode cross-queue access
-- **Validation layers**: Always active in development
+- **TLAS barriers**: Use `FRAGMENT_SHADER_BIT | COMPUTE_SHADER_BIT`, NOT `RAY_TRACING_SHADER_BIT_KHR` (ray queries, not RT pipelines)
+- **Validation layers**: Always active in development (note: ~6% CPU overhead, ~41% when combined with rwlock)
 - **Never direct calls**: Graphics, Resources, Saphir use Vulkan abstractions
 - **VMA mandatory**: All GPU allocation via VMA, never direct vkAllocateMemory
 - **Y-down setup**: Viewport and projection configured for engine Y-down

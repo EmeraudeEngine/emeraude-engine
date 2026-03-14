@@ -966,12 +966,79 @@ Every pipeline modification **must** follow this protocol:
 
 No blind optimization. No guesswork. Data drives every decision.
 
-## 15. Frame Synchronization — Double-Buffering
+## 15. Instance-Local Program Cache (RenderableInstance)
+
+> [!IMPORTANT]
+> **`RenderableInstance::Abstract` has a local `ResolvedProgram` cache (`StaticVector<16>`)
+> that avoids per-draw hashtable lookups into `Renderable::Abstract::m_programs`.**
+
+### Architecture
+
+The `Renderable::Abstract` stores compiled shader programs in a `std::unordered_map` keyed
+by `ProgramCacheKey` (render pass handle + material hash). Looking up this map every draw call
+was measured at 13.32% of CPU time (perf profiling).
+
+**Solution:** Each `RenderableInstance::Abstract` caches resolved programs locally:
+
+```cpp
+struct ResolvedProgram {
+    ProgramCacheKey key;
+    GraphicsPipeline * pipeline;
+    PipelineLayout * layout;
+};
+StaticVector< ResolvedProgram, 16 > m_resolvedPrograms;
+```
+
+`resolveProgram(renderPassHandle, layerIndex)` checks the local cache first (linear scan of
+up to 16 entries — cache-friendly). On miss, it falls back to the `Renderable`'s map (protected
+by `std::shared_mutex` for concurrent reads) and caches the result locally.
+
+**Cache invalidation:** `m_resolvedPrograms` is cleared on swap-chain recreation (render pass
+handle changes) via `invalidateProgramCache()`.
+
+**Measured impact:** Cache lookup -83% (from 13.32% to 2.20% of CPU time).
+
+**Thread safety:** `Renderable::Abstract::m_programs` uses `std::shared_mutex` — shared lock
+for reads (render thread), exclusive lock for writes (resource loading thread).
+
+**Code references:**
+- `RenderableInstance/Abstract.hpp` — `ResolvedProgram`, `m_resolvedPrograms`, `resolveProgram()`
+- `RenderableInstance/Abstract.cpp` — `resolveProgram()` implementation, `invalidateProgramCache()`
+- `Renderable/Abstract.hpp` — `m_programs`, `m_programsMutex` (`std::shared_mutex`)
+- `Renderable/Abstract.cpp` — `findProgram()` (shared_lock read), `cacheProgram()` (unique_lock write)
+
+## 15b. PostProcessStack Race Condition (Fixed Mar 2026)
+
+> [!WARNING]
+> **The render thread must NOT create the scene render target before the logic thread has
+> set the PostProcessStack.** If created too early, the scene target uses wrong formats
+> (no HDR, no depth/normals attachments) because `PostProcessor::requiresHDR()` etc. return
+> false when the stack is null.
+>
+> **Fix:** Defer `SceneRenderTarget` creation until the PostProcessStack is non-null.
+> The Renderer checks for a non-null stack before creating the scene target.
+>
+> **Code references:**
+> - `Graphics/Renderer.cpp` — Deferred scene target creation
+> - `Graphics/PostProcessor.cpp` — `requiresHDR()` aggregates chain needs
+
+## 15c. GrabPass Destruction Safety (Fixed Mar 2026)
+
+> [!WARNING]
+> **`PostProcessor::configure()` must call `device->waitIdle()` before destroying the old
+> GrabPass.** In-flight command buffers may still reference the old GrabPass's image/sampler.
+> Destroying without waiting causes use-after-free Vulkan validation errors.
+>
+> **Code reference:** `Graphics/PostProcessor.cpp:configure()`
+
+## 16. Frame Synchronization — Double-Buffering
 
 > [!CRITICAL]
 > **Read [`src/Scenes/AGENTS.md` → Frame Synchronization](../Scenes/AGENTS.md) BEFORE adding
 > any GPU buffer (SSBO, UBO) that is updated per-frame, or any post-process effect that
-> reconstructs world positions from the depth buffer.**
+> reconstructs world positions from the depth buffer.
+> Also read [Section 15](#15-instance-local-program-cache-renderableinstance) for the
+> instance-local cache that avoids per-draw hashtable lookups.**
 
 The renderer uses **frames-in-flight** (`Renderer::framesInFlight()`, typically 2-3).
 Each frame has its own command buffer, fence, and descriptor sets indexed by
@@ -1001,7 +1068,7 @@ to the next logic tick → **matrix/depth mismatch → flickering**. See `RTR.cp
 - `Renderer.hpp:framesInFlight()` — Number of frames-in-flight
 - `Scenes/SceneMetaData.hpp:initializePerFrameBuffers()` — Reference implementation
 
-## 16. Navigation
+## 17. Navigation
 
 -   **Base Class**: `Renderable::Abstract`
 -   **Main Entry**: `Renderer` (Central coordinator)
@@ -1013,4 +1080,5 @@ to the next logic tick → **matrix/depth mismatch → flickering**. See `RTR.cp
 -   **Shadow Mapping**: [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - PCF, global control, per-light settings
 -   **Animated Cubemaps**: See [Section 11](#11-animated-texture-cubemap-system) - CubemapMovieResource + AnimatedTextureCubemap
 -   **Post-Processing**: See [Section 12](#12-post-processing-effects) - RTR, SSR, ContactShadows, SSAO, Bloom, DoF, AtmosphericFog, VolumetricLight, LensFlare, ToneMapping
--   **Frame Sync**: See [Section 15](#15-frame-synchronization--double-buffering) - Per-frame buffers, view matrix state index
+-   **Instance Program Cache**: See [Section 15](#15-instance-local-program-cache-renderableinstance) - Per-instance resolved program cache
+-   **Frame Sync**: See [Section 16](#16-frame-synchronization--double-buffering) - Per-frame buffers, view matrix state index

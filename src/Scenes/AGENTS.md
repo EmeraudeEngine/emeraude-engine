@@ -543,15 +543,41 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 - **TriangleStrip support** — `generateTriangleListIndicesForRT()` virtual method converts strip+primitive restart to triangle list. Persistent `m_rtIndexBufferObject` stored in `Geometry::Interface` for shader access to converted indices.
 - **Subclasses**: `VertexGridResource` overrides `generateTriangleListIndicesForRT()` for strip conversion
 
-### TLAS Retirement
-The current TLAS is moved to `m_retiredTLAS` before building a new one. Up to 3 retired TLAS are kept alive to cover frames-in-flight. This prevents the GPU from accessing a destroyed TLAS from a previous frame's command buffer.
+### TLAS Async Build (Inline Recording)
+
+> [!CRITICAL]
+> **TLAS builds are recorded inline into the render command buffer via `recordTLASBuild()`.**
+> The old synchronous `buildTLAS()` (fence wait per frame) has been removed.
+
+**Two-phase API:**
+1. `SceneMetaData::rebuild(renderLists, ..., frameIndex)` — Collects TLAS instances, calls `AccelerationStructureBuilder::prepareTLAS()` (CPU-side buffer preparation)
+2. `Scene::recordTLASBuild(commandBuffer)` → `SceneMetaData::recordTLASBuild(commandBuffer)` → `AccelerationStructureBuilder::recordTLASBuild(commandBuffer, request)` — Records build commands into the render command buffer
+
+**Call site in Renderer:**
+```
+prepareRender() → scene->recordTLASBuild(commandBuffer) → beginRenderPass()
+```
+
+### TLAS Buffer Lifetime & Retirement
+
+TLAS buffers (TLAS + instance buffer + scratch buffer) are **per-request**, not persistent.
+Each `TLASBuildRequest` owns its buffers. After recording, the request is retired into a
+`std::deque`. Requests are popped from the front when the deque exceeds `framesInFlight()`
+entries. This prevents use-after-free where a persistent buffer was written by the CPU
+while the GPU was still reading it from a previous frame's command buffer.
+
+### Pre-Allocated Rebuild Vectors
+
+`SceneMetaData::rebuild()` reuses persistent vectors as class members (`m_instances`,
+`m_meshMetaDataEntries`, `m_materialDataEntries`) instead of per-frame heap allocations.
+These are cleared and refilled each frame without deallocating.
 
 ### Key Files
-- `Scenes/SceneMetaData.hpp/.cpp` — TLAS, per-frame SSBOs, texture registration cache
+- `Scenes/SceneMetaData.hpp/.cpp` — TLAS, per-frame SSBOs, texture registration cache, `recordTLASBuild()`
 - `Scenes/GPUMeshMetaData.hpp` — GPU-side struct (VB/IB addresses, stride, offsets, material index)
 - `Graphics/Geometry/Interface.hpp/.cpp` — `buildAccelerationStructure()`, `generateTriangleListIndicesForRT()`, `m_rtIndexBufferObject`
 - `Graphics/Geometry/VertexGridResource.cpp` — Strip→TriangleList conversion
-- `Vulkan/AccelerationStructureBuilder.hpp/.cpp` — BLAS/TLAS building, `BLASGeometryInput` (supports CPU indices)
+- `Vulkan/AccelerationStructureBuilder.hpp/.cpp` — BLAS/TLAS building, `TLASBuildRequest`, `prepareTLAS()`, `recordTLASBuild()`, retired request deque
 
 ## Render List Categories
 

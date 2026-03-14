@@ -27,6 +27,8 @@
 - VULKAN: Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering (Vulkan 1.3), then leverage dynamic rendering to order draws by pipeline layout and reduce binding cost.
 - VULKAN: Extend SharedUniformBuffer pooling strategy to short-lived entities (particles, projectiles) for UBO/VBO allocation optimization.
 - RENDERING SYSTEM: Hi-Z Occlusion
+- RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
+- RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
 
 ## Post-Processing Pipeline (Effects/Framebuffer + Effects/Lens)
 
