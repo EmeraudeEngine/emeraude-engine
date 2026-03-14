@@ -731,7 +731,9 @@ namespace EmEn::Scenes
 						});
 					}
 
-					/* Read texture coordinates directly into vertex array (flip V for Vulkan). */
+					/* Read texture coordinates directly into vertex array.
+				 * NOTE: glTF and Vulkan share the same UV convention: (0,0) = top-left, V increases downward.
+				 * No V-flip is needed. */
 					const auto textureCoordinatesIt = glTFPrimitive.findAttribute("TEXCOORD_0");
 
 					if ( textureCoordinatesIt != glTFPrimitive.attributes.end() )
@@ -740,7 +742,7 @@ namespace EmEn::Scenes
 						size_t index = 0;
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec2 >(asset, uvAccessor, [&] (const fastgltf::math::fvec2 & v) {
-							vertices[globalVertexOffset + index].setTextureCoordinates(Vector< 3, float >{v.x(), 1.0F - v.y(), 0.0F});
+							vertices[globalVertexOffset + index].setTextureCoordinates(Vector< 3, float >{v.x(), v.y(), 0.0F});
 							index++;
 						});
 					}
@@ -1002,10 +1004,17 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		/* Compute this node's local frame and accumulate into world coordinates. */
+		/* Compute this node's local frame and accumulate into world coordinates.
+		 * NOTE: Extract scale from the combined matrix column lengths before
+		 * CartesianFrame normalizes the direction vectors (which would lose scale). */
 		const auto localFrame = extractFrameFromNode(glTFNode);
 		const auto worldMatrix = parentWorldFrame.getModelMatrix() * localFrame.getModelMatrix();
-		const CartesianFrame< float > worldFrame{worldMatrix};
+		const Vector< 3, float > worldScale{
+			Vector< 3, float >{worldMatrix[M4x4Col0Row0], worldMatrix[M4x4Col0Row1], worldMatrix[M4x4Col0Row2]}.length(),
+			Vector< 3, float >{worldMatrix[M4x4Col1Row0], worldMatrix[M4x4Col1Row1], worldMatrix[M4x4Col1Row2]}.length(),
+			Vector< 3, float >{worldMatrix[M4x4Col2Row0], worldMatrix[M4x4Col2Row1], worldMatrix[M4x4Col2Row2]}.length()
+		};
+		const CartesianFrame< float > worldFrame{worldMatrix, worldScale};
 
 		/* Create a StaticEntity if this node has a mesh. */
 		if ( glTFNode.meshIndex.has_value() )
