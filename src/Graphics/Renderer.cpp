@@ -1310,25 +1310,28 @@ namespace EmEn::Graphics
 
 		/* Lazy creation/destruction of the internal scene target based on post-processor state.
 		 * When PP is enabled: create the HDR scene target and reconfigure PP with it.
-		 * When PP is disabled: destroy the scene target and return to direct swapchain rendering. */
-		if ( m_postProcessor.isEnabled() && m_sceneTarget == nullptr )
+		 * When PP is disabled: destroy the scene target and return to direct swapchain rendering.
+		 * NOTE: Defer creation until the scene's PostProcessStack is ready. The logic thread
+		 * may still be building the scene when the render thread first reaches this point.
+		 * Creating the scene target without the stack leads to wrong formats (no HDR/depth/normals). */
+		const auto * stack = (scene != nullptr) ? scene->postProcessStack() : nullptr;
+
+		if ( m_postProcessor.isEnabled() && m_sceneTarget == nullptr && stack != nullptr )
 		{
 			/* Pre-update cached requirements so recreateSceneTarget() picks up
 			 * correct formats (HDR color, normals MRT) before creating the target. */
-			const auto * stack = (scene != nullptr) ? scene->postProcessStack() : nullptr;
-
 			m_postProcessor.updateCachedRequirements(
-				stack != nullptr && stack->requiresHDR(),
-				stack != nullptr && stack->requiresDepth(),
-				stack != nullptr && stack->requiresNormals());
+				stack->requiresHDR(),
+				stack->requiresDepth(),
+				stack->requiresNormals());
 
 			if ( this->recreateSceneTarget() )
 			{
 				if ( !m_postProcessor.configure(
 					std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget),
-					stack != nullptr && stack->requiresHDR(),
-					stack != nullptr && stack->requiresDepth(),
-					stack != nullptr && stack->requiresNormals()) )
+					stack->requiresHDR(),
+					stack->requiresDepth(),
+					stack->requiresNormals()) )
 				{
 					TraceError{ClassId} << "Unable to reconfigure the post-processor with the scene target!";
 				}
