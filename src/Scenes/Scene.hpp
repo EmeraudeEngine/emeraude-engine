@@ -1548,6 +1548,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Records the pending TLAS build into the given command buffer.
+			 * @note Must be called after prepareRender() and before render passes that use RT.
+			 * @param cmdBuf The Vulkan command buffer (must be in recording state).
+			 */
+			void
+			recordTLASBuild (VkCommandBuffer cmdBuf) noexcept
+			{
+				m_sceneMetaData.recordTLASBuild(cmdBuf);
+			}
+
+			/**
 			 * @brief Returns the scene metadata manager (TLAS, mesh/material SSBOs).
 			 * @return const SceneMetaData &
 			 */

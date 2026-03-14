@@ -1421,6 +1421,12 @@ namespace EmEn::Graphics
 		/* Prepare scene render lists once (frustum culling, Z-sorting). */
 		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_swapChain);
 
+		/* Record deferred TLAS build into the render command buffer (no CPU stall). */
+		if ( scene != nullptr )
+		{
+			scene->recordTLASBuild(commandBuffer->handle());
+		}
+
 		/* Render pass 1: Scene rendering (clears buffers). */
 		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1506,6 +1512,12 @@ namespace EmEn::Graphics
 		/* Prepare scene render lists once (frustum culling, Z-sorting)
 		 * against the internal scene target (HDR float16 framebuffer). */
 		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_sceneTarget);
+
+		/* Record deferred TLAS build into the render command buffer (no CPU stall). */
+		if ( scene != nullptr )
+		{
+			scene->recordTLASBuild(commandBuffer->handle());
+		}
 
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
 		 * When the scene target has no normals MRT attachment, use the 2-element clear values

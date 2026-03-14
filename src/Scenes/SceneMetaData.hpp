@@ -28,12 +28,16 @@
 
 /* STL inclusions. */
 #include <array>
+#include <deque>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /* Local inclusions. */
+#include "GPUMeshMetaData.hpp"
 #include "RenderBatch.hpp"
+#include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
@@ -48,6 +52,11 @@ namespace EmEn::Vulkan
 namespace EmEn::Graphics
 {
 	class BindlessTextureManager;
+
+	namespace Material
+	{
+		class Interface;
+	}
 }
 
 namespace EmEn::Scenes
@@ -127,6 +136,25 @@ namespace EmEn::Scenes
 			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex) noexcept;
 
 			/**
+			 * @brief Records the pending TLAS build into an external command buffer.
+			 * @note Must be called after rebuild() and before render passes that use RT.
+			 * No-op if there is no pending build (RT disabled or empty scene).
+			 * @param cmdBuf The Vulkan command buffer to record into (must be in recording state).
+			 */
+			void recordTLASBuild (VkCommandBuffer cmdBuf) noexcept;
+
+			/**
+			 * @brief Returns whether a TLAS build is pending and needs to be recorded.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPendingTLASBuild () const noexcept
+			{
+				return m_pendingTLASBuild != nullptr;
+			}
+
+			/**
 			 * @brief Returns the top-level acceleration structure for ray tracing.
 			 * @return const Vulkan::AccelerationStructure *
 			 */
@@ -201,14 +229,22 @@ namespace EmEn::Scenes
 			std::unique_ptr< Vulkan::AccelerationStructureBuilder > m_accelerationStructureBuilder;
 			/** @brief Top-level acceleration structure for the scene. Rebuilt each frame. */
 			std::unique_ptr< Vulkan::AccelerationStructure > m_TLAS;
+			/** @brief Pending TLAS build request (prepared by rebuild, consumed by recordTLASBuild). */
+			std::unique_ptr< Vulkan::TLASBuildRequest > m_pendingTLASBuild;
 			/** @brief Retired TLAS objects kept alive until frames-in-flight have completed. */
-			std::vector< std::unique_ptr< Vulkan::AccelerationStructure > > m_retiredTLAS;
+			std::deque< std::unique_ptr< Vulkan::AccelerationStructure > > m_retiredTLAS;
 			/** @brief Per-frame mesh metadata SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_meshMetaDataSSBOs;
 			/** @brief Per-frame material data SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_materialDataSSBOs;
 			/** @brief Cache of registered bindless texture indices keyed by texture pointer. */
 			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_textureRegistrationCache;
+			/** @brief Persistent per-frame collection structures (reused to avoid heap allocations). */
+			std::vector< Vulkan::TLASInstanceInput > m_rebuildInstances;
+			std::vector< GPUMeshMetaData > m_rebuildMeshEntries;
+			std::unordered_map< const Graphics::Material::Interface *, uint32_t > m_rebuildMaterialMap;
+			std::vector< Graphics::Material::GPURTMaterialData > m_rebuildMaterialEntries;
+			std::unordered_set< const Vulkan::TextureInterface * > m_rebuildActiveTextures;
 			/** @brief Number of active RT instances this frame. */
 			size_t m_instanceCount{0};
 			/** @brief Number of unique RT materials this frame. */

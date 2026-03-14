@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <unordered_map>
-#include <unordered_set>
 
 /* Local inclusions. */
 #include "GPUMeshMetaData.hpp"
@@ -125,11 +124,16 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		/* Temporary per-frame collection structures. */
-		std::vector< TLASInstanceInput > instances;
-		std::vector< GPUMeshMetaData > meshEntries;
-		std::unordered_map< const Material::Interface *, uint32_t > materialMap;
-		std::vector< Material::GPURTMaterialData > materialEntries;
+		/* Reuse persistent collection structures (clear but keep allocated memory). */
+		m_rebuildInstances.clear();
+		m_rebuildMeshEntries.clear();
+		m_rebuildMaterialMap.clear();
+		m_rebuildMaterialEntries.clear();
+
+		auto & instances = m_rebuildInstances;
+		auto & meshEntries = m_rebuildMeshEntries;
+		auto & materialMap = m_rebuildMaterialMap;
+		auto & materialEntries = m_rebuildMaterialEntries;
 
 		/* Compute vertex attribute byte offsets from geometry flags.
 		 * Layout order: Position(3) → TangentSpace(9) or Normal(3) → PrimaryUV(2/3) → ... */
@@ -295,8 +299,9 @@ namespace EmEn::Scenes
 		/* --- Resolve bindless texture indices for RT materials --- */
 		if ( bindlessTextureManager != nullptr && !materialMap.empty() )
 		{
-			/* Track which cached textures are still in use this frame. */
-			std::unordered_set< const Vulkan::TextureInterface * > activeTextures;
+			/* Reuse persistent set (clear but keep allocated memory). */
+			m_rebuildActiveTextures.clear();
+			auto & activeTextures = m_rebuildActiveTextures;
 
 			for ( auto & [material, matIndex] : materialMap )
 			{
@@ -383,6 +388,7 @@ namespace EmEn::Scenes
 
 		if ( instances.empty() )
 		{
+			m_pendingTLASBuild.reset();
 			m_TLAS.reset();
 			m_retiredTLAS.clear();
 			m_instanceCount = 0;
@@ -418,7 +424,7 @@ namespace EmEn::Scenes
 		m_instanceCount = meshEntries.size();
 		m_materialCount = materialEntries.size();
 
-		/* --- Retire current TLAS and build new one --- */
+		/* --- Retire current TLAS and prepare the new one (deferred GPU build) --- */
 		if ( m_TLAS != nullptr )
 		{
 			m_retiredTLAS.emplace_back(std::move(m_TLAS));
@@ -427,9 +433,26 @@ namespace EmEn::Scenes
 		/* Keep at most 3 retired TLAS (covers typical 2-3 frames-in-flight). */
 		while ( m_retiredTLAS.size() > 3 )
 		{
-			m_retiredTLAS.erase(m_retiredTLAS.begin());
+			m_retiredTLAS.pop_front();
 		}
 
-		m_TLAS = m_accelerationStructureBuilder->buildTLAS(instances);
+		/* Prepare the TLAS build (CPU-side only). The GPU build commands will be
+		 * recorded into the main render command buffer by recordTLASBuild(). */
+		m_pendingTLASBuild = m_accelerationStructureBuilder->prepareTLAS(instances);
+	}
+
+	void
+	SceneMetaData::recordTLASBuild (VkCommandBuffer cmdBuf) noexcept
+	{
+		if ( m_pendingTLASBuild == nullptr || m_accelerationStructureBuilder == nullptr )
+		{
+			return;
+		}
+
+		m_accelerationStructureBuilder->recordTLASBuild(cmdBuf, *m_pendingTLASBuild);
+
+		/* Transfer ownership of the built TLAS. */
+		m_TLAS = std::move(m_pendingTLASBuild->tlas);
+		m_pendingTLASBuild.reset();
 	}
 }
