@@ -399,12 +399,48 @@ namespace EmEn::Graphics::RenderableInstance
 		Tracer::error(TracerTag, errorMessage, location);
 	}
 
+	std::shared_ptr< Saphir::Program >
+	Abstract::resolveProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderable::ProgramCacheKey & cacheKey) const noexcept
+	{
+		const auto renderTargetId = reinterpret_cast< uint64_t >(renderTarget.get());
+
+		/* Fast path: linear scan on the small instance-local cache. */
+		for ( const auto & entry : m_resolvedPrograms )
+		{
+			if ( entry.renderTargetId == renderTargetId &&
+				entry.renderPassHandle == cacheKey.renderPassHandle &&
+				entry.programType == cacheKey.programType &&
+				entry.renderPassType == cacheKey.renderPassType &&
+				entry.layerIndex == cacheKey.layerIndex )
+			{
+				return entry.program;
+			}
+		}
+
+		/* Slow path: fall back to the Renderable's hashtable cache. */
+		auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
+
+		if ( program != nullptr && !m_resolvedPrograms.full() )
+		{
+			m_resolvedPrograms.emplace_back(ResolvedProgram{
+				.renderTargetId = renderTargetId,
+				.renderPassHandle = cacheKey.renderPassHandle,
+				.programType = cacheKey.programType,
+				.renderPassType = cacheKey.renderPassType,
+				.layerIndex = cacheKey.layerIndex,
+				.program = program
+			});
+		}
+
+		return program;
+	}
+
 	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
-		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
+		const auto program = this->resolveProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
 		{
@@ -492,7 +528,7 @@ namespace EmEn::Graphics::RenderableInstance
 			? reinterpret_cast< uint64_t >(postProcessFB->renderPass()->handle())
 			: reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
-		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
+		const auto program = this->resolveProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
 		{
@@ -614,7 +650,7 @@ namespace EmEn::Graphics::RenderableInstance
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, renderPassHandle, layerIndex);
-		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
+		const auto program = this->resolveProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
 		{

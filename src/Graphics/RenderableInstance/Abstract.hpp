@@ -802,8 +802,33 @@ namespace EmEn::Graphics::RenderableInstance
 			[[nodiscard]]
 			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex) const noexcept;
 
+			/**
+			 * @brief Resolves a program from the fast instance-local cache or falls back to the Renderable cache.
+			 * @param renderTarget A reference to the render target.
+			 * @param cacheKey The program cache key.
+			 * @return std::shared_ptr< Saphir::Program > The resolved program, or nullptr if not found.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Saphir::Program > resolveProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderable::ProgramCacheKey & cacheKey) const noexcept;
+
+			/** @brief Entry in the instance-local resolved program cache. */
+			struct ResolvedProgram final
+			{
+				uint64_t renderTargetId{0};
+				uint64_t renderPassHandle{0};
+				Renderable::ProgramType programType{Renderable::ProgramType::Rendering};
+				RenderPassType renderPassType{RenderPassType::SimplePass};
+				uint32_t layerIndex{0};
+				std::shared_ptr< Saphir::Program > program;
+			};
+
+			/** @brief Maximum number of resolved program entries per instance. */
+			static constexpr size_t MaxResolvedPrograms{16};
+
 			const std::shared_ptr< Renderable::Abstract > m_renderable;
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;
+			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
+			mutable Libs::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_frameIndex{0};
 	};
 }

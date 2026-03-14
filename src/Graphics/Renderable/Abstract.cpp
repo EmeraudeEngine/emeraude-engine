@@ -87,7 +87,7 @@ namespace EmEn::Graphics::Renderable
 	std::shared_ptr< Saphir::Program >
 	Abstract::findCachedProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::shared_lock lock{m_programCacheMutex};
 
 		const auto renderTargetIt = m_programCache.find(renderTarget);
 
@@ -109,7 +109,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	Abstract::cacheProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key, const std::shared_ptr< Saphir::Program > & program) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::lock_guard lock{m_programCacheMutex};
 
 		m_programCache[renderTarget][key] = program;
 	}
@@ -117,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	Abstract::clearProgramCache (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::lock_guard lock{m_programCacheMutex};
 
 		m_programCache.erase(renderTarget);
 	}
@@ -125,7 +125,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	Abstract::clearAllProgramCaches () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::lock_guard lock{m_programCacheMutex};
 
 		m_programCache.clear();
 	}
@@ -133,7 +133,7 @@ namespace EmEn::Graphics::Renderable
 	bool
 	Abstract::hasAnyCachedPrograms (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::shared_lock lock{m_programCacheMutex};
 
 		const auto renderTargetIt = m_programCache.find(renderTarget);
 
@@ -148,7 +148,7 @@ namespace EmEn::Graphics::Renderable
 	bool
 	Abstract::hasAnyCachedProgramsForRenderPass (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, uint64_t renderPassHandle) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::shared_lock lock{m_programCacheMutex};
 
 		const auto renderTargetIt = m_programCache.find(renderTarget);
 
@@ -174,7 +174,7 @@ namespace EmEn::Graphics::Renderable
 	size_t
 	Abstract::cachedProgramCount (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+		const std::shared_lock lock{m_programCacheMutex};
 
 		const auto renderTargetIt = m_programCache.find(renderTarget);
 

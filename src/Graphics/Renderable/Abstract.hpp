@@ -28,7 +28,7 @@
 
 /* STL inclusions. */
 #include <memory>
-#include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 
 /* Local inclusions for inheritances. */
@@ -344,7 +344,7 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Cache of shader programs per render target and configuration. */
 			mutable RenderTargetProgramCache m_programCache;
 
-			/** @brief Mutex protecting the program cache. */
-			mutable std::mutex m_programCacheMutex;
+			/** @brief Shared mutex protecting the program cache (read-heavy, write-rare). */
+			mutable std::shared_mutex m_programCacheMutex;
 	};
 }
