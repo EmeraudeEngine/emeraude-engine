@@ -147,16 +147,6 @@ namespace EmEn::Vulkan
 			std::unique_ptr< AccelerationStructure > buildBLAS (const BLASGeometryInput & geometry) noexcept;
 
 			/**
-			 * @brief Builds a top-level acceleration structure synchronously (legacy path).
-			 * @note Prefer prepareTLAS() + recordTLASBuild() for per-frame rebuilds
-			 * to avoid CPU stalls from the internal fence wait.
-			 * @param instances A reference to a vector of instance inputs.
-			 * @return std::unique_ptr< AccelerationStructure > The built TLAS, or nullptr on failure.
-			 */
-			[[nodiscard]]
-			std::unique_ptr< AccelerationStructure > buildTLAS (const std::vector< TLASInstanceInput > & instances) noexcept;
-
-			/**
 			 * @brief Prepares a TLAS build (CPU-side): uploads instances, allocates AS and scratch.
 			 * @note Does NOT submit any GPU commands. The caller must record the build
 			 * into a command buffer via recordTLASBuild().
