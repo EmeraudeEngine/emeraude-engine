@@ -68,8 +68,19 @@ layout(push_constant) uniform PushConstants
 	float spread;
 };
 
-/* 13-tap downsample filter (Jimenez, COD:MW). */
-vec4 downsample13Tap (sampler2D tex, vec2 uv, vec2 ts)
+/* Karis average weight: suppresses firefly pixels by weighting
+ * each sample inversely proportional to its luminance.
+ * Bright outlier pixels get near-zero weight. (Epic Games, UE4) */
+float karisWeight (vec3 color)
+{
+	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	return 1.0 / (1.0 + luma);
+}
+
+/* 13-tap downsample filter (Jimenez, COD:MW) with Karis anti-firefly.
+ * The useAntiFirefly flag enables luminance-weighted averaging on the
+ * first downsample pass to prevent single bright pixels from dominating. */
+vec4 downsample13Tap (sampler2D tex, vec2 uv, vec2 ts, bool useAntiFirefly)
 {
 	vec4 A = texture(tex, uv + ts * vec2(-1.0, -1.0));
 	vec4 B = texture(tex, uv + ts * vec2( 0.0, -1.0));
@@ -85,6 +96,35 @@ vec4 downsample13Tap (sampler2D tex, vec2 uv, vec2 ts)
 	vec4 L = texture(tex, uv + ts * vec2( 0.0,  1.0));
 	vec4 M = texture(tex, uv + ts * vec2( 1.0,  1.0));
 
+	if ( useAntiFirefly )
+	{
+		/* Weighted average using Karis: each 2x2 quad is weighted
+		 * by the inverse of its luminance, killing fireflies. */
+		vec4 g0 = (D + E + I + J);
+		vec4 g1 = (A + B + F + G);
+		vec4 g2 = (B + C + G + H);
+		vec4 g3 = (F + G + K + L);
+		vec4 g4 = (G + H + L + M);
+
+		float w0 = karisWeight(g0.rgb * 0.25);
+		float w1 = karisWeight(g1.rgb * 0.25);
+		float w2 = karisWeight(g2.rgb * 0.25);
+		float w3 = karisWeight(g3.rgb * 0.25);
+		float w4 = karisWeight(g4.rgb * 0.25);
+
+		float wSum = w0 * 0.5 + (w1 + w2 + w3 + w4) * 0.125;
+
+		vec4 result = vec4(0.0);
+		result += g0 * 0.5 * w0;
+		result += g1 * 0.125 * w1;
+		result += g2 * 0.125 * w2;
+		result += g3 * 0.125 * w3;
+		result += g4 * 0.125 * w4;
+
+		return result / (wSum * 4.0 + 0.00001);
+	}
+
+	/* Standard unweighted downsample for subsequent mip levels. */
 	vec4 result = vec4(0.0);
 	result += (D + E + I + J) * 0.5;
 	result += (A + B + F + G) * 0.125;
@@ -110,14 +150,26 @@ vec3 applyThreshold (vec3 color, float thresh, float knee)
 void main()
 {
 	vec2 ts = vec2(texelSizeX, texelSizeY);
-	vec4 color = downsample13Tap(inputTex, vUV, ts);
+
+	/* Anti-firefly (Karis weight) on the first downsample pass only
+	 * (when threshold > 0). Subsequent passes use standard averaging. */
+	vec4 color = downsample13Tap(inputTex, vUV, ts, threshold > 0.0);
+
+	/* Reject NaN/Inf to prevent contamination of the bloom chain. */
+	if (any(isnan(color)) || any(isinf(color)))
+	{
+		outColor = vec4(0.0);
+		return;
+	}
 
 	if (threshold > 0.0)
 	{
 		color.rgb = applyThreshold(color.rgb, threshold, softKnee);
 	}
 
-	outColor = color;
+	/* Clamp after threshold: Karis handles moderate outliers,
+	 * this catches extreme values that still slip through. */
+	outColor = clamp(color, vec4(0.0), vec4(64.0));
 }
 )GLSL";
 
