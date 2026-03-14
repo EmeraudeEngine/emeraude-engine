@@ -291,6 +291,17 @@ namespace EmEn::Graphics
 			? m_renderer.sceneTarget()->normalsFormat()
 			: VK_FORMAT_UNDEFINED;
 
+		/* Ensure any in-flight command buffers referencing the old grab pass have completed
+		 * before destroying its resources. This only happens during (re)configuration,
+		 * not per-frame — typically once at scene load or on window resize. */
+		if ( m_grabPass != nullptr )
+		{
+			m_renderer.device()->waitIdle("PostProcessor::configure - grab pass reconfiguration");
+
+			m_grabPass->destroy();
+			m_grabPass.reset();
+		}
+
 		m_grabPass = std::make_unique< GrabPass >();
 
 		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat) )
