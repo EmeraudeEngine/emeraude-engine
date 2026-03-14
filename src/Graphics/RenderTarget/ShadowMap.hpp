@@ -725,9 +725,16 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
-					/* NOTE: Set the expected final image layout for being usable as a texture sampler.
-					 * This must match the render pass finalLayout (VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL). */
-					m_depthImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+					/* NOTE: Perform an initial layout transition from UNDEFINED to DEPTH_STENCIL_READ_ONLY_OPTIMAL.
+					 * This allows the shadow map to be used immediately in descriptors/samplers.
+					 * The RenderPass will transition to DEPTH_STENCIL_ATTACHMENT_OPTIMAL when rendering,
+					 * then back to DEPTH_STENCIL_READ_ONLY_OPTIMAL when done. */
+					if ( !renderer.transferManager().transitionImageLayout(*m_depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL) )
+					{
+						TraceError{ClassId} << "Unable to transition depth image to DEPTH_STENCIL_READ_ONLY_OPTIMAL for shadow map '" << this->id() << "' !";
+
+						return false;
+					}
 
 					/* Create the main image view for rendering.
 					 * - 2D: VK_IMAGE_VIEW_TYPE_2D
@@ -841,6 +848,9 @@ namespace EmEn::Graphics::RenderTarget
 				/* Depth/Stencil buffer. */
 				if ( m_depthImage != nullptr )
 				{
+					/* The image starts in DEPTH_STENCIL_READ_ONLY_OPTIMAL (transitioned at creation),
+					 * transitions to DEPTH_STENCIL_ATTACHMENT_OPTIMAL during rendering,
+					 * then back to DEPTH_STENCIL_READ_ONLY_OPTIMAL when done. */
 					renderPass->addAttachmentDescription(VkAttachmentDescription{
 						.flags = 0,
 						.format = m_depthImage->createInfo().format,
@@ -849,7 +859,7 @@ namespace EmEn::Graphics::RenderTarget
 						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
 						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
 					});
 
