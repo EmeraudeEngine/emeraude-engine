@@ -1634,11 +1634,23 @@ namespace EmEn::Graphics::Material
 			if ( componentIt != m_components.cend() )
 			{
 				lightGenerator.declareSurfaceAlbedo(componentIt->second->variableName());
+
+				/* Opacity: use albedo texture alpha when blending is enabled (glTF alphaMode: BLEND). */
+				if ( this->isFlagEnabled(BlendingEnabled) )
+				{
+					lightGenerator.declareSurfaceOpacity(componentIt->second->variableName() + ".a");
+				}
 			}
 			else
 			{
 				/* Use uniform color value. */
 				lightGenerator.declareSurfaceAlbedo(MaterialUB(UniformBlock::Component::AlbedoColor));
+
+				/* Opacity: use uniform albedo alpha when blending is enabled. */
+				if ( this->isFlagEnabled(BlendingEnabled) )
+				{
+					lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::AlbedoColor) + ".a");
+				}
 			}
 		}
 

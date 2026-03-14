@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 /* Local inclusions for usages. */
@@ -82,6 +83,16 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Sets a list of glTF node names to exclude from loading.
+			 * @note Excluded nodes and their entire subtree are skipped during hierarchy building.
+			 * @param names Set of glTF node names (as they appear in the file, not engine-prefixed).
+			 */
+			void setExcludedNodeNames (std::unordered_set< std::string > names) noexcept
+			{
+				m_excludedNodeNames = std::move(names);
+			}
+
+			/**
 			 * @brief Loads a glTF/glb file into the scene.
 			 * @param filepath Path to the .gltf or .glb file.
 			 * @param scene Reference to the scene.
@@ -114,6 +125,7 @@ namespace EmEn::Scenes
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;
+			std::unordered_set< std::string > m_excludedNodeNames;
 			std::vector< std::shared_ptr< Graphics::ImageResource > > m_images;
 			std::vector< std::shared_ptr< Graphics::TextureResource::Texture2D > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;

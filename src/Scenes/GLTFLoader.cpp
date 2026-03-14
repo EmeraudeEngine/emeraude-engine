@@ -485,6 +485,9 @@ namespace EmEn::Scenes
 				iridescenceFactor = static_cast< float >(glTFMaterial.iridescence->iridescenceFactor);
 			}
 
+			/* Alpha mode (OPAQUE, MASK, BLEND). */
+			const bool isAlphaBlend = glTFMaterial.alphaMode == fastgltf::AlphaMode::Blend;
+
 			/* Async material creation — lambda is fully self-contained, no this/reference captures. */
 			auto material = m_resources.container< Material::PBRResource >()
 				->getOrCreateResource(name, [
@@ -496,7 +499,8 @@ namespace EmEn::Scenes
 					clearcoatFactor, clearcoatRoughness,
 					sheenColor, sheenRoughness,
 					transmissionFactor,
-					iridescenceFactor
+					iridescenceFactor,
+					isAlphaBlend
 				] (auto & materialResource) {
 					/* Albedo. */
 					if ( albedoTex != nullptr )
@@ -564,6 +568,12 @@ namespace EmEn::Scenes
 					if ( iridescenceFactor > 0.0F )
 					{
 						materialResource.setIridescenceComponent(iridescenceFactor);
+					}
+
+					/* Alpha blending (glTF alphaMode: BLEND). */
+					if ( isAlphaBlend )
+					{
+						materialResource.enableBlending(BlendingMode::Normal);
 					}
 
 					return materialResource.setManualLoadSuccess(true);
@@ -986,6 +996,12 @@ namespace EmEn::Scenes
 
 		const auto & glTFNode = asset.nodes[nodeIndex];
 
+		/* Skip excluded nodes and their entire subtree. */
+		if ( !glTFNode.name.empty() && m_excludedNodeNames.contains(std::string{glTFNode.name}) )
+		{
+			return;
+		}
+
 		/* Compute this node's local frame and accumulate into world coordinates. */
 		const auto localFrame = extractFrameFromNode(glTFNode);
 		const auto worldMatrix = parentWorldFrame.getModelMatrix() * localFrame.getModelMatrix();
@@ -1029,6 +1045,13 @@ namespace EmEn::Scenes
 		}
 
 		const auto & glTFNode = asset.nodes[nodeIndex];
+
+		/* Skip excluded nodes and their entire subtree. */
+		if ( !glTFNode.name.empty() && m_excludedNodeNames.contains(std::string{glTFNode.name}) )
+		{
+			return;
+		}
+
 		const auto nodeName = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
 		const auto frame = extractFrameFromNode(glTFNode);
 		const auto engineNode = engineParent->createChild(nodeName, frame);
