@@ -134,7 +134,10 @@ namespace EmEn::Scenes
 
 		const auto & asset = result.get();
 
-		/* Load pipeline: Images → Textures → Materials → Meshes → Nodes. */
+		/* Load pipeline: Images → Materials → Meshes → Nodes.
+		 * NOTE: Textures (Texture2D) are created on-demand inside loadMaterials()
+		 * when the material semantic is known (albedo vs normal vs data).
+		 * This allows setting the correct VkFormat (sRGB vs UNORM) before GPU creation. */
 		TraceInfo{ClassId} << "Phase 1: Loading " << asset.images.size() << " images...";
 
 		if ( !this->loadImages(asset, parentPath) )
@@ -142,21 +145,14 @@ namespace EmEn::Scenes
 			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
 		}
 
-		TraceInfo{ClassId} << "Phase 2: Loading " << asset.textures.size() << " textures...";
-
-		if ( !this->loadTextures(asset) )
-		{
-			Tracer::warning(ClassId, "Some textures failed to load, continuing with defaults.");
-		}
-
-		TraceInfo{ClassId} << "Phase 3: Loading " << asset.materials.size() << " materials...";
+		TraceInfo{ClassId} << "Phase 2: Loading " << asset.materials.size() << " materials...";
 
 		if ( !this->loadMaterials(asset) )
 		{
 			Tracer::warning(ClassId, "Some materials failed to load, continuing with defaults.");
 		}
 
-		TraceInfo{ClassId} << "Phase 4: Loading " << asset.meshes.size() << " meshes...";
+		TraceInfo{ClassId} << "Phase 3: Loading " << asset.meshes.size() << " meshes...";
 
 		if ( !this->loadMeshes(asset) )
 		{
@@ -165,7 +161,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		TraceInfo{ClassId} << "Phase 5: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
+		TraceInfo{ClassId} << "Phase 4: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
 
 		this->buildNodeHierarchy(asset, scene, scene.root());
 
@@ -364,6 +360,7 @@ namespace EmEn::Scenes
 	GLTFLoader::loadMaterials (const fastgltf::Asset & asset) noexcept
 	{
 		m_materials.resize(asset.materials.size());
+		m_textures.resize(asset.textures.size());
 
 		bool allSuccess = true;
 
@@ -380,10 +377,58 @@ namespace EmEn::Scenes
 			else
 				name.append(glTFMaterial.name.data(), glTFMaterial.name.size());
 
-			/* Pre-resolve textures by index. Captures shared_ptrs by value
-			 * so the async lambda is fully self-contained (no this, no references). */
+			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand.
+			 * This defers Texture2D creation to material loading time so the material semantic
+			 * (color vs data) is known before GPU resources are created. Uses m_textures as cache
+			 * since multiple materials may reference the same texture. */
 			const auto resolveTexture = [&] (size_t textureIndex) -> std::shared_ptr< TextureResource::Texture2D > {
-				return (textureIndex < m_textures.size()) ? m_textures[textureIndex] : nullptr;
+				if ( textureIndex >= asset.textures.size() )
+				{
+					return nullptr;
+				}
+
+				/* Return cached texture if already created. */
+				if ( m_textures[textureIndex] != nullptr )
+				{
+					return m_textures[textureIndex];
+				}
+
+				const auto & glTFTexture = asset.textures[textureIndex];
+
+				if ( !glTFTexture.imageIndex.has_value() )
+				{
+					return nullptr;
+				}
+
+				const auto imageIndex = glTFTexture.imageIndex.value();
+
+				if ( imageIndex >= m_images.size() || m_images[imageIndex] == nullptr )
+				{
+					return nullptr;
+				}
+
+				/* Build texture resource name. */
+				std::string texName;
+				texName.reserve(m_resourcePrefix.size() + 9 + glTFTexture.name.size());
+				texName = m_resourcePrefix;
+				texName += "Texture/";
+				if ( glTFTexture.name.empty() )
+				{
+					texName += std::to_string(textureIndex);
+				}
+				else
+				{
+					texName.append(glTFTexture.name.data(), glTFTexture.name.size());
+				}
+
+				auto texture = m_resources.container< TextureResource::Texture2D >()
+					->getOrCreateResource(texName, [image = m_images[imageIndex]] (auto & textureResource) {
+						return textureResource.load(image);
+					});
+
+				m_textures[textureIndex] = texture;
+
+				return texture;
 			};
 
 			const auto & PBRData = glTFMaterial.pbrData;
