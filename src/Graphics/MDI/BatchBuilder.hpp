@@ -73,8 +73,8 @@ namespace EmEn::Graphics::MDI
 		uint32_t drawCount{0};
 		/** @brief Index of the first draw in the per-draw SSBO for this batch. */
 		uint32_t firstDrawIndex{0};
-		/** @brief Reference to the representative render batch (for binding state). */
-		const Scenes::RenderBatch * representativeBatch{nullptr};
+		/** @brief All render batches in this group (for fallback individual rendering). */
+		std::vector< const Scenes::RenderBatch * > renderBatches;
 	};
 
 	/**

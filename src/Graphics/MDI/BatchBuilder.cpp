@@ -26,6 +26,9 @@
 
 #include "BatchBuilder.hpp"
 
+/* STL inclusions. */
+#include <cstring>
+
 /* Local inclusions. */
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/Interface.hpp"
@@ -33,13 +36,17 @@
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Saphir/Program.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/IndirectBuffer.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
-#include "Vulkan/ShaderStorageBufferObject.hpp"
+#include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::MDI
@@ -182,9 +189,8 @@ namespace EmEn::Graphics::MDI
 				batch.indirectOffset = totalDrawIndex * sizeof(VkDrawIndexedIndirectCommand);
 				batch.firstDrawIndex = totalDrawIndex;
 				batch.drawCount = 0;
-				batch.representativeBatch = &renderBatch;
 
-				m_batches.push_back(batch);
+				m_batches.push_back(std::move(batch));
 
 				currentRenderable = renderable;
 				currentMaterial = material;
@@ -207,30 +213,17 @@ namespace EmEn::Graphics::MDI
 
 			perDrawData[totalDrawIndex].frameIndex = 0; /* TODO: animated materials */
 
-			/* Fill indirect draw command. */
-			if ( geometry->useIndexBuffer() && geometry->indexBufferObject() != nullptr )
-			{
-				const auto * ibo = geometry->indexBufferObject();
+			/* Fill indirect draw command using sub-geometry range for multi-layer support. */
+			const auto subRange = geometry->subGeometryRange(layerIndex);
 
-				indirectCmds[totalDrawIndex].indexCount = ibo->indexCount();
-				indirectCmds[totalDrawIndex].instanceCount = 1;
-				indirectCmds[totalDrawIndex].firstIndex = 0;
-				indirectCmds[totalDrawIndex].vertexOffset = 0;
-				indirectCmds[totalDrawIndex].firstInstance = 0;
-			}
-			else
-			{
-				/* Non-indexed geometry: use vertexCount as indexCount (fallback). */
-				const auto * vbo = geometry->vertexBufferObject();
+			indirectCmds[totalDrawIndex].indexCount = subRange[1];
+			indirectCmds[totalDrawIndex].instanceCount = 1;
+			indirectCmds[totalDrawIndex].firstIndex = subRange[0];
+			indirectCmds[totalDrawIndex].vertexOffset = 0;
+			indirectCmds[totalDrawIndex].firstInstance = 0;
 
-				indirectCmds[totalDrawIndex].indexCount = vbo != nullptr ? vbo->vertexCount() : 0;
-				indirectCmds[totalDrawIndex].instanceCount = 1;
-				indirectCmds[totalDrawIndex].firstIndex = 0;
-				indirectCmds[totalDrawIndex].vertexOffset = 0;
-				indirectCmds[totalDrawIndex].firstInstance = 0;
-			}
-
-			/* Increment draw count for current batch. */
+			/* Add this render batch to the group and increment draw count. */
+			m_batches.back().renderBatches.push_back(&renderBatch);
 			m_batches.back().drawCount++;
 			totalDrawIndex++;
 		}
@@ -263,35 +256,117 @@ namespace EmEn::Graphics::MDI
 			return;
 		}
 
-		/* Use state tracker for the dispatch — MDI batches are already state-sorted,
-		 * so the tracker eliminates redundant binds between consecutive single-draw batches
-		 * and between the bind-once phase of multi-draw batches. */
+		const auto bdaAddress = this->perDrawSSBOAddress(frameIndex);
+
 		RenderableInstance::RenderStateTracker tracker{};
 
 		for ( const auto & batch : m_batches )
 		{
-			if ( batch.representativeBatch == nullptr )
+			if ( batch.renderBatches.empty() )
 			{
 				continue;
 			}
 
-			const auto & instance = batch.representativeBatch->renderableInstance();
-			const auto layerIndex = batch.representativeBatch->subGeometryIndex();
+			const auto & firstBatch = *batch.renderBatches[0];
+			const auto & instance = firstBatch.renderableInstance();
+			const auto layerIndex = firstBatch.subGeometryIndex();
 
-			/* TODO: Remove this forced fallback once MDI indirect draw is validated. */
-			if ( batch.drawCount >= 1 )
+			/* Multi-draw batch with valid MDI program: use vkCmdDrawIndexedIndirect. */
+			if ( batch.drawCount > 1 && bdaAddress != 0 )
 			{
-				/* Fallback to individual tracked render for all batches. */
-				instance->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, layerIndex, batch.representativeBatch->worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				const auto program = instance->resolveMDIProgram(renderTarget, layerIndex);
+
+				if ( program != nullptr )
+				{
+					const auto * geometry = instance->renderable()->geometry();
+					const auto pipelineLayout = program->pipelineLayout();
+					const auto pipelineHandle = program->graphicsPipeline()->handle();
+
+					/* Bind pipeline. */
+					if ( tracker.lastPipeline != pipelineHandle )
+					{
+						commandBuffer.bind(*program->graphicsPipeline());
+						tracker.lastPipeline = pipelineHandle;
+						tracker.invalidateDescriptorSets();
+					}
+
+					/* Viewport. */
+					if ( !tracker.viewportSet )
+					{
+						renderTarget->setViewport(commandBuffer);
+						tracker.viewportSet = true;
+					}
+
+					/* Geometry. */
+					if ( tracker.lastGeometry != static_cast< const void * >(geometry) || tracker.lastLayerIndex != layerIndex )
+					{
+						commandBuffer.bind(*geometry, layerIndex);
+						tracker.lastGeometry = geometry;
+						tracker.lastLayerIndex = layerIndex;
+					}
+
+					/* Push MDI constants: BDA(8) + VP(64) + frameIndex(4) = 76 bytes. */
+					{
+						const auto & viewMatrix = renderTarget->viewMatrices().viewMatrix(readStateIndex, false, 0);
+						const auto & projectionMatrix = renderTarget->viewMatrices().projectionMatrix(readStateIndex);
+						const auto viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+						const auto bdaLo = static_cast< uint32_t >(bdaAddress & 0xFFFFFFFFUL);
+						const auto bdaHi = static_cast< uint32_t >((bdaAddress >> 32) & 0xFFFFFFFFUL);
+
+						std::array< float, 19 > buffer{};
+						std::memcpy(&buffer[0], &bdaLo, sizeof(uint32_t));
+						std::memcpy(&buffer[1], &bdaHi, sizeof(uint32_t));
+						std::memcpy(&buffer[2], viewProjectionMatrix.data(), 64);
+						buffer[18] = 0.0F;
+
+						vkCmdPushConstants(commandBuffer.handle(), pipelineLayout->handle(), VK_SHADER_STAGE_VERTEX_BIT, 0, 76, buffer.data());
+					}
+
+					/* Descriptor sets. */
+					uint32_t setOffset = 0;
+
+					const auto * viewDS = renderTarget->viewMatrices().descriptorSet();
+
+					if ( tracker.lastViewDS != viewDS->handle() )
+					{
+						commandBuffer.bind(*viewDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
+						tracker.lastViewDS = viewDS->handle();
+					}
+
+					setOffset++;
+
+					const auto * material = instance->renderable()->material(layerIndex);
+
+					if ( material != nullptr )
+					{
+						const auto * materialDS = material->descriptorSet();
+
+						if ( tracker.lastMaterialDS != materialDS->handle() )
+						{
+							commandBuffer.bind(*materialDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
+							tracker.lastMaterialDS = materialDS->handle();
+						}
+
+						setOffset++;
+					}
+
+					/* THE indirect draw call — N objects in one Vulkan command. */
+					commandBuffer.drawIndexedIndirect(
+						m_indirectBuffers[frameIndex]->handle(),
+						batch.indirectOffset,
+						batch.drawCount,
+						sizeof(VkDrawIndexedIndirectCommand)
+					);
+
+					continue;
+				}
 			}
-			else
+
+			/* Fallback: render ALL objects in the batch individually. */
+			for ( const auto * rb : batch.renderBatches )
 			{
-				/* Multi-draw: for now, fall back to individual draws per batch entry.
-				 * True MDI dispatch (vkCmdDrawIndexedIndirect) requires MDI-enabled shaders
-				 * that read modelMatrix from SSBO via gl_DrawID instead of push constants.
-				 * This will be activated once shader generation is updated (steps 6-8). */
-				/* TODO: Replace with vkCmdDrawIndexedIndirect when MDI shaders are ready. */
-				instance->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, layerIndex, batch.representativeBatch->worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				rb->renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, rb->subGeometryIndex(), rb->worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
 			}
 		}
 	}

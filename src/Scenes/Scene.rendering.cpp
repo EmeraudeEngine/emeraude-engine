@@ -392,14 +392,48 @@ namespace EmEn::Scenes
 	{
 		if ( !m_renderLists[Opaque].empty() )
 		{
-			/* Phase 1A: state-sorted rendering with redundant bind elimination.
-			 * MDI dispatch is prepared but not active in the render loop until
-			 * indirect draw validation is complete. */
-			RenderableInstance::RenderStateTracker tracker{};
+			auto * mdiBatchBuilder = m_AVConsoleManager.graphicsRenderer().MDIBatchBuilder();
 
-			for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
+			if ( mdiBatchBuilder != nullptr && mdiBatchBuilder->isReady() && m_renderLists[Opaque].size() > 1 )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, m_preparedBindlessManager);
+				const auto currentFrame = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+				mdiBatchBuilder->buildBatches(m_renderLists[Opaque], currentFrame, m_preparedReadStateIndex);
+				mdiBatchBuilder->dispatch(renderTarget, commandBuffer, currentFrame, m_preparedReadStateIndex, m_preparedBindlessManager);
+
+				/* Render objects skipped by MDI (sprites, InfinityView, adaptive LOD). */
+				if ( mdiBatchBuilder->skippedCount() > 0 )
+				{
+					RenderableInstance::RenderStateTracker tracker{};
+
+					for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
+					{
+						const auto * renderable = renderBatch.renderableInstance()->renderable();
+
+						if ( renderable == nullptr )
+						{
+							continue;
+						}
+
+						const bool isSkipped = renderable->isSprite()
+							|| renderBatch.renderableInstance()->isUsingInfinityView()
+							|| (renderable->geometry() != nullptr && renderable->geometry()->isAdaptiveLOD());
+
+						if ( isSkipped )
+						{
+							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, m_preparedBindlessManager);
+						}
+					}
+				}
+			}
+			else
+			{
+				/* No MDI: Phase 1A tracked render for all objects. */
+				RenderableInstance::RenderStateTracker tracker{};
+
+				for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
+				{
+					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, m_preparedBindlessManager);
+				}
 			}
 		}
 

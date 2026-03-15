@@ -140,7 +140,7 @@ float influenceStrength(const Vector<3,float>& worldPosition);
 
 ### Spatial Optimization
 - **Octrees per Scene**: One for physics, one for rendering
-- **Frustum culling**: Active during tree traversal
+- **Frustum culling**: Active during tree traversal. **Sprites are excluded** from frustum culling because billboard rotation (vertex shader) changes the screen-space extent, but culling uses CPU-side AABB from the flat quad geometry (Z=0). See: `Scene.rendering.cpp` frustum check.
 - **Depth limit**: `DefaultMaxDepth` (16 levels) prevents infinite subdivision when entities cluster
 - Future optimization: Culling by Octree sector
 
@@ -585,9 +585,9 @@ The Scene dispatches renderable layers into 7 render lists (defined in `Scene.hp
 
 | Index | Constant | Sort Order | Description |
 |-------|----------|------------|-------------|
-| 0 | `Opaque` | Front-to-back | Opaque objects, no lighting |
+| 0 | `Opaque` | State-sorted (pipeline\|material\|geometry\|distance) | Opaque objects, no lighting. Special objects (sprites, InfinityView, depth-disabled) use distance-only fallback |
 | 1 | `Translucent` | Back-to-front | Translucent objects (no grab pass), no lighting |
-| 2 | `OpaqueLighted` | Front-to-back | Opaque objects, with lighting |
+| 2 | `OpaqueLighted` | State-sorted | Opaque objects, with lighting. Same special-object fallback |
 | 3 | `TranslucentLighted` | Back-to-front | Translucent objects (no grab pass), with lighting |
 | 4 | `Shadows` | Distance | Shadow-casting objects |
 | 5 | `TranslucentGB` | Back-to-front | Translucent objects requiring grab pass, no lighting |

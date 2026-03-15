@@ -292,6 +292,26 @@ barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
 > - **NEVER use** `VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR` — it requires enabling the RT pipeline extension
 > - Access mask: `VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR` is correct for both approaches
 
+## Multi-Draw Indirect Support
+
+The command buffer supports `drawIndexedIndirect()` for GPU-driven rendering. Device features enabled in `Instance.cpp`:
+- `multiDrawIndirect`, `drawIndirectFirstInstance` (VK 1.0)
+- `shaderInt64` (VK 1.0) — `uint64_t` for BDA address reconstruction
+- `shaderDrawParameters` (VK 1.1) — `gl_DrawID` in vertex shaders
+
+**Buffer types for MDI:**
+- `IndirectBuffer` (`IndirectBuffer.hpp`) — `VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT`, host-visible
+- Per-draw SSBO — Created via `Buffer` directly with `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT` (NOT via `ShaderStorageBufferObject` which lacks the BDA flag)
+
+> [!WARNING]
+> **`ShaderStorageBufferObject` does NOT include `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`.**
+> For BDA-accessible SSBOs, use `Buffer` directly with both `STORAGE_BUFFER_BIT` and `SHADER_DEVICE_ADDRESS_BIT`.
+
+**Code references:**
+- `CommandBuffer.cpp:drawIndexedIndirect()` — Wraps `vkCmdDrawIndexedIndirect`
+- `IndirectBuffer.hpp` — Convenience buffer subclass
+- `Instance.cpp` — Feature enablement (MDI + shaderInt64 + shaderDrawParameters)
+
 ## Critical Points
 
 - **Ordered destruction**: Destroy resources in reverse creation order
