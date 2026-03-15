@@ -44,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "ExternalInput.hpp"
+#include "MDI/BatchBuilder.hpp"
 #include "Recorder.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
@@ -682,6 +683,28 @@ namespace EmEn::Graphics
 			isShadowMapsEnabled () const noexcept
 			{
 				return m_shadowMapsEnabled;
+			}
+
+			/**
+			 * @brief Returns whether Multi-Draw Indirect rendering is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMDIEnabled () const noexcept
+			{
+				return m_MDIEnabled;
+			}
+
+			/**
+			 * @brief Returns the MDI batch builder.
+			 * @return MDI::BatchBuilder *
+			 */
+			[[nodiscard]]
+			MDI::BatchBuilder *
+			MDIBatchBuilder () noexcept
+			{
+				return m_MDIBatchBuilder.get();
 			}
 
 			/**
@@ -1502,6 +1525,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;
 			uint32_t m_rtLightCount{0};
+			/** @brief MDI batch builder for GPU-driven opaque rendering. */
+			std::unique_ptr< MDI::BatchBuilder > m_MDIBatchBuilder;
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_rayTracingSettingEnabled{true};
@@ -1511,5 +1536,6 @@ namespace EmEn::Graphics
 			bool m_grabPassEnabled{false};
 			bool m_swapChainMustBeRecreated{false};
 			bool m_shutdownRequested{false};
+			bool m_MDIEnabled{false};
 	};
 }

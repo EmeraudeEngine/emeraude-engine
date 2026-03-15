@@ -122,16 +122,24 @@ namespace EmEn::Saphir
 			bool wasBillBoardingEnabled () const noexcept;
 
 			/**
+			 * @brief Returns whether MDI (Multi-Draw Indirect) was enabled for this program.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool wasMDIEnabled () const noexcept;
+
+			/**
 			 * @brief Initializes the vertex shader and returns it.
 			 * @param name A reference to a string.
 			 * @param enableInstancing Enable instancing for the vertex shader.
 			 * @param enableAdvancedMatrices Enable the advanced matrices for the vertex shader.
 			 * @param enableBillBoarding Enable the render of bill boards instead of classic geometry.
 			 * @param enableCubemapMode Enable cubemap multiview rendering mode.
+			 * @param enableMDI Enable Multi-Draw Indirect mode.
 			 * @return VertexShader *
 			 */
 			[[nodiscard]]
-			VertexShader * initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode = false) noexcept;
+			VertexShader * initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode = false, bool enableMDI = false) noexcept;
 
 			/**
 			 * @brief Initializes the tesselation control shader and returns it.

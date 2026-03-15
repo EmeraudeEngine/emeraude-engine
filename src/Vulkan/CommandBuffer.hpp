@@ -589,6 +589,21 @@ namespace EmEn::Vulkan
 			 */
 			void draw (uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) const noexcept;
 
+			/**
+			 * @brief Registers a multi-draw indexed indirect command.
+			 *
+			 * Issues drawCount indexed draw commands from an indirect buffer.
+			 * Each draw reads a VkDrawIndexedIndirectCommand struct at the given stride.
+			 * Used for Multi-Draw Indirect (MDI) rendering where draw parameters are
+			 * sourced from a GPU buffer.
+			 *
+			 * @param buffer The indirect command buffer handle.
+			 * @param offset Byte offset into the buffer for the first command.
+			 * @param drawCount Number of draws to issue.
+			 * @param stride Byte stride between consecutive commands.
+			 */
+			void drawIndexedIndirect (VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) const noexcept;
+
 		private:
 
 			VkCommandBuffer m_handle{VK_NULL_HANDLE};

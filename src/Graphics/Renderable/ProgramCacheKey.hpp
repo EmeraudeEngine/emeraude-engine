@@ -83,6 +83,8 @@ namespace EmEn::Graphics::Renderable
 		bool isDepthWriteDisabled{false};
 		/** @brief Whether bindless textures are enabled (adds a descriptor set). */
 		bool isBindlessEnabled{false};
+		/** @brief Whether MDI (Multi-Draw Indirect) is enabled for this program variant. */
+		bool isMDIEnabled{false};
 
 		/**
 		 * @brief Computes a hash value for this key.
@@ -109,6 +111,7 @@ namespace EmEn::Graphics::Renderable
 			hashCombine(static_cast< size_t >(isDepthWriteDisabled));
 			hashCombine(materialLayoutHash);
 			hashCombine(static_cast< size_t >(isBindlessEnabled));
+			hashCombine(static_cast< size_t >(isMDIEnabled));
 
 			return h;
 		}
@@ -131,7 +134,8 @@ namespace EmEn::Graphics::Renderable
 				isDepthTestDisabled == other.isDepthTestDisabled &&
 				isDepthWriteDisabled == other.isDepthWriteDisabled &&
 				materialLayoutHash == other.materialLayoutHash &&
-				isBindlessEnabled == other.isBindlessEnabled;
+				isBindlessEnabled == other.isBindlessEnabled &&
+				isMDIEnabled == other.isMDIEnabled;
 		}
 	};
 }

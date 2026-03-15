@@ -263,6 +263,10 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 
+			/* Multi-Draw Indirect */
+			constexpr auto GraphicsMDIEnabledKey{"Core/Graphics/MDI/Enabled"};
+			constexpr auto DefaultGraphicsMDIEnabled{false};
+
 			/* Shadow Mapping */
 			constexpr auto GraphicsShadowMappingEnabledKey{"Core/Graphics/ShadowMapping/Enabled"};
 			constexpr auto DefaultGraphicsShadowMappingEnabled{true};

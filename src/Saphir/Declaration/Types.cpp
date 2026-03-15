@@ -47,6 +47,9 @@ namespace EmEn::Saphir::Declaration
 			case VariableType::UnsignedInteger :
 				return GLSL::UnsignedInteger;
 
+			case VariableType::UnsignedInteger64 :
+				return "uint64_t";
+
 			case VariableType::Integer :
 				return GLSL::Integer;
 
@@ -542,6 +545,9 @@ namespace EmEn::Saphir::Declaration
 			case VariableType::AtomicUnsignedInteger :
 				return sizeof(unsigned int);
 
+			case VariableType::UnsignedInteger64 :
+				return sizeof(uint64_t);
+
 			case VariableType::Integer :
 				return sizeof(int);
 
@@ -637,7 +643,8 @@ namespace EmEn::Saphir::Declaration
 			case VariableType::Boolean :
 				return 4;
 
-			/* Double scalars: base alignment = 8 bytes. */
+			/* 64-bit types: base alignment = 8 bytes. */
+			case VariableType::UnsignedInteger64 :
 			case VariableType::Double :
 				return 8;
 

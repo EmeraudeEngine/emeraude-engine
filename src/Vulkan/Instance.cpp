@@ -858,6 +858,11 @@ namespace EmEn::Vulkan
 			requirements.featuresVK12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 		}
 		requirements.featuresVK12().bufferDeviceAddress = VK_TRUE; // Required for buffer device addresses (VBO/IBO for RT, etc.)
+		/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
+		requirements.featuresVK10().multiDrawIndirect = VK_TRUE; // Required for vkCmdDrawIndexedIndirect with drawCount > 1
+		requirements.featuresVK10().drawIndirectFirstInstance = VK_TRUE; // Required for firstInstance in indirect commands
+		requirements.featuresVK10().shaderInt64 = VK_TRUE; // Required for uint64_t in shaders (BDA address reconstruction)
+		requirements.featuresVK11().shaderDrawParameters = VK_TRUE; // Required for gl_DrawID in vertex shaders
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
 		/* NOTE: Optional extension detection. Query all device extensions once and enable

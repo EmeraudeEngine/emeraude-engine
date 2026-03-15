@@ -434,6 +434,7 @@ namespace EmEn::Graphics
 
 		m_rayTracingSettingEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsRayTracingEnabledKey, DefaultGraphicsRayTracingEnabled);
 		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
+		m_MDIEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsMDIEnabledKey, DefaultGraphicsMDIEnabled);
 
 		/* NOTE: Graphics device selection from the vulkan instance.
 		 * The Vulkan instance doesn't directly create a device on its initialization. */
@@ -653,6 +654,20 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Initialize Multi-Draw Indirect batch builder if enabled and device supports it. */
+		if ( m_MDIEnabled && m_device != nullptr )
+		{
+			m_MDIBatchBuilder = std::make_unique< MDI::BatchBuilder >(m_device, this->framesInFlight());
+
+			if ( !m_MDIBatchBuilder->createResources() )
+			{
+				TraceWarning{ClassId} << "MDI batch builder initialization failed. Falling back to individual draws.";
+
+				m_MDIBatchBuilder.reset();
+				m_MDIEnabled = false;
+			}
+		}
+
 		return true;
 	}
 
@@ -686,6 +701,9 @@ namespace EmEn::Graphics
 
 		/* NOTE: Final device idle to ensure all GPU work is complete. */
 		m_device->waitIdle("Renderer::onTerminate()");
+
+		/* Release MDI resources before other Vulkan objects are destroyed. */
+		m_MDIBatchBuilder.reset();
 
 		size_t error = 0;
 

@@ -72,7 +72,9 @@ namespace EmEn::Saphir::Generator
 		IsInstancingEnabled = 1U << 2,
 		IsRenderableFacingCamera = 1U << 3,
 		IsLightingEnabled = 1U << 4,
-		BindlessTexturesEnabled = 1U << 5
+		BindlessTexturesEnabled = 1U << 5,
+		/** @brief Multi-Draw Indirect enabled: model matrix from SSBO via BDA + gl_DrawID instead of push constants. */
+		IsMultiDrawIndirectEnabled = 1U << 6
 	};
 
 	/**
@@ -233,6 +235,37 @@ namespace EmEn::Saphir::Generator
 				{
 					this->disableFlag(BindlessTexturesEnabled);
 				}
+			}
+
+			/**
+			 * @brief Enables Multi-Draw Indirect mode for this generator.
+			 * @note When enabled, model matrices are read from an SSBO via BDA + gl_DrawID
+			 * instead of push constants. Requires GL_EXT_buffer_reference.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableMultiDrawIndirect (bool state) noexcept
+			{
+				if ( state )
+				{
+					this->enableFlag(IsMultiDrawIndirectEnabled);
+				}
+				else
+				{
+					this->disableFlag(IsMultiDrawIndirectEnabled);
+				}
+			}
+
+			/**
+			 * @brief Returns whether Multi-Draw Indirect mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMultiDrawIndirectEnabled () const noexcept
+			{
+				return this->isFlagEnabled(IsMultiDrawIndirectEnabled);
 			}
 
 			/**

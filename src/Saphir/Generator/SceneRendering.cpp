@@ -266,7 +266,8 @@ namespace EmEn::Saphir::Generator
 			this->isFlagEnabled(IsInstancingEnabled),
 			this->isAdvancedRendering(),
 			this->isFlagEnabled(IsRenderableFacingCamera),
-			isCubemapTarget
+			isCubemapTarget,
+			this->isMultiDrawIndirectEnabled()
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 

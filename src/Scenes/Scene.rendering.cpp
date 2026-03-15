@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/Renderer.hpp"
 #include "NodeCrawler.hpp"
 
@@ -391,9 +392,14 @@ namespace EmEn::Scenes
 	{
 		if ( !m_renderLists[Opaque].empty() )
 		{
+			/* Phase 1A: state-sorted rendering with redundant bind elimination.
+			 * MDI dispatch is prepared but not active in the render loop until
+			 * indirect draw validation is complete. */
+			RenderableInstance::RenderStateTracker tracker{};
+
 			for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, m_preparedBindlessManager);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, m_preparedBindlessManager);
 			}
 		}
 
@@ -1024,8 +1030,17 @@ namespace EmEn::Scenes
 						}
 					}
 
-					/* Raster list: frustum culling + distance check. */
-					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !node->isVisibleTo(frustum) ) )
+					/* Raster list: frustum culling + distance check.
+					 * Sprites skip frustum culling: their bounding volume is a flat quad (Z=0)
+					 * that doesn't account for billboard rotation done in the vertex shader. */
+					if ( distance > viewDistance )
+					{
+						return;
+					}
+
+					const bool isBillboardSprite = renderableInstance->renderable() != nullptr && renderableInstance->renderable()->isSprite();
+
+					if ( !isBillboardSprite && !renderTarget->isCubemap() && !node->isVisibleTo(frustum) )
 					{
 						return;
 					}
@@ -1079,7 +1094,21 @@ namespace EmEn::Scenes
 
 			if ( isOpaque )
 			{
-				RenderBatch::create(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
+				/* Objects with special rendering flags are order-dependent and must keep distance sorting.
+				 * State-sorted key only for standard opaques without special depth/display flags. */
+				const bool isSpecial = renderable->isSprite()
+					|| renderableInstance->isDepthTestDisabled()
+					|| renderableInstance->isDepthWriteDisabled()
+					|| renderableInstance->isUsingInfinityView();
+
+				if ( isSpecial )
+				{
+					RenderBatch::create(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
+				}
+				else
+				{
+					RenderBatch::createStateSorted(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
+				}
 			}
 			else if ( needsGrabPass )
 			{
@@ -1095,11 +1124,14 @@ namespace EmEn::Scenes
 	void
 	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager) const noexcept
 	{
+		/* State tracker for redundant bind elimination (lighted list is state-sorted). */
+		RenderableInstance::RenderStateTracker tracker{};
+
 		if ( m_lightSet.isUsingStaticLighting() )
 		{
 			for ( const auto & renderBatch : renderBatches | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
 			}
 
 			return;
@@ -1114,7 +1146,7 @@ namespace EmEn::Scenes
 			const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
 
 			/* Ambient pass. */
-			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
+			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
 
 			/* Loop through all directional lights. */
 			for ( const auto & light : m_lightSet.directionalLights() )
@@ -1151,7 +1183,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::DirectionalLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
 			}
 
 			/* Loop through all point lights. */
@@ -1198,7 +1230,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::PointLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
 			}
 
 			/* Loop through all spotlights. */
@@ -1245,9 +1277,19 @@ namespace EmEn::Scenes
 					passType = RenderPassType::SpotLightPass;
 				}
 
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
 			}
 		}
+
+#ifdef DEBUG
+		if ( tracker.totalDrawCalls > 1 )
+		{
+			TraceInfo{ClassId} << "[MDI-1A] Lighted: " << tracker.totalDrawCalls << " draws, saved "
+				<< tracker.savedPipelineBinds << " pipeline, "
+				<< tracker.savedGeometryBinds << " geometry, "
+				<< tracker.savedMaterialBinds << " material binds";
+		}
+#endif
 	}
 
 	void
@@ -1464,7 +1506,26 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		return renderableInstance->getReadyForRender(*this, renderTarget, renderPassTypes, m_AVConsoleManager.graphicsRenderer());
+		if ( !renderableInstance->getReadyForRender(*this, renderTarget, renderPassTypes, m_AVConsoleManager.graphicsRenderer()) )
+		{
+			return false;
+		}
+
+		/* Generate MDI shader variants for standard opaque non-lighted objects when MDI is enabled.
+		 * Sprites, InfinityView, and other special objects are excluded — they need per-object
+		 * push constant handling that's incompatible with the MDI push constant layout. */
+		if ( m_AVConsoleManager.graphicsRenderer().isMDIEnabled()
+			&& !renderableInstance->isLightingEnabled()
+			&& renderableInstance->renderable() != nullptr
+			&& !renderableInstance->renderable()->isSprite()
+			&& !renderableInstance->isUsingInfinityView()
+			&& !renderableInstance->isDepthTestDisabled()
+			&& !renderableInstance->isDepthWriteDisabled() )
+		{
+			static_cast< void >(renderableInstance->getReadyForMDI(*this, renderTarget, m_AVConsoleManager.graphicsRenderer()));
+		}
+
+		return true;
 	}
 
 	void

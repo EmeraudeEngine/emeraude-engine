@@ -131,8 +131,19 @@ namespace EmEn::Saphir
 		return m_vertexShader->isBillBoardingEnabled();
 	}
 
+	bool
+	Program::wasMDIEnabled () const noexcept
+	{
+		if ( m_vertexShader == nullptr )
+		{
+			return false;
+		}
+
+		return m_vertexShader->isMDIEnabled();
+	}
+
 	VertexShader *
-	Program::initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode) noexcept
+	Program::initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode, bool enableMDI) noexcept
 	{
 		if ( m_vertexShader != nullptr )
 		{
@@ -161,6 +172,11 @@ namespace EmEn::Saphir
 		if ( enableCubemapMode )
 		{
 			m_vertexShader->enableCubemapMode();
+		}
+
+		if ( enableMDI )
+		{
+			m_vertexShader->enableMDI();
 		}
 
 		return m_vertexShader.get();

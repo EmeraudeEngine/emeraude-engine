@@ -271,6 +271,28 @@ namespace EmEn::Saphir
 	}
 
 	bool
+	VertexShader::prepareMDIModelMatrix () noexcept
+	{
+		if ( this->preparationAlreadyDone(ShaderVariable::MDIModelMatrix) )
+		{
+			return true;
+		}
+
+		/* NOTE: Extensions are registered in onSourceCodeGeneration() to ensure
+		 * they appear before the PerDrawDataRef declaration in the generated GLSL. */
+
+		std::stringstream code;
+
+		code <<
+			"\t" "const uint64_t perDrawAddr = packUint2x32(uvec2(" << MatrixPC(PushConstant::Component::PerDrawAddrLo) << ", " << MatrixPC(PushConstant::Component::PerDrawAddrHi) << "));" "\n"
+			"\t" "const mat4 " << ShaderVariable::MDIModelMatrix << " = mat4(PerDrawDataRef(perDrawAddr)[gl_DrawID].modelMatrix);" "\n\n";
+
+		m_uniquePreparations.emplace_back(ShaderVariable::MDIModelMatrix, code.str());
+
+		return true;
+	}
+
+	bool
 	VertexShader::prepareModelViewMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::ModelViewMatrix) )
@@ -336,6 +358,17 @@ namespace EmEn::Saphir
 
 				code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << Attribute::ModelMatrix << ";" "\n";
 			}
+		}
+		else if ( this->isMDIEnabled() )
+		{
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = "
+				<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, false) << " * "
+				<< ShaderVariable::MDIModelMatrix << ";" "\n";
 		}
 		else
 		{
@@ -478,6 +511,15 @@ namespace EmEn::Saphir
 				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << ";" "\n";
 			}
 		}
+		else if ( this->isMDIEnabled() )
+		{
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << ShaderVariable::MDIModelMatrix << ";" "\n";
+		}
 		else
 		{
 			/* NOTE: For unique sprite (this->isBillBoardingEnabled()), the model matrix is already oriented to the camera. */
@@ -519,7 +561,16 @@ namespace EmEn::Saphir
 			code << ShaderVariable::PositionWorldSpace << " = ";
 		}
 
-		if ( this->isInstancingEnabled() )
+		if ( this->isMDIEnabled() )
+		{
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			code << ShaderVariable::MDIModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);" "\n";
+		}
+		else if ( this->isInstancingEnabled() )
 		{
 			if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
 			{
@@ -598,7 +649,7 @@ namespace EmEn::Saphir
 		/* NOTE: When rendering to a cubemap or CSM, we MUST always prepare the ModelViewProjectionMatrix
 		 * because the push constant contains only the Model matrix, and Projection/View come from the UBO
 		 * indexed by gl_ViewIndex. Without this, the shader would try to read a non-existent MVP from push constants. */
-		if ( this->isInstancingEnabled() || this->isAdvancedMatricesEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
+		if ( this->isMDIEnabled() || this->isInstancingEnabled() || this->isAdvancedMatricesEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
 		{
 			if ( !this->prepareModelViewProjectionMatrix() )
 			{
@@ -800,7 +851,16 @@ namespace EmEn::Saphir
 
 		std::string modelMatrix;
 
-		if ( this->isInstancingEnabled() )
+		if ( this->isMDIEnabled() )
+		{
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			modelMatrix = ShaderVariable::MDIModelMatrix;
+		}
+		else if ( this->isInstancingEnabled() )
 		{
 			if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
 			{
@@ -1363,6 +1423,20 @@ namespace EmEn::Saphir
 		if ( !this->generateMainUniqueInstructions(generator, topInstructions, outputInstructions) )
 		{
 			return false;
+		}
+
+		/* MDI: Declare the buffer_reference struct for per-draw SSBO access via BDA.
+		 * Extensions are registered in enableMDI() so they appear in generateHeaders(). */
+		if ( m_MDIEnabled )
+		{
+			code <<
+				"\n" "/* MDI per-draw data (BDA buffer reference). */" "\n"
+				"layout(buffer_reference, std430) readonly buffer PerDrawDataRef" "\n"
+				"{" "\n"
+				"\t" "mat4 modelMatrix;" "\n"
+				"\t" "uint frameIndex;" "\n"
+				"\t" "uint _padding[3];" "\n"
+				"};" "\n\n";
 		}
 
 		/* Specific input shader code declarations. */

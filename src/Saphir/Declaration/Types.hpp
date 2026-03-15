@@ -63,6 +63,7 @@ namespace EmEn::Saphir::Declaration
 		Float,
 		Double,
 		UnsignedInteger,
+		UnsignedInteger64,
 		Integer,
 		AtomicUnsignedInteger,
 		Boolean,

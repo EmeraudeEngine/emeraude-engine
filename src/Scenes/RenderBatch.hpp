@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <map>
@@ -115,9 +116,82 @@ namespace EmEn::Scenes
 				);
 			}
 
-		private :
+		/**
+		 * @brief Creates a render batch with a state-sorted composite key for opaque rendering.
+		 *
+		 * The 64-bit key is structured as:
+		 * - Bits 63-48: Pipeline identity (hash of instance flags affecting shader selection)
+		 * - Bits 47-32: Material identity (low bits of material pointer address)
+		 * - Bits 31-16: Geometry identity (low bits of geometry pointer address)
+		 * - Bits 15-0 : Quantized distance (rough front-to-back for early-Z benefit)
+		 *
+		 * This ordering minimizes Vulkan state changes: pipeline binds are most expensive,
+		 * followed by descriptor set binds, then geometry (VBO/IBO) binds.
+		 *
+		 * @param renderList A reference to a render list.
+		 * @param distance The distance of the renderable from the camera.
+		 * @param renderableInstance A pointer to the renderable instance.
+		 * @param worldCoordinates A pointer to the cartesian frame.
+		 * @param subGeometryIndex The layer index of the renderable.
+		 */
+		static
+		void
+		createStateSorted (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex) noexcept
+		{
+			const auto * renderable = renderableInstance->renderable();
 
-			static constexpr auto DistanceMultiplier{1000.0F};
+			/* Pipeline identity: hash instance flags that affect shader/pipeline selection. */
+			uint64_t pipelineHash = 0;
+			uint64_t materialId = 0;
+			uint64_t geometryId = 0;
+
+			if ( renderable != nullptr )
+			{
+				/* Combine flags that differentiate pipelines. */
+				pipelineHash = static_cast< uint64_t >(renderableInstance->useModelVertexBufferObject()) << 4
+					| static_cast< uint64_t >(renderableInstance->isLightingEnabled()) << 3
+					| static_cast< uint64_t >(renderableInstance->isDepthTestDisabled()) << 2
+					| static_cast< uint64_t >(renderableInstance->isDepthWriteDisabled()) << 1;
+
+				/* Material identity: low 16 bits of material object address. */
+				if ( const auto * material = renderable->material(subGeometryIndex); material != nullptr )
+				{
+					/* Mix in the material layout hash for pipeline layout discrimination. */
+					if ( const auto layout = material->descriptorSetLayout(); layout != nullptr )
+					{
+						pipelineHash ^= static_cast< uint64_t >(layout->getHash() & 0xFFFF);
+					}
+
+					materialId = reinterpret_cast< uintptr_t >(material) & 0xFFFF;
+				}
+
+				/* Geometry identity: low 16 bits of geometry object address. */
+				if ( renderable->geometry() != nullptr )
+				{
+					geometryId = reinterpret_cast< uintptr_t >(renderable->geometry()) & 0xFFFF;
+				}
+			}
+
+			/* Quantized distance: front-to-back for early-Z, clamped to 16 bits. */
+			const auto quantizedDistance = static_cast< uint64_t >(std::min(distance * DistanceMultiplier, static_cast< float >(UINT16_MAX)));
+
+			/* Compose the 64-bit sort key. */
+			const uint64_t sortKey =
+				((pipelineHash & 0xFFFF) << 48) |
+				((materialId & 0xFFFF) << 32) |
+				((geometryId & 0xFFFF) << 16) |
+				(quantizedDistance & 0xFFFF);
+
+			renderList.emplace(
+				std::piecewise_construct,
+				std::forward_as_tuple(sortKey),
+				std::forward_as_tuple(renderableInstance, worldCoordinates, subGeometryIndex)
+			);
+		}
+
+	private :
+
+		static constexpr auto DistanceMultiplier{1000.0F};
 
 			const std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
 			const Libs::Math::CartesianFrame< float > * m_worldCoordinates{nullptr};

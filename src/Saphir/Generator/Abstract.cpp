@@ -412,6 +412,18 @@ namespace EmEn::Saphir::Generator
 	{
 		Declaration::PushConstantBlock pushConstantBlock{PushConstant::Type::Matrices, PushConstant::Matrices};
 
+		/* MDI mode: push BDA address (2 × uint32) + ViewProjectionMatrix + FrameIndex.
+		 * The model matrix is read from the per-draw SSBO via buffer_reference + gl_DrawID. */
+		if ( m_shaderProgram->wasMDIEnabled() )
+		{
+			pushConstantBlock.addMember(Declaration::VariableType::UnsignedInteger, PushConstant::Component::PerDrawAddrLo);
+			pushConstantBlock.addMember(Declaration::VariableType::UnsignedInteger, PushConstant::Component::PerDrawAddrHi);
+			pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewProjectionMatrix);
+			pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::FrameIndex);
+
+			return shader.declare(pushConstantBlock);
+		}
+
 		if ( m_shaderProgram->wasInstancingEnabled() )
 		{
 			if ( m_shaderProgram->wasAdvancedMatricesEnabled() || m_shaderProgram->wasBillBoardingEnabled() )

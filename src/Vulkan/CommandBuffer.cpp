@@ -1525,4 +1525,40 @@ namespace EmEn::Vulkan
 			firstInstance
 		);
 	}
+
+	void
+	CommandBuffer::drawIndexedIndirect (VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created for drawIndexedIndirect() !");
+
+				return;
+			}
+
+			if ( buffer == VK_NULL_HANDLE )
+			{
+				Tracer::error(ClassId, "Null indirect buffer for drawIndexedIndirect() !");
+
+				return;
+			}
+
+			if ( drawCount == 0 )
+			{
+				Tracer::error(ClassId, "No draw count for drawIndexedIndirect() !");
+
+				return;
+			}
+		}
+
+		vkCmdDrawIndexedIndirect(
+			m_handle,
+			buffer,
+			offset,
+			drawCount,
+			stride
+		);
+	}
 }

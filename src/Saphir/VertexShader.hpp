@@ -271,6 +271,34 @@ namespace EmEn::Saphir
 				return m_csmModeEnabled;
 			}
 
+			/**
+			 * @brief Enables Multi-Draw Indirect mode.
+			 * @return void
+			 */
+			void
+			enableMDI () noexcept
+			{
+				m_MDIEnabled = true;
+
+				/* Register extensions early so generateHeaders() emits them
+				 * before the BDA struct declaration in onSourceCodeGeneration(). */
+				this->setExtensionBehavior("GL_EXT_buffer_reference", "enable");
+				this->setExtensionBehavior("GL_EXT_buffer_reference2", "enable");
+				this->setExtensionBehavior("GL_ARB_gpu_shader_int64", "enable");
+				this->setExtensionBehavior("GL_ARB_shader_draw_parameters", "enable");
+			}
+
+			/**
+			 * @brief Returns whether MDI mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMDIEnabled () const noexcept
+			{
+				return m_MDIEnabled;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
@@ -294,6 +322,9 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			bool prepareSpriteModelMatrix () noexcept;
+
+			[[nodiscard]]
+			bool prepareMDIModelMatrix () noexcept;
 
 			/**
 			 * @brief Creates a local variable for modelView matrix with VBO.
@@ -473,5 +504,6 @@ namespace EmEn::Saphir
 			bool m_billBoardingEnabled{false};
 			bool m_cubemapModeEnabled{false};
 			bool m_csmModeEnabled{false};
+			bool m_MDIEnabled{false};
 	};
 }

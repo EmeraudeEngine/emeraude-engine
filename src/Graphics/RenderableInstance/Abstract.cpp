@@ -40,7 +40,9 @@
 #include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
@@ -54,7 +56,7 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr auto TracerTag{"RenderableInstance"};
 
 	Renderable::ProgramCacheKey
-	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex) const noexcept
+	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex, bool isMDIEnabled) const noexcept
 	{
 		size_t materialLayoutHash = 0;
 		bool isBindlessEnabled = false;
@@ -88,7 +90,8 @@ namespace EmEn::Graphics::RenderableInstance
 			.isLightingEnabled = this->isLightingEnabled(),
 			.isDepthTestDisabled = this->isDepthTestDisabled(),
 			.isDepthWriteDisabled = this->isDepthWriteDisabled(),
-			.isBindlessEnabled = isBindlessEnabled
+			.isBindlessEnabled = isBindlessEnabled,
+			.isMDIEnabled = isMDIEnabled
 		};
 	}
 
@@ -391,6 +394,55 @@ namespace EmEn::Graphics::RenderableInstance
 		return true;
 	}
 
+	bool
+	Abstract::getReadyForMDI (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept
+	{
+		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
+		{
+			return true;
+		}
+
+		const auto layerCount = m_renderable->layerCount();
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+
+		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+		{
+			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, RenderPassType::SimplePass, renderPassHandle, layerIndex, true);
+
+			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
+			{
+				continue;
+			}
+
+			std::stringstream shaderProgramName;
+			shaderProgramName << "RenderableInstanceMDI" << to_string(RenderPassType::SimplePass);
+
+			Generator::SceneRendering generator{shaderProgramName.str(), renderTarget, this->shared_from_this(), layerIndex, scene, RenderPassType::SimplePass, renderer.primaryServices().settings()};
+
+			generator.enableMultiDrawIndirect(true);
+
+			if ( !generator.generateShaderProgram(renderer) )
+			{
+				TraceWarning{TracerTag} << "Unable to generate MDI shader program for renderable '" << m_renderable->name() << "' layer " << layerIndex;
+
+				return false;
+			}
+
+			m_renderable->cacheProgram(renderTarget, cacheKey, generator.shaderProgram());
+		}
+
+		return true;
+	}
+
+	std::shared_ptr< Saphir::Program >
+	Abstract::resolveMDIProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex) const noexcept
+	{
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, RenderPassType::SimplePass, renderPassHandle, layerIndex, true);
+
+		return this->resolveProgram(renderTarget, cacheKey);
+	}
+
 	void
 	Abstract::setBroken (const std::string & errorMessage, const std::source_location & location) noexcept
 	{
@@ -622,6 +674,203 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/* Draw stitching geometry between LOD zones. */
+			const auto stitchingCount = geometry->getStitchingDrawCallCount();
+
+			for ( uint32_t stitchIndex = 0; stitchIndex < stitchingCount; ++stitchIndex )
+			{
+				const auto range = geometry->getStitchingDrawCallRange(stitchIndex);
+
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+			}
+		}
+		else if ( material->isAnimated() )
+		{
+			commandBuffer.draw(*geometry, m_frameIndex, this->instanceCount());
+		}
+		else if ( m_renderable->layerCount() == 1 )
+		{
+			commandBuffer.draw(*geometry, this->instanceCount());
+		}
+		else
+		{
+			commandBuffer.draw(*geometry, layerIndex, this->instanceCount());
+		}
+	}
+
+	void
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, const BindlessTextureManager * bindlessTexturesManager) const noexcept
+	{
+		/* For grab-pass layers on render targets with a post-process framebuffer,
+		 * use the post-process render pass handle (pipelines were created for it). */
+		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
+		const bool isGrabPassLayer = postProcessFB != nullptr && m_renderable->requiresGrabPass(layerIndex);
+		const auto renderPassHandle = isGrabPassLayer
+			? reinterpret_cast< uint64_t >(postProcessFB->renderPass()->handle())
+			: reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
+		const auto program = this->resolveProgram(renderTarget, cacheKey);
+
+		if ( program == nullptr )
+		{
+			const auto * material = m_renderable->material(layerIndex);
+
+			TraceWarning{TracerTag} <<
+				"There is no suitable render program for the renderable instance (Maybe in loading stage)!\n"
+				"  Renderable  : " << m_renderable->name() << "\n"
+				"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
+				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
+				"  RenderPass  : " << to_string(renderPassType) << "\n"
+				"  Layer       : " << layerIndex << "\n"
+				"  CacheKey    : ProgramType=Rendering, RPHandle=" << renderPassHandle << ", Lighting=" << (cacheKey.isLightingEnabled ? "yes" : "no") << ", Bindless=" << (cacheKey.isBindlessEnabled ? "yes" : "no") << "\n"
+				"  BrokenState : " << (this->isBroken() ? "YES (shader generation failed earlier)" : "no");
+
+			return;
+		}
+
+		const auto * geometry = m_renderable->geometry();
+		const auto pipelineLayout = program->pipelineLayout();
+		const auto pipelineHandle = program->graphicsPipeline()->handle();
+
+		/* Bind the graphics pipeline only if it changed. */
+		if ( tracker.lastPipeline != pipelineHandle )
+		{
+			commandBuffer.bind(*program->graphicsPipeline());
+			tracker.lastPipeline = pipelineHandle;
+
+			/* Pipeline change invalidates descriptor set compatibility. */
+			tracker.invalidateDescriptorSets();
+		}
+#ifdef DEBUG
+		else
+		{
+			tracker.savedPipelineBinds++;
+		}
+#endif
+
+		/* Set the dynamic viewport and scissor only once per pass. */
+		if ( !tracker.viewportSet )
+		{
+			renderTarget->setViewport(commandBuffer);
+			tracker.viewportSet = true;
+		}
+#ifdef DEBUG
+		else
+		{
+			tracker.savedViewportSets++;
+		}
+#endif
+
+		/* Bind geometry (VBO/IBO) only if it changed. */
+		if ( tracker.lastGeometry != static_cast< const void * >(geometry) || tracker.lastLayerIndex != layerIndex )
+		{
+			this->bindInstanceModelLayer(commandBuffer, layerIndex);
+			tracker.lastGeometry = geometry;
+			tracker.lastLayerIndex = layerIndex;
+		}
+#ifdef DEBUG
+		else
+		{
+			tracker.savedGeometryBinds++;
+		}
+#endif
+
+		/* Build render pass context. */
+		const RenderPassContext passContext{
+			.commandBuffer = &commandBuffer,
+			.viewMatrices = &renderTarget->viewMatrices(),
+			.readStateIndex = readStateIndex,
+			.isCubemap = renderTarget->isCubemap()
+		};
+
+		/* Build push constant context. */
+		const PushConstantContext pushContext{
+			.pipelineLayout = pipelineLayout.get(),
+			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
+			.useBillboarding = program->wasBillBoardingEnabled()
+		};
+
+		/* Push constants are always required (unique model matrix per object). */
+		this->pushMatricesForRendering(passContext, pushContext, worldCoordinates);
+
+		uint32_t setOffset = 0;
+
+		/* Bind view UBO (skip if already bound for this pipeline). */
+		const auto * viewDS = renderTarget->viewMatrices().descriptorSet();
+
+		if ( tracker.lastViewDS != viewDS->handle() )
+		{
+			commandBuffer.bind(*viewDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
+			tracker.lastViewDS = viewDS->handle();
+		}
+
+		setOffset++;
+
+		/* Bind light UBO (and shadow map sampler if applicable). */
+		if ( lightEmitter != nullptr && lightEmitter->isCreated() )
+		{
+			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
+			const auto * lightDS = lightEmitter->descriptorSet(useShadowMap);
+
+			if ( tracker.lastLightDS != lightDS->handle() )
+			{
+				commandBuffer.bind(*lightDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset, lightEmitter->UBOOffset());
+				tracker.lastLightDS = lightDS->handle();
+			}
+
+			setOffset++;
+		}
+
+		/* Bind material UBO and samplers (skip if already bound). */
+		const auto * material = m_renderable->material(layerIndex);
+		const auto * materialDS = material->descriptorSet();
+
+		if ( tracker.lastMaterialDS != materialDS->handle() )
+		{
+			commandBuffer.bind(*materialDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
+			tracker.lastMaterialDS = materialDS->handle();
+		}
+#ifdef DEBUG
+		else
+		{
+			tracker.savedMaterialBinds++;
+		}
+#endif
+
+		setOffset++;
+
+		/* Bind bindless textures descriptor set if needed. */
+		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || renderPassUsesColorProjection(renderPassType)) )
+		{
+			const auto * bindlessDS = bindlessTexturesManager->descriptorSet();
+
+			if ( tracker.lastBindlessDS != bindlessDS->handle() )
+			{
+				commandBuffer.bind(*bindlessDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
+				tracker.lastBindlessDS = bindlessDS->handle();
+			}
+		}
+
+#ifdef DEBUG
+		tracker.totalDrawCalls++;
+#endif
+
+		/* Issue the draw command (same logic as non-tracked render). */
+		if ( geometry->isAdaptiveLOD() )
+		{
+			const auto & viewPosition = renderTarget->viewMatrices().position();
+
+			geometry->prepareAdaptiveRendering(viewPosition);
+
+			const auto drawCallCount = geometry->getAdaptiveDrawCallCount(viewPosition);
+
+			for ( uint32_t drawCallIndex = 0; drawCallIndex < drawCallCount; ++drawCallIndex )
+			{
+				const auto range = geometry->getAdaptiveDrawCallRange(drawCallIndex, viewPosition);
+
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+			}
+
 			const auto stitchingCount = geometry->getStitchingDrawCallCount();
 
 			for ( uint32_t stitchIndex = 0; stitchIndex < stitchingCount; ++stitchIndex )

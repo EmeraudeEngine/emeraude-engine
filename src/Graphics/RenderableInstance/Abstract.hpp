@@ -42,6 +42,7 @@
 #include "Graphics/Types.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "RenderContext.hpp"
+#include "RenderStateTracker.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 
 /* Forward declarations. */
@@ -640,6 +641,30 @@ namespace EmEn::Graphics::RenderableInstance
 			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
 
 			/**
+			 * @brief Draws the instance in a render target with state tracking to skip redundant binds.
+			 *
+			 * Same as render() but checks a RenderStateTracker before each Vulkan bind command,
+			 * skipping redundant pipeline, geometry, and descriptor set binds when the state
+			 * matches the previous draw call.
+			 *
+			 * When pipeline changes, all descriptor set tracking is invalidated (Vulkan
+			 * descriptor set binding validity depends on pipeline layout compatibility).
+			 *
+			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param lightEmitter A pointer to an optional light emitter. Can be nullptr for unlit rendering.
+			 * @param renderPassType The render pass type into the render target.
+			 * @param layerIndex The renderable layer index (for multi-layer materials).
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 * @param tracker A reference to the state tracker for redundant bind elimination.
+			 * @param bindlessTexturesManager A pointer to the bindless textures manager. Can be nullptr.
+			 *
+			 * @see render() For the non-tracked version.
+			 */
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+
+			/**
 			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.
 			 *
 			 * Draws colored lines representing the TBN vectors at each vertex:
@@ -660,6 +685,25 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @version 0.8.35
 			 */
 			void renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
+			/**
+			 * @brief Prepares MDI shader program variants for this instance.
+			 * @param scene The scene context.
+			 * @param renderTarget The render target.
+			 * @param renderer The renderer.
+			 * @return True if MDI programs were generated successfully.
+			 */
+			[[nodiscard]]
+			bool getReadyForMDI (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Resolves the MDI program variant for this instance.
+			 * @param renderTarget The render target.
+			 * @param layerIndex The material layer index.
+			 * @return The resolved MDI program, or nullptr if not found.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Saphir::Program > resolveMDIProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex) const noexcept;
 
 			/**
 			 * @brief Returns whether this instance is animated with frames.
@@ -800,7 +844,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return Renderable::ProgramCacheKey
 			 */
 			[[nodiscard]]
-			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex) const noexcept;
+			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex, bool isMDIEnabled = false) const noexcept;
 
 			/**
 			 * @brief Resolves a program from the fast instance-local cache or falls back to the Renderable cache.

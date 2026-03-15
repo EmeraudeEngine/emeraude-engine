@@ -851,6 +851,9 @@ namespace EmEn::Saphir
 				constexpr auto ModelMatrix{"modelMatrix"};
 				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
 				constexpr auto ModelViewProjectionMatrix{"modelViewProjectionMatrix"};
+				/* NOTE : MDI (Multi-Draw Indirect) BDA address for per-draw SSBO. */
+				constexpr auto PerDrawAddrLo{"perDrawAddrLo"};
+				constexpr auto PerDrawAddrHi{"perDrawAddrHi"};
 				/* NOTE : Specific (overlay, ...) rendering. */
 				constexpr auto TransformationMatrix{"transformationMatrix"};
 				/* NOTE : Animated texture frame index. */
@@ -884,6 +887,7 @@ namespace EmEn::Saphir
 			constexpr auto NormalWorldSpace{"svNormalWorldSpace"};
 			constexpr auto NormalViewSpace{"svNormalViewSpace"};
 			constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
+			constexpr auto MDIModelMatrix{"svMDIModelMatrix"};
 			constexpr auto ModelViewMatrix{"svModelViewMatrix"};
 			constexpr auto NormalMatrix{"svNormalMatrix"};
 			constexpr auto ModelViewProjectionMatrix{"svModelViewProjectionMatrix"};
