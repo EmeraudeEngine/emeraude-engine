@@ -115,6 +115,9 @@ and the AI executes, measures, and iterates at industrial speed.
 2.  **Vulkan:** NEVER call Vulkan directly. Use `Graphics/` abstractions.
 3.  **Memory:** Use **VMA** for GPU. Use **RAII** for CPU. No raw pointers.
 4.  **Frame Sync:** Any GPU buffer (SSBO/UBO) updated per-frame **MUST** be double-buffered (one per frame-in-flight). See [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) → Frame Synchronization.
+5.  **sRGB Convention:** Material variable names ending with `Color` trigger `VK_FORMAT_*_SRGB`. Data textures (normals, roughness) use `_UNORM`. Enforced in `Material::Component::Texture` constructors. See `Material/Component/Texture.hpp`.
+6.  **BC7 Compression:** All `Texture2D` resources are BC7-compressed at load time when `textureCompressionBC` is available. Compressed data cached on disk (`TextureCache`). Format: `VK_FORMAT_BC7_SRGB_BLOCK` or `VK_FORMAT_BC7_UNORM_BLOCK` based on sRGB flag.
+7.  **Image Format Awareness:** When adding new `VkFormat` variants, update `Image::pixelBytes()` AND `Image::colorCount()` — missing cases return 0, breaking multi-layer uploads silently.
 
 ## 3b. Licensing
 
