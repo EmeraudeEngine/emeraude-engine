@@ -1105,7 +1105,7 @@ Opaque objects are sorted by a composite 64-bit key `(pipeline|material|geometry
 - `Scenes/Scene.rendering.cpp:renderOpaque()` — Phase 1A render loop
 - `Scenes/Scene.rendering.cpp:renderLightedSelection()` — Phase 1A for lighted objects
 
-### Phase 1B — MDI Infrastructure (Dispatch Inactive)
+### Phase 1B — MDI Dispatch (Active)
 
 Per-draw model matrices stored in an SSBO accessed via Buffer Device Address (BDA) + `gl_DrawID`. Indirect draw commands in a `VkBuffer`. Both double-buffered per frame-in-flight.
 
@@ -1136,9 +1136,15 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 
 **Objects excluded from MDI**: Sprites, InfinityView, depth-test/write-disabled, adaptive LOD geometry. These are rendered via Phase 1A fallback.
 
-**Current status**: Shaders compile, buffers allocated with `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`, but `BatchBuilder::dispatch()` is not wired into the render loop. The dispatch needs to iterate all objects per batch (not just the representative) before activation.
+**Dispatch status**: Active. `BatchBuilder::dispatch()` is wired into `Scene::renderOpaque()`. For multi-draw batches with a valid MDI program, `vkCmdDrawIndexedIndirect` is issued. Otherwise, ALL objects in the batch are rendered individually via the Phase 1A tracked render fallback.
+
+**Multi-layer geometry**: Indirect draw commands use `geometry->subGeometryRange(layerIndex)` for correct `firstIndex`/`indexCount` per layer. Using the full `indexBufferObject()->indexCount()` causes one layer to draw another layer's indices with the wrong material.
+
+**Batch storage**: `MDIBatch` stores a `std::vector<const RenderBatch*>` of ALL render batches in the group (not just the representative). This ensures the fallback path renders every object, not just the first.
 
 **Setting**: `Core/Graphics/MDI/Enabled` (default: false)
+
+**Known limitation**: StandardResource materials without lighting enabled may not render correctly in the Opaque (non-lighted) list. This is a material/demo configuration issue, not an MDI bug.
 
 **Code references:**
 - `MDI/PerDrawData.hpp` — GPU-side struct (mat4 + uint frameIndex + padding = 80 bytes)
