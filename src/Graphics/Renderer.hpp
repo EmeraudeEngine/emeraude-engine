@@ -35,6 +35,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <string_view>
 
 /* Local inclusions for inheritances. */
 #include "Console/ControllableTrait.hpp"
@@ -175,7 +176,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< Vulkan::CommandPool >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::CommandPool >
+			const std::shared_ptr< Vulkan::CommandPool > &
 			commandPool () const noexcept
 			{
 				return m_commandPool;
@@ -297,11 +298,7 @@ namespace EmEn::Graphics
 			std::string
 			getFrameName (uint32_t frameIndex) noexcept
 			{
-				std::stringstream frameName;
-
-				frameName << "Frame" << frameIndex;
-
-				return frameName.str();
+				return "Frame" + std::to_string(frameIndex);
 			}
 
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
@@ -901,7 +898,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< Vulkan::Device >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::Device >
+			const std::shared_ptr< Vulkan::Device > &
 			device () const noexcept
 			{
 				return m_device;
@@ -942,7 +939,11 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool needsInternalTarget () const noexcept;
+			bool
+			needsInternalTarget () const noexcept
+			{
+				return m_windowLess || m_postProcessor.isEnabled();
+			}
 
 			/**
 			 * @brief Returns the current scene color image for post-processing blit.
@@ -1009,7 +1010,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< SceneRenderTarget >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SceneRenderTarget >
+			const std::shared_ptr< SceneRenderTarget > &
 			sceneTarget () const noexcept
 			{
 				return m_sceneTarget;
@@ -1038,7 +1039,7 @@ namespace EmEn::Graphics
 			const Vulkan::DescriptorSet *
 			rtDescriptorSet () const noexcept
 			{
-				if ( m_rtDescriptorSets.empty() )
+				if ( m_rtDescriptorSets.empty() || m_currentTLAS == nullptr )
 				{
 					return nullptr;
 				}
@@ -1062,7 +1063,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::DescriptorSetLayout >
+			const std::shared_ptr< Vulkan::DescriptorSetLayout > &
 			rtDescriptorSetLayout () const noexcept
 			{
 				return m_rtDescriptorSetLayout;
@@ -1081,7 +1082,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< Vulkan::DescriptorPool >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::DescriptorPool >
+			const std::shared_ptr< Vulkan::DescriptorPool > &
 			descriptorPool () const noexcept
 			{
 				return m_descriptorPool;
@@ -1125,7 +1126,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< TextureResource::TextureCubemap >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< TextureResource::TextureCubemap >
+			const std::shared_ptr< TextureResource::TextureCubemap > &
 			getDefaultTextureCubemap () const noexcept
 			{
 				return m_defaultTextureCubemap;
@@ -1137,7 +1138,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< DummyShadowTexture >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< DummyShadowTexture >
+			const std::shared_ptr< DummyShadowTexture > &
 			getDummyShadowTexture2D () const noexcept
 			{
 				return m_dummyShadowTexture2D;
@@ -1149,7 +1150,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< DummyShadowTexture >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< DummyShadowTexture >
+			const std::shared_ptr< DummyShadowTexture > &
 			getDummyShadowTextureCube () const noexcept
 			{
 				return m_dummyShadowTextureCube;
@@ -1161,7 +1162,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< DummyColorProjectionTexture >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< DummyColorProjectionTexture >
+			const std::shared_ptr< DummyColorProjectionTexture > &
 			getDummyColorProjectionTexture2D () const noexcept
 			{
 				return m_dummyColorProjectionTexture2D;
@@ -1173,7 +1174,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< DummyColorProjectionTexture >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< DummyColorProjectionTexture >
+			const std::shared_ptr< DummyColorProjectionTexture > &
 			getDummyColorProjectionTextureCube () const noexcept
 			{
 				return m_dummyColorProjectionTextureCube;
@@ -1243,7 +1244,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< Vulkan::Sampler >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sampler > getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
+			std::shared_ptr< Vulkan::Sampler > getSampler (std::string_view identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
 			 * @brief Render a new offscreen frame for the active scene.
@@ -1426,6 +1427,14 @@ namespace EmEn::Graphics
 			void renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
 
 			/**
+			 * @brief Applies software frame rate limiting if enabled.
+			 * @note Uses sleep for the bulk of the wait and busy-wait for the final
+			 * microseconds to achieve precise timing.
+			 * @return void
+			 */
+			void applyFrameRateLimit () const noexcept;
+
+			/**
 			 * @brief Recreates the internal scene render target on resize.
 			 * @return bool
 			 */
@@ -1495,7 +1504,19 @@ namespace EmEn::Graphics
 			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
-			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler > > m_samplers;
+			/** @brief Transparent hash for heterogeneous string_view lookup in unordered_map. */
+			struct TransparentStringHash
+			{
+				using is_transparent = void;
+
+				size_t
+				operator() (std::string_view sv) const noexcept
+				{
+					return std::hash< std::string_view >{}(sv);
+				}
+			};
+
+			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler >, TransparentStringHash, std::equal_to<> > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 3 > m_clearColors{};
 			/* Clear values for render targets without the MRT normals attachment (swap chain).
@@ -1534,7 +1555,6 @@ namespace EmEn::Graphics
 			bool m_renderToTexturesEnabled{true};
 			bool m_TBNSpaceRenderingEnabled{false};
 			bool m_grabPassEnabled{false};
-			bool m_swapChainMustBeRecreated{false};
 			bool m_shutdownRequested{false};
 			bool m_MDIEnabled{false};
 	};

@@ -57,7 +57,7 @@
 namespace
 {
 	/** @brief Empty lens effects list for the passthrough shader case. */
-	static const std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
+	constexpr std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
 }
 
 namespace EmEn::Graphics
@@ -181,7 +181,7 @@ namespace EmEn::Graphics
 		m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
 	{
 		/* Framebuffer clear color value. */
-		this->setClearColor(Libs::PixelFactory::Black);
+		this->setClearColor(Black);
 
 		/* Framebuffer clear depth/stencil values. */
 		this->setClearDepthStencilValues(1.0F, 0);
@@ -821,26 +821,6 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
-	bool
-	Renderer::needsInternalTarget () const noexcept
-	{
-		/* The internal scene target is needed when:
-		 * - Windowless mode (always needs an internal framebuffer)
-		 * - Post-processor is active (HDR float16 pipeline)
-		 * - MSAA is active (future phase) */
-		if ( m_windowLess )
-		{
-			return true;
-		}
-
-		if ( m_postProcessor.isEnabled() )
-		{
-			return true;
-		}
-
-		return false;
-	}
-
 	std::shared_ptr< Vulkan::Image >
 	Renderer::currentSceneColorImage () const noexcept
 	{
@@ -947,7 +927,7 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< Sampler >
-	Renderer::getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
+	Renderer::getSampler (std::string_view identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
 	{
 		if ( const auto samplerIt = m_samplers.find(identifier); samplerIt != m_samplers.cend() )
 		{
@@ -976,8 +956,10 @@ namespace EmEn::Graphics
 
 		setupCreateInfo(this->primaryServices().settings(), createInfo);
 
+		std::string id{identifier};
+
 		auto sampler = std::make_shared< Sampler >(m_device, createInfo);
-		sampler->setIdentifier(ClassId, identifier.c_str(), "Sampler");
+		sampler->setIdentifier(ClassId, id.c_str(), "Sampler");
 
 		if ( !sampler->createOnHardware() )
 		{
@@ -986,7 +968,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		const auto [samplerPair, success] = m_samplers.emplace(identifier, sampler);
+		const auto [samplerPair, success] = m_samplers.emplace(std::move(id), sampler);
 
 		if constexpr ( IsDebug )
 		{
@@ -1079,6 +1061,36 @@ namespace EmEn::Graphics
 		}
 
 		return inserted;
+	}
+
+	void
+	Renderer::applyFrameRateLimit () const noexcept
+	{
+		if ( !this->isSoftwareFrameLimiterEnabled() )
+		{
+			return;
+		}
+
+		const auto elapsed = std::chrono::high_resolution_clock::now() - m_frameStartTime;
+
+		if ( elapsed >= m_frameDuration )
+		{
+			return;
+		}
+
+		/* Sleep for most of the remaining time (leave 1ms for busy-wait precision). */
+		if ( const auto remainingTime = m_frameDuration - elapsed; remainingTime > std::chrono::milliseconds(1) )
+		{
+			std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
+		}
+
+		/* Busy-wait for the final portion to achieve precise timing.
+		 * NOTE: yield() hints the OS to schedule other threads, reducing CPU waste.
+		 * If frame timing becomes inconsistent, comment out the yield(). */
+		while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
+		{
+			std::this_thread::yield();
+		}
 	}
 
 	void
@@ -1186,33 +1198,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* NOTE: Apply frame rate limiting if enabled.
-		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
-		 * as std::this_thread::sleep_for() has limited precision on most platforms. */
-		if ( this->isSoftwareFrameLimiterEnabled() )
-		{
-			const auto frameEndTime = std::chrono::high_resolution_clock::now();
-			const auto elapsed = frameEndTime - m_frameStartTime;
-
-			if ( elapsed < m_frameDuration )
-			{
-				const auto remainingTime = m_frameDuration - elapsed;
-
-				/* Sleep for most of the remaining time (leave 1ms for busy-wait precision). */
-				if ( remainingTime > std::chrono::milliseconds(1) )
-				{
-					std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
-				}
-
-				/* Busy-wait for the final portion to achieve precise timing.
-				 * NOTE: yield() hints the OS to schedule other threads, reducing CPU waste.
-				 * If frame timing becomes inconsistent, comment out the yield(). */
-				while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
-				{
-					std::this_thread::yield();
-				}
-			}
-		}
+		this->applyFrameRateLimit();
 	}
 
 	void
@@ -1267,7 +1253,7 @@ namespace EmEn::Graphics
 
 			if ( m_retiredFrameCountdown == 0 )
 			{
-				for ( auto & target : m_retiredSceneTargets )
+				for ( const auto & target : m_retiredSceneTargets )
 				{
 					target->destroyRenderTarget();
 				}
@@ -1332,7 +1318,7 @@ namespace EmEn::Graphics
 		 * NOTE: Defer creation until the scene's PostProcessStack is ready. The logic thread
 		 * may still be building the scene when the render thread first reaches this point.
 		 * Creating the scene target without the stack leads to wrong formats (no HDR/depth/normals). */
-		const auto * stack = (scene != nullptr) ? scene->postProcessStack() : nullptr;
+		const auto * stack = scene != nullptr ? scene->postProcessStack() : nullptr;
 
 		if ( m_postProcessor.isEnabled() && m_sceneTarget == nullptr && stack != nullptr )
 		{
@@ -1382,13 +1368,10 @@ namespace EmEn::Graphics
 		/* 6. Submit the work on the GPU and present. */
 		{
 			/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swap-chain */
-			StaticVector< VkPipelineStageFlags, 16 > waitStages;
-
-			/* All render-to-texture semaphores wait at FRAGMENT_SHADER stage (when we sample the texture) */
-			for ( size_t semaphoreIndex = 0; semaphoreIndex < currentFrameScope.secondarySemaphores().size(); ++semaphoreIndex )
-			{
-				waitStages.emplace_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-			}
+			StaticVector< VkPipelineStageFlags, 16 > waitStages(
+				currentFrameScope.secondarySemaphores().size(),
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			);
 
 			/* Add swap-chain image available semaphore and wait at COLOR_ATTACHMENT_OUTPUT stage */
 			currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
@@ -1410,42 +1393,21 @@ namespace EmEn::Graphics
 
 		m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
 
-		/* NOTE: Apply frame rate limiting if enabled.
-		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
-		 * as std::this_thread::sleep_for() has limited precision on most platforms. */
-		if ( this->isSoftwareFrameLimiterEnabled() )
-		{
-			const auto frameEndTime = std::chrono::high_resolution_clock::now();
-
-			if ( const auto elapsed = frameEndTime - m_frameStartTime; elapsed < m_frameDuration )
-			{
-				/* Sleep for most of the remaining time (leave 1ms for busy-wait precision). */
-				if ( const auto remainingTime = m_frameDuration - elapsed; remainingTime > std::chrono::milliseconds(1) )
-				{
-					std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
-				}
-
-				/* Busy-wait for the final portion to achieve precise timing.
-				 * NOTE: yield() hints the OS to schedule other threads, reducing CPU waste.
-				 * If frame timing becomes inconsistent, comment out the yield(). */
-				while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
-				{
-					std::this_thread::yield();
-				}
-			}
-		}
+		this->applyFrameRateLimit();
 	}
 
 	void
 	Renderer::renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
 	{
+		auto * const scenePtr = scene.get();
+
 		/* Prepare scene render lists once (frustum culling, Z-sorting). */
-		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_swapChain);
+		const bool sceneHasContent = scenePtr != nullptr && scenePtr->prepareRender(m_swapChain);
 
 		/* Record deferred TLAS build into the render command buffer (no CPU stall). */
-		if ( scene != nullptr )
+		if ( scenePtr != nullptr )
 		{
-			scene->recordTLASBuild(commandBuffer->handle());
+			scenePtr->recordTLASBuild(commandBuffer->handle());
 		}
 
 		/* Render pass 1: Scene rendering (clears buffers). */
@@ -1454,12 +1416,12 @@ namespace EmEn::Graphics
 		/* Render opaque and translucent objects in the MSAA render pass. */
 		if ( sceneHasContent )
 		{
-			scene->renderOpaque(m_swapChain, *commandBuffer);
-			scene->renderTranslucent(m_swapChain, *commandBuffer);
+			scenePtr->renderOpaque(m_swapChain, *commandBuffer);
+			scenePtr->renderTranslucent(m_swapChain, *commandBuffer);
 
 			if ( m_TBNSpaceRenderingEnabled )
 			{
-				scene->renderTBNSpace(m_swapChain, *commandBuffer);
+				scenePtr->renderTBNSpace(m_swapChain, *commandBuffer);
 			}
 		}
 
@@ -1479,9 +1441,9 @@ namespace EmEn::Graphics
 		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 		/* Render translucent grab-pass objects (refraction, etc.). */
-		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
+		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
-			scene->renderTranslucentGB(m_swapChain, *commandBuffer);
+			scenePtr->renderTranslucentGB(m_swapChain, *commandBuffer);
 		}
 
 		/* Post-processing: end RP2, blit the complete scene, restart RP2, draw fullscreen quad. */
@@ -1494,28 +1456,31 @@ namespace EmEn::Graphics
 			/* Set the current TLAS and update RT descriptor set for post-process effects.
 			 * Capture the read state index so post-process effects (RTR) use view matrices
 			 * consistent with the depth buffer rendered this frame. */
-			m_currentTLAS = (scene != nullptr) ? scene->TLAS() : nullptr;
-
-			if ( scene != nullptr )
+			if ( scenePtr != nullptr )
 			{
-				m_currentReadStateIndex = scene->preparedReadStateIndex();
+				m_currentTLAS = scenePtr->TLAS();
+				m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
 
 				if ( m_currentTLAS != nullptr )
 				{
-					this->updateRTDescriptorSet(scene->sceneMetaData(), scene->lightSet());
+					this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
 				}
+			}
+			else
+			{
+				m_currentTLAS = nullptr;
 			}
 
 			/* Process scene effects (multi-pass). */
-			if ( scene != nullptr && scene->hasPostProcessStack() )
+			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scene->postProcessStack());
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack());
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 			/* Process camera lens effects (single-pass). */
-			const auto * camera = (scene != nullptr) ? scene->activeCamera() : nullptr;
+			const auto * camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
 			const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
 
 			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
@@ -1530,14 +1495,16 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
 	{
+		auto * const scenePtr = scene.get();
+
 		/* Prepare scene render lists once (frustum culling, Z-sorting)
 		 * against the internal scene target (HDR float16 framebuffer). */
-		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_sceneTarget);
+		const bool sceneHasContent = scenePtr != nullptr && scenePtr->prepareRender(m_sceneTarget);
 
 		/* Record deferred TLAS build into the render command buffer (no CPU stall). */
-		if ( scene != nullptr )
+		if ( scenePtr != nullptr )
 		{
-			scene->recordTLASBuild(commandBuffer->handle());
+			scenePtr->recordTLASBuild(commandBuffer->handle());
 		}
 
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
@@ -1558,12 +1525,12 @@ namespace EmEn::Graphics
 
 		if ( sceneHasContent )
 		{
-			scene->renderOpaque(m_sceneTarget, *commandBuffer);
-			scene->renderTranslucent(m_sceneTarget, *commandBuffer);
+			scenePtr->renderOpaque(m_sceneTarget, *commandBuffer);
+			scenePtr->renderTranslucent(m_sceneTarget, *commandBuffer);
 
 			if ( m_TBNSpaceRenderingEnabled )
 			{
-				scene->renderTBNSpace(m_sceneTarget, *commandBuffer);
+				scenePtr->renderTBNSpace(m_sceneTarget, *commandBuffer);
 			}
 		}
 
@@ -1580,7 +1547,7 @@ namespace EmEn::Graphics
 
 		/* RP-scene-load (internal target, LOAD): TranslucentGB objects render after the grab pass
 		 * so they can sample the captured scene for refraction effects. */
-		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
+		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
 			if ( sceneTargetHasNormals )
 			{
@@ -1591,7 +1558,7 @@ namespace EmEn::Graphics
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 			}
 
-			scene->renderTranslucentGB(m_sceneTarget, *commandBuffer);
+			scenePtr->renderTranslucentGB(m_sceneTarget, *commandBuffer);
 
 			commandBuffer->endRenderPass();
 		}
@@ -1603,22 +1570,25 @@ namespace EmEn::Graphics
 		/* Set the current TLAS and update RT descriptor set for post-process effects.
 		 * Capture the read state index so post-process effects (RTR) use view matrices
 		 * consistent with the depth buffer rendered this frame. */
-		m_currentTLAS = (scene != nullptr) ? scene->TLAS() : nullptr;
-
-		if ( scene != nullptr )
+		if ( scenePtr != nullptr )
 		{
-			m_currentReadStateIndex = scene->preparedReadStateIndex();
+			m_currentTLAS = scenePtr->TLAS();
+			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
 
 			if ( m_currentTLAS != nullptr )
 			{
-				this->updateRTDescriptorSet(scene->sceneMetaData(), scene->lightSet());
+				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
 			}
+		}
+		else
+		{
+			m_currentTLAS = nullptr;
 		}
 
 		/* Process scene effects (multi-pass). */
-		if ( scene != nullptr && scene->hasPostProcessStack() )
+		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scene->postProcessStack());
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack());
 		}
 
 		/* Establish swapchain image layouts by running RP1 (CLEAR) with no draw calls.
@@ -1632,7 +1602,7 @@ namespace EmEn::Graphics
 		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 		/* Process camera lens effects (single-pass). */
-		const auto * camera = (scene != nullptr) ? scene->activeCamera() : nullptr;
+		const auto * camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
 		const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
 
 		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
