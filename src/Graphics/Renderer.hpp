@@ -849,8 +849,8 @@ namespace EmEn::Graphics
 			void
 			setClearDepthStencilValues (float depth, uint32_t stencil) noexcept
 			{
-				m_clearColors[2].depthStencil.depth = depth;
-				m_clearColors[2].depthStencil.stencil = stencil;
+				m_clearColors[3].depthStencil.depth = depth;
+				m_clearColors[3].depthStencil.stencil = stencil;
 				m_swapChainClearColors[1].depthStencil.depth = depth;
 				m_swapChainClearColors[1].depthStencil.stencil = stencil;
 			}
@@ -879,7 +879,7 @@ namespace EmEn::Graphics
 			float
 			getClearDepthValue () const noexcept
 			{
-				return m_clearColors[2].depthStencil.depth;
+				return m_clearColors[3].depthStencil.depth;
 			}
 
 			/**
@@ -890,7 +890,7 @@ namespace EmEn::Graphics
 			uint32_t
 			getClearStencilValue () const noexcept
 			{
-				return m_clearColors[2].depthStencil.stencil;
+				return m_clearColors[3].depthStencil.stencil;
 			}
 
 			/**
@@ -968,6 +968,14 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Vulkan::Image > currentSceneNormalsImage () const noexcept;
+
+			/**
+			 * @brief Returns the current scene material properties image for post-processing.
+			 * @note Returns the internal target's material properties image when active, otherwise nullptr.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSceneMaterialPropertiesImage () const noexcept;
 
 			/**
 			 * @brief Returns the current frame-in-flight index.
@@ -1518,9 +1526,14 @@ namespace EmEn::Graphics
 
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler >, TransparentStringHash, std::equal_to<> > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
-			std::array< VkClearValue, 3 > m_clearColors{};
-			/* Clear values for render targets without the MRT normals attachment (swap chain).
-			 * Layout: [0]=color, [1]=depth/stencil (vs m_clearColors: [0]=color, [1]=normals, [2]=depth). */
+			std::array< VkClearValue, 4 > m_clearColors{
+				VkClearValue{},
+				VkClearValue{},
+				VkClearValue{.color = {.float32 = {0.0F, 1.0F, 240.0F / 255.0F, 1.0F}}},
+				VkClearValue{}
+			};
+			/* Clear values for render targets without the MRT attachments (swap chain).
+			 * Layout: [0]=color, [1]=depth/stencil (vs m_clearColors: [0]=color, [1]=normals, [2]=materialProperties, [3]=depth). */
 			std::array< VkClearValue, 2 > m_swapChainClearColors{};
 			/* NOTE: Shadow maps only have a depth attachment at index 0, so they need
 			 * separate clear values with depth=1.0 at index 0 (not index 1 like main render). */

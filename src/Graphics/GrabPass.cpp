@@ -37,7 +37,7 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	bool
-	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat) noexcept
+	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -289,12 +289,95 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Create the material properties grab pass image if a format is specified. */
+		if ( materialPropertiesFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_materialPropertiesImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				materialPropertiesFormat,
+				VkExtent3D{width, height, 1},
+				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_materialPropertiesImage->setIdentifier(ClassId, "MaterialProperties", "Image");
+
+			if ( !m_materialPropertiesImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass material properties image !";
+
+				return false;
+			}
+
+			/* Transition material properties to shader read layout. */
+			{
+				const auto & transferManager = renderer.transferManager();
+
+				if ( !transferManager.transitionImageLayout(
+					*m_materialPropertiesImage,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				) )
+				{
+					TraceError{ClassId} << "Unable to transition grab pass material properties image to shader read layout !";
+
+					return false;
+				}
+			}
+
+			m_materialPropertiesImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			/* Create the material properties image view. */
+			m_materialPropertiesImageView = std::make_shared< ImageView >(
+				m_materialPropertiesImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_materialPropertiesImageView->setIdentifier(ClassId, "MaterialProperties", "ImageView");
+
+			if ( !m_materialPropertiesImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass material properties image view !";
+
+				return false;
+			}
+
+			/* Get or create the material properties sampler: nearest filtering, clamp-to-edge. */
+			m_materialPropertiesSampler = renderer.getSampler("GrabPassMaterialProperties", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				createInfo.magFilter = VK_FILTER_NEAREST;
+				createInfo.minFilter = VK_FILTER_NEAREST;
+				createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.compareEnable = VK_FALSE;
+				createInfo.minLod = 0.0F;
+				createInfo.maxLod = 1.0F;
+			});
+
+			if ( m_materialPropertiesSampler == nullptr )
+			{
+				TraceError{ClassId} << "Unable to get the sampler for grab pass material properties !";
+
+				return false;
+			}
+		}
+
 		return true;
 	}
 
 	void
 	GrabPass::destroy () noexcept
 	{
+		m_materialPropertiesSampler.reset();
+		m_materialPropertiesImageView.reset();
+		m_materialPropertiesImage.reset();
 		m_normalsSampler.reset();
 		m_normalsImageView.reset();
 		m_normalsImage.reset();
@@ -307,15 +390,15 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat) noexcept
+	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat) noexcept
 	{
 		this->destroy();
 
-		return this->create(renderer, width, height, colorFormat, depthFormat, normalsFormat);
+		return this->create(renderer, width, height, colorFormat, depthFormat, normalsFormat, materialPropertiesFormat);
 	}
 
 	void
-	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage, const Image * srcDepthImage, const Image * srcNormalsImage) const noexcept
+	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage, const Image * srcDepthImage, const Image * srcNormalsImage, const Image * srcMaterialPropertiesImage) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -563,6 +646,86 @@ namespace EmEn::Graphics
 				);
 			}
 		}
+
+		/* === Material properties copy === */
+		if ( srcMaterialPropertiesImage != nullptr && this->hasMaterialProperties() )
+		{
+			/* 16. Barrier: source material properties COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier srcBarrier{
+					*srcMaterialPropertiesImage,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					srcBarrier,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 17. Barrier: grab material properties texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier dstBarrier{
+					*m_materialPropertiesImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					dstBarrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 18. Copy: source material properties -> grab material properties texture (same format, use vkCmdCopyImage). */
+			commandBuffer.copyImage(
+				*srcMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_materialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+
+			/* 19. Barrier: grab material properties texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier dstBarrier{
+					*m_materialPropertiesImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					dstBarrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 20. Barrier: source material properties TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
+			 * (ready for the post-process render pass). */
+			{
+				const Sync::ImageMemoryBarrier srcBarrier{
+					*srcMaterialPropertiesImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					srcBarrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				);
+			}
+		}
 	}
 
 	VkDescriptorImageInfo
@@ -572,6 +735,17 @@ namespace EmEn::Graphics
 		info.sampler = m_normalsSampler ? m_normalsSampler->handle() : VK_NULL_HANDLE;
 		info.imageView = m_normalsImageView ? m_normalsImageView->handle() : VK_NULL_HANDLE;
 		info.imageLayout = m_normalsImage ? m_normalsImage->currentImageLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
+
+		return info;
+	}
+
+	VkDescriptorImageInfo
+	GrabPass::materialPropertiesDescriptorInfo () const noexcept
+	{
+		VkDescriptorImageInfo info{};
+		info.sampler = m_materialPropertiesSampler ? m_materialPropertiesSampler->handle() : VK_NULL_HANDLE;
+		info.imageView = m_materialPropertiesImageView ? m_materialPropertiesImageView->handle() : VK_NULL_HANDLE;
+		info.imageLayout = m_materialPropertiesImage ? m_materialPropertiesImage->currentImageLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
 
 		return info;
 	}

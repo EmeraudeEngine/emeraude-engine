@@ -253,6 +253,18 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares a per-pixel reflectivity map for the G-buffer material properties output.
+			 * @param valueVariableName The GLSL variable name of the sampled reflectivity map (luminance).
+			 * @return void
+			 */
+			void
+			declareSurfaceReflectivityMap (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceReflectivityMap = valueVariableName;
+				m_useReflectivityMap = true;
+			}
+
+			/**
 			 * @brief Returns whether normal mapping is active for this light generator.
 			 * @return bool
 			 */
@@ -631,6 +643,16 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			std::string finalNormalViewSpaceExpression () const noexcept;
+
+			/**
+			 * @brief Returns a GLSL vec4 expression for the material properties G-buffer output.
+			 * @note Encodes reflectivity, AO response, emissive mask and other properties
+			 * as nibble-packed values based on the declared surface properties.
+			 * Falls back to neutral defaults for undeclared properties.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string materialPropertiesExpression () const noexcept;
 
 			/**
 			 * @brief Returns the variable name of the produced fragment color.
@@ -1017,6 +1039,8 @@ namespace EmEn::Saphir
 			std::string m_surfaceKHRSpecularColor;
 			/* KHR_materials_emissive_strength variable. */
 			std::string m_surfaceEmissiveStrength;
+			/* Reflectivity map variable (per-pixel reflectivity for G-buffer). */
+			std::string m_surfaceReflectivityMap;
 			const StaticLighting * m_staticLighting{nullptr};
 			bool m_discardUnlitFragment{true};
 			bool m_useStaticLighting{false};
@@ -1037,6 +1061,7 @@ namespace EmEn::Saphir
 			bool m_useIridescence{false};
 			bool m_useKHRSpecular{false};
 			bool m_useMaterialIOR{false};
+			bool m_useReflectivityMap{false};
 			bool m_highQualityEnabled{false};
 			bool m_PCFEnabled{false};
 	};

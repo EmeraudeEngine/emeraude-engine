@@ -58,6 +58,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -125,6 +126,13 @@ void main()
 
 	/* Normalize CoC to [0, 1] range. */
 	coc = clamp(coc * cocScale, 0.0, 1.0);
+
+	/* Modulate CoC by per-pixel DoF mask from material properties G-buffer.
+	 * A channel low nibble = dofMask (0 = always sharp, 15 = normal blur). */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint aPacked = uint(mp.a * 255.0);
+	float dofMask = float(aPacked & 0xFu) / 15.0;
+	coc *= dofMask;
 
 	/* Store color in RGB and CoC in alpha. */
 	outColor = vec4(color.rgb, coc);
@@ -250,7 +258,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts (shared from base class) ---- */
-		auto singleLayout = getSingleInputLayout(renderer);
+		auto singleLayout = getInputLayout(renderer, 1);
 
 		if ( singleLayout == nullptr )
 		{
@@ -259,11 +267,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto dualLayout = getDualInputLayout(renderer);
+		auto dualLayout = getInputLayout(renderer, 2);
 
 		if ( dualLayout == nullptr )
 		{
 			TraceError{TracerTag} << "Failed to get dual-input descriptor set layout !";
+
+			return false;
+		}
+
+		/* CoC pass uses triple-input: color + depth + material properties. */
+		auto tripleLayout = getInputLayout(renderer, 3);
+
+		if ( tripleLayout == nullptr )
+		{
+			TraceError{TracerTag} << "Failed to get triple-input descriptor set layout !";
 
 			return false;
 		}
@@ -275,7 +293,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(dualLayout);
+			sets.emplace_back(tripleLayout);
 			m_cocLayout = renderer.layoutManager().getPipelineLayout(sets, ranges);
 		}
 		{
@@ -336,8 +354,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create descriptor sets ---- */
 
-		/* CoC: reads color + depth (updated per-frame, needs per-frame copies). */
-		m_cocPerFrame = createPerFrameDescriptorSets(renderer, dualLayout, ClassId, "CoC_DescSet");
+		/* CoC: reads color + depth + material properties (updated per-frame, needs per-frame copies). */
+		m_cocPerFrame = createPerFrameDescriptorSets(renderer, tripleLayout, ClassId, "CoC_DescSet");
 
 		if ( m_cocPerFrame.empty() )
 		{
@@ -433,18 +451,24 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		[[maybe_unused]] const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{
 		/* Update per-frame descriptor sets to avoid conflicts with pending command buffers. */
 		const auto frameIndex = m_renderer->currentFrameIndex();
 
-		/* Update CoC descriptor: binding 0 = color, binding 1 = depth. */
+		/* Update CoC descriptor: binding 0 = color, binding 1 = depth, binding 2 = material properties. */
 		static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+		}
+
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* Update composite descriptor: binding 0 = original color. */

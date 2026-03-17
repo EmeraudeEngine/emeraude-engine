@@ -115,7 +115,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals) noexcept;
+			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties) noexcept;
 
 			/* Shared state. */
 
@@ -178,19 +178,32 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the cached material properties requirement.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			cachedRequiresMaterialProperties () const noexcept
+			{
+				return m_cachedRequiresMaterialProperties;
+			}
+
+			/**
 			 * @brief Updates the cached requirements without reconfiguring GPU resources.
 			 * @note Call this before recreateSceneTarget() so it picks up correct formats.
 			 * @param requiresHDR Whether the scene effects require HDR.
 			 * @param requiresDepth Whether the scene effects require depth.
 			 * @param requiresNormals Whether the scene effects require normals.
+			 * @param requiresMaterialProperties Whether the scene effects require material properties.
 			 * @return void
 			 */
 			void
-			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals) noexcept
+			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties) noexcept
 			{
 				m_cachedRequiresHDR = requiresHDR;
 				m_cachedRequiresDepth = requiresDepth;
 				m_cachedRequiresNormals = requiresNormals;
+				m_cachedRequiresMaterialProperties = requiresMaterialProperties;
 			}
 
 			/**
@@ -269,5 +282,6 @@ namespace EmEn::Graphics
 			bool m_cachedRequiresHDR{false};
 			bool m_cachedRequiresDepth{false};
 			bool m_cachedRequiresNormals{false};
+			bool m_cachedRequiresMaterialProperties{false};
 	};
 }

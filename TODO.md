@@ -36,3 +36,62 @@
 - [ ] **Motion Blur** — Flou de mouvement caméra/objets. Sensation de poids et d'inertie.
 - [ ] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
+
+## Rendering
+
+### Current State (v0.6.4)
+
+The renderer has a solid foundation:
+- **State sorting** via 64-bit composite key (pipeline > material > geometry > distance)
+- **Multi-Draw Indirect (MDI)** with Buffer Device Address (BDA) for per-draw data
+- **Dual render strategy**: direct swap-chain path and HDR internal target (float16) path
+- **Triple buffering** with double-buffered SSBO/indirect buffers per frame-in-flight
+- **TLAS deferred recording** for ray-tracing acceleration structure builds
+- **Post-processing pipeline** with indirect (multi-pass) and direct (in-RP) effect execution
+
+### Roadmap toward UE5-class runtime
+
+#### 1. GPU-Driven Rendering (highest impact)
+
+Move culling and draw submission from CPU to GPU.
+
+- Replace CPU frustum cull + `vkCmdDrawIndexedIndirect()` with:
+    - GPU compute shader performing frustum culling
+    - `vkCmdDrawIndexedIndirectCount()` where GPU decides draw count
+- CPU uploads entire scene to persistent SSBOs, no longer rebuilds render list per-frame
+- Foundation for Nanite-class geometry handling
+
+#### 2. Bindless Textures
+
+Eliminate material as a batch-breaking criterion.
+
+- Single descriptor set containing all scene textures
+- Per-draw material index stored in SSBO alongside model matrix
+- Batch key reduces from `(pipeline, material, geometry)` to `(pipeline, geometry)`
+- Dramatically larger MDI batches
+
+#### 3. GPU Occlusion Culling (Hi-Z)
+
+Reject invisible geometry before draw submission.
+
+- Downsample previous frame depth into Hi-Z mipmap pyramid
+- GPU compute tests each bounding box against Hi-Z
+- Integrates into the GPU culling compute shader from step 1
+- Critical for dense urban/interior scenes
+
+#### 4. Render Graph
+
+Automate resource management and barrier placement.
+
+- Automatic render target lifetime management (transient allocations)
+- Automatic `vkCmdPipelineBarrier` placement between passes
+- Pass reordering and merging opportunities
+- Scales cleanly as passes multiply (SSAO, SSR, bloom, volumetrics, motion blur...)
+
+#### 5. Order-Independent Transparency (OIT)
+
+Replace sorted per-object translucency with a robust algorithm.
+
+- Weighted Blended OIT or Moment-Based OIT
+- Eliminates sorting artifacts for overlapping transparents
+- Better handling of particles and vegetation

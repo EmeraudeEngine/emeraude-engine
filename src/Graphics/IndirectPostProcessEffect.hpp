@@ -141,6 +141,18 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether this effect requires a material properties buffer input.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresMaterialProperties () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Returns whether this effect requires a velocity buffer input.
 			 * @return bool
 			 */
@@ -200,11 +212,12 @@ namespace EmEn::Graphics
 			 * @param inputColor The input color texture to process.
 			 * @param inputDepth The input depth texture (maybe nullptr if not available).
 			 * @param inputNormals The input normals texture (maybe nullptr if not available).
+			 * @param inputMaterialProperties The input material properties texture (maybe nullptr if not available).
 			 * @param constants The current post-processing push constants.
 			 * @return const Vulkan::TextureInterface & The output texture to pass to the next effect.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const PostProcessor::PushConstants & constants) noexcept = 0;
+			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const PostProcessor::PushConstants & constants) noexcept = 0;
 
 		protected:
 
@@ -254,7 +267,7 @@ void main()
 			 */
 			[[nodiscard]]
 			static std::shared_ptr< Vulkan::GraphicsPipeline > createFullscreenPipeline (
-				Renderer & renderer,
+				const Renderer & renderer,
 				const char * tracerTag,
 				const std::string & name,
 				const std::shared_ptr< Vulkan::ShaderModule > & vertexModule,
@@ -278,7 +291,7 @@ void main()
 			 */
 			static void recordFullscreenPass (
 				const Vulkan::CommandBuffer & commandBuffer,
-				IntermediateRenderTarget & target,
+				const IntermediateRenderTarget & target,
 				const Vulkan::GraphicsPipeline & pipeline,
 				const Vulkan::PipelineLayout & pipelineLayout,
 				const Vulkan::DescriptorSet & descriptorSet,
@@ -289,20 +302,13 @@ void main()
 			/* ---- Shared descriptor set layout helpers ---- */
 
 			/**
-			 * @brief Returns the shared single-input descriptor set layout (1 combined image sampler).
+			 * @brief Returns a shared descriptor set layout with N combined image samplers.
 			 * @param renderer A reference to the graphics renderer.
+			 * @param samplerCount The number of combined image samplers (1, 2, 3, etc.).
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Vulkan::DescriptorSetLayout > getSingleInputLayout (Renderer & renderer) noexcept;
-
-			/**
-			 * @brief Returns the shared dual-input descriptor set layout (2 combined image samplers).
-			 * @param renderer A reference to the graphics renderer.
-			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDualInputLayout (Renderer & renderer) noexcept;
+			static std::shared_ptr< Vulkan::DescriptorSetLayout > getInputLayout (Renderer & renderer, uint32_t samplerCount) noexcept;
 
 			/**
 			 * @brief Allocates per-frame descriptor sets (one per frame-in-flight).
@@ -314,7 +320,7 @@ void main()
 			 */
 			[[nodiscard]]
 			static std::vector< std::unique_ptr< Vulkan::DescriptorSet > > createPerFrameDescriptorSets (
-				Renderer & renderer,
+				const Renderer & renderer,
 				const std::shared_ptr< Vulkan::DescriptorSetLayout > & layout,
 				const char * classId,
 				const std::string & baseName

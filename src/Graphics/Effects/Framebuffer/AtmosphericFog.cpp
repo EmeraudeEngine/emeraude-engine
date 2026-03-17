@@ -64,6 +64,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -153,6 +154,17 @@ void main()
 
 	float fogAmount = 1.0 - exp(-max(fogOpticalDepth, 0.0));
 
+	/* Modulate fog intensity by per-pixel fog response from material properties G-buffer.
+	 * A channel high nibble = fogResponse (0 = no fog, 15 = full fog).
+	 * Only apply to geometry pixels — sky pixels have no material data. */
+	if (!isSky)
+	{
+		vec4 mp = texture(materialPropsTex, vUV);
+		uint aPacked = uint(mp.a * 255.0);
+		float fogResponse = float(aPacked >> 4u) / 15.0;
+		fogAmount *= fogResponse;
+	}
+
 	/* Directional inscattering (simplified Henyey-Greenstein).
 	 * lightDir is the emission direction (sun → scene), negate it
 	 * to get the source direction so inscattering peaks when
@@ -189,10 +201,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* ---- Descriptor set layout (shared dual-input: scene color + depth) ---- */
-		auto dualInputLayout = getDualInputLayout(renderer);
+		/* ---- Descriptor set layout (triple-input: scene color + depth + material properties) ---- */
+		auto tripleInputLayout = getInputLayout(renderer, 3);
 
-		if ( dualInputLayout == nullptr )
+		if ( tripleInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -206,7 +218,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(dualInputLayout);
+			sets.emplace_back(tripleInputLayout);
 			m_fogLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
 
@@ -247,7 +259,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create descriptor sets ---- */
-		m_fogPerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "AFDescSet");
+		m_fogPerFrame = createPerFrameDescriptorSets(renderer, tripleInputLayout, ClassId, "AFDescSet");
 
 		if ( m_fogPerFrame.empty() )
 		{
@@ -280,6 +292,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		[[maybe_unused]] const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{
@@ -313,12 +326,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto lY = m_lightDirY / lLen;
 		const auto lZ = m_lightDirZ / lLen;
 
-		/* Update per-frame descriptor with scene color and depth. */
+		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+		}
+
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* Build push constants. */

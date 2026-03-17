@@ -57,6 +57,7 @@ layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D inputTex;
+layout(set = 0, binding = 1) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -164,7 +165,20 @@ void main()
 
 	if (threshold > 0.0)
 	{
-		color.rgb = applyThreshold(color.rgb, threshold, softKnee);
+		/* Decode bloom contribution and emissive mask from material properties G-buffer.
+		 * B channel: high nibble = bloomContrib, low nibble = emissiveMask. */
+		vec4 mp = texture(materialPropsTex, vUV);
+		uint bPacked = uint(mp.b * 255.0);
+		float bloomContrib = float(bPacked >> 4u) / 15.0;
+		float emissiveMask = float(bPacked & 0xFu) / 15.0;
+
+		/* Emissive pixels bloom more easily (lower threshold). */
+		float effectiveThreshold = threshold * mix(1.0, 0.1, emissiveMask);
+
+		color.rgb = applyThreshold(color.rgb, effectiveThreshold, softKnee);
+
+		/* Modulate extracted brightness by per-pixel bloom contribution. */
+		color.rgb *= bloomContrib;
 	}
 
 	/* Clamp after threshold: Karis handles moderate outliers,
@@ -309,10 +323,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Descriptor set layouts (from base class shared utilities). */
-		auto singleInputLayout = getSingleInputLayout(renderer);
-		auto dualInputLayout = getDualInputLayout(renderer);
+		auto dualInputLayout = getInputLayout(renderer, 2);
 
-		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
+		if ( dualInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -328,8 +341,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Pipeline layouts. */
 		{
+			/* Downsample: binding 0 = input texture, binding 1 = material properties. */
 			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(singleInputLayout);
+			sets.emplace_back(dualInputLayout);
 
 			m_downsampleLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);
 		}
@@ -370,22 +384,23 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	bool
 	Bloom::createDescriptorSets (Renderer & renderer) noexcept
 	{
-		const auto singleInputLayout = getSingleInputLayout(renderer);
-		const auto dualInputLayout = getDualInputLayout(renderer);
+		const auto dualInputLayout = getInputLayout(renderer, 2);
 		const auto & pool = renderer.descriptorPool();
 
-		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
+		if ( dualInputLayout == nullptr )
 		{
 			return false;
 		}
 
-		/* Downsample descriptor sets (single input each).
+		/* Downsample descriptor sets (dual input: binding 0 = input, binding 1 = material properties).
 		 * Set [0] is updated per-frame in execute() to point to the input texture,
 		 * so we create per-frame-in-flight copies to avoid descriptor update conflicts.
-		 * Sets [1..4] are pre-written to the previous downsample target. */
+		 * Sets [1..4] are pre-written to the previous downsample target.
+		 * Binding 1 (materialPropsTex) is only sampled in the first pass (threshold > 0),
+		 * but must be bound for all passes to satisfy the descriptor set layout. */
 		for ( int i = 0; i < MipLevels; ++i )
 		{
-			m_downDescSets[static_cast< size_t >(i)] = std::make_unique< DescriptorSet >(pool, singleInputLayout);
+			m_downDescSets[static_cast< size_t >(i)] = std::make_unique< DescriptorSet >(pool, dualInputLayout);
 			m_downDescSets[static_cast< size_t >(i)]->setIdentifier(ClassId, "DownDescSet" + std::to_string(i), "DescriptorSet");
 
 			if ( !m_downDescSets[static_cast< size_t >(i)]->create() )
@@ -401,11 +416,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				{
 					return false;
 				}
+
+				/* Binding 1: write the previous downsample target as a dummy for
+				 * material properties (not sampled in non-threshold passes). */
+				if ( !m_downDescSets[static_cast< size_t >(i)]->writeCombinedImageSampler(1, input) )
+				{
+					return false;
+				}
 			}
 		}
 
 		/* Per-frame copies of m_downDescSets[0] for safe per-frame updates. */
-		m_downFirstPerFrame = createPerFrameDescriptorSets(renderer, singleInputLayout, ClassId, "DownDescSet0");
+		m_downFirstPerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "DownDescSet0");
 
 		if ( m_downFirstPerFrame.empty() )
 		{
@@ -591,6 +613,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		[[maybe_unused]] const TextureInterface * inputDepth,
 		[[maybe_unused]] const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		[[maybe_unused]] const PostProcessor::PushConstants & constants
 	) noexcept
 	{
@@ -600,6 +623,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto frameIndex = m_renderer->currentFrameIndex();
 
 		static_cast< void >(m_downFirstPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+		/* Binding 1: material properties G-buffer for bloom contribution/emissive modulation. */
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_downFirstPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputMaterialProperties));
+		}
+
 		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
 		/* ---- Downsample Chain ---- */

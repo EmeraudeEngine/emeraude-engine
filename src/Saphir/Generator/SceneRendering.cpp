@@ -349,6 +349,12 @@ namespace EmEn::Saphir::Generator
 			fragmentShader->declare(Declaration::OutputFragment{1, Keys::GLSL::FloatVector4, Keys::ShaderVariable::OutputNormal});
 		}
 
+		/* Declare the MRT material properties output only when the render target has the attachment. */
+		if ( m_hasMaterialPropertiesAttachment )
+		{
+			fragmentShader->declare(Declaration::OutputFragment{2, Keys::GLSL::FloatVector4, Keys::ShaderVariable::OutputMaterialProperties});
+		}
+
 		/* If a material is present, generate the shader code (optional). */
 		if ( this->materialEnabled() && !this->getMaterialInterface()->generateFragmentShaderCode(*this, m_lightGenerator, *fragmentShader) )
 		{
@@ -399,6 +405,23 @@ namespace EmEn::Saphir::Generator
 					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(0.0);";
 				}
 			}
+
+			if ( m_hasMaterialPropertiesAttachment )
+			{
+				/* Write material properties to MRT attachment 2 for post-process effect modulation.
+				 * Nibble-packed RGBA: R[hi:lo]=reflection:reserved, G[hi:lo]=aoResponse:shadowResponse,
+				 * B[hi:lo]=bloomContrib:emissiveMask, A[hi:lo]=fogResponse:dofMask.
+				 * Values derived from declared surface properties (metalness, roughness, AO, emissive).
+				 * Light passes output zero (additive blending preserves the existing values). */
+				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = " << m_lightGenerator.materialPropertiesExpression() << ";";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0);";
+				}
+			}
 		}
 		else if ( this->materialEnabled() )
 		{
@@ -408,6 +431,11 @@ namespace EmEn::Saphir::Generator
 			{
 				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(0.0, 0.0, 1.0, 0.5);";
 			}
+
+			if ( m_hasMaterialPropertiesAttachment )
+			{
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 1.0, 240.0 / 255.0, 1.0);";
+			}
 		}
 		else
 		{
@@ -416,6 +444,11 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasNormalsAttachment )
 			{
 				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(0.0, 0.0, 1.0, 0.5);";
+			}
+
+			if ( m_hasMaterialPropertiesAttachment )
+			{
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 1.0, 240.0 / 255.0, 1.0);";
 			}
 		}
 
@@ -470,11 +503,16 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* When the render target has a normals attachment (MRT), duplicate the color
-		 * blend attachment for the normals buffer.  This ensures:
-		 * - AmbientPass (no blend): writes the actual normal (replace).
-		 * - Light passes (additive): writes vec4(0.0), adding nothing to the existing normal. */
+		/* When the render target has MRT attachments, duplicate the color blend attachment
+		 * for each additional buffer. This ensures:
+		 * - AmbientPass (no blend): writes the actual values (replace).
+		 * - Light passes (additive): writes vec4(0.0), adding nothing to the existing values. */
 		if ( m_hasNormalsAttachment )
+		{
+			graphicsPipeline.appendColorBlendAttachment(graphicsPipeline.colorBlendAttachments()[0]);
+		}
+
+		if ( m_hasMaterialPropertiesAttachment )
 		{
 			graphicsPipeline.appendColorBlendAttachment(graphicsPipeline.colorBlendAttachments()[0]);
 		}

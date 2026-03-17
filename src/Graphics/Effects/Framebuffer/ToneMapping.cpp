@@ -424,8 +424,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Descriptor set layouts. */
-		auto singleInputLayout = getSingleInputLayout(renderer);
-		auto dualInputLayout = getDualInputLayout(renderer);
+		auto singleInputLayout = getInputLayout(renderer, 1);
+		auto dualInputLayout = getInputLayout(renderer, 2);
 
 		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
 		{
@@ -509,8 +509,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	bool
 	ToneMapping::createDescriptorSets (Renderer & renderer) noexcept
 	{
-		const auto singleInputLayout = getSingleInputLayout(renderer);
-		const auto dualInputLayout = getDualInputLayout(renderer);
+		const auto singleInputLayout = getInputLayout(renderer, 1);
+		const auto dualInputLayout = getInputLayout(renderer, 2);
 
 		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
 		{
@@ -727,6 +727,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		[[maybe_unused]] const TextureInterface * inputDepth,
 		[[maybe_unused]] const TextureInterface * inputNormals,
+		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{

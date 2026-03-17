@@ -201,6 +201,82 @@ namespace
 
 			const EmEn::Graphics::GrabPass & m_grabPass;
 	};
+
+	/**
+	 * @brief Lightweight adapter exposing a GrabPass's material properties resources as a TextureInterface.
+	 * @note Stack-allocated in executeIndirectPostProcessEffects(); lives for the duration of the chain.
+	 */
+	class GrabPassMaterialPropertiesAdapter final : public EmEn::Vulkan::TextureInterface
+	{
+		public:
+
+			explicit
+			GrabPassMaterialPropertiesAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+				: m_grabPass{grabPass}
+			{
+
+			}
+
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept override
+			{
+				return m_grabPass.hasMaterialProperties();
+			}
+
+			[[nodiscard]]
+			EmEn::Vulkan::TextureType
+			type () const noexcept override
+			{
+				return EmEn::Vulkan::TextureType::Texture2D;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 2;
+			}
+
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return false;
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_grabPass.materialPropertiesImage();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_grabPass.materialPropertiesImageView();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_grabPass.materialPropertiesSampler();
+			}
+
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				return false;
+			}
+
+		private:
+
+			const EmEn::Graphics::GrabPass & m_grabPass;
+	};
 }
 
 namespace EmEn::Graphics
@@ -263,12 +339,13 @@ namespace EmEn::Graphics
 	/* Configuration. */
 
 	bool
-	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals) noexcept
+	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties) noexcept
 	{
 		/* Cache the requirements for later use (recordBlit, recreateSceneTarget). */
 		m_cachedRequiresHDR = requiresHDR;
 		m_cachedRequiresDepth = requiresDepth;
 		m_cachedRequiresNormals = requiresNormals;
+		m_cachedRequiresMaterialProperties = requiresMaterialProperties;
 
 		const auto & extent = renderTarget->extent();
 		const auto swapChainColorFormat = m_renderer.swapChainColorFormat();
@@ -291,6 +368,11 @@ namespace EmEn::Graphics
 			? m_renderer.sceneTarget()->normalsFormat()
 			: VK_FORMAT_UNDEFINED;
 
+		/* Material properties format: matches the scene render target's material properties MRT attachment. */
+		const auto materialPropertiesFormat = m_renderer.sceneTarget() != nullptr
+			? m_renderer.sceneTarget()->materialPropertiesFormat()
+			: VK_FORMAT_UNDEFINED;
+
 		/* Ensure any in-flight command buffers referencing the old grab pass have completed
 		 * before destroying its resources. This only happens during (re)configuration,
 		 * not per-frame — typically once at scene load or on window resize. */
@@ -304,7 +386,7 @@ namespace EmEn::Graphics
 
 		m_grabPass = std::make_unique< GrabPass >();
 
-		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat) )
+		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat, materialPropertiesFormat) )
 		{
 			TraceError{ClassId} << "Unable to create the post-processor grab pass !";
 
@@ -370,6 +452,18 @@ namespace EmEn::Graphics
 					if ( !descriptorSet->writeCombinedImageSampler(2, *m_grabPass->normalsImage(), *m_grabPass->normalsImageView(), *m_grabPass->normalsSampler()) )
 					{
 						TraceError{ClassId} << "Unable to write the grab pass normals texture to the post-processor descriptor set !";
+
+						m_descriptorSets.clear();
+
+						return false;
+					}
+				}
+
+				if ( m_grabPass->hasMaterialProperties() )
+				{
+					if ( !descriptorSet->writeCombinedImageSampler(3, *m_grabPass->materialPropertiesImage(), *m_grabPass->materialPropertiesImageView(), *m_grabPass->materialPropertiesSampler()) )
+					{
+						TraceError{ClassId} << "Unable to write the grab pass material properties texture to the post-processor descriptor set !";
 
 						m_descriptorSets.clear();
 
@@ -669,6 +763,90 @@ namespace EmEn::Graphics
 				);
 			}
 		}
+
+		/* === Material properties copy === */
+		const auto srcMaterialPropertiesImage = m_renderer.currentSceneMaterialPropertiesImage();
+
+		if ( srcMaterialPropertiesImage != nullptr && m_grabPass->hasMaterialProperties() )
+		{
+			const auto dstMaterialPropertiesImage = m_grabPass->materialPropertiesImage();
+
+			/* 16. Transition scene material properties: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcMaterialPropertiesImage,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 17. Transition grab pass material properties: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstMaterialPropertiesImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 18. Copy scene material properties -> grab pass material properties (same format). */
+			commandBuffer.copyImage(
+				*srcMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*dstMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+
+			/* 19. Transition grab pass material properties: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstMaterialPropertiesImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 20. Transition scene material properties: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL.
+			 * Ready for RP2 restart or internal target attachment layout restoration. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcMaterialPropertiesImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				);
+			}
+		}
 	}
 
 	void
@@ -709,6 +887,9 @@ namespace EmEn::Graphics
 		GrabPassNormalsAdapter normalsAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * normalsTexture = m_grabPass->hasNormals() ? &normalsAdapter : nullptr;
 
+		GrabPassMaterialPropertiesAdapter materialPropertiesAdapter{*m_grabPass};
+		const Vulkan::TextureInterface * materialPropertiesTexture = m_grabPass->hasMaterialProperties() ? &materialPropertiesAdapter : nullptr;
+
 		for ( const auto & effect : stack.effects() )
 		{
 			if ( effect == nullptr || !effect->isEnabled() )
@@ -734,13 +915,19 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* Skip material-properties-requiring effects if no material properties are available. */
+			if ( effect->requiresMaterialProperties() && materialPropertiesTexture == nullptr )
+			{
+				continue;
+			}
+
 			/* Skip ray tracing effects if RT is not available or disabled via settings. */
 			if ( effect->requiresRayTracing() && (!m_renderer.device()->rayTracingEnabled() || !m_renderer.isRayTracingSettingEnabled()) )
 			{
 				continue;
 			}
 
-			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, pc);
+			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, materialPropertiesTexture, pc);
 		}
 
 		/* Update only the current frame's descriptor set to point to the effect chain output
@@ -881,6 +1068,7 @@ namespace EmEn::Graphics
 			descriptorSetLayout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT);
 			descriptorSetLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 			descriptorSetLayout->declareCombinedImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT);
+			descriptorSetLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
 			{

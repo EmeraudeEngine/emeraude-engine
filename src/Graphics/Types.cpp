@@ -477,6 +477,9 @@ namespace EmEn::Graphics
 			case ComponentType::ClearCoatNormal :
 				return ClearCoatNormalString;
 
+			case ComponentType::ReflectivityMap :
+				return ReflectivityMapString;
+
 			case ComponentType::Invalid :
 				return InvalidString;
 		}
@@ -595,6 +598,11 @@ namespace EmEn::Graphics
 		if ( value == ClearCoatNormalString )
 		{
 			return ComponentType::ClearCoatNormal;
+		}
+
+		if ( value == ReflectivityMapString )
+		{
+			return ComponentType::ReflectivityMap;
 		}
 
 		if ( value == InvalidString )

@@ -158,6 +158,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D shadowTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -169,8 +170,16 @@ void main()
 	vec4 color = texture(colorTex, vUV);
 	float shadow = texture(shadowTex, vUV).r;
 
+	/* Decode material properties from G-buffer. */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint gPacked = uint(mp.g * 255.0);
+	float shadowResponse = float(gPacked & 0xFu) / 15.0;
+
 	/* Mix toward full shadow based on intensity. */
 	shadow = mix(1.0, shadow, intensity);
+
+	/* Modulate shadow by material shadowResponse. */
+	shadow = mix(1.0, shadow, shadowResponse);
 
 	outColor = vec4(color.rgb * shadow, color.a);
 }
@@ -273,16 +282,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts ---- */
-		auto singleInputLayout = getSingleInputLayout(renderer);
+		auto singleInputLayout = getInputLayout(renderer, 1);
 
 		if ( singleInputLayout == nullptr )
 		{
 			return false;
 		}
 
-		auto dualInputLayout = getDualInputLayout(renderer);
+		auto tripleInputLayout = getInputLayout(renderer, 3);
 
-		if ( dualInputLayout == nullptr )
+		if ( tripleInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -328,7 +337,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(dualInputLayout);
+			sets.emplace_back(tripleInputLayout);
 			m_applyLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
 		{
@@ -454,8 +463,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Apply: reads scene color (binding 0, per-frame) + blurred shadow (binding 1, fixed). */
-		m_applyPerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "CS_Apply_DescSet");
+		/* Apply: reads scene color (binding 0, per-frame) + blurred shadow (binding 1, fixed) + material properties (per-frame). */
+		m_applyPerFrame = createPerFrameDescriptorSets(renderer, tripleInputLayout, ClassId, "CS_Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
 		{
@@ -507,6 +516,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{
@@ -543,6 +553,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* 3. Update per-frame apply descriptor with scene color. */
 		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+		/* Update material properties descriptor for apply pass. */
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
 
 		/* Extract camera position from inverse view matrix. */
 		const auto invView = viewMat.inverse();

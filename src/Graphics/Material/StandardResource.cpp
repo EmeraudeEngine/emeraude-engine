@@ -474,6 +474,13 @@ namespace EmEn::Graphics::Material
 			}
 				return true;
 
+			case FillingType::Value :
+			{
+				/* Post-process only reflection: no cubemap, just SSR/RTR via G-buffer reflectivity. */
+				m_postProcessReflectivityAmount = FastJSON::getValue< float >(componentData, JKAmount).value_or(0.5F);
+			}
+				return true;
+
 			case FillingType::Gradient :
 			case FillingType::Texture :
 			case FillingType::VolumeTexture :
@@ -556,6 +563,48 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::parseReflectivityMapComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, ReflectivityMapString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::ReflectivityMap, std::make_unique< Texture >(Uniform::ReflectivityMapSampler, SurfaceReflectivityMap, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+			}
+				return true;
+
+			case FillingType::None :
+				/* ReflectivityMap is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource reflectivity map component !";
+
+				return false;
+		}
+	}
+
+	bool
 	StandardResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
@@ -628,6 +677,13 @@ namespace EmEn::Graphics::Material
 		if ( !this->parseRefractionComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the refraction component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseReflectivityMapComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the reflectivity map component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
@@ -1207,6 +1263,21 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* Reflectivity Map component (texture-based or post-process Value fallback) */
+		{
+			const auto componentIt = m_components.find(ComponentType::ReflectivityMap);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceReflectivityMap(componentIt->second->variableName());
+			}
+			else if ( m_postProcessReflectivityAmount >= 0.0F )
+			{
+				/* Post-process only reflection (Value type): pass the constant as a GLSL literal. */
+				lightGenerator.declareSurfaceReflectivityMap("(" + std::to_string(m_postProcessReflectivityAmount) + ")");
+			}
+		}
+
 		return true;
 	}
 
@@ -1683,6 +1754,19 @@ namespace EmEn::Graphics::Material
 		}, fragmentShader, materialSet) )
 		{
 			TraceError{ClassId} << "Unable to generate fragment code for the auto-illumination component of material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Reflectivity Map component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::ReflectivityMap, [this] (FragmentShader & shader, const Texture * component) {
+			/* NOTE: Reflectivity is typically stored in a grayscale texture (red channel). */
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the reflectivity map component of material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -2684,6 +2768,38 @@ namespace EmEn::Graphics::Material
 
 		this->setRefractionIOR(ior);
 		this->setRefractionAmount(amount);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setReflectivityMapComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the reflectivity map component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::ReflectivityMap, std::make_unique< Texture >(Uniform::ReflectivityMapSampler, SurfaceReflectivityMap, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for reflectivity map component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
 	}

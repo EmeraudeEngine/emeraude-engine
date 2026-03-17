@@ -153,6 +153,13 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool requiresNormals () const noexcept;
 
+			/**
+			 * @brief Returns whether any effect in the stack requires material properties input.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool requiresMaterialProperties () const noexcept;
+
 		private:
 
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_effects;

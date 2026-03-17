@@ -197,6 +197,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D aoTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -211,8 +212,18 @@ void main()
 	vec4 color = texture(colorTex, vUV);
 	float ao = texture(aoTex, vUV).r;
 
+	/* Decode material properties from G-buffer. */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint gPacked = uint(mp.g * 255.0);
+	float aoResponse = float(gPacked >> 4u) / 15.0;
+	uint bPacked = uint(mp.b * 255.0);
+	float emissiveMask = float(bPacked & 0xFu) / 15.0;
+
 	/* Mix towards full AO based on intensity. */
 	ao = mix(1.0, ao, intensity);
+
+	/* Modulate AO by material aoResponse; emissive surfaces reject AO darkening. */
+	ao = mix(1.0, ao, aoResponse * (1.0 - emissiveMask));
 
 	outColor = vec4(color.rgb * ao, color.a);
 }
@@ -261,10 +272,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts (shared) ---- */
-		auto singleLayout = getSingleInputLayout(renderer);
-		auto dualLayout = getDualInputLayout(renderer);
+		auto singleLayout = getInputLayout(renderer, 1);
+		auto dualLayout = getInputLayout(renderer, 2);
+		auto tripleLayout = getInputLayout(renderer, 3);
 
-		if ( singleLayout == nullptr || dualLayout == nullptr )
+		if ( singleLayout == nullptr || dualLayout == nullptr || tripleLayout == nullptr )
 		{
 			return false;
 		}
@@ -296,7 +308,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(dualLayout);
+			sets.emplace_back(tripleLayout);
 			m_applyLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
 
@@ -376,8 +388,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Apply: reads color (updated per-frame) + blurred AO (fixed). */
-		m_applyPerFrame = createPerFrameDescriptorSets(renderer, dualLayout, ClassId, "Apply_DescSet");
+		/* Apply: reads color (updated per-frame) + blurred AO (fixed) + material properties (per-frame). */
+		m_applyPerFrame = createPerFrameDescriptorSets(renderer, tripleLayout, ClassId, "Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
 		{
@@ -427,6 +439,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{
@@ -445,6 +458,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Update color descriptor for apply pass (this frame's copy). */
 		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+		/* Update material properties descriptor for apply pass. */
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
 
 		/* ---- Pass 1: AO Computation ---- */
 		{

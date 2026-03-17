@@ -84,6 +84,94 @@ namespace EmEn::Saphir
 	}
 
 	std::string
+	LightGenerator::materialPropertiesExpression () const noexcept
+	{
+		/* Reflectivity (R high nibble):
+		 * Priority 1: Dedicated reflectivity map (per-pixel, artist-controlled).
+		 * Priority 2: PBR with IBL — iblIntensity modulated by smoothness.
+		 * Priority 3: PBR metalness-derived reflectivity.
+		 * Priority 4: Standard reflectionAmount.
+		 * Fallback: 0 (no reflection). */
+		std::string reflectivity;
+
+		if ( m_useReflectivityMap && !m_surfaceReflectivityMap.empty() )
+		{
+			/* Dedicated reflectivity map: per-pixel control, highest priority. */
+			reflectivity = "clamp(" + m_surfaceReflectivityMap + ", 0.0, 1.0)";
+		}
+		else if ( m_usePBRMode && !m_surfaceIBLIntensity.empty() && m_useReflection )
+		{
+			/* PBR with environment reflection: IBL intensity scaled by smoothness.
+			 * Metallic surfaces always get high reflectivity. */
+			if ( !m_surfaceMetalness.empty() && !m_surfaceRoughness.empty() )
+			{
+				reflectivity = "clamp(max(" + m_surfaceIBLIntensity + " * (1.0 - " + m_surfaceRoughness + "), " + m_surfaceMetalness + "), 0.0, 1.0)";
+			}
+			else if ( !m_surfaceRoughness.empty() )
+			{
+				reflectivity = "clamp(" + m_surfaceIBLIntensity + " * (1.0 - " + m_surfaceRoughness + "), 0.0, 1.0)";
+			}
+			else
+			{
+				reflectivity = "clamp(" + m_surfaceIBLIntensity + ", 0.0, 1.0)";
+			}
+		}
+		else if ( m_usePBRMode && !m_surfaceMetalness.empty() && !m_surfaceRoughness.empty() )
+		{
+			/* PBR without explicit reflection: derive from metalness and smoothness. */
+			reflectivity = "clamp(" + m_surfaceMetalness + " * (1.0 - " + m_surfaceRoughness + "), 0.0, 1.0)";
+		}
+		else if ( m_useReflection && !m_surfaceReflectionAmount.empty() )
+		{
+			/* Standard material: use the explicit reflection amount. */
+			reflectivity = "clamp(" + m_surfaceReflectionAmount + ", 0.0, 1.0)";
+		}
+		else
+		{
+			reflectivity = "0.0";
+		}
+
+		/* AO response (G high nibble):
+		 * PBR with AO: aoIntensity (0=no AO effect, 1=full AO).
+		 * Others: 1.0 (full AO response). */
+		std::string aoResponse;
+
+		if ( m_useAmbientOcclusion && !m_surfaceAOIntensity.empty() )
+		{
+			aoResponse = "clamp(" + m_surfaceAOIntensity + ", 0.0, 1.0)";
+		}
+		else
+		{
+			aoResponse = "1.0";
+		}
+
+		/* Emissive mask (B low nibble):
+		 * Any material with autoIllumination: amount (0=not emissive, 1=fully emissive).
+		 * Others: 0 (not emissive). */
+		std::string emissiveMask;
+
+		if ( m_useAutoIllumination && !m_surfaceAutoIlluminationAmount.empty() )
+		{
+			emissiveMask = "clamp(" + m_surfaceAutoIlluminationAmount + ", 0.0, 1.0)";
+		}
+		else
+		{
+			emissiveMask = "0.0";
+		}
+
+		/* Encode nibble-packed vec4:
+		 * R = (reflectivity << 4 | reserved) / 255
+		 * G = (aoResponse << 4 | shadowResponse) / 255    — shadowResponse=15 (full)
+		 * B = (bloomContrib << 4 | emissiveMask) / 255     — bloomContrib=15 (full)
+		 * A = (fogResponse << 4 | dofMask) / 255           — both 15 (full) */
+		return "vec4("
+			"float(uint(" + reflectivity + " * 15.0) << 4u) / 255.0, "
+			"float((uint(" + aoResponse + " * 15.0) << 4u) | 15u) / 255.0, "
+			"float((15u << 4u) | uint(" + emissiveMask + " * 15.0)) / 255.0, "
+			"1.0)";
+	}
+
+	std::string
 	LightGenerator::lightPositionWorldSpace () const noexcept
 	{
 		if ( m_useStaticLighting )

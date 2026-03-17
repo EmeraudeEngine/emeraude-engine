@@ -439,7 +439,9 @@ void main()
 }
 )GLSL";
 
-	/* Apply pass: additive blend of indirect light onto the scene. */
+	/* Apply pass: additive blend of indirect light onto the scene,
+	 * modulated by the material properties G-buffer (emissive surfaces
+	 * should not receive GI — they emit their own light). */
 	static constexpr auto RTGIApplyFragmentShader = R"GLSL(
 #version 450
 
@@ -448,6 +450,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D giTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -461,6 +464,14 @@ void main()
 {
 	vec4 color = texture(colorTex, vUV);
 	vec3 gi = texture(giTex, vUV).rgb;
+
+	/* Decode emissive mask from material properties G-buffer.
+	 * B channel low nibble = emissiveMask (0 = not emissive, 15 = fully emissive).
+	 * Emissive surfaces should not receive GI — they emit their own light. */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint bPacked = uint(mp.b * 255.0);
+	float emissiveMask = float(bPacked & 0xFu) / 15.0;
+	gi *= (1.0 - emissiveMask);
 
 	/* Additive blend: indirect light adds to the scene. */
 	color.rgb += gi * intensity;
@@ -519,13 +530,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
-		auto traceInputLayout = getDualInputLayout(renderer);
+		auto traceInputLayout = getInputLayout(renderer, 2);
 
 		/* Single input (blur): 1 combined image sampler. */
-		auto singleLayout = getSingleInputLayout(renderer);
+		auto singleLayout = getInputLayout(renderer, 1);
 
-		/* Apply input (color + blurred GI): 2 combined image samplers. */
-		auto applyLayout = getDualInputLayout(renderer);
+		/* Apply input (color + blurred GI + material properties): 3 combined image samplers. */
+		auto applyLayout = getInputLayout(renderer, 3);
 
 		if ( traceInputLayout == nullptr || singleLayout == nullptr || applyLayout == nullptr )
 		{
@@ -710,6 +721,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{
@@ -728,6 +740,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Update color descriptor for apply pass. */
 		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+		/* Update material properties descriptor for apply pass. */
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
 
 		/* ---- Pass 1: Ray Trace GI ---- */
 		{

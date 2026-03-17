@@ -115,8 +115,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				const Vulkan::TextureInterface & inputColor,
 				const Vulkan::TextureInterface * inputDepth,
 				const Vulkan::TextureInterface * inputNormals,
+				const Vulkan::TextureInterface * inputMaterialProperties,
 				const PostProcessor::PushConstants & constants
 			) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
+			[[nodiscard]]
+			bool
+			requiresMaterialProperties () const noexcept override
+			{
+				return true;
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresHDR() */
 			[[nodiscard]]

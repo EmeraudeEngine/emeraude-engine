@@ -111,6 +111,7 @@ namespace EmEn::Graphics::Material
 		static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
 		static constexpr auto SurfaceSpecularFactor{"SurfaceSpecularFactor"};
 		static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
+		static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
@@ -462,6 +463,14 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity = DefaultAOIntensity) noexcept;
+
+			/**
+			 * @brief Sets the reflectivity map component as a texture.
+			 * @warning This function is available before creation time.
+			 * @param texture A reference to a texture smart pointer (reflectivity map).
+			 * @return bool
+			 */
+			bool setReflectivityMapComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
 
 			/**
 			 * @brief Sets the clear coat component as scalar values.
@@ -1042,6 +1051,15 @@ namespace EmEn::Graphics::Material
 			bool parseAmbientOcclusionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
+			 * @brief Parses the reflectivity map component from JSON data.
+			 * @param data A reference to the JSON data.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool parseReflectivityMapComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
 			 * @brief Parses the clear coat component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
@@ -1307,6 +1325,7 @@ namespace EmEn::Graphics::Material
 			uint32_t m_sharedUBOIndex{0};
 			bool m_videoMemoryUpdated{false};
 			bool m_invertRoughness{false};
+			float m_postProcessReflectivityAmount{-1.0F};
 			bool m_isUsingEnvironmentCubemap{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_isUsingEnvironmentCubemapForTransmission{false};

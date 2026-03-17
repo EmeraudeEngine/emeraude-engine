@@ -83,13 +83,17 @@ namespace EmEn::Saphir::Generator
 					this->enableBindlessTextures(true);
 				}
 
-				/* Detect whether the render target supports MRT normal output
-				 * by checking if the render pass has more than 1 color attachment. */
+				/* Detect whether the render target supports MRT outputs
+				 * by checking the render pass color attachment count.
+				 * Attachment order: [0]=color, [1]=normals, [2]=materialProperties.
+				 * Material properties requires normals (enforced by Renderer). */
 				if ( const auto * fb = renderTarget->framebuffer(); fb != nullptr )
 				{
 					if ( const auto & rp = fb->renderPass(); rp != nullptr )
 					{
-						m_hasNormalsAttachment = rp->colorAttachmentCount() > 1;
+						const auto colorCount = rp->colorAttachmentCount();
+						m_hasNormalsAttachment = colorCount > 1;
+						m_hasMaterialPropertiesAttachment = colorCount > 2;
 					}
 				}
 			}
@@ -153,5 +157,6 @@ namespace EmEn::Saphir::Generator
 			LightGenerator m_lightGenerator;
 			const Scenes::Scene * m_scene{nullptr};
 			bool m_hasNormalsAttachment{false};
+			bool m_hasMaterialPropertiesAttachment{false};
 	};
 }

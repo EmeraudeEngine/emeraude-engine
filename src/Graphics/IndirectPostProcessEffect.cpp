@@ -67,23 +67,13 @@ namespace EmEn::Graphics
 	std::shared_ptr< ShaderModule >
 	IndirectPostProcessEffect::getFullscreenVertexShader (Renderer & renderer) noexcept
 	{
-		return renderer.shaderManager().getShaderModuleFromSourceCode(
-			renderer.device(), "FullscreenPostProcessVS", Saphir::ShaderType::VertexShader, FullscreenVertexShaderSource
-		);
+		return renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "FullscreenPostProcessVS", Saphir::ShaderType::VertexShader, FullscreenVertexShaderSource);
 	}
 
 	/* ---- Shared fullscreen pipeline creation ---- */
 
 	std::shared_ptr< GraphicsPipeline >
-	IndirectPostProcessEffect::createFullscreenPipeline (
-		Renderer & renderer,
-		const char * tracerTag,
-		const std::string & name,
-		const std::shared_ptr< ShaderModule > & vertexModule,
-		const std::shared_ptr< ShaderModule > & fragmentModule,
-		const std::shared_ptr< PipelineLayout > & pipelineLayout,
-		const IntermediateRenderTarget & target
-	) noexcept
+	IndirectPostProcessEffect::createFullscreenPipeline (const Renderer & renderer, const char * tracerTag, const std::string & name, const std::shared_ptr< ShaderModule > & vertexModule, const std::shared_ptr< ShaderModule > & fragmentModule, const std::shared_ptr< PipelineLayout > & pipelineLayout, const IntermediateRenderTarget & target) noexcept
 	{
 		auto pipeline = std::make_shared< GraphicsPipeline >(renderer.device());
 		pipeline->setIdentifier(tracerTag, name, "GraphicsPipeline");
@@ -186,15 +176,7 @@ namespace EmEn::Graphics
 	/* ---- Shared fullscreen pass recording ---- */
 
 	void
-	IndirectPostProcessEffect::recordFullscreenPass (
-		const CommandBuffer & commandBuffer,
-		IntermediateRenderTarget & target,
-		const GraphicsPipeline & pipeline,
-		const PipelineLayout & pipelineLayout,
-		const DescriptorSet & descriptorSet,
-		const void * pushConstants,
-		uint32_t pushConstantsSize
-	) noexcept
+	IndirectPostProcessEffect::recordFullscreenPass (const CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const GraphicsPipeline & pipeline, const PipelineLayout & pipelineLayout, const DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize) noexcept
 	{
 		target.beginRenderPass(commandBuffer);
 
@@ -235,42 +217,22 @@ namespace EmEn::Graphics
 	/* ---- Shared descriptor set layout helpers ---- */
 
 	std::shared_ptr< DescriptorSetLayout >
-	IndirectPostProcessEffect::getSingleInputLayout (Renderer & renderer) noexcept
+	IndirectPostProcessEffect::getInputLayout (Renderer & renderer, uint32_t samplerCount) noexcept
 	{
-		static constexpr auto LayoutId = "PostProcess_SingleSampler";
+		const auto layoutId = "PostProcess_" + std::to_string(samplerCount) + "Sampler";
 
 		auto & layoutManager = renderer.layoutManager();
-		auto layout = layoutManager.getDescriptorSetLayout(LayoutId);
+		auto layout = layoutManager.getDescriptorSetLayout(layoutId);
 
 		if ( layout == nullptr )
 		{
-			layout = layoutManager.prepareNewDescriptorSetLayout(LayoutId);
-			layout->setIdentifier(TracerTag, LayoutId, "DescriptorSetLayout");
-			layout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT);
+			layout = layoutManager.prepareNewDescriptorSetLayout(layoutId);
+			layout->setIdentifier(TracerTag, layoutId, "DescriptorSetLayout");
 
-			if ( !layoutManager.createDescriptorSetLayout(layout) )
+			for ( uint32_t bindingIndex = 0; bindingIndex < samplerCount; ++bindingIndex )
 			{
-				return nullptr;
+				layout->declareCombinedImageSampler(bindingIndex, VK_SHADER_STAGE_FRAGMENT_BIT);
 			}
-		}
-
-		return layout;
-	}
-
-	std::shared_ptr< DescriptorSetLayout >
-	IndirectPostProcessEffect::getDualInputLayout (Renderer & renderer) noexcept
-	{
-		static constexpr auto LayoutId = "PostProcess_DualSampler";
-
-		auto & layoutManager = renderer.layoutManager();
-		auto layout = layoutManager.getDescriptorSetLayout(LayoutId);
-
-		if ( layout == nullptr )
-		{
-			layout = layoutManager.prepareNewDescriptorSetLayout(LayoutId);
-			layout->setIdentifier(TracerTag, LayoutId, "DescriptorSetLayout");
-			layout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT);
-			layout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 			if ( !layoutManager.createDescriptorSetLayout(layout) )
 			{
@@ -284,12 +246,7 @@ namespace EmEn::Graphics
 	/* ---- Shared per-frame descriptor set allocation ---- */
 
 	std::vector< std::unique_ptr< DescriptorSet > >
-	IndirectPostProcessEffect::createPerFrameDescriptorSets (
-		Renderer & renderer,
-		const std::shared_ptr< DescriptorSetLayout > & layout,
-		const char * classId,
-		const std::string & baseName
-	) noexcept
+	IndirectPostProcessEffect::createPerFrameDescriptorSets (const Renderer & renderer, const std::shared_ptr< DescriptorSetLayout > & layout, const char * classId, const std::string & baseName) noexcept
 	{
 		const auto & pool = renderer.descriptorPool();
 		const auto frameCount = renderer.framesInFlight();

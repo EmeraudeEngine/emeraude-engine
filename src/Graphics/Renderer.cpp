@@ -648,7 +648,7 @@ namespace EmEn::Graphics
 		 * At this point no scene is loaded yet, so requirements are all false (passthrough). */
 		if ( m_swapChain != nullptr && m_postProcessor.usable() )
 		{
-			if ( !m_postProcessor.configure(m_swapChain, false, false, false) )
+			if ( !m_postProcessor.configure(m_swapChain, false, false, false, false) )
 			{
 				TraceError{ClassId} << "Unable to configure the post-processor !";
 			}
@@ -854,6 +854,17 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSceneMaterialPropertiesImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->materialPropertiesImage();
+		}
+
+		return nullptr;
+	}
+
 	bool
 	Renderer::recreateSceneTarget () noexcept
 	{
@@ -890,16 +901,26 @@ namespace EmEn::Graphics
 			height = m_window.state().windowHeight;
 		}
 
+		/* Material properties require normals (same effects need both, and the shader generator
+		 * uses colorAttachmentCount to detect MRT layout: normals is always before materialProperties). */
+		const auto needsNormals = m_postProcessor.cachedRequiresNormals() || m_postProcessor.cachedRequiresMaterialProperties();
+
 		/* Normals buffer format for MRT: view-space normals for SSAO and SSR.
 		 * Only allocated when the effect chain actually needs normals. */
-		const auto normalsFormat = m_postProcessor.cachedRequiresNormals()
+		const auto normalsFormat = needsNormals
 			? VK_FORMAT_R16G16B16A16_SFLOAT
+			: VK_FORMAT_UNDEFINED;
+
+		/* Material properties buffer format for MRT: per-pixel surface properties for post-process modulation.
+		 * Only allocated when the effect chain actually needs material properties. */
+		const auto materialPropertiesFormat = m_postProcessor.cachedRequiresMaterialProperties()
+			? VK_FORMAT_R8G8B8A8_UNORM
 			: VK_FORMAT_UNDEFINED;
 
 		m_sceneTarget = std::make_shared< SceneRenderTarget >(
 			"SceneRenderTarget",
 			width, height,
-			colorFormat, normalsFormat, depthFormat,
+			colorFormat, normalsFormat, materialPropertiesFormat, depthFormat,
 			m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance)
 		);
 
@@ -1327,7 +1348,8 @@ namespace EmEn::Graphics
 			m_postProcessor.updateCachedRequirements(
 				stack->requiresHDR(),
 				stack->requiresDepth(),
-				stack->requiresNormals());
+				stack->requiresNormals(),
+				stack->requiresMaterialProperties());
 
 			if ( this->recreateSceneTarget() )
 			{
@@ -1335,7 +1357,8 @@ namespace EmEn::Graphics
 					std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget),
 					stack->requiresHDR(),
 					stack->requiresDepth(),
-					stack->requiresNormals()) )
+					stack->requiresNormals(),
+					stack->requiresMaterialProperties()) )
 				{
 					TraceError{ClassId} << "Unable to reconfigure the post-processor with the scene target!";
 				}
@@ -1508,15 +1531,25 @@ namespace EmEn::Graphics
 		}
 
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
-		 * When the scene target has no normals MRT attachment, use the 2-element clear values
-		 * (color + depth) to match the attachment layout. The 3-element m_clearColors has
-		 * [0]=color, [1]=normals, [2]=depth which would misalign the depth clear value
-		 * when normals are absent (attachment 1 = depth, not normals). */
+		 * Clear values must match the actual attachment layout which depends on which
+		 * MRT attachments are present. m_clearColors layout: [0]=color, [1]=normals,
+		 * [2]=materialProperties, [3]=depth. Build the matching subset for beginRenderPass. */
 		const bool sceneTargetHasNormals = m_sceneTarget->normalsFormat() != VK_FORMAT_UNDEFINED;
+		const bool sceneTargetHasMaterialProperties = m_sceneTarget->materialPropertiesFormat() != VK_FORMAT_UNDEFINED;
 
-		if ( sceneTargetHasNormals )
+		if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
 		{
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+		}
+		else if ( sceneTargetHasNormals )
+		{
+			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[3]};
+			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
+		}
+		else if ( sceneTargetHasMaterialProperties )
+		{
+			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[3]};
+			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		else
 		{
@@ -1549,9 +1582,19 @@ namespace EmEn::Graphics
 		 * so they can sample the captured scene for refraction effects. */
 		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
-			if ( sceneTargetHasNormals )
+			if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
 			{
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+			}
+			else if ( sceneTargetHasNormals )
+			{
+				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[3]};
+				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
+			}
+			else if ( sceneTargetHasMaterialProperties )
+			{
+				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[3]};
+				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else
 			{
@@ -1879,7 +1922,8 @@ namespace EmEn::Graphics
 				renderTarget,
 				m_postProcessor.cachedRequiresHDR(),
 				m_postProcessor.cachedRequiresDepth(),
-				m_postProcessor.cachedRequiresNormals()) )
+				m_postProcessor.cachedRequiresNormals(),
+				m_postProcessor.cachedRequiresMaterialProperties()) )
 			{
 				TraceError{ClassId} << "Unable to reconfigure the post-processor on resize!";
 			}

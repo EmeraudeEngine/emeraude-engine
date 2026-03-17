@@ -306,7 +306,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Descriptor set layout: 1 combined image sampler. */
-		auto descriptorSetLayout = getSingleInputLayout(renderer);
+		auto descriptorSetLayout = getInputLayout(renderer, 1);
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -386,6 +386,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		[[maybe_unused]] const TextureInterface * inputDepth,
 		[[maybe_unused]] const TextureInterface * inputNormals,
+		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
 		[[maybe_unused]] const PostProcessor::PushConstants & constants
 	) noexcept
 	{

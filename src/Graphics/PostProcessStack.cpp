@@ -138,4 +138,12 @@ namespace EmEn::Graphics
 			return effect != nullptr && effect->isEnabled() && effect->requiresNormals();
 		});
 	}
+
+	bool
+	PostProcessStack::requiresMaterialProperties () const noexcept
+	{
+		return std::ranges::any_of(m_effects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->requiresMaterialProperties();
+		});
+	}
 }

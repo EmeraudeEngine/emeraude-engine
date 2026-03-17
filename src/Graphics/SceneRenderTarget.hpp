@@ -70,10 +70,11 @@ namespace EmEn::Graphics
 			 * @param height The height of the render target.
 			 * @param colorFormat The Vulkan color format (e.g. VK_FORMAT_R16G16B16A16_SFLOAT for HDR).
 			 * @param normalsFormat The Vulkan format for the normals MRT attachment. VK_FORMAT_UNDEFINED to skip.
+			 * @param materialPropertiesFormat The Vulkan format for the material properties MRT attachment. VK_FORMAT_UNDEFINED to skip.
 			 * @param depthFormat The Vulkan depth format (e.g. VK_FORMAT_D24_UNORM_S8_UINT).
 			 * @param viewDistance The max viewable distance in meters.
 			 */
-			SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat depthFormat, float viewDistance) noexcept;
+			SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat depthFormat, float viewDistance) noexcept;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
 			void setViewDistance (float meters) noexcept override;
@@ -198,6 +199,28 @@ namespace EmEn::Graphics
 				return m_normalsImage;
 			}
 
+			/**
+			 * @brief Returns the material properties format used by this render target.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat
+			materialPropertiesFormat () const noexcept
+			{
+				return m_materialPropertiesFormat;
+			}
+
+			/**
+			 * @brief Returns the material properties image for blit/sampling operations.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			materialPropertiesImage () const noexcept
+			{
+				return m_materialPropertiesImage;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
@@ -265,11 +288,14 @@ namespace EmEn::Graphics
 
 			VkFormat m_colorFormat;
 			VkFormat m_normalsFormat;
+			VkFormat m_materialPropertiesFormat;
 			VkFormat m_depthFormat;
 			std::shared_ptr< Vulkan::Image > m_colorImage;
 			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
 			std::shared_ptr< Vulkan::Image > m_normalsImage;
 			std::shared_ptr< Vulkan::ImageView > m_normalsImageView;
+			std::shared_ptr< Vulkan::Image > m_materialPropertiesImage;
+			std::shared_ptr< Vulkan::ImageView > m_materialPropertiesImageView;
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;

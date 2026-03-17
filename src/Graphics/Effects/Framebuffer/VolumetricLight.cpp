@@ -217,7 +217,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Single input layout (1 combined image sampler). */
-		auto singleInputLayout = getSingleInputLayout(renderer);
+		auto singleInputLayout = getInputLayout(renderer, 1);
 
 		if ( singleInputLayout == nullptr )
 		{
@@ -225,7 +225,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Dual input layout (2 combined image samplers). */
-		auto dualInputLayout = getDualInputLayout(renderer);
+		auto dualInputLayout = getInputLayout(renderer, 2);
 
 		if ( dualInputLayout == nullptr )
 		{
@@ -403,6 +403,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		[[maybe_unused]] const TextureInterface * inputNormals,
+		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{

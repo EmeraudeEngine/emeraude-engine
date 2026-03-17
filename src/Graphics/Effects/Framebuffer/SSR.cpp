@@ -376,7 +376,8 @@ void main()
 }
 )GLSL";
 
-	/* Composite pass: blends the blurred reflected color with the scene. */
+	/* Composite pass: blends the blurred reflected color with the scene,
+	 * modulated by the per-pixel reflectivity from the material properties G-buffer. */
 	static constexpr auto SSRCompositeFragmentShader = R"GLSL(
 #version 450
 
@@ -385,6 +386,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D ssrTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -399,12 +401,17 @@ void main()
 	vec4 color = texture(colorTex, vUV);
 	vec4 ssrData = texture(ssrTex, vUV);
 
+	/* Decode reflectivity from the material properties G-buffer (R channel, high nibble). */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint rPacked = uint(mp.r * 255.0);
+	float reflectivity = float(rPacked >> 4u) / 15.0;
+
 	/* ssrData.rgb = blurred reflected color, ssrData.a = blurred confidence. */
 	float confidence = ssrData.a;
 
-	if (confidence > 0.001)
+	if (confidence > 0.001 && reflectivity > 0.0)
 	{
-		color.rgb = mix(color.rgb, ssrData.rgb / max(confidence, 0.001), confidence * intensity);
+		color.rgb = mix(color.rgb, ssrData.rgb / max(confidence, 0.001), confidence * intensity * reflectivity);
 	}
 
 	outColor = color;
@@ -465,10 +472,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (depth + normals): 2 combined image samplers at bindings 0,1. */
-		auto traceInputLayout = getDualInputLayout(renderer);
+		auto traceInputLayout = getInputLayout(renderer, 2);
 
 		/* Single input (SSR trace result for blur): 1 combined image sampler at binding 0. */
-		auto singleLayout = getSingleInputLayout(renderer);
+		auto singleLayout = getInputLayout(renderer, 1);
 
 		/* Resolve input (color + trace + depth + normals + env cubemap): 5 bindings, custom. */
 		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInput");
@@ -489,8 +496,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Composite input (color + blurred SSR): 2 combined image samplers at bindings 0,1. */
-		auto compositeLayout = getDualInputLayout(renderer);
+		/* Composite input (color + blurred SSR + material properties): 3 combined image samplers at bindings 0,1,2. */
+		auto compositeLayout = getInputLayout(renderer, 3);
 
 		if ( traceInputLayout == nullptr || singleLayout == nullptr || resolveInputLayout == nullptr || compositeLayout == nullptr )
 		{
@@ -704,6 +711,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const TextureInterface & inputColor,
 		const TextureInterface * inputDepth,
 		const TextureInterface * inputNormals,
+		const TextureInterface * inputMaterialProperties,
 		const PostProcessor::PushConstants & constants
 	) noexcept
 	{
@@ -722,6 +730,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Update color descriptor for composite pass (this frame's copy). */
 		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+		/* Update material properties descriptor for composite pass. */
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
 
 		/* ---- Pass 1: Trace ---- */
 		{

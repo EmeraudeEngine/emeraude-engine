@@ -702,6 +702,7 @@ namespace EmEn::Saphir
 			constexpr auto RoughnessSampler{"uRoughnessSampler"};
 			constexpr auto MetalnessSampler{"uMetalnessSampler"};
 			constexpr auto AmbientOcclusionSampler{"uAmbientOcclusionSampler"};
+			constexpr auto ReflectivityMapSampler{"uReflectivityMapSampler"};
 			constexpr auto ClearCoatSampler{"uClearCoatSampler"};
 			constexpr auto ClearCoatRoughnessSampler{"uClearCoatRoughnessSampler"};
 			constexpr auto ClearCoatNormalSampler{"uClearCoatNormalSampler"};
@@ -897,6 +898,7 @@ namespace EmEn::Saphir
 			constexpr auto ParallaxTextureCoordinates{"pomTexCoords"};
 			constexpr auto OutputFragment{"svOutputFragment"};
 			constexpr auto OutputNormal{"svOutputNormal"};
+			constexpr auto OutputMaterialProperties{"svOutputMaterialProperties"};
 			constexpr auto FragCoord{"svFragCoord"};
 			constexpr auto Light{"svLight"};
 			constexpr auto PositionLightSpace{"PositionLightSpace"};

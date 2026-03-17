@@ -382,6 +382,7 @@ namespace EmEn::Graphics
 		Transmission = 19,
 		Iridescence = 20,
 		ClearCoatNormal = 21,
+		ReflectivityMap = 22,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -408,6 +409,7 @@ namespace EmEn::Graphics
 	constexpr auto TransmissionString{"Transmission"};
 	constexpr auto IridescenceString{"Iridescence"};
 	constexpr auto ClearCoatNormalString{"ClearCoatNormal"};
+	constexpr auto ReflectivityMapString{"ReflectivityMap"};
 	constexpr auto DispersionString{"Dispersion"};
 	constexpr auto EmissiveStrengthString{"EmissiveStrength"};
 	constexpr auto SpecularKHRString{"Specular"};
