@@ -623,14 +623,11 @@ namespace EmEn::Scenes
 		{
 			if ( notificationCode == Renderer::WindowContentRefreshed && m_postProcessStack != nullptr )
 			{
-				auto & renderer = m_AVConsoleManager.graphicsRenderer();
-				const auto mainRT = renderer.mainRenderTarget();
-
-				if ( mainRT != nullptr )
+				if ( const auto mainRT = m_AVConsoleManager.graphicsRenderer().mainRenderTarget(); mainRT != nullptr )
 				{
 					const auto & extent = mainRT->extent();
 
-					if ( !m_postProcessStack->resizeAll(renderer, extent.width, extent.height) )
+					if ( !m_postProcessStack->resizeAll(extent.width, extent.height) )
 					{
 						TraceError{ClassId} << "Failed to resize the post-process stack on window resize !";
 					}

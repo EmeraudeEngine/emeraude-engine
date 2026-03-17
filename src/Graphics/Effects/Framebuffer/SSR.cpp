@@ -421,11 +421,15 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	bool
-	SSR::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	SSR::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 
@@ -472,10 +476,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (depth + normals): 2 combined image samplers at bindings 0,1. */
-		auto traceInputLayout = getInputLayout(renderer, 2);
+		auto traceInputLayout = this->getInputLayout(2);
 
 		/* Single input (SSR trace result for blur): 1 combined image sampler at binding 0. */
-		auto singleLayout = getInputLayout(renderer, 1);
+		auto singleLayout = this->getInputLayout(1);
 
 		/* Resolve input (color + trace + depth + normals + env cubemap): 5 bindings, custom. */
 		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInput");
@@ -497,7 +501,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Composite input (color + blurred SSR + material properties): 3 combined image samplers at bindings 0,1,2. */
-		auto compositeLayout = getInputLayout(renderer, 3);
+		auto compositeLayout = this->getInputLayout(3);
 
 		if ( traceInputLayout == nullptr || singleLayout == nullptr || resolveInputLayout == nullptr || compositeLayout == nullptr )
 		{
@@ -506,40 +510,39 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(traceInputLayout);
-			m_traceLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ResolvePushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_traceLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(resolveInputLayout);
-			m_resolveLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_resolveLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ResolvePushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleLayout);
-			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_blurLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(compositeLayout);
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, ranges);
+
+			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+			});
 		}
 
 		if ( m_traceLayout == nullptr || m_resolveLayout == nullptr || m_blurLayout == nullptr || m_compositeLayout == nullptr )
@@ -551,19 +554,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto vertexModule = getFullscreenVertexShader(renderer);
-		auto traceFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSR_Trace_FS", Saphir::ShaderType::FragmentShader, SSRTraceFragmentShader
-		);
-		auto resolveFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSR_Resolve_FS", Saphir::ShaderType::FragmentShader, SSRResolveFragmentShader
-		);
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSR_Blur_FS", Saphir::ShaderType::FragmentShader, SSRBlurFragmentShader
-		);
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSR_Composite_FS", Saphir::ShaderType::FragmentShader, SSRCompositeFragmentShader
-		);
+		const auto vertexModule = this->getFullscreenVertexShader();
+		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Trace_FS", ShaderType::FragmentShader, SSRTraceFragmentShader);
+		const auto resolveFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Resolve_FS", ShaderType::FragmentShader, SSRResolveFragmentShader);
+		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Blur_FS", ShaderType::FragmentShader, SSRBlurFragmentShader);
+		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Composite_FS", ShaderType::FragmentShader, SSRCompositeFragmentShader);
 
 		if ( vertexModule == nullptr || traceFragment == nullptr || resolveFragment == nullptr || blurFragment == nullptr || compositeFragment == nullptr )
 		{
@@ -573,10 +568,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_tracePipeline = createFullscreenPipeline(renderer, ClassId, "SSR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_resolvePipeline = createFullscreenPipeline(renderer, ClassId, "SSR_Resolve", vertexModule, resolveFragment, m_resolveLayout, m_resolveTarget);
-		m_blurPipeline = createFullscreenPipeline(renderer, ClassId, "SSR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_compositePipeline = createFullscreenPipeline(renderer, ClassId, "SSR_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
+		m_tracePipeline = this->createFullscreenPipeline(ClassId, "SSR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
+		m_resolvePipeline = this->createFullscreenPipeline(ClassId, "SSR_Resolve", vertexModule, resolveFragment, m_resolveLayout, m_resolveTarget);
+		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
+		m_compositePipeline = this->createFullscreenPipeline(ClassId, "SSR_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
 		if ( m_tracePipeline == nullptr || m_resolvePipeline == nullptr || m_blurPipeline == nullptr || m_compositePipeline == nullptr )
 		{
@@ -587,7 +582,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto & pool = renderer.descriptorPool();
 
 		/* Trace: reads depth + normals (updated per-frame). */
-		m_tracePerFrame = createPerFrameDescriptorSets(renderer, traceInputLayout, ClassId, "Trace_DescSet");
+		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
 		if ( m_tracePerFrame.empty() )
 		{
@@ -598,21 +593,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * depth (binding 2, per-frame), normals (binding 3, per-frame),
 		 * environment cubemap (binding 4, fixed). */
 		{
-			const auto & cubemap = m_environmentCubemap
-				? m_environmentCubemap
+			const auto & cubemap = m_fallbackEnvCubemap
+				? m_fallbackEnvCubemap
 				: renderer.getDefaultTextureCubemap();
 
-			m_resolvePerFrame = createPerFrameDescriptorSets(renderer, resolveInputLayout, ClassId, "Resolve_DescSet");
+			m_resolvePerFrame = this->createPerFrameDescriptorSets(resolveInputLayout, ClassId, "Resolve_DescSet");
 
 			if ( m_resolvePerFrame.empty() )
 			{
 				return false;
 			}
 
-			for ( auto & ds : m_resolvePerFrame )
+			for ( const auto & descriptorSet : m_resolvePerFrame )
 			{
 				/* Binding 1: trace result (same target every frame). */
-				if ( !ds->writeCombinedImageSampler(1, m_traceTarget) )
+				if ( !descriptorSet->writeCombinedImageSampler(1, m_traceTarget) )
 				{
 					return false;
 				}
@@ -620,7 +615,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/* Binding 4: environment cubemap (fixed). */
 				if ( cubemap != nullptr )
 				{
-					if ( !ds->writeCombinedImageSampler(4, *cubemap) )
+					if ( !descriptorSet->writeCombinedImageSampler(4, *cubemap) )
 					{
 						return false;
 					}
@@ -657,23 +652,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Composite: reads color (updated per-frame) + blurred SSR (fixed). */
-		m_compositePerFrame = createPerFrameDescriptorSets(renderer, compositeLayout, ClassId, "Composite_DescSet");
+		m_compositePerFrame = this->createPerFrameDescriptorSets(compositeLayout, ClassId, "Composite_DescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
 			return false;
 		}
 
-		for ( auto & ds : m_compositePerFrame )
+		for ( const auto & descriptorSet : m_compositePerFrame )
 		{
 			/* Binding 1: blurred SSR (same for all frames). */
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -686,9 +679,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_tracePerFrame.clear();
 		m_blurVDescSet.reset();
 		m_blurHDescSet.reset();
-
-		m_renderer = nullptr;
-
+		
 		m_compositePipeline.reset();
 		m_blurPipeline.reset();
 		m_resolvePipeline.reset();
@@ -706,16 +697,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	SSR::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	SSR::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update depth + normals descriptors for this frame's trace pass. */
 		if ( inputDepth != nullptr )
@@ -754,9 +738,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.binarySteps = m_parameters.binarySteps
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_traceTarget, *m_tracePipeline, *m_traceLayout,
-				*m_tracePerFrame[frameIndex], &pc, sizeof(TracePushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_traceTarget,
+				*m_tracePipeline,
+				*m_traceLayout,
+				*m_tracePerFrame[frameIndex],
+				&pc,
+				sizeof(TracePushConstants)
 			);
 		}
 
@@ -777,8 +766,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Compute inverse view matrix for cubemap fallback.
 			 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-			const auto readStateIndex = m_renderer->currentReadStateIndex();
-			const auto & viewMat = m_renderer->mainRenderTarget()->viewMatrices().viewMatrix(readStateIndex, false, 0);
+			const auto readStateIndex = this->renderer().currentReadStateIndex();
+			const auto & viewMat = this->renderer().mainRenderTarget()->viewMatrices().viewMatrix(readStateIndex, false, 0);
 			const auto invView = viewMat.inverse();
 			const auto * inv = invView.data();
 
@@ -796,9 +785,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.intensity = m_parameters.intensity
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_resolveTarget, *m_resolvePipeline, *m_resolveLayout,
-				*m_resolvePerFrame[frameIndex], &resolvePC, sizeof(ResolvePushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_resolveTarget,
+				*m_resolvePipeline,
+				*m_resolveLayout,
+				*m_resolvePerFrame[frameIndex],
+				&resolvePC,
+				sizeof(ResolvePushConstants)
 			);
 		}
 
@@ -811,9 +805,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 0.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_blurHTarget, *m_blurPipeline, *m_blurLayout,
-				*m_blurHDescSet, &blurH, sizeof(BlurPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurHTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurHDescSet,
+				&blurH,
+				sizeof(BlurPushConstants)
 			);
 		}
 
@@ -826,9 +825,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 1.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_blurVTarget, *m_blurPipeline, *m_blurLayout,
-				*m_blurVDescSet, &blurV, sizeof(BlurPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurVTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurVDescSet,
+				&blurV,
+				sizeof(BlurPushConstants)
 			);
 		}
 
@@ -841,9 +845,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.padding3 = 0.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_outputTarget, *m_compositePipeline, *m_compositeLayout,
-				*m_compositePerFrame[frameIndex], &comp, sizeof(CompositePushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_outputTarget,
+				*m_compositePipeline,
+				*m_compositeLayout,
+				*m_compositePerFrame[frameIndex],
+				&comp,
+				sizeof(CompositePushConstants)
 			);
 		}
 

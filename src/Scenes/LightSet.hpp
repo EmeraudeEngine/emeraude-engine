@@ -268,7 +268,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::SharedUniformBuffer >
 			directionalLightBuffer () const noexcept
 			{
-				return m_directionalLightBuffer;
+				return m_directionalLightUBO;
 			}
 
 			/**
@@ -279,7 +279,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::SharedUniformBuffer >
 			pointLightBuffer () const noexcept
 			{
-				return m_pointLightBuffer;
+				return m_pointLightUBO;
 			}
 
 			/**
@@ -290,7 +290,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::SharedUniformBuffer >
 			spotLightBuffer () const noexcept
 			{
-				return m_spotLightBuffer;
+				return m_spotLightUBO;
 			}
 
 			/**
@@ -476,6 +476,18 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the main directional light of the scene to compute specific effects.
+			 * @warning Can be nullptr.
+			 * @return std::shared_ptr< Component::DirectionalLight >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Component::DirectionalLight >
+			mainDirectionalLight () const noexcept
+			{
+				return m_mainDirectionalLight.lock();
+			}
+
+			/**
 			 * @brief Returns the percentage of each light color to use for ambient light calculation.
 			 * @return float
 			 */
@@ -554,7 +566,7 @@ namespace EmEn::Scenes
 			Vulkan::ShaderStorageBufferObject *
 			rtLightBuffer () const noexcept
 			{
-				return m_rtLightBuffer.get();
+				return m_RTLightSSBO.get();
 			}
 
 			/**
@@ -565,7 +577,7 @@ namespace EmEn::Scenes
 			uint32_t
 			rtLightCount () const noexcept
 			{
-				return m_rtLightCount;
+				return m_RTLightCount;
 			}
 
 			/**
@@ -603,21 +615,21 @@ namespace EmEn::Scenes
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const LightSet & obj);
 
-			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightBuffer;
-			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightBuffer;
-			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightBuffer;
 			std::set< std::shared_ptr< Component::AbstractLightEmitter > > m_lights;
 			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
 			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights;
 			std::map< std::string, Saphir::StaticLighting > m_staticLighting;
-			/* RT light SSBO (flat array of all lights for ray query shaders). */
-			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_rtLightBuffer;
+			std::weak_ptr< Component::DirectionalLight > m_mainDirectionalLight;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightUBO;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightUBO;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightUBO;
+			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTLightSSBO;
+			mutable uint32_t m_RTLightCount{0};
+			mutable std::mutex m_lightsAccess;
 			Libs::PixelFactory::Color< float > m_ambientLightColor{Libs::PixelFactory::Black};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
-			mutable std::mutex m_lightsAccess;
-			mutable uint32_t m_rtLightCount{0};
 			bool m_initialized{false};
 			bool m_enabled{false};
 			bool m_useStaticLighting{false};

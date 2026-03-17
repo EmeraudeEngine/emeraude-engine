@@ -36,6 +36,7 @@
 #include "PostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Vulkan/DescriptorSet.hpp"
 #include "PostProcessor.hpp"
 
 /* Forward declarations. */
@@ -44,12 +45,16 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class CommandBuffer;
-		class DescriptorSet;
 		class DescriptorSetLayout;
 		class GraphicsPipeline;
 		class PipelineLayout;
 		class ShaderModule;
 		class TextureInterface;
+	}
+
+	namespace Scenes
+	{
+		class LightSet;
 	}
 
 	namespace Graphics
@@ -90,14 +95,14 @@ namespace EmEn::Graphics
 			 * @param copy A reference to the copied instance.
 			 * @return IndirectPostProcessEffect &
 			 */
-			IndirectPostProcessEffect & operator= (const IndirectPostProcessEffect & copy) noexcept = default;
+			IndirectPostProcessEffect & operator= (const IndirectPostProcessEffect & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return IndirectPostProcessEffect &
 			 */
-			IndirectPostProcessEffect & operator= (IndirectPostProcessEffect && copy) noexcept = default;
+			IndirectPostProcessEffect & operator= (IndirectPostProcessEffect && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the indirect post-process effect.
@@ -178,14 +183,26 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether this effect requires the scene light set to function.
+			 * @note Effects returning true are skipped when no main directional light is available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresLightSet () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Creates GPU resources for this effect.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param width The framebuffer width.
 			 * @param height The framebuffer height.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept = 0;
+			virtual bool create (uint32_t width, uint32_t height) noexcept = 0;
 
 			/**
 			 * @brief Destroys GPU resources for this effect.
@@ -197,13 +214,12 @@ namespace EmEn::Graphics
 			 * @brief Recreates GPU resources after a resize.
 			 * @note Default implementation calls destroy() then create(). Override only if
 			 * the effect needs partial recreation (e.g., keeping adaptation state).
-			 * @param renderer A reference to the graphics renderer.
 			 * @param width The new framebuffer width.
 			 * @param height The new framebuffer height.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool resize (Renderer & renderer, uint32_t width, uint32_t height) noexcept;
+			virtual bool resize (uint32_t width, uint32_t height) noexcept;
 
 			/**
 			 * @brief Executes the effect for the current frame.
@@ -213,18 +229,39 @@ namespace EmEn::Graphics
 			 * @param inputDepth The input depth texture (maybe nullptr if not available).
 			 * @param inputNormals The input normals texture (maybe nullptr if not available).
 			 * @param inputMaterialProperties The input material properties texture (maybe nullptr if not available).
+			 * @param lightSet The scene light set for lighting queries (maybe nullptr if not available).
 			 * @param constants The current post-processing push constants.
 			 * @return const Vulkan::TextureInterface & The output texture to pass to the next effect.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const PostProcessor::PushConstants & constants) noexcept = 0;
+			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept = 0;
 
 		protected:
 
 			/**
 			 * @brief Constructs an indirect post-process effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			IndirectPostProcessEffect () noexcept = default;
+			explicit
+			IndirectPostProcessEffect (Renderer & renderer) noexcept
+				: m_renderer{renderer}
+			{
+
+			}
+
+			[[nodiscard]]
+			Renderer &
+			renderer () noexcept
+			{
+				return m_renderer;
+			}
+
+			[[nodiscard]]
+			const Renderer &
+			renderer () const noexcept
+			{
+				return m_renderer;
+			}
 
 			/* ---- Shared fullscreen pass infrastructure ---- */
 
@@ -246,17 +283,15 @@ void main()
 
 			/**
 			 * @brief Returns the compiled fullscreen vertex shader module (cached by ShaderManager).
-			 * @param renderer A reference to the graphics renderer.
 			 * @return std::shared_ptr< Vulkan::ShaderModule >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Vulkan::ShaderModule > getFullscreenVertexShader (Renderer & renderer) noexcept;
+			std::shared_ptr< Vulkan::ShaderModule > getFullscreenVertexShader () const noexcept;
 
 			/**
 			 * @brief Creates a standard fullscreen graphics pipeline.
 			 * @note Configures: empty vertex input, triangle list, dynamic viewport/scissor,
 			 * no culling, no depth test, no blending, single color attachment, RGBA write mask.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param tracerTag The tracer tag for debug identification.
 			 * @param name The pipeline name for debug identification.
 			 * @param vertexModule The vertex shader module.
@@ -266,15 +301,7 @@ void main()
 			 * @return std::shared_ptr< Vulkan::GraphicsPipeline >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Vulkan::GraphicsPipeline > createFullscreenPipeline (
-				const Renderer & renderer,
-				const char * tracerTag,
-				const std::string & name,
-				const std::shared_ptr< Vulkan::ShaderModule > & vertexModule,
-				const std::shared_ptr< Vulkan::ShaderModule > & fragmentModule,
-				const std::shared_ptr< Vulkan::PipelineLayout > & pipelineLayout,
-				const IntermediateRenderTarget & target
-			) noexcept;
+			std::shared_ptr< Vulkan::GraphicsPipeline > createFullscreenPipeline (const char * tracerTag, const std::string & name, const std::shared_ptr< Vulkan::ShaderModule > & vertexModule, const std::shared_ptr< Vulkan::ShaderModule > & fragmentModule, const std::shared_ptr< Vulkan::PipelineLayout > & pipelineLayout, const IntermediateRenderTarget & target) const noexcept;
 
 			/**
 			 * @brief Records a fullscreen pass into a command buffer.
@@ -289,41 +316,30 @@ void main()
 			 * @param pushConstantsSize Size of the push constants data in bytes.
 			 * @return void
 			 */
-			static void recordFullscreenPass (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const IntermediateRenderTarget & target,
-				const Vulkan::GraphicsPipeline & pipeline,
-				const Vulkan::PipelineLayout & pipelineLayout,
-				const Vulkan::DescriptorSet & descriptorSet,
-				const void * pushConstants,
-				uint32_t pushConstantsSize
-			) noexcept;
+			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize) noexcept;
 
 			/* ---- Shared descriptor set layout helpers ---- */
 
 			/**
 			 * @brief Returns a shared descriptor set layout with N combined image samplers.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param samplerCount The number of combined image samplers (1, 2, 3, etc.).
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Vulkan::DescriptorSetLayout > getInputLayout (Renderer & renderer, uint32_t samplerCount) noexcept;
+			std::shared_ptr< Vulkan::DescriptorSetLayout > getInputLayout (uint32_t samplerCount) const noexcept;
 
 			/**
 			 * @brief Allocates per-frame descriptor sets (one per frame-in-flight).
-			 * @param renderer A reference to the graphics renderer.
 			 * @param layout The descriptor set layout.
 			 * @param classId The class identifier for debug tracing.
 			 * @param baseName The base name for descriptor set identification.
 			 * @return std::vector< std::unique_ptr< Vulkan::DescriptorSet > >
 			 */
 			[[nodiscard]]
-			static std::vector< std::unique_ptr< Vulkan::DescriptorSet > > createPerFrameDescriptorSets (
-				const Renderer & renderer,
-				const std::shared_ptr< Vulkan::DescriptorSetLayout > & layout,
-				const char * classId,
-				const std::string & baseName
-			) noexcept;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > createPerFrameDescriptorSets (const std::shared_ptr< Vulkan::DescriptorSetLayout > & layout, const char * classId, const std::string & baseName) const noexcept;
+
+		private:
+
+			Renderer & m_renderer;
 	};
 }

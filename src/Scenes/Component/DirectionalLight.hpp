@@ -239,6 +239,17 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the current light emission direction in world space.
+			 * @return Libs::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Libs::Math::Vector< 3, float >
+			direction () const noexcept
+			{
+				return {m_buffer[DirectionOffset], m_buffer[DirectionOffset + 1], m_buffer[DirectionOffset + 2]};
+			}
+
+			/**
 			 * @brief Returns whether this light uses Cascaded Shadow Maps.
 			 * @return bool
 			 */

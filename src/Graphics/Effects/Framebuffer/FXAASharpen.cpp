@@ -322,13 +322,17 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	/* ---- Lifecycle ---- */
 
 	bool
-	FXAASharpen::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	FXAASharpen::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		/* Output is LDR (8-bit per channel). */
 		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R8G8B8A8_UNORM, "FXAASharpenOutput") )
 		{
@@ -338,11 +342,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Compile shaders. */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		auto vertexModule = this->getFullscreenVertexShader();
 
-		auto fragmentModule = renderer.shaderManager().getShaderModuleFromSourceCode(
-			renderer.device(), "FXAASharpenFS", Saphir::ShaderType::FragmentShader, FXAASharpenFragmentShader
-		);
+		auto fragmentModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "FXAASharpenFS", ShaderType::FragmentShader, FXAASharpenFragmentShader);
 
 		if ( vertexModule == nullptr || fragmentModule == nullptr )
 		{
@@ -352,7 +354,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Descriptor set layout: 1 combined image sampler. */
-		auto descriptorSetLayout = getInputLayout(renderer, 1);
+		auto descriptorSetLayout = this->getInputLayout(1);
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -361,21 +363,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Push constant range (32 bytes). */
-		const Libs::StaticVector< VkPushConstantRange, 4 > pcRange{
-			VkPushConstantRange{
-				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				.offset = 0,
-				.size = sizeof(FXAASharpenPushConstants)
-			}
-		};
-
 		/* Pipeline layout. */
 		{
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(descriptorSetLayout);
 
-			m_pipelineLayout = renderer.layoutManager().getPipelineLayout(sets, pcRange);
+			/* Push constant range (32 bytes). */
+			m_pipelineLayout = renderer.layoutManager().getPipelineLayout(sets, {
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(FXAASharpenPushConstants)
+				}
+			});
 		}
 
 		if ( m_pipelineLayout == nullptr )
@@ -386,9 +386,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Graphics pipeline. */
-		m_pipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "FXAASharpen", vertexModule, fragmentModule, m_pipelineLayout, m_outputTarget
-		);
+		m_pipeline = this->createFullscreenPipeline(ClassId, "FXAASharpen", vertexModule, fragmentModule, m_pipelineLayout, m_outputTarget);
 
 		if ( m_pipeline == nullptr )
 		{
@@ -398,7 +396,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Per-frame descriptor sets. */
-		m_descriptorSets = createPerFrameDescriptorSets(renderer, descriptorSetLayout, ClassId, "FXAASharpenDescSet");
+		m_descriptorSets = this->createPerFrameDescriptorSets(descriptorSetLayout, ClassId, "FXAASharpenDescSet");
 
 		if ( m_descriptorSets.empty() )
 		{
@@ -406,10 +404,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			return false;
 		}
-
-		m_renderer = &renderer;
-
-		TraceSuccess{TracerTag} << "FXAA+Sharpen effect created (" << width << "x" << height << ").";
 
 		return true;
 	}
@@ -421,22 +415,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_pipeline.reset();
 		m_pipelineLayout.reset();
 		m_outputTarget.destroy();
-		m_renderer = nullptr;
 	}
 
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	FXAASharpen::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		[[maybe_unused]] const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
-		[[maybe_unused]] const PostProcessor::PushConstants & constants
-	) noexcept
+	FXAASharpen::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update the per-frame descriptor set with the current input. */
 		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(0, inputColor));

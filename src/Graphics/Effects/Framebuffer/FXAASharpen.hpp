@@ -37,28 +37,11 @@
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
-
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**
 	 * @brief Combined FXAA + CAS Sharpen post-processing effect in a single render pass.
-	 * @note Performs FXAA 3.11 Quality 12 anti-aliasing followed by Contrast Adaptive Sharpening
+	 * @note Performs FXAA 3.11 Quality 12 antialiasing followed by Contrast Adaptive Sharpening
 	 * in one fragment shader, saving one render pass compared to running them separately.
 	 * Both effects are LDR, full-res, same format (R8G8B8A8_UNORM), and always sequential
 	 * at the end of the post-process chain, making them ideal candidates for fusion.
@@ -86,27 +69,38 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Constructs a combined FXAA+Sharpen effect.
+			 * @brief Constructs a fast approximate antialiasing effect combined to sharpen effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			FXAASharpen () noexcept = default;
+			explicit
+			FXAASharpen (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a fast approximate antialiasing effect combined to sharpen effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			FXAASharpen (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/**
 			 * @brief Sets the combined FXAA+Sharpen parameters.
@@ -132,9 +126,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
-			Renderer * m_renderer{nullptr};
 			Parameters m_parameters;
-
 			IntermediateRenderTarget m_outputTarget;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;

@@ -483,15 +483,17 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	bool
-	RTGI::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	RTGI::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
-		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(
-			GraphicsRayTracingGIPixelDoublingKey, DefaultGraphicsRayTracingGIPixelDoubling
-		);
+		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsRayTracingGIPixelDoublingKey, DefaultGraphicsRayTracingGIPixelDoubling);
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
@@ -530,13 +532,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
-		auto traceInputLayout = getInputLayout(renderer, 2);
+		auto traceInputLayout = this->getInputLayout( 2);
 
 		/* Single input (blur): 1 combined image sampler. */
-		auto singleLayout = getInputLayout(renderer, 1);
+		auto singleLayout = this->getInputLayout(1);
 
 		/* Apply input (color + blurred GI + material properties): 3 combined image samplers. */
-		auto applyLayout = getInputLayout(renderer, 3);
+		auto applyLayout = this->getInputLayout(3);
 
 		if ( traceInputLayout == nullptr || singleLayout == nullptr || applyLayout == nullptr )
 		{
@@ -566,33 +568,32 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pipeline layouts ---- */
 		{
 			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures. */
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
-			m_traceLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_traceLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleLayout);
-			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_blurLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(applyLayout);
-			m_applyLayout = layoutManager.getPipelineLayout(sets, ranges);
+
+			m_applyLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
+			});
 		}
 
 		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
@@ -604,16 +605,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto vertexModule = getFullscreenVertexShader(renderer);
-		auto traceFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "RTGI_Trace_FS", Saphir::ShaderType::FragmentShader, RTGITraceFragmentShader
-		);
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "RTGI_Blur_FS", Saphir::ShaderType::FragmentShader, RTGIBlurFragmentShader
-		);
-		auto applyFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "RTGI_Apply_FS", Saphir::ShaderType::FragmentShader, RTGIApplyFragmentShader
-		);
+		const auto vertexModule = this->getFullscreenVertexShader();
+		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Trace_FS", ShaderType::FragmentShader, RTGITraceFragmentShader);
+		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Blur_FS", ShaderType::FragmentShader, RTGIBlurFragmentShader);
+		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Apply_FS", ShaderType::FragmentShader, RTGIApplyFragmentShader);
 
 		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr || applyFragment == nullptr )
 		{
@@ -623,9 +618,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_tracePipeline = createFullscreenPipeline(renderer, ClassId, "RTGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_blurPipeline = createFullscreenPipeline(renderer, ClassId, "RTGI_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_applyPipeline = createFullscreenPipeline(renderer, ClassId, "RTGI_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
+		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
+		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
+		m_applyPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
 		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr || m_applyPipeline == nullptr )
 		{
@@ -636,7 +631,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto & pool = renderer.descriptorPool();
 
 		/* Trace: set 1 reads depth + normals (updated per-frame). */
-		m_tracePerFrame = createPerFrameDescriptorSets(renderer, traceInputLayout, ClassId, "Trace_DescSet");
+		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
 		if ( m_tracePerFrame.empty() )
 		{
@@ -672,7 +667,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Apply: reads color (per-frame) + blurred GI (fixed). */
-		m_applyPerFrame = createPerFrameDescriptorSets(renderer, applyLayout, ClassId, "Apply_DescSet");
+		m_applyPerFrame = this->createPerFrameDescriptorSets(applyLayout, ClassId, "Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
 		{
@@ -687,8 +682,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		m_renderer = &renderer;
-
 		return true;
 	}
 
@@ -699,8 +692,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_tracePerFrame.clear();
 		m_blurVDescSet.reset();
 		m_blurHDescSet.reset();
-
-		m_renderer = nullptr;
 
 		m_applyPipeline.reset();
 		m_blurPipeline.reset();
@@ -716,16 +707,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTGI::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update depth + normals descriptors for this frame's trace pass. */
 		if ( inputDepth != nullptr )
@@ -750,8 +734,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pass 1: Ray Trace GI ---- */
 		{
 			/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
-			const auto readStateIndex = m_renderer->currentReadStateIndex();
-			const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+			const auto readStateIndex = this->renderer().currentReadStateIndex();
+			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 			const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 			const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 			const auto invViewProj = (projMat * viewMat).inverse();
@@ -811,9 +795,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			);
 
 			/* Bind set 0: RT descriptor set (TLAS + SSBOs). */
-			const auto * rtDescSet = m_renderer->rtDescriptorSet();
-
-			if ( rtDescSet != nullptr )
+			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
 			{
 				commandBuffer.bind(*rtDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 			}
@@ -822,9 +804,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
 
 			/* Bind set 2: Bindless textures. */
-			const auto * bindlessDescSet = m_renderer->bindlessTextureManager().descriptorSet();
-
-			if ( bindlessDescSet != nullptr )
+			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
 			{
 				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
 			}
@@ -843,9 +823,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 0.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_blurHTarget, *m_blurPipeline, *m_blurLayout,
-				*m_blurHDescSet, &blurH, sizeof(BlurPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurHTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurHDescSet,
+				&blurH,
+				sizeof(BlurPushConstants)
 			);
 		}
 
@@ -858,9 +843,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 1.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_blurVTarget, *m_blurPipeline, *m_blurLayout,
-				*m_blurVDescSet, &blurV, sizeof(BlurPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurVTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurVDescSet,
+				&blurV,
+				sizeof(BlurPushConstants)
 			);
 		}
 
@@ -873,9 +863,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.padding3 = 0.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_outputTarget, *m_applyPipeline, *m_applyLayout,
-				*m_applyPerFrame[frameIndex], &apply, sizeof(ApplyPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_outputTarget,
+				*m_applyPipeline,
+				*m_applyLayout,
+				*m_applyPerFrame[frameIndex],
+				&apply,
+				sizeof(ApplyPushConstants)
 			);
 		}
 

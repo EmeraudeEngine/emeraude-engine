@@ -45,6 +45,7 @@
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "GrabPass.hpp"
 #include "Renderer.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Tracer.hpp"
 #include "ViewMatricesInterface.hpp"
 
@@ -850,7 +851,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -927,7 +928,13 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, materialPropertiesTexture, pc);
+			/* Skip light-dependent effects if no main directional light is available. */
+			if ( effect->requiresLightSet() && (lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr) )
+			{
+				continue;
+			}
+
+			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, materialPropertiesTexture, lightSet, pc);
 		}
 
 		/* Update only the current frame's descriptor set to point to the effect chain output

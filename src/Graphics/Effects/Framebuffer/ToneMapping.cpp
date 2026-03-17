@@ -373,18 +373,21 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	/* ---- Pipeline Creation ---- */
 
 	bool
-	ToneMapping::createPipelines (Renderer & renderer) noexcept
+	ToneMapping::createPipelines () noexcept
 	{
+		auto & renderer = this->renderer();
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
 		/* Get the shared fullscreen vertex shader from the base class. */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		auto vertexModule = this->getFullscreenVertexShader();
 
 		if ( vertexModule == nullptr )
 		{
@@ -394,25 +397,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Compile fragment shaders. */
-		auto tmFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "ToneMappingFS", Saphir::ShaderType::FragmentShader, ToneMappingFragmentShader
-		);
-
-		auto lumExtractFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "LumExtractFS", Saphir::ShaderType::FragmentShader, LuminanceExtractFragmentShader
-		);
-
-		auto lumDownsampleFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "LumDownsampleFS", Saphir::ShaderType::FragmentShader, LuminanceDownsampleFragmentShader
-		);
-
-		auto adaptFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "AdaptationFS", Saphir::ShaderType::FragmentShader, AdaptationFragmentShader
-		);
-
-		auto autoExpFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "AutoExpToneMappingFS", Saphir::ShaderType::FragmentShader, AutoExposureToneMappingFragmentShader
-		);
+		auto tmFragment = shaderManager.getShaderModuleFromSourceCode(device, "ToneMappingFS", ShaderType::FragmentShader, ToneMappingFragmentShader);
+		auto lumExtractFragment = shaderManager.getShaderModuleFromSourceCode(device, "LumExtractFS", ShaderType::FragmentShader, LuminanceExtractFragmentShader);
+		auto lumDownsampleFragment = shaderManager.getShaderModuleFromSourceCode(device, "LumDownsampleFS", ShaderType::FragmentShader, LuminanceDownsampleFragmentShader);
+		auto adaptFragment = shaderManager.getShaderModuleFromSourceCode(device, "AdaptationFS", ShaderType::FragmentShader, AdaptationFragmentShader);
+		auto autoExpFragment = shaderManager.getShaderModuleFromSourceCode(device, "AutoExpToneMappingFS", ShaderType::FragmentShader, AutoExposureToneMappingFragmentShader);
 
 		if ( tmFragment == nullptr || lumExtractFragment == nullptr ||
 			 lumDownsampleFragment == nullptr || adaptFragment == nullptr ||
@@ -424,8 +413,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Descriptor set layouts. */
-		auto singleInputLayout = getInputLayout(renderer, 1);
-		auto dualInputLayout = getInputLayout(renderer, 2);
+		auto singleInputLayout = this->getInputLayout(1);
+		auto dualInputLayout = this->getInputLayout(2);
 
 		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
 		{
@@ -433,7 +422,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Push constant ranges. */
-		const Libs::StaticVector< VkPushConstantRange, 4 > pcRange16{
+		const StaticVector< VkPushConstantRange, 4 > pcRange16{
 			VkPushConstantRange{
 				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				.offset = 0,
@@ -441,7 +430,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		};
 
-		const Libs::StaticVector< VkPushConstantRange, 4 > pcRange32{
+		const StaticVector< VkPushConstantRange, 4 > pcRange32{
 			VkPushConstantRange{
 				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				.offset = 0,
@@ -453,19 +442,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleInputLayout);
 
 			m_pipelineLayout = layoutManager.getPipelineLayout(sets, pcRange16);
 		}
+
 		{
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_adaptPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange16);
 		}
+
 		{
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_autoExpPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange32);
@@ -477,40 +468,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Create pipelines. */
-		m_pipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "ToneMapping", vertexModule, tmFragment, m_pipelineLayout, m_outputTarget
-		);
+		m_pipeline = this->createFullscreenPipeline(ClassId, "ToneMapping", vertexModule, tmFragment, m_pipelineLayout, m_outputTarget);
+		m_lumExtractPipeline = this->createFullscreenPipeline(ClassId, "LumExtract", vertexModule, lumExtractFragment, m_pipelineLayout, *m_lumTargets[0]);
+		m_lumDownsamplePipeline = this->createFullscreenPipeline(ClassId, "LumDownsample", vertexModule, lumDownsampleFragment, m_pipelineLayout, *m_lumTargets[0]);
+		m_adaptPipeline = this->createFullscreenPipeline(ClassId, "Adaptation", vertexModule, adaptFragment, m_adaptPipelineLayout, m_adaptTargets[0]);
+		m_autoExposurePipeline = this->createFullscreenPipeline(ClassId, "AutoExpToneMapping", vertexModule, autoExpFragment, m_autoExpPipelineLayout, m_outputTarget);
 
-		m_lumExtractPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "LumExtract", vertexModule, lumExtractFragment, m_pipelineLayout, *m_lumTargets[0]
-		);
-
-		m_lumDownsamplePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "LumDownsample", vertexModule, lumDownsampleFragment, m_pipelineLayout, *m_lumTargets[0]
-		);
-
-		m_adaptPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "Adaptation", vertexModule, adaptFragment, m_adaptPipelineLayout, m_adaptTargets[0]
-		);
-
-		m_autoExposurePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "AutoExpToneMapping", vertexModule, autoExpFragment, m_autoExpPipelineLayout, m_outputTarget
-		);
-
-		return m_pipeline != nullptr
-			&& m_lumExtractPipeline != nullptr
-			&& m_lumDownsamplePipeline != nullptr
-			&& m_adaptPipeline != nullptr
-			&& m_autoExposurePipeline != nullptr;
+		return m_pipeline != nullptr && m_lumExtractPipeline != nullptr && m_lumDownsamplePipeline != nullptr && m_adaptPipeline != nullptr && m_autoExposurePipeline != nullptr;
 	}
 
 	/* ---- Descriptor Set Creation ---- */
 
 	bool
-	ToneMapping::createDescriptorSets (Renderer & renderer) noexcept
+	ToneMapping::createDescriptorSets () noexcept
 	{
-		const auto singleInputLayout = getInputLayout(renderer, 1);
-		const auto dualInputLayout = getInputLayout(renderer, 2);
+		const auto singleInputLayout = this->getInputLayout(1);
+		const auto dualInputLayout = this->getInputLayout(2);
 
 		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
 		{
@@ -520,7 +493,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Per-frame single-input descriptor sets.
 		 * Used for non-auto-exposure tone mapping AND luminance extraction.
 		 * Updated each frame to point to the HDR input. */
-		m_descriptorSets = createPerFrameDescriptorSets(renderer, singleInputLayout, ClassId, "ToneMappingDescSet");
+		m_descriptorSets = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "ToneMappingDescSet");
 
 		if ( m_descriptorSets.empty() )
 		{
@@ -536,21 +509,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		if ( m_lumTargets.size() > 1 )
 		{
-			const auto & pool = renderer.descriptorPool();
+			const auto & pool = this->renderer().descriptorPool();
 
 			m_lumDownDescSets.reserve(m_lumTargets.size() - 1);
 
-			for ( size_t i = 0; i < m_lumTargets.size() - 1; ++i )
+			for ( size_t index = 0; index < m_lumTargets.size() - 1; ++index )
 			{
 				auto ds = std::make_unique< DescriptorSet >(pool, singleInputLayout);
-				ds->setIdentifier(ClassId, "LumDownDescSet" + std::to_string(i), "DescriptorSet");
+				ds->setIdentifier(ClassId, "LumDownDescSet" + std::to_string(index), "DescriptorSet");
 
 				if ( !ds->create() )
 				{
 					return false;
 				}
 
-				if ( !ds->writeCombinedImageSampler(0, *m_lumTargets[i]) )
+				if ( !ds->writeCombinedImageSampler(0, *m_lumTargets[index]) )
 				{
 					return false;
 				}
@@ -561,7 +534,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Per-frame adaptation descriptor sets (dual input, updated each frame for ping-pong).
 		 * Binding 0 = current 1x1 luminance, binding 1 = previous adapted luminance. */
-		m_adaptPerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "AdaptDescSet");
+		m_adaptPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "AdaptDescSet");
 
 		if ( m_adaptPerFrame.empty() )
 		{
@@ -570,7 +543,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Per-frame auto-exposure tone mapping descriptor sets (dual input).
 		 * Binding 0 = HDR input, binding 1 = adapted luminance. */
-		m_autoExpDescPerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "AutoExpDescSet");
+		m_autoExpDescPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "AutoExpDescSet");
 
 		if ( m_autoExpDescPerFrame.empty() )
 		{
@@ -583,8 +556,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Lifecycle ---- */
 
 	bool
-	ToneMapping::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	ToneMapping::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		constexpr auto lumFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
 		/* Output is LDR (8-bit per channel). */
@@ -631,11 +606,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Create adaptation ping-pong targets (2x 1x1). */
-		for ( uint32_t i = 0; i < 2; ++i )
+		for ( uint32_t index = 0; index < 2; ++index )
 		{
-			if ( !m_adaptTargets[i].create(renderer, 1, 1, lumFormat, "AdaptLum" + std::to_string(i)) )
+			if ( !m_adaptTargets[index].create(renderer, 1, 1, lumFormat, "AdaptLum" + std::to_string(index)) )
 			{
-				TraceError{ClassId} << "Failed to create adaptation target " << i << " !";
+				TraceError{ClassId} << "Failed to create adaptation target " << index << " !";
 
 				return false;
 			}
@@ -644,7 +619,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_currentAdaptIndex = 0;
 
 		/* Create pipelines. */
-		if ( !this->createPipelines(renderer) )
+		if ( !this->createPipelines() )
 		{
 			TraceError{ClassId} << "Failed to create tone mapping pipelines !";
 
@@ -652,19 +627,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Create descriptor sets. */
-		if ( !this->createDescriptorSets(renderer) )
+		if ( !this->createDescriptorSets() )
 		{
 			TraceError{ClassId} << "Failed to create tone mapping descriptor sets !";
 
 			return false;
 		}
 
-		m_renderer = &renderer;
 		m_firstFrame = true;
 		m_previousTime = 0.0F;
-
-		TraceSuccess{ClassId} << "ToneMapping effect created (" << width << "x" << height
-			<< ", " << m_lumTargets.size() << " luminance levels).";
 
 		return true;
 	}
@@ -713,7 +684,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Output target. */
 		m_outputTarget.destroy();
 
-		m_renderer = nullptr;
 		m_firstFrame = true;
 		m_previousTime = 0.0F;
 		m_currentAdaptIndex = 0;
@@ -722,16 +692,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	ToneMapping::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		[[maybe_unused]] const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	ToneMapping::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update the per-frame descriptor set for the HDR input. */
 		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(0, inputColor));

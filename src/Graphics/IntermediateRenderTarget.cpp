@@ -190,7 +190,7 @@ namespace EmEn::Graphics
 			.extent = {m_width, m_height}
 		};
 
-		const std::array< VkClearValue, 1 > clearValues{
+		constexpr std::array< VkClearValue, 1 > clearValues{
 			VkClearValue{.color = {{0.0F, 0.0F, 0.0F, 0.0F}}}
 		};
 

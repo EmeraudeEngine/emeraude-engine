@@ -38,21 +38,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -88,12 +73,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				Operator tonemapOperator{Operator::ACESFilmic};
 				float exposure{1.0F};
 				float gamma{2.2F};
-				bool autoExposureEnabled{true};
 				float keyValue{0.18F};
 				float adaptSpeedUp{1.5F};
 				float adaptSpeedDown{3.0F};
 				float minExposure{0.1F};
 				float maxExposure{10.0F};
+				bool autoExposureEnabled{true};
 			};
 
 			/**
@@ -109,26 +94,37 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Constructs a tone mapping effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			ToneMapping () noexcept = default;
+			explicit
+			ToneMapping (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a tone mapping effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			ToneMapping (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/**
 			 * @brief Sets the tone mapping parameters.
@@ -156,55 +152,44 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Creates all graphics pipelines.
-			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createPipelines (Renderer & renderer) noexcept;
+			bool createPipelines () noexcept;
 
 			/**
 			 * @brief Creates all descriptor sets.
-			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDescriptorSets (Renderer & renderer) noexcept;
+			bool createDescriptorSets () noexcept;
 
-			Renderer * m_renderer{nullptr};
 			Parameters m_parameters;
-
 			/* Standard tone mapping output (LDR). */
 			IntermediateRenderTarget m_outputTarget;
-
 			/* Standard tone mapping pipeline (no auto-exposure). */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
-
 			/* Auto-exposure: luminance downsample chain (half-res -> 1x1, R16G16B16A16_SFLOAT). */
 			std::vector< std::unique_ptr< IntermediateRenderTarget > > m_lumTargets;
-
 			/* Auto-exposure: adaptation ping-pong (two 1x1 R16G16B16A16_SFLOAT targets). */
 			std::array< IntermediateRenderTarget, 2 > m_adaptTargets;
 			uint32_t m_currentAdaptIndex{0};
-
 			/* Auto-exposure: pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_lumExtractPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_lumDownsamplePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_adaptPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_autoExposurePipeline;
-
 			/* Auto-exposure: pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_adaptPipelineLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_autoExpPipelineLayout;
-
 			/* Auto-exposure: descriptor sets.
 			 * m_lumDownDescSets are fixed (internal chain).
 			 * Per-frame sets are updated each frame to handle external input and ping-pong. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_lumDownDescSets;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_adaptPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_autoExpDescPerFrame;
-
 			/* Auto-exposure: time tracking for deltaTime computation. */
 			float m_previousTime{0.0F};
 			bool m_firstFrame{true};

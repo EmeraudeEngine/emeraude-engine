@@ -53,6 +53,11 @@ namespace EmEn
 		class LayoutManager;
 	}
 
+	namespace Scenes
+	{
+		class LightSet;
+	}
+
 	namespace Graphics
 	{
 		class GrabPass;
@@ -238,7 +243,7 @@ namespace EmEn::Graphics
 			 * @param stack The scene's post-process stack.
 			 * @return void
 			 */
-			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) const noexcept;
+			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.

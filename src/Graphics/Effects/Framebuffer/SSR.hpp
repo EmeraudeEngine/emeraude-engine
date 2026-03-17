@@ -36,26 +36,19 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
 	namespace Graphics
 	{
-		class Renderer;
+		class TextureCubemap;
+	}
 
-		namespace TextureResource
-		{
-			class TextureCubemap;
-		}
+	namespace Vulkan::TextureResource
+	{
+		class TextureCubemap;
 	}
 }
 
@@ -149,27 +142,40 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Constructs an SSR effect.
+			 * @brief Constructs a screen-space reflexion effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			SSR () noexcept = default;
+			explicit
+			SSR (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a screen-space reflexion effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 * @param fallbackEnvCubemap The environment cubemap texture.
+			 */
+			SSR (Renderer & renderer, const Parameters & parameters, const std::shared_ptr< TextureResource::TextureCubemap > & fallbackEnvCubemap = nullptr) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters},
+				m_fallbackEnvCubemap{fallbackEnvCubemap}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -233,41 +239,35 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			void
 			setEnvironmentCubemap (const std::shared_ptr< TextureResource::TextureCubemap > & cubemap) noexcept
 			{
-				m_environmentCubemap = cubemap;
+				m_fallbackEnvCubemap = cubemap;
 			}
 
 		private:
 
+			Parameters m_parameters;
+			std::shared_ptr< TextureResource::TextureCubemap > m_fallbackEnvCubemap;
 			/* IRTs: trace (half-res), resolve (half-res), blur H (half-res), blur V (half-res), composite (full-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_resolveTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
 			IntermediateRenderTarget m_outputTarget;
-
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_resolvePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
-
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_resolveLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
-
 			/* Descriptor sets (fixed — never updated after creation). */
 			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
-
 			/* Per-frame-in-flight descriptor sets (updated every frame). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_resolvePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
-
-			Renderer * m_renderer{nullptr};
-			Parameters m_parameters;
-			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
 	};
 }

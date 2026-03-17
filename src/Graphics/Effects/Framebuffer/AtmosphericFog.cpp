@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -64,7 +65,6 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -154,17 +154,6 @@ void main()
 
 	float fogAmount = 1.0 - exp(-max(fogOpticalDepth, 0.0));
 
-	/* Modulate fog intensity by per-pixel fog response from material properties G-buffer.
-	 * A channel high nibble = fogResponse (0 = no fog, 15 = full fog).
-	 * Only apply to geometry pixels — sky pixels have no material data. */
-	if (!isSky)
-	{
-		vec4 mp = texture(materialPropsTex, vUV);
-		uint aPacked = uint(mp.a * 255.0);
-		float fogResponse = float(aPacked >> 4u) / 15.0;
-		fogAmount *= fogResponse;
-	}
-
 	/* Directional inscattering (simplified Henyey-Greenstein).
 	 * lightDir is the emission direction (sun → scene), negate it
 	 * to get the source direction so inscattering peaks when
@@ -184,25 +173,25 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	/* ---- Lifecycle ---- */
 
 	bool
-	AtmosphericFog::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	AtmosphericFog::create (uint32_t width, uint32_t height) noexcept
 	{
-		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
-
 		/* Create output target (full-res). */
-		if ( !m_outputTarget.create(renderer, width, height, format, "AF_Output") )
+		if ( !m_outputTarget.create(this->renderer(), width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "AF_Output") )
 		{
 			TraceError{TracerTag} << "Failed to create output target !";
 
 			return false;
 		}
 
-		/* ---- Descriptor set layout (triple-input: scene color + depth + material properties) ---- */
-		auto tripleInputLayout = getInputLayout(renderer, 3);
+		/* ---- Descriptor set layout (dual-input: scene color + depth) ---- */
+		auto tripleInputLayout = this->getInputLayout(2);
 
 		if ( tripleInputLayout == nullptr )
 		{
@@ -211,13 +200,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layout ---- */
 		{
-			auto & layoutManager = renderer.layoutManager();
+			auto & layoutManager = this->renderer().layoutManager();
 
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+			const StaticVector< VkPushConstantRange, 4 > ranges{
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(FogPushConstants)}
 			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(tripleInputLayout);
 			m_fogLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
@@ -228,7 +217,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Compile shaders ---- */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		const auto vertexModule = this->getFullscreenVertexShader();
 
 		if ( vertexModule == nullptr )
 		{
@@ -237,9 +226,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto fogFragment = renderer.shaderManager().getShaderModuleFromSourceCode(
-			renderer.device(), "AF_Fog_FS", Saphir::ShaderType::FragmentShader, FogFragmentShader
-		);
+		const auto fogFragment = this->renderer().shaderManager().getShaderModuleFromSourceCode(this->renderer().device(), "AF_Fog_MatProps_FS", Saphir::ShaderType::FragmentShader, FogFragmentShader);
 
 		if ( fogFragment == nullptr )
 		{
@@ -249,9 +236,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipeline ---- */
-		m_fogPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "AF_Fog", vertexModule, fogFragment, m_fogLayout, m_outputTarget
-		);
+		m_fogPipeline = this->createFullscreenPipeline(ClassId, "AF_Fog", vertexModule, fogFragment, m_fogLayout, m_outputTarget);
 
 		if ( m_fogPipeline == nullptr )
 		{
@@ -259,14 +244,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create descriptor sets ---- */
-		m_fogPerFrame = createPerFrameDescriptorSets(renderer, tripleInputLayout, ClassId, "AFDescSet");
+		m_fogPerFrame = this->createPerFrameDescriptorSets(tripleInputLayout, ClassId, "AFDescSet");
 
 		if ( m_fogPerFrame.empty() )
 		{
 			return false;
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -275,33 +258,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	AtmosphericFog::destroy () noexcept
 	{
 		m_fogPerFrame.clear();
-
-		m_renderer = nullptr;
-
 		m_fogPipeline.reset();
 		m_fogLayout.reset();
-
 		m_outputTarget.destroy();
 	}
 
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	AtmosphericFog::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	AtmosphericFog::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Extract camera basis from view matrix.
 		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-		const auto readStateIndex = m_renderer->currentReadStateIndex();
-		const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+		const auto readStateIndex = this->renderer().currentReadStateIndex();
+		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & camPos = viewMatrices.position(readStateIndex);
 
@@ -316,15 +288,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto fZ = -viewMat(2, 2);
 
 		/* Compute tanHalfFovY and aspect ratio. */
-		const auto fovDeg = m_renderer->mainRenderTarget()->viewMatrices().fieldOfView();
+		const auto fovDeg = this->renderer().mainRenderTarget()->viewMatrices().fieldOfView();
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
-		const auto aspectRatio = m_renderer->mainRenderTarget()->viewMatrices().getAspectRatio();
+		const auto aspectRatio = this->renderer().mainRenderTarget()->viewMatrices().getAspectRatio();
 
-		/* Normalize light direction. */
-		const auto lLen = std::sqrt(m_lightDirX * m_lightDirX + m_lightDirY * m_lightDirY + m_lightDirZ * m_lightDirZ + 1e-8F);
-		const auto lX = m_lightDirX / lLen;
-		const auto lY = m_lightDirY / lLen;
-		const auto lZ = m_lightDirZ / lLen;
+		/* Read light direction and inscatter color from LightSet. */
+		const auto mainLight = lightSet->mainDirectionalLight();
+		const auto lightDir = mainLight->direction().normalized();
+		const auto inscatterColor = m_inscatterColorOverride.value_or(mainLight->color());
 
 		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
@@ -332,11 +303,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-		}
-
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* Build push constants. */
@@ -358,16 +324,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.fogHeightFalloff = m_parameters.heightFalloff,
 			.fogBaseHeight = m_parameters.baseHeight,
 			.fogMaxDistance = m_parameters.maxDistance,
-			.fogColorR = m_parameters.fogColorR,
-			.fogColorG = m_parameters.fogColorG,
-			.fogColorB = m_parameters.fogColorB,
-			.lightDirX = lX,
-			.lightDirY = lY,
-			.lightDirZ = lZ,
+			.fogColorR = m_parameters.fogColor.red(),
+			.fogColorG = m_parameters.fogColor.green(),
+			.fogColorB = m_parameters.fogColor.blue(),
+			.lightDirX = lightDir.x(),
+			.lightDirY = lightDir.y(),
+			.lightDirZ = lightDir.z(),
 			.inscatterExponent = m_parameters.inscatterExponent,
-			.inscatterColorR = m_inscatterColorR,
-			.inscatterColorG = m_inscatterColorG,
-			.inscatterColorB = m_inscatterColorB,
+			.inscatterColorR = inscatterColor.red(),
+			.inscatterColorG = inscatterColor.green(),
+			.inscatterColorB = inscatterColor.blue(),
 			.inscatterIntensity = m_parameters.inscatterIntensity,
 			.skyFogEnabled = m_parameters.skyFogEnabled ? 1.0F : 0.0F
 		};

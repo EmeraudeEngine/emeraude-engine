@@ -32,6 +32,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -226,13 +227,17 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	/* ---- Lifecycle ---- */
 
 	bool
-	LensFlare::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	LensFlare::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
 
 		const auto halfW = std::max(width / 2, 1U);
@@ -266,7 +271,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Single input layout (1 combined image sampler). */
-		auto singleInputLayout = getInputLayout(renderer, 1);
+		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
 		{
@@ -274,7 +279,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Dual input layout (2 combined image samplers). */
-		auto dualInputLayout = getInputLayout(renderer, 2);
+		auto dualInputLayout = this->getInputLayout(2);
 
 		if ( dualInputLayout == nullptr )
 		{
@@ -283,31 +288,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			sets.emplace_back(singleInputLayout);
+
+			m_thresholdLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ThresholdPushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(singleInputLayout);
-			m_thresholdLayout = layoutManager.getPipelineLayout(sets, ranges);
+			});
 		}
+
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			sets.emplace_back(singleInputLayout);
+
+			m_ghostHaloLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GhostHaloPushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(singleInputLayout);
-			m_ghostHaloLayout = layoutManager.getPipelineLayout(sets, ranges);
+			});
 		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, ranges);
+
+			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+			});
 		}
 
 		if ( m_thresholdLayout == nullptr || m_ghostHaloLayout == nullptr || m_compositeLayout == nullptr )
@@ -316,7 +320,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Compile shaders ---- */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		const auto vertexModule = this->getFullscreenVertexShader();
 
 		if ( vertexModule == nullptr )
 		{
@@ -328,9 +332,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto thresholdFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "LF_Threshold_FS", Saphir::ShaderType::FragmentShader, ThresholdFragmentShader
-		);
+		auto thresholdFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_Threshold_FS", ShaderType::FragmentShader, ThresholdFragmentShader);
 
 		if ( thresholdFragment == nullptr )
 		{
@@ -339,9 +341,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto ghostHaloFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "LF_GhostHalo_FS", Saphir::ShaderType::FragmentShader, GhostHaloFragmentShader
-		);
+		auto ghostHaloFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_GhostHalo_FS", ShaderType::FragmentShader, GhostHaloFragmentShader);
 
 		if ( ghostHaloFragment == nullptr )
 		{
@@ -350,9 +350,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "LF_Composite_FS", Saphir::ShaderType::FragmentShader, CompositeFragmentShader
-		);
+		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_Composite_FS", ShaderType::FragmentShader, CompositeFragmentShader);
 
 		if ( compositeFragment == nullptr )
 		{
@@ -362,15 +360,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_thresholdPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "LF_Threshold", vertexModule, thresholdFragment, m_thresholdLayout, m_thresholdTarget
-		);
-		m_ghostHaloPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "LF_GhostHalo", vertexModule, ghostHaloFragment, m_ghostHaloLayout, m_ghostHaloTarget
-		);
-		m_compositePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "LF_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget
-		);
+		m_thresholdPipeline = this->createFullscreenPipeline(ClassId, "LF_Threshold", vertexModule, thresholdFragment, m_thresholdLayout, m_thresholdTarget);
+		m_ghostHaloPipeline = this->createFullscreenPipeline(ClassId, "LF_GhostHalo", vertexModule, ghostHaloFragment, m_ghostHaloLayout, m_ghostHaloTarget);
+		m_compositePipeline = this->createFullscreenPipeline(ClassId, "LF_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
 		if ( m_thresholdPipeline == nullptr || m_ghostHaloPipeline == nullptr || m_compositePipeline == nullptr )
 		{
@@ -380,7 +372,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create descriptor sets ---- */
 
 		/* Threshold: reads scene color (updated per-frame). */
-		m_thresholdPerFrame = createPerFrameDescriptorSets(renderer, singleInputLayout, ClassId, "LF_Threshold_DescSet");
+		m_thresholdPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "LF_Threshold_DescSet");
 
 		if ( m_thresholdPerFrame.empty() )
 		{
@@ -404,7 +396,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Composite: reads scene color (updated per-frame, binding 0) + ghost+halo result (fixed, binding 1). */
-		m_compositePerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "LF_Composite_DescSet");
+		m_compositePerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "LF_Composite_DescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
@@ -412,15 +404,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Write binding 1 (ghost+halo result) for each composite frame descriptor. */
-		for ( auto & ds : m_compositePerFrame )
+		for ( const auto & descriptorSet : m_compositePerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_ghostHaloTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_ghostHaloTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -431,8 +421,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_compositePerFrame.clear();
 		m_ghostHaloDescSet.reset();
 		m_thresholdPerFrame.clear();
-
-		m_renderer = nullptr;
 
 		m_compositePipeline.reset();
 		m_ghostHaloPipeline.reset();
@@ -447,41 +435,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	LensFlare::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		[[maybe_unused]] const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
-		[[maybe_unused]] const PostProcessor::PushConstants & constants
-	) noexcept
+	LensFlare::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* 1. Project light direction to screen space.
 		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-		const auto readStateIndex = m_renderer->currentReadStateIndex();
-		const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+		const auto readStateIndex = this->renderer().currentReadStateIndex();
+		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 		const auto & camPos = viewMatrices.position(readStateIndex);
 
 		/* Light source direction (opposite of emission direction). */
-		const auto lightSourceX = -m_lightDirX;
-		const auto lightSourceY = -m_lightDirY;
-		const auto lightSourceZ = -m_lightDirZ;
-		const auto invLen = 1.0F / std::sqrt(lightSourceX * lightSourceX + lightSourceY * lightSourceY + lightSourceZ * lightSourceZ + 1e-8F);
-		const auto normX = lightSourceX * invLen;
-		const auto normY = lightSourceY * invLen;
-		const auto normZ = lightSourceZ * invLen;
+		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
+		const auto lightSource = (-lightDirection).normalized();
 
 		/* Project a far point along the light source direction. */
-		const auto farPointX = camPos[0] + normX * 10000.0F;
-		const auto farPointY = camPos[1] + normY * 10000.0F;
-		const auto farPointZ = camPos[2] + normZ * 10000.0F;
+		const auto farPointX = camPos[0] + lightSource.x() * 10000.0F;
+		const auto farPointY = camPos[1] + lightSource.y() * 10000.0F;
+		const auto farPointZ = camPos[2] + lightSource.z() * 10000.0F;
 
 		/* Transform to clip space. */
-		const Libs::Math::Vector< 4, float > worldPos{farPointX, farPointY, farPointZ, 1.0F};
+		const Math::Vector< 4, float > worldPos{farPointX, farPointY, farPointZ, 1.0F};
 		const auto viewPos = viewMat * worldPos;
 		const auto clipPos = projMat * viewPos;
 

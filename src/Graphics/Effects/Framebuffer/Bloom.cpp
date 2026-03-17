@@ -266,18 +266,21 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
+	using namespace Saphir;
 	using namespace Vulkan;
 
 	/* ---- Pipeline Creation ---- */
 
 	bool
-	Bloom::createPipelines (Renderer & renderer) noexcept
+	Bloom::createPipelines () noexcept
 	{
+		auto & renderer = this->renderer();
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
 		/* Get the shared fullscreen vertex shader from the base class. */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		const auto vertexModule = this->getFullscreenVertexShader();
 
 		if ( vertexModule == nullptr )
 		{
@@ -287,9 +290,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Compile the downsample fragment shader. */
-		auto downsampleFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "BloomDownsampleFS", Saphir::ShaderType::FragmentShader, DownsampleFragmentShader
-		);
+		const auto downsampleFragment = shaderManager.getShaderModuleFromSourceCode(device, "BloomDownsampleFS", ShaderType::FragmentShader, DownsampleFragmentShader);
 
 		if ( downsampleFragment == nullptr )
 		{
@@ -299,9 +300,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Compile the upsample fragment shader. */
-		auto upsampleFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "BloomUpsampleFS", Saphir::ShaderType::FragmentShader, UpsampleFragmentShader
-		);
+		const auto upsampleFragment = shaderManager.getShaderModuleFromSourceCode(device, "BloomUpsampleFS", ShaderType::FragmentShader, UpsampleFragmentShader);
 
 		if ( upsampleFragment == nullptr )
 		{
@@ -311,9 +310,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Compile the composite fragment shader. */
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "BloomCompositeFS", Saphir::ShaderType::FragmentShader, CompositeFragmentShader
-		);
+		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "BloomCompositeFS", ShaderType::FragmentShader, CompositeFragmentShader);
 
 		if ( compositeFragment == nullptr )
 		{
@@ -323,7 +320,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Descriptor set layouts (from base class shared utilities). */
-		auto dualInputLayout = getInputLayout(renderer, 2);
+		auto dualInputLayout = this->getInputLayout(2);
 
 		if ( dualInputLayout == nullptr )
 		{
@@ -331,7 +328,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Push constant range (shared by all pipelines). */
-		const Libs::StaticVector< VkPushConstantRange, 4 > pushConstantRanges{
+		const StaticVector< VkPushConstantRange, 4 > pushConstantRanges{
 			VkPushConstantRange{
 				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				.offset = 0,
@@ -342,19 +339,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Pipeline layouts. */
 		{
 			/* Downsample: binding 0 = input texture, binding 1 = material properties. */
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_downsampleLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);
 		}
+
 		{
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_upsampleLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);
 		}
+
 		{
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_compositeLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);
@@ -366,15 +365,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Create the three pipelines using the base class utility. */
-		m_downsamplePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "BloomDownsample", vertexModule, downsampleFragment, m_downsampleLayout, m_downTargets[0]
-		);
-		m_upsamplePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "BloomUpsample", vertexModule, upsampleFragment, m_upsampleLayout, m_upTargets[0]
-		);
-		m_compositePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "BloomComposite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget
-		);
+		m_downsamplePipeline = this->createFullscreenPipeline(ClassId, "BloomDownsample", vertexModule, downsampleFragment, m_downsampleLayout, m_downTargets[0]);
+		m_upsamplePipeline = this->createFullscreenPipeline(ClassId, "BloomUpsample", vertexModule, upsampleFragment, m_upsampleLayout, m_upTargets[0]);
+		m_compositePipeline = this->createFullscreenPipeline(ClassId, "BloomComposite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
 		return m_downsamplePipeline != nullptr && m_upsamplePipeline != nullptr && m_compositePipeline != nullptr;
 	}
@@ -382,10 +375,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Descriptor Set Creation ---- */
 
 	bool
-	Bloom::createDescriptorSets (Renderer & renderer) noexcept
+	Bloom::createDescriptorSets () noexcept
 	{
-		const auto dualInputLayout = getInputLayout(renderer, 2);
-		const auto & pool = renderer.descriptorPool();
+		const auto dualInputLayout = this->getInputLayout(2);
+		const auto & pool = this->renderer().descriptorPool();
 
 		if ( dualInputLayout == nullptr )
 		{
@@ -398,28 +391,28 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * Sets [1..4] are pre-written to the previous downsample target.
 		 * Binding 1 (materialPropsTex) is only sampled in the first pass (threshold > 0),
 		 * but must be bound for all passes to satisfy the descriptor set layout. */
-		for ( int i = 0; i < MipLevels; ++i )
+		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
 		{
-			m_downDescSets[static_cast< size_t >(i)] = std::make_unique< DescriptorSet >(pool, dualInputLayout);
-			m_downDescSets[static_cast< size_t >(i)]->setIdentifier(ClassId, "DownDescSet" + std::to_string(i), "DescriptorSet");
+			m_downDescSets[mipLevel] = std::make_unique< DescriptorSet >(pool, dualInputLayout);
+			m_downDescSets[mipLevel]->setIdentifier(ClassId, "DownDescSet" + std::to_string(mipLevel), "DescriptorSet");
 
-			if ( !m_downDescSets[static_cast< size_t >(i)]->create() )
+			if ( !m_downDescSets[mipLevel]->create() )
 			{
 				return false;
 			}
 
-			if ( i > 0 )
+			if ( mipLevel > 0 )
 			{
-				const auto & input = m_downTargets[static_cast< size_t >(i - 1)];
+				const auto & input = m_downTargets[static_cast< size_t >(mipLevel - 1)];
 
-				if ( !m_downDescSets[static_cast< size_t >(i)]->writeCombinedImageSampler(0, input) )
+				if ( !m_downDescSets[mipLevel]->writeCombinedImageSampler(0, input) )
 				{
 					return false;
 				}
 
 				/* Binding 1: write the previous downsample target as a dummy for
 				 * material properties (not sampled in non-threshold passes). */
-				if ( !m_downDescSets[static_cast< size_t >(i)]->writeCombinedImageSampler(1, input) )
+				if ( !m_downDescSets[mipLevel]->writeCombinedImageSampler(1, input) )
 				{
 					return false;
 				}
@@ -427,7 +420,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Per-frame copies of m_downDescSets[0] for safe per-frame updates. */
-		m_downFirstPerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "DownDescSet0");
+		m_downFirstPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "DownDescSet0");
 
 		if ( m_downFirstPerFrame.empty() )
 		{
@@ -436,18 +429,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Upsample descriptor sets (dual input each).
 		 * Binding 0 = previous upsample output (or bottom mip), binding 1 = downsample at this level. */
-		for ( int i = 0; i < MipLevels - 1; ++i )
+		for ( uint32_t mipLevel = 0; mipLevel < MipLevels - 1; ++mipLevel )
 		{
-			m_upDescSets[static_cast< size_t >(i)] = std::make_unique< DescriptorSet >(pool, dualInputLayout);
-			m_upDescSets[static_cast< size_t >(i)]->setIdentifier(ClassId, "UpDescSet" + std::to_string(i), "DescriptorSet");
+			m_upDescSets[mipLevel] = std::make_unique< DescriptorSet >(pool, dualInputLayout);
+			m_upDescSets[mipLevel]->setIdentifier(ClassId, "UpDescSet" + std::to_string(mipLevel), "DescriptorSet");
 
-			if ( !m_upDescSets[static_cast< size_t >(i)]->create() )
+			if ( !m_upDescSets[mipLevel]->create() )
 			{
 				return false;
 			}
 
 			/* Binding 0: previous level (bottom mip for first pass, then upTargets). */
-			if ( i == 0 )
+			if ( mipLevel == 0 )
 			{
 				/* First upsample reads from the smallest downsample target. */
 				if ( !m_upDescSets[0]->writeCombinedImageSampler(0, m_downTargets[MipLevels - 1]) )
@@ -457,7 +450,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 			else
 			{
-				if ( !m_upDescSets[static_cast< size_t >(i)]->writeCombinedImageSampler(0, m_upTargets[static_cast< size_t >(i - 1)]) )
+				if ( !m_upDescSets[mipLevel]->writeCombinedImageSampler(0, m_upTargets[static_cast< size_t >(mipLevel - 1)]) )
 				{
 					return false;
 				}
@@ -466,9 +459,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Binding 1: downsample at this level.
 			 * Upsample pass i writes to upTargets[i], which has the same resolution as downTargets[MipLevels - 2 - i].
 			 * We blend with the downsample at the target resolution. */
-			const auto downIndex = static_cast< size_t >(MipLevels - 2 - i);
+			const auto downIndex = static_cast< size_t >(MipLevels - 2 - mipLevel);
 
-			if ( !m_upDescSets[static_cast< size_t >(i)]->writeCombinedImageSampler(1, m_downTargets[downIndex]) )
+			if ( !m_upDescSets[mipLevel]->writeCombinedImageSampler(1, m_downTargets[downIndex]) )
 			{
 				return false;
 			}
@@ -476,17 +469,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Composite descriptor sets (dual input, per-frame-in-flight).
 		 * Binding 0 = original input (updated per-frame), binding 1 = final bloom (top upsample). */
-		m_compositePerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "CompositeDescSet");
+		m_compositePerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "CompositeDescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
 			return false;
 		}
 
-		for ( auto & ds : m_compositePerFrame )
+		for ( const auto & descriptorSet : m_compositePerFrame )
 		{
 			/* Binding 1: top upsample result (same for all frames). */
-			if ( !ds->writeCombinedImageSampler(1, m_upTargets[MipLevels - 2]) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_upTargets[MipLevels - 2]) )
 			{
 				return false;
 			}
@@ -498,42 +491,51 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Lifecycle ---- */
 
 	bool
-	Bloom::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	Bloom::create (uint32_t width, uint32_t height) noexcept
 	{
 		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
 
+		auto & renderer = this->renderer();
+
 		/* Create downsample targets (halving resolution at each level). */
-		auto mipW = width / 2;
-		auto mipH = height / 2;
+		auto mipWidth = width / 2;
+		auto mipHeight = height / 2;
 
-		for ( int i = 0; i < MipLevels; ++i )
+		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
 		{
-			if ( mipW == 0 ) { mipW = 1; }
-			if ( mipH == 0 ) { mipH = 1; }
-
-			if ( !m_downTargets[static_cast< size_t >(i)].create(renderer, mipW, mipH, format, "BloomDown" + std::to_string(i)) )
+			if ( mipWidth == 0 )
 			{
-				TraceError{TracerTag} << "Failed to create downsample target " << i << " !";
+				mipWidth = 1;
+			}
+			
+			if ( mipHeight == 0 )
+			{
+				mipHeight = 1;
+			}
+
+			if ( !m_downTargets[mipLevel].create(renderer, mipWidth, mipHeight, format, "BloomDown" + std::to_string(mipLevel)) )
+			{
+				TraceError{TracerTag} << "Failed to create downsample target " << mipLevel << " !";
 
 				return false;
 			}
 
-			mipW /= 2;
-			mipH /= 2;
+			mipWidth /= 2;
+			mipHeight /= 2;
 		}
 
 		/* Create upsample targets (matching downsample levels in reverse, excluding the smallest).
 		 * upTargets[0] matches downTargets[MipLevels-2] resolution (1/16),
 		 * upTargets[MipLevels-2] matches downTargets[0] resolution (1/2). */
-		for ( int i = 0; i < MipLevels - 1; ++i )
+		for ( uint32_t mipLevel = 0; mipLevel < MipLevels - 1; ++mipLevel )
 		{
-			const auto downIndex = static_cast< size_t >(MipLevels - 2 - i);
-			const auto upW = m_downTargets[downIndex].width();
-			const auto upH = m_downTargets[downIndex].height();
+			const auto downIndex = static_cast< size_t >(MipLevels - 2 - mipLevel);
+			const auto upWidth = m_downTargets[downIndex].width();
+			const auto upHeight = m_downTargets[downIndex].height();
 
-			if ( !m_upTargets[static_cast< size_t >(i)].create(renderer, upW, upH, format, "BloomUp" + std::to_string(i)) )
+			if ( !m_upTargets[mipLevel].create(renderer, upWidth, upHeight, format, "BloomUp" + std::to_string(mipLevel)) )
 			{
-				TraceError{TracerTag} << "Failed to create upsample target " << i << " !";
+				TraceError{TracerTag} << "Failed to create upsample target " << mipLevel << " !";
 
 				return false;
 			}
@@ -548,7 +550,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Create pipelines. */
-		if ( !this->createPipelines(renderer) )
+		if ( !this->createPipelines() )
 		{
 			TraceError{TracerTag} << "Failed to create bloom pipelines !";
 
@@ -556,14 +558,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Create descriptor sets. */
-		if ( !this->createDescriptorSets(renderer) )
+		if ( !this->createDescriptorSets() )
 		{
 			TraceError{TracerTag} << "Failed to create bloom descriptor sets !";
 
 			return false;
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -608,19 +608,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	Bloom::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		[[maybe_unused]] const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		[[maybe_unused]] const PostProcessor::PushConstants & constants
-	) noexcept
+	Bloom::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
 		/* Update the per-frame descriptor sets to point to the external input.
 		 * Each frame-in-flight has its own copy to avoid updating a descriptor
 		 * set still referenced by a pending command buffer. */
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		static_cast< void >(m_downFirstPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
@@ -633,14 +626,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
 		/* ---- Downsample Chain ---- */
-		for ( int i = 0; i < MipLevels; ++i )
+		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
 		{
-			const auto idx = static_cast< size_t >(i);
+			const auto idx = mipLevel;
 
 			/* Texel size of the INPUT texture for this pass. */
 			float inputW, inputH;
 
-			if ( i == 0 )
+			if ( mipLevel == 0 )
 			{
 				/* First pass reads from the external input. */
 				inputW = static_cast< float >(m_downTargets[0].width() * 2);
@@ -655,7 +648,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const BloomPushConstants pc{
 				.texelSizeX = 1.0F / inputW,
 				.texelSizeY = 1.0F / inputH,
-				.threshold = (i == 0) ? m_parameters.threshold : 0.0F,
+				.threshold = (mipLevel == 0) ? m_parameters.threshold : 0.0F,
 				.softKnee = m_parameters.softKnee,
 				.intensity = m_parameters.intensity,
 				.spread = m_parameters.spread
@@ -663,7 +656,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* For the first pass (i==0), use the per-frame descriptor set
 			 * since it's updated every frame with the external input. */
-			const auto & descSet = (i == 0) ? *m_downFirstPerFrame[frameIndex] : *m_downDescSets[idx];
+			const auto & descSet = (mipLevel == 0) ? *m_downFirstPerFrame[frameIndex] : *m_downDescSets[idx];
 
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
@@ -677,13 +670,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Upsample Chain ---- */
-		for ( int i = 0; i < MipLevels - 1; ++i )
+		for ( uint32_t mipLevel = 0; mipLevel < MipLevels - 1; ++mipLevel )
 		{
-			const auto idx = static_cast< size_t >(i);
-
 			/* Texel size of the OUTPUT target for this pass. */
-			const auto outW = static_cast< float >(m_upTargets[idx].width());
-			const auto outH = static_cast< float >(m_upTargets[idx].height());
+			const auto outW = static_cast< float >(m_upTargets[mipLevel].width());
+			const auto outH = static_cast< float >(m_upTargets[mipLevel].height());
 
 			const BloomPushConstants pc{
 				.texelSizeX = 1.0F / outW,
@@ -696,10 +687,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
-				m_upTargets[idx],
+				m_upTargets[mipLevel],
 				*m_upsamplePipeline,
 				*m_upsampleLayout,
-				*m_upDescSets[idx],
+				*m_upDescSets[mipLevel],
 				&pc,
 				sizeof(BloomPushConstants)
 			);

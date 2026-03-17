@@ -114,7 +114,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
+			bool createAll (uint32_t width, uint32_t height) const noexcept;
 
 			/**
 			 * @brief Destroys GPU resources for all effects.
@@ -124,13 +124,12 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Recreates GPU resources after a resize.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param width The new framebuffer width.
 			 * @param height The new framebuffer height.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool resizeAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
+			bool resizeAll (uint32_t width, uint32_t height) const noexcept;
 
 			/**
 			 * @brief Returns whether any effect in the stack requires HDR input.
@@ -159,6 +158,13 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool requiresMaterialProperties () const noexcept;
+
+			/**
+			 * @brief Returns whether any effect in the stack requires the scene light set.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool requiresLightSet () const noexcept;
 
 		private:
 

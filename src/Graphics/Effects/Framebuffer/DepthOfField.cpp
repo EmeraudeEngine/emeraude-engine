@@ -58,7 +58,6 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -126,13 +125,6 @@ void main()
 
 	/* Normalize CoC to [0, 1] range. */
 	coc = clamp(coc * cocScale, 0.0, 1.0);
-
-	/* Modulate CoC by per-pixel DoF mask from material properties G-buffer.
-	 * A channel low nibble = dofMask (0 = always sharp, 15 = normal blur). */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint aPacked = uint(mp.a * 255.0);
-	float dofMask = float(aPacked & 0xFu) / 15.0;
-	coc *= dofMask;
 
 	/* Store color in RGB and CoC in alpha. */
 	outColor = vec4(color.rgb, coc);
@@ -218,16 +210,22 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
+
+	/* ---- Lifecycle ---- */
 
 	bool
-	DepthOfField::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	DepthOfField::create (uint32_t width, uint32_t height) noexcept
 	{
-		const auto halfW = (width > 1) ? width / 2 : 1U;
-		const auto halfH = (height > 1) ? height / 2 : 1U;
+		auto & renderer = this->renderer();
+
+		const auto halfWidth = width > 1 ? width / 2 : 1U;
+		const auto halfHeight = height > 1 ? height / 2 : 1U;
 
 		/* CoC target stores color + CoC in alpha (half-res, RGBA16F for precision). */
-		if ( !m_cocTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "DoF_CoC") )
+		if ( !m_cocTarget.create(renderer, halfWidth, halfHeight, VK_FORMAT_R16G16B16A16_SFLOAT, "DoF_CoC") )
 		{
 			TraceError{TracerTag} << "Failed to create DoF CoC target !";
 
@@ -235,14 +233,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Blur targets (half-res). */
-		if ( !m_blurHTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "DoF_BlurH") )
+		if ( !m_blurHTarget.create(renderer, halfWidth, halfHeight, VK_FORMAT_R16G16B16A16_SFLOAT, "DoF_BlurH") )
 		{
 			TraceError{TracerTag} << "Failed to create DoF blur H target !";
 
 			return false;
 		}
 
-		if ( !m_blurVTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "DoF_BlurV") )
+		if ( !m_blurVTarget.create(renderer, halfWidth, halfHeight, VK_FORMAT_R16G16B16A16_SFLOAT, "DoF_BlurV") )
 		{
 			TraceError{TracerTag} << "Failed to create DoF blur V target !";
 
@@ -258,7 +256,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts (shared from base class) ---- */
-		auto singleLayout = getInputLayout(renderer, 1);
+		auto singleLayout = this->getInputLayout(1);
 
 		if ( singleLayout == nullptr )
 		{
@@ -267,7 +265,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto dualLayout = getInputLayout(renderer, 2);
+		auto dualLayout = this->getInputLayout(2);
 
 		if ( dualLayout == nullptr )
 		{
@@ -277,7 +275,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* CoC pass uses triple-input: color + depth + material properties. */
-		auto tripleLayout = getInputLayout(renderer, 3);
+		auto tripleLayout = this->getInputLayout(2);
 
 		if ( tripleLayout == nullptr )
 		{
@@ -288,31 +286,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CoCPushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(tripleLayout);
-			m_cocLayout = renderer.layoutManager().getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_cocLayout = renderer.layoutManager().getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CoCPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleLayout);
-			m_blurLayout = renderer.layoutManager().getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_blurLayout = renderer.layoutManager().getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualLayout);
-			m_compositeLayout = renderer.layoutManager().getPipelineLayout(sets, ranges);
+
+			m_compositeLayout = renderer.layoutManager().getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+			});
 		}
 
 		if ( m_cocLayout == nullptr || m_blurLayout == nullptr || m_compositeLayout == nullptr )
@@ -324,16 +321,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto vertexModule = getFullscreenVertexShader(renderer);
-		auto cocFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "DoF_CoC_FS", Saphir::ShaderType::FragmentShader, CoCFragmentShader
-		);
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "DoF_Blur_FS", Saphir::ShaderType::FragmentShader, DoFBlurFragmentShader
-		);
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "DoF_Composite_FS", Saphir::ShaderType::FragmentShader, DoFCompositeFragmentShader
-		);
+		const auto vertexModule = this->getFullscreenVertexShader();
+		const auto cocFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_CoC_FS", ShaderType::FragmentShader, CoCFragmentShader);
+		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Blur_FS", ShaderType::FragmentShader, DoFBlurFragmentShader);
+		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Composite_FS", ShaderType::FragmentShader, DoFCompositeFragmentShader);
 
 		if ( vertexModule == nullptr || cocFragment == nullptr || blurFragment == nullptr || compositeFragment == nullptr )
 		{
@@ -343,9 +334,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_cocPipeline = IndirectPostProcessEffect::createFullscreenPipeline(renderer, ClassId, "DoF_CoC", vertexModule, cocFragment, m_cocLayout, m_cocTarget);
-		m_blurPipeline = IndirectPostProcessEffect::createFullscreenPipeline(renderer, ClassId, "DoF_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_compositePipeline = IndirectPostProcessEffect::createFullscreenPipeline(renderer, ClassId, "DoF_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
+		m_cocPipeline = this->createFullscreenPipeline(ClassId, "DoF_CoC", vertexModule, cocFragment, m_cocLayout, m_cocTarget);
+		m_blurPipeline = this->createFullscreenPipeline(ClassId, "DoF_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
+		m_compositePipeline = this->createFullscreenPipeline(ClassId, "DoF_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
 		if ( m_cocPipeline == nullptr || m_blurPipeline == nullptr || m_compositePipeline == nullptr )
 		{
@@ -355,7 +346,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create descriptor sets ---- */
 
 		/* CoC: reads color + depth + material properties (updated per-frame, needs per-frame copies). */
-		m_cocPerFrame = createPerFrameDescriptorSets(renderer, tripleLayout, ClassId, "CoC_DescSet");
+		m_cocPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "CoC_DescSet");
 
 		if ( m_cocPerFrame.empty() )
 		{
@@ -401,7 +392,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Composite: reads original color + blurred result (binding 0 updated per-frame). */
-		m_compositePerFrame = createPerFrameDescriptorSets(renderer, dualLayout, ClassId, "Composite_DescSet");
+		m_compositePerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "Composite_DescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
@@ -411,15 +402,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Binding 1: blurred result (same for all frames). */
-		for ( auto & ds : m_compositePerFrame )
+		for ( const auto & descriptorSet : m_compositePerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -446,17 +435,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	DepthOfField::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	DepthOfField::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		/* Update per-frame descriptor sets to avoid conflicts with pending command buffers. */
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update CoC descriptor: binding 0 = color, binding 1 = depth, binding 2 = material properties. */
 		static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
@@ -464,11 +446,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-		}
-
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* Update composite descriptor: binding 0 = original color. */

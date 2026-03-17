@@ -232,11 +232,15 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	bool
-	SSAO::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	SSAO::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 
@@ -272,9 +276,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts (shared) ---- */
-		auto singleLayout = getInputLayout(renderer, 1);
-		auto dualLayout = getInputLayout(renderer, 2);
-		auto tripleLayout = getInputLayout(renderer, 3);
+		auto singleLayout = this->getInputLayout(1);
+		auto dualLayout = this->getInputLayout(2);
+		auto tripleLayout = this->getInputLayout(3);
 
 		if ( singleLayout == nullptr || dualLayout == nullptr || tripleLayout == nullptr )
 		{
@@ -285,31 +289,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SSAOPushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualLayout);
-			m_aoLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_aoLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SSAOPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleLayout);
-			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_blurLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(tripleLayout);
-			m_applyLayout = layoutManager.getPipelineLayout(sets, ranges);
+
+			m_applyLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
+			});
 		}
 
 		if ( m_aoLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
@@ -321,16 +324,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto vertexModule = getFullscreenVertexShader(renderer);
-		auto aoFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, SSAOComputeFragmentShader
-		);
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSAO_Blur_FS", Saphir::ShaderType::FragmentShader, BlurFragmentShader
-		);
-		auto applyFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "SSAO_Apply_FS", Saphir::ShaderType::FragmentShader, ApplyFragmentShader
-		);
+		const auto vertexModule = this->getFullscreenVertexShader();
+		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, SSAOComputeFragmentShader);
+		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_Blur_FS", Saphir::ShaderType::FragmentShader, BlurFragmentShader);
+		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_Apply_FS", Saphir::ShaderType::FragmentShader, ApplyFragmentShader);
 
 		if ( vertexModule == nullptr || aoFragment == nullptr || blurFragment == nullptr || applyFragment == nullptr )
 		{
@@ -340,9 +337,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_aoPipeline = IndirectPostProcessEffect::createFullscreenPipeline(renderer, ClassId, "SSAO_AO", vertexModule, aoFragment, m_aoLayout, m_aoTarget);
-		m_blurPipeline = IndirectPostProcessEffect::createFullscreenPipeline(renderer, ClassId, "SSAO_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_applyPipeline = IndirectPostProcessEffect::createFullscreenPipeline(renderer, ClassId, "SSAO_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
+		m_aoPipeline = this->createFullscreenPipeline(ClassId, "SSAO_AO", vertexModule, aoFragment, m_aoLayout, m_aoTarget);
+		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSAO_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
+		m_applyPipeline = this->createFullscreenPipeline(ClassId, "SSAO_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
 		if ( m_aoPipeline == nullptr || m_blurPipeline == nullptr || m_applyPipeline == nullptr )
 		{
@@ -353,7 +350,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto & pool = renderer.descriptorPool();
 
 		/* AO computation: reads depth + normals (updated per-frame). */
-		m_aoPerFrame = createPerFrameDescriptorSets(renderer, dualLayout, ClassId, "AO_DescSet");
+		m_aoPerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "AO_DescSet");
 
 		if ( m_aoPerFrame.empty() )
 		{
@@ -389,23 +386,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Apply: reads color (updated per-frame) + blurred AO (fixed) + material properties (per-frame). */
-		m_applyPerFrame = createPerFrameDescriptorSets(renderer, tripleLayout, ClassId, "Apply_DescSet");
+		m_applyPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
 		{
 			return false;
 		}
 
-		for ( auto & ds : m_applyPerFrame )
+		for ( const auto & descriptorSet : m_applyPerFrame )
 		{
 			/* Binding 1: blurred AO (same for all frames). */
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -417,9 +412,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_aoPerFrame.clear();
 		m_blurVDescSet.reset();
 		m_blurHDescSet.reset();
-
-		m_renderer = nullptr;
-
+		
 		m_applyPipeline.reset();
 		m_blurPipeline.reset();
 		m_aoPipeline.reset();
@@ -434,16 +427,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	SSAO::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	SSAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update depth + normals descriptors for this frame's AO pass. */
 		if ( inputDepth != nullptr )
@@ -480,7 +466,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.sampleCount = m_parameters.sampleCount
 			};
 
-			recordFullscreenPass(commandBuffer, m_aoTarget, *m_aoPipeline, *m_aoLayout, *m_aoPerFrame[frameIndex], &pc, sizeof(pc));
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_aoTarget,
+				*m_aoPipeline,
+				*m_aoLayout,
+				*m_aoPerFrame[frameIndex],
+				&pc,
+				sizeof(pc)
+			);
 		}
 
 		/* ---- Pass 2: Horizontal Blur ---- */
@@ -492,7 +486,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 0.0F
 			};
 
-			recordFullscreenPass(commandBuffer, m_blurHTarget, *m_blurPipeline, *m_blurLayout, *m_blurHDescSet, &pc, sizeof(pc));
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurHTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurHDescSet,
+				&pc,
+				sizeof(pc)
+			);
 		}
 
 		/* ---- Pass 3: Vertical Blur ---- */
@@ -504,7 +506,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 1.0F
 			};
 
-			recordFullscreenPass(commandBuffer, m_blurVTarget, *m_blurPipeline, *m_blurLayout, *m_blurVDescSet, &pc, sizeof(pc));
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurVTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurVDescSet,
+				&pc,
+				sizeof(pc)
+			);
 		}
 
 		/* ---- Pass 4: Apply AO to Color ---- */
@@ -516,7 +526,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.padding3 = 0.0F
 			};
 
-			recordFullscreenPass(commandBuffer, m_outputTarget, *m_applyPipeline, *m_applyLayout, *m_applyPerFrame[frameIndex], &pc, sizeof(pc));
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_outputTarget,
+				*m_applyPipeline,
+				*m_applyLayout,
+				*m_applyPerFrame[frameIndex],
+				&pc,
+				sizeof(pc)
+			);
 		}
 
 		return m_outputTarget;

@@ -37,23 +37,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
-
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**
@@ -120,26 +103,37 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Constructs a contact shadows effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			ContactShadows () noexcept = default;
+			explicit
+			ContactShadows (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a contact shadows effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			ContactShadows (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -173,20 +167,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
-			/**
-			 * @brief Sets the dominant light emission direction.
-			 * @param x The X component of the emission direction (world space).
-			 * @param y The Y component of the emission direction (world space).
-			 * @param z The Z component of the emission direction (world space).
-			 * @return void
-			 */
-			void
-			setLightDirection (float x, float y, float z) noexcept
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresLightSet() */
+			[[nodiscard]]
+			bool
+			requiresLightSet () const noexcept override
 			{
-				m_lightDirX = x;
-				m_lightDirY = y;
-				m_lightDirZ = z;
+				return true;
 			}
+
 
 			/**
 			 * @brief Sets the contact shadows parameters.
@@ -212,39 +200,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
+			Parameters m_parameters;
 			/* Intermediate render targets. */
 			IntermediateRenderTarget m_shadowTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
 			IntermediateRenderTarget m_outputTarget;
-
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_shadowPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurHPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurVPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_applyPipeline;
-
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_shadowLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
-
 			/* Descriptor set layouts. */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_shadowDescLayout;
-
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_shadowPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
-
-			/* Light direction (emission direction, world space). */
-			float m_lightDirX{0.0F};
-			float m_lightDirY{-1.0F};
-			float m_lightDirZ{0.0F};
-
-			/* Parameters. */
-			Parameters m_parameters;
-			Renderer * m_renderer{nullptr};
 	};
 }

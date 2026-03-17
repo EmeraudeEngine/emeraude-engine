@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -177,13 +178,17 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	/* ---- Lifecycle ---- */
 
 	bool
-	VolumetricLight::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	VolumetricLight::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
 
 		const auto halfW = (width > 1) ? width / 2 : 1U;
@@ -217,7 +222,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Single input layout (1 combined image sampler). */
-		auto singleInputLayout = getInputLayout(renderer, 1);
+		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
 		{
@@ -225,7 +230,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Dual input layout (2 combined image samplers). */
-		auto dualInputLayout = getInputLayout(renderer, 2);
+		auto dualInputLayout = this->getInputLayout(2);
 
 		if ( dualInputLayout == nullptr )
 		{
@@ -234,31 +239,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ScatterPushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleInputLayout);
-			m_occlusionLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+
+			m_occlusionLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ScatterPushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
-			sets.emplace_back(singleInputLayout);
-			m_radialLayout = layoutManager.getPipelineLayout(sets, ranges);
+			});
 		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			sets.emplace_back(singleInputLayout);
+
+			m_radialLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ScatterPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(dualInputLayout);
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, ranges);
+
+			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+			});
 		}
 
 		if ( m_occlusionLayout == nullptr || m_radialLayout == nullptr || m_compositeLayout == nullptr )
@@ -267,7 +271,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Compile shaders ---- */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		auto vertexModule = this->getFullscreenVertexShader();
 
 		if ( vertexModule == nullptr )
 		{
@@ -279,9 +283,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto occlusionFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "VL_Occlusion_FS", Saphir::ShaderType::FragmentShader, OcclusionFragmentShader
-		);
+		const auto occlusionFragment = shaderManager.getShaderModuleFromSourceCode(device, "VL_Occlusion_FS", ShaderType::FragmentShader, OcclusionFragmentShader);
 
 		if ( occlusionFragment == nullptr )
 		{
@@ -290,9 +292,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto radialFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "VL_Radial_FS", Saphir::ShaderType::FragmentShader, RadialBlurFragmentShader
-		);
+		const auto radialFragment = shaderManager.getShaderModuleFromSourceCode(device, "VL_Radial_FS", ShaderType::FragmentShader, RadialBlurFragmentShader);
 
 		if ( radialFragment == nullptr )
 		{
@@ -301,9 +301,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "VL_Composite_FS", Saphir::ShaderType::FragmentShader, CompositeFragmentShader
-		);
+		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "VL_Composite_FS", ShaderType::FragmentShader, CompositeFragmentShader);
 
 		if ( compositeFragment == nullptr )
 		{
@@ -313,15 +311,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_occlusionPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "VL_Occlusion", vertexModule, occlusionFragment, m_occlusionLayout, m_occlusionTarget
-		);
-		m_radialPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "VL_Radial", vertexModule, radialFragment, m_radialLayout, m_radialTarget
-		);
-		m_compositePipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "VL_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget
-		);
+		m_occlusionPipeline = this->createFullscreenPipeline(ClassId, "VL_Occlusion", vertexModule, occlusionFragment, m_occlusionLayout, m_occlusionTarget);
+		m_radialPipeline = this->createFullscreenPipeline(ClassId, "VL_Radial", vertexModule, radialFragment, m_radialLayout, m_radialTarget);
+		m_compositePipeline = this->createFullscreenPipeline(ClassId, "VL_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
 		if ( m_occlusionPipeline == nullptr || m_radialPipeline == nullptr || m_compositePipeline == nullptr )
 		{
@@ -331,7 +323,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create descriptor sets ---- */
 
 		/* Occlusion: reads depth (updated per-frame). */
-		m_occlusionPerFrame = createPerFrameDescriptorSets(renderer, singleInputLayout, ClassId, "VL_Occlusion_DescSet");
+		m_occlusionPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "VL_Occlusion_DescSet");
 
 		if ( m_occlusionPerFrame.empty() )
 		{
@@ -355,7 +347,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Composite: reads scene color (updated per-frame, binding 0) + radial result (fixed, binding 1). */
-		m_compositePerFrame = createPerFrameDescriptorSets(renderer, dualInputLayout, ClassId, "VL_Composite_DescSet");
+		m_compositePerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "VL_Composite_DescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
@@ -363,15 +355,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Write binding 1 (radial blur result) for each composite frame descriptor. */
-		for ( auto & ds : m_compositePerFrame )
+		for ( const auto & descriptorSet : m_compositePerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_radialTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_radialTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -382,8 +372,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_compositePerFrame.clear();
 		m_radialDescSet.reset();
 		m_occlusionPerFrame.clear();
-
-		m_renderer = nullptr;
 
 		m_compositePipeline.reset();
 		m_radialPipeline.reset();
@@ -398,41 +386,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	VolumetricLight::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		[[maybe_unused]] const TextureInterface * inputNormals,
-		[[maybe_unused]] const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	VolumetricLight::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* 1. Project light direction to screen space.
 		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-		const auto readStateIndex = m_renderer->currentReadStateIndex();
-		const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+		const auto readStateIndex = this->renderer().currentReadStateIndex();
+		const auto & viewMatrices =this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 		const auto & camPos = viewMatrices.position(readStateIndex);
 
 		/* Light source direction (opposite of emission direction). */
-		const auto lightSourceX = -m_lightDirX;
-		const auto lightSourceY = -m_lightDirY;
-		const auto lightSourceZ = -m_lightDirZ;
-		const auto invLen = 1.0F / std::sqrt(lightSourceX * lightSourceX + lightSourceY * lightSourceY + lightSourceZ * lightSourceZ + 1e-8F);
-		const auto normX = lightSourceX * invLen;
-		const auto normY = lightSourceY * invLen;
-		const auto normZ = lightSourceZ * invLen;
+		const auto mainLight = lightSet->mainDirectionalLight();
+		const auto lightSource = (-mainLight->direction()).normalized();
+		const auto lightColor = m_lightColorOverride.value_or(mainLight->color());
+		const auto lightIntensity = m_lightIntensityOverride.value_or(mainLight->intensity());
 
 		/* Project a far point along the light source direction. */
-		const auto farPointX = camPos[0] + normX * 10000.0F;
-		const auto farPointY = camPos[1] + normY * 10000.0F;
-		const auto farPointZ = camPos[2] + normZ * 10000.0F;
+		const auto farPointX = camPos[0] + lightSource.x() * 10000.0F;
+		const auto farPointY = camPos[1] + lightSource.y() * 10000.0F;
+		const auto farPointZ = camPos[2] + lightSource.z() * 10000.0F;
 
 		/* Transform to view space (Matrix<4> * Vector<4>). */
-		const Libs::Math::Vector< 4, float > worldPos{farPointX, farPointY, farPointZ, 1.0F};
+		const Math::Vector< 4, float > worldPos{farPointX, farPointY, farPointZ, 1.0F};
 		const auto viewPos = viewMat * worldPos;
 		const auto clipPos = projMat * viewPos;
 
@@ -469,10 +447,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.texelSizeY = 1.0F / static_cast< float >(m_occlusionTarget.height()),
 			.nearPlane = constants.nearPlane,
 			.farPlane = constants.farPlane,
-			.lightColorR = m_lightColorR,
-			.lightColorG = m_lightColorG,
-			.lightColorB = m_lightColorB,
-			.lightIntensity = m_lightIntensity,
+			.lightColorR = lightColor.red(),
+			.lightColorG = lightColor.green(),
+			.lightColorB = lightColor.blue(),
+			.lightIntensity = lightIntensity,
 			.density = m_parameters.density,
 			.decay = m_parameters.decay,
 			.exposure = m_parameters.exposure,

@@ -55,27 +55,27 @@ namespace EmEn::Graphics
 	/* ---- Default resize ---- */
 
 	bool
-	IndirectPostProcessEffect::resize (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	IndirectPostProcessEffect::resize (uint32_t width, uint32_t height) noexcept
 	{
 		this->destroy();
 
-		return this->create(renderer, width, height);
+		return this->create(width, height);
 	}
 
 	/* ---- Shared fullscreen vertex shader ---- */
 
 	std::shared_ptr< ShaderModule >
-	IndirectPostProcessEffect::getFullscreenVertexShader (Renderer & renderer) noexcept
+	IndirectPostProcessEffect::getFullscreenVertexShader () const noexcept
 	{
-		return renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "FullscreenPostProcessVS", Saphir::ShaderType::VertexShader, FullscreenVertexShaderSource);
+		return m_renderer.shaderManager().getShaderModuleFromSourceCode(m_renderer.device(), "FullscreenPostProcessVS", Saphir::ShaderType::VertexShader, FullscreenVertexShaderSource);
 	}
 
 	/* ---- Shared fullscreen pipeline creation ---- */
 
 	std::shared_ptr< GraphicsPipeline >
-	IndirectPostProcessEffect::createFullscreenPipeline (const Renderer & renderer, const char * tracerTag, const std::string & name, const std::shared_ptr< ShaderModule > & vertexModule, const std::shared_ptr< ShaderModule > & fragmentModule, const std::shared_ptr< PipelineLayout > & pipelineLayout, const IntermediateRenderTarget & target) noexcept
+	IndirectPostProcessEffect::createFullscreenPipeline (const char * tracerTag, const std::string & name, const std::shared_ptr< ShaderModule > & vertexModule, const std::shared_ptr< ShaderModule > & fragmentModule, const std::shared_ptr< PipelineLayout > & pipelineLayout, const IntermediateRenderTarget & target) const noexcept
 	{
-		auto pipeline = std::make_shared< GraphicsPipeline >(renderer.device());
+		auto pipeline = std::make_shared< GraphicsPipeline >(m_renderer.device());
 		pipeline->setIdentifier(tracerTag, name, "GraphicsPipeline");
 
 		Libs::StaticVector< std::shared_ptr< ShaderModule >, 5 > shaderModules;
@@ -217,11 +217,12 @@ namespace EmEn::Graphics
 	/* ---- Shared descriptor set layout helpers ---- */
 
 	std::shared_ptr< DescriptorSetLayout >
-	IndirectPostProcessEffect::getInputLayout (Renderer & renderer, uint32_t samplerCount) noexcept
+	IndirectPostProcessEffect::getInputLayout (uint32_t samplerCount) const noexcept
 	{
+		auto & layoutManager = m_renderer.layoutManager();
+
 		const auto layoutId = "PostProcess_" + std::to_string(samplerCount) + "Sampler";
 
-		auto & layoutManager = renderer.layoutManager();
 		auto layout = layoutManager.getDescriptorSetLayout(layoutId);
 
 		if ( layout == nullptr )
@@ -246,10 +247,10 @@ namespace EmEn::Graphics
 	/* ---- Shared per-frame descriptor set allocation ---- */
 
 	std::vector< std::unique_ptr< DescriptorSet > >
-	IndirectPostProcessEffect::createPerFrameDescriptorSets (const Renderer & renderer, const std::shared_ptr< DescriptorSetLayout > & layout, const char * classId, const std::string & baseName) noexcept
+	IndirectPostProcessEffect::createPerFrameDescriptorSets (const std::shared_ptr< DescriptorSetLayout > & layout, const char * classId, const std::string & baseName) const noexcept
 	{
-		const auto & pool = renderer.descriptorPool();
-		const auto frameCount = renderer.framesInFlight();
+		const auto & pool = m_renderer.descriptorPool();
+		const auto frameCount = m_renderer.framesInFlight();
 
 		std::vector< std::unique_ptr< DescriptorSet > > result;
 		result.reserve(frameCount);

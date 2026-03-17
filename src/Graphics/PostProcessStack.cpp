@@ -62,7 +62,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::createAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept
+	PostProcessStack::createAll (uint32_t width, uint32_t height) const noexcept
 	{
 		for ( const auto & effect : m_effects )
 		{
@@ -71,7 +71,7 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			if ( !effect->create(renderer, width, height) )
+			if ( !effect->create(width, height) )
 			{
 				TraceError{ClassId} << "Failed to create effect in the post-process stack !";
 
@@ -95,7 +95,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::resizeAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept
+	PostProcessStack::resizeAll (uint32_t width, uint32_t height) const noexcept
 	{
 		for ( const auto & effect : m_effects )
 		{
@@ -104,7 +104,7 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			if ( !effect->resize(renderer, width, height) )
+			if ( !effect->resize(width, height) )
 			{
 				TraceError{ClassId} << "Failed to resize effect in the post-process stack !";
 
@@ -144,6 +144,14 @@ namespace EmEn::Graphics
 	{
 		return std::ranges::any_of(m_effects, [] (const auto & effect) {
 			return effect != nullptr && effect->isEnabled() && effect->requiresMaterialProperties();
+		});
+	}
+
+	bool
+	PostProcessStack::requiresLightSet () const noexcept
+	{
+		return std::ranges::any_of(m_effects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->requiresLightSet();
 		});
 	}
 }

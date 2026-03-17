@@ -37,22 +37,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -123,27 +107,38 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Constructs an RTGI effect.
+			 * @brief Constructs a ray-tracing global illumination effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			RTGI () noexcept = default;
+			explicit
+			RTGI (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a ray-tracing global illumination effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			RTGI (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -201,31 +196,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
+			Parameters m_parameters;
 			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res), apply (full-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
 			IntermediateRenderTarget m_outputTarget;
-
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_applyPipeline;
-
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
-
 			/* Descriptor sets (fixed -- never updated after creation). */
 			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
-
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
-
-			Renderer * m_renderer{nullptr};
-			Parameters m_parameters;
 	};
 }

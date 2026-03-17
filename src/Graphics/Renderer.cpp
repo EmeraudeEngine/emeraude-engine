@@ -1497,7 +1497,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack());
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet());
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -1631,7 +1631,7 @@ namespace EmEn::Graphics
 		/* Process scene effects (multi-pass). */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack());
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet());
 		}
 
 		/* Establish swapchain image layouts by running RP1 (CLEAR) with no draw calls.

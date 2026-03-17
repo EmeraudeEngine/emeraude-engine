@@ -36,7 +36,6 @@
 #include "Saphir/LightGenerator.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
-#include "Vulkan/SwapChain.hpp"
 #include "Scene.hpp"
 #include "Tracer.hpp"
 
@@ -111,9 +110,9 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, true, true);
 
-			m_directionalLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
+			m_directionalLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
 
-			if ( m_directionalLightBuffer == nullptr )
+			if ( m_directionalLightUBO == nullptr )
 			{
 				Tracer::error(ClassId, "Unable to create the directional light shared uniform buffer !");
 
@@ -138,9 +137,9 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, true, true);
 
-			m_pointLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes());
+			m_pointLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes());
 
-			if ( m_pointLightBuffer == nullptr )
+			if ( m_pointLightUBO == nullptr )
 			{
 				Tracer::error(ClassId, "Unable to create the point light shared uniform buffer !");
 
@@ -165,9 +164,9 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, true, true);
 
-			m_spotLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes());
+			m_spotLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes());
 
-			if ( m_spotLightBuffer == nullptr )
+			if ( m_spotLightUBO == nullptr )
 			{
 				Tracer::error(ClassId, "Unable to create the spotlight shared uniform buffer !");
 
@@ -192,11 +191,11 @@ namespace EmEn::Scenes
 		/* Create the RT light SSBO for ray query shaders.
 		 * This flat array contains all light types in a unified format. */
 		{
-			const auto bufferSize = static_cast< VkDeviceSize >(MaxRTLights * sizeof(GPULightData));
+			constexpr auto bufferSize = static_cast< VkDeviceSize >(MaxRTLights * sizeof(GPULightData));
 
-			m_rtLightBuffer = std::make_unique< ShaderStorageBufferObject >(renderer.device(), bufferSize);
+			m_RTLightSSBO = std::make_unique< ShaderStorageBufferObject >(renderer.device(), bufferSize);
 
-			if ( !m_rtLightBuffer->createOnHardware() )
+			if ( !m_RTLightSSBO->createOnHardware() )
 			{
 				Tracer::error(ClassId, "Unable to create the RT light SSBO !");
 
@@ -227,18 +226,18 @@ namespace EmEn::Scenes
 		m_initialized = false;
 
 		/* Release the RT light SSBO. */
-		if ( m_rtLightBuffer != nullptr )
+		if ( m_RTLightSSBO != nullptr )
 		{
-			m_rtLightBuffer->destroyFromHardware();
-			m_rtLightBuffer.reset();
-			m_rtLightCount = 0;
+			m_RTLightSSBO->destroyFromHardware();
+			m_RTLightSSBO.reset();
+			m_RTLightCount = 0;
 		}
 
 		/* Release the directional light SharedUniformBuffer. */
 		{
-			const auto pointer = m_directionalLightBuffer;
+			const auto pointer = m_directionalLightUBO;
 
-			m_directionalLightBuffer.reset();
+			m_directionalLightUBO.reset();
 
 			if ( !sharedUBOManager.destroySharedUniformBuffer(pointer) )
 			{
@@ -248,9 +247,9 @@ namespace EmEn::Scenes
 
 		/* Release the point light SharedUniformBuffer. */
 		{
-			const auto pointer = m_pointLightBuffer;
+			const auto pointer = m_pointLightUBO;
 
-			m_pointLightBuffer.reset();
+			m_pointLightUBO.reset();
 
 			if ( !sharedUBOManager.destroySharedUniformBuffer(pointer) )
 			{
@@ -260,9 +259,9 @@ namespace EmEn::Scenes
 
 		/* Release the spotlight SharedUniformBuffer. */
 		{
-			const auto pointer = m_spotLightBuffer;
+			const auto pointer = m_spotLightUBO;
 
-			m_spotLightBuffer.reset();
+			m_spotLightUBO.reset();
 
 			if ( !sharedUBOManager.destroySharedUniformBuffer(pointer) )
 			{
@@ -288,6 +287,11 @@ namespace EmEn::Scenes
 
 		m_lights.emplace(light);
 		m_directionalLights.emplace(light);
+
+		if ( m_mainDirectionalLight.expired() )
+		{
+			m_mainDirectionalLight = light;
+		}
 
 		this->notify(DirectionalLightAdded, light);
 	}
@@ -559,9 +563,9 @@ namespace EmEn::Scenes
 		}
 
 		/* Update the RT light SSBO with all enabled lights. */
-		if ( m_rtLightBuffer != nullptr && m_rtLightBuffer->isCreated() )
+		if ( m_RTLightSSBO != nullptr && m_RTLightSSBO->isCreated() )
 		{
-			auto * gpuData = m_rtLightBuffer->mapMemoryAs< GPULightData >();
+			auto * gpuData = m_RTLightSSBO->mapMemoryAs< GPULightData >();
 
 			if ( gpuData != nullptr )
 			{
@@ -637,7 +641,7 @@ namespace EmEn::Scenes
 					lightIndex++;
 				}
 
-				/* Spot lights (type = 2). */
+				/* Spotlights (type = 2). */
 				for ( const auto & light : m_spotLights )
 				{
 					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
@@ -671,8 +675,8 @@ namespace EmEn::Scenes
 					lightIndex++;
 				}
 
-				m_rtLightBuffer->unmapMemory();
-				m_rtLightCount = lightIndex;
+				m_RTLightSSBO->unmapMemory();
+				m_RTLightCount = lightIndex;
 			}
 			else
 			{

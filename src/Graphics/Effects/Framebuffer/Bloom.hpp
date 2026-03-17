@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
 #include <memory>
+#include <array>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -37,22 +37,6 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
-
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -97,27 +81,38 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Constructs a bloom effect.
+			 * @brief Constructs a Bloom effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			Bloom () noexcept = default;
+			explicit
+			Bloom (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a Bloom effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			Bloom (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
 			[[nodiscard]]
@@ -161,35 +156,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Creates all graphics pipelines for the bloom passes.
-			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createPipelines (Renderer & renderer) noexcept;
+			bool createPipelines () noexcept;
 
 			/**
 			 * @brief Creates all descriptor sets for the bloom passes.
-			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDescriptorSets (Renderer & renderer) noexcept;
+			bool createDescriptorSets () noexcept;
 
+			Parameters m_parameters;
 			/* Intermediate render targets. */
 			std::array< IntermediateRenderTarget, MipLevels > m_downTargets;
 			std::array< IntermediateRenderTarget, MipLevels - 1 > m_upTargets;
 			IntermediateRenderTarget m_outputTarget;
-
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_downsamplePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_upsamplePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
-
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_downsampleLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_upsampleLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
-
 			/* Descriptor sets.
 			 * NOTE: m_downDescSets[0] and m_compositeDescSet are updated every frame
 			 * in execute(), so they need per-frame-in-flight copies to avoid updating
@@ -199,10 +190,5 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::unique_ptr< Vulkan::DescriptorSet > m_compositeDescSet;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_downFirstPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
-
-			/* Parameters. */
-			Parameters m_parameters;
-
-			Renderer * m_renderer{nullptr};
 	};
 }

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -36,23 +37,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Libs/PixelFactory/Color.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -117,26 +103,37 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Constructs a volumetric light effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			VolumetricLight () noexcept = default;
+			explicit
+			VolumetricLight (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a volumetric light effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			VolumetricLight (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -154,45 +151,54 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
-			/**
-			 * @brief Sets the light direction (emission direction, not source direction).
-			 * @param x The X component of the light direction.
-			 * @param y The Y component of the light direction.
-			 * @param z The Z component of the light direction.
-			 * @return void
-			 */
-			void
-			setLightDirection (float x, float y, float z) noexcept
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresLightSet() */
+			[[nodiscard]]
+			bool
+			requiresLightSet () const noexcept override
 			{
-				m_lightDirX = x;
-				m_lightDirY = y;
-				m_lightDirZ = z;
+				return true;
 			}
 
 			/**
-			 * @brief Sets the light color.
-			 * @param r Red component (0-1).
-			 * @param g Green component (0-1).
-			 * @param b Blue component (0-1).
+			 * @brief Overrides the light color (instead of reading from LightSet).
+			 * @param color The override color.
 			 * @return void
 			 */
 			void
-			setLightColor (float r, float g, float b) noexcept
+			setLightColorOverride (const Libs::PixelFactory::Color<> & color) noexcept
 			{
-				m_lightColorR = r;
-				m_lightColorG = g;
-				m_lightColorB = b;
+				m_lightColorOverride = color;
 			}
 
 			/**
-			 * @brief Sets the light intensity multiplier.
-			 * @param intensity The intensity value.
+			 * @brief Clears the light color override (reverts to LightSet value).
 			 * @return void
 			 */
 			void
-			setLightIntensity (float intensity) noexcept
+			clearLightColorOverride () noexcept
 			{
-				m_lightIntensity = intensity;
+				m_lightColorOverride.reset();
+			}
+
+			/**
+			 * @brief Overrides the light intensity (instead of reading from LightSet).
+			 * @param intensity The override intensity.
+			 * @return void
+			 */
+			void
+			setLightIntensityOverride (float intensity) noexcept
+			{
+				m_lightIntensityOverride = intensity;
+			}
+
+			/**
+			 * @brief Clears the light intensity override (reverts to LightSet value).
+			 * @return void
+			 */
+			void
+			clearLightIntensityOverride () noexcept
+			{
+				m_lightIntensityOverride.reset();
 			}
 
 			/**
@@ -219,35 +225,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
+			Parameters m_parameters;
 			/* Intermediate render targets. */
 			IntermediateRenderTarget m_occlusionTarget;
 			IntermediateRenderTarget m_radialTarget;
 			IntermediateRenderTarget m_outputTarget;
-
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_occlusionPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_radialPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
-
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_occlusionLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_radialLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
-
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_occlusionPerFrame;
 			std::unique_ptr< Vulkan::DescriptorSet > m_radialDescSet;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
-
-			/* Light parameters. */
-			float m_lightDirX{0.0F};
-			float m_lightDirY{-1.0F};
-			float m_lightDirZ{0.0F};
-			float m_lightColorR{1.0F};
-			float m_lightColorG{0.9F};
-			float m_lightColorB{0.7F};
-			float m_lightIntensity{1.0F};
-			Parameters m_parameters;
-			Renderer * m_renderer{nullptr};
+			/* Optional overrides (nullopt = read from LightSet at execute time). */
+			std::optional< Libs::PixelFactory::Color<> > m_lightColorOverride;
+			std::optional< float > m_lightIntensityOverride;
 	};
 }

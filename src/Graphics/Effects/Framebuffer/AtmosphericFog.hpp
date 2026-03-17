@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -36,23 +37,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Libs/PixelFactory/Color.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Vulkan
-	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class GraphicsPipeline;
-		class PipelineLayout;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
-}
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -79,9 +65,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float heightFalloff{0.2F};
 				float baseHeight{0.0F};
 				float maxDistance{10000.0F};
-				float fogColorR{0.5F};
-				float fogColorG{0.6F};
-				float fogColorB{0.7F};
+				Libs::PixelFactory::Color<> fogColor{0.5F, 0.6F, 0.7F};
 				float inscatterExponent{8.0F};
 				float inscatterIntensity{1.0F};
 				bool skyFogEnabled{false};
@@ -130,39 +114,42 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Constructs an atmospheric fog effect.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			AtmosphericFog () noexcept = default;
+			explicit
+			AtmosphericFog (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs an atmospheric fog effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			AtmosphericFog (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height) noexcept override;
+			bool create (uint32_t width, uint32_t height) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (
-				const Vulkan::CommandBuffer & commandBuffer,
-				const Vulkan::TextureInterface & inputColor,
-				const Vulkan::TextureInterface * inputDepth,
-				const Vulkan::TextureInterface * inputNormals,
-				const Vulkan::TextureInterface * inputMaterialProperties,
-				const PostProcessor::PushConstants & constants
-			) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
 			bool
 			requiresDepth () const noexcept override
-			{
-				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
-			[[nodiscard]]
-			bool
-			requiresMaterialProperties () const noexcept override
 			{
 				return true;
 			}
@@ -175,34 +162,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
-			/**
-			 * @brief Sets the light direction for inscattering (emission direction).
-			 * @param x The X component of the light direction.
-			 * @param y The Y component of the light direction.
-			 * @param z The Z component of the light direction.
-			 * @return void
-			 */
-			void
-			setLightDirection (float x, float y, float z) noexcept
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresLightSet() */
+			[[nodiscard]]
+			bool
+			requiresLightSet () const noexcept override
 			{
-				m_lightDirX = x;
-				m_lightDirY = y;
-				m_lightDirZ = z;
+				return true;
 			}
 
 			/**
-			 * @brief Sets the inscattering color.
-			 * @param r Red component (0-1).
-			 * @param g Green component (0-1).
-			 * @param b Blue component (0-1).
+			 * @brief Overrides the inscattering color (instead of reading from LightSet).
+			 * @param color The override color.
 			 * @return void
 			 */
 			void
-			setInscatterColor (float r, float g, float b) noexcept
+			setInscatterColorOverride (const Libs::PixelFactory::Color<> & color) noexcept
 			{
-				m_inscatterColorR = r;
-				m_inscatterColorG = g;
-				m_inscatterColorB = b;
+				m_inscatterColorOverride = color;
+			}
+
+			/**
+			 * @brief Clears the inscatter color override (reverts to LightSet value).
+			 * @return void
+			 */
+			void
+			clearInscatterColorOverride () noexcept
+			{
+				m_inscatterColorOverride.reset();
 			}
 
 			/**
@@ -229,29 +215,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
-			/* Intermediate render target. */
-			IntermediateRenderTarget m_outputTarget;
-
-			/* Pipeline. */
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_fogPipeline;
-
-			/* Pipeline layout. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_fogLayout;
-
-			/* Descriptor sets (per-frame). */
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_fogPerFrame;
-
-			/* Light direction for inscattering. */
-			float m_lightDirX{0.0F};
-			float m_lightDirY{-1.0F};
-			float m_lightDirZ{0.0F};
-
-			/* Inscattering color. */
-			float m_inscatterColorR{1.0F};
-			float m_inscatterColorG{0.9F};
-			float m_inscatterColorB{0.7F};
-
 			Parameters m_parameters;
-			Renderer * m_renderer{nullptr};
+			IntermediateRenderTarget m_outputTarget;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_fogPipeline;
+			std::shared_ptr< Vulkan::PipelineLayout > m_fogLayout;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_fogPerFrame;
+			std::optional< Libs::PixelFactory::Color<> > m_inscatterColorOverride;
 	};
 }

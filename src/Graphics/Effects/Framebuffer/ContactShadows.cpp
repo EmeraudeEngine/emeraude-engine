@@ -31,8 +31,8 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
-#include "Tracer.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -41,6 +41,7 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Tracer.hpp"
 
 /* Defining the resource owner of this translation unit. */
 /* NOLINTBEGIN(cert-err58-cpp) : We need static strings. */
@@ -53,7 +54,7 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
-	static constexpr auto RTShadowFragmentShader = R"GLSL(
+	constexpr auto RTShadowFragmentShader = R"GLSL(
 #version 460
 
 #extension GL_EXT_ray_query : require
@@ -150,7 +151,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto ApplyFragmentShader = R"GLSL(
+	constexpr auto ApplyFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -185,7 +186,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto BlurFragmentShader = R"GLSL(
+	constexpr auto BlurFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -243,13 +244,17 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	/* ---- Lifecycle ---- */
 
 	bool
-	ContactShadows::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	ContactShadows::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		/* Create shadow mask target (full-res, RT gives clean results). */
 		if ( !m_shadowTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_RTShadow") )
 		{
@@ -282,14 +287,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts ---- */
-		auto singleInputLayout = getInputLayout(renderer, 1);
+		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
 		{
 			return false;
 		}
 
-		auto tripleInputLayout = getInputLayout(renderer, 3);
+		auto tripleInputLayout = this->getInputLayout(3);
 
 		if ( tripleInputLayout == nullptr )
 		{
@@ -323,29 +328,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+			const StaticVector< VkPushConstantRange, 4 > ranges{
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ShadowPushConstants)}
 			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(m_shadowDescLayout);
 			m_shadowLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
+
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+			const StaticVector< VkPushConstantRange, 4 > ranges{
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
 			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(tripleInputLayout);
 			m_applyLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
+
 		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
+			const StaticVector< VkPushConstantRange, 4 > ranges{
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
 			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleInputLayout);
 			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
@@ -356,7 +363,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Compile shaders ---- */
-		auto vertexModule = getFullscreenVertexShader(renderer);
+		const auto vertexModule = this->getFullscreenVertexShader();
 
 		if ( vertexModule == nullptr )
 		{
@@ -368,9 +375,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto shadowFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "CS_RTShadow_FS", Saphir::ShaderType::FragmentShader, RTShadowFragmentShader
-		);
+		const auto shadowFragment = shaderManager.getShaderModuleFromSourceCode(device, "CS_RTShadow_FS", ShaderType::FragmentShader, RTShadowFragmentShader);
 
 		if ( shadowFragment == nullptr )
 		{
@@ -379,9 +384,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto applyFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "CS_Apply_FS", Saphir::ShaderType::FragmentShader, ApplyFragmentShader
-		);
+		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "CS_Apply_FS", ShaderType::FragmentShader, ApplyFragmentShader);
 
 		if ( applyFragment == nullptr )
 		{
@@ -390,9 +393,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "CS_Blur_FS", Saphir::ShaderType::FragmentShader, BlurFragmentShader
-		);
+		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "CS_Blur_FS", ShaderType::FragmentShader, BlurFragmentShader);
 
 		if ( blurFragment == nullptr )
 		{
@@ -402,21 +403,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_shadowPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "CS_RTShadow", vertexModule, shadowFragment, m_shadowLayout, m_shadowTarget
-		);
-		m_blurHPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "CS_BlurH", vertexModule, blurFragment, m_blurLayout, m_blurHTarget
-		);
-		m_blurVPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "CS_BlurV", vertexModule, blurFragment, m_blurLayout, m_blurVTarget
-		);
-		m_applyPipeline = IndirectPostProcessEffect::createFullscreenPipeline(
-			renderer, ClassId, "CS_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget
-		);
+		m_shadowPipeline = this->createFullscreenPipeline(ClassId, "CS_RTShadow", vertexModule, shadowFragment, m_shadowLayout, m_shadowTarget);
+		m_blurHPipeline = this->createFullscreenPipeline(ClassId, "CS_BlurH", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
+		m_blurVPipeline = this->createFullscreenPipeline(ClassId, "CS_BlurV", vertexModule, blurFragment, m_blurLayout, m_blurVTarget);
+		m_applyPipeline = this->createFullscreenPipeline(ClassId, "CS_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
-		if ( m_shadowPipeline == nullptr || m_blurHPipeline == nullptr ||
-			m_blurVPipeline == nullptr || m_applyPipeline == nullptr )
+		if ( m_shadowPipeline == nullptr || m_blurHPipeline == nullptr || m_blurVPipeline == nullptr || m_applyPipeline == nullptr )
 		{
 			return false;
 		}
@@ -424,7 +416,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create descriptor sets ---- */
 
 		/* RT shadow pass: reads depth (binding 0) + normals (binding 1) + TLAS (binding 2). */
-		m_shadowPerFrame = createPerFrameDescriptorSets(renderer, m_shadowDescLayout, ClassId, "CS_RTShadow_DescSet");
+		m_shadowPerFrame = this->createPerFrameDescriptorSets(m_shadowDescLayout, ClassId, "CS_RTShadow_DescSet");
 
 		if ( m_shadowPerFrame.empty() )
 		{
@@ -432,39 +424,39 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Blur H: reads shadow mask (binding 0, fixed). */
-		m_blurHPerFrame = createPerFrameDescriptorSets(renderer, singleInputLayout, ClassId, "CS_BlurH_DescSet");
+		m_blurHPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "CS_BlurH_DescSet");
 
 		if ( m_blurHPerFrame.empty() )
 		{
 			return false;
 		}
 
-		for ( auto & ds : m_blurHPerFrame )
+		for ( const auto & descriptorSet : m_blurHPerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(0, m_shadowTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_shadowTarget) )
 			{
 				return false;
 			}
 		}
 
 		/* Blur V: reads blur H output (binding 0, fixed). */
-		m_blurVPerFrame = createPerFrameDescriptorSets(renderer, singleInputLayout, ClassId, "CS_BlurV_DescSet");
+		m_blurVPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "CS_BlurV_DescSet");
 
 		if ( m_blurVPerFrame.empty() )
 		{
 			return false;
 		}
 
-		for ( auto & ds : m_blurVPerFrame )
+		for ( const auto & descriptorSet : m_blurVPerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(0, m_blurHTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
 			{
 				return false;
 			}
 		}
 
 		/* Apply: reads scene color (binding 0, per-frame) + blurred shadow (binding 1, fixed) + material properties (per-frame). */
-		m_applyPerFrame = createPerFrameDescriptorSets(renderer, tripleInputLayout, ClassId, "CS_Apply_DescSet");
+		m_applyPerFrame = this->createPerFrameDescriptorSets(tripleInputLayout, ClassId, "CS_Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
 		{
@@ -472,15 +464,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Write binding 1 (blurred shadow mask) for each apply frame descriptor. */
-		for ( auto & ds : m_applyPerFrame )
+		for ( const auto & descriptorSet : m_applyPerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -492,8 +482,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_blurVPerFrame.clear();
 		m_blurHPerFrame.clear();
 		m_shadowPerFrame.clear();
-
-		m_renderer = nullptr;
 
 		m_applyPipeline.reset();
 		m_blurVPipeline.reset();
@@ -511,22 +499,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	ContactShadows::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	ContactShadows::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* 1. Compute inverse view-projection matrix for world-space reconstruction.
 		 * CRITICAL: Use readStateIndex to match the view matrix that produced the depth buffer.
 		 * The default overload reads m_logicState which may have advanced → flickering. */
-		const auto readStateIndex = m_renderer->currentReadStateIndex();
-		const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+		const auto readStateIndex = this->renderer().currentReadStateIndex();
+		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 		const auto viewProjMat = projMat * viewMat;
@@ -544,11 +525,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Bind the current TLAS for ray queries. */
-		const auto * tlas = m_renderer->currentTLAS();
+		const auto * TLAS = this->renderer().currentTLAS();
 
-		if ( tlas != nullptr && tlas->isCreated() )
+		if ( TLAS != nullptr && TLAS->isCreated() )
 		{
-			static_cast< void >(m_shadowPerFrame[frameIndex]->writeAccelerationStructure(2, tlas->handle()));
+			static_cast< void >(m_shadowPerFrame[frameIndex]->writeAccelerationStructure(2, TLAS->handle()));
 		}
 
 		/* 3. Update per-frame apply descriptor with scene color. */
@@ -567,9 +548,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* 4. Pass 1: RT shadow query (full-res). */
 		ShadowPushConstants shadowPC{};
 		std::memcpy(shadowPC.inverseProjViewMatrix, invViewProjMat.data(), sizeof(shadowPC.inverseProjViewMatrix));
-		shadowPC.lightDirWorldX = m_lightDirX;
-		shadowPC.lightDirWorldY = m_lightDirY;
-		shadowPC.lightDirWorldZ = m_lightDirZ;
+		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
+		shadowPC.lightDirWorldX = lightDirection.x();
+		shadowPC.lightDirWorldY = lightDirection.y();
+		shadowPC.lightDirWorldZ = lightDirection.z();
 		shadowPC.maxDistance = m_parameters.maxDistance;
 		shadowPC.normalBias = m_parameters.normalBias;
 		shadowPC.viewPosX = inv[12];

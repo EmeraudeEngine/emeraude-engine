@@ -479,11 +479,15 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	using namespace Libs;
 	using namespace Vulkan;
+	using namespace Saphir;
 
 	bool
-	RTR::create (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	RTR::create (uint32_t width, uint32_t height) noexcept
 	{
+		auto & renderer = this->renderer();
+
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 
@@ -522,13 +526,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
-		auto traceInputLayout = getInputLayout(renderer, 2);
+		auto traceInputLayout = this->getInputLayout(2);
 
 		/* Single input (blur): 1 combined image sampler. */
-		auto singleLayout = getInputLayout(renderer, 1);
+		auto singleLayout = this->getInputLayout(1);
 
 		/* Composite input (color + blurred RTR + material properties): 3 combined image samplers. */
-		auto compositeLayout = getInputLayout(renderer, 3);
+		auto compositeLayout = this->getInputLayout(3);
 
 		if ( traceInputLayout == nullptr || singleLayout == nullptr || compositeLayout == nullptr )
 		{
@@ -558,33 +562,32 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pipeline layouts ---- */
 		{
 			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures. */
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
-			};
-
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
-			m_traceLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_traceLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(singleLayout);
-			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-		{
-			const Libs::StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			};
 
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			m_blurLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+			});
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
 			sets.emplace_back(compositeLayout);
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, ranges);
+
+			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+			});
 		}
 
 		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_compositeLayout == nullptr )
@@ -596,16 +599,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto vertexModule = getFullscreenVertexShader(renderer);
-		auto traceFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "RTR_Trace_FS", Saphir::ShaderType::FragmentShader, RTRTraceFragmentShader
-		);
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "RTR_Blur_FS", Saphir::ShaderType::FragmentShader, RTRBlurFragmentShader
-		);
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(
-			device, "RTR_Composite_FS", Saphir::ShaderType::FragmentShader, RTRCompositeFragmentShader
-		);
+		const auto vertexModule = this->getFullscreenVertexShader();
+		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Trace_FS", ShaderType::FragmentShader, RTRTraceFragmentShader);
+		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Blur_FS", ShaderType::FragmentShader, RTRBlurFragmentShader);
+		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Composite_FS", ShaderType::FragmentShader, RTRCompositeFragmentShader);
 
 		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr || compositeFragment == nullptr )
 		{
@@ -615,9 +612,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_tracePipeline = createFullscreenPipeline(renderer, ClassId, "RTR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_blurPipeline = createFullscreenPipeline(renderer, ClassId, "RTR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_compositePipeline = createFullscreenPipeline(renderer, ClassId, "RTR_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
+		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
+		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
+		m_compositePipeline = this->createFullscreenPipeline(ClassId, "RTR_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
 		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr || m_compositePipeline == nullptr )
 		{
@@ -628,7 +625,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto & pool = renderer.descriptorPool();
 
 		/* Trace: set 1 reads depth + normals (updated per-frame). */
-		m_tracePerFrame = createPerFrameDescriptorSets(renderer, traceInputLayout, ClassId, "Trace_DescSet");
+		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
 		if ( m_tracePerFrame.empty() )
 		{
@@ -664,22 +661,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Composite: reads color (per-frame) + blurred RTR (fixed). */
-		m_compositePerFrame = createPerFrameDescriptorSets(renderer, compositeLayout, ClassId, "Composite_DescSet");
+		m_compositePerFrame = this->createPerFrameDescriptorSets(compositeLayout, ClassId, "Composite_DescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
 			return false;
 		}
 
-		for ( auto & ds : m_compositePerFrame )
+		for ( const auto & descriptorSet : m_compositePerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}
 		}
-
-		m_renderer = &renderer;
 
 		return true;
 	}
@@ -691,8 +686,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_tracePerFrame.clear();
 		m_blurVDescSet.reset();
 		m_blurHDescSet.reset();
-
-		m_renderer = nullptr;
 
 		m_compositePipeline.reset();
 		m_blurPipeline.reset();
@@ -708,16 +701,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTR::execute (
-		const CommandBuffer & commandBuffer,
-		const TextureInterface & inputColor,
-		const TextureInterface * inputDepth,
-		const TextureInterface * inputNormals,
-		const TextureInterface * inputMaterialProperties,
-		const PostProcessor::PushConstants & constants
-	) noexcept
+	RTR::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
-		const auto frameIndex = m_renderer->currentFrameIndex();
+		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update depth + normals descriptors for this frame's trace pass. */
 		if ( inputDepth != nullptr )
@@ -745,8 +731,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * CRITICAL: Use the readStateIndex to get the SAME view matrix that produced
 			 * the depth buffer. Using logicState would read the next tick's camera position,
 			 * causing world position mismatch → flickering reflections. */
-			const auto readStateIndex = m_renderer->currentReadStateIndex();
-			const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+			const auto readStateIndex = this->renderer().currentReadStateIndex();
+			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 			const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 			const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 			const auto invViewProj = (projMat * viewMat).inverse();
@@ -772,7 +758,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.maxDistance = m_parameters.maxDistance,
 				.intensity = m_parameters.intensity,
 				.fadeScreenEdge = m_parameters.fadeScreenEdge,
-				.lightCount = m_renderer->rtLightCount()
+				.lightCount = this->renderer().rtLightCount()
 			};
 
 			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures) per-frame. */
@@ -806,9 +792,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			);
 
 			/* Bind set 0: RT descriptor set (TLAS + SSBOs). */
-			const auto * rtDescSet = m_renderer->rtDescriptorSet();
-
-			if ( rtDescSet != nullptr )
+			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
 			{
 				commandBuffer.bind(*rtDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 			}
@@ -817,9 +801,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
 
 			/* Bind set 2: Bindless textures. */
-			const auto * bindlessDescSet = m_renderer->bindlessTextureManager().descriptorSet();
-
-			if ( bindlessDescSet != nullptr )
+			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
 			{
 				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
 			}
@@ -838,9 +820,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 0.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_blurHTarget, *m_blurPipeline, *m_blurLayout,
-				*m_blurHDescSet, &blurH, sizeof(BlurPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurHTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurHDescSet,
+				&blurH,
+				sizeof(BlurPushConstants)
 			);
 		}
 
@@ -853,9 +840,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.directionY = 1.0F
 			};
 
-			recordFullscreenPass(
-				commandBuffer, m_blurVTarget, *m_blurPipeline, *m_blurLayout,
-				*m_blurVDescSet, &blurV, sizeof(BlurPushConstants)
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_blurVTarget,
+				*m_blurPipeline,
+				*m_blurLayout,
+				*m_blurVDescSet,
+				&blurV,
+				sizeof(BlurPushConstants)
 			);
 		}
 
@@ -868,7 +860,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.padding3 = 0.0F
 			};
 
-			recordFullscreenPass(
+			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer, m_outputTarget, *m_compositePipeline, *m_compositeLayout,
 				*m_compositePerFrame[frameIndex], &comp, sizeof(CompositePushConstants)
 			);
