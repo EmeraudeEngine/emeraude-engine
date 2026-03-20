@@ -20,6 +20,7 @@ Context for developing Emeraude Engine utility libraries.
 - Simple implementations of classic algorithms
 - Optimized for real-time usage
 - **DiamondSquare**: Procedural terrain heightmap generation (see below)
+- **DelaunayTriangulation**: Constrained Delaunay 2D triangulation with boundary polygon filtering (Bowyer-Watson + ray-casting interior test)
 
 **Compression/** - Compression/decompression abstraction
 - Standardized data compression logic
@@ -73,6 +74,9 @@ Context for developing Emeraude Engine utility libraries.
 - Geometric transformations
 - Normal, tangent, UV calculations
 - **Grid**: Terrain height/normal queries with edge clamping (see below)
+- **Shape**: Core geometry container with `BoundaryLoop` support, `surfaceArea()`, `volume()`, `isSurfaceOpened()`
+- **ShapeProcessor**: Geometry analysis and modification (vertex dedup, boundary loop detection, ear-clipping sealing)
+- **ShapeSplitter**: Plane-based geometry splitting with optional integrated cap sealing (`sealCut` option)
 - Format handlers: Native (ee3d), OBJ, STL, MDx (MDL/MD2/MD3/MD5)
 - MDx formats are read-only (no write support)
 - See: `VertexFactory/FileIO.hpp`, `VertexFactory/StreamIO.hpp`
@@ -640,6 +644,58 @@ Both delegate to `FileFormatInterface::readStream(ByteStream &, ...)` / `writeSt
 | `WaveFactory/StreamIO.hpp` | Audio memory buffer I/O (libsndfile only) |
 | `VertexFactory/FileIO.hpp` | Geometry file dispatcher (Native, OBJ, STL, MDx) |
 | `VertexFactory/StreamIO.hpp` | Geometry memory buffer I/O (Native ee3d only) |
+
+## VertexFactory: Shape Splitting, Boundary Loops and Sealing
+
+### BoundaryLoop (Shape member)
+
+`Shape` stores boundary loops as `std::vector<BoundaryLoop<index_data_t>>` — ordered sequences of vertex indices forming open edges. Populated by:
+1. **ShapeSplitter** (automatic, during plane split with `sealCut=false`)
+2. **ShapeProcessor::findBoundaryLoops()** (on-demand analysis of any geometry)
+
+Key Shape methods:
+- `boundaryLoops()` — const/mutable access
+- `isSurfaceOpened()` — true if boundary loops exist
+- `boundaryLoopsAnalyzed()` — true if analysis was performed (distinguishes "no holes" from "not checked")
+- `surfaceArea()` — sum of triangle areas (squared units)
+- `volume()` — divergence theorem (cubic units, returns 0 if surface is open)
+
+### ShapeSplitter
+
+Splits a shape by a plane into front/back parts. Key features:
+- **`sealCut` option**: When true, automatically seals cut surfaces via `ShapeProcessor`
+- **Boundary edge collection**: Intersection vertex pairs collected during triangle clipping
+- **Spatial dedup**: Quantized position keys merge vertices from different code paths (`getOrCopyVertex` vs `getOrCreateIntersectionVertex`)
+- **Angle-based loop chaining**: At T-junctions, picks the neighbor with straightest continuation (highest dot product between incoming/outgoing directions)
+- **Loop merging**: Adjacent loops with close endpoints are concatenated (handles 4 endpoint combinations with auto-reversal)
+- **Mirror strategy**: Back part produces cleaner boundary loops (no on-plane triangle artifacts), mirrored to front part by position matching
+
+Code references:
+- `ShapeSplitter.hpp:split()` — Main entry point
+- `ShapeSplitter.hpp:chainBoundaryEdges()` — Spatial dedup + angle-based chaining + merge
+- `ShapeSplitter.hpp:mirrorBoundaryLoops()` — Position-based loop remapping from back to front
+- `ShapeSplitter.hpp:sealCutSurface()` — Delegates to `ShapeProcessor::sealAllBoundaryLoops()`
+
+### ShapeProcessor
+
+Geometry analysis and modification on a `Shape` reference:
+- **`deduplicateVertices()`**: Quantization-based vertex merge with index remapping
+- **`findBoundaryLoops()`**: Edge counting + canonical position map + angle-based chaining + loop merging
+- **`sealBoundaryLoop()`**: Ear-clipping triangulation (O(n·r)) with:
+  - 2D projection via orthonormal basis from cap normal
+  - CCW winding enforcement
+  - Reflex/ear classification with only-reflex containment test
+  - New cap vertices with correct normal + planar UV projection (square, normalized [0,1])
+  - Reversed winding (CBA) for Vulkan CCW front-face convention
+- **`sealAllBoundaryLoops()`**: Uses pre-computed `Shape::boundaryLoops()` if available, falls back to `findBoundaryLoops()`
+
+### Algorithms: DelaunayTriangulation
+
+Bowyer-Watson incremental Delaunay triangulation with constrained boundary:
+- Super-triangle enclosure → incremental point insertion → circumcircle invalidation
+- Post-filter: remove triangles outside boundary polygon (ray-casting centroid test)
+- Template on `data_t` (float/double precision)
+- Located in `Algorithms/DelaunayTriangulation.hpp` (standalone, generic)
 
 ## Detailed Documentation
 

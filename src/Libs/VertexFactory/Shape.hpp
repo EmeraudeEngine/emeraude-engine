@@ -56,6 +56,17 @@
 namespace EmEn::Libs::VertexFactory
 {
 	/**
+	 * @brief A boundary loop representing an ordered sequence of vertex indices forming a hole in a shape.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
+	 */
+	template< typename index_data_t = uint32_t >
+	requires (std::is_unsigned_v< index_data_t >)
+	struct BoundaryLoop final
+	{
+		std::vector< index_data_t > vertexIndices;
+	};
+
+	/**
 	 * @brief The shape class for defining a complete geometry.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
 	 * @tparam index_data_t The precision type of index data. Default uint32_t.
@@ -189,6 +200,8 @@ namespace EmEn::Libs::VertexFactory
 				m_vertexColors.clear();
 				m_triangles.clear();
 				m_edges.clear();
+				m_boundaryLoops.clear();
+				m_boundaryLoopsAnalyzed = false;
 				m_groups.clear();
 				m_groups.resize(1);
 				m_boundingBox.reset();
@@ -312,6 +325,77 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Gives access to the boundary loops list.
+			 * @return const std::vector< BoundaryLoop< index_data_t > > &
+			 */
+			[[nodiscard]]
+			const std::vector< BoundaryLoop< index_data_t > > &
+			boundaryLoops () const noexcept
+			{
+				return m_boundaryLoops;
+			}
+
+			/**
+			 * @brief Gives mutable access to the boundary loops list.
+			 * @return std::vector< BoundaryLoop< index_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< BoundaryLoop< index_data_t > > &
+			boundaryLoops () noexcept
+			{
+				return m_boundaryLoops;
+			}
+
+			/**
+			 * @brief Clears all boundary loops.
+			 * @return void
+			 */
+			void
+			clearBoundaryLoops () noexcept
+			{
+				m_boundaryLoops.clear();
+				m_boundaryLoopsAnalyzed = false;
+			}
+
+			/**
+			 * @brief Returns whether the surface has known openings (boundary loops).
+			 * @note Returns false if boundary loops have never been analyzed or set.
+			 * Use analyzeBoundaryLoops() first, or check boundaryLoopsAnalyzed() to know
+			 * if the result is meaningful.
+			 * @return bool True if the shape has at least one boundary loop.
+			 */
+			[[nodiscard]]
+			bool
+			isSurfaceOpened () const noexcept
+			{
+				return !m_boundaryLoops.empty();
+			}
+
+			/**
+			 * @brief Returns whether boundary loops have been analyzed or explicitly set.
+			 * @note A shape loaded from a file will return false until boundary loops are
+			 * analyzed or set by a processor (e.g. ShapeSplitter).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			boundaryLoopsAnalyzed () const noexcept
+			{
+				return m_boundaryLoopsAnalyzed;
+			}
+
+			/**
+			 * @brief Marks the boundary loops as having been analyzed.
+			 * @note Called automatically by analyzeBoundaryLoops() and by ShapeSplitter.
+			 * @return void
+			 */
+			void
+			setBoundaryLoopsAnalyzed () noexcept
+			{
+				m_boundaryLoopsAnalyzed = true;
+			}
+
+			/**
 			 * @brief Gives access to the bounding box.
 			 * @return const Math::Space3D::AACuboid< vertex_data_t > &
 			 */
@@ -357,11 +441,22 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the group list the geometry is composed of.
-			 * @return std::vector< std::pair< index_data_t, index_data_t > > &
+			 * @return const std::vector< std::pair< index_data_t, index_data_t > > &
 			 */
 			[[nodiscard]]
 			const std::vector< std::pair< index_data_t, index_data_t > > &
 			groups () const noexcept
+			{
+				return m_groups;
+			}
+
+			/**
+			 * @brief Gives mutable access to the group list.
+			 * @return std::vector< std::pair< index_data_t, index_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< std::pair< index_data_t, index_data_t > > &
+			groups () noexcept
 			{
 				return m_groups;
 			}
@@ -386,6 +481,57 @@ namespace EmEn::Libs::VertexFactory
 			farthestDistance () const noexcept
 			{
 				return m_farthestDistance;
+			}
+
+			/**
+			 * @brief Computes the total surface area of the geometry.
+			 * @return vertex_data_t The surface area in squared units.
+			 */
+			[[nodiscard]]
+			vertex_data_t
+			surfaceArea () const noexcept
+			{
+				vertex_data_t area = 0;
+
+				for ( const auto & tri : m_triangles )
+				{
+					const auto & a = m_vertices[tri.vertexIndex(0)].position();
+					const auto & b = m_vertices[tri.vertexIndex(1)].position();
+					const auto & c = m_vertices[tri.vertexIndex(2)].position();
+
+					area += Math::Vector< 3, vertex_data_t >::crossProduct(b - a, c - a).length() * static_cast< vertex_data_t >(0.5);
+				}
+
+				return area;
+			}
+
+			/**
+			 * @brief Computes the volume of the geometry using the divergence theorem.
+			 * @note Only meaningful for closed (watertight) surfaces. Returns 0 if
+			 * boundary loops are known to exist (open surface).
+			 * @return vertex_data_t The volume in cubic units.
+			 */
+			[[nodiscard]]
+			vertex_data_t
+			volume () const noexcept
+			{
+				if ( m_boundaryLoopsAnalyzed && !m_boundaryLoops.empty() )
+				{
+					return 0;
+				}
+
+				vertex_data_t vol = 0;
+
+				for ( const auto & tri : m_triangles )
+				{
+					const auto & a = m_vertices[tri.vertexIndex(0)].position();
+					const auto & b = m_vertices[tri.vertexIndex(1)].position();
+					const auto & c = m_vertices[tri.vertexIndex(2)].position();
+
+					vol += Math::Vector< 3, vertex_data_t >::dotProduct(a, Math::Vector< 3, vertex_data_t >::crossProduct(b, c));
+				}
+
+				return std::abs(vol) / static_cast< vertex_data_t >(6);
 			}
 
 			/**
@@ -456,6 +602,17 @@ namespace EmEn::Libs::VertexFactory
 			declareNormalsAvailable () noexcept
 			{
 				m_normalsDeclared = true;
+			}
+
+			/**
+			 * @brief Declares that texture coordinates are available.
+			 * @note Use this after generating UVs externally (e.g., UV unwrapping).
+			 * @return void
+			 */
+			void
+			declareTextureCoordinatesAvailable () noexcept
+			{
+				m_textureCoordinatesDeclared = true;
 			}
 
 			/**
@@ -1982,6 +2139,7 @@ namespace EmEn::Libs::VertexFactory
 			std::vector< Math::Vector< 4, vertex_data_t > > m_vertexColors;
 			std::vector< ShapeTriangle< vertex_data_t, index_data_t > > m_triangles;
 			std::vector< ShapeEdge< index_data_t > > m_edges;
+			std::vector< BoundaryLoop< index_data_t > > m_boundaryLoops;
 			Math::Space3D::AACuboid< vertex_data_t > m_boundingBox;
 			Math::Space3D::Sphere< vertex_data_t > m_boundingSphere;
 			/* NOTE: This is the max distance between [0,0,0] and the farthest vertex.
@@ -1990,5 +2148,6 @@ namespace EmEn::Libs::VertexFactory
 			bool m_textureCoordinatesDeclared{false};
 			bool m_normalsDeclared{false};
 			bool m_computeEdges{false};
+			bool m_boundaryLoopsAnalyzed{false};
 	};
 }

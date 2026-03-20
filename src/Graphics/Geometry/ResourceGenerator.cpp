@@ -42,8 +42,10 @@ namespace EmEn::Graphics::Geometry
 	std::shared_ptr< IndexedVertexResource >
 	ResourceGenerator::shape (const Shape< float > & shape, const std::string & resourceName) const noexcept
 	{
+		/* NOTE: Capture shape by value — the lambda may execute asynchronously
+		 * in a thread pool worker after the caller's Shape has been destroyed. */
 		return m_resources.container< IndexedVertexResource >()
-			->getOrCreateResource(resourceName, [&shape] (auto & geometryResource) {
+			->getOrCreateResource(resourceName, [shape] (auto & geometryResource) {
 				return geometryResource.load(shape);
 			}, m_generationParameters.geometryFlags());
 	}

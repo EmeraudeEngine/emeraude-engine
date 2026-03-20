@@ -57,7 +57,9 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			explicit
 			ShapeVertex (const Math::Vector< 3, vertex_data_t > & position, const Math::Vector< 3, vertex_data_t > & normal = Math::Vector< 3, vertex_data_t >::positiveZ(), const Math::Vector< 3, vertex_data_t > & textureCoordinates = {}) noexcept
-				: m_position(position), m_normal(normal), m_textureCoordinates(textureCoordinates)
+				: m_position{position},
+				m_normal{normal},
+				m_textureCoordinates{textureCoordinates}
 			{
 
 			}

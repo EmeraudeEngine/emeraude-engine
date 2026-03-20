@@ -62,7 +62,7 @@ namespace EmEn::Libs::Math
 			 */
 			Plane (const Vector< 3, data_t > & direction, const Vector< 3, data_t > & point)
 				: m_normal(direction.normalized()),
-				m_distance(-m_normal.dotProduct(point))
+				m_distance(-Vector< 3, data_t >::dotProduct(m_normal, point))
 			{
 
 			}
@@ -75,7 +75,7 @@ namespace EmEn::Libs::Math
 			 */
 			Plane (const Vector< 3, data_t > & pointA, const Vector< 3, data_t > & pointB, const Vector< 3, data_t > & pointC)
 				: m_normal(Vector< 3, data_t >::normal(pointA, pointB, pointC)),
-				m_distance(-m_normal.dotProduct(pointA))
+				m_distance(-Vector< 3, data_t >::dotProduct(m_normal, pointA))
 			{
 
 			}
