@@ -43,6 +43,7 @@
 #include <mutex>
 #include <filesystem>
 #include <source_location>
+#include <functional>
 
 /* Local inclusions for usages. */
 #include "Libs/BlobTrait.hpp"
@@ -788,6 +789,19 @@ namespace EmEn
 
 		public:
 
+			using Sink = std::function<void(Severity, const char*, std::string_view)>;
+
+			/**
+			 * @brief Adds a custom sink to receive all logs.
+			 * @param sink The callback receiving logs.
+			 */
+			void addSink(Sink sink) noexcept;
+
+			/**
+			 * @brief Clears all registered sinks.
+			 */
+			void removeAllSinks() noexcept;
+
 			/**
 			 * @brief Private constructor accessible only through PrivateToken.
 			 *
@@ -843,6 +857,7 @@ namespace EmEn
 			LogFormat m_logFormat{LogFormat::Text};
 			bool m_serviceInitialized{false};
 			bool m_isChildProcess{false};
+			std::vector<Sink> m_sinks;
 			bool m_printOnlyErrors{false};
 			bool m_sourceLocationEnabled{false};
 			bool m_threadInfosEnabled{false};

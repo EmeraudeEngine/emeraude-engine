@@ -846,7 +846,7 @@ void main()
 	}
 
 	void
-	XRayAnalyzer::scanAll (uint32_t sliceCount, const std::function< void (uint32_t, const Pixmap< uint8_t > &) > & callback) noexcept
+	XRayAnalyzer::scanAll (uint32_t sliceCount, const std::function< void (uint32_t, const Pixmap< uint8_t > &) > & callback, bool unpackPixels) noexcept
 	{
 		auto & d = *m_impl;
 
@@ -864,8 +864,9 @@ void main()
 		/* CPU-side buffer for packed bits readback. */
 		std::vector< uint32_t > packedData(packedWordCount);
 
-		/* Dummy pixmap for callback signature (empty — timing mode). */
+		/* Empty pixmap for benchmark mode (unpackPixels == false). */
 		Pixmap< uint8_t > dummyOutput;
+		Pixmap< uint8_t > unpackedOutput;
 
 		/* Precompute constants outside the loop. */
 		const auto pixelStepX = d.squareSize / static_cast< float >(res);
@@ -959,7 +960,30 @@ void main()
 				d.stagingBuffer->unmapMemory();
 			}
 
-			callback(i, dummyOutput);
+			if ( unpackPixels )
+			{
+				/* Unpack 1-bit-per-pixel packed data into Grayscale pixmap. */
+				unpackedOutput = Pixmap< uint8_t >(res, res, ChannelMode::Grayscale, Color< float >{0.0F, 0.0F, 0.0F, 1.0F});
+
+				auto * pixels = unpackedOutput.data().data();
+
+				for ( size_t idx = 0; idx < totalPixels; ++idx )
+				{
+					const auto word = packedData[idx >> 5];
+					const auto bit = idx & 31;
+
+					if ( (word >> bit) & 1 )
+					{
+						pixels[idx] = 255;
+					}
+				}
+
+				callback(i, unpackedOutput);
+			}
+			else
+			{
+				callback(i, dummyOutput);
+			}
 		}
 	}
 }

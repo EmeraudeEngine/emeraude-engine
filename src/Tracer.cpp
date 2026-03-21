@@ -429,6 +429,14 @@ namespace EmEn
 			m_logger->push(severity, tag, std::string{message}, location);
 		}
 
+		{
+			const std::lock_guard< std::mutex > sinkLock{m_consoleAccess};
+			for (const auto& sink : m_sinks)
+			{
+				sink(severity, tag, message);
+			}
+		}
+
 		std::stringstream trace;
 
 		trace << '[' << to_string(severity) << "][" << tag << ']';
@@ -475,6 +483,14 @@ namespace EmEn
 			logMessage << functionName << "() : " << message;
 
 			m_logger->push(Severity::Info, tag, logMessage.str(), location);
+		}
+
+		{
+			const std::lock_guard< std::mutex > sinkLock{m_consoleAccess};
+			for (const auto& sink : m_sinks)
+			{
+				sink(Severity::Info, tag, message.empty() ? std::string(functionName) + "() called !" : std::string(functionName) + "() : " + std::string(message));
+			}
 		}
 
 		std::stringstream trace;
@@ -566,5 +582,19 @@ namespace EmEn
 				stream << ' ' << message << ' ';
 				break;
 		}
+	}
+
+	void
+	Tracer::addSink(Sink sink) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+		m_sinks.emplace_back(std::move(sink));
+	}
+
+	void
+	Tracer::removeAllSinks() noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+		m_sinks.clear();
 	}
 }

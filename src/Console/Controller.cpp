@@ -39,12 +39,33 @@ namespace EmEn::Console
 	bool
 	Controller::onInitialize () noexcept
 	{
+#ifdef ASIO_ENABLED
+		m_remoteListener = std::make_unique<RemoteListener>(7777); 
+		m_remoteListener->start();
+
+		Tracer::getInstance().addSink([this](Severity severity, const char* tag, std::string_view message) {
+			if (m_remoteListener)
+			{
+				std::stringstream ss;
+				ss << "[" << to_string(severity) << "][" << tag << "] " << message;
+				m_remoteListener->broadcast(ss.str());
+			}
+		});
+#endif
 		return true;
 	}
 
 	bool
 	Controller::onTerminate () noexcept
 	{
+#ifdef ASIO_ENABLED
+		Tracer::getInstance().removeAllSinks();
+		if (m_remoteListener)
+		{
+			m_remoteListener->stop();
+			m_remoteListener.reset();
+		}
+#endif
 		m_consoleObjects.clear();
 
 		return true;
@@ -144,6 +165,45 @@ namespace EmEn::Console
 
 			break;
 		}
+	}
+
+	void
+	Controller::executeCommand (const std::string & fullCommand) noexcept
+	{
+		Outputs tempOutputs;
+
+		this->executeCommand(fullCommand, tempOutputs);
+
+		for (const auto & output : tempOutputs)
+		{
+			if (output.severity() == Severity::Error || output.severity() == Severity::Fatal)
+			{
+				Tracer::error(ClassId, output.message());
+			}
+			else if (output.severity() == Severity::Warning)
+			{
+				Tracer::warning(ClassId, output.message());
+			}
+			else
+			{
+				Tracer::info(ClassId, output.message());
+			}
+		}
+	}
+
+	void
+	Controller::poll () noexcept
+	{
+#ifdef ASIO_ENABLED
+		if (m_remoteListener)
+		{
+			std::string command;
+			while (m_remoteListener->popCommand(command))
+			{
+				this->executeCommand(command);
+			}
+		}
+#endif
 	}
 
 	bool

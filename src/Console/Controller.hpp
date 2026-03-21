@@ -38,6 +38,10 @@
 #include "Output.hpp"
 #include "ControllableTrait.hpp"
 
+#ifdef ASIO_ENABLED
+#include "RemoteListener.hpp"
+#endif
+
 /* Forward declarations */
 namespace EmEn
 {
@@ -153,11 +157,23 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Executes a command.
+			 * @param fullCommand A reference to a string holding the raw command.
+			 * @return void
+			 */
+			void executeCommand (const std::string & fullCommand) noexcept;
+
+			/**
+			 * @brief Executes a command and collects outputs.
 			 * @param command A reference to a string holding the raw command.
 			 * @param outputs A writable reference to a vector of console outputs.
 			 * @return bool
 			 */
 			bool executeCommand (const std::string & command, Outputs & outputs) noexcept;
+
+			/**
+			 * @brief Polls pending remote console commands.
+			 */
+			void poll () noexcept;
 
 			/**
 			 * @brief Returns the instance of the console controller.
@@ -211,5 +227,10 @@ namespace EmEn::Console
 			std::vector< std::string > m_history;
 			bool m_directInputWasEnabled{false};
 			bool m_pointerWasLocked{false};
+
+
+#ifdef ASIO_ENABLED
+			std::unique_ptr<RemoteListener> m_remoteListener;
+#endif
 	};
 }

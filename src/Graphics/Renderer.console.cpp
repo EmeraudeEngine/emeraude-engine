@@ -26,11 +26,79 @@
 
 #include "Renderer.hpp"
 
+/* STL inclusions. */
+#include <chrono>
+#include <sstream>
+
+/* Local inclusions. */
+#include "Libs/PixelFactory/FileIO.hpp"
+#include "Libs/IO/IO.hpp"
+#include "FileSystem.hpp"
+#include "PrimaryServices.hpp"
+#include "Vulkan/SwapChain.hpp"
+
 namespace EmEn::Graphics
 {
+	using namespace Libs;
+
 	void
 	Renderer::onRegisterToConsole () noexcept
 	{
+		this->bindCommand("screenshot", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* Gets the capture directory. */
+			auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
 
+			if ( !IO::writable(captureDirectory) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write in captures directory " << captureDirectory);
+
+				return false;
+			}
+
+			std::array< PixelFactory::Pixmap< uint8_t >, 3 > images{};
+
+			if ( !this->captureFramebuffer(images, false, false) || !images[0].isValid() )
+			{
+				outputs.emplace_back(Severity::Error, "Framebuffer capture failed !");
+
+				return false;
+			}
+
+			std::stringstream filename;
+			filename << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
+
+			const auto filepath = captureDirectory.append(filename.str());
+
+			if ( !PixelFactory::FileIO::write(images[0], filepath) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write screenshot to " << filepath);
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Screenshot saved: " << filepath);
+
+			return true;
+		}, "Captures the current framebuffer and saves it as a PNG.");
+
+		this->bindCommand("getStatus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			const auto & stats = this->statistics();
+
+			std::stringstream status;
+			status << "Renderer status:" "\n";
+			status << "  FPS: " << stats.executionsPerSecond() << " (avg: " << stats.averageExecutionsPerSecond() << ")" "\n";
+			status << "  Frame time: " << stats.duration() << " ms (avg: " << stats.averageDuration() << " ms)" "\n";
+			status << "  Frames in flight: " << this->framesInFlight() << "\n";
+
+			if ( m_swapChain != nullptr )
+			{
+				const auto extent = m_swapChain->extent();
+				status << "  Resolution: " << extent.width << "x" << extent.height << "\n";
+			}
+
+			outputs.emplace_back(Severity::Info, status.str());
+
+			return true;
+		}, "Returns renderer statistics (FPS, frame time, resolution).");
 	}
 }

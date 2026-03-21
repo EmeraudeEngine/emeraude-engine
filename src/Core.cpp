@@ -338,6 +338,7 @@ namespace EmEn
 			}
 
 			/* Let the child class get the call event from the main loop. */
+			m_consoleController.poll();
 			this->onCoreMainLoopCycle();
 
 			/* NOTE: Checks whether the engine is running or paused.
@@ -353,6 +354,7 @@ namespace EmEn
 				while ( m_paused )
 				{
 					/* Let the child class get the call event from the main loop. */
+					m_consoleController.poll();
 					this->onCoreMainLoopCycle();
 
 					m_inputManager.waitSystemEvents();

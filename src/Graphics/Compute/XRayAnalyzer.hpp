@@ -112,8 +112,11 @@ namespace EmEn::Graphics::Compute
 			 * @brief Scans all slices using single-pass ray casting on GPU.
 			 * @param sliceCount Number of slices.
 			 * @param callback Called for each completed slice.
+			 * @param unpackPixels When true, unpacks packed 1-bit GPU output into a Grayscale pixmap
+			 *        passed to the callback. When false (default), the callback receives an empty
+			 *        pixmap (benchmark/timing mode only).
 			 */
-			void scanAll (uint32_t sliceCount, const std::function< void (uint32_t, const Libs::PixelFactory::Pixmap< uint8_t > &) > & callback) noexcept;
+			void scanAll (uint32_t sliceCount, const std::function< void (uint32_t, const Libs::PixelFactory::Pixmap< uint8_t > &) > & callback, bool unpackPixels = false) noexcept;
 
 		private:
 

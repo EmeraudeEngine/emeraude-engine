@@ -29,6 +29,9 @@
 /* STL inclusions. */
 #include <ranges>
 
+/* Local inclusions. */
+#include "Component/Camera.hpp"
+
 namespace EmEn::Scenes
 {
 	using namespace Libs;
@@ -255,5 +258,92 @@ namespace EmEn::Scenes
 
 			return true;
 		});
+
+		this->bindCommand("getSceneInfo", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto & scene = *m_activeScene;
+
+			size_t nodeCount = 0;
+			size_t staticEntityCount = 0;
+
+			nodeCount = scene.root()->children().size();
+
+			scene.forEachStaticEntities([&staticEntityCount] (const auto &) {
+				++staticEntityCount;
+			});
+
+			const auto * camera = scene.activeCamera();
+
+			std::stringstream info;
+			info << "Scene: " << scene.name() << "\n";
+			info << "  Nodes: " << nodeCount << "\n";
+			info << "  Static entities: " << staticEntityCount << "\n";
+			info << "  Active camera: " << (camera != nullptr ? camera->name() : "none") << "\n";
+
+			outputs.emplace_back(Severity::Info, info.str());
+
+			return true;
+		}, "Returns scene information (name, node count, entity count, active camera).");
+
+		this->bindCommand("setCameraPosition", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 3 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: setCameraPosition(x, y, z [, fx, fy, fz])");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto * camera = m_activeScene->activeCamera();
+
+			if ( camera == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active camera !");
+
+				return false;
+			}
+
+			/* Find the node that holds the camera entity. */
+			auto cameraNode = m_activeScene->root()->findChild(camera->parentEntity().name());
+
+			if ( cameraNode == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "Camera node not found !");
+
+				return false;
+			}
+
+			const auto x = arguments[0].asFloat();
+			const auto y = arguments[1].asFloat();
+			const auto z = arguments[2].asFloat();
+
+			cameraNode->setPosition({x, y, z}, Math::TransformSpace::World);
+
+			if ( arguments.size() >= 6 )
+			{
+				const auto fx = arguments[3].asFloat();
+				const auto fy = arguments[4].asFloat();
+				const auto fz = arguments[5].asFloat();
+
+				const Math::Vector< 3, float > target{x + fx, y + fy, z + fz};
+				cameraNode->lookAt(target, false);
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Camera moved to (" << x << ", " << y << ", " << z << ")");
+
+			return true;
+		}, "Moves camera. Usage: setCameraPosition(x, y, z [, fx, fy, fz]) where f* is the forward direction.");
 	}
 }
