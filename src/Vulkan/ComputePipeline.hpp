@@ -118,6 +118,24 @@ namespace EmEn::Vulkan
 			bool destroyFromHardware () noexcept override;
 
 			/**
+			 * @brief Sets the compute shader module for this pipeline.
+			 * @param shaderModule The compiled compute shader module handle.
+			 * @param entryPoint The shader entry point name. Default "main".
+			 * @return void
+			 */
+			void
+			setShaderModule (VkShaderModule shaderModule, const char * entryPoint = "main") noexcept
+			{
+				m_createInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+				m_createInfo.stage.pNext = nullptr;
+				m_createInfo.stage.flags = 0;
+				m_createInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+				m_createInfo.stage.module = shaderModule;
+				m_createInfo.stage.pName = entryPoint;
+				m_createInfo.stage.pSpecializationInfo = nullptr;
+			}
+
+			/**
 			 * @brief Returns the pipeline vulkan handle.
 			 * @return VkPipeline
 			 */

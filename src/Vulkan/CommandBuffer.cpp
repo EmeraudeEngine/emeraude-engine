@@ -1041,6 +1041,22 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::dispatch (uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created ! Unable to dispatch compute.");
+
+				return;
+			}
+		}
+
+		vkCmdDispatch(m_handle, groupCountX, groupCountY, groupCountZ);
+	}
+
+	void
 	CommandBuffer::bind (const VertexBufferObject & vertexBufferObject, VkDeviceSize offset) const noexcept
 	{
 		if constexpr ( IsDebug )

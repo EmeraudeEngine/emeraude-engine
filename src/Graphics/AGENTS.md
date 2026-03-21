@@ -1231,3 +1231,38 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 -   **Post-Processing**: See [Section 12](#12-post-processing-effects) - RTR, SSR, ContactShadows, SSAO, Bloom, DoF, AtmosphericFog, VolumetricLight, LensFlare, ToneMapping
 -   **Instance Program Cache**: See [Section 15](#15-instance-local-program-cache-renderableinstance) - Per-instance resolved program cache
 -   **Frame Sync**: See [Section 16](#16-frame-synchronization--double-buffering) - Per-frame buffers, view matrix state index
+-   **Compute Shaders**: See below - GPU compute pipeline for non-rendering workloads
+
+## GPU Compute Pipeline (Graphics/Compute/)
+
+### Infrastructure
+
+The engine supports Vulkan compute shaders via:
+- `Vulkan::ComputePipeline` — Compute pipeline with `setShaderModule()` for shader stage init
+- `Vulkan::CommandBuffer::dispatch()` — Compute shader dispatch (vkCmdDispatch wrapper)
+- `Saphir::ShaderManager::getShaderModuleFromSourceCode()` — Runtime GLSL→SPIRV compilation
+
+### Graphics/Compute/XRayAnalyzer
+
+GPU-accelerated volumetric cross-section scanner using Vulkan compute shaders:
+- **GLSL compute shader**: 16×16 workgroups, Möller-Trumbore ray-triangle intersection
+- **Spatial grid SSBO**: 128² cells with triangle index lookup (avoids brute-force 150K tests per pixel)
+- **Bit-packed output**: 32 pixels per uint32 (32× memory reduction vs raw pixels)
+- **Device-local output SSBO** + **host-cached staging buffer** for fast PCIe readback
+- **Push constants**: Per-slice depth, resolution, grid parameters
+- **Pipeline barriers**: compute→transfer→host for correct synchronization
+- **Performance**: 46ms/slice at 16K×16K on RTX 3070 Ti (5.5 Gpixels/sec)
+
+Architecture:
+```
+Triangles SSBO (binding 0) ─┐
+Grid Cells SSBO (binding 2) ─┼─→ Compute Shader ─→ Output SSBO ─→ vkCmdCopyBuffer ─→ Staging Buffer ─→ memcpy ─→ CPU
+Grid Indices SSBO (binding 3)┘                    (device-local)                      (host-cached)
+```
+
+Code references:
+- `Graphics/Compute/XRayAnalyzer.hpp` — Public API (addShape, setViewpoint, prepare, scan, scanAll)
+- `Graphics/Compute/XRayAnalyzer.cpp` — Vulkan pipeline setup, GLSL source, dispatch loop
+- `Vulkan/ComputePipeline.hpp:setShaderModule()` — Shader stage initialization
+- `Vulkan/CommandBuffer.hpp:dispatch()` — vkCmdDispatch wrapper
+- `Vulkan/Buffer.hpp:setHostReadable()` — HOST_CACHED_BIT for fast CPU reads

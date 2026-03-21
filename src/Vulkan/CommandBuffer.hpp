@@ -490,6 +490,15 @@ namespace EmEn::Vulkan
 			void bind (const ComputePipeline & computePipeline) const noexcept;
 
 			/**
+			 * @brief Dispatches a compute shader.
+			 * @param groupCountX Number of workgroups in X.
+			 * @param groupCountY Number of workgroups in Y.
+			 * @param groupCountZ Number of workgroups in Z.
+			 * @return void
+			 */
+			void dispatch (uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const noexcept;
+
+			/**
 			 * @brief Binds a single vertex buffer objects.
 			 * @param vertexBufferObject A reference to a VBO.
 			 * @param offset The starting point to read the VBO. Default 0.

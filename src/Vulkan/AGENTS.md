@@ -28,6 +28,14 @@ Vulkan abstraction layer that hides API complexity while providing precise contr
 - Vulkan Y-inverted viewport handled automatically
 - No conversion in shaders
 
+### Compute Shader Support
+- `ComputePipeline` — Full compute pipeline with `setShaderModule()` for shader stage init
+- `CommandBuffer::dispatch(groupX, groupY, groupZ)` — vkCmdDispatch wrapper
+- `Buffer::setHostReadable(true)` — Enables `HOST_CACHED_BIT` for fast GPU→CPU readback
+- Use device-local SSBO for GPU writes + host-cached staging buffer + `vkCmdCopyBuffer` for optimal readback
+- `Queue::waitIdle()` for synchronous compute completion
+- Compute shaders compiled via `Saphir::ShaderManager::getShaderModuleFromSourceCode()`
+
 ### Swap-Chain Format Configuration
 
 The swap-chain surface format can be configured via settings:
