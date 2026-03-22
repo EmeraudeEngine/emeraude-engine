@@ -75,7 +75,7 @@ namespace EmEn
 
 		{
 			//m_font = m_resourceManager.container< Graphics::FontResource >()->getResource("old", false);
-			m_font = m_resourceManager.container< Graphics::FontResource >()->getDefaultResource();
+			m_font = m_overlayManager.resourceManager().container< Graphics::FontResource >()->getDefaultResource();
 
 			m_processor.setPixmap(m_surface->activePixmap());
 			m_processor.setFont(m_font->font(), 16U);

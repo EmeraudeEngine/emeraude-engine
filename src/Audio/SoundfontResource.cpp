@@ -50,7 +50,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundfontResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	SoundfontResource::load () noexcept
 	{
 		/* Neutral resource: no soundfont loaded.
 		 * MIDI rendering will fall back to additive synthesis. */
@@ -64,7 +64,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundfontResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	SoundfontResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -116,15 +116,13 @@ namespace EmEn::Audio
 			return this->setLoadSuccess(false);
 		}
 
-		TraceInfo{ClassId} <<
-			"Loaded soundfont '" << this->name() << "' with " << this->presetCount() << " presets "
-			"(" << (m_fileData.size() / 1024) << " KB).";
+		TraceDebug{ClassId} << "Loaded soundfont '" << this->name() << "' with " << this->presetCount() << " presets (" << (m_fileData.size() / 1024) << " KB).";
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	SoundfontResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
+	SoundfontResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -185,9 +183,7 @@ namespace EmEn::Audio
 			return this->setLoadSuccess(false);
 		}
 
-		TraceInfo{ClassId} <<
-			"Loaded soundfont '" << this->name() << "' with " << this->presetCount() << " presets "
-			"(" << (m_fileData.size() / 1024) << " KB).";
+		TraceDebug{ClassId} << "Loaded soundfont '" << this->name() << "' with " << this->presetCount() << " presets (" << (m_fileData.size() / 1024) << " KB).";
 
 		return this->setLoadSuccess(true);
 	}

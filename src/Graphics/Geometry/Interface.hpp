@@ -55,9 +55,6 @@ namespace EmEn::Graphics::Geometry
 	{
 		public:
 
-			/** @brief Access to the graphics renderer for loading GPU resources. */
-			static Renderer * s_graphicsRenderer;
-
 			/**
 			 * @brief Sets the acceleration structure builder for ray tracing BLAS.
 			 * @param builder A pointer to the builder. Null disables RT BLAS building.
@@ -406,11 +403,12 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Constructs an abstract geometry.
+			 * @param serviceProvider A reference to the service provider.
 			 * @param name A reference to a string for the resource name.
 			 * @param geometryFlagBits The geometry resource flag bits.
 			 */
-			Interface (const std::string & name, uint32_t geometryFlagBits) noexcept
-				: ResourceTrait{name, geometryFlagBits}
+			Interface (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t geometryFlagBits) noexcept
+				: ResourceTrait{serviceProvider, name, geometryFlagBits}
 			{
 
 			}

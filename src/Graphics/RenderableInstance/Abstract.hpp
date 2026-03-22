@@ -612,7 +612,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see pushMatricesForShadowCasting() For push constant strategy.
 			 * @version 0.8.35
 			 */
-			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.
@@ -630,7 +630,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
-		 * @param bindlessTexturesManager A pointer to the bindless textures manager for materials using automatic reflection. Can be nullptr.
+			 * @param bindlessTexturesManager A pointer to the bindless textures manager for materials using automatic reflection. Can be nullptr.
 			 *
 			 * @todo The lightEmitter parameter should be refactored to use a smart pointer for safety.
 			 *
@@ -638,7 +638,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see renderTBNSpace() For debug visualization.
 			 * @version 0.8.35
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target with state tracking to skip redundant binds.
@@ -658,11 +658,12 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
 			 * @param tracker A reference to the state tracker for redundant bind elimination.
+			 * @param LODLevel The geometry LOD level to render.
 			 * @param bindlessTexturesManager A pointer to the bindless textures manager. Can be nullptr.
 			 *
 			 * @see render() For the non-tracked version.
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
 
 			/**
 			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.
@@ -757,6 +758,7 @@ namespace EmEn::Graphics::RenderableInstance
 				: FlagTrait{flagBits},
 				m_renderable{renderable}
 			{
+
 			}
 
 			/**
@@ -788,8 +790,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see PushConstantContext::useAdvancedMatrices For lighting mode.
 			 * @see PushConstantContext::useBillboarding For sprite mode.
 			 */
-			virtual void
-			pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+			virtual void pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
 			 * @brief Returns the number of instances to draw.
@@ -810,9 +811,10 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Binds the renderable instance resources to a command buffer.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @param layerIndex The current layer to bind.
+			 * @param LODLevel The desired LOD level.
 			 * @return void
 			 */
-			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept = 0;
+			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex, uint32_t LODLevel) const noexcept = 0;
 
 			/**
 			 * @brief Returns the current animation frame index.
@@ -841,6 +843,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param renderPassType The render pass type.
 			 * @param renderPassHandle The Vulkan render pass handle for pipeline compatibility.
 			 * @param layerIndex The material layer index.
+			 * @param isMDIEnabled
 			 * @return Renderable::ProgramCacheKey
 			 */
 			[[nodiscard]]

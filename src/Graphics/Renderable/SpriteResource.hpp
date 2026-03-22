@@ -59,12 +59,12 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Construct a Sprite resource.
-			 * @param name A string for the resource name [std::move].
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			SpriteResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Abstract{std::move(name), IsSprite | renderableFlags}
+			SpriteResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), IsSprite | resourceFlags}
 			{
 
 			}
@@ -112,41 +112,31 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material != nullptr )
-				{
-					return m_material->isOpaque();
-				}
-
-				return true;
+				return m_material != nullptr ? m_material->isOpaque() : true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
 			[[nodiscard]]
 			bool
 			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material != nullptr )
-				{
-					return m_material->requiresGrabPass();
-				}
-
-				return false;
+				return m_material != nullptr ? m_material->requiresGrabPass() : false;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
-			geometry () const noexcept override
+			geometry (uint32_t /*LODIndex*/) const noexcept override
 			{
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -154,7 +144,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -162,30 +152,24 @@ namespace EmEn::Graphics::Renderable
 				return nullptr;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox(uint32_t) const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingBox;
-				}
-
-				return m_geometry->boundingBox();
+				return m_geometry != nullptr ?
+					m_geometry->boundingBox() :
+					NullBoundingBox;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere(uint32_t) const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingSphere;
-				}
-
-				return m_geometry->boundingSphere();
+				return m_geometry != nullptr ?
+					m_geometry->boundingSphere() :
+					NullBoundingSphere;
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -196,11 +180,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -212,35 +196,13 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a sprite resource from a material.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param material A reference to a material resource smart pointer.
 			 * @param centerAtBottom Set the sprite center to the bottom of the quad. Default false.
 			 * @param flip Flip the sprite picture. Default false.
 			 * @param rasterizationOptions A reference to rasterization options. Defaults.
 			 * @return bool
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
-
-			/**
-			 * @brief Sets the uniform scale of the sprite.
-			 * @param value
-			 */
-			void
-			setUniformScale (float value) noexcept
-			{
-				m_uniformScale = std::abs(value);
-			}
-
-			/**
-			 * @brief Returns the uniform scale of the sprite.
-			 * @return float
-			 */
-			[[nodiscard]]
-			float
-			uniformScale () const noexcept override
-			{
-				return m_uniformScale;
-			}
+			bool load (const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
 			 * @brief Returns the number of frames from the material.
@@ -289,13 +251,12 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Prepares the geometry resource for the sprite.
 			 * @note This geometry resource will be shared between all sprites.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param isAnimated Set texture coordinates to 3D if so.
 			 * @param centerAtBottom Set the geometry center at the bottom for specific sprites.
 			 * @param flip Flip the UV on X axis.
 			 * @return bool
 			 */
-			bool prepareGeometry (Resources::AbstractServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept;
+			bool prepareGeometry (bool isAnimated, bool centerAtBottom, bool flip) noexcept;
 
 			/**
 			 * @brief Attaches the material resource.
@@ -304,16 +265,12 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
 
-			/* JSON key. */
-			static constexpr auto JKUniformScaleKey{"UniformScale"};
-			static constexpr auto JKCenterAtBottomKey{"CenterAtBottom"};
-			static constexpr auto JKFlipKey{"Flip"};
-
 			static inline std::mutex s_lockGeometryLoading;
+
+			static constexpr uint32_t MaxFrames{120};
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			float m_uniformScale{1.0F};
 	};
 }
 

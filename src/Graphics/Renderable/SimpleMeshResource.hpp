@@ -27,12 +27,15 @@
 #pragma once
 
 /* STL inclusions. */
+#include <future>
 #include <memory>
+#include <mutex>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -57,12 +60,12 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Constructs a simple mesh resource.
-			 * @param name A string for the resource name [std::move].
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			SimpleMeshResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Abstract{std::move(name), renderableFlags}
+			SimpleMeshResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -102,11 +105,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -132,41 +135,27 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material != nullptr )
-				{
-					return m_material->isOpaque();
-				}
-
-				return true;
+				return m_material != nullptr ? m_material->isOpaque() : true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
 			[[nodiscard]]
 			bool
 			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material != nullptr )
-				{
-					return m_material->requiresGrabPass();
-				}
-
-				return false;
+				return m_material != nullptr ? m_material->requiresGrabPass() : false;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
-			const Geometry::Interface *
-			geometry () const noexcept override
-			{
-				return m_geometry.get();
-			}
+			const Geometry::Interface * geometry (uint32_t LODIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -174,7 +163,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -187,12 +176,9 @@ namespace EmEn::Graphics::Renderable
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingBox;
-				}
-
-				return m_geometry->boundingBox();
+				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+					m_geometry[0]->boundingBox() :
+					NullBoundingBox;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
@@ -200,12 +186,9 @@ namespace EmEn::Graphics::Renderable
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingSphere;
-				}
-
-				return m_geometry->boundingSphere();
+				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+					m_geometry[0]->boundingSphere() :
+					NullBoundingSphere;
 			}
 
 			/**
@@ -218,6 +201,10 @@ namespace EmEn::Graphics::Renderable
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material = nullptr, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
 
 			/**
 			 * @brief Attaches the geometry resource.
@@ -233,9 +220,20 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
 
-			std::shared_ptr< Geometry::Interface > m_geometry;
+			/**
+			 * @brief Generates a single LOD level from the source geometry via mesh decimation.
+			 * @param sourceGeometry The LOD 0 indexed geometry with local data.
+			 * @param LODLevel The target LOD level (1-3).
+			 * @param ratio The decimation ratio (0.0 = max reduction, 1.0 = no reduction).
+			 * @return void
+			 */
+			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
+
+			Libs::StaticVector< std::shared_ptr< Geometry::Interface >, MaxLODLevels > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
 			RasterizationOptions m_rasterizationOptions{};
+			std::vector< std::future< void > > m_lodFutures;
+			mutable std::mutex m_geometryMutex;
 	};
 }
 

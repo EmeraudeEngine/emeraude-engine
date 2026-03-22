@@ -37,53 +37,6 @@ namespace EmEn::Graphics::Renderable
 
 	constexpr auto TracerTag{"RenderableInterface"};
 
-	bool
-	Abstract::onDependenciesLoaded () noexcept
-	{
-		/* NOTE: Check for sub-geometries and layer count coherence. */
-		if ( this->subGeometryCount() != this->layerCount() )
-		{
-			TraceError{TracerTag} <<
-				"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
-				"There is " << this->subGeometryCount() << " sub-geometries and " <<  this->layerCount() << " rendering layers!";
-
-			return false;
-		}
-
-		if constexpr ( IsDebug )
-		{
-			/* NOTE: Check the geometry resource. */
-			if ( !this->geometry()->isLoaded() )
-			{
-
-				TraceError{TracerTag} <<
-					"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
-					"The geometry is not created!";
-
-				return false;
-			}
-
-			/* NOTE: Check material resources. */
-			const auto layerCount = this->layerCount();
-
-			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
-			{
-				if ( !this->material(layerIndex)->isCreated() )
-				{
-					TraceError{TracerTag} <<
-						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
-						"The material #" << layerIndex << " is not created!";
-
-					return false;
-				}
-			}
-		}
-
-		this->setReadyForInstantiation(true);
-
-		return true;
-	}
-
 	std::shared_ptr< Saphir::Program >
 	Abstract::findCachedProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key) const noexcept
 	{

@@ -17,18 +17,12 @@ add_library(bc7enc_rdo STATIC
 target_include_directories(bc7enc_rdo PUBLIC ${BC7ENC_RDO_DIR})
 
 # Suppress warnings from third-party code (compiled with -Werror in the engine).
-# Always optimize bc7enc_rdo regardless of build type — it's pure computational
-# code and running it at -O0 makes compression 10-20x slower.
+# Optimization flags are inherited from the build type (Release/Debug) —
+# do not force them here to avoid MSVC flag conflicts (e.g., /RTC1 vs /O2).
 if ( NOT MSVC )
-	target_compile_options(bc7enc_rdo PRIVATE
-		-w
-		-O2
-	)
+	target_compile_options(bc7enc_rdo PRIVATE -w)
 else ()
-	target_compile_options(bc7enc_rdo PRIVATE
-		/w
-		/O2
-	)
+	target_compile_options(bc7enc_rdo PRIVATE /w)
 endif ()
 
 target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${BC7ENC_RDO_DIR})

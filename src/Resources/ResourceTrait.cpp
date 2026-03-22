@@ -257,8 +257,13 @@ namespace EmEn::Resources
 		/* NOTE: We need to track what actions to take outside the lock to avoid
 		 * calling virtual methods (onDependenciesLoaded) and observer notifications
 		 * while holding the mutex, which could cause deadlocks. */
-		enum class Action { None, CallOnDependenciesLoaded };
-		Action pendingAction = Action::None;
+		enum class Action
+		{
+			None,
+			CallOnDependenciesLoaded
+		};
+
+		auto pendingAction = Action::None;
 
 		{
 			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
@@ -439,7 +444,7 @@ namespace EmEn::Resources
 	}
 
 	bool
-	ResourceTrait::load (AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	ResourceTrait::load (const std::filesystem::path & filepath) noexcept
 	{
 		const auto root = FastJSON::getRootFromFile(filepath);
 
@@ -456,9 +461,9 @@ namespace EmEn::Resources
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		serviceProvider.update(root.value());
+		this->serviceProvider().update(root.value());
 
-		return this->load(serviceProvider, root.value());
+		return this->load(root.value());
 	}
 
 	std::string

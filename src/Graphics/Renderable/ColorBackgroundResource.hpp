@@ -54,13 +54,13 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Constructs a color background.
-			 * @param name A string for the resource name [std::move].
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
 			 * @param color A reference to a color.
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			ColorBackgroundResource (std::string name, const Libs::PixelFactory::Color< float > & color, uint32_t renderableFlags = 0) noexcept
-				: AbstractBackground(std::move(name), renderableFlags)
+			ColorBackgroundResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, const Libs::PixelFactory::Color< float > & color, uint32_t resourceFlags = 0) noexcept
+				: AbstractBackground{serviceProvider, std::move(name), resourceFlags}
 			{
 				this->setAverageColor(color);
 			}
@@ -100,11 +100,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -144,10 +144,10 @@ namespace EmEn::Graphics::Renderable
 				return false;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
-			geometry () const noexcept override
+			geometry (uint32_t /*LODLevel*/) const noexcept override
 			{
 				return nullptr;
 			}
@@ -169,6 +169,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
 
 			static std::string s_label;
 	};

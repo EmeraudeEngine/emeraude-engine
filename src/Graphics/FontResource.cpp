@@ -40,7 +40,7 @@ namespace EmEn::Graphics
 	using namespace Libs::PixelFactory;
 
 	bool
-	FontResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	FontResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -77,7 +77,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	FontResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	FontResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -88,7 +88,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	FontResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	FontResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

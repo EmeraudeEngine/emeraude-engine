@@ -202,8 +202,8 @@ namespace EmEn::Graphics::RenderableInstance
 				return m_activeInstanceCount;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer() */
-			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept override;
+			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer(const Vulkan::CommandBuffer &, uint32_t, uint32_t) const */
+			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex, uint32_t LODLevel) const noexcept override;
 
 			/**
 			 * @brief Creates the model matrices.

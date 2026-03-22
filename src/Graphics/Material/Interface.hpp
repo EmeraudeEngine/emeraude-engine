@@ -118,9 +118,6 @@ namespace EmEn::Graphics::Material
 	{
 		public:
 
-			/** @brief Access to the graphics renderer for loading GPU resources. */
-			static Renderer * s_graphicsRenderer;
-
 			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
@@ -571,12 +568,12 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Constructs a material interface.
-			 * @param name The name of the resource.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
 			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit
-			Interface (const std::string & name, uint32_t resourceFlags) noexcept
-				: ResourceTrait{name, resourceFlags}
+			Interface (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t resourceFlags) noexcept
+				: ResourceTrait{serviceProvider, name, resourceFlags}
 			{
 
 			}

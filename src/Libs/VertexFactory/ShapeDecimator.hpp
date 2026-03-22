@@ -163,6 +163,12 @@ namespace EmEn::Libs::VertexFactory
 						continue;
 					}
 
+					/* Sliver triangle check. */
+					if ( checkSliverCreation(candidate.v0, candidate.v1, candidate.optimalPos, vertices, triangles) )
+					{
+						continue;
+					}
+
 					/* Perform the collapse: v0 survives, v1 is removed. */
 					const auto v0 = candidate.v0;
 					const auto v1 = candidate.v1;
@@ -322,6 +328,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				index_data_t v[3]{0, 0, 0};
 				size_t srcTriIndex{0};
+				uint32_t groupIndex{0};
 				bool removed{false};
 			};
 
@@ -349,6 +356,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				const auto & srcVerts = workShape.vertices();
 				const auto & srcTris = workShape.triangles();
+				const auto & srcGroups = workShape.groups();
 
 				/* Assumes the source shape has been pre-deduped with position-only dedup
 				 * (ShapeProcessor::deduplicateVertices(false, false)) to build proper
@@ -364,6 +372,26 @@ namespace EmEn::Libs::VertexFactory
 
 				triangles.resize(srcTris.size());
 
+				/* Build a lookup: triangle index → group index.
+				 * Groups store (offset, length) ranges over the triangle array. */
+				std::vector< uint32_t > triGroupMap(srcTris.size(), 0);
+
+				for ( uint32_t g = 0; g < static_cast< uint32_t >(srcGroups.size()); ++g )
+				{
+					const auto groupOffset = srcGroups[g].first;
+					const auto groupLength = srcGroups[g].second;
+
+					for ( index_data_t i = 0; i < groupLength; ++i )
+					{
+						const auto triIdx = groupOffset + i;
+
+						if ( triIdx < srcTris.size() )
+						{
+							triGroupMap[triIdx] = g;
+						}
+					}
+				}
+
 				for ( size_t t = 0; t < srcTris.size(); ++t )
 				{
 					const auto & tri = srcTris[t];
@@ -372,6 +400,7 @@ namespace EmEn::Libs::VertexFactory
 					triangles[t].v[1] = tri.vertexIndex(1);
 					triangles[t].v[2] = tri.vertexIndex(2);
 					triangles[t].srcTriIndex = t;
+					triangles[t].groupIndex = triGroupMap[t];
 
 					/* Skip degenerate triangles. */
 					if ( triangles[t].v[0] == triangles[t].v[1] || triangles[t].v[1] == triangles[t].v[2] || triangles[t].v[0] == triangles[t].v[2] )
@@ -632,6 +661,9 @@ namespace EmEn::Libs::VertexFactory
 			Math::Vector< 3, vertex_data_t >
 			computeOptimalPosition (const Quadric & Q, const Math::Vector< 3, vertex_data_t > & vA, const Math::Vector< 3, vertex_data_t > & vB) noexcept
 			{
+				const auto mid = (vA + vB) * static_cast< vertex_data_t >(0.5);
+				const auto edgeLengthSq = (vB - vA).lengthSquared();
+
 				/* Try to solve the 3x3 system from the upper-left of Q.
 				 * | a11 a12 a13 | | x |   | -a14 |
 				 * | a12 a22 a23 | | y | = | -a24 |
@@ -642,7 +674,7 @@ namespace EmEn::Libs::VertexFactory
 
 				const auto det = a * (e * h - f * f) - b * (b * h - f * c) + c * (b * f - e * c);
 
-				if ( std::abs(det) > static_cast< vertex_data_t >(1e-10) )
+				if ( std::abs(det) > static_cast< vertex_data_t >(1e-6) )
 				{
 					const auto invDet = static_cast< vertex_data_t >(1) / det;
 
@@ -652,12 +684,20 @@ namespace EmEn::Libs::VertexFactory
 					const auto y = invDet * (rx * (c * f - b * h) + ry * (a * h - c * c) + rz * (b * c - a * f));
 					const auto z = invDet * (rx * (b * f - c * e) + ry * (b * c - a * f) + rz * (a * e - b * b));
 
-					return {x, y, z};
+					const Math::Vector< 3, vertex_data_t > solved{x, y, z};
+
+					/* Reject the solved position if it lies too far from the edge midpoint.
+					 * A factor of 2× the edge length keeps the result in a reasonable neighborhood. */
+					constexpr auto MaxDistanceFactor = static_cast< vertex_data_t >(4);
+					const auto distSqFromMid = (solved - mid).lengthSquared();
+
+					if ( distSqFromMid <= MaxDistanceFactor * edgeLengthSq )
+					{
+						return solved;
+					}
 				}
 
 				/* Fallback: pick the best among midpoint, vA, vB. */
-				const auto mid = (vA + vB) * static_cast< vertex_data_t >(0.5);
-
 				const auto costA = evaluateQuadric(Q, vA);
 				const auto costB = evaluateQuadric(Q, vB);
 				const auto costMid = evaluateQuadric(Q, mid);
@@ -692,6 +732,82 @@ namespace EmEn::Libs::VertexFactory
 				 * For a boundary edge: exactly 1 shared neighbor.
 				 * Allow both cases. */
 				return sharedCount <= 2;
+			}
+
+			/**
+			 * @brief Checks if a collapse would produce sliver triangles (near-degenerate).
+			 * Uses the compactness ratio: 4√3 × area / perimeter². A perfect equilateral = 1.0.
+			 * @return true if a sliver would be created (collapse should be rejected).
+			 */
+			[[nodiscard]]
+			static
+			bool
+			checkSliverCreation (index_data_t v0, index_data_t v1, const Math::Vector< 3, vertex_data_t > & newPos, const std::vector< VertexData > & vertices, const std::vector< TriangleData > & triangles) noexcept
+			{
+				constexpr auto MinCompactness = static_cast< vertex_data_t >(0.02);
+				constexpr auto FourSqrt3 = static_cast< vertex_data_t >(6.928203230275509);
+
+				auto checkTriangles = [&] (index_data_t vKeep, index_data_t vRemove) -> bool
+				{
+					for ( const auto triIdx : vertices[vKeep].adjacentTris )
+					{
+						const auto & tri = triangles[triIdx];
+
+						if ( tri.removed )
+						{
+							continue;
+						}
+
+						/* Skip triangles shared by both vertices (they will be removed). */
+						bool hasRemove = false;
+
+						for ( int i = 0; i < 3; ++i )
+						{
+							if ( tri.v[i] == vRemove )
+							{
+								hasRemove = true;
+
+								break;
+							}
+						}
+
+						if ( hasRemove )
+						{
+							continue;
+						}
+
+						/* Compute the triangle with vKeep moved to newPos. */
+						Math::Vector< 3, vertex_data_t > positions[3];
+
+						for ( int i = 0; i < 3; ++i )
+						{
+							positions[i] = (tri.v[i] == vKeep) ? newPos : vertices[tri.v[i]].position;
+						}
+
+						const auto e0 = positions[1] - positions[0];
+						const auto e1 = positions[2] - positions[1];
+						const auto e2 = positions[0] - positions[2];
+
+						const auto area = Math::Vector< 3, vertex_data_t >::crossProduct(e0, positions[2] - positions[0]).length() * static_cast< vertex_data_t >(0.5);
+						const auto perimeter = e0.length() + e1.length() + e2.length();
+
+						if ( perimeter < static_cast< vertex_data_t >(1e-10) )
+						{
+							return true;
+						}
+
+						const auto compactness = FourSqrt3 * area / (perimeter * perimeter);
+
+						if ( compactness < MinCompactness )
+						{
+							return true;
+						}
+					}
+
+					return false;
+				};
+
+				return checkTriangles(v0, v1) || checkTriangles(v1, v0);
 			}
 
 			[[nodiscard]]
@@ -740,15 +856,28 @@ namespace EmEn::Libs::VertexFactory
 							newPositions[i] = (tri.v[i] == vKeep) ? newPos : vertices[tri.v[i]].position;
 						}
 
-						const auto oldNormal = Math::Vector< 3, vertex_data_t >::crossProduct(
+						const auto oldCross = Math::Vector< 3, vertex_data_t >::crossProduct(
 							oldPositions[1] - oldPositions[0], oldPositions[2] - oldPositions[0]);
 
-						const auto newNormal = Math::Vector< 3, vertex_data_t >::crossProduct(
+						const auto newCross = Math::Vector< 3, vertex_data_t >::crossProduct(
 							newPositions[1] - newPositions[0], newPositions[2] - newPositions[0]);
 
-						if ( Math::Vector< 3, vertex_data_t >::dotProduct(oldNormal, newNormal) < 0 )
+						/* Skip degenerate triangles (near-zero area). */
+						const auto oldLenSq = oldCross.lengthSquared();
+						const auto newLenSq = newCross.lengthSquared();
+
+						if ( oldLenSq < static_cast< vertex_data_t >(1e-20) || newLenSq < static_cast< vertex_data_t >(1e-20) )
 						{
-							return true; /* Flip detected. */
+							return true;
+						}
+
+						/* Normalize before comparing: the threshold is a cosine angle, not a magnitude. */
+						const auto dot = Math::Vector< 3, vertex_data_t >::dotProduct(oldCross, newCross);
+						const auto normalizedDot = dot / std::sqrt(oldLenSq * newLenSq);
+
+						if ( normalizedDot < static_cast< vertex_data_t >(0.2) )
+						{
+							return true; /* Flip or excessive deformation detected. */
 						}
 					}
 
@@ -832,15 +961,32 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				/* Emit surviving triangles. */
+				/* Collect surviving triangle indices, sorted by group for multi-material preservation. */
+				std::vector< size_t > survivingTriIndices;
+				survivingTriIndices.reserve(triangles.size());
+
 				for ( size_t t = 0; t < triangles.size(); ++t )
 				{
-					if ( triangles[t].removed )
+					if ( !triangles[t].removed )
 					{
-						continue;
+						survivingTriIndices.emplace_back(t);
 					}
+				}
 
-					const auto & tri = triangles[t];
+				std::ranges::stable_sort(survivingTriIndices, [&triangles] (size_t a, size_t b) {
+					return triangles[a].groupIndex < triangles[b].groupIndex;
+				});
+
+				/* Emit surviving triangles in group order and rebuild group ranges. */
+				auto & groups = output.groups();
+				groups.clear();
+
+				uint32_t currentGroup = std::numeric_limits< uint32_t >::max();
+				index_data_t groupStart = 0;
+
+				for ( const auto triIdx : survivingTriIndices )
+				{
+					const auto & tri = triangles[triIdx];
 
 					const auto dv0 = vertexMap[tri.v[0]];
 					const auto dv1 = vertexMap[tri.v[1]];
@@ -857,16 +1003,25 @@ namespace EmEn::Libs::VertexFactory
 
 					output.triangles().emplace_back(outTri);
 
-					auto & groups = output.groups();
+					/* Track group transitions. */
+					if ( tri.groupIndex != currentGroup )
+					{
+						if ( currentGroup != std::numeric_limits< uint32_t >::max() )
+						{
+							const auto triCount = static_cast< index_data_t >(output.triangles().size()) - 1 - groupStart;
+							groups.emplace_back(groupStart, triCount);
+						}
 
-					if ( groups.empty() )
-					{
-						groups.emplace_back(0, 1);
+						currentGroup = tri.groupIndex;
+						groupStart = static_cast< index_data_t >(output.triangles().size()) - 1;
 					}
-					else
-					{
-						++groups.back().second;
-					}
+				}
+
+				/* Close the last group. */
+				if ( currentGroup != std::numeric_limits< uint32_t >::max() )
+				{
+					const auto triCount = static_cast< index_data_t >(output.triangles().size()) - groupStart;
+					groups.emplace_back(groupStart, triCount);
 				}
 
 				if ( !output.empty() )

@@ -21,16 +21,25 @@ Fail-safe resource system that guarantees NEVER returning nullptr and always pro
 
 ### AbstractServiceProvider Interface
 
-Services available to resources during loading via `load(AbstractServiceProvider&)`:
+Services available to resources via `this->serviceProvider()` (injected at construction):
 
 | Method | Returns | Purpose |
 |--------|---------|---------|
 | `fileSystem()` | `const FileSystem&` | File path resolution |
 | `settings()` | `Settings&` | Configuration retrieval and modification |
 | `graphicsRenderer()` | `Graphics::Renderer&` | GPU resource creation |
+| `audioManager()` | `Audio::Manager&` | Audio system access |
 | `container<T>()` | `Container<T>*` | Access to other resource containers |
 
-**Code reference:** `ResourceTrait.hpp:AbstractServiceProvider`
+**Constructor injection (v0.9+):** ServiceProvider is passed as the first constructor argument to every resource. The `load()` methods no longer receive it — resources access it via `this->serviceProvider()`.
+
+```cpp
+// Constructor: ResourceTrait(AbstractServiceProvider & serviceProvider, name, flags)
+// Storage: AbstractServiceProvider & m_serviceProvider (non-nullable reference)
+// Access: this->serviceProvider() returns the reference
+```
+
+**Code reference:** `ResourceTrait.hpp:AbstractServiceProvider`, `ResourceTrait.hpp:ResourceTrait()`
 
 ### Resource Lifecycle
 
@@ -55,10 +64,11 @@ Unloaded → Enqueuing/ManualEnqueuing → Loading → Loaded/Failed
 - Errors are logged but never break the application
 
 ### Neutral Resource Pattern
-- **MANDATORY**: Implement `load(AbstractServiceProvider&)` without parameters
+- **MANDATORY**: Implement `load()` (no parameters) for neutral/default resources
 - Neutral resource must ALWAYS succeed (no I/O)
 - Be immediately usable and visually identifiable
 - No external dependencies
+- ServiceProvider is available via `this->serviceProvider()` if needed
 
 ### Thread Safety (CRITICAL)
 
@@ -119,14 +129,20 @@ bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
 
 ### Creating a New Resource Type
 1. Inherit from `ResourceTrait`
-2. **MANDATORY**: Implement neutral resource `load(AbstractServiceProvider&)`
-3. Implement file/data loading with failure possibility
-4. `onDependenciesLoaded()` for finalization
-5. Register in `Manager`
+2. Constructor must accept `AbstractServiceProvider &` as first parameter, forwarded to `ResourceTrait`
+3. **MANDATORY**: Implement neutral resource `load()` (no parameters)
+4. Implement `load(filepath)` and `load(Json::Value)` with failure possibility
+5. `onDependenciesLoaded()` for finalization
+6. Register in `Manager`
 
 ### Loading with Dependencies
 ```cpp
-bool load(AbstractServiceProvider& provider, const Json::Value& data) override {
+// Constructor: ServiceProvider injected at construction
+MyResource(AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t flags)
+    : ResourceTrait{serviceProvider, name, flags} {}
+
+// load() no longer receives ServiceProvider — use this->serviceProvider()
+bool load(const Json::Value& data) noexcept override {
     // 1. Initialize enqueuing
     if (!this->initializeEnqueuing(false)) return false;
 
@@ -134,14 +150,14 @@ bool load(AbstractServiceProvider& provider, const Json::Value& data) override {
     loadImmediateData(data);
 
     // 3. Declare dependencies (automatic cycle detection)
-    auto dep = provider.container<OtherResource>()->getResource(data["dep"]);
+    auto dep = this->serviceProvider().container<OtherResource>()->getResource(data["dep"]);
     if (!addDependency(dep)) return false;  // Cycle detected = failure
 
     // 4. Finalize enqueuing
     return this->setLoadSuccess(true); // Resource transitions to Loading
 }
 
-bool onDependenciesLoaded() override {
+bool onDependenciesLoaded() noexcept override {
     // 5. Finalization when ALL dependencies are ready
     // NOTE: Called OUTSIDE mutex to avoid deadlocks
     uploadToGPU();

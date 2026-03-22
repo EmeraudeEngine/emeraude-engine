@@ -51,9 +51,6 @@ namespace EmEn::Graphics::TextureResource
 	{
 		public:
 
-			/** @brief Access to the graphics renderer for loading GPU resources. */
-			static Renderer * s_graphicsRenderer;
-
 			/**
 			 * @brief Destructs the abstract texture resource.
 			 */
@@ -153,11 +150,12 @@ namespace EmEn::Graphics::TextureResource
 
 			/**
 			 * @brief Constructs an abstract texture resource.
+			 * @param serviceProvider A reference to the service provider.
 			 * @param textureName A string for the texture name [std::move].
 			 * @param textureFlags The resource flag bits.
 			 */
-			Abstract (std::string textureName, uint32_t textureFlags) noexcept
-				: ResourceTrait{std::move(textureName), textureFlags}
+			Abstract (Resources::AbstractServiceProvider & serviceProvider, std::string textureName, uint32_t textureFlags) noexcept
+				: ResourceTrait{serviceProvider, std::move(textureName), textureFlags}
 			{
 
 			}

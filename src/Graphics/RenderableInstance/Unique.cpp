@@ -155,9 +155,9 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Unique::bindInstanceModelLayer (const CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept
+	Unique::bindInstanceModelLayer (const CommandBuffer & commandBuffer, uint32_t layerIndex, uint32_t LODLevel) const noexcept
 	{
 		/* Bind the geometry VBO and the optional IBO. */
-		commandBuffer.bind(*this->renderable()->geometry(), layerIndex);
+		commandBuffer.bind(*this->renderable()->geometry(LODLevel), layerIndex);
 	}
 }

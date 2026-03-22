@@ -117,7 +117,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex) noexcept
+	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex) noexcept
 	{
 		if ( m_accelerationStructureBuilder == nullptr )
 		{
@@ -170,7 +170,7 @@ namespace EmEn::Scenes
 
 		/* Collect instances from a render list. */
 		const auto collectFromList = [&] (const RenderBatch::List & renderList) {
-			for ( const auto & [key, batch] : renderList )
+			for ( const auto & batch : renderList | std::views::values )
 			{
 				const auto * renderable = batch.renderableInstance()->renderable();
 
@@ -179,7 +179,7 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				const auto * geometry = renderable->geometry();
+				const auto * geometry = renderable->geometry(0);
 
 				if ( geometry == nullptr )
 				{
@@ -212,9 +212,7 @@ namespace EmEn::Scenes
 
 				if ( material != nullptr )
 				{
-					auto it = materialMap.find(material);
-
-					if ( it != materialMap.end() )
+					if ( auto it = materialMap.find(material); it != materialMap.end() )
 					{
 						materialIndex = it->second;
 					}
@@ -234,22 +232,19 @@ namespace EmEn::Scenes
 
 				GPUMeshMetaData meshMeta{};
 
-				const auto * vbo = geometry->vertexBufferObject();
-
-				if ( vbo != nullptr )
+				if ( const auto * VBO = geometry->vertexBufferObject(); VBO != nullptr )
 				{
-					meshMeta.vertexBufferAddress = m_accelerationStructureBuilder->getBufferDeviceAddress(vbo->handle());
-					meshMeta.vertexStride = vbo->vertexElementCount() * static_cast< uint32_t >(sizeof(float));
+					meshMeta.vertexBufferAddress = m_accelerationStructureBuilder->getBufferDeviceAddress(VBO->handle());
+					meshMeta.vertexStride = VBO->vertexElementCount() * static_cast< uint32_t >(sizeof(float));
 				}
 
 				/* Use RT-specific triangle-list IBO when available (e.g. TriangleStrip converted),
 				 * otherwise fall back to the native IBO. */
-				const auto * rtIBO = geometry->rtIndexBufferObject();
-				const auto * ibo = (rtIBO != nullptr) ? rtIBO : geometry->indexBufferObject();
+				const auto * RayTracingIBO = geometry->rtIndexBufferObject();
 
-				if ( ibo != nullptr )
+				if ( const auto * IBO = RayTracingIBO != nullptr ? RayTracingIBO : geometry->indexBufferObject(); IBO != nullptr )
 				{
-					meshMeta.indexBufferAddress = m_accelerationStructureBuilder->getBufferDeviceAddress(ibo->handle());
+					meshMeta.indexBufferAddress = m_accelerationStructureBuilder->getBufferDeviceAddress(IBO->handle());
 				}
 
 				meshMeta.normalByteOffset = computeNormalByteOffset(geometry);
@@ -260,9 +255,8 @@ namespace EmEn::Scenes
 
 				/* --- TLAS instance --- */
 				VkTransformMatrixKHR transform{};
-				const auto * worldCoordinates = batch.worldCoordinates();
 
-				if ( worldCoordinates != nullptr )
+				if ( const auto * worldCoordinates = batch.worldCoordinates(); worldCoordinates != nullptr )
 				{
 					const auto modelMatrix = worldCoordinates->getModelMatrix();
 					const auto * m = modelMatrix.data();
@@ -317,14 +311,13 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					const auto * texPtr = texture.get();
-					activeTextures.insert(texPtr);
+					const auto * texturePtr = texture.get();
+					activeTextures.insert(texturePtr);
 
 					/* Look up or register in the bindless texture manager. */
 					uint32_t bindlessIndex;
-					auto cacheIt = m_textureRegistrationCache.find(texPtr);
 
-					if ( cacheIt != m_textureRegistrationCache.end() )
+					if ( auto cacheIt = m_textureRegistrationCache.find(texturePtr); cacheIt != m_textureRegistrationCache.end() )
 					{
 						bindlessIndex = cacheIt->second;
 					}
@@ -337,7 +330,7 @@ namespace EmEn::Scenes
 							continue;
 						}
 
-						m_textureRegistrationCache.emplace(texPtr, bindlessIndex);
+						m_textureRegistrationCache.emplace(texturePtr, bindlessIndex);
 					}
 
 					/* Fill the appropriate index and flag in the RT material. */
@@ -374,7 +367,7 @@ namespace EmEn::Scenes
 			/* Unregister textures that are no longer in use. */
 			for ( auto it = m_textureRegistrationCache.begin(); it != m_textureRegistrationCache.end(); )
 			{
-				if ( activeTextures.find(it->first) == activeTextures.end() )
+				if ( !activeTextures.contains(it->first) )
 				{
 					bindlessTextureManager->unregisterTexture2D(it->second);
 					it = m_textureRegistrationCache.erase(it);
@@ -400,9 +393,7 @@ namespace EmEn::Scenes
 		/* --- Upload mesh metadata SSBO for the current frame --- */
 		if ( frameIndex < m_meshMetaDataSSBOs.size() && m_meshMetaDataSSBOs[frameIndex] != nullptr && !meshEntries.empty() )
 		{
-			auto * dst = m_meshMetaDataSSBOs[frameIndex]->mapMemoryAs< GPUMeshMetaData >();
-
-			if ( dst != nullptr )
+			if ( auto * dst = m_meshMetaDataSSBOs[frameIndex]->mapMemoryAs< GPUMeshMetaData >(); dst != nullptr )
 			{
 				std::memcpy(dst, meshEntries.data(), meshEntries.size() * sizeof(GPUMeshMetaData));
 				m_meshMetaDataSSBOs[frameIndex]->unmapMemory();
@@ -412,9 +403,7 @@ namespace EmEn::Scenes
 		/* --- Upload material data SSBO for the current frame --- */
 		if ( frameIndex < m_materialDataSSBOs.size() && m_materialDataSSBOs[frameIndex] != nullptr && !materialEntries.empty() )
 		{
-			auto * dst = m_materialDataSSBOs[frameIndex]->mapMemoryAs< Material::GPURTMaterialData >();
-
-			if ( dst != nullptr )
+			if ( auto * dst = m_materialDataSSBOs[frameIndex]->mapMemoryAs< Material::GPURTMaterialData >(); dst != nullptr )
 			{
 				std::memcpy(dst, materialEntries.data(), materialEntries.size() * sizeof(Material::GPURTMaterialData));
 				m_materialDataSSBOs[frameIndex]->unmapMemory();

@@ -232,14 +232,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTextureCubemap::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	AnimatedTextureCubemap::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = serviceProvider.container< CubemapMovieResource >()->getDefaultResource();
+		m_localData = this->serviceProvider().container< CubemapMovieResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -250,11 +250,11 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTextureCubemap::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	AnimatedTextureCubemap::load (const std::filesystem::path & filepath) noexcept
 	{
 		/* Looking for a cubemap movie resource by extracting the resource name from the filepath.
 		 * NOTE: The loading process is synchronous here. */
-		const auto cubemapMovieResource = serviceProvider.container< CubemapMovieResource >()->getResource(
+		const auto cubemapMovieResource = this->serviceProvider().container< CubemapMovieResource >()->getResource(
 			ResourceTrait::getResourceNameFromFilepath(filepath, "CubemapMovies"),
 			false
 		);
@@ -263,7 +263,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTextureCubemap::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	AnimatedTextureCubemap::load (const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

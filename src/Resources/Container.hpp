@@ -1437,7 +1437,7 @@ namespace EmEn::Resources
 					}
 				}
 
-				auto result = m_resources.emplace(resourceName, std::make_shared< resource_t >(resourceName, resourceFlags));
+				auto result = m_resources.emplace(resourceName, std::make_shared< resource_t >(m_serviceProvider, resourceName, resourceFlags));
 
 				if ( !result.second )
 				{
@@ -1483,9 +1483,9 @@ namespace EmEn::Resources
 				}
 
 				/* Creates and load the resource. */
-				auto defaultResource = std::make_shared< resource_t >(Default);
+				auto defaultResource = std::make_shared< resource_t >(m_serviceProvider, Default);
 
-				if ( !defaultResource->load(m_serviceProvider) )
+				if ( !defaultResource->load() )
 				{
 					TraceFatal{resource_t::ClassId} << "The default resource '" << resource_t::ClassId << "' can't be loaded !";
 
@@ -1589,7 +1589,7 @@ namespace EmEn::Resources
 				auto result = m_resources.emplace(
 					std::piecewise_construct,
 					std::forward_as_tuple(name),
-					std::forward_as_tuple(new resource_t(name, 0))
+					std::forward_as_tuple(new resource_t(m_serviceProvider, name, 0))
 				);
 
 				if ( !result.second )
@@ -1686,7 +1686,7 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(m_serviceProvider, std::filesystem::path{infos.data().asString()});
+						success = request.resource()->load(std::filesystem::path{infos.data().asString()});
 						break;
 
 					/* This is direct data with a JsonCPP way of representing the data. */
@@ -1696,7 +1696,7 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(m_serviceProvider, infos.data());
+						success = request.resource()->load(infos.data());
 						break;
 
 					/* This should never happen! ExternalData must be processed before. */

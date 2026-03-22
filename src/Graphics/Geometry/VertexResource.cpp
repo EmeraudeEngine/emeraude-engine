@@ -150,7 +150,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	VertexResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -170,7 +170,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	VertexResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -191,7 +191,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	VertexResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

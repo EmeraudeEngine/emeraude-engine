@@ -60,7 +60,7 @@ namespace EmEn::Graphics
 	constexpr auto JKCubemap{"Cubemap"};
 
 	bool
-	CubemapMovieResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	CubemapMovieResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -129,12 +129,12 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapMovieResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	CubemapMovieResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
 		{
-			return ResourceTrait::load(serviceProvider, filepath);
+			return ResourceTrait::load(filepath);
 		}
 
 		TraceDebug{ClassId} << "Reading cubemap movie file is not available yet !";
@@ -148,7 +148,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapMovieResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	CubemapMovieResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -158,7 +158,7 @@ namespace EmEn::Graphics
 		/* Checks the load in the parametric way. */
 		if ( data.isMember(JKBaseCubemapName) )
 		{
-			if ( !this->loadParametric(serviceProvider, data) )
+			if ( !this->loadParametric(data) )
 			{
 				TraceError{ClassId} << "Unable to load the cubemap movie with parametric key '" << JKBaseCubemapName << "' !";
 
@@ -168,7 +168,7 @@ namespace EmEn::Graphics
 		/* Checks the load in the manual way. */
 		else if ( data.isMember(JKFrames) )
 		{
-			if ( !this->loadManual(serviceProvider, data) )
+			if ( !this->loadManual(data) )
 			{
 				TraceError{ClassId} << "Unable to load the cubemap movie with manual key '" << JKFrames << "' !";
 
@@ -213,7 +213,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapMovieResource::loadParametric (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	CubemapMovieResource::loadParametric (const Json::Value & data) noexcept
 	{
 		/* Checks the base name of cubemap animation files. */
 		const auto basename = FastJSON::getValue< std::string >(data, JKBaseCubemapName);
@@ -257,7 +257,7 @@ namespace EmEn::Graphics
 		m_looping = FastJSON::getValue< bool >(data, JKIsLooping).value_or(true);
 
 		/* Gets all frames cubemaps. */
-		auto * cubemapContainer = serviceProvider.container< CubemapResource >();
+		auto * cubemapContainer = this->serviceProvider().container< CubemapResource >();
 
 		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
@@ -282,7 +282,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapMovieResource::loadManual (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	CubemapMovieResource::loadManual (const Json::Value & data) noexcept
 	{
 		if ( !data.isMember(JKFrames) || !data[JKFrames].isArray() )
 		{
@@ -291,7 +291,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		auto * cubemaps = serviceProvider.container< CubemapResource >();
+		auto * cubemaps = this->serviceProvider().container< CubemapResource >();
 
 		for ( const auto & frame : data[JKFrames] )
 		{

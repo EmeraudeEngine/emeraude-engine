@@ -81,13 +81,13 @@ namespace EmEn::Graphics
 			 * Creates a new ImageResource instance. The actual image data is not loaded
 			 * until one of the load() methods is called.
 			 *
-			 * @param name The unique identifier for this resource (moved into the object).
-			 * @param resourceFlags Optional resource flag bits for future use (currently unused).
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 * @version 0.8.35
 			 */
-			explicit
-			ImageResource (std::string name, uint32_t resourceFlags = 0) noexcept
-				: ResourceTrait{std::move(name), resourceFlags}
+			ImageResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -154,12 +154,11 @@ namespace EmEn::Graphics
 			 * This method ensures the resource always has valid data, following the
 			 * fail-safe design pattern where resources never fail to load.
 			 *
-			 * @param serviceProvider The resource service provider (unused in this implementation).
 			 * @return true if the default image was successfully generated, false otherwise.
 			 * @post If successful, m_pixmap contains a valid 64x64 RGBA image.
 			 * @version 0.8.35
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			bool load () noexcept override;
 
 			/**
 			 * @brief Loads a 2D image from a file on disk.
@@ -171,14 +170,13 @@ namespace EmEn::Graphics
 			 * (valid dimensions, color format, etc.). If validation fails, the pixmap
 			 * is cleared and the resource is marked as failed.
 			 *
-			 * @param serviceProvider The resource service provider (unused in this implementation).
 			 * @param filepath The filesystem path to the image file to load.
 			 * @return true if the image was successfully loaded and validated, false otherwise.
 			 * @post If successful, m_pixmap contains the loaded image data in RGBA format.
 			 * @note Supported formats depend on PixelFactory::FileIO capabilities (PNG, JPEG, TGA).
 			 * @version 0.8.35
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			bool load (const std::filesystem::path & filepath) noexcept override;
 
 			/**
 			 * @brief JSON-based loading is not supported for image resources.
@@ -186,13 +184,12 @@ namespace EmEn::Graphics
 			 * This method always fails and logs an error, as image data cannot be
 			 * meaningfully embedded in JSON format. Use the file-based load() method instead.
 			 *
-			 * @param serviceProvider The resource service provider (unused).
 			 * @param data The JSON data (unused).
 			 * @return Always returns false.
 			 * @note This method exists for interface compliance but is not functional.
 			 * @version 0.8.35
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (const Json::Value & data) noexcept override;
 
 			/**
 			 * @brief Returns the total memory occupied by this resource in bytes.

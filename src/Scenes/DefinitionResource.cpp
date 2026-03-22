@@ -38,13 +38,13 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 
 	bool
-	DefinitionResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	DefinitionResource::load () noexcept
 	{
 		return false;
 	}
 
 	bool
-	DefinitionResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	DefinitionResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -58,13 +58,13 @@ namespace EmEn::Scenes
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		serviceProvider.update(root);
+		this->serviceProvider().update(root);
 
-		return this->load(serviceProvider, root);
+		return this->load(root);
 	}
 
 	bool
-	DefinitionResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
+	DefinitionResource::load (const Json::Value & data) noexcept
 	{
 		m_root = data;
 

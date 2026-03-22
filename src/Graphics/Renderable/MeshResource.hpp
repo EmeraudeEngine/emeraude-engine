@@ -27,13 +27,16 @@
 #pragma once
 
 /* STL inclusions. */
-#include <vector>
+#include <future>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Resources/Container.hpp"
 
 /* Forward declarations. */
@@ -127,12 +130,12 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Construct a mesh resource.
-			 * @param name A string for the resource name.
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			MeshResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Abstract{std::move(name), renderableFlags}
+			MeshResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -169,12 +172,7 @@ namespace EmEn::Graphics::Renderable
 			uint32_t
 			subGeometryCount () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return 0;
-				}
-
-				return m_geometry->subGeometryCount();
+				return !m_geometry.empty() && m_geometry[0] != nullptr ? m_geometry[0]->subGeometryCount() : 0;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
@@ -185,27 +183,23 @@ namespace EmEn::Graphics::Renderable
 				return static_cast< uint32_t >(m_layers.size());
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
 			[[nodiscard]]
 			bool isOpaque (uint32_t layerIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
 			[[nodiscard]]
 			bool requiresGrabPass (uint32_t layerIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
-			const Geometry::Interface *
-			geometry () const noexcept override
-			{
-				return m_geometry.get();
-			}
+			const Geometry::Interface * geometry (uint32_t LODLevel) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface * material (uint32_t layerIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
 			[[nodiscard]]
 			const RasterizationOptions * layerRasterizationOptions (uint32_t layerIndex) const noexcept override;
 
@@ -214,12 +208,9 @@ namespace EmEn::Graphics::Renderable
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingBox;
-				}
-
-				return m_geometry->boundingBox();
+				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+					m_geometry[0]->boundingBox() :
+					NullBoundingBox;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
@@ -227,12 +218,9 @@ namespace EmEn::Graphics::Renderable
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingSphere;
-				}
-
-				return m_geometry->boundingSphere();
+				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+					m_geometry[0]->boundingSphere() :
+					NullBoundingSphere;
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -243,11 +231,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -276,13 +264,6 @@ namespace EmEn::Graphics::Renderable
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions = {}) noexcept;
 
 			/**
-			 * @brief Gives a hint for the mesh size. This is not effective by itself, you can use it to scale a scene node.
-			 * @return float
-			 */
-			[[nodiscard]]
-			float baseSize () const noexcept;
-
-			/**
 			 * @brief Parses a JSON stream to get the material information.
 			 * @note This method is public to allow SimpleMeshResource to reuse it.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
@@ -299,17 +280,11 @@ namespace EmEn::Graphics::Renderable
 			 */
 			static RasterizationOptions parseLayerOptions (const Json::Value & data) noexcept;
 
-			/* JSON keys (public for shared use with SimpleMeshResource). */
-			static constexpr auto LayersKey{"Layers"};
-			static constexpr auto GeometryTypeKey{"GeometryType"};
-			static constexpr auto GeometryNameKey{"GeometryName"};
-			static constexpr auto MaterialTypeKey{"MaterialType"};
-			static constexpr auto MaterialNameKey{"MaterialName"};
-			static constexpr auto BaseSizeKey{"BaseSize"};
-			static constexpr auto EnableDoubleSidedFaceKey{"EnableDoubleSidedFace"};
-			static constexpr auto DrawingModeKey{"DrawingMode"};
-
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
 
 			/**
 			 * @brief Sets the geometry resource.
@@ -344,19 +319,28 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Parses a JSON stream to get the geometry information.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param data A reference to a JSON node.
 			 * @return std::shared_ptr< Geometry::Interface >
 			 */
-			std::shared_ptr< Geometry::Interface > parseGeometry (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+			std::shared_ptr< Geometry::Interface > parseGeometry (const Json::Value & data) noexcept;
+
+			/**
+			 * @brief Generates a single LOD level from the source geometry via mesh decimation.
+			 * @param sourceGeometry The LOD 0 indexed geometry with local data.
+			 * @param LODLevel The target LOD level (1-3).
+			 * @param ratio The decimation ratio (0.0 = max reduction, 1.0 = no reduction).
+			 * @return void
+			 */
+			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
 
 			/* Flag names. */
 			static constexpr auto IsReadyToSetupGPU{0UL};
 			static constexpr auto IsBroken{1UL};
 
-			std::shared_ptr< Geometry::Interface > m_geometry;
+			Libs::StaticVector< std::shared_ptr< Geometry::Interface >, MaxLODLevels > m_geometry;
 			std::vector< MeshLayer > m_layers;
-			float m_baseSize{1.0F};
+			std::vector< std::future< void > > m_lodFutures;
+			mutable std::mutex m_geometryMutex;
 	};
 }
 

@@ -45,7 +45,7 @@ namespace EmEn::Graphics::Geometry
 
 	constexpr auto TracerTag{"GeometryInterface"};
 
-	Renderer * Interface::s_graphicsRenderer = nullptr;
+	/* TODO: Remove this ! */
 	AccelerationStructureBuilder * Interface::s_accelerationStructureBuilder = nullptr;
 
 	bool
@@ -146,34 +146,26 @@ namespace EmEn::Graphics::Geometry
 
 			/* Create a persistent RT index buffer for shader access (UV/normal lookup).
 			 * The BLAS build also uses these indices via cpuIndices. */
-			if ( s_graphicsRenderer != nullptr )
+			auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
+			const auto indexCount = static_cast< uint32_t >(convertedIndices.size());
+
+			m_rtIndexBufferObject = std::make_unique< Vulkan::IndexBufferObject >(transferManager.device(), indexCount);
+			m_rtIndexBufferObject->setIdentifier("Geometry", this->name(), "RT_IndexBufferObject");
+
+			if ( m_rtIndexBufferObject->createOnHardware() && m_rtIndexBufferObject->transferData(transferManager, convertedIndices) )
 			{
-				auto & transferManager = s_graphicsRenderer->transferManager();
-				const auto indexCount = static_cast< uint32_t >(convertedIndices.size());
-
-				m_rtIndexBufferObject = std::make_unique< Vulkan::IndexBufferObject >(transferManager.device(), indexCount);
-				m_rtIndexBufferObject->setIdentifier("Geometry", this->name(), "RT_IndexBufferObject");
-
-				if ( m_rtIndexBufferObject->createOnHardware() && m_rtIndexBufferObject->transferData(transferManager, convertedIndices) )
-				{
-					/* Use the persistent RT IBO for the BLAS build. */
-					geometry.indexBuffer = m_rtIndexBufferObject->handle();
-					geometry.indexCount = indexCount;
-					geometry.indexType = VK_INDEX_TYPE_UINT32;
-				}
-				else
-				{
-					TraceError{TracerTag} << "Failed to create RT index buffer for geometry '" << this->name() << "' ! Falling back to CPU indices.";
-
-					m_rtIndexBufferObject.reset();
-
-					/* Fall back to CPU index upload in the builder. */
-					geometry.cpuIndices = convertedIndices.data();
-					geometry.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
-				}
+				/* Use the persistent RT IBO for the BLAS build. */
+				geometry.indexBuffer = m_rtIndexBufferObject->handle();
+				geometry.indexCount = indexCount;
+				geometry.indexType = VK_INDEX_TYPE_UINT32;
 			}
 			else
 			{
+				TraceError{TracerTag} << "Failed to create RT index buffer for geometry '" << this->name() << "' ! Falling back to CPU indices.";
+
+				m_rtIndexBufferObject.reset();
+
+				/* Fall back to CPU index upload in the builder. */
 				geometry.cpuIndices = convertedIndices.data();
 				geometry.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
 			}
@@ -202,14 +194,7 @@ namespace EmEn::Graphics::Geometry
 	bool
 	Interface::onDependenciesLoaded () noexcept
 	{
-		if ( s_graphicsRenderer == nullptr )
-		{
-			TraceError{TracerTag} << "The static renderer pointer is null !";
-
-			return false;
-		}
-
-		if ( !this->isCreated() && !this->createOnHardware(s_graphicsRenderer->transferManager()) )
+		if ( !this->isCreated() && !this->createOnHardware(this->serviceProvider().graphicsRenderer().transferManager()) )
 		{
 			TraceError{TracerTag} << "Unable to send the geometry resource '" << this->name() << "' (" << this->classLabel() << ") into the video memory !";
 

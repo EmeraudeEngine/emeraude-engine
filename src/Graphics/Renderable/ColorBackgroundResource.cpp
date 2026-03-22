@@ -31,7 +31,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs;
 
 	bool
-	ColorBackgroundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	ColorBackgroundResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	ColorBackgroundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	ColorBackgroundResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -56,5 +56,13 @@ namespace EmEn::Graphics::Renderable
 		this->setAverageColor(PixelFactory::Black);
 
 		return this->setLoadSuccess(true);
+	}
+
+	bool
+	ColorBackgroundResource::onDependenciesLoaded () noexcept
+	{
+		this->setReadyForInstantiation(true);
+
+		return true;
 	}
 }

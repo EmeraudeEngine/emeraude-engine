@@ -35,7 +35,7 @@ namespace EmEn::Graphics
 	using namespace Libs;
 
 	bool
-	VolumetricImageResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	VolumetricImageResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -71,7 +71,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	VolumetricImageResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	VolumetricImageResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -85,7 +85,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	VolumetricImageResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	VolumetricImageResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

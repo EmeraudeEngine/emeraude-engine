@@ -67,12 +67,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Constructs a movie resource.
-			 * @param name A string for the resource name [std::move].
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
 			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
 			explicit
-			MovieResource (std::string name, uint32_t resourceFlags = 0) noexcept
-				: ResourceTrait{std::move(name), resourceFlags}
+			MovieResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -112,14 +113,14 @@ namespace EmEn::Graphics
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			bool load (const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -268,19 +269,17 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Loads a movie based on a numerical sequence of files.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
-			bool loadParametric (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+			bool loadParametric (const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Loads a manual version of a movie.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
-			bool loadManual (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+			bool loadManual (const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Updates the full duration of the movie.

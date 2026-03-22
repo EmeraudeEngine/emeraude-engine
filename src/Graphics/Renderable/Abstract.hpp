@@ -41,6 +41,7 @@
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RasterizationOptions.hpp"
 #include "ProgramCacheKey.hpp"
+#include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -123,6 +124,28 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Destructs the renderable object.
 			 */
 			~Abstract () override = default;
+
+			/**
+			 * @brief Sets the uniform scale of the renderable.
+			 * @param value
+			 */
+			void
+			setUniformScale (float value) noexcept
+			{
+				m_uniformScale = std::abs(value);
+			}
+
+			/**
+			 * @brief Returns the size scale factor for the renderable.
+			 * @note By default, returns 1.0F (no scaling). Derived classes can override.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			uniformScale () const noexcept
+			{
+				return m_uniformScale;
+			}
 
 			/**
 			 * @brief Returns whether the renderable is ready to prepare an instance on GPU for rendering.
@@ -247,10 +270,11 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Returns the geometry of the renderable.
+			 * @param LODIndex The LOD level.
 			 * @return const Geometry::Interface *
 			 */
 			[[nodiscard]]
-			virtual const Geometry::Interface * geometry () const noexcept = 0;
+			virtual const Geometry::Interface * geometry (uint32_t LODIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the material of the renderable.
@@ -284,29 +308,16 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			virtual const Libs::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
 
-			/**
-			 * @brief Returns the size scale factor for the renderable.
-			 * @note By default, returns 1.0F (no scaling). Derived classes can override.
-			 * @return float
-			 */
-			[[nodiscard]]
-			virtual
-			float
-			uniformScale () const noexcept
-			{
-				return 1.0F;
-			}
-
 		protected:
 
 			/**
 			 * @brief Constructs a renderable object.
-			 * @param resourceName A string for the resource name [std::move].
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name A string for the resource name [std::move].
 			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit
-			Abstract (std::string resourceName, uint32_t resourceFlags) noexcept
-				: ResourceTrait{std::move(resourceName), resourceFlags}
+			Abstract (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags) noexcept
+				: ResourceTrait{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -331,10 +342,6 @@ namespace EmEn::Graphics::Renderable
 
 		private:
 
-			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
-			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
-
 			/** @brief Type alias for the inner program cache (config key → program). */
 			using ProgramCache = std::unordered_map< ProgramCacheKey, std::shared_ptr< Saphir::Program > >;
 
@@ -343,8 +350,8 @@ namespace EmEn::Graphics::Renderable
 
 			/** @brief Cache of shader programs per render target and configuration. */
 			mutable RenderTargetProgramCache m_programCache;
-
 			/** @brief Shared mutex protecting the program cache (read-heavy, write-rare). */
 			mutable std::shared_mutex m_programCacheMutex;
+			float m_uniformScale = 1.0F;
 	};
 }

@@ -36,7 +36,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 
 	bool
-	DynamicSkyResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	DynamicSkyResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -49,7 +49,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	DynamicSkyResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	DynamicSkyResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -93,5 +93,32 @@ namespace EmEn::Graphics::Renderable
 		m_material = material;
 
 		return this->addDependency(m_material);
+	}
+
+	bool
+	DynamicSkyResource::onDependenciesLoaded () noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+		}
+
+		this->setReadyForInstantiation(true);
+
+		return true;
 	}
 }

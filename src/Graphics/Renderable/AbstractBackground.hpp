@@ -238,12 +238,12 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Constructs an abstract renderable background.
-			 * @param name A reference to a string for the resource name [std::move].
-			 * @param renderableFlags The resource flag bits.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			AbstractBackground (std::string name, uint32_t renderableFlags) noexcept
-				: Abstract{std::move(name), renderableFlags}
+			AbstractBackground (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}

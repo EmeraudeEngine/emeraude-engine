@@ -37,10 +37,7 @@
 /* Local usages */
 #include "Output.hpp"
 #include "ControllableTrait.hpp"
-
-#ifdef ASIO_ENABLED
 #include "RemoteListener.hpp"
-#endif
 
 /* Forward declarations */
 namespace EmEn
@@ -225,12 +222,8 @@ namespace EmEn::Console
 			PrimaryServices & m_primaryServices;
 			std::map< std::string, ControllableTrait * > m_consoleObjects;
 			std::vector< std::string > m_history;
+			std::unique_ptr< RemoteListener > m_remoteListener;
 			bool m_directInputWasEnabled{false};
 			bool m_pointerWasLocked{false};
-
-
-#ifdef ASIO_ENABLED
-			std::unique_ptr<RemoteListener> m_remoteListener;
-#endif
 	};
 }

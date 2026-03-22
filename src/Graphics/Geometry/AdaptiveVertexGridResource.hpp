@@ -109,12 +109,12 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Constructs an adaptive grid geometry resource.
-			 * @param name A reference to a string for the resource name.
-			 * @param geometryFlagBits The geometry resource flag bits, See EmEn::Graphics::Geometry::GeometryFlagBits. Default EnablePrimitiveRestart.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The geometry resource flag bits. See EmEn::Graphics::Geometry::GeometryFlagBits. Default none.
 			 */
-			explicit
-			AdaptiveVertexGridResource (const std::string & name, uint32_t geometryFlagBits = EnablePrimitiveRestart) noexcept
-				: Interface{name, geometryFlagBits}
+			AdaptiveVertexGridResource (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t resourceFlags = 0) noexcept
+				: Interface{serviceProvider, name, resourceFlags}
 			{
 
 			}
@@ -283,11 +283,11 @@ namespace EmEn::Graphics::Geometry
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]

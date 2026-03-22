@@ -36,6 +36,7 @@
 /* Local inclusions for usages. */
 #include "RenderTarget/Abstract.hpp"
 #include "DirectPostProcessEffect.hpp"
+#include "PrimaryServices.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -69,6 +70,11 @@ namespace EmEn
 		{
 			class IndexedVertexResource;
 		}
+	}
+
+	namespace Resources
+	{
+		class Manager;
 	}
 }
 
@@ -107,9 +113,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Constructs the post-processor service.
-			 * @param renderer A reference to the graphics renderer.
+			 * @param primaryServices A reference to the primary services.
+			 * @param resourcesManager A reference to the resource manager.
 			 */
-			explicit PostProcessor (Renderer & renderer) noexcept;
+			PostProcessor (PrimaryServices & primaryServices, Resources::Manager & resourcesManager) noexcept;
 
 			/**
 			 * @brief Configures the post-processor over a render-target with explicit requirements.
@@ -117,6 +124,7 @@ namespace EmEn::Graphics
 			 * @param requiresHDR Whether the scene effects require HDR.
 			 * @param requiresDepth Whether the scene effects require depth.
 			 * @param requiresNormals Whether the scene effects require normals.
+			 * @param requiresMaterialProperties
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -241,6 +249,7 @@ namespace EmEn::Graphics
 			 * After execution, the descriptor set is updated to point to the chain output.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param stack The scene's post-process stack.
+			 * @param lightSet
 			 * @return void
 			 */
 			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept;
@@ -251,7 +260,7 @@ namespace EmEn::Graphics
 			 * Generates or retrieves a cached shader program from the effects list,
 			 * then renders a fullscreen quad with that program.
 			 * @param commandBuffer A reference to the active command buffer.
-			 * @param lensEffects The camera's lens effects list (may be empty for passthrough).
+			 * @param lensEffects The camera's lens effects list (maybe empty for passthrough).
 			 * @return void
 			 */
 			void executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept;
@@ -274,7 +283,8 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/* Shared state. */
+			PrimaryServices & m_primaryServices;
+			Resources::Manager & m_resourcesManager;
 			Renderer & m_renderer;
 			std::unique_ptr< GrabPass > m_grabPass;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
@@ -282,7 +292,6 @@ namespace EmEn::Graphics
 			float m_nearPlane{0.1F};
 			float m_farPlane{1000.0F};
 			bool m_enabled{false};
-
 			/* Cached requirements from configure(). */
 			bool m_cachedRequiresHDR{false};
 			bool m_cachedRequiresDepth{false};

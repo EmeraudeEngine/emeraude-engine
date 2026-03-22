@@ -55,12 +55,12 @@ namespace EmEn::Graphics::TextureResource
 
 			/**
 			 * @brief Constructs an animated texture 2D resource.
-			 * @param textureName A string for the texture name [std::move].
-			 * @param textureFlags The resource flag bits. Default none. (Unused yet)
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit
-			AnimatedTexture2D (std::string textureName, uint32_t textureFlags = 0) noexcept
-				: Abstract{std::move(textureName), textureFlags}
+			AnimatedTexture2D (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -195,14 +195,14 @@ namespace EmEn::Graphics::TextureResource
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			bool load (const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]

@@ -31,14 +31,12 @@
 #include <algorithm>
 #include <map>
 #include <memory>
-#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
 
 /* Local inclusions. */
 #include "DefinitionResource.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
@@ -96,7 +94,15 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundLevel, seaLevel);
+		auto newScene = std::make_shared< Scene >(
+			m_resourceManager.graphicsRenderer(),
+			m_resourceManager.audioManager(),
+			sceneName,
+			boundary,
+			background,
+			groundLevel,
+			seaLevel
+		);
 
 		this->notify(SceneCreated, newScene);
 
@@ -134,7 +140,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Loads the scene definition from the file. */
-		if ( !sceneDefinition->load(m_resourceManager, filepath) )
+		if ( !sceneDefinition->load(filepath) )
 		{
 			TraceError{ClassId} << "Unable to load Definition from '" << filepath << "' file ! Loading cancelled ...";
 

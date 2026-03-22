@@ -104,15 +104,22 @@ class Container : public ContainerInterface, public ObserverTrait {
 // src/Resources/ResourceTrait.hpp
 class ResourceTrait : public std::enable_shared_from_this<ResourceTrait>,
                       public NameableTrait, public FlagTrait, public ObservableTrait {
+    AbstractServiceProvider & m_serviceProvider;  // Injected at construction (non-nullable)
     std::vector<std::shared_ptr<ResourceTrait>> m_parentsToNotify;
     std::vector<std::shared_ptr<ResourceTrait>> m_dependenciesToWaitFor;
     std::atomic<Status> m_status{Status::Unloaded};  // Thread-safe status
     std::mutex m_dependenciesAccess;  // Protects dependency lists
 
-    // Loading lifecycle
-    virtual bool load(AbstractServiceProvider&) = 0;  // Neutral resource (no params)
-    virtual bool load(AbstractServiceProvider&, const std::filesystem::path&) = 0;
-    virtual bool load(AbstractServiceProvider&, const Json::Value&) = 0;
+    // Constructor: ServiceProvider injected at construction time
+    ResourceTrait(AbstractServiceProvider & serviceProvider, std::string name, uint32_t flags) noexcept;
+
+    // Service access (available from construction, before load())
+    AbstractServiceProvider & serviceProvider() const noexcept;
+
+    // Loading lifecycle — ServiceProvider no longer passed here
+    virtual bool load() noexcept = 0;  // Neutral resource (no params)
+    virtual bool load(const std::filesystem::path &) noexcept = 0;
+    virtual bool load(const Json::Value &) noexcept = 0;
 
     // Dependency management
     bool addDependency(const std::shared_ptr<ResourceTrait>& dependency);
@@ -137,7 +144,7 @@ class ResourceTrait : public std::enable_shared_from_this<ResourceTrait>,
 
 ## The Neutral Resource Pattern (Critical!)
 
-**Every resource type MUST implement `load(ServiceProvider&)` without parameters.**
+**Every resource type MUST implement `load()` (no parameters) for neutral/default resources.**
 
 This method creates a **neutral/default** version of the resource that:
 - **Always succeeds** (no file I/O, no network, no dependencies)
@@ -149,7 +156,11 @@ This method creates a **neutral/default** version of the resource that:
 ```cpp
 // TextureResource - Procedural checkerboard
 class TextureResource : public ResourceTrait {
-    bool load(ServiceProvider& provider) override {
+    // Constructor: ServiceProvider injected at construction
+    TextureResource(AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t flags)
+        : ResourceTrait{serviceProvider, name, flags} {}
+
+    bool load() noexcept override {
         // Generate 64×64 checkerboard pattern (pink/black)
         m_pixels = generateCheckerboard(64, 64, Color::Pink, Color::Black);
         m_width = 64;
@@ -157,7 +168,7 @@ class TextureResource : public ResourceTrait {
         return true;  // Always succeeds
     }
 
-    bool load(ServiceProvider& provider, const std::filesystem::path& path) override {
+    bool load(const std::filesystem::path& path) noexcept override {
         // Load real texture from file
         if (!loadImageFile(path, m_pixels, m_width, m_height)) {
             return false;  // Can fail
@@ -165,7 +176,7 @@ class TextureResource : public ResourceTrait {
         return true;
     }
 
-    bool onDependenciesLoaded() override {
+    bool onDependenciesLoaded() noexcept override {
         // Upload to GPU (same for neutral or real)
         m_vkImage = vulkan.createImage(m_pixels, m_width, m_height);
         return true;
@@ -174,30 +185,33 @@ class TextureResource : public ResourceTrait {
 
 // MeshResource - Procedural gray cube
 class MeshResource : public ResourceTrait {
-    bool load(ServiceProvider& provider) override {
-        // Generate unit cube geometry
+    MeshResource(AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t flags)
+        : ResourceTrait{serviceProvider, name, flags} {}
+
+    bool load() noexcept override {
+        // Generate unit cube geometry — serviceProvider available via this->serviceProvider()
         m_vertices = generateCubeVertices(1.0F);
         m_indices = generateCubeIndices();
 
         // Neutral gray material (no dependencies)
-        m_material = provider.container<MaterialResource>()->getDefaultResource();
+        m_material = this->serviceProvider().container<MaterialResource>()->getDefaultResource();
 
         return true;  // Always succeeds
     }
 
-    bool load(ServiceProvider& provider, const Json::Value& data) override {
-        // Load real mesh from data
+    bool load(const Json::Value& data) noexcept override {
+        // Load real mesh from data — use this->serviceProvider() for container access
         m_vertices = loadVertices(data);
         m_indices = loadIndices(data);
 
         // Add material dependency
-        auto material = provider.container<MaterialResource>()->getResource(data["material"]);
+        auto material = this->serviceProvider().container<MaterialResource>()->getResource(data["material"]);
         addDependency(material);  // ← Keeps resource in Loading state
 
         return true;
     }
 
-    bool onDependenciesLoaded() override {
+    bool onDependenciesLoaded() noexcept override {
         // ← ALL dependencies loaded! Material + textures ready
         // Upload complete data to GPU
         m_vertexBuffer = vulkan.createBuffer(m_vertices);
@@ -233,10 +247,10 @@ class VolumetricImageResource : public ResourceTrait {
     uint32_t m_colorCount{4};  // RGBA
 
     // Neutral resource: 32×32×32 RGB gradient cube
-    bool load(ServiceProvider&) override;
+    bool load() noexcept override;
 
     // File loading: TODO
-    bool load(ServiceProvider&, const std::filesystem::path&) override;
+    bool load(const std::filesystem::path&) noexcept override;
 };
 ```
 
@@ -296,21 +310,21 @@ enum class Status : uint8_t {
 ### Key Implementation Details
 
 ```cpp
-// Inside resource load()
-bool MeshResource::load(ServiceProvider& provider, const Json::Value& data) {
+// Inside resource load() — ServiceProvider is NOT passed, use this->serviceProvider()
+bool MeshResource::load(const Json::Value& data) noexcept {
     // 1. Load immediate data
     m_vertices = loadVertices(data);
     m_indices = loadIndices(data);
 
-    // 2. Declare dependencies
-    auto material = provider.container<MaterialResource>()->getResource(data["material"]);
+    // 2. Declare dependencies — access containers via serviceProvider()
+    auto material = this->serviceProvider().container<MaterialResource>()->getResource(data["material"]);
     addDependency(material);  // ← Resource stays in Loading state
 
     return true;  // load() succeeded, but resource not Loaded yet
 }
 
 // Called automatically when all dependencies finish
-bool MeshResource::onDependenciesLoaded() {
+bool MeshResource::onDependenciesLoaded() noexcept {
     // 3. Finalize with complete data
     // At this point: geometry + material + textures ALL ready
     m_vertexBuffer = vulkan.createBuffer(m_vertices);
@@ -522,7 +536,7 @@ size_t Manager::unloadUnusedResources() {
 ```
 src/Resources/
 ├── Types.hpp              # Enums (SourceType, Status, DepComplexity) + conversion functions
-├── ResourceTrait.hpp      # Base class + AbstractServiceProvider (merged)
+├── ResourceTrait.hpp      # Base class + AbstractServiceProvider (merged). ServiceProvider injected at construction.
 ├── ResourceTrait.cpp      # Implementation (dependency management, cycle detection)
 ├── Container.hpp          # Template Container<resource_t> (type-specific store)
 ├── Manager.hpp            # Central Manager (access to all containers)

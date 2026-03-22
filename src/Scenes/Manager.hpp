@@ -176,17 +176,13 @@ namespace EmEn::Scenes
 			 * @param primaryServices A reference to primary services.
 			 * @param resourceManager A reference to the resource manager.
 			 * @param inputManager A reference to the input manager.
-			 * @param graphicsRenderer A reference to the graphics renderer.
-			 * @param audioManager A reference to the audio manager.
 			 */
-			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Input::Manager & inputManager, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
+			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Input::Manager & inputManager) noexcept
 				: ServiceInterface{ClassId},
 				ControllableTrait{ClassId},
 				m_primaryServices{primaryServices},
 				m_resourceManager{resourceManager},
-				m_inputManager{inputManager},
-				m_graphicsRenderer{graphicsRenderer},
-				m_audioManager{audioManager}
+				m_inputManager{inputManager}
 			{
 
 			}
@@ -370,8 +366,6 @@ namespace EmEn::Scenes
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			Input::Manager & m_inputManager;
-			Graphics::Renderer & m_graphicsRenderer;
-			Audio::Manager & m_audioManager;
 			std::map< std::string, std::shared_ptr< Scene > > m_scenes;
 			std::shared_ptr< Scene > m_activeScene;
 			ConsoleMemory m_consoleMemory;

@@ -286,9 +286,11 @@ namespace EmEn::Graphics
 
 	/* Construction & lifecycle. */
 
-	PostProcessor::PostProcessor (Renderer & renderer) noexcept
+	PostProcessor::PostProcessor (PrimaryServices & primaryServices, Resources::Manager & resourcesManager) noexcept
 		: ServiceInterface{ClassId},
-		m_renderer{renderer}
+		m_primaryServices{primaryServices},
+		m_resourcesManager{resourcesManager},
+		m_renderer{resourcesManager.graphicsRenderer()}
 	{
 
 	}
@@ -297,7 +299,7 @@ namespace EmEn::Graphics
 	PostProcessor::onInitialize () noexcept
 	{
 		/* Create the fullscreen quad geometry. */
-		m_quadGeometry = std::make_shared< Geometry::IndexedVertexResource >("PostProcessQuad", Geometry::EnablePrimaryTextureCoordinates);
+		m_quadGeometry = std::make_shared< Geometry::IndexedVertexResource >(m_resourcesManager, "PostProcessQuad", Geometry::EnablePrimaryTextureCoordinates);
 
 		if ( !m_quadGeometry->load(ShapeGenerator::generateQuad(2.0F, 2.0F)) )
 		{

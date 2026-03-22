@@ -44,10 +44,8 @@ namespace EmEn::Graphics::Renderable
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 
-	constexpr uint32_t MaxFrames{120};
-
 	bool
-	SpriteResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	SpriteResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -56,14 +54,14 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		if ( !this->prepareGeometry(serviceProvider, false, false, false) )
+		if ( !this->prepareGeometry(false, false, false) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(serviceProvider.container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(this->serviceProvider().container< Material::BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -72,7 +70,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	SpriteResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -81,8 +79,8 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		const auto material = serviceProvider.container< Material::BasicResource >()
-			->getOrCreateResource("SpriteMaterial" + this->name(), [&serviceProvider, data] (auto & materialResource) {
+		const auto material = this->serviceProvider().container< Material::BasicResource >()
+			->getOrCreateResource("SpriteMaterial" + this->name(), [&, data] (auto & materialResource) {
 				if ( !data.isMember(Material::JKData) || !data[Material::JKData].isObject() )
 				{
 					TraceError{ClassId} << "The key '" << Material::JKData << "' JSON structure is not present or not an object !";
@@ -99,7 +97,7 @@ namespace EmEn::Graphics::Renderable
 					{
 						case FillingType::Texture :
 						{
-							const auto textureResource = serviceProvider.container< TextureResource::Texture2D >()
+							const auto textureResource = this->serviceProvider().container< TextureResource::Texture2D >()
 								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
 								.value_or(Resources::Default));
 
@@ -112,7 +110,7 @@ namespace EmEn::Graphics::Renderable
 
 						case FillingType::AnimatedTexture :
 						{
-							const auto textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()
+							const auto textureResource = this->serviceProvider().container< TextureResource::AnimatedTexture2D >()
 								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
 								.value_or(Resources::Default));
 
@@ -162,30 +160,33 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		const auto isAnimated = Material::getFillingTypeFromJSON(data) == FillingType::AnimatedTexture;
-		const auto centerAtBottom = FastJSON::getValue< bool >(data, JKCenterAtBottomKey).value_or(false);
-		const auto flip = FastJSON::getValue< bool >(data, JKFlipKey).value_or(false);
+		const auto centerAtBottom = FastJSON::getValue< bool >(data, JKCenterAtBottom).value_or(false);
+		const auto flip = FastJSON::getValue< bool >(data, JKFlip).value_or(false);
 
-		if ( !this->prepareGeometry(serviceProvider, isAnimated, centerAtBottom, flip) )
+		if ( !this->prepareGeometry(isAnimated, centerAtBottom, flip) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		m_uniformScale = FastJSON::getValue< float >(data, JKUniformScaleKey).value_or(1.0F);
+		if ( data.isMember(JKUniformScale) )
+		{
+			this->setUniformScale(FastJSON::getValue< float >(data, JKUniformScale).value_or(1.0F));
+		}
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	SpriteResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom, bool flip, const RasterizationOptions & /*rasterizationOptions*/) noexcept
+	SpriteResource::load (const std::shared_ptr< Material::Interface > & material, bool centerAtBottom, bool flip, const RasterizationOptions & /*rasterizationOptions*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->prepareGeometry(serviceProvider, material->isAnimated(), centerAtBottom, flip) )
+		if ( !this->prepareGeometry(material->isAnimated(), centerAtBottom, flip) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");
 
@@ -206,7 +207,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::prepareGeometry (Resources::AbstractServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept
+	SpriteResource::prepareGeometry (bool isAnimated, bool centerAtBottom, bool flip) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{s_lockGeometryLoading};
 
@@ -221,7 +222,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* NOTE: Must be sync to get the geometry ASAP. */
-		m_geometry = serviceProvider.container< Geometry::IndexedVertexResource >()
+		m_geometry = this->serviceProvider().container< Geometry::IndexedVertexResource >()
 			->getOrCreateResource(resourceName.str(), [isAnimated, centerAtBottom, flip] (auto & geometryResource) {
 				Shape< float, uint32_t > shape{2 * MaxFrames};
 
@@ -315,6 +316,25 @@ namespace EmEn::Graphics::Renderable
 	bool
 	SpriteResource::onDependenciesLoaded () noexcept
 	{
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+		}
+
 		this->setReadyForInstantiation(true);
 
 		return true;

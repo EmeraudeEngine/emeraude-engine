@@ -94,8 +94,11 @@ namespace EmEn::Scenes
 			explicit SceneMetaData (const std::shared_ptr< Vulkan::Device > & device, bool enableRayTracing = true) noexcept;
 
 			SceneMetaData (const SceneMetaData & copy) noexcept = delete;
+
 			SceneMetaData (SceneMetaData && copy) noexcept = delete;
+
 			SceneMetaData & operator= (const SceneMetaData & copy) noexcept = delete;
+
 			SceneMetaData & operator= (SceneMetaData && copy) noexcept = delete;
 
 			/**

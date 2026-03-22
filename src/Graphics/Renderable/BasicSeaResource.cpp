@@ -36,14 +36,14 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 
 	bool
-	BasicSeaResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	BasicSeaResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >("DefaultBasicSeaGeometry");
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), "DefaultBasicSeaGeometry");
 
 		if ( !geometryResource->load(DefaultSize, DefaultDivision) )
 		{
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(serviceProvider.container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(this->serviceProvider().container< Material::BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -66,7 +66,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicSeaResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	BasicSeaResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -119,6 +119,7 @@ namespace EmEn::Graphics::Renderable
 		/* 1. Generate the grid geometry with tangent space and texture coordinates
 		 * so that PBR materials with normal maps can work properly. */
 		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(
+			this->serviceProvider(),
 			this->name() + "GridGeometry",
 			Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart
 		);
@@ -213,5 +214,32 @@ namespace EmEn::Graphics::Renderable
 
 		/* Checks if all is loaded */
 		return this->addDependency(m_material);
+	}
+
+	bool
+	BasicSeaResource::onDependenciesLoaded () noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+		}
+
+		this->setReadyForInstantiation(true);
+
+		return true;
 	}
 }

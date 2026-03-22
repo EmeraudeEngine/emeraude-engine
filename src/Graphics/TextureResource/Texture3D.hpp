@@ -102,13 +102,13 @@ namespace EmEn::Graphics::TextureResource
 			 * Creates an empty texture resource that must be loaded via load() methods before use.
 			 * The texture is not created on the GPU until createTexture() is called.
 			 *
-			 * @param textureName Unique name identifying this texture resource.
-			 * @param textureFlags Optional resource flag bits for future use. Default is 0 (unused).
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 * @version 0.8.35
 			 */
-			explicit
-			Texture3D (std::string textureName, uint32_t textureFlags = 0) noexcept
-				: Abstract{std::move(textureName), textureFlags}
+			Texture3D (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -297,33 +297,14 @@ namespace EmEn::Graphics::TextureResource
 				return ClassId;
 			}
 
-			/**
-			 * @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &)
-			 *
-			 * Loads the default VolumetricImageResource from the service provider as volumetric data source.
-			 *
-			 * @version 0.8.35
-			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/**
-			 * @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &)
-			 *
-			 * Loads a VolumetricImageResource from the specified filepath and sets it as the volumetric data source.
-			 *
-			 * @version 0.8.35
-			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			bool load (const std::filesystem::path & filepath) noexcept override;
 
-			/**
-			 * @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &)
-			 *
-			 * Not intended to be used for Texture3D resources. Always returns false.
-			 *
-			 * @note This resource has no local store and cannot be loaded from JSON data.
-			 * @version 0.8.35
-			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept

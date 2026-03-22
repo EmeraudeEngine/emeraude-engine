@@ -52,7 +52,7 @@ namespace EmEn::Graphics::Material
 	using namespace Vulkan;
 
 	bool
-	BasicResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	BasicResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -99,7 +99,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	BasicResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -145,7 +145,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, componentData, fillingType, serviceProvider);
+				m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, componentData, fillingType, this->serviceProvider());
 
 				const auto textureResource = m_textureComponent->textureResource();
 

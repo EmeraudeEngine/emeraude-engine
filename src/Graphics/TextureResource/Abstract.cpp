@@ -39,20 +39,11 @@ namespace EmEn::Graphics::TextureResource
 
 	constexpr auto TracerTag{"AbstractTextureResource"};
 
-	Renderer * Abstract::s_graphicsRenderer = nullptr;
-
 	bool
 	Abstract::onDependenciesLoaded () noexcept
 	{
-		if ( s_graphicsRenderer == nullptr )
-		{
-			TraceError{TracerTag} << "The static renderer pointer is null !";
-
-			return false;
-		}
-
 		/* NOTE: Ensure the texture is on the video memory. */
-		if ( !this->isCreated() && !this->createTexture(*s_graphicsRenderer) )
+		if ( !this->isCreated() && !this->createTexture(this->serviceProvider().graphicsRenderer()) )
 		{
 			TraceError{TracerTag} << "Unable to load texture resource (" << this->classLabel() << ") '" << this->name() << "' !";
 

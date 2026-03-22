@@ -68,13 +68,11 @@ namespace EmEn
 
 			/**
 			 * @brief Constructs the notifier service.
-			 * @param resourceManager A reference to the resource manager.
 			 * @param overlayManager A reference to the overlay manager.
 			 */
 			explicit
-			Notifier (Resources::Manager & resourceManager, Overlay::Manager & overlayManager) noexcept
+			Notifier (Overlay::Manager & overlayManager) noexcept
 				: ServiceInterface{ClassId},
-				m_resourceManager{resourceManager},
 				m_overlayManager{overlayManager}
 			{
 
@@ -167,7 +165,6 @@ namespace EmEn
 			 */
 			void clearDisplay (const Libs::PixelFactory::Color< float > & bgColor) const noexcept;
 
-			Resources::Manager & m_resourceManager;
 			Overlay::Manager & m_overlayManager;
 			std::shared_ptr< Overlay::UIScreen > m_screen;
 			std::shared_ptr< Overlay::Surface > m_surface;

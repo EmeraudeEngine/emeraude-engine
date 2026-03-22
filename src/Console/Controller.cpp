@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Libs/String.hpp"
 #include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
 
 namespace EmEn::Console
 {
@@ -40,18 +41,29 @@ namespace EmEn::Console
 	Controller::onInitialize () noexcept
 	{
 #ifdef ASIO_ENABLED
-		m_remoteListener = std::make_unique<RemoteListener>(7777); 
-		m_remoteListener->start();
+		const auto remoteListenerPort = m_primaryServices.settings().getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
 
-		Tracer::getInstance().addSink([this](Severity severity, const char* tag, std::string_view message) {
-			if (m_remoteListener)
-			{
-				std::stringstream ss;
-				ss << "[" << to_string(severity) << "][" << tag << "] " << message;
-				m_remoteListener->broadcast(ss.str());
-			}
-		});
+		m_remoteListener = std::make_unique< RemoteListener >(remoteListenerPort);
+
+		if ( m_remoteListener->isRunning() )
+		{
+			Tracer::getInstance().addSink([this] (Severity severity, const char * tag, std::string_view message) {
+				if ( m_remoteListener )
+				{
+					std::stringstream ss;
+					ss << "[" << to_string(severity) << "][" << tag << "] " << message;
+					m_remoteListener->broadcast(ss.str());
+				}
+			});
+		}
+		else
+		{
+			m_remoteListener.reset();
+
+			TraceWarning{ClassId} << "Remote listener failed to initialize, remote console will be unavailable.";
+		}
 #endif
+
 		return true;
 	}
 
@@ -60,12 +72,13 @@ namespace EmEn::Console
 	{
 #ifdef ASIO_ENABLED
 		Tracer::getInstance().removeAllSinks();
-		if (m_remoteListener)
+
+		if ( m_remoteListener != nullptr )
 		{
-			m_remoteListener->stop();
 			m_remoteListener.reset();
 		}
 #endif
+
 		m_consoleObjects.clear();
 
 		return true;
@@ -98,7 +111,6 @@ namespace EmEn::Console
 
 		return true;
 	}
-
 
 	bool
 	Controller::remove (const ControllableTrait & pointer) noexcept
@@ -174,13 +186,13 @@ namespace EmEn::Console
 
 		this->executeCommand(fullCommand, tempOutputs);
 
-		for (const auto & output : tempOutputs)
+		for ( const auto & output : tempOutputs )
 		{
-			if (output.severity() == Severity::Error || output.severity() == Severity::Fatal)
+			if ( output.severity() == Severity::Error || output.severity() == Severity::Fatal )
 			{
 				Tracer::error(ClassId, output.message());
 			}
-			else if (output.severity() == Severity::Warning)
+			else if ( output.severity() == Severity::Warning )
 			{
 				Tracer::warning(ClassId, output.message());
 			}
@@ -195,10 +207,11 @@ namespace EmEn::Console
 	Controller::poll () noexcept
 	{
 #ifdef ASIO_ENABLED
-		if (m_remoteListener)
+		if ( m_remoteListener != nullptr )
 		{
 			std::string command;
-			while (m_remoteListener->popCommand(command))
+
+			while ( m_remoteListener->popCommand(command) )
 			{
 				this->executeCommand(command);
 			}

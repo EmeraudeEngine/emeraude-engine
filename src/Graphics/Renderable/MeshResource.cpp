@@ -28,9 +28,11 @@
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
+#include "Libs/VertexFactory/ShapeDecimator.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
 #include "Graphics/Material/PBRResource.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -50,9 +52,7 @@ namespace EmEn::Graphics::Renderable
 			layerIndex = 0;
 		}
 
-		const auto materialResource = m_layers[layerIndex].material();
-
-		if ( materialResource != nullptr )
+		if ( const auto materialResource = m_layers[layerIndex].material(); materialResource != nullptr )
 		{
 			return materialResource->isOpaque();
 		}
@@ -68,14 +68,27 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		const auto materialResource = m_layers[layerIndex].material();
-
-		if ( materialResource != nullptr )
+		if ( const auto materialResource = m_layers[layerIndex].material(); materialResource != nullptr )
 		{
 			return materialResource->requiresGrabPass();
 		}
 
 		return false;
+	}
+
+	const Geometry::Interface *
+	MeshResource::geometry (uint32_t LODLevel) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_geometryMutex};
+
+		if ( m_geometry.empty() )
+		{
+			return nullptr;
+		}
+
+		const auto clamped = std::min(LODLevel, static_cast< uint32_t >(m_geometry.size() - 1));
+
+		return m_geometry[clamped].get();
 	}
 
 	const Material::Interface *
@@ -105,19 +118,19 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	MeshResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(serviceProvider.container< VertexResource >()->getDefaultResource()) )
+		if ( !this->setGeometry(this->serviceProvider().container< VertexResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(serviceProvider.container< BasicResource >()->getDefaultResource(), {}, 0) )
+		if ( !this->setMaterial(this->serviceProvider().container< BasicResource >()->getDefaultResource(), {}, 0) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -126,58 +139,50 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Geometry::Interface >
-	MeshResource::parseGeometry (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MeshResource::parseGeometry (const Json::Value & data) noexcept
 	{
-		/* Checks size option */
-		if ( data.isMember(BaseSizeKey) )
+		if ( data.isMember(JKUniformScale) )
 		{
-			if ( data[BaseSizeKey].isNumeric() )
-			{
-				m_baseSize = data[BaseSizeKey].asFloat();
-			}
-			else
-			{
-				TraceWarning{ClassId} << "The key '" << BaseSizeKey << "' must be numeric !";
-			}
+			this->setUniformScale(FastJSON::getValue< float >(data, JKUniformScale).value_or(1.0F));
 		}
 
-		const auto geometryType = FastJSON::getValidatedStringValue(data, GeometryTypeKey, Geometry::Types).value_or(IndexedVertexResource::ClassId);
-		const auto geometryResourceName = FastJSON::getValue< std::string >(data, GeometryNameKey);
+		const auto geometryType = FastJSON::getValidatedStringValue(data, JKGeometryType, Geometry::Types).value_or(IndexedVertexResource::ClassId);
+		const auto geometryResourceName = FastJSON::getValue< std::string >(data, JKGeometryName);
 
 		if ( geometryType == VertexResource::ClassId )
 		{
 			if ( !geometryResourceName )
 			{
-				TraceError{ClassId} << "The key '" << GeometryTypeKey << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
+				TraceError{ClassId} << "The key '" << JKGeometryType << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
 
-				return serviceProvider.container< VertexResource >()->getDefaultResource();
+				return this->serviceProvider().container< VertexResource >()->getDefaultResource();
 			}
 
-			return serviceProvider.container< VertexResource >()->getResource(geometryResourceName.value());
+			return this->serviceProvider().container< VertexResource >()->getResource(geometryResourceName.value());
 		}
 
 		if ( geometryType == IndexedVertexResource::ClassId )
 		{
 			if ( !geometryResourceName )
 			{
-				TraceError{ClassId} << "The key '" << GeometryTypeKey << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
+				TraceError{ClassId} << "The key '" << JKGeometryType << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
 
-				return serviceProvider.container< IndexedVertexResource >()->getDefaultResource();
+				return this->serviceProvider().container< IndexedVertexResource >()->getDefaultResource();
 			}
 
-			return serviceProvider.container< IndexedVertexResource >()->getResource(geometryResourceName.value());
+			return this->serviceProvider().container< IndexedVertexResource >()->getResource(geometryResourceName.value());
 		}
 
 		TraceWarning{ClassId} << "Geometry resource type '" << geometryType << "' is not handled !";
 
-		return serviceProvider.container< IndexedVertexResource >()->getDefaultResource();
+		return this->serviceProvider().container< IndexedVertexResource >()->getDefaultResource();
 	}
 
 	std::shared_ptr< Material::Interface >
 	MeshResource::parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
-		const auto materialType = FastJSON::getValidatedStringValue(data, MaterialTypeKey, Material::Types).value_or(BasicResource::ClassId);
-		const auto materialResourceName = FastJSON::getValue< std::string >(data, MaterialNameKey);
+		const auto materialType = FastJSON::getValidatedStringValue(data, JKMaterialType, Material::Types).value_or(BasicResource::ClassId);
+		const auto materialResourceName = FastJSON::getValue< std::string >(data, JKMaterialName);
 
 		/* C++20 lambda template to load material from the appropriate container. */
 		auto loadMaterial = [&] < typename ResourceType > () -> std::shared_ptr< Material::Interface >
@@ -186,7 +191,7 @@ namespace EmEn::Graphics::Renderable
 
 			if ( !materialResourceName )
 			{
-				TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << ResourceType::ClassId << "' is not present or not a string !";
+				TraceError{ClassId} << "The key '" << JKMaterialName << "' for '" << ResourceType::ClassId << "' is not present or not a string !";
 
 				return container->getDefaultResource();
 			}
@@ -212,9 +217,9 @@ namespace EmEn::Graphics::Renderable
 	{
 		RasterizationOptions layerRasterizationOptions{};
 
-		if ( data.isMember(EnableDoubleSidedFaceKey) && data[EnableDoubleSidedFaceKey].isBool() )
+		if ( data.isMember(JKEnableDoubleSidedFace) && data[JKEnableDoubleSidedFace].isBool() )
 		{
-			if ( data[EnableDoubleSidedFaceKey] )
+			if ( data[JKEnableDoubleSidedFace] )
 			{
 				layerRasterizationOptions.setCullingMode(CullingMode::None);
 			}
@@ -224,17 +229,17 @@ namespace EmEn::Graphics::Renderable
 			}
 		}
 
-		if ( data.isMember(DrawingModeKey) && data[DrawingModeKey].isString() )
+		if ( data.isMember(JKDrawingMode) && data[JKDrawingMode].isString() )
 		{
-			if ( data[DrawingModeKey] == "Fill" )
+			if ( data[JKDrawingMode] == "Fill" )
 			{
 				layerRasterizationOptions.setPolygonMode(PolygonMode::Fill);
 			}
-			else if ( data[DrawingModeKey] == "Line" )
+			else if ( data[JKDrawingMode] == "Line" )
 			{
 				layerRasterizationOptions.setPolygonMode(PolygonMode::Line);
 			}
-			else if ( data[DrawingModeKey] == "Point" )
+			else if ( data[JKDrawingMode] == "Point" )
 			{
 				layerRasterizationOptions.setPolygonMode(PolygonMode::Point);
 			}
@@ -244,7 +249,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MeshResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -255,7 +260,7 @@ namespace EmEn::Graphics::Renderable
 		//this->parseOptions(data);
 
 		/* Parse geometry definition. */
-		const auto geometryResource = this->parseGeometry(serviceProvider, data);
+		const auto geometryResource = this->parseGeometry(data);
 
 		if ( geometryResource == nullptr )
 		{
@@ -267,25 +272,25 @@ namespace EmEn::Graphics::Renderable
 		this->setGeometry(geometryResource);
 
 		/* Checks layers array presence and content. */
-		if ( !data.isMember(LayersKey) )
+		if ( !data.isMember(JKLayers) )
 		{
-			TraceError{ClassId} << "'" << LayersKey << "' key doesn't exist !";
+			TraceError{ClassId} << "'" << JKLayers << "' key doesn't exist !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto & layerRules = data[LayersKey];
+		const auto & layerRules = data[JKLayers];
 
 		if ( !layerRules.isArray() )
 		{
-			TraceError{ClassId} << "'" << LayersKey << "' key must be a JSON array !";
+			TraceError{ClassId} << "'" << JKLayers << "' key must be a JSON array !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		if ( layerRules.empty() )
 		{
-			TraceError{ClassId} << "'" << LayersKey << "' array is empty !";
+			TraceError{ClassId} << "'" << JKLayers << "' array is empty !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -295,7 +300,7 @@ namespace EmEn::Graphics::Renderable
 		for ( const auto & layerRule : layerRules )
 		{
 			/* Parse material definition and get default if an error occurs. */
-			auto materialResource = MeshResource::parseLayer(serviceProvider, layerRule);
+			auto materialResource = MeshResource::parseLayer(this->serviceProvider(), layerRule);
 
 			/* Gets a default material. */
 			if ( materialResource == nullptr )
@@ -396,9 +401,9 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		m_geometry = geometry;
+		m_geometry.emplace_back(geometry);
 
-		return this->addDependency(m_geometry);
+		return this->addDependency(geometry);
 	}
 
 	bool
@@ -420,9 +425,139 @@ namespace EmEn::Graphics::Renderable
 		return this->addDependency(material);
 	}
 
-	float
-	MeshResource::baseSize () const noexcept
+	bool
+	MeshResource::onDependenciesLoaded () noexcept
 	{
-		return m_baseSize;
+		/* NOTE: Check for sub-geometries and layer count coherence. */
+		if ( this->subGeometryCount() != this->layerCount() )
+		{
+			TraceError{ClassId} <<
+				"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+				"There is " << this->subGeometryCount() << " sub-geometries and " <<  this->layerCount() << " rendering layers!";
+
+			return false;
+		}
+
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+					"The geometry is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resources. */
+			const auto lCount = this->layerCount();
+
+			for ( uint32_t layerIndex = 0; layerIndex < lCount; layerIndex++ )
+			{
+				if ( !this->material(layerIndex)->isCreated() )
+				{
+					TraceError{ClassId} <<
+						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+						"The material #" << layerIndex << " is not created!";
+
+					return false;
+				}
+			}
+		}
+
+		/* LOD 0 is ready — mark the renderable as instantiable immediately. */
+		this->setReadyForInstantiation(true);
+
+		/* Attempt automatic LOD generation for IndexedVertexResource with sufficient detail. */
+		auto sourceGeometry = std::dynamic_pointer_cast< IndexedVertexResource >(m_geometry[0]);
+
+		if ( sourceGeometry != nullptr )
+		{
+			const auto triangleCount = sourceGeometry->localData().triangles().size();
+
+			/* Determine how many LOD levels to generate based on available detail. */
+			uint32_t levelsToGenerate = 0;
+			float ratio = LODReductionRatio;
+
+			while ( levelsToGenerate < MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= MinTrianglesPerLOD )
+			{
+				levelsToGenerate++;
+
+				ratio *= LODReductionRatio;
+			}
+
+			if ( levelsToGenerate > 0 )
+			{
+				TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
+
+				m_lodFutures.emplace_back(std::async(std::launch::async, [this, sourceGeometry, levelsToGenerate] {
+					float levelRatio = LODReductionRatio;
+
+					for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
+					{
+						this->generateLODLevel(sourceGeometry, level, levelRatio);
+
+						levelRatio *= LODReductionRatio;
+					}
+				}));
+			}
+		}
+
+		return true;
+	}
+
+	void
+	MeshResource::generateLODLevel (const std::shared_ptr< IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept
+	{
+		/* Decimate the source mesh (preserves multi-group structure). */
+		const VertexFactory::ShapeDecimator decimator{sourceGeometry->localData(), ratio};
+		auto decimatedShape = decimator.decimate();
+
+		if ( !decimatedShape.isValid() || decimatedShape.triangles().empty() )
+		{
+			TraceWarning{ClassId} << "LOD " << LODLevel << " decimation failed for '" << this->name() << "'.";
+
+			return;
+		}
+
+		/* Create a standalone geometry resource for this LOD level. */
+		const auto LODName = this->name() + "_LOD" + std::to_string(LODLevel);
+		auto lodGeometry = std::make_shared< IndexedVertexResource >(this->serviceProvider(), LODName, sourceGeometry->flags());
+
+		/* load(Shape) triggers the full resource lifecycle:
+		 * setLoadSuccess(true) → checkDependencies() → onDependenciesLoaded()
+		 * → createOnHardware() + buildAccelerationStructure(). */
+		if ( !lodGeometry->load(decimatedShape) )
+		{
+			TraceWarning{ClassId} << "LOD " << LODLevel << " load failed for '" << this->name() << "'.";
+
+			return;
+		}
+
+		/* Wait for the geometry to be fully uploaded to GPU. */
+		if ( !lodGeometry->isCreated() )
+		{
+			TraceWarning{ClassId} << "LOD " << LODLevel << " GPU upload failed for '" << this->name() << "'.";
+
+			return;
+		}
+
+		/* Thread-safe swap into the geometry array. */
+		{
+			const std::lock_guard< std::mutex > lock{m_geometryMutex};
+
+			/* Ensure sequential filling: LOD levels must be added in order. */
+			if ( m_geometry.size() == LODLevel )
+			{
+				m_geometry.emplace_back(std::move(lodGeometry));
+
+				TraceSuccess{ClassId} <<
+					"LOD " << LODLevel << " ready for '" << this->name() << "' "
+					"(" << decimatedShape.triangles().size() << " triangles, "
+					<< decimatedShape.groupCount() << " group(s), "
+					<< static_cast< int >(ratio * 100.0F) << "%).";
+			}
+		}
 	}
 }

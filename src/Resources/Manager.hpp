@@ -497,25 +497,18 @@ namespace EmEn::Resources
 
 			/** @brief Reference to the engine's primary services provider. */
 			PrimaryServices & m_primaryServices;
-
 			/** @brief Map of resource stores, indexed by store name, containing resource metadata. */
 			std::unordered_map< std::string, std::shared_ptr< std::unordered_map< std::string, BaseInformation > > > m_localStores;
-
 			/** @brief Map of resource containers, indexed by resource type, managing loaded resources. */
 			std::unordered_map< std::type_index, std::unique_ptr< ContainerInterface > > m_containers;
-
 			/** @brief Mutex protecting concurrent access to m_localStores. */
 			mutable std::mutex m_localStoresAccess;
-
 			/** @brief Flag indicating whether verbose logging is enabled for resource operations. */
 			bool m_showInformation{false};
-
 			/** @brief Flag indicating whether downloading resources from remote sources is allowed. */
 			bool m_downloadingAllowed{false};
-
 			/** @brief Flag indicating whether resource conversion should suppress output messages. */
 			bool m_quietConversion{false};
-
 			/** @brief Flag indicating whether dynamic directory scanning is used instead of JSON indexing. */
 			bool m_useDynamicScan{false};
 	};

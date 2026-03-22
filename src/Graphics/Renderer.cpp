@@ -169,10 +169,12 @@ namespace EmEn::Graphics
 		}
 	}
 
-	Renderer::Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept
+	Renderer::Renderer (PrimaryServices & primaryServices, Resources::Manager & resourcesManager, Instance & instance, Window & window) noexcept
 		: ServiceInterface{ClassId},
 		ControllableTrait{ClassId},
 		m_primaryServices{primaryServices},
+		m_resourcesManager{resourcesManager},
+		m_renderer{resourcesManager.graphicsRenderer()},
 		m_vulkanInstance{instance},
 		m_window{window},
 		m_shaderManager{primaryServices},
@@ -187,10 +189,6 @@ namespace EmEn::Graphics
 		this->setClearDepthStencilValues(1.0F, 0);
 
 		this->observe(&m_window);
-
-		Geometry::Interface::s_graphicsRenderer = this;
-		TextureResource::Abstract::s_graphicsRenderer = this;
-		Material::Interface::s_graphicsRenderer = this;
 	}
 
 	bool

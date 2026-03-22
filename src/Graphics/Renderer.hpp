@@ -115,6 +115,11 @@ namespace EmEn
 		}
 	}
 
+	namespace Resources
+	{
+		class Manager;
+	}
+
 	namespace Saphir
 	{
 		class Program;
@@ -361,10 +366,11 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Constructs the graphics renderer.
 			 * @param primaryServices A reference to primary services.
+			 * @param resourcesManager A reference to the resource manager.
 			 * @param instance A reference to the Vulkan instance.
 			 * @param window A reference to a handle.
 			 */
-			Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept;
+			Renderer (PrimaryServices & primaryServices, Resources::Manager & resourcesManager, Vulkan::Instance & instance, Window & window) noexcept;
 
 			/**
 			 * @brief Destructs the graphics renderer.
@@ -699,7 +705,7 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			MDI::BatchBuilder *
-			MDIBatchBuilder () noexcept
+			MDIBatchBuilder () const noexcept
 			{
 				return m_MDIBatchBuilder.get();
 			}
@@ -1480,6 +1486,8 @@ namespace EmEn::Graphics
 			bool recreateRenderingSubSystem (bool withSurface, bool useNativeCode = false) noexcept;
 
 			PrimaryServices & m_primaryServices;
+			Resources::Manager & m_resourcesManager;
+			Renderer & m_renderer;
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
 			std::shared_ptr< Vulkan::Device > m_device;
@@ -1499,7 +1507,7 @@ namespace EmEn::Graphics
 			SharedUBOManager m_sharedUBOManager;
 			BindlessTextureManager m_bindlessTextureManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
-			PostProcessor m_postProcessor{*this};
+			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
 			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};
 			std::vector< ServiceInterface * > m_subServicesEnabled;
@@ -1523,7 +1531,6 @@ namespace EmEn::Graphics
 					return std::hash< std::string_view >{}(sv);
 				}
 			};
-
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler >, TransparentStringHash, std::equal_to<> > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 4 > m_clearColors{

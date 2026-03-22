@@ -1967,6 +1967,15 @@ namespace EmEn::Scenes
 			 * ============================================================ */
 
 			/**
+			 * @brief Select a suitable LOD level based on screen-space coverage.
+			 * @param distance The object distance to the camera.
+			 * @param objectRadius The object's world-space bounding radius (boundingSphere * uniformScale).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t selectLODLevel (float distance, float objectRadius) const noexcept;
+
+			/**
 			 * @brief Saves scene global visual components.
 			 * @return void
 			 */
@@ -2030,7 +2039,7 @@ namespace EmEn::Scenes
 			 * @param readStateIndex The render state valid index to read data.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param renderBatches A reference to a render batch.
-			 * @param bindlessTexturesManager A pointer to the bindless textures manager. Can be nullptr.
+			 * @param bindlessTexturesManager A pointer to the bindless texture manager. Can be nullptr.
 			 * @return void
 			 */
 			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager) const noexcept;
@@ -2040,7 +2049,7 @@ namespace EmEn::Scenes
 			 * @param function A reference to a function.
 			 * @return void
 			 */
-			void forEachRenderableInstance (const std::function< bool (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept;
+			void forEachRenderableInstance (const std::function< void (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept;
 
 			/**
 			 * @brief Initializes a render target with all scene renderable instances.
@@ -2306,6 +2315,8 @@ namespace EmEn::Scenes
 			RenderBatch::List m_rtOpaqueLightedList{};
 			/** @brief Cached TLAS distance setting (read once at scene init, not per-frame). */
 			float m_tlasDistance{1000.0F};
+			/** @brief Current main camera view distance for LOD computation. Updated per prepareRendering(). */
+			float m_currentViewDistance{1000.0F};
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
 

@@ -282,15 +282,17 @@ namespace EmEn::Overlay
 	std::shared_ptr< Program >
 	Manager::generateShaderProgram (bool premultipliedAlpha, bool isBGRASurface) const noexcept
 	{
-		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, premultipliedAlpha, isBGRASurface};
+		auto & renderer = m_resourceManager.graphicsRenderer();
+
+		Generator::OverlayRendering generator{renderer.mainRenderTarget(), m_surfaceGeometry, premultipliedAlpha, isBGRASurface};
 
 		/* Use the post-process framebuffer for pipeline creation (single-sample overlay). */
-		if ( const auto * overlayFB = m_graphicsRenderer.overlayFramebuffer(); overlayFB != nullptr )
+		if ( const auto * overlayFB = renderer.overlayFramebuffer(); overlayFB != nullptr )
 		{
 			generator.setPipelineFramebuffer(overlayFB);
 		}
 
-		if ( !generator.generateShaderProgram(m_graphicsRenderer) )
+		if ( !generator.generateShaderProgram(renderer) )
 		{
 			Tracer::error(ClassId, "Unable to generate the overlay manager shader program !");
 
@@ -327,7 +329,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_surfaceGeometry = std::make_shared< Geometry::IndexedVertexResource >("OverlayQuad", Geometry::EnablePrimaryTextureCoordinates);
+		m_surfaceGeometry = std::make_shared< Geometry::IndexedVertexResource >(m_resourceManager, "OverlayQuad", Geometry::EnablePrimaryTextureCoordinates);
 
 		if ( !m_surfaceGeometry->load(ShapeGenerator::generateQuad(2.0F, 2.0F)) )
 		{
@@ -384,7 +386,7 @@ namespace EmEn::Overlay
 		this->releaseImGUI();
 #endif
 
-		this->forget(&m_window);
+		this->forget(&m_resourceManager.graphicsRenderer().window());
 
 		m_screens.clear();
 
@@ -420,7 +422,13 @@ namespace EmEn::Overlay
 			return nullptr;
 		}
 
-		auto screen = std::make_shared< UIScreen >(name, m_framebufferProperties, m_graphicsRenderer, enableKeyboardListener, enablePointerListener);
+		auto screen = std::make_shared< UIScreen >(
+			name,
+			m_framebufferProperties,
+			m_resourceManager.graphicsRenderer(),
+			enableKeyboardListener,
+			enablePointerListener
+		);
 
 		m_screens[name] = screen;
 
@@ -630,7 +638,7 @@ namespace EmEn::Overlay
 	void
 	Manager::updateFramebufferProperties () noexcept
 	{
-		const auto & windowState = m_window.state();
+		const auto & windowState = m_resourceManager.graphicsRenderer().window().state();
 
 		if ( auto & settings = m_primaryServices.settings(); settings.getOrSetDefault< bool >(OverlayForceScaleKey, DefaultOverlayForceScale) )
 		{
@@ -710,7 +718,7 @@ namespace EmEn::Overlay
 		}
 
 		/* Step 3: Notify observers of the resize completion. */
-		const auto & windowState = m_window.state();
+		const auto & windowState = m_resourceManager.graphicsRenderer().window().state();
 
 		this->notify(OverlayResized, std::array< uint32_t, 2 >{
 		   windowState.framebufferWidth,

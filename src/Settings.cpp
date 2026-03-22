@@ -271,6 +271,14 @@ namespace EmEn
 			{
 				return v;
 			}
+			else if constexpr ( std::is_same_v< T, int16_t > )
+			{
+				return static_cast< Json::Int >(v);
+			}
+			else if constexpr ( std::is_same_v< T, uint16_t > )
+			{
+				return static_cast< Json::UInt >(v);
+			}
 			else if constexpr ( std::is_same_v< T, int32_t > )
 			{
 				return v;

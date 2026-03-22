@@ -52,7 +52,7 @@ namespace EmEn::Graphics::Renderable
 
 		const auto shape = ShapeGenerator::generateCuboid(SkySize, SkySize, SkySize, options);
 
-		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(SkyBoxGeometryName);
+		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(serviceProvider, SkyBoxGeometryName);
 
 		if ( !geometry->load(shape) )
 		{
@@ -79,7 +79,7 @@ namespace EmEn::Graphics::Renderable
 
 		const auto shape = ShapeGenerator::generateSphere< float, uint32_t >(SkySize, 16, 16, options);
 
-		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(SkyBoxGeometryName);
+		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(serviceProvider, SkyBoxGeometryName);
 
 		if ( !geometry->load(shape) )
 		{

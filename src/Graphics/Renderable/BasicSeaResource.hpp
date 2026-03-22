@@ -64,12 +64,12 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Constructs a water level resource.
-			 * @param name A reference to a string for the resource name.
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			BasicSeaResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Abstract{std::move(name), renderableFlags}
+			BasicSeaResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -117,41 +117,31 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material == nullptr )
-				{
-					return true;
-				}
-
-				return m_material->isOpaque();
+				return m_material != nullptr ? m_material->isOpaque() : true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
 			[[nodiscard]]
 			bool
 			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material == nullptr )
-				{
-					return false;
-				}
-
-				return m_material->requiresGrabPass();
+				return m_material != nullptr ? m_material->requiresGrabPass() : false;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
-			geometry () const noexcept override
+			geometry (uint32_t /*LODLevel*/) const noexcept override
 			{
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -159,7 +149,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -172,12 +162,9 @@ namespace EmEn::Graphics::Renderable
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingBox;
-				}
-
-				return m_geometry->boundingBox();
+				return m_geometry != nullptr ?
+					m_geometry->boundingBox() :
+					NullBoundingBox;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
@@ -185,12 +172,9 @@ namespace EmEn::Graphics::Renderable
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				if ( m_geometry == nullptr )
-				{
-					return NullBoundingSphere;
-				}
-
-				return m_geometry->boundingSphere();
+				return m_geometry != nullptr ?
+					m_geometry->boundingSphere() :
+					NullBoundingSphere;
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -201,11 +185,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -301,6 +285,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
 
 			/**
 			 * @brief Attaches the geometry resource.

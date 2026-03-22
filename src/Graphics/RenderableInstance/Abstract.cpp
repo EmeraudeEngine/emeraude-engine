@@ -72,7 +72,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 				if ( programType == Renderable::ProgramType::Rendering && material->useEnvironmentCubemap() )
 				{
-					if ( Material::Interface::s_graphicsRenderer != nullptr && Material::Interface::s_graphicsRenderer->bindlessTextureManager().usable() )
+					if ( material->serviceProvider().graphicsRenderer().bindlessTextureManager().usable() )
 					{
 						isBindlessEnabled = true;
 					}
@@ -243,7 +243,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/* NOTE: The geometry interface is the same for every layer of the renderable interface. */
-			if ( const auto * geometry = m_renderable->geometry(); geometry == nullptr )
+			if ( const auto * geometry = m_renderable->geometry(0); geometry == nullptr )
 			{
 				std::stringstream errorMessage;
 
@@ -488,7 +488,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
+	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
@@ -533,7 +533,7 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
 		}
 
-		this->bindInstanceModelLayer(commandBuffer, layerIndex);
+		this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
 
 		/* Build render pass context (created once per pass, reused for all objects). */
 		const RenderPassContext passContext{
@@ -557,20 +557,20 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Draw with correct frame index for animated materials. */
 		if ( material != nullptr && material->isAnimated() )
 		{
-			commandBuffer.draw(*m_renderable->geometry(), m_frameIndex, this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(LODLevel), m_frameIndex, this->instanceCount());
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.draw(*m_renderable->geometry(), this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(LODLevel), this->instanceCount());
 		}
 		else
 		{
-			commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(LODLevel), layerIndex, this->instanceCount());
 		}
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, const BindlessTextureManager * bindlessTexturesManager) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager) const noexcept
 	{
 		/* For grab-pass layers on render targets with a post-process framebuffer,
 		 * use the post-process render pass handle (pipelines were created for it). */
@@ -599,7 +599,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return;
 		}
 
-		const auto * geometry = m_renderable->geometry();
+		const auto * geometry = m_renderable->geometry(LODLevel);
 		const auto pipelineLayout = program->pipelineLayout();
 
 		/* Bind the graphics pipeline. */
@@ -609,7 +609,7 @@ namespace EmEn::Graphics::RenderableInstance
 		renderTarget->setViewport(commandBuffer);
 
 		/* Bind a renderable instance VBO / IBO. */
-		this->bindInstanceModelLayer(commandBuffer, layerIndex);
+		this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
 
 		/* Build render pass context (created once per pass, reused for all objects). */
 		const RenderPassContext passContext{
@@ -698,7 +698,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, const BindlessTextureManager * bindlessTexturesManager) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager) const noexcept
 	{
 		/* For grab-pass layers on render targets with a post-process framebuffer,
 		 * use the post-process render pass handle (pipelines were created for it). */
@@ -727,7 +727,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return;
 		}
 
-		const auto * geometry = m_renderable->geometry();
+		const auto * geometry = m_renderable->geometry(LODLevel);
 		const auto pipelineLayout = program->pipelineLayout();
 		const auto pipelineHandle = program->graphicsPipeline()->handle();
 
@@ -763,7 +763,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Bind geometry (VBO/IBO) only if it changed. */
 		if ( tracker.lastGeometry != static_cast< const void * >(geometry) || tracker.lastLayerIndex != layerIndex )
 		{
-			this->bindInstanceModelLayer(commandBuffer, layerIndex);
+			this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
 			tracker.lastGeometry = geometry;
 			tracker.lastLayerIndex = layerIndex;
 		}
@@ -921,7 +921,7 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 		}
 
-		this->bindInstanceModelLayer(commandBuffer, layerIndex);
+		this->bindInstanceModelLayer(commandBuffer, layerIndex, 0);
 
 		/* Build render pass context (created once per pass, reused for all objects). */
 		const RenderPassContext passContext{
@@ -941,13 +941,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->pushMatricesForRendering(passContext, pushContext, worldCoordinates);
 
+		/* TBN debug always uses LOD 0 (full detail). */
 		if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.draw(*m_renderable->geometry(), this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(0), this->instanceCount());
 		}
 		else
 		{
-			commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(0), layerIndex, this->instanceCount());
 		}
 	}
 }

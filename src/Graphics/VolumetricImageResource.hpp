@@ -86,13 +86,13 @@ namespace EmEn::Graphics
 			 * Creates a new VolumetricImageResource instance. The actual volumetric data
 			 * is not loaded until one of the load() methods is called.
 			 *
-			 * @param name The unique identifier for this resource (moved into the object).
-			 * @param resourceFlags Optional resource flag bits for future use (currently unused).
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 * @version 0.8.35
 			 */
-			explicit
-			VolumetricImageResource (std::string name, uint32_t resourceFlags = 0) noexcept
-				: ResourceTrait{std::move(name), resourceFlags}
+			VolumetricImageResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -162,12 +162,11 @@ namespace EmEn::Graphics
 			 * and testing, following the fail-safe design pattern where resources never
 			 * fail to load.
 			 *
-			 * @param serviceProvider The resource service provider (unused in this implementation).
 			 * @return true if the default volumetric data was successfully generated, false otherwise.
 			 * @post If successful, m_data contains 32x32x32x4 bytes of RGBA gradient data.
 			 * @version 0.8.35
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			bool load () noexcept override;
 
 			/**
 			 * @brief Loads 3D volumetric data from a file on disk.
@@ -176,14 +175,13 @@ namespace EmEn::Graphics
 			 * volumetric data from various file formats including raw binary volumes,
 			 * voxel formats (.vox), and potentially medical imaging formats (DICOM).
 			 *
-			 * @param serviceProvider The resource service provider (unused).
 			 * @param filepath The filesystem path to the volumetric data file.
 			 * @return Always returns false (not yet implemented).
 			 * @warning This method logs a warning and always fails.
 			 * @todo Implement file loading for volumetric data formats (.raw, .vox, DICOM).
 			 * @version 0.8.35
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			bool load (const std::filesystem::path & filepath) noexcept override;
 
 			/**
 			 * @brief JSON-based loading is not supported for volumetric image resources.
@@ -192,13 +190,12 @@ namespace EmEn::Graphics
 			 * meaningfully embedded in JSON format due to its size. Use the file-based
 			 * load() method instead when file loading is implemented.
 			 *
-			 * @param serviceProvider The resource service provider (unused).
 			 * @param data The JSON data (unused).
 			 * @return Always returns false.
 			 * @note This method exists for interface compliance but is not functional.
 			 * @version 0.8.35
 			 */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (const Json::Value & data) noexcept override;
 
 			/**
 			 * @brief Returns the total memory occupied by this resource in bytes.

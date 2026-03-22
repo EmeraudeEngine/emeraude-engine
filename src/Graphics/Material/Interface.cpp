@@ -40,12 +40,10 @@ namespace EmEn::Graphics::Material
 
 	constexpr auto TracerTag{"MaterialInterface"};
 
-	Renderer * Interface::s_graphicsRenderer = nullptr;
-
 	void
 	Interface::exportRTMaterialData (GPURTMaterialData & outData) const noexcept
 	{
-		/* Default: grey dielectric with no textures. */
+		/* Default: gray dielectric with no textures. */
 		outData = GPURTMaterialData{};
 	}
 
@@ -58,13 +56,6 @@ namespace EmEn::Graphics::Material
 	bool
 	Interface::onDependenciesLoaded () noexcept
 	{
-		if ( s_graphicsRenderer == nullptr )
-		{
-			Tracer::error(TracerTag, "The static renderer pointer is null !");
-
-			return false;
-		}
-
 		if ( this->isCreated() )
 		{
 			TraceWarning{TracerTag} << "The material resource '" << this->name() << "' is already created !";
@@ -72,7 +63,7 @@ namespace EmEn::Graphics::Material
 			return true;
 		}
 
-		if ( !this->create(*s_graphicsRenderer) )
+		if ( !this->create(this->serviceProvider().graphicsRenderer()) )
 		{
 			TraceError{TracerTag} << "Unable to load the material resource '" << this->name() << "' into the GPU!";
 

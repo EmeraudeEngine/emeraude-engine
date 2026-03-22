@@ -40,21 +40,21 @@ namespace EmEn::Graphics::Renderable
 	using namespace Graphics::Material;
 
 	bool
-	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	SkyBoxResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(serviceProvider)) )
+		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(this->serviceProvider())) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		auto defaultCubemapResource = serviceProvider.container< TextureResource::TextureCubemap >()->getDefaultResource();
+		auto defaultCubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getDefaultResource();
 
-		const auto material = serviceProvider.container< BasicResource >()
+		const auto material = this->serviceProvider().container< BasicResource >()
 			->getOrCreateResource("DefaultSkyboxMaterial", [defaultCubemapResource] (auto & materialResource) {
 				if ( !materialResource.setTextureResource(defaultCubemapResource) )
 				{
@@ -76,31 +76,31 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	SkyBoxResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(serviceProvider)) )
+		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(this->serviceProvider())) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !data.isMember(TextureKey) || !data[TextureKey].isString() )
+		if ( !data.isMember(JKTexture) || !data[JKTexture].isString() )
 		{
-			TraceError{ClassId} << "The '" << TextureKey << "' key is not present or not a string in '" << this->name() << "' Json file ! ";
+			TraceError{ClassId} << "The '" << JKTexture << "' key is not present or not a string in '" << this->name() << "' Json file ! ";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto textureName = data[TextureKey].asString();
+		const auto textureName = data[JKTexture].asString();
 
 		/* Store the cubemap for environment IBL access. */
-		auto cubemapResource = serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading());
+		auto cubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading());
 
-		const auto material = serviceProvider.container< BasicResource >()
+		const auto material = this->serviceProvider().container< BasicResource >()
 			->getOrCreateResource(textureName + "SkyboxMaterial", [cubemapResource] (auto & materialResource) {
 				if ( !materialResource.setTextureResource(cubemapResource) )
 				{
@@ -115,13 +115,13 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		this->setLightPosition(FastJSON::getValue< Vector< 3, float > >(data, LightPositionKey).value_or(Vector< 3, float >::origin()));
+		this->setLightPosition(FastJSON::getValue< Vector< 3, float > >(data, JKLightPosition).value_or(Vector< 3, float >::origin()));
 
-		this->setLightAmbientColor(FastJSON::getValue< Color< float > >(data, LightAmbientColorKey).value_or(Black));
+		this->setLightAmbientColor(FastJSON::getValue< Color< float > >(data, JKLightAmbientColor).value_or(Black));
 
-		this->setLightDiffuseColor(FastJSON::getValue< Color< float > >(data, LightDiffuseColorKey).value_or(Black));
+		this->setLightDiffuseColor(FastJSON::getValue< Color< float > >(data, JKLightDiffuseColor).value_or(Black));
 
-		this->setLightSpecularColor(FastJSON::getValue< Color< float > >(data, LightSpecularColorKey).value_or(Black));
+		this->setLightSpecularColor(FastJSON::getValue< Color< float > >(data, JKLightSpecularColor).value_or(Black));
 
 		/* Store the cubemap for environment IBL access. */
 		m_environmentCubemap = cubemapResource;
@@ -130,14 +130,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Interface > & material) noexcept
+	SkyBoxResource::load (const std::shared_ptr< Interface > & material) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(serviceProvider) ) )
+		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(this->serviceProvider()) ) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -194,6 +194,33 @@ namespace EmEn::Graphics::Renderable
 
 			return false;
 		}
+
+		return true;
+	}
+
+	bool
+	SkyBoxResource::onDependenciesLoaded () noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+		}
+
+		this->setReadyForInstantiation(true);
 
 		return true;
 	}

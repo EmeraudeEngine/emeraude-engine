@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <map>
 #include <vector>
 #include <string>
@@ -61,6 +62,8 @@ namespace EmEn
 	/** @brief Types allowed by settings. */
 	template< typename variable_t >
 	concept SettingType = std::is_same_v< variable_t, bool > ||
+						  std::is_same_v< variable_t, int16_t > ||
+						  std::is_same_v< variable_t, uint16_t > ||
 						  std::is_same_v< variable_t, int32_t > ||
 						  std::is_same_v< variable_t, uint32_t > ||
 						  std::is_same_v< variable_t, int64_t > ||
@@ -70,7 +73,7 @@ namespace EmEn
 						  std::is_same_v< variable_t, std::string >;
 
 	/** @brief Type-safe variant holding any setting value. */
-	using SettingValue = std::variant< bool, int32_t, uint32_t, int64_t, uint64_t, float, double, std::string >;
+	using SettingValue = std::variant< bool, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, float, double, std::string >;
 
 	/**
 	 * @class SettingStore
@@ -911,6 +914,101 @@ namespace EmEn
 					{
 						return *p > 0;
 					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return *p > 0;
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						return *p > 0;
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, int16_t > )
+				{
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return *p;
+					}
+
+					if ( const auto * p = std::get_if< bool >(&value) )
+					{
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< int32_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< int64_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, uint16_t > )
+				{
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						return *p;
+					}
+
+					if ( const auto * p = std::get_if< bool >(&value) )
+					{
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< int32_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< int64_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, int32_t > )
@@ -940,6 +1038,16 @@ namespace EmEn
 					if ( const auto * p = std::get_if< uint64_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
 						return static_cast< variable_t >(*p);
 					}
 				}
@@ -972,6 +1080,16 @@ namespace EmEn
 						/* NOTE: Possible loss of precision on high number. */
 						return static_cast< variable_t >(*p);
 					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, int64_t > )
@@ -1001,6 +1119,16 @@ namespace EmEn
 						/* NOTE: Possible loss of precision on high number. */
 						return static_cast< variable_t >(*p);
 					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, uint64_t > )
@@ -1028,6 +1156,16 @@ namespace EmEn
 					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
 						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
 					}
 				}
 
@@ -1070,6 +1208,16 @@ namespace EmEn
 						/* NOTE: Possible loss of precision on high number. */
 						return static_cast< variable_t >(*p);
 					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, double > )
@@ -1105,6 +1253,16 @@ namespace EmEn
 					}
 
 					if ( const auto * p = std::get_if< uint64_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< int16_t >(&value) )
+					{
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint16_t >(&value) )
 					{
 						return static_cast< variable_t >(*p);
 					}

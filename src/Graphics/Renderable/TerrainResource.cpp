@@ -86,14 +86,14 @@ namespace EmEn::Graphics::Renderable
 			const auto subGrid = m_localData.subGrid(m_lastAdaptiveGridPositionUpdated, static_cast< uint32_t >(m_visibleSize));
 
 			/* Launch update in a detached thread. */
-			std::thread([geometry = m_geometry, subGrid = std::move(subGrid)]() {
+			std::thread([geometry = m_geometry, subGrid = subGrid] () {
 				geometry->updateData(subGrid);
 			}).detach();
 		}
 	}
 
 	bool
-	TerrainResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	TerrainResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -120,7 +120,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(serviceProvider.container< Material::StandardResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(this->serviceProvider().container< Material::StandardResource >()->getDefaultResource()) )
 		{
 			m_localData.clear();
 
@@ -131,7 +131,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	TerrainResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -145,7 +145,7 @@ namespace EmEn::Graphics::Renderable
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		serviceProvider.update(root);
+		this->serviceProvider().update(root);
 
 		if ( !root.isMember(DefinitionResource::GroundKey) )
 		{
@@ -170,11 +170,11 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		return this->load(serviceProvider, groundObject[FastJSON::DataKey]);
+		return this->load(groundObject[FastJSON::DataKey]);
 	}
 
 	bool
-	TerrainResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	TerrainResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -184,12 +184,12 @@ namespace EmEn::Graphics::Renderable
 		/* First, we check every key from JSON data. */
 
 		/* Checks size and division options... */
-		const auto gridSize = FastJSON::getValue< float >(data, GridSizeKey).value_or(DefaultGridSize);
-		const auto gridDivision = FastJSON::getValue< uint32_t >(data, GridDivisionKey).value_or(DefaultGridDivision);
-		m_visibleSize = FastJSON::getValue< float >(data, GridVisibleSizeKey).value_or(DefaultVisibleSize);
+		const auto gridSize = FastJSON::getValue< float >(data, JKGridSize).value_or(DefaultGridSize);
+		const auto gridDivision = FastJSON::getValue< uint32_t >(data, JKGridDivision).value_or(DefaultGridDivision);
+		m_visibleSize = FastJSON::getValue< float >(data, JKGridVisibleSize).value_or(DefaultVisibleSize);
 
 		/* Checks material type. */
-		const auto materialType = FastJSON::getValue< std::string >(data, MaterialTypeKey);
+		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
 
 		if ( !materialType || materialType != Material::StandardResource::ClassId )
 		{
@@ -211,13 +211,13 @@ namespace EmEn::Graphics::Renderable
 		/* The material. */
 		std::shared_ptr< Material::Interface > materialResource{};
 
-		auto * materials = serviceProvider.container< Material::StandardResource >();
+		auto * materials = this->serviceProvider().container< Material::StandardResource >();
 
-		const auto materialName = FastJSON::getValue< std::string >(data, MaterialNameKey);
+		const auto materialName = FastJSON::getValue< std::string >(data, JKMaterialName);
 
 		if ( !materialName )
 		{
-			TraceWarning{ClassId} << "The key '" << MaterialNameKey << "' is not present or not a string !";
+			TraceWarning{ClassId} << "The key '" << JKMaterialName << "' is not present or not a string !";
 
 			materialResource = materials->getDefaultResource();
 		}
@@ -243,19 +243,19 @@ namespace EmEn::Graphics::Renderable
 		/* After we check after optional parameters. */
 
 		/* Checks for geometry relief generation options. */
-		if ( data.isMember(HeightMapKey) )
+		if ( data.isMember(JKHeightMap) )
 		{
-			if ( auto heightMapping = data[HeightMapKey]; heightMapping.isArray() )
+			if ( auto heightMapping = data[JKHeightMap]; heightMapping.isArray() )
 			{
-				auto * images = serviceProvider.container< ImageResource >();
+				auto * images = this->serviceProvider().container< ImageResource >();
 
 				for ( const auto & iteration : heightMapping )
 				{
-					auto imageName = FastJSON::getValue< std::string >(iteration, ImageNameKey);
+					auto imageName = FastJSON::getValue< std::string >(iteration, JKImageName);
 
 					if ( !imageName )
 					{
-						TraceWarning{ClassId} << "The key '" << ImageNameKey << "' is not present or not a string !";
+						TraceWarning{ClassId} << "The key '" << JKImageName << "' is not present or not a string !";
 
 						continue;
 					}
@@ -270,7 +270,7 @@ namespace EmEn::Graphics::Renderable
 					}
 
 					/* Color inversion if requested. */
-					const auto inverse = FastJSON::getValue< bool >(iteration, InverseKey).value_or(false);
+					const auto inverse = FastJSON::getValue< bool >(iteration, JKInverse).value_or(false);
 
 					/* Checks for scaling. */
 					const auto scale = FastJSON::getValue< float >(iteration, FastJSON::ScaleKey).value_or(1.0F);
@@ -285,14 +285,14 @@ namespace EmEn::Graphics::Renderable
 			}
 			else
 			{
-				TraceWarning{ClassId} << "The key '" << HeightMapKey << "' is not an array !";
+				TraceWarning{ClassId} << "The key '" << JKHeightMap << "' is not an array !";
 			}
 		}
 
 		/* Perlin noise filtering application. */
-		if ( data.isMember(PerlinNoiseKey) )
+		if ( data.isMember(JKPerlinNoise) )
 		{
-			if ( auto noiseFiltering = data[PerlinNoiseKey]; noiseFiltering.isArray() )
+			if ( auto noiseFiltering = data[JKPerlinNoise]; noiseFiltering.isArray() )
 			{
 				for ( const auto & iteration : noiseFiltering )
 				{
@@ -311,7 +311,7 @@ namespace EmEn::Graphics::Renderable
 			}
 			else
 			{
-				TraceWarning{ClassId} << "The key '" << PerlinNoiseKey << "' is not an array !";
+				TraceWarning{ClassId} << "The key '" << JKPerlinNoise << "' is not an array !";
 			}
 		}
 
@@ -495,5 +495,32 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		return this->setLoadSuccess(true);
+	}
+
+	bool
+	TerrainResource::onDependenciesLoaded () noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+		}
+
+		this->setReadyForInstantiation(true);
+
+		return true;
 	}
 }

@@ -77,10 +77,10 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicGroundResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	BasicGroundResource::load () noexcept
 	{
 		/* 1. Creating a default GridGeometry. */
-		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >("DefaultBasicGroundGeometry");
+		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), "DefaultBasicGroundGeometry");
 
 		if ( !defaultGeometry->load(DefaultSize, DefaultDivision) )
 		{
@@ -90,7 +90,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Retrieving the default material. */
-		const auto defaultMaterial = serviceProvider.container< Material::BasicResource >()->getDefaultResource();
+		const auto defaultMaterial = this->serviceProvider().container< Material::BasicResource >()->getDefaultResource();
 
 		if ( defaultMaterial == nullptr )
 		{
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicGroundResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	BasicGroundResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -118,7 +118,7 @@ namespace EmEn::Graphics::Renderable
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		serviceProvider.update(root);
+		this->serviceProvider().update(root);
 
 		if ( !root.isMember(DefinitionResource::GroundKey) )
 		{
@@ -143,32 +143,32 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		return this->load(serviceProvider, groundObject[FastJSON::DataKey]);
+		return this->load(groundObject[FastJSON::DataKey]);
 	}
 
 	bool
-	BasicGroundResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	BasicGroundResource::load (const Json::Value & data) noexcept
 	{
 		/* 1. Creating a geometry. */
 		/* Checks size option. */
-		if ( !data.isMember(SizeKey) || !data[SizeKey].isNumeric() )
+		if ( !data.isMember(JKGridSize) || !data[JKGridSize].isNumeric() )
 		{
-			TraceError{ClassId} << "The key '" << SizeKey << "' is not present or not numeric !";
+			TraceError{ClassId} << "The key '" << JKGridSize << "' is not present or not numeric !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		/* Checks division option. */
-		if ( !data.isMember(DivisionKey) || !data[DivisionKey].isNumeric() )
+		if ( !data.isMember(JKGridDivision) || !data[JKGridDivision].isNumeric() )
 		{
-			TraceError{ClassId} << "The key '" << DivisionKey << "' is not present or not numeric !";
+			TraceError{ClassId} << "The key '" << JKGridDivision << "' is not present or not numeric !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "Geometry");
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "Geometry");
 
-		if ( !geometryResource->load(data[SizeKey].asFloat(), data[DivisionKey].asUInt(), DefaultGeometryFlags) )
+		if ( !geometryResource->load(data[JKGridSize].asFloat(), data[JKGridDivision].asUInt(), DefaultGeometryFlags) )
 		{
 			TraceError{ClassId} << "Unable to create grid geometry to generate the basic ground !";
 
@@ -176,38 +176,38 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Check for geometry options. */
-		if ( data.isMember(HeightMapKey) )
+		if ( data.isMember(JKHeightMap) )
 		{
-			const auto & subData = data[HeightMapKey];
+			const auto & subData = data[JKHeightMap];
 
-			if ( subData.isMember(ImageNameKey) && subData[ImageNameKey].isString() )
+			if ( subData.isMember(JKImageName) && subData[JKImageName].isString() )
 			{
-				const auto imageName = subData[ImageNameKey].asString();
+				const auto imageName = subData[JKImageName].asString();
 
-				const auto imageResource = serviceProvider.container< ImageResource >()->getResource(imageName);
+				const auto imageResource = this->serviceProvider().container< ImageResource >()->getResource(imageName);
 
 				if ( imageResource != nullptr )
 				{
 					/* Color inversion if requested. */
 					auto inverse = false;
 
-					if ( subData.isMember(InverseKey) )
+					if ( subData.isMember(JKInverse) )
 					{
-						inverse = subData[InverseKey].asBool();
+						inverse = subData[JKInverse].asBool();
 					}
 
 					/* Checks for scaling. */
 					auto scale = 1.0F;
 
-					if ( subData.isMember(ScaleKey) )
+					if ( subData.isMember(JKScale) )
 					{
-						if ( subData[ScaleKey].isNumeric() )
+						if ( subData[JKScale].isNumeric() )
 						{
-							scale = subData[ScaleKey].asFloat();
+							scale = subData[JKScale].asFloat();
 						}
 						else
 						{
-							TraceWarning{ClassId} << "The key '" << ScaleKey << "' is not numeric !";
+							TraceWarning{ClassId} << "The key '" << JKScale << "' is not numeric !";
 						}
 					}
 
@@ -221,48 +221,48 @@ namespace EmEn::Graphics::Renderable
 			}
 			else
 			{
-				TraceWarning{ClassId} << "The key '" << ImageNameKey << "' is not present or not a string !";
+				TraceWarning{ClassId} << "The key '" << JKImageName << "' is not present or not a string !";
 			}
 		}
 
 		/* 3. Check material properties. */
-		if ( !data.isMember(MaterialTypeKey) || !data[MaterialTypeKey].isString() )
+		if ( !data.isMember(JKMaterialType) || !data[JKMaterialType].isString() )
 		{
-			TraceError{ClassId} << "The key '" << MaterialTypeKey << "' is not present or not a string !";
+			TraceError{ClassId} << "The key '" << JKMaterialType << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !data.isMember(MaterialNameKey) || !data[MaterialTypeKey].isString() )
+		if ( !data.isMember(JKMaterialName) || !data[JKMaterialType].isString() )
 		{
-			TraceError{ClassId} << "The key '" << MaterialNameKey << "' is not present or not a string !";
+			TraceError{ClassId} << "The key '" << JKMaterialName << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		/* Checks if the UV multiplier parameter. */
-		if ( data.isMember(UVMultiplierKey) )
+		if ( data.isMember(JKUVMultiplier) )
 		{
-			if ( data[UVMultiplierKey].isNumeric() )
+			if ( data[JKUVMultiplier].isNumeric() )
 			{
-				geometryResource->localData().setUVMultiplier(data[UVMultiplierKey].asFloat());
+				geometryResource->localData().setUVMultiplier(data[JKUVMultiplier].asFloat());
 			}
 			else
 			{
-				TraceWarning{ClassId} << "The key '" << UVMultiplierKey << "' is not numeric !";
+				TraceWarning{ClassId} << "The key '" << JKUVMultiplier << "' is not numeric !";
 			}
 		}
 
 		/* Gets the resource from the geometry store. */
 		std::shared_ptr< Material::Interface > materialResource;
 
-		const auto materialType = data[MaterialTypeKey].asString();
+		const auto materialType = data[JKMaterialType].asString();
 
 		if ( materialType == Material::StandardResource::ClassId )
 		{
-			const auto name = data[MaterialNameKey].asString();
+			const auto name = data[JKMaterialName].asString();
 
-			materialResource = serviceProvider.container< Material::StandardResource >()->getResource(name);
+			materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(name);
 		}
 		else
 		{
@@ -306,7 +306,7 @@ namespace EmEn::Graphics::Renderable
 	bool
 	BasicGroundResource::load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions, float UVMultiplier) noexcept
 	{
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometry", DefaultGeometryFlags);
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "GridGeometry", DefaultGeometryFlags);
 
 		if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
 		{
@@ -348,7 +348,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the geometry resource from the shape. */
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometryDiamondSquare", DefaultGeometryFlags);
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "GridGeometryDiamondSquare", DefaultGeometryFlags);
 
 		if ( !geometryResource->load(grid) )
 		{
@@ -383,7 +383,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the geometry resource from the shape. */
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometryPerlinNoise", DefaultGeometryFlags);
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "GridGeometryPerlinNoise", DefaultGeometryFlags);
 
 		if ( !geometryResource->load(grid) )
 		{
@@ -427,5 +427,32 @@ namespace EmEn::Graphics::Renderable
 		m_material = materialResource;
 
 		return this->addDependency(m_material);
+	}
+
+	bool
+	BasicGroundResource::onDependenciesLoaded () noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
+			{
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
+
+				return false;
+			}
+		}
+
+		this->setReadyForInstantiation(true);
+
+		return true;
 	}
 }

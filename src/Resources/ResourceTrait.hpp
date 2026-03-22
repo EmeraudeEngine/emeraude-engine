@@ -502,6 +502,18 @@ namespace EmEn::Resources
 			~ResourceTrait () override;
 
 			/**
+			 * @brief Returns the service provider captured during load().
+			 * @note Returns nullptr if load() has not been called yet.
+			 * @return AbstractServiceProvider &
+			 */
+			[[nodiscard]]
+			AbstractServiceProvider &
+			serviceProvider () const noexcept
+			{
+				return m_serviceProvider;
+			}
+
+			/**
 			 * @brief Returns whether the resource is the top of a loadable object chain.
 			 *
 			 * A top resource has no parent resources waiting for it. Top resources are typically
@@ -670,14 +682,13 @@ namespace EmEn::Resources
 			 * This method creates a default/fallback version of the resource (e.g., a white texture,
 			 * default mesh, or silence audio clip). Used when no file or data is provided.
 			 *
-			 * @param serviceProvider A reference to the resource manager service provider for accessing other resources
 			 * @return true if default resource was successfully created, false on failure
 			 * @pre Resource should be in Unloaded state
 			 * @post Resource will be in Loaded or Failed state
 			 * @note Pure virtual - must be implemented by derived classes
-			 * @see load(AbstractServiceProvider&, const std::filesystem::path&)
+			 * @see load(const std::filesystem::path&)
 			 */
-			virtual bool load (AbstractServiceProvider & serviceProvider) noexcept = 0;
+			virtual bool load () noexcept = 0;
 
 			/**
 			 * @brief Loads a resource from a disk file.
@@ -686,16 +697,15 @@ namespace EmEn::Resources
 			 * load(AbstractServiceProvider&, const Json::Value&). Derived classes can override
 			 * this for binary formats or custom file handling.
 			 *
-			 * @param serviceProvider A reference to the resource manager service provider for accessing dependencies
 			 * @param filepath Path to the resource file on disk
 			 * @return true if resource was successfully loaded from file, false on failure
 			 * @pre Resource should be in Unloaded state
 			 * @pre File must exist and be readable
 			 * @post Resource will be in Loaded or Failed state
 			 * @note Default implementation parses JSON; override for binary formats
-			 * @see load(AbstractServiceProvider&, const Json::Value&)
+			 * @see load(const Json::Value&)
 			 */
-			virtual bool load (AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept;
+			virtual bool load (const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Loads a resource from a JsonCPP object.
@@ -703,16 +713,15 @@ namespace EmEn::Resources
 			 * This is the primary loading method for JSON-based resource definitions. The JSON object
 			 * typically contains resource parameters and references to dependencies.
 			 *
-			 * @param serviceProvider A reference to the resource manager service provider for loading dependencies
 			 * @param data A reference to a parsed JsonCPP object containing resource data
 			 * @return true if resource was successfully loaded from JSON data, false on failure
 			 * @pre Resource should be in Unloaded state
 			 * @pre JSON data must be valid and contain required fields
 			 * @post Resource will be in Loaded or Failed state
 			 * @note Pure virtual - must be implemented by derived classes
-			 * @see load(AbstractServiceProvider&, const std::filesystem::path&)
+			 * @see load(const std::filesystem::path&)
 			 */
-			virtual bool load (AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept = 0;
+			virtual bool load (const Json::Value & data) noexcept = 0;
 
 			/**
 			 * @brief Returns the amount of memory occupied by this resource in bytes.
@@ -741,15 +750,17 @@ namespace EmEn::Resources
 			 * Protected constructor ensures resources can only be instantiated through derived classes.
 			 * Initializes the resource in Unloaded state with no dependencies.
 			 *
+			 * @param serviceProvider A reference to the service provider.
 			 * @param resourceName Unique identifier for the resource (moved into NameableTrait)
 			 * @param initialResourceFlags Initial FlagTrait flags controlling loading behavior
 			 * @post Resource is in Unloaded state with empty dependency lists
 			 * @note Resource names should be unique within their container
 			 * @see NameableTrait, FlagTrait
 			 */
-			ResourceTrait (std::string resourceName, uint32_t initialResourceFlags) noexcept
+			ResourceTrait (AbstractServiceProvider & serviceProvider, std::string resourceName, uint32_t initialResourceFlags) noexcept
 				: NameableTrait{std::move(resourceName)},
-				FlagTrait{initialResourceFlags}
+				FlagTrait{initialResourceFlags},
+				m_serviceProvider{serviceProvider}
 			{
 
 			}
@@ -942,6 +953,7 @@ namespace EmEn::Resources
 
 			static constexpr uint32_t DirectLoading = 1U << 31;
 
+			AbstractServiceProvider & m_serviceProvider;
 			std::vector< std::shared_ptr< ResourceTrait > > m_parentsToNotify;
 			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor;
 			std::atomic< Status > m_status{Status::Unloaded};

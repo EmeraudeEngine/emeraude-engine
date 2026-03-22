@@ -147,15 +147,17 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	MusicResource::load () noexcept
 	{
-		if ( !serviceProvider.audioManager().isAudioSystemAvailable() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
 
-		m_frequency = serviceProvider.audioManager().frequencyPlayback();
-		m_chunkSize = serviceProvider.audioManager().musicChunkSize();
+		const auto & audioManager = this->serviceProvider().audioManager();
+
+		m_frequency = audioManager.frequencyPlayback();
+		m_chunkSize = audioManager.musicChunkSize();
 
 		if ( !this->beginLoading() )
 		{
@@ -249,7 +251,6 @@ namespace EmEn::Audio
 		};
 
 		/* Transpose one octave down for a warmer, deeper tone. */
-		constexpr float Transpose = 0.5F;
 
 		/* Place each melody note: single sine wave, transposed down. */
 		for ( size_t rep = 0; rep < Repetitions; ++rep )
@@ -258,6 +259,7 @@ namespace EmEn::Audio
 
 			for ( const auto & note : melodyNotes )
 			{
+				constexpr float Transpose = 0.5F;
 				const auto start = loopOffset + beatToSample(note.startBeat);
 				auto length = beatToSample(note.durationBeats);
 
@@ -332,15 +334,17 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	MusicResource::load (const std::filesystem::path & filepath) noexcept
 	{
-		if ( !serviceProvider.audioManager().isAudioSystemAvailable() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
 
-		m_frequency = serviceProvider.audioManager().frequencyPlayback();
-		m_chunkSize = serviceProvider.audioManager().musicChunkSize();
+		const auto & audioManager = this->serviceProvider().audioManager();
+
+		m_frequency = audioManager.frequencyPlayback();
+		m_chunkSize = audioManager.musicChunkSize();
 
 		if ( !this->beginLoading() )
 		{
@@ -353,44 +357,39 @@ namespace EmEn::Audio
 		if ( extension == ".mid" || extension == ".midi" )
 		{
 			/* Query the soundfont name from settings. */
-			const auto soundfontName = serviceProvider.settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
+			const auto soundfontName = this->serviceProvider().settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
 
 			if ( !soundfontName.empty() )
 			{
 				/* Load the soundfont as a dependency. */
-				auto * soundfontContainer = serviceProvider.container< SoundfontResource >();
+				m_soundfontDependency = this->serviceProvider().container< SoundfontResource >()->getResource(soundfontName, true);
 
-				if ( soundfontContainer != nullptr )
+				if ( m_soundfontDependency != nullptr )
 				{
-					m_soundfontDependency = soundfontContainer->getResource(soundfontName, true);
+					/* Store the MIDI path for later rendering in onDependenciesLoaded(). */
+					m_pendingMidiPath = filepath;
 
-					if ( m_soundfontDependency != nullptr )
+					/* Add the soundfont as a dependency - rendering will happen once it's loaded. */
+					if ( !this->addDependency(m_soundfontDependency) )
 					{
-						/* Store the MIDI path for later rendering in onDependenciesLoaded(). */
-						m_pendingMidiPath = filepath;
+						TraceWarning{ClassId} <<
+							"Failed to add soundfont '" << soundfontName << "' as dependency for music '" << this->name() << "'. "
+							"Falling back to additive synthesis.";
 
-						/* Add the soundfont as a dependency - rendering will happen once it's loaded. */
-						if ( !this->addDependency(m_soundfontDependency) )
-						{
-							TraceWarning{ClassId} <<
-								"Failed to add soundfont '" << soundfontName << "' as dependency for music '" << this->name() << "'. "
-								"Falling back to additive synthesis.";
-
-							m_soundfontDependency.reset();
-							m_pendingMidiPath.clear();
-						}
-						else
-						{
-							/* Dependency added successfully. Loading will complete in onDependenciesLoaded(). */
-							return this->setLoadSuccess(true);
-						}
+						m_soundfontDependency.reset();
+						m_pendingMidiPath.clear();
 					}
 					else
 					{
-						TraceWarning{ClassId} <<
-							"Soundfont '" << soundfontName << "' not found for music '" << this->name() << "'. "
-							"Using additive synthesis fallback.";
+						/* Dependency added successfully. Loading will complete in onDependenciesLoaded(). */
+						return this->setLoadSuccess(true);
 					}
+				}
+				else
+				{
+					TraceWarning{ClassId} <<
+						"Soundfont '" << soundfontName << "' not found for music '" << this->name() << "'. "
+						"Using additive synthesis fallback.";
 				}
 			}
 
@@ -447,15 +446,17 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MusicResource::load (const Json::Value & data) noexcept
 	{
-		if ( !serviceProvider.audioManager().isAudioSystemAvailable() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
 
-		m_frequency = serviceProvider.audioManager().frequencyPlayback();
-		m_chunkSize = serviceProvider.audioManager().musicChunkSize();
+		const auto & audioManager = this->serviceProvider().audioManager();
+
+		m_frequency = audioManager.frequencyPlayback();
+		m_chunkSize = audioManager.musicChunkSize();
 
 		if ( !this->beginLoading() )
 		{

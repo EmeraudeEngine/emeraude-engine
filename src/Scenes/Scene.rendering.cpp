@@ -360,7 +360,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
 		{
-			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel());
 		}
 	}
 
@@ -414,13 +414,15 @@ namespace EmEn::Scenes
 							continue;
 						}
 
+						const auto geometry = renderable->geometry(0);
+
 						const bool isSkipped = renderable->isSprite()
 							|| renderBatch.renderableInstance()->isUsingInfinityView()
-							|| (renderable->geometry() != nullptr && renderable->geometry()->isAdaptiveLOD());
+							|| (geometry != nullptr && geometry->isAdaptiveLOD());
 
 						if ( isSkipped )
 						{
-							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, m_preparedBindlessManager);
+							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager);
 						}
 					}
 				}
@@ -432,7 +434,7 @@ namespace EmEn::Scenes
 
 				for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
 				{
-					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, m_preparedBindlessManager);
+					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager);
 				}
 			}
 		}
@@ -450,7 +452,7 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : m_renderLists[Translucent] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, m_preparedBindlessManager);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager);
 			}
 		}
 
@@ -467,7 +469,7 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : m_renderLists[TranslucentGB] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, m_preparedBindlessManager);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager);
 			}
 		}
 
@@ -679,6 +681,34 @@ namespace EmEn::Scenes
 		}
 	}
 
+	[[nodiscard]]
+	uint32_t
+	Scene::selectLODLevel (float distance, float objectRadius) const noexcept
+	{
+		if ( m_currentViewDistance <= 0.0F || distance <= 0.0F || objectRadius <= 0.0F )
+		{
+			return 0U;
+		}
+
+		/* Screen-space coverage: how large the object appears relative to the viewport.
+		 * screenSize ∝ objectRadius / distance. When screenSize is large, use LOD 0.
+		 * As screenSize shrinks, increase LOD level.
+		 *
+		 * LODLevel = clamp(MaxLODLevels - screenSize / threshold, 0, MaxLODLevels-1)
+		 * where threshold defines the coverage at which LOD 0 transitions to LOD 1. */
+		constexpr auto LODTransitionThreshold{0.75F};
+
+		const auto screenSize = objectRadius / distance;
+		const auto LODf = static_cast< float >(Renderable::MaxLODLevels) * (static_cast< float >(1) - screenSize / LODTransitionThreshold);
+
+		if ( LODf <= 0.0F )
+		{
+			return 0U;
+		}
+
+		return std::min(static_cast< uint32_t >(LODf), Renderable::MaxLODLevels - 1);
+	}
+
 	bool
 	Scene::checkRenderableInstanceForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
 	{
@@ -865,11 +895,15 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* Compute LOD level from main camera distance (same as main rendering).
+		 * Shadow detail degrades with the same LOD as the main view. */
+		const auto objectRadius = renderable->boundingSphere().radius() * renderable->uniformScale();
+		const auto LODLevel = this->selectLODLevel(distance, objectRadius);
 		const auto layerCount = renderable->layerCount();
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 		{
-			RenderBatch::create(m_renderLists[Shadows], distance, renderableInstance, worldCoordinates, layerIndex);
+			RenderBatch::create(m_renderLists[Shadows], distance, renderableInstance, worldCoordinates, layerIndex, LODLevel);
 		}
 	}
 
@@ -929,6 +963,9 @@ namespace EmEn::Scenes
 		const auto & cameraPosition = renderTarget->viewMatrices().position();
 		const auto & frustum = renderTarget->viewMatrices().frustum(0);
 		const auto viewDistance = renderTarget->viewDistance();
+
+		/* Store view distance for LOD computation in insertIntoRenderLists(). */
+		m_currentViewDistance = viewDistance;
 
 		for ( const auto & component : m_sceneVisualComponents )
 		{
@@ -1118,6 +1155,11 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* Compute LOD level from screen-space coverage (distance + object size).
+		 * LOD 0 = full detail (large on screen), MaxLODLevels-1 = minimum detail (small on screen). */
+		const auto objectRadius = renderable->boundingSphere().radius() * renderable->uniformScale();
+		const auto LODLevel = this->selectLODLevel(distance, objectRadius);
+
 		const auto layerCount = renderable->layerCount();
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
@@ -1137,20 +1179,20 @@ namespace EmEn::Scenes
 
 				if ( isSpecial )
 				{
-					RenderBatch::create(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
+					RenderBatch::create(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex, LODLevel);
 				}
 				else
 				{
-					RenderBatch::createStateSorted(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
+					RenderBatch::createStateSorted(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex, LODLevel);
 				}
 			}
 			else if ( needsGrabPass )
 			{
-				RenderBatch::create(m_renderLists[isLighted ? TranslucentGBLighted : TranslucentGB], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
+				RenderBatch::create(m_renderLists[isLighted ? TranslucentGBLighted : TranslucentGB], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex, LODLevel);
 			}
 			else
 			{
-				RenderBatch::create(m_renderLists[isLighted ? TranslucentLighted : Translucent], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
+				RenderBatch::create(m_renderLists[isLighted ? TranslucentLighted : Translucent], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex, LODLevel);
 			}
 		}
 	}
@@ -1165,7 +1207,7 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : renderBatches | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
 			}
 
 			return;
@@ -1180,7 +1222,7 @@ namespace EmEn::Scenes
 			const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
 
 			/* Ambient pass. */
-			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
 
 			/* Loop through all directional lights. */
 			for ( const auto & light : m_lightSet.directionalLights() )
@@ -1217,7 +1259,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::DirectionalLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
 			}
 
 			/* Loop through all point lights. */
@@ -1264,7 +1306,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::PointLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
 			}
 
 			/* Loop through all spotlights. */
@@ -1311,11 +1353,11 @@ namespace EmEn::Scenes
 					passType = RenderPassType::SpotLightPass;
 				}
 
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
 			}
 		}
 
-#ifdef DEBUG
+/*#ifdef DEBUG
 		if ( tracker.totalDrawCalls > 1 )
 		{
 			TraceInfo{ClassId} << "[MDI-1A] Lighted: " << tracker.totalDrawCalls << " draws, saved "
@@ -1323,11 +1365,11 @@ namespace EmEn::Scenes
 				<< tracker.savedGeometryBinds << " geometry, "
 				<< tracker.savedMaterialBinds << " material binds";
 		}
-#endif
+#endif*/
 	}
 
 	void
-	Scene::forEachRenderableInstance (const std::function< bool (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept
+	Scene::forEachRenderableInstance (const std::function< void (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept
 	{
 		for ( const auto & visualComponent : m_sceneVisualComponents )
 		{

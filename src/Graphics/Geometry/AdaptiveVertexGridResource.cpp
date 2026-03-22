@@ -423,7 +423,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	AdaptiveVertexGridResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -436,7 +436,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	AdaptiveVertexGridResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -686,14 +686,6 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* Check if static renderer is available. */
-		if ( s_graphicsRenderer == nullptr )
-		{
-			Tracer::error(ClassId, "Cannot update: no renderer available!");
-
-			return false;
-		}
-
 		/* Mark as updating. */
 		m_isUpdating.store(true, std::memory_order_release);
 
@@ -739,11 +731,13 @@ namespace EmEn::Graphics::Geometry
 			(void) this->addVertexToBuffer(pointIndex, vertexAttributes, vertexElementCount);
 		}
 
+		auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
+
 		/* Create new VBO. */
-		auto newVBO = std::make_unique< VertexBufferObject >(s_graphicsRenderer->transferManager().device(), totalPoints, vertexElementCount, false);
+		auto newVBO = std::make_unique< VertexBufferObject >(transferManager.device(), totalPoints, vertexElementCount, false);
 		newVBO->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
-		if ( !newVBO->createOnHardware() || !newVBO->transferData(s_graphicsRenderer->transferManager(), vertexAttributes) )
+		if ( !newVBO->createOnHardware() || !newVBO->transferData(transferManager, vertexAttributes) )
 		{
 			Tracer::error(ClassId, "Failed to create new VBO!");
 

@@ -204,14 +204,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	TextureCubemap::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = serviceProvider.container< CubemapResource >()->getDefaultResource();
+		m_localData = this->serviceProvider().container< CubemapResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -222,16 +222,16 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	TextureCubemap::load (const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(serviceProvider.container< CubemapResource >()->getResource(
+		return this->load(this->serviceProvider().container< CubemapResource >()->getResource(
 			ResourceTrait::getResourceNameFromFilepath(filepath, "Cubemaps"),
 			true)
 		);
 	}
 
 	bool
-	TextureCubemap::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	TextureCubemap::load (const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

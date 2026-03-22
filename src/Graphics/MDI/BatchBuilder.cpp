@@ -45,9 +45,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/IndirectBuffer.hpp"
-#include "Vulkan/IndexBufferObject.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::MDI
 {
@@ -70,8 +68,8 @@ namespace EmEn::Graphics::MDI
 			return false;
 		}
 
-		const VkDeviceSize perDrawSSBOSize = MaxMDIDraws * sizeof(PerDrawData);
-		const VkDeviceSize indirectBufferSize = MaxMDIDraws * sizeof(VkDrawIndexedIndirectCommand);
+		constexpr VkDeviceSize perDrawSSBOSize = MaxMDIDraws * sizeof(PerDrawData);
+		constexpr VkDeviceSize indirectBufferSize = MaxMDIDraws * sizeof(VkDrawIndexedIndirectCommand);
 
 		m_perDrawSSBOs.resize(m_framesInFlight);
 		m_indirectBuffers.resize(m_framesInFlight);
@@ -142,7 +140,7 @@ namespace EmEn::Graphics::MDI
 		const Geometry::Interface * currentGeometry = nullptr;
 		uint32_t currentLayerIndex = UINT32_MAX;
 
-		for ( const auto & [sortKey, renderBatch] : renderList )
+		for ( const auto & renderBatch : renderList | std::views::values )
 		{
 			if ( totalDrawIndex >= MaxMDIDraws )
 			{
@@ -164,7 +162,7 @@ namespace EmEn::Graphics::MDI
 				continue;
 			}
 
-			const auto * geometry = renderable->geometry();
+			const auto * geometry = renderable->geometry(0);
 
 			if ( geometry != nullptr && geometry->isAdaptiveLOD() )
 			{
@@ -278,7 +276,7 @@ namespace EmEn::Graphics::MDI
 
 				if ( program != nullptr )
 				{
-					const auto * geometry = instance->renderable()->geometry();
+					const auto * geometry = instance->renderable()->geometry(0);
 					const auto pipelineLayout = program->pipelineLayout();
 					const auto pipelineHandle = program->graphicsPipeline()->handle();
 
@@ -366,7 +364,7 @@ namespace EmEn::Graphics::MDI
 			/* Fallback: render ALL objects in the batch individually. */
 			for ( const auto * rb : batch.renderBatches )
 			{
-				rb->renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, rb->subGeometryIndex(), rb->worldCoordinates(), commandBuffer, tracker, bindlessTexturesManager);
+				rb->renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, rb->subGeometryIndex(), rb->worldCoordinates(), commandBuffer, tracker, rb->LODLevel(), bindlessTexturesManager);
 			}
 		}
 	}

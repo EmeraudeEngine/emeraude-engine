@@ -54,12 +54,12 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Constructs a dynamic skybox resource.
-			 * @param name A string for the skybox [std::move].
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			DynamicSkyResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: AbstractBackground{std::move(name), renderableFlags}
+			DynamicSkyResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: AbstractBackground{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -107,7 +107,7 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
@@ -115,7 +115,7 @@ namespace EmEn::Graphics::Renderable
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
 			[[nodiscard]]
 			bool
 			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
@@ -123,15 +123,15 @@ namespace EmEn::Graphics::Renderable
 				return false;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
-			geometry () const noexcept override
+			geometry (uint32_t /*LODLevel*/) const noexcept override
 			{
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -139,7 +139,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -155,11 +155,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -170,6 +170,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
 
 			/**
 			 * @brief setGeometry

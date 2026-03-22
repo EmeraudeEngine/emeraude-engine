@@ -51,12 +51,14 @@ namespace EmEn::Scenes
 			 * @param renderableInstance A reference to a renderable instance smart pointer.
 			 * @param worldCoordinates A pointer to the cartesian frame.
 			 * @param subGeometryIndex The layer index of the renderable.
+			 * @param LODLevel The geometry LOD level for this batch.
 			 */
 			explicit
-			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex) noexcept
+			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
 				: m_renderableInstance{renderableInstance},
 				m_worldCoordinates{worldCoordinates},
-				m_subGeometryIndex{subGeometryIndex}
+				m_subGeometryIndex{subGeometryIndex},
+				m_LODLevel{LODLevel}
 			{
 
 			}
@@ -97,22 +99,34 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the geometry LOD level for this batch.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			LODLevel () const noexcept
+			{
+				return m_LODLevel;
+			}
+
+			/**
 			 * @brief Static method to instantiate a render batch and register it to a render list.
 			 * @param renderList A referencer to a render list.
 			 * @param distance The distance of the renderable from the camera.
 			 * @param renderableInstance A pointer to the renderable instance.
 			 * @param worldCoordinates A pointer to the cartesian frame.
 			 * @param subGeometryIndex The layer index of the renderable.
+			 * @param LODLevel The geometry LOD level for this batch.
 			 * @return void
 			 */
 			static
 			void
-			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex) noexcept
+			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
 			{
 				renderList.emplace(
 					std::piecewise_construct,
 					std::forward_as_tuple(static_cast< uint64_t >(distance * DistanceMultiplier)),
-					std::forward_as_tuple(renderableInstance, worldCoordinates, subGeometryIndex)
+					std::forward_as_tuple(renderableInstance, worldCoordinates, subGeometryIndex, LODLevel)
 				);
 			}
 
@@ -133,10 +147,11 @@ namespace EmEn::Scenes
 		 * @param renderableInstance A pointer to the renderable instance.
 		 * @param worldCoordinates A pointer to the cartesian frame.
 		 * @param subGeometryIndex The layer index of the renderable.
+		 * @param LODLevel The geometry LOD level for this batch.
 		 */
 		static
 		void
-		createStateSorted (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex) noexcept
+		createStateSorted (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
 		{
 			const auto * renderable = renderableInstance->renderable();
 
@@ -166,9 +181,9 @@ namespace EmEn::Scenes
 				}
 
 				/* Geometry identity: low 16 bits of geometry object address. */
-				if ( renderable->geometry() != nullptr )
+				if ( const auto * geometryAddr = renderable->geometry(LODLevel); geometryAddr != nullptr )
 				{
-					geometryId = reinterpret_cast< uintptr_t >(renderable->geometry()) & 0xFFFF;
+					geometryId = reinterpret_cast< uintptr_t >(geometryAddr) & 0xFFFF;
 				}
 			}
 
@@ -185,7 +200,7 @@ namespace EmEn::Scenes
 			renderList.emplace(
 				std::piecewise_construct,
 				std::forward_as_tuple(sortKey),
-				std::forward_as_tuple(renderableInstance, worldCoordinates, subGeometryIndex)
+				std::forward_as_tuple(renderableInstance, worldCoordinates, subGeometryIndex, LODLevel)
 			);
 		}
 
@@ -196,5 +211,6 @@ namespace EmEn::Scenes
 			const std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
 			const Libs::Math::CartesianFrame< float > * m_worldCoordinates{nullptr};
 			const uint32_t m_subGeometryIndex;
+			const uint32_t m_LODLevel{0};
 	};
 }

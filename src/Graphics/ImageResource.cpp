@@ -39,7 +39,7 @@ namespace EmEn::Graphics
 	using namespace Libs;
 
 	bool
-	ImageResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	ImageResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -92,7 +92,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	ImageResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -119,7 +119,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	ImageResource::load (const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

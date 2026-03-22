@@ -320,18 +320,19 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns the geometry interface pointer.
+			 * @param LODIndex The desired LOD level. Default 0.
 			 * @return const Graphics::Geometry::Interface *
 			 */
 			[[nodiscard]]
 			const Graphics::Geometry::Interface *
-			getGeometryInterface () const noexcept
+			getGeometryInterface (uint32_t LODIndex = 0) const noexcept
 			{
 				if ( !this->isRenderableInstanceAvailable() )
 				{
 					return nullptr;
 				}
 
-				return m_renderableInstance->renderable()->geometry();
+				return m_renderableInstance->renderable()->geometry(LODIndex);
 			}
 
 			/**

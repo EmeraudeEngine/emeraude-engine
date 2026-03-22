@@ -1348,13 +1348,13 @@ namespace EmEn
 			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices, false};	///< Vulkan instance wrapper. FIXME: Find a nice way to let user-application sets the boolean
 			Window m_window{m_primaryServices, m_vulkanInstance, m_identification};	///< Application window.
 			Input::Manager m_inputManager{m_primaryServices, m_window};				///< Input device management.
-			Graphics::Renderer m_graphicsRenderer{m_primaryServices, m_vulkanInstance, m_window}; ///< Vulkan rendering pipeline.
+			Graphics::Renderer m_graphicsRenderer{m_primaryServices, m_resourceManager, m_vulkanInstance, m_window}; ///< Vulkan rendering pipeline.
 			Physics::Manager m_physicsManager{m_primaryServices, m_vulkanInstance};	///< Physics simulation.
 			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager};	   ///< OpenAL audio system.
-			Overlay::Manager m_overlayManager{m_primaryServices, m_window, m_graphicsRenderer}; ///< ImGui overlay system.
-			Notifier m_notifier{m_resourceManager, m_overlayManager};				  ///< On-screen notifications.
+			Overlay::Manager m_overlayManager{m_primaryServices, m_resourceManager}; ///< ImGui overlay system.
+			Notifier m_notifier{m_overlayManager};				  ///< On-screen notifications.
 			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
-			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_graphicsRenderer, m_audioManager}; ///< Scene graph management.
+			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager}; ///< Scene graph management.
 			/* Reusable capture buffer for screenshots. */
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};
 			/* Service tracking. */

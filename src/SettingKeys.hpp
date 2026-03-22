@@ -56,6 +56,10 @@ namespace EmEn
 		constexpr auto TracerLogFormatKey{"Core/Tracer/LogFormat"};
 		constexpr auto DefaultTracerLogFormat{"Text"};
 
+		/* Console */
+		constexpr auto ConsoleRemoteListenerPortKey{"Core/Console/RemoteListenerPort"};
+		constexpr auto DefaultConsoleRemoteListenerPort{static_cast< uint16_t >(7777)};
+
 		/* Input manager */
 		constexpr auto InputShowInformationKey{"Core/Input/ShowInformation"}; // Logs (and with argument switch "--show-input-infos")
 		constexpr auto DefaultInputShowInformation{false};

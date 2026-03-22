@@ -70,14 +70,14 @@ namespace EmEn::Graphics::Material
 	using namespace Vulkan;
 
 	bool
-	PBRResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	PBRResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		/* Default PBR material: grey dielectric with medium roughness. */
+		/* Default PBR material: gray dielectric with medium roughness. */
 		this->setAlbedoComponent(DefaultAlbedoColor);
 		this->setRoughnessComponent(DefaultRoughness);
 		this->setMetalnessComponent(DefaultMetalness);
@@ -996,9 +996,7 @@ namespace EmEn::Graphics::Material
 				const auto attenuationDistance = FastJSON::getValue< float >(data[TransmissionString], JKAttenuationDistance).value_or(DefaultAttenuationDistance);
 				const auto thickness = FastJSON::getValue< float >(data[TransmissionString], JKThickness).value_or(DefaultThicknessFactor);
 
-				const auto useGrabPass = FastJSON::getValue< bool >(data[TransmissionString], JKScreenSpace).value_or(false);
-
-				if ( useGrabPass )
+				if ( FastJSON::getValue< bool >(data[TransmissionString], JKScreenSpace).value_or(false) )
 				{
 					if ( !this->setTransmissionComponentFromGrabPass(factor, attenuationColor, attenuationDistance, thickness) )
 					{
@@ -1052,12 +1050,14 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	PBRResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	PBRResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
+
+		auto & serviceProvider = this->serviceProvider();
 
 		if ( !this->parseAlbedoComponent(data, serviceProvider) )
 		{
@@ -2111,7 +2111,7 @@ namespace EmEn::Graphics::Material
 			 * and the geometry only has 2D UVs, add the 3D coordinate fallback. */
 			if ( !this->primaryTextureCoordinatesUses3D() )
 			{
-				for ( const auto & [type, component] : m_components )
+				for (const auto & component : m_components | std::views::values)
 				{
 					const auto * texture = dynamic_cast< const Component::Texture * >(component.get());
 

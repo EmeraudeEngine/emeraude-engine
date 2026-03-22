@@ -44,7 +44,7 @@ namespace EmEn::Graphics
 	using namespace Libs::PixelFactory;
 
 	bool
-	CubemapResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	CubemapResource::load () noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -153,12 +153,12 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	CubemapResource::load (const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
 		{
-			return ResourceTrait::load(serviceProvider, filepath);
+			return ResourceTrait::load(filepath);
 		}
 		
 		/* Tries to read the pixmap. */
@@ -185,7 +185,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	CubemapResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -202,7 +202,7 @@ namespace EmEn::Graphics
 
 		const auto fileFormat = data[FileFormatKey].asString();
 
-		const auto & fileSystem = serviceProvider.fileSystem();
+		const auto & fileSystem = this->serviceProvider().fileSystem();
 
 		/* Checks if cubemap is packed onto one image. */
 		if ( data.isMember(PackedKey) && data[PackedKey].asBool() )

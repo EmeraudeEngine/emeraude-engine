@@ -32,6 +32,10 @@
 #include <vector>
 
 /* Third-party inclusions. */
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 #include <shobjidl.h>
 #include "reproc++/run.hpp"

@@ -64,13 +64,13 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Constructs a terrain resource.
-			 * @param name A reference to a string for the resource name.
-			 * @param renderableFlags The resource flag bits. Default none.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit
-			TerrainResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Abstract{std::move(name), renderableFlags},
-				  m_geometry{std::make_unique< Geometry::AdaptiveVertexGridResource >(this->name() + "AdaptiveGrid", Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart)}
+			TerrainResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags},
+				  m_geometry{std::make_unique< Geometry::AdaptiveVertexGridResource >(serviceProvider, this->name() + "AdaptiveGrid", Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart)}
 			{
 
 			}
@@ -118,41 +118,31 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material != nullptr )
-				{
-					return m_material->isOpaque();
-				}
-
-				return true;
+				return m_material != nullptr ? m_material->isOpaque() : true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
 			[[nodiscard]]
 			bool
 			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
 			{
-				if ( m_material != nullptr )
-				{
-					return m_material->requiresGrabPass();
-				}
-
-				return false;
+				return m_material != nullptr ? m_material->requiresGrabPass() : false;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
-			geometry () const noexcept override
+			geometry (uint32_t /*LODIndex*/) const noexcept override
 			{
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -160,7 +150,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -192,14 +182,14 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			bool load (const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -336,24 +326,16 @@ namespace EmEn::Graphics::Renderable
 
 		private:
 
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
+
 			/**
 			 * @brief Sets a material.
 			 * @param materialResource A reference to a material smart pointer.
 			 * @return bool
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
-
-			/* JSON key. */
-			static constexpr auto GridSizeKey{"GridSize"};
-			static constexpr auto GridDivisionKey{"GridDivision"};
-			static constexpr auto GridVisibleSizeKey{"GridVisibleSize"};
-			static constexpr auto HeightMapKey{"HeightMap"};
-			static constexpr auto ImageNameKey{"ImageName"};
-			static constexpr auto InverseKey{"Inverse"};
-			static constexpr auto MaterialTypeKey{"MaterialType"};
-			static constexpr auto MaterialNameKey{"MaterialName"};
-			static constexpr auto PerlinNoiseKey{"PerlinNoise"};
-			static constexpr auto VertexColorKey{"VertexColor"};
 
 			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;

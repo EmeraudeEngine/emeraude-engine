@@ -87,18 +87,16 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Constructs an overlay manager.
 			 * @param primaryServices A reference to primary services.
-			 * @param window A reference to the window.
-			 * @param graphicsRenderer A reference to the graphics renderer.
+			 * @param resourceManager A reference to the resource manager.
 			 */
-			Manager (PrimaryServices & primaryServices, Window & window, Graphics::Renderer & graphicsRenderer) noexcept
+			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept
 				: ServiceInterface{ClassId},
 				KeyboardListenerInterface{false, true},
 				PointerListenerInterface{false, false, true},
 				m_primaryServices{primaryServices},
-				m_window{window},
-				m_graphicsRenderer{graphicsRenderer}
+				m_resourceManager{resourceManager}
 			{
-				this->observe(&m_window);
+				this->observe(&m_resourceManager.graphicsRenderer().window());
 			}
 
 			/**
@@ -158,6 +156,17 @@ namespace EmEn::Overlay
 			primaryServices () const noexcept
 			{
 				return m_primaryServices;
+			}
+
+			/**
+			 * @brief Returns the reference to the resource manager.
+			 * @return Resources::Manager &
+			 */
+			[[nodiscard]]
+			Resources::Manager &
+			resourceManager () const noexcept
+			{
+				return m_resourceManager;
 			}
 
 			/**
@@ -435,8 +444,7 @@ namespace EmEn::Overlay
 #endif
 
 			PrimaryServices & m_primaryServices;
-			Window & m_window;
-			Graphics::Renderer & m_graphicsRenderer;
+			Resources::Manager & m_resourceManager;
 			FramebufferProperties m_framebufferProperties;
 			std::shared_ptr< Graphics::Geometry::IndexedVertexResource > m_surfaceGeometry;
 			std::array< std::shared_ptr< Saphir::Program >, ProgramCount > m_programs;
