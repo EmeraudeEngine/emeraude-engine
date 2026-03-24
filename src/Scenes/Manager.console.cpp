@@ -33,6 +33,9 @@
 #include "Component/Camera.hpp"
 #include "Component/Microphone.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
+#include "Graphics/Renderable/BasicGroundResource.hpp"
+#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Resources/Manager.hpp"
 
 /* Local inclusions. */
@@ -46,9 +49,9 @@ namespace EmEn::Scenes
 	Manager::onRegisterToConsole () noexcept
 	{
 		this->bindCommand("createScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 5 )
+			if ( arguments.size() < 6 )
 			{
-				outputs.emplace_back(Severity::Error, "Usage: createScene(name, boundary, cameraNodeName, cameraX, cameraY, cameraZ [, backgroundName])");
+				outputs.emplace_back(Severity::Error, "Usage: createScene(name, boundary, cameraNode, camX, camY, camZ [, backgroundName [, groundMaterial]])");
 
 				return false;
 			}
@@ -64,7 +67,7 @@ namespace EmEn::Scenes
 
 			const auto boundary = arguments[1].asFloat();
 
-			/* Optional background. */
+			/* Optional background (arg 6). */
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > background;
 
 			if ( arguments.size() >= 7 )
@@ -79,7 +82,44 @@ namespace EmEn::Scenes
 				}
 			}
 
-			auto scene = this->newScene(name, boundary, background);
+			/* Optional ground (arg 7). */
+			std::shared_ptr< Scenes::GroundLevelInterface > groundLevel;
+
+			if ( arguments.size() >= 8 )
+			{
+				const auto matName = arguments[7].asString();
+
+				std::shared_ptr< Graphics::Material::Interface > materialResource;
+
+				if ( matName == "default" )
+				{
+					materialResource = m_resourceManager.container< Graphics::Material::BasicResource >()->getDefaultResource();
+				}
+				else
+				{
+					materialResource = m_resourceManager.container< Graphics::Material::StandardResource >()->getResource(matName);
+				}
+
+				if ( materialResource == nullptr )
+				{
+					outputs.emplace_back(Severity::Warning, std::stringstream{} << "Ground material '" << matName << "' not found, skipping ground.");
+				}
+				else
+				{
+					auto ground = std::make_shared< Graphics::Renderable::BasicGroundResource >(m_resourceManager, "ConsoleGround");
+
+					if ( ground->load(boundary * 2.0F, 8, materialResource, {}, boundary * 2.0F) )
+					{
+						groundLevel = ground;
+					}
+					else
+					{
+						outputs.emplace_back(Severity::Warning, "Ground geometry failed to load !");
+					}
+				}
+			}
+
+			auto scene = this->newScene(name, boundary, background, groundLevel);
 
 			if ( scene == nullptr )
 			{
@@ -103,6 +143,12 @@ namespace EmEn::Scenes
 				cameraNode->componentBuilder< Component::Microphone >(cameraNodeName + "Microphone").asPrimary().build();
 			}
 
+			/* Setup basic directional lighting. */
+			scene->lightSet().enableAsStaticLighting()
+				.setAmbientParameters({0.3F, 0.4F, 0.6F, 1.0F}, 0.25F)
+				.setLightParameters({1.0F, 0.95F, 0.8F, 1.0F}, 1.2F)
+				.setAsDirectionalLight({1.0F, 1.0F, 1.0F}, true);
+
 			if ( this->enableScene(scene) )
 			{
 				outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << name << "' created and enabled (boundary: " << boundary << ", camera: " << cameraNodeName << ").");
@@ -113,7 +159,7 @@ namespace EmEn::Scenes
 			}
 
 			return true;
-		}, "Creates a scene with camera. Usage: createScene(name, boundary, cameraNode, camX, camY, camZ [, backgroundName])");
+		}, "Creates a scene with camera. Usage: createScene(name, boundary, cameraNode, camX, camY, camZ [, backgroundName [, groundMaterial]])");
 
 		this->bindCommand("enableScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -327,6 +373,51 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Attaches a primary microphone to a node. Usage: attachMicrophone(nodeName, microphoneName)");
+
+		this->bindCommand("setGround", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto matName = arguments.empty() ? std::string{"default"} : arguments[0].asString();
+			const auto boundary = m_activeScene->boundary();
+
+			std::shared_ptr< Graphics::Material::Interface > materialResource;
+
+			if ( matName == "default" )
+			{
+				materialResource = m_resourceManager.container< Graphics::Material::BasicResource >()->getDefaultResource();
+			}
+			else
+			{
+				materialResource = m_resourceManager.container< Graphics::Material::StandardResource >()->getResource(matName);
+			}
+
+			if ( materialResource == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Material '" << matName << "' not found !");
+
+				return false;
+			}
+
+			auto ground = std::make_shared< Graphics::Renderable::BasicGroundResource >(m_resourceManager, "ConsoleGround");
+
+			if ( !ground->load(boundary, 8, materialResource, {}, boundary) )
+			{
+				outputs.emplace_back(Severity::Error, "Ground geometry failed to load !");
+
+				return false;
+			}
+
+			m_activeScene->setGroundLevel(ground);
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Ground set with material '" << matName << "'.");
+
+			return true;
+		}, "Sets the ground for the active scene. Usage: setGround([materialName])");
 
 		this->bindCommand("setBackground", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
