@@ -786,6 +786,11 @@ namespace EmEn
 
 			this->observe(&m_sceneManager);
 
+			/* Register JSON scene handler on the console controller. */
+			m_consoleController.setJsonHandler([this] (const std::string & json, Console::Outputs & outputs) {
+				return m_sceneManager.loadSceneFromJson(json, outputs);
+			});
+
 			TraceSuccess{ClassId} << m_sceneManager.name() << " service up!";
 		}
 		else

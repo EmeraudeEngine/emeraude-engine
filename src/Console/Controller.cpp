@@ -202,7 +202,15 @@ namespace EmEn::Console
 			{
 				Outputs outputs;
 
-				this->executeCommand(pending.command, outputs);
+				/* JSON input: route to the registered JSON handler. */
+				if ( !pending.command.empty() && pending.command[0] == '{' && m_jsonHandler )
+				{
+					m_jsonHandler(pending.command, outputs);
+				}
+				else
+				{
+					this->executeCommand(pending.command, outputs);
+				}
 
 				/* Send clean response directly to the requesting client. */
 				if ( pending.client != nullptr && !outputs.empty() )

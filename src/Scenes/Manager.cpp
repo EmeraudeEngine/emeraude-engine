@@ -38,6 +38,7 @@
 /* Local inclusions. */
 #include "DefinitionResource.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Libs/FastJSON.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 
@@ -177,6 +178,75 @@ namespace EmEn::Scenes
 		this->notify(SceneLoaded, scene);
 
 		return {scene, sceneDefinition};
+	}
+
+	bool
+	Manager::loadSceneFromJson (const std::string & jsonString, Console::Outputs & outputs) noexcept
+	{
+		const auto rootCheck = FastJSON::getRootFromString(jsonString);
+
+		if ( !rootCheck )
+		{
+			outputs.emplace_back(Severity::Error, "Invalid JSON !");
+
+			return false;
+		}
+
+		const auto & root = rootCheck.value();
+
+		/* Create a temporary definition resource. */
+		auto definition = m_resourceManager.container< DefinitionResource >()->createResource("ConsoleSceneDefinition");
+
+		if ( definition == nullptr )
+		{
+			outputs.emplace_back(Severity::Error, "Failed to create scene definition resource !");
+
+			return false;
+		}
+
+		if ( !definition->load(root) )
+		{
+			outputs.emplace_back(Severity::Error, "Failed to load scene definition !");
+
+			return false;
+		}
+
+		const auto sceneName = definition->getSceneName();
+		const auto boundary = definition->getBoundary(DefaultSceneBoundary);
+
+		if ( this->hasSceneNamed(sceneName) )
+		{
+			outputs.emplace_back(Severity::Error, std::stringstream{} << "Scene '" << sceneName << "' already exists !");
+
+			return false;
+		}
+
+		auto scene = this->newScene(sceneName, boundary);
+
+		if ( scene == nullptr )
+		{
+			outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to create scene '" << sceneName << "' !");
+
+			return false;
+		}
+
+		if ( !definition->buildScene(*scene) )
+		{
+			outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to build scene '" << sceneName << "' from JSON !");
+
+			return false;
+		}
+
+		if ( this->enableScene(scene) )
+		{
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << sceneName << "' loaded from JSON and enabled.");
+		}
+		else
+		{
+			outputs.emplace_back(Severity::Warning, std::stringstream{} << "Scene '" << sceneName << "' loaded but failed to enable.");
+		}
+
+		return true;
 	}
 
 	bool

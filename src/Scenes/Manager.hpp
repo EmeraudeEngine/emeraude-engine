@@ -266,6 +266,14 @@ namespace EmEn::Scenes
 			SceneLoading loadScene (const std::shared_ptr< DefinitionResource > & sceneDefinition) noexcept;
 
 			/**
+			 * @brief Loads a scene from a JSON string, builds it, and enables it.
+			 * @param jsonString The JSON scene description.
+			 * @param outputs Console outputs for feedback.
+			 * @return bool
+			 */
+			bool loadSceneFromJson (const std::string & jsonString, Console::Outputs & outputs) noexcept;
+
+			/**
 			 * @brief Disables and delete a scene.
 			 * @param sceneName The scene name.
 			 * @return bool

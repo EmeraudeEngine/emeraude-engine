@@ -167,10 +167,23 @@ namespace EmEn::Console
 			 */
 			bool executeCommand (const std::string & command, Outputs & outputs) noexcept;
 
+			/** @brief Callback type for JSON scene descriptions received via TCP. */
+			using JsonHandler = std::function< bool (const std::string &, Outputs &) >;
+
 			/**
 			 * @brief Polls pending remote console commands.
 			 */
 			void poll () noexcept;
+
+			/**
+			 * @brief Sets a handler for JSON input received via TCP (lines starting with '{').
+			 * @param handler The callback function.
+			 */
+			void
+			setJsonHandler (JsonHandler handler) noexcept
+			{
+				m_jsonHandler = std::move(handler);
+			}
 
 			/**
 			 * @brief Returns the instance of the console controller.
@@ -224,6 +237,7 @@ namespace EmEn::Console
 			std::vector< std::string > m_history;
 			std::unique_ptr< RemoteListener > m_remoteListener;
 			bool m_directInputWasEnabled{false};
+			JsonHandler m_jsonHandler;
 			bool m_pointerWasLocked{false};
 	};
 }
