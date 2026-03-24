@@ -32,6 +32,8 @@
 /* Local inclusions. */
 #include "Component/Camera.hpp"
 #include "Component/Microphone.hpp"
+#include "Component/Visual.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
@@ -418,6 +420,76 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Sets the ground for the active scene. Usage: setGround([materialName])");
+
+		this->bindCommand("addMesh", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 5 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: addMesh(meshResource, entityName, x, y, z [, scale])");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto meshName = arguments[0].asString();
+			const auto entityName = arguments[1].asString();
+			const auto x = arguments[2].asFloat();
+			const auto y = arguments[3].asFloat();
+			const auto z = arguments[4].asFloat();
+			const auto scale = arguments.size() >= 6 ? arguments[5].asFloat() : 1.0F;
+
+			auto * meshContainer = m_resourceManager.container< Graphics::Renderable::MeshResource >();
+
+			if ( meshContainer == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "MeshResource container not available !");
+
+				return false;
+			}
+
+			auto mesh = meshContainer->getResource(meshName);
+
+			if ( mesh == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Mesh '" << meshName << "' not found !");
+
+				return false;
+			}
+
+			mesh->setUniformScale(scale);
+
+			const Libs::Math::Vector< 3, float > position{x, y, z};
+			auto entity = m_activeScene->createStaticEntity(entityName, position);
+
+			if ( entity == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to create entity '" << entityName << "' !");
+
+				return false;
+			}
+
+			const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual")
+				.setup([scale] (auto & component) {
+					component.getRenderableInstance()->enableLighting();
+					component.getRenderableInstance()->setTransformationMatrix(Libs::Math::Matrix4F::scaling(scale));
+				}).build(mesh);
+
+			if ( visual == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "Failed to create visual component !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Mesh '" << meshName << "' placed at (" << x << ", " << y << ", " << z << ") as '" << entityName << "' (scale: " << scale << ").");
+
+			return true;
+		}, "Adds a mesh to the scene. Usage: addMesh(meshResource, entityName, x, y, z [, scale])");
 
 		this->bindCommand("setBackground", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
