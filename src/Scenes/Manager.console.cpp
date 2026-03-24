@@ -30,6 +30,10 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Graphics/Renderable/SkyBoxResource.hpp"
+#include "Resources/Manager.hpp"
+
+/* Local inclusions. */
 #include "Component/Camera.hpp"
 
 namespace EmEn::Scenes
@@ -39,6 +43,110 @@ namespace EmEn::Scenes
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
+		this->bindCommand("createScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: createScene(name [, boundary])");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+
+			if ( this->hasSceneNamed(name) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Scene '" << name << "' already exists !");
+
+				return false;
+			}
+
+			const auto boundary = arguments.size() >= 2 ? arguments[1].asFloat() : DefaultSceneBoundary;
+
+			auto scene = this->newScene(name, boundary);
+
+			if ( scene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to create scene '" << name << "' !");
+
+				return false;
+			}
+
+			if ( this->enableScene(scene) )
+			{
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << name << "' created and enabled (boundary: " << boundary << ").");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Warning, std::stringstream{} << "Scene '" << name << "' created but failed to enable.");
+			}
+
+			return true;
+		}, "Creates and enables a new empty scene. Usage: createScene(name [, boundary])");
+
+		this->bindCommand("deleteScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: deleteScene(name)");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+
+			if ( this->deleteScene(name) )
+			{
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << name << "' deleted.");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to delete scene '" << name << "' !");
+			}
+
+			return true;
+		}, "Deletes a scene. Usage: deleteScene(name)");
+
+		this->bindCommand("setBackground", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: setBackground(skyboxName)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+
+			auto * skyBoxContainer = m_resourceManager.container< Graphics::Renderable::SkyBoxResource >();
+
+			if ( skyBoxContainer == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "SkyBox resource container not available !");
+
+				return false;
+			}
+
+			auto skyBox = skyBoxContainer->getResource(name);
+
+			if ( skyBox == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "SkyBox resource '" << name << "' not found !");
+
+				return false;
+			}
+
+			m_activeScene->setBackground(skyBox);
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Background set to '" << name << "'.");
+
+			return true;
+		}, "Sets the scene background skybox. Usage: setBackground(skyboxName)");
+
 		this->bindCommand("listScenes", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			std::stringstream list;
 
