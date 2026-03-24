@@ -93,6 +93,14 @@ namespace EmEn::Scenes
 			/* Ground keys. */
 			static constexpr auto GridDivisionKey{"GridDivision"};
 			static constexpr auto UVMultiplierKey{"UVMultiplier"};
+			static constexpr auto ShiftHeightKey{"ShiftHeight"};
+
+			/* Noise keys. */
+			static constexpr auto NoiseKey{"Noise"};
+			static constexpr auto SizeKey{"Size"};
+			static constexpr auto FactorKey{"Factor"};
+			static constexpr auto RoughnessKey{"Roughness"};
+			static constexpr auto SeedKey{"Seed"};
 
 			/* Lighting keys. */
 			static constexpr auto AmbientKey{"Ambient"};

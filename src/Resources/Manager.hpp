@@ -33,6 +33,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
@@ -77,7 +78,7 @@ namespace EmEn::Resources
 	 *
 	 * @since 0.8.35
 	 */
-	class Manager final : public ServiceInterface, public AbstractServiceProvider
+	class Manager final : public ServiceInterface, public Console::ControllableTrait, public AbstractServiceProvider
 	{
 		public:
 
@@ -104,6 +105,7 @@ namespace EmEn::Resources
 			explicit
 			Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				AbstractServiceProvider{primaryServices.fileSystem(), primaryServices.settings(), graphicsRenderer, audioManager},
 				m_primaryServices{primaryServices}
 			{
@@ -278,6 +280,9 @@ namespace EmEn::Resources
 			 * @since 0.8.35
 			 */
 			bool onInitialize () noexcept override;
+
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
 
 			/**
 			 * @brief Terminates the resource manager service.

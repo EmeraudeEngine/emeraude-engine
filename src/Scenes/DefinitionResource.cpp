@@ -212,58 +212,96 @@ namespace EmEn::Scenes
 
 		const auto & gnd = m_root[GroundKey];
 		const auto type = FastJSON::getValue< std::string >(gnd, TypeKey).value_or("Basic");
+		const auto boundary = scene.boundary();
+		const auto gridDivision = FastJSON::getValue< uint32_t >(gnd, GridDivisionKey).value_or(64);
+		const auto uvMultiplier = FastJSON::getValue< float >(gnd, UVMultiplierKey).value_or(boundary);
+		const auto shiftHeight = FastJSON::getValue< float >(gnd, ShiftHeightKey).value_or(0.0F);
 
-		if ( type == "Basic" )
+		/* Resolve material. */
+		std::shared_ptr< Material::Interface > materialResource;
+
+		if ( gnd.isMember(MaterialKey) && gnd[MaterialKey].isObject() )
 		{
-			const auto boundary = scene.boundary();
-			const auto gridDivision = FastJSON::getValue< uint32_t >(gnd, GridDivisionKey).value_or(8);
-			const auto uvMultiplier = FastJSON::getValue< float >(gnd, UVMultiplierKey).value_or(boundary);
+			const auto & mat = gnd[MaterialKey];
+			const auto matType = FastJSON::getValue< std::string >(mat, TypeKey).value_or("Basic");
+			const auto matResource = FastJSON::getValue< std::string >(mat, ResourceKey).value_or("");
 
-			/* Resolve material. */
-			std::shared_ptr< Material::Interface > materialResource;
-
-			if ( gnd.isMember(MaterialKey) && gnd[MaterialKey].isObject() )
+			if ( matType == "Standard" && !matResource.empty() )
 			{
-				const auto & mat = gnd[MaterialKey];
-				const auto matType = FastJSON::getValue< std::string >(mat, TypeKey).value_or("Basic");
-				const auto matResource = FastJSON::getValue< std::string >(mat, ResourceKey).value_or("");
-
-				if ( matType == "Standard" && !matResource.empty() )
-				{
-					materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(matResource);
-				}
-				else
-				{
-					materialResource = this->serviceProvider().container< Material::BasicResource >()->getDefaultResource();
-				}
+				materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(matResource);
+			}
+			else if ( matType == "PBR" && !matResource.empty() )
+			{
+				/* NOTE: PBR materials use the same container interface. */
+				materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(matResource);
 			}
 			else
 			{
 				materialResource = this->serviceProvider().container< Material::BasicResource >()->getDefaultResource();
 			}
+		}
+		else
+		{
+			materialResource = this->serviceProvider().container< Material::BasicResource >()->getDefaultResource();
+		}
 
-			if ( materialResource == nullptr )
+		if ( materialResource == nullptr )
+		{
+			TraceWarning{ClassId} << "Ground material not found !";
+
+			return false;
+		}
+
+		auto ground = std::make_shared< Renderable::BasicGroundResource >(this->serviceProvider(), scene.name() + "Ground");
+
+		bool loaded = false;
+
+		if ( type == "Basic" )
+		{
+			loaded = ground->load(boundary, gridDivision, materialResource, {}, uvMultiplier);
+		}
+		else if ( type == "PerlinNoise" )
+		{
+			Libs::VertexFactory::PerlinNoiseParams< float > noise;
+
+			if ( gnd.isMember(NoiseKey) && gnd[NoiseKey].isObject() )
 			{
-				TraceWarning{ClassId} << "Ground material not found !";
-
-				return false;
+				const auto & n = gnd[NoiseKey];
+				noise.size = FastJSON::getValue< float >(n, SizeKey).value_or(1.0F);
+				noise.factor = FastJSON::getValue< float >(n, FactorKey).value_or(0.5F);
 			}
 
-			auto ground = std::make_shared< Renderable::BasicGroundResource >(this->serviceProvider(), scene.name() + "Ground");
+			loaded = ground->loadPerlinNoise(boundary, gridDivision, materialResource, noise, {}, uvMultiplier, shiftHeight);
+		}
+		else if ( type == "DiamondSquare" )
+		{
+			Libs::VertexFactory::DiamondSquareParams< float > noise;
 
-			if ( ground->load(boundary, gridDivision, materialResource, {}, uvMultiplier) )
+			if ( gnd.isMember(NoiseKey) && gnd[NoiseKey].isObject() )
 			{
-				scene.setGroundLevel(ground);
-
-				return true;
+				const auto & n = gnd[NoiseKey];
+				noise.factor = FastJSON::getValue< float >(n, FactorKey).value_or(0.89F);
+				noise.roughness = FastJSON::getValue< float >(n, RoughnessKey).value_or(0.5F);
+				noise.seed = FastJSON::getValue< int32_t >(n, SeedKey).value_or(0);
 			}
 
-			TraceWarning{ClassId} << "Ground geometry failed to load !";
+			loaded = ground->loadDiamondSquare(boundary, gridDivision, materialResource, noise, {}, uvMultiplier, shiftHeight);
 		}
 		else
 		{
 			TraceWarning{ClassId} << "Ground type '" << type << "' not yet supported.";
+
+			return false;
 		}
+
+		if ( loaded )
+		{
+			scene.setGroundLevel(ground);
+
+			return true;
+		}
+
+		TraceWarning{ClassId} << "Ground geometry failed to load !";
 
 		return false;
 	}

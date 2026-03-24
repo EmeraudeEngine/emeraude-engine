@@ -569,6 +569,8 @@ namespace EmEn
 		/* Initialize resource manager services. */
 		if ( m_resourceManager.initialize(m_primaryServicesEnabled) )
 		{
+			m_resourceManager.registerToObject(*this);
+
 			TraceSuccess{ClassId} << m_resourceManager.name() << " service up !";
 		}
 		else

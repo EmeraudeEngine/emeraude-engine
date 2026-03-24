@@ -86,6 +86,20 @@ namespace EmEn::Resources
 			~ContainerInterface () override = default;
 
 			/**
+			 * @brief Returns the number of loaded resources.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			virtual size_t resourceCount () const noexcept = 0;
+
+			/**
+			 * @brief Returns the available resource names from the store (not yet loaded).
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			virtual std::vector< std::string > availableResourceNames () const noexcept = 0;
+
+			/**
 			 * @brief Sets the verbosity state for the container.
 			 *
 			 * When enabled, the container will output detailed trace information about resource
@@ -649,6 +663,34 @@ namespace EmEn::Resources
 			setVerbosity (bool state) noexcept override
 			{
 				m_verboseEnabled = state;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::resourceCount() const noexcept */
+			[[nodiscard]]
+			size_t
+			resourceCount () const noexcept override
+			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				return m_resources.size();
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::availableResourceNames() const noexcept */
+			[[nodiscard]]
+			std::vector< std::string >
+			availableResourceNames () const noexcept override
+			{
+				if ( m_localStore == nullptr )
+				{
+					return {};
+				}
+
+				std::vector< std::string > names;
+				names.reserve(m_localStore->size());
+
+				std::ranges::copy(*m_localStore | std::views::keys, std::back_inserter(names));
+
+				return names;
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::memoryOccupied() const noexcept */
