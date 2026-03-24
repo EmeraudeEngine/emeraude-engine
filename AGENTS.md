@@ -80,6 +80,52 @@ This means:
 This is a new model of engine development where the human defines the vision and architecture,
 and the AI executes, measures, and iterates at industrial speed.
 
+### AI Runtime Control — GOLD RULE
+
+> [!CRITICAL]
+> **The engine has a Remote Console (TCP port 7777).** Any AI working on this project
+> **MUST** use it. This is not optional — it is the primary tool for understanding what
+> the engine is doing at runtime.
+>
+> **Cross-platform tool (required on Windows):** Use `tools/remote-console.py` — works on Windows, Linux, and macOS:
+> ```bash
+> python3 tools/remote-console.py "COMMAND"
+> ```
+> On Linux/macOS, `nc` (netcat) also works:
+> ```bash
+> # Linux (use -q flag):
+> echo "COMMAND" | nc -q 2 localhost 7777
+>
+> # macOS (use -w flag — macOS nc does not support -q):
+> echo "COMMAND" | nc -w 2 localhost 7777
+> ```
+>
+> **When the user asks "what's on screen?"** → take a screenshot:
+> ```bash
+> python3 tools/remote-console.py "Core.RendererService.screenshot()"
+> ```
+> Then **read the PNG file** to see the rendering output. You have eyes. Use them.
+>
+> **When you need to verify a rendering change** → screenshot before and after.
+>
+> **When you need to understand the scene** → query it:
+> ```bash
+> python3 tools/remote-console.py "Core.SceneManagerService.getSceneInfo()"
+> ```
+>
+> **When you need to know what resources exist** → ask the engine:
+> ```bash
+> python3 tools/remote-console.py "Core.ResourcesManagerService.listResources(MeshResource)"
+> ```
+>
+> **The AI can create 3D scenes autonomously** — via live commands or JSON:
+> ```bash
+> python3 tools/remote-console.py '{"Name":"Scene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar"},...}'
+> ```
+>
+> The complete reference is in [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md).
+> **Read it before any runtime work.**
+
 ## 2. Architecture Map
 
 | Category | System | Path | Context |
@@ -98,7 +144,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) | Scene graph. |
 | | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. |
 | **Tools/UI** | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) | UI & Debug. |
-| | Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) | In-game terminal. |
+| | Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) | Runtime control (TCP + in-game). |
 | | AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) | Virtual devices. |
 | | Tool | [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) | Editor tools. |
 | **Net** | Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) | HTTP/Download. |
@@ -156,13 +202,33 @@ This engine is developed **with AI and for AI** — AI is not a helper, it is th
 **AI diagnostic integration:**
 - **RenderDoc in-application API** — programmatic GPU frame capture (`EMERAUDE_ENABLE_RENDERDOC=ON`)
 - **RenderDoc Python module** — autonomous .rdc analysis (draw calls, render passes, vertex throughput)
-- **Remote Console screenshot** — `Renderer.screenshot()` via TCP console for visual regression testing
+- **Remote Console screenshot** — `Core.RendererService.screenshot()` via TCP console for visual regression testing
 - **RenderDoc CLI capture** — `renderdoccmd capture` for pipeline regression testing
 
 See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions.md#ai-friendly-code-guidelines) for detailed guidelines.
 
-## 6. Documentation Index
+## 6. AI Runtime Control
 
+The engine exposes a **Remote Console** (TCP port 7777) that enables AI agents to control
+a running application autonomously. This is the foundation for AI-driven 3D content creation.
+
+**Capabilities:**
+- **Resource discovery** — query available skyboxes, meshes, materials
+- **Scene creation** — via live commands or JSON scene descriptions
+- **Camera control** — position, orientation, visual verification via screenshots
+- **Audio control** — full TrackMixer playback management
+- **Settings/window** — runtime configuration changes
+
+**Reference:** [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) — **THE complete guide** for
+any AI operating the engine at runtime. Contains the full command reference, JSON scene format
+specification, spatial orientation tutorial, and visual feedback loop methodology.
+
+**Console system:** [`src/Console/AGENTS.md`](src/Console/AGENTS.md) — Architecture, command flow,
+how to add new commands.
+
+## 7. Documentation Index
+
+-   **AI Runtime Control:** [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) (**AI operator guide** — resource discovery, scene creation, command reference).
 -   **Philosophy:** [`docs/architecture-philosophy.md`](docs/architecture-philosophy.md) (Deep dive).
 -   **Tracer:** [`docs/tracer-system.md`](docs/tracer-system.md) (Logging rules).
 -   **Conventions:** [`docs/cpp-conventions.md`](docs/cpp-conventions.md) (Includes AI-friendly guidelines).
@@ -173,7 +239,7 @@ See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions
 
 > **Maintenance:** If you implement significant changes, ask to update docs or run `/update-docs`.
 
-## 7. Code Generation Directives
+## 8. Code Generation Directives
 
 > [!CRITICAL]
 > These rules are **NON-NEGOTIABLE** for any AI-generated code in this engine.

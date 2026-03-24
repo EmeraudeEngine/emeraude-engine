@@ -79,7 +79,10 @@ Screenshots are taken via the Remote Console TCP connection using `Renderer.scre
 ./app --load-demo <demo-id>
 
 # 2. From another terminal (or programmatically via TCP socket on port 7777):
-echo "Renderer.screenshot()" | nc -w 2 localhost 7777
+# Cross-platform (recommended, required on Windows):
+python tools/remote-console.py "Core.RendererService.screenshot()"
+# Linux/macOS only:
+echo "Core.RendererService.screenshot()" | nc -w 2 localhost 7777
 ```
 
 **Implementation:** See `Graphics/Renderer.console.cpp`. Saves PNG to `{userDataDir}/captures/{unix_timestamp}.png`.

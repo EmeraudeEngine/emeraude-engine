@@ -50,14 +50,12 @@
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"
 #include "SceneRenderTarget.hpp"
-#include "Geometry/Interface.hpp"
-#include "TextureResource/Abstract.hpp"
 #include "Material/Interface.hpp"
 
 namespace
 {
 	/** @brief Empty lens effects list for the passthrough shader case. */
-	constexpr std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
+	const std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
 }
 
 namespace EmEn::Graphics

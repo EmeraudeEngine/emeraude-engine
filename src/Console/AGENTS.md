@@ -11,7 +11,18 @@ A TCP server listens on a configurable port (default **7777**, setting: `Core/Co
 1. **Send commands** — one per line, newline-terminated (`\n`)
 2. **Receive clean responses** — command outputs are sent directly to the requesting client (no Tracer noise)
 
-**Connection pattern:**
+**Connection — Cross-platform (Python, recommended):**
+
+Use `tools/remote-console.py` — works on Windows, Linux, and macOS:
+```bash
+# Send a single command
+python tools/remote-console.py "Core.SettingsService.getJson()"
+
+# Interactive mode (REPL)
+python tools/remote-console.py
+```
+
+**Connection — Linux/macOS only (nc):**
 ```bash
 # Send a command and get the response (nc -q 1 for quick disconnect)
 echo "Core.SettingsService.getJson()" | nc -q 2 localhost 7777
@@ -27,6 +38,8 @@ sleep 2
 ) | nc localhost 7777
 ```
 
+**Note:** `nc` (netcat) is not available on Windows. Always use `tools/remote-console.py` for cross-platform compatibility.
+
 **Response format:** Clean text or JSON — no `[Info][...]` prefixes, no ANSI codes. Each command response is terminated by `\n`. The Tracer is NOT broadcast to TCP clients.
 
 **Lifecycle:** The listener starts in `Controller::onInitialize()` and stops in `Controller::onTerminate()`. It runs on a dedicated network thread. Commands are queued and executed on the **main thread**.
@@ -37,14 +50,15 @@ All services are registered under `Core` as a single entry point:
 
 ```
 Core
-├── ArgumentsService        — Launch arguments (getJson, get, print)
-├── AudioManagerService     — Audio system
-│   └── TrackMixerService   — Music playback (play, pause, stop, volume, playlist, etc.)
-├── FileSystemService       — File paths (getJson, get, print)
-├── RendererService         — Graphics (screenshot, getStatus)
-├── SceneManagerService     — Scene creation and manipulation (see §5)
-├── SettingsService         — Configuration (getJson, set, save, print)
-└── WindowService           — Window control (resize, getState)
+├── ArgumentsService          — Launch arguments (getJson, get, print)
+├── AudioManagerService       — Audio system
+│   └── TrackMixerService     — Music playback (play, pause, stop, volume, playlist, etc.)
+├── FileSystemService         — File paths (getJson, get, print)
+├── RendererService           — Graphics (screenshot, getStatus)
+├── ResourcesManagerService   — Resource discovery (listContainers, listResources)
+├── SceneManagerService       — Scene creation and manipulation (see §5)
+├── SettingsService           — Configuration (getJson, set, save, print)
+└── WindowService             — Window control (resize, getState)
 ```
 
 ### Discovering commands
@@ -99,6 +113,17 @@ echo "Core.AudioManagerService.TrackMixerService.volume(50)" | nc -q 1 localhost
 echo "Core.AudioManagerService.TrackMixerService.playlist()" | nc -q 1 localhost 7777
 echo "Core.AudioManagerService.TrackMixerService.playlist(play, 3)" | nc -q 1 localhost 7777
 echo "Core.AudioManagerService.TrackMixerService.status()" | nc -q 1 localhost 7777
+```
+
+### Resource discovery
+```bash
+# List all resource containers (skyboxes, meshes, materials, etc.)
+echo "Core.ResourcesManagerService.listContainers()" | nc -q 2 localhost 7777
+# Returns JSON: [{"id":"SkyBoxResource","name":"...","loaded":3,"available":5}, ...]
+
+# List available resources in a specific container
+echo "Core.ResourcesManagerService.listResources(SkyBoxResource)" | nc -q 2 localhost 7777
+# Returns JSON: ["Miramar","DNCity","CloudyDay", ...]
 ```
 
 ### Screenshot and visual verification
@@ -277,10 +302,20 @@ function onEngineResponse(command, outputs) {
 }
 ```
 
+## 9. JSON Scene Input
+
+TCP lines starting with `{` are routed to a registered JSON handler (not the normal command parser). This enables complete scene creation from a single JSON document.
+
+- **Registration:** `Controller::setJsonHandler()` sets a `std::function< bool (const std::string &, Outputs &) >` callback
+- **Setup:** `Core` registers the handler in `initializeSecondaryLevel()`, routing to `SceneManager::loadSceneFromJson()`
+- **Flow:** TCP input -> `poll()` detects `{` prefix -> `m_jsonHandler(json, outputs)` -> scene built and enabled
+- **Format:** See [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) section 4 for the full JSON scene specification
+
 ## Critical Points
 
 - **Do not confuse** with AVConsole (`src/Scenes/AVConsole/`) which is the Audio/Video virtual device system
 - **Port 7777** is configurable via `Core/Console/RemoteListenerPort` setting
 - **No authentication** — the remote console is currently open
 - **Clean responses** — TCP responses contain only command output, no Tracer logs
-- **`lookAt` convention** — the `setNodeLookAt` function has a known orientation issue under investigation
+- **JSON routing** — lines starting with `{` bypass the command parser and go to the JSON handler
+- **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) for the complete AI operator reference
