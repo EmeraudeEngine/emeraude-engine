@@ -35,9 +35,19 @@
 namespace EmEn::Scenes
 {
 	class Scene;
+	class Node;
 
 	/**
-	 * @brief The scene definition class.
+	 * @brief The scene definition class. Builds a complete scene from a JSON description.
+	 * @details The JSON format supports:
+	 * - Name, Boundary: scene identification and size
+	 * - Properties: physics (gravity, atmosphere, etc.)
+	 * - Background: SkyBox, DynamicSky, Color
+	 * - Ground: Basic (flat), Terrain (heightmap)
+	 * - Lighting: Static directional lighting
+	 * - Nodes: hierarchical tree with components (Camera, Microphone, Lights, Visual, etc.)
+	 * - StaticEntities: positioned objects with components (Visual, Lights, SoundEmitter, etc.)
+	 * Each element uses a "Type" field for extensibility.
 	 * @extends EmEn::Resources::ResourceTrait This is a resource
 	 */
 	class DefinitionResource final : public Resources::ResourceTrait
@@ -52,16 +62,42 @@ namespace EmEn::Scenes
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::None};
 
-			/* JSON key. */
+			/* Top-level JSON keys. */
+			static constexpr auto BoundaryKey{"Boundary"};
 			static constexpr auto BackgroundKey{"Background"};
 			static constexpr auto GroundKey{"Ground"};
+			static constexpr auto LightingKey{"Lighting"};
+			static constexpr auto NodesKey{"Nodes"};
+			static constexpr auto StaticEntitiesKey{"StaticEntities"};
 			static constexpr auto ExtraDataKey{"ExtraData"};
+
+			/* Shared JSON keys. */
+			static constexpr auto TypeKey{"Type"};
+			static constexpr auto ResourceKey{"Resource"};
+			static constexpr auto PositionKey{"Position"};
+			static constexpr auto LookAtKey{"LookAt"};
+			static constexpr auto ComponentsKey{"Components"};
+			static constexpr auto ScaleKey{"Scale"};
+			static constexpr auto ColorKey{"Color"};
+			static constexpr auto IntensityKey{"Intensity"};
+			static constexpr auto PrimaryKey{"Primary"};
+			static constexpr auto MeshKey{"Mesh"};
+			static constexpr auto MaterialKey{"Material"};
+
+			/* Property keys. */
 			static constexpr auto SurfaceGravityKey{"SurfaceGravity"};
 			static constexpr auto AtmosphericDensityKey{"AtmosphericDensity"};
 			static constexpr auto PlanetRadiusKey{"PlanetRadius"};
 			static constexpr auto WaterDensityKey{"WaterDensity"};
-			static constexpr auto NodesKey{"Nodes"};
-			static constexpr auto ComponentsKey{"Components"};
+
+			/* Ground keys. */
+			static constexpr auto GridDivisionKey{"GridDivision"};
+			static constexpr auto UVMultiplierKey{"UVMultiplier"};
+
+			/* Lighting keys. */
+			static constexpr auto AmbientKey{"Ambient"};
+			static constexpr auto LightKey{"Light"};
+			static constexpr auto DirectionKey{"Direction"};
 
 			/**
 			 * @brief Constructs a definition resource.
@@ -124,43 +160,83 @@ namespace EmEn::Scenes
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				// TODO with json node ...
 				return 0;
 			}
 
-			/** @brief Gives the name of the scene. */
+			/**
+			 * @brief Returns the scene name from the JSON definition.
+			 * @return std::string
+			 */
 			[[nodiscard]]
 			std::string getSceneName () const noexcept;
 
-			/** @brief Build the scene from JSON definition. */
+			/**
+			 * @brief Returns the scene boundary from the JSON definition.
+			 * @param defaultBoundary Fallback value if not specified.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float getBoundary (float defaultBoundary = 1000.0F) const noexcept;
+
+			/**
+			 * @brief Builds the scene from the JSON definition.
+			 * @param scene A reference to the scene to populate.
+			 * @return bool
+			 */
 			bool buildScene (Scene & scene) noexcept;
 
-			/** @brief Gets the extra data from the scene definition */
+			/**
+			 * @brief Returns the extra data from the scene definition.
+			 * @return Json::Value
+			 */
 			[[nodiscard]]
 			Json::Value getExtraData () const noexcept;
 
 		private:
 
 			/**
-			 * @brief readProperties
+			 * @brief Reads and applies physics properties.
 			 * @param scene A reference to the scene.
 			 * @return bool
 			 */
 			bool readProperties (Scene & scene) noexcept;
 
 			/**
-			 * @brief Reads the background description.
+			 * @brief Reads and applies the background (SkyBox, DynamicSky, Color).
 			 * @param scene A reference to the scene.
 			 * @return bool
 			 */
 			bool readBackground (Scene & scene) noexcept;
 
 			/**
-			 * @brief Reads the ground description.
+			 * @brief Reads and applies the ground (Basic, Terrain).
 			 * @param scene A reference to the scene.
 			 * @return bool
 			 */
 			bool readGround (Scene & scene) noexcept;
+
+			/**
+			 * @brief Reads and applies the lighting setup.
+			 * @param scene A reference to the scene.
+			 * @return bool
+			 */
+			bool readLighting (Scene & scene) noexcept;
+
+			/**
+			 * @brief Reads and creates nodes recursively.
+			 * @param scene A reference to the scene.
+			 * @param parentNode The parent node to attach children to.
+			 * @param nodesArray The JSON array of node definitions.
+			 * @return bool
+			 */
+			bool readNodes (Scene & scene, const std::shared_ptr< Node > & parentNode, const Json::Value & nodesArray) noexcept;
+
+			/**
+			 * @brief Reads and creates static entities.
+			 * @param scene A reference to the scene.
+			 * @return bool
+			 */
+			bool readStaticEntities (Scene & scene) noexcept;
 
 			Json::Value m_root;
 	};

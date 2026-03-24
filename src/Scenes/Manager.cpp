@@ -157,7 +157,7 @@ namespace EmEn::Scenes
 		const auto sceneName = sceneDefinition->getSceneName();
 
 		/* Creating a new scene in the manager and build with the definition. */
-		auto scene = this->newScene(sceneName, DefaultSceneBoundary);
+		auto scene = this->newScene(sceneName, sceneDefinition->getBoundary(DefaultSceneBoundary));
 
 		if ( scene == nullptr )
 		{
