@@ -44,6 +44,9 @@
 #include "Libs/Network/asio_throw_exception.hpp"
 #include <asio.hpp>
 
+/* Local inclusions. */
+#include "SettingKeys.hpp"
+
 namespace EmEn::Console
 {
 	/**
@@ -65,7 +68,7 @@ namespace EmEn::Console
 			 * @brief Constructs the remote listener service.
 			 * @param port The TCP port to listen on. Default 7777.
 			 */
-			explicit RemoteListener (uint16_t port = 7777) noexcept;
+			explicit RemoteListener (uint16_t port = DefaultConsoleRemoteListenerPort) noexcept;
 
 			/**
 			 * @brief Destructs the remote listener service.

@@ -109,9 +109,8 @@ When you identify a need for a new console command during your work, **formulate
 5. **Why** -- the concrete use case that motivates it
 
 **Example request:**
-> I need a `Renderer.screenshot(filename)` command so I can capture the current frame
-> to a PNG from a remote TCP session, without needing the `--screenshot-after` argument.
-> This would allow me to wait until the scene is fully loaded before capturing.
+> I need a `Renderer.getStatus()` command so I can query frame rate and resolution
+> from a remote TCP session to monitor rendering performance.
 
 The project owner validates the design, the AI implements it.
 

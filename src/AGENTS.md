@@ -69,28 +69,22 @@ Core owns coordinated audio+video+voice-over recording via two protected methods
 - **Shift+F12** — Take a screenshot (`screenshot()`)
 - **Shift+Ctrl+F12** — Toggle audio+video recording
 
-### Core - Automated Screenshot (`--screenshot-after`)
+### Core - Remote Console Screenshot
 
-CLI argument for headless visual capture: takes a screenshot after N seconds of runtime, then exits cleanly.
+Screenshots are taken via the Remote Console TCP connection using `Renderer.screenshot()`.
 
 **Usage:**
 ```bash
-./app --load-demo <demo-id> --screenshot-after <seconds>
+# 1. Launch the application
+./app --load-demo <demo-id>
+
+# 2. From another terminal (or programmatically via TCP socket on port 7777):
+echo "Renderer.screenshot()" | nc -w 2 localhost 7777
 ```
 
-**Implementation details:**
-- Parsed in `Core::initializeBaseLevel()` using `std::from_chars` (no-exception safe). See: `Core.cpp:~line 579`
-- Timer checked in main loop after pause handling. See: `Core.cpp:run()` (~line 367)
-- Reuses existing `Core::screenshot()` — saves PNG to `{userDataDir}/captures/{unix_timestamp}.png`
-- Calls `Core::stop()` after capture for clean shutdown
-- `m_screenshotAfterUs` stores delay in microseconds (0 = disabled). See: `Core.hpp:m_screenshotAfterUs`
-- `ScreenshotAfterArg` constant: `"--screenshot-after"`. See: `Core.hpp:ScreenshotAfterArg`
+**Implementation:** See `Graphics/Renderer.console.cpp`. Saves PNG to `{userDataDir}/captures/{unix_timestamp}.png`.
 
-**Threading note:** `m_lifetime` (logic thread) is read from the main thread via `>=` comparison. Acceptable race: value is monotonically increasing, worst case is one frame late (~16ms).
-
-**Shutdown timing:** CEF cleanup adds ~10-15s after `stop()`. When using `timeout`, set it well above the screenshot delay (e.g., `timeout 40` for `--screenshot-after 10`).
-
-**AI visual analysis workflow:** This enables fully automated rendering analysis — launch demo, capture output, read PNG with multimodal AI, evaluate visual quality.
+**AI visual analysis workflow:** Launch demo, wait for scene to load, send `Renderer.screenshot()` via TCP, read captured PNG with multimodal AI, evaluate visual quality. This approach is more reliable than a timer because the AI can wait until the scene is fully loaded before capturing.
 
 ### Core - Maintenance CLI Arguments
 

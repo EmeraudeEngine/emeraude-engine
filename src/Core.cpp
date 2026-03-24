@@ -27,7 +27,6 @@
 #include "Core.hpp"
 
 /* STL inclusions. */
-#include <charconv>
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -366,61 +365,6 @@ namespace EmEn
 				}, true);
 			}
 
-			/* Automated RenderDoc capture timer check. */
-			if ( m_renderDocCaptureAfterUs > 0 && m_lifetime >= m_renderDocCaptureAfterUs )
-			{
-				TraceInfo{ClassId} << "RenderDoc capture timer elapsed after " << (m_lifetime / 1'000'000ULL) << " second(s).";
-
-				auto & renderDoc = m_vulkanInstance.renderDocCapture();
-
-				if ( renderDoc.isAvailable() )
-				{
-					/* Ensure the RenderDoc capture directory exists. */
-					const auto captureDir = m_primaryServices.fileSystem().userDataDirectory("RenderDoc");
-					std::filesystem::create_directories(captureDir);
-
-					/* Set the capture file path with unix timestamp. */
-					const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
-					const auto capturePath = captureDir / std::to_string(timestamp);
-					renderDoc.setCaptureFilePath(capturePath.string());
-
-					renderDoc.startCapture();
-					m_renderDocCapturing = true;
-				}
-
-				m_renderDocCaptureAfterUs = 0;
-
-				/* NOTE: Don't exit immediately — RenderDoc needs frames to be submitted while capturing.
-				 * Schedule end of capture + screenshot + exit shortly after. */
-				m_screenshotAfterUs = m_lifetime + 2'000'000ULL;
-			}
-
-			/* End any in-progress RenderDoc capture before taking a screenshot and exiting. */
-			if ( m_renderDocCapturing && m_screenshotAfterUs > 0 && m_lifetime >= m_screenshotAfterUs )
-			{
-				static_cast< void >(m_vulkanInstance.renderDocCapture().endCapture());
-				m_renderDocCapturing = false;
-			}
-
-			/* Automated screenshot timer check. */
-			if ( m_screenshotAfterUs > 0 && m_lifetime >= m_screenshotAfterUs )
-			{
-				TraceInfo{ClassId} << "Screenshot timer elapsed after " << (m_lifetime / 1'000'000ULL) << " second(s).";
-
-				if ( this->screenshot() )
-				{
-					TraceSuccess{ClassId} << "Automated screenshot captured successfully.";
-				}
-				else
-				{
-					TraceError{ClassId} << "Automated screenshot capture failed!";
-				}
-
-				m_screenshotAfterUs = 0;
-
-				this->stop();
-			}
-
 			if ( m_enableStatistics )
 			{
 				auto currentTime = std::chrono::steady_clock::now();
@@ -529,8 +473,6 @@ namespace EmEn
 			m_coreHelp.registerArgument("Force the use of a config directory overriding every others.", "config-directory", 0, {"DIRECTORY_PATH"});
 			m_coreHelp.registerArgument("Force the use of a data directory overriding every others.", "data-directory", 0, {"DIRECTORY_PATH"});
 			m_coreHelp.registerArgument("Execute a specific tool.", "tools-mode", 't');
-			m_coreHelp.registerArgument("Capture a screenshot after N seconds of runtime, then exit the application.", "screenshot-after", 0, {"SECONDS"});
-		m_coreHelp.registerArgument("Capture a RenderDoc frame after N seconds of runtime, then exit.", "renderdoc-capture-after", 0, {"SECONDS"});
 			m_coreHelp.registerArgument("List local data that would be wiped (dry run). Settings are preserved.", "wipe-local-data");
 			m_coreHelp.registerArgument("Wipe all local data (cache and user data directories). Settings are preserved. The application exits immediately.", "wipe-local-data-confirm");
 			m_coreHelp.registerArgument("Backup and reset the settings file. The application exits immediately.", "reset-settings");
@@ -574,17 +516,6 @@ namespace EmEn
 
 			return false;
 		}
-
-#ifndef EMERAUDE_ENABLE_RENDERDOC
-		if ( m_primaryServices.arguments().get(RenderDocCaptureAfterArg) )
-		{
-			TraceError{ClassId} <<
-				"'" << RenderDocCaptureAfterArg << "' was requested but the engine was NOT compiled "
-				"with EMERAUDE_ENABLE_RENDERDOC=ON ! Aborting.";
-
-			return false;
-		}
-#endif
 
 		if ( m_primaryServices.arguments().isSwitchPresent(WipeLocalDataConfirmArg) )
 		{
@@ -675,44 +606,6 @@ namespace EmEn
 		if ( m_primaryServices.arguments().isSwitchPresent(ToolsArg, ToolsLongArg) )
 		{
 			m_startupMode = StartupMode::ToolsMode;
-		}
-
-		/* Checks if an automated screenshot timer was requested. */
-		if ( const auto arg = m_primaryServices.arguments().get(ScreenshotAfterArg) )
-		{
-			unsigned long seconds = 0;
-			const auto & str = arg.value();
-			auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), seconds);
-
-			if ( ec == std::errc{} && seconds > 0 )
-			{
-				m_screenshotAfterUs = static_cast< uint64_t >(seconds) * 1'000'000ULL;
-
-				TraceInfo{ClassId} << "Screenshot scheduled after " << seconds << " second(s), then exit.";
-			}
-			else
-			{
-				TraceWarning{ClassId} << "Invalid --screenshot-after value: '" << str << "'. Ignored.";
-			}
-		}
-
-		/* Checks if an automated RenderDoc capture timer was requested. */
-		if ( const auto arg = m_primaryServices.arguments().get(RenderDocCaptureAfterArg) )
-		{
-			unsigned long seconds = 0;
-			const auto & str = arg.value();
-			auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), seconds);
-
-			if ( ec == std::errc{} && seconds > 0 )
-			{
-				m_renderDocCaptureAfterUs = static_cast< uint64_t >(seconds) * 1'000'000ULL;
-
-				TraceInfo{ClassId} << "RenderDoc capture scheduled after " << seconds << " second(s), then exit.";
-			}
-			else
-			{
-				TraceWarning{ClassId} << "Invalid --renderdoc-capture-after value: '" << str << "'. Ignored.";
-			}
 		}
 
 		Tracer::success(ClassId, "*** Core level created ***");

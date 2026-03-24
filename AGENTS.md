@@ -156,8 +156,8 @@ This engine is developed **with AI and for AI** — AI is not a helper, it is th
 **AI diagnostic integration:**
 - **RenderDoc in-application API** — programmatic GPU frame capture (`EMERAUDE_ENABLE_RENDERDOC=ON`)
 - **RenderDoc Python module** — autonomous .rdc analysis (draw calls, render passes, vertex throughput)
-- **Automated screenshot pipeline** — `--screenshot-after` for visual regression testing
-- **Automated RenderDoc capture** — `--renderdoc-capture-after` for pipeline regression testing
+- **Remote Console screenshot** — `Renderer.screenshot()` via TCP console for visual regression testing
+- **RenderDoc CLI capture** — `renderdoccmd capture` for pipeline regression testing
 
 See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions.md#ai-friendly-code-guidelines) for detailed guidelines.
 

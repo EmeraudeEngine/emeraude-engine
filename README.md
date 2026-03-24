@@ -294,15 +294,15 @@ python3 your_script.py capture.rdc
 
 #### Automated Capture (CLI)
 
-Use `renderdoccmd` to inject the capture layer and the `--renderdoc-capture-after` engine argument to trigger a timed capture:
+Use `renderdoccmd` to inject the capture layer and capture a frame externally:
 
 ```bash
 cd <your-build-dir>/Debug
 
-# Capture a frame after 15 seconds of runtime (allows resources to load),
-# then take a screenshot and exit.
+# Capture frames during runtime. Use Shift+C in-app to trigger a capture,
+# or use the RenderDoc GUI for interactive capture.
 renderdoccmd capture --wait-for-exit \
-    ./your-app --load-demo <demo-name> --renderdoc-capture-after 15
+    ./your-app --load-demo <demo-name>
 ```
 
 The `.rdc` capture file is saved to `{userDataDir}/RenderDoc/{unix_timestamp}_capture.rdc`.

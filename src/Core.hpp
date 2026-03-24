@@ -174,9 +174,7 @@ namespace EmEn
 			 */
 			static constexpr auto ToolsArg{"-t"}; ///< Short argument for tools mode.
 			static constexpr auto ToolsLongArg{"--tools-mode"}; ///< Long argument for tools mode.
-			static constexpr auto ScreenshotAfterArg{"--screenshot-after"}; ///< Argument for automated screenshot after N seconds.
-			static constexpr auto RenderDocCaptureAfterArg{"--renderdoc-capture-after"}; ///< Argument for automated RenderDoc capture after N seconds.
-			static constexpr auto WipeLocalDataArg{"--wipe-local-data"}; ///< Argument to preview local data wipe (dry run).
+	static constexpr auto WipeLocalDataArg{"--wipe-local-data"}; ///< Argument to preview local data wipe (dry run).
 			static constexpr auto WipeLocalDataConfirmArg{"--wipe-local-data-confirm"}; ///< Argument to actually wipe local data.
 			static constexpr auto ResetSettingsArg{"--reset-settings"}; ///< Argument to backup and reset settings file.
 			/** @} */
@@ -1369,8 +1367,6 @@ namespace EmEn
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
 			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
-			uint64_t m_screenshotAfterUs{0}; ///< Screenshot delay in microseconds (0 = disabled).
-			uint64_t m_renderDocCaptureAfterUs{0}; ///< RenderDoc capture delay in microseconds (0 = disabled).
 			std::filesystem::path m_rushVoiceOverPath{};
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
@@ -1384,7 +1380,6 @@ namespace EmEn
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
 			bool m_windowChanged{false};
-			bool m_renderDocCapturing{false}; ///< Whether a RenderDoc capture is currently in progress.
 			/** @} */ // End of Member Variables group
 	};
 }
