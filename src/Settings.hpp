@@ -41,6 +41,7 @@
 
 /* Local inclusion for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 
 /* Local inclusion for usages. */
 #include "Tracer.hpp"
@@ -349,7 +350,7 @@ namespace EmEn
 	 * @see EmEn::SettingStore, EmEn::SettingValue, EmEn::SettingType
 	 * @version 0.8.61
 	 */
-	class Settings final : public ServiceInterface
+	class Settings final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 
@@ -383,6 +384,7 @@ namespace EmEn
 			 */
 			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				m_arguments{arguments},
 				m_fileSystem{fileSystem}
 			{
@@ -809,6 +811,9 @@ namespace EmEn
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
+
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
 
 			/**
 			 * @brief Splits a slash-delimited settings path into a store key and a variable name.

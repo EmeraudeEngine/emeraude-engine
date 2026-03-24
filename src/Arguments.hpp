@@ -42,6 +42,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
 #ifdef IS_WINDOWS
@@ -54,7 +55,7 @@ namespace EmEn
 	 * @brief The application arguments service.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class Arguments final : public ServiceInterface
+	class Arguments final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 
@@ -69,6 +70,7 @@ namespace EmEn
 			 */
 			Arguments (int argc, char * * argv, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				m_childProcess{childProcess}
 			{
 				/* NOTE: Create a copy of main() arguments. */
@@ -93,6 +95,7 @@ namespace EmEn
 			 */
 			Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				m_childProcess{childProcess}
 			{
 				/* NOTE: Create a copy of main() arguments. */
@@ -256,6 +259,9 @@ namespace EmEn
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
+
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
 
 			/**
 			 * @brief STL streams printable object.

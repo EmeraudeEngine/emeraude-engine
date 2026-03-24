@@ -64,6 +64,9 @@ namespace EmEn::Console
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RemoteListener"};
 
+			/** @brief Maximum number of pending commands in the queue before dropping new ones. */
+			static constexpr size_t MaxPendingCommands{256};
+
 			/**
 			 * @brief Constructs the remote listener service.
 			 * @param port The TCP port to listen on. Default 7777.
@@ -82,13 +85,27 @@ namespace EmEn::Console
 				return m_running;
 			}
 
+			/** @brief A pending command with its originating client socket. */
+			struct PendingCommand
+			{
+				std::string command;
+				std::shared_ptr< asio::ip::tcp::socket > client;
+			};
+
 			/**
 			 * @brief Pops the oldest command from the queue.
-			 * @param outCommand Will contain the command string if successful.
+			 * @param outCommand Will contain the command and client socket if successful.
 			 * @return true if a command was available, false otherwise.
 			 */
 			[[nodiscard]]
-			bool popCommand (std::string & outCommand) noexcept;
+			bool popCommand (PendingCommand & outCommand) noexcept;
+
+			/**
+			 * @brief Sends a response directly to a specific client (clean, no Tracer prefix).
+			 * @param client The client socket to respond to.
+			 * @param message The response message.
+			 */
+			void respond (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & message) noexcept;
 
 			/**
 			 * @brief Broadcasts a message string to all connected clients.
@@ -106,8 +123,9 @@ namespace EmEn::Console
 			/**
 			 * @brief Enqueues a command received from a client.
 			 * @param command A reference to the command string.
+			 * @param client The socket of the client that sent the command.
 			 */
-			void enqueueCommand (const std::string & command) noexcept;
+			void enqueueCommand (const std::string & command, const std::shared_ptr< asio::ip::tcp::socket > & client) noexcept;
 
 			/**
 			 * @brief Removes a disconnected client from the set.
@@ -122,7 +140,7 @@ namespace EmEn::Console
 			std::mutex m_clientsMutex;
 			std::set< std::shared_ptr< asio::ip::tcp::socket > > m_clients;
 			std::mutex m_queueMutex;
-			std::queue< std::string > m_commandsQueue;
+			std::queue< PendingCommand > m_commandsQueue;
 			std::atomic< bool > m_running{false};
 	};
 }

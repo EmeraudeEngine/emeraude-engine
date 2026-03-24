@@ -101,7 +101,7 @@ namespace EmEn::Console
 
 						if ( !line.empty() )
 						{
-							m_listener.enqueueCommand(line);
+							m_listener.enqueueCommand(line, m_socket);
 						}
 
 						this->doRead();
@@ -206,7 +206,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	RemoteListener::popCommand (std::string & outCommand) noexcept
+	RemoteListener::popCommand (PendingCommand & outCommand) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_queueMutex};
 
@@ -219,6 +219,25 @@ namespace EmEn::Console
 		m_commandsQueue.pop();
 
 		return true;
+	}
+
+	void
+	RemoteListener::respond (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & message) noexcept
+	{
+		if ( client == nullptr || !client->is_open() )
+		{
+			return;
+		}
+
+		asio::error_code ec;
+		static_cast< void >(asio::write(*client, asio::buffer(message + "\n"), ec));
+
+		if ( ec )
+		{
+			const std::lock_guard< std::mutex > lock{m_clientsMutex};
+
+			m_clients.erase(client);
+		}
 	}
 
 	void
@@ -270,11 +289,18 @@ namespace EmEn::Console
 	}
 
 	void
-	RemoteListener::enqueueCommand (const std::string & command) noexcept
+	RemoteListener::enqueueCommand (const std::string & command, const std::shared_ptr< asio::ip::tcp::socket > & client) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_queueMutex};
 
-		m_commandsQueue.push(command);
+		if ( m_commandsQueue.size() >= MaxPendingCommands )
+		{
+			TraceWarning{ClassId} << "Command queue full (" << MaxPendingCommands << "), dropping command.";
+
+			return;
+		}
+
+		m_commandsQueue.push({command, client});
 	}
 
 	void

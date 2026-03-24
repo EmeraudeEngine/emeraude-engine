@@ -245,9 +245,12 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.cpp
     # ROOT
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PrimaryServices.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemNotification.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Tracer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/User.cpp
@@ -352,6 +355,7 @@ else ()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformManager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Notifier.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.console.cpp
     )
 
     # Per-OS files

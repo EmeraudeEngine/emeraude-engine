@@ -45,18 +45,7 @@ namespace EmEn::Console
 
 		m_remoteListener = std::make_unique< RemoteListener >(remoteListenerPort);
 
-		if ( m_remoteListener->isRunning() )
-		{
-			Tracer::getInstance().addSink([this] (Severity severity, const char * tag, std::string_view message) {
-				if ( m_remoteListener )
-				{
-					std::stringstream ss;
-					ss << "[" << to_string(severity) << "][" << tag << "] " << message;
-					m_remoteListener->broadcast(ss.str());
-				}
-			});
-		}
-		else
+		if ( !m_remoteListener->isRunning() )
 		{
 			m_remoteListener.reset();
 
@@ -71,8 +60,6 @@ namespace EmEn::Console
 	Controller::onTerminate () noexcept
 	{
 #ifdef ASIO_ENABLED
-		Tracer::getInstance().removeAllSinks();
-
 		if ( m_remoteListener != nullptr )
 		{
 			m_remoteListener.reset();
@@ -209,11 +196,26 @@ namespace EmEn::Console
 #ifdef ASIO_ENABLED
 		if ( m_remoteListener != nullptr )
 		{
-			std::string command;
+			RemoteListener::PendingCommand pending;
 
-			while ( m_remoteListener->popCommand(command) )
+			while ( m_remoteListener->popCommand(pending) )
 			{
-				this->executeCommand(command);
+				Outputs outputs;
+
+				this->executeCommand(pending.command, outputs);
+
+				/* Send clean response directly to the requesting client. */
+				if ( pending.client != nullptr && !outputs.empty() )
+				{
+					std::stringstream response;
+
+					for ( const auto & output : outputs )
+					{
+						response << output.message() << "\n";
+					}
+
+					m_remoteListener->respond(pending.client, response.str());
+				}
 			}
 		}
 #endif
@@ -263,12 +265,6 @@ namespace EmEn::Console
 	{
 		for ( const auto & [name, controllable] : objects )
 		{
-			/* Object name is smaller than input, skip it. */
-			if ( identifier.length() > name.length() )
-			{
-				continue;
-			}
-
 			/* Perfect match. */
 			if ( identifier == name )
 			{
@@ -280,21 +276,7 @@ namespace EmEn::Console
 				return true;
 			}
 
-			/* Checks for mismatching. */
-			auto mismatch = false;
-
-			for ( size_t chr = 0; chr < identifier.length(); chr++ )
-			{
-				/* Object name mismatch characters from input. */
-				if ( name[chr] != identifier[chr] )
-				{
-					mismatch = true;
-
-					break;
-				}
-			}
-
-			if ( !mismatch )
+			if ( name.starts_with(identifier) )
 			{
 				suggestions.emplace_back(name);
 			}
@@ -323,27 +305,6 @@ namespace EmEn::Console
 			}
 
 			outputs.emplace_back(Severity::Info, message);
-
-			return true;
-		}
-
-		if ( command == "printArguments" )
-		{
-			outputs.emplace_back(Severity::Info, std::stringstream{} << m_primaryServices.arguments());
-
-			return true;
-		}
-
-		if ( command == "printFileSystem" )
-		{
-			outputs.emplace_back(Severity::Info, std::stringstream{} << m_primaryServices.fileSystem());
-
-			return true;
-		}
-
-		if ( command == "printCoreSettings" )
-		{
-			outputs.emplace_back(Severity::Info, std::stringstream{} << m_primaryServices.settings());
 
 			return true;
 		}

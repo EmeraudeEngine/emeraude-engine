@@ -41,45 +41,38 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 0;
+				return false;
 			}
 
-			/* Checks if we need to resume. */
+			/* No argument: resume current track or start playlist. */
 			if ( arguments.empty() )
 			{
-				switch ( m_playingTrack )
+				if ( m_userState == UserState::Paused )
 				{
-					case PlayingTrack::None :
-						outputs.emplace_back(Severity::Warning, "There is no soundtrack !");
-						break;
+					this->resume();
 
-					case PlayingTrack::TrackA :
-						if ( m_trackA->isPaused() )
-						{
-							m_trackA->resume();
+					outputs.emplace_back(Severity::Success, "Resumed.");
 
-							outputs.emplace_back(Severity::Info, "Resuming track A.");
-
-							return 0;
-						}
-						break;
-
-					case PlayingTrack::TrackB :
-						if ( m_trackB->isPaused() )
-						{
-							m_trackB->resume();
-
-							outputs.emplace_back(Severity::Info, "Resuming track B.");;
-
-							return 0;
-						}
-						break;
+					return true;
 				}
 
-				return 1;
+				/* Nothing playing: start the playlist if available. */
+				if ( !m_playlist.empty() )
+				{
+					if ( this->playIndex(m_musicIndex) )
+					{
+						outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing track " << (m_musicIndex + 1) << "/" << m_playlist.size() << ".");
+
+						return true;
+					}
+				}
+
+				outputs.emplace_back(Severity::Warning, "Nothing to play !");
+
+				return false;
 			}
 
-			/* Search the song. */
+			/* Search the song by name. */
 			const auto soundTrackName = arguments[0].asString();
 			const auto soundtrack = m_resourceManager.container< MusicResource >()->getResource(soundTrackName);
 
@@ -87,44 +80,36 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Error, std::stringstream{} << "Soundtrack '" << soundTrackName << "' doesn't exist !");
 
-				return 2;
+				return false;
 			}
 
 			this->play(soundtrack);
 
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing '" << soundTrackName << "' ...");
 
-			return 0;
-		}, "Play or resume a music. There is no need of parameter to resume.");
+			return true;
+		}, "Play or resume a music. Without argument: resumes or starts the playlist.");
 
 		this->bindCommand("pause", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			if ( !this->usable() )
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
-			switch ( m_playingTrack )
+			if ( m_playingTrack == PlayingTrack::None )
 			{
-				case PlayingTrack::None :
-					outputs.emplace_back(Severity::Warning, "There is no track playing !");
-					break;
+				outputs.emplace_back(Severity::Warning, "There is no track playing !");
 
-				case PlayingTrack::TrackA :
-					m_trackA->pause();
-
-					outputs.emplace_back(Severity::Info, "Track A paused.");
-					break;
-
-				case PlayingTrack::TrackB :
-					m_trackB->pause();
-
-					outputs.emplace_back(Severity::Info, "Track B paused.");
-					break;
+				return false;
 			}
 
-			return 0;
+			this->pause();
+
+			outputs.emplace_back(Severity::Success, "Paused.");
+
+			return true;
 		}, "Pause music playback.");
 
 		this->bindCommand("stop", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
@@ -132,31 +117,21 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
-			switch ( m_playingTrack )
+			if ( m_playingTrack == PlayingTrack::None )
 			{
-				case PlayingTrack::None:
-					outputs.emplace_back(Severity::Warning, "There is no track playing !");
-					break;
+				outputs.emplace_back(Severity::Warning, "There is no track playing !");
 
-				case PlayingTrack::TrackA :
-					m_trackA->stop();
-					m_playingTrack = PlayingTrack::None;
-
-					outputs.emplace_back(Severity::Info, "Track A stopped.");
-					break;
-
-				case PlayingTrack::TrackB :
-					m_trackB->stop();
-					m_playingTrack = PlayingTrack::None;
-
-					outputs.emplace_back(Severity::Info, "Track B stopped.");
-					break;
+				return false;
 			}
 
-			return 0;
+			this->stop();
+
+			outputs.emplace_back(Severity::Success, "Stopped.");
+
+			return true;
 		}, "Stop music.");
 
 		this->bindCommand("volume,vol", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -164,14 +139,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Info, std::stringstream{} << "Current volume: " << (m_gain * 100.0F) << "%");
 
-				return 0;
+				return true;
 			}
 
 			const auto newVolume = arguments[0].asFloat();
@@ -180,14 +155,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Error, "Volume must be between 0 and 100.");
 
-				return 2;
+				return false;
 			}
 
 			this->setVolume(newVolume / 100.0F);
 
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Volume set to " << newVolume << "%");
 
-			return 0;
+			return true;
 		}, "Get or set volume (0-100).");
 
 		this->bindCommand("next", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
@@ -195,14 +170,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( m_playlist.empty() )
 			{
 				outputs.emplace_back(Severity::Warning, "Playlist is empty !");
 
-				return 2;
+				return false;
 			}
 
 			if ( this->next() )
@@ -214,7 +189,7 @@ namespace EmEn::Audio
 				outputs.emplace_back(Severity::Error, "Unable to play next track !");
 			}
 
-			return 0;
+			return true;
 		}, "Play next track in playlist.");
 
 		this->bindCommand("previous,prev", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
@@ -222,14 +197,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( m_playlist.empty() )
 			{
 				outputs.emplace_back(Severity::Warning, "Playlist is empty !");
 
-				return 2;
+				return false;
 			}
 
 			if ( this->previous() )
@@ -241,7 +216,7 @@ namespace EmEn::Audio
 				outputs.emplace_back(Severity::Error, "Unable to play previous track !");
 			}
 
-			return 0;
+			return true;
 		}, "Play previous track in playlist.");
 
 		this->bindCommand("shuffle", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -249,14 +224,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Info, std::stringstream{} << "Shuffle mode: " << (m_shuffleEnabled ? "ON" : "OFF"));
 
-				return 0;
+				return true;
 			}
 
 			const auto state = arguments[0].asString();
@@ -277,10 +252,10 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Error, "Invalid argument. Use 'on' or 'off'.");
 
-				return 2;
+				return false;
 			}
 
-			return 0;
+			return true;
 		}, "Get or set shuffle mode (on/off).");
 
 		this->bindCommand("loop", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -288,14 +263,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Info, std::stringstream{} << "Loop mode: " << (m_playMode == PlayMode::Loop ? "ON" : "OFF"));
 
-				return 0;
+				return true;
 			}
 
 			const auto state = arguments[0].asString();
@@ -316,10 +291,10 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Error, "Invalid argument. Use 'on' or 'off'.");
 
-				return 2;
+				return false;
 			}
 
-			return 0;
+			return true;
 		}, "Get or set loop mode (on/off).");
 
 		this->bindCommand("crossfade", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -327,14 +302,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Info, std::stringstream{} << "Crossfade: " << (m_crossFaderEnabled ? "ON" : "OFF"));
 
-				return 0;
+				return true;
 			}
 
 			const auto state = arguments[0].asString();
@@ -355,10 +330,10 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Error, "Invalid argument. Use 'on' or 'off'.");
 
-				return 2;
+				return false;
 			}
 
-			return 0;
+			return true;
 		}, "Get or set crossfade transition (on/off).");
 
 		this->bindCommand("seek", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -366,21 +341,21 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( m_playingTrack == PlayingTrack::None )
 			{
 				outputs.emplace_back(Severity::Warning, "No track is currently playing !");
 
-				return 2;
+				return false;
 			}
 
 			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Info, std::stringstream{} << "Current position: " << this->currentPosition() << "s / " << this->currentDuration() << "s");
 
-				return 0;
+				return true;
 			}
 
 			const auto position = arguments[0].asFloat();
@@ -390,14 +365,14 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Error, std::stringstream{} << "Position must be between 0 and " << duration << " seconds.");
 
-				return 3;
+				return false;
 			}
 
 			this->seek(position);
 
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Seeked to " << position << "s");
 
-			return 0;
+			return true;
 		}, "Seek to position in seconds.");
 
 		this->bindCommand("status", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
@@ -405,7 +380,7 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			std::stringstream status;
@@ -451,7 +426,7 @@ namespace EmEn::Audio
 
 			outputs.emplace_back(Severity::Info, status.str());
 
-			return 0;
+			return true;
 		}, "Show current track mixer status.");
 
 		this->bindCommand("playlist,pl", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -459,7 +434,7 @@ namespace EmEn::Audio
 			{
 				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
 
-				return 1;
+				return false;
 			}
 
 			if ( arguments.empty() )
@@ -468,7 +443,7 @@ namespace EmEn::Audio
 				{
 					outputs.emplace_back(Severity::Info, "Playlist is empty.");
 
-					return 0;
+					return true;
 				}
 
 				std::stringstream list;
@@ -487,7 +462,7 @@ namespace EmEn::Audio
 
 				outputs.emplace_back(Severity::Info, list.str());
 
-				return 0;
+				return true;
 			}
 
 			const auto subCommand = arguments[0].asString();
@@ -498,7 +473,7 @@ namespace EmEn::Audio
 
 				outputs.emplace_back(Severity::Success, "Playlist cleared.");
 
-				return 0;
+				return true;
 			}
 
 			if ( subCommand == "add" )
@@ -507,7 +482,7 @@ namespace EmEn::Audio
 				{
 					outputs.emplace_back(Severity::Error, "Usage: playlist add <track_name>");
 
-					return 2;
+					return false;
 				}
 
 				const auto trackName = arguments[1].asString();
@@ -517,14 +492,14 @@ namespace EmEn::Audio
 				{
 					outputs.emplace_back(Severity::Error, std::stringstream{} << "Track '" << trackName << "' not found !");
 
-					return 3;
+					return false;
 				}
 
 				this->addToPlaylist(track);
 
 				outputs.emplace_back(Severity::Success, std::stringstream{} << "Added '" << trackName << "' to playlist.");
 
-				return 0;
+				return true;
 			}
 
 			if ( subCommand == "play" )
@@ -533,7 +508,7 @@ namespace EmEn::Audio
 				{
 					outputs.emplace_back(Severity::Error, "Usage: playlist play <index>");
 
-					return 2;
+					return false;
 				}
 
 				const auto index = static_cast< size_t >(arguments[1].asInteger());
@@ -542,7 +517,7 @@ namespace EmEn::Audio
 				{
 					outputs.emplace_back(Severity::Error, std::stringstream{} << "Invalid index. Must be between 1 and " << m_playlist.size() << ".");
 
-					return 3;
+					return false;
 				}
 
 				if ( this->playIndex(index - 1) )
@@ -554,12 +529,12 @@ namespace EmEn::Audio
 					outputs.emplace_back(Severity::Error, "Unable to play track !");
 				}
 
-				return 0;
+				return true;
 			}
 
 			outputs.emplace_back(Severity::Error, "Unknown subcommand. Use: clear, add, play");
 
-			return 4;
+			return false;
 		}, "Manage playlist. Subcommands: clear, add <track>, play <index>");
 	}
 }

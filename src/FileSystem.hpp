@@ -37,6 +37,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "PlatformSpecific/UserInfo.hpp"
@@ -54,7 +55,7 @@ namespace EmEn
 	 * @brief The file system service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class FileSystem final : public ServiceInterface
+	class FileSystem final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 
@@ -70,6 +71,7 @@ namespace EmEn
 			 */
 			FileSystem (const Arguments & arguments, const PlatformSpecific::UserInfo & userInfo, const Identification & identification, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				m_arguments{arguments},
 				m_userInfo{userInfo},
 				m_organizationName{identification.applicationOrganization()},
@@ -248,6 +250,9 @@ namespace EmEn
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
+
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
 
 			/**
 			 * @brief Checks the binary path.

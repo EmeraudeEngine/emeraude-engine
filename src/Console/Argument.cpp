@@ -83,6 +83,11 @@ namespace EmEn::Console
 			return *p;
 		}
 
+		if ( const auto * p = std::get_if< int32_t >(&m_value) )
+		{
+			return static_cast< float >(*p);
+		}
+
 		TraceWarning{ClassId} << "This argument is not a floating point number !";
 
 		return 0.0F;

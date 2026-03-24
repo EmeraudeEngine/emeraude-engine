@@ -43,6 +43,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
@@ -84,7 +85,7 @@ namespace EmEn
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 */
-	class Window final : public ServiceInterface, public Libs::ObservableTrait
+	class Window final : public ServiceInterface, public Console::ControllableTrait, public Libs::ObservableTrait
 	{
 		public:
 
@@ -151,6 +152,7 @@ namespace EmEn
 			 */
 			Window (PrimaryServices & primaryServices, const Vulkan::Instance & instance, const Identification & identification) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				m_primaryServices{primaryServices},
 				m_instance{instance},
 				m_title{identification.applicationId()}
@@ -694,6 +696,9 @@ namespace EmEn
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
+
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
 
 			/**
 			 * @brief Tells whether the window should show information.

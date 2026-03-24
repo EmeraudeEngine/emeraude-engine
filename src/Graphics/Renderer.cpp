@@ -611,7 +611,7 @@ namespace EmEn::Graphics
 			Tracer::warning(ClassId, "Unable to create RT descriptor set. Ray tracing reflections will be unavailable.");
 		}
 
-		this->registerToConsole();
+		/* NOTE: Console registration is handled by Core via registerToObject(). */
 
 		/* Create the grab pass texture (initially disabled, but pre-allocated). */
 		if ( m_swapChain != nullptr )

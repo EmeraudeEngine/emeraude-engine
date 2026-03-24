@@ -108,7 +108,7 @@ namespace EmEn::Console
 
 			if ( argument == "false" )
 			{
-				m_arguments.emplace_back(true);
+				m_arguments.emplace_back(false);
 
 				continue;
 			}
@@ -130,6 +130,9 @@ namespace EmEn::Console
 
 				continue;
 			}
+
+			/* Bare word: treat as string argument. */
+			m_arguments.emplace_back(argument);
 		}
 	}
 

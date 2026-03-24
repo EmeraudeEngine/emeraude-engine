@@ -62,9 +62,7 @@ namespace EmEn::Console
 		if ( !identifier.empty() )
 		{
 			/* Checks for a sub object */
-			const auto objectIt = std::ranges::find_if(m_consoleObjects, [identifier] (const auto & objectIt) {
-				return objectIt.first == identifier;
-			});
+			const auto objectIt = m_consoleObjects.find(identifier);
 
 			if ( objectIt != m_consoleObjects.cend() )
 			{
@@ -86,9 +84,7 @@ namespace EmEn::Console
 		}
 
 		/* Checks for object commands. */
-		const auto commandIt = std::ranges::find_if(m_commands, [expression] (const auto & commandIt) {
-			return commandIt.first == expression.commandName();
-		});
+		const auto commandIt = m_commands.find(expression.commandName());
 
 		if ( commandIt != m_commands.cend() )
 		{
@@ -122,33 +118,13 @@ namespace EmEn::Console
 		/* For each possible command. */
 		for ( const auto & key : m_commands | std::views::keys )
 		{
-			/* Object name is smaller than input, skip it. */
-			if ( identifier.length() > key.length() )
-			{
-				continue;
-			}
-
-			/* Perfect match. */
+			/* Perfect match or not a prefix: skip. */
 			if ( identifier == key )
 			{
 				continue;
 			}
 
-			/* Checks for mismatching. */
-			auto mismatch = false;
-
-			for ( size_t chr = 0; chr < identifier.length(); chr++ )
-			{
-				/* Object name mismatch characters from input. */
-				if ( key[chr] != identifier[chr] )
-				{
-					mismatch = true;
-
-					break;
-				}
-			}
-
-			if ( !mismatch )
+			if ( key.starts_with(identifier) )
 			{
 				suggestions.emplace_back(key + "()");
 			}
@@ -194,7 +170,16 @@ namespace EmEn::Console
 	bool
 	ControllableTrait::registerToConsole () noexcept
 	{
-		if ( !Controller::instance()->add(*this) )
+		auto * console = Controller::instance();
+
+		if ( console == nullptr )
+		{
+			TraceError{TracerTag} << "Console controller is not available !";
+
+			return false;
+		}
+
+		if ( !console->add(*this) )
 		{
 			TraceError{TracerTag} << "Unable to register this object to the console.";
 

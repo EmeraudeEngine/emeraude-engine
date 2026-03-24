@@ -49,7 +49,7 @@ namespace EmEn::Scenes
 	bool
 	Manager::onInitialize () noexcept
 	{
-		this->registerToConsole();
+		/* NOTE: Console registration is handled by Core via registerToObject(). */
 
 		return true;
 	}

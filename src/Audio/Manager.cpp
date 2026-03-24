@@ -319,7 +319,7 @@ namespace EmEn::Audio
 
 		s_audioEnabled = true;
 
-		this->registerToConsole();
+		/* NOTE: Console registration is handled by Core via registerToObject(). */
 
 		if ( m_externalInput.initialize(m_subServicesEnabled) )
 		{
@@ -332,6 +332,8 @@ namespace EmEn::Audio
 
 		if ( m_trackMixer.initialize(m_subServicesEnabled) )
 		{
+			m_trackMixer.registerToObject(*this);
+
 			TraceSuccess{ClassId} << m_trackMixer.name() << " service up !";
 
 			m_trackMixer.enableCrossFader(m_contextAttributes[ALC_STEREO_SOURCES] >= 2);

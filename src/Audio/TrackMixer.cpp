@@ -124,7 +124,7 @@ namespace EmEn::Audio
 		m_trackB->setRolloffFactor(0.0F);
 		m_trackB->setGain(0.0F);
 
-		this->registerToConsole();
+		/* NOTE: Console registration is handled by AudioManager via registerToObject(). */
 
 		m_stopThread = false;
 		m_eventThread = std::thread{&TrackMixer::eventLoop, this};

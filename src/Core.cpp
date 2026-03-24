@@ -551,6 +551,10 @@ namespace EmEn
 
 			this->registerToConsole();
 
+			m_primaryServices.arguments().registerToObject(*this);
+			m_primaryServices.fileSystem().registerToObject(*this);
+			m_primaryServices.settings().registerToObject(*this);
+
 			this->observe(&m_consoleController);
 		}
 		else
@@ -643,6 +647,8 @@ namespace EmEn
 		/* Initialize the handle. */
 		if ( m_window.initialize(m_secondaryServicesEnabled) )
 		{
+			m_window.registerToObject(*this);
+
 			this->observe(&m_window);
 
 			TraceSuccess{ClassId} << m_window.name() << " service up!";
@@ -776,6 +782,8 @@ namespace EmEn
 		/* Initialize scene manager. */
 		if ( m_sceneManager.initialize(m_secondaryServicesEnabled) )
 		{
+			m_sceneManager.registerToObject(*this);
+
 			this->observe(&m_sceneManager);
 
 			TraceSuccess{ClassId} << m_sceneManager.name() << " service up!";
