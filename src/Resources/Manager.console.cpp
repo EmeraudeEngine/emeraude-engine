@@ -46,11 +46,7 @@ namespace EmEn::Resources
 
 				first = false;
 
-				/* Build a query-safe ID by removing spaces. */
-				auto id = container->name();
-				std::erase(id, ' ');
-
-				json << "{\"id\":\"" << id << "\",\"name\":\"" << container->name() << "\",\"loaded\":" << container->resourceCount() << ",\"available\":" << container->availableResourceNames().size() << "}";
+				json << "{\"id\":\"" << container->resourceClassId() << "\",\"name\":\"" << container->name() << "\",\"loaded\":" << container->resourceCount() << ",\"available\":" << container->availableResourceNames().size() << "}";
 			}
 
 			json << "]";
@@ -72,10 +68,7 @@ namespace EmEn::Resources
 
 			for ( const auto & [typeIndex, container] : m_containers )
 			{
-				auto id = container->name();
-				std::erase(id, ' ');
-
-				if ( container->name() == containerName || id == containerName )
+				if ( containerName == container->resourceClassId() || containerName == container->name() )
 				{
 					const auto names = container->availableResourceNames();
 

@@ -100,6 +100,13 @@ namespace EmEn::Resources
 			virtual std::vector< std::string > availableResourceNames () const noexcept = 0;
 
 			/**
+			 * @brief Returns the ClassId of the resource type managed by this container.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			virtual const char * resourceClassId () const noexcept = 0;
+
+			/**
 			 * @brief Sets the verbosity state for the container.
 			 *
 			 * When enabled, the container will output detailed trace information about resource
@@ -691,6 +698,14 @@ namespace EmEn::Resources
 				std::ranges::copy(*m_localStore | std::views::keys, std::back_inserter(names));
 
 				return names;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::resourceClassId() const noexcept */
+			[[nodiscard]]
+			const char *
+			resourceClassId () const noexcept override
+			{
+				return resource_t::ClassId;
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::memoryOccupied() const noexcept */
