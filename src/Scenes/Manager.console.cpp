@@ -30,6 +30,8 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Component/Camera.hpp"
+#include "Component/Microphone.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Resources/Manager.hpp"
 
@@ -44,9 +46,9 @@ namespace EmEn::Scenes
 	Manager::onRegisterToConsole () noexcept
 	{
 		this->bindCommand("createScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
+			if ( arguments.size() < 5 )
 			{
-				outputs.emplace_back(Severity::Error, "Usage: createScene(name [, boundary])");
+				outputs.emplace_back(Severity::Error, "Usage: createScene(name, boundary, cameraNodeName, cameraX, cameraY, cameraZ [, backgroundName])");
 
 				return false;
 			}
@@ -60,9 +62,24 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto boundary = arguments.size() >= 2 ? arguments[1].asFloat() : DefaultSceneBoundary;
+			const auto boundary = arguments[1].asFloat();
 
-			auto scene = this->newScene(name, boundary);
+			/* Optional background. */
+			std::shared_ptr< Graphics::Renderable::AbstractBackground > background;
+
+			if ( arguments.size() >= 7 )
+			{
+				const auto bgName = arguments[6].asString();
+
+				auto * skyBoxContainer = m_resourceManager.container< Graphics::Renderable::SkyBoxResource >();
+
+				if ( skyBoxContainer != nullptr )
+				{
+					background = skyBoxContainer->getResource(bgName);
+				}
+			}
+
+			auto scene = this->newScene(name, boundary, background);
 
 			if ( scene == nullptr )
 			{
@@ -71,9 +88,24 @@ namespace EmEn::Scenes
 				return false;
 			}
 
+			/* Create camera+microphone node BEFORE enabling the scene. */
+			const auto cameraNodeName = arguments[2].asString();
+			const auto camX = arguments[3].asFloat();
+			const auto camY = arguments[4].asFloat();
+			const auto camZ = arguments[5].asFloat();
+
+			auto cameraNode = scene->root()->createChild(cameraNodeName, {}, 0);
+
+			if ( cameraNode != nullptr )
+			{
+				cameraNode->setPosition({camX, camY, camZ}, Libs::Math::TransformSpace::World);
+				cameraNode->componentBuilder< Component::Camera >(cameraNodeName + "Camera").asPrimary().build(true);
+				cameraNode->componentBuilder< Component::Microphone >(cameraNodeName + "Microphone").asPrimary().build();
+			}
+
 			if ( this->enableScene(scene) )
 			{
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << name << "' created and enabled (boundary: " << boundary << ").");
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << name << "' created and enabled (boundary: " << boundary << ", camera: " << cameraNodeName << ").");
 			}
 			else
 			{
@@ -81,7 +113,37 @@ namespace EmEn::Scenes
 			}
 
 			return true;
-		}, "Creates and enables a new empty scene. Usage: createScene(name [, boundary])");
+		}, "Creates a scene with camera. Usage: createScene(name, boundary, cameraNode, camX, camY, camZ [, backgroundName])");
+
+		this->bindCommand("enableScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: enableScene(name)");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+			const auto scene = this->getScene(name);
+
+			if ( scene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Scene '" << name << "' not found !");
+
+				return false;
+			}
+
+			if ( this->enableScene(scene) )
+			{
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Scene '" << name << "' enabled.");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to enable scene '" << name << "' !");
+			}
+
+			return true;
+		}, "Enables a scene. Usage: enableScene(name)");
 
 		this->bindCommand("deleteScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -104,6 +166,167 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Deletes a scene. Usage: deleteScene(name)");
+
+		this->bindCommand("createNode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: createNode(name [, x, y, z])");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+
+			auto node = m_activeScene->root()->createChild(name, {}, m_activeScene->lifetimeMS());
+
+			if ( node == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to create node '" << name << "' !");
+
+				return false;
+			}
+
+			if ( arguments.size() >= 4 )
+			{
+				const auto x = arguments[1].asFloat();
+				const auto y = arguments[2].asFloat();
+				const auto z = arguments[3].asFloat();
+
+				node->setPosition({x, y, z}, Libs::Math::TransformSpace::World);
+
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Node '" << name << "' created at (" << x << ", " << y << ", " << z << ").");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Node '" << name << "' created at origin.");
+			}
+
+			return true;
+		}, "Creates a node in the active scene. Usage: createNode(name [, x, y, z])");
+
+		this->bindCommand("destroyNode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: destroyNode(name)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+
+			if ( m_activeScene->root()->destroyChild(name) )
+			{
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Node '" << name << "' destroyed.");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << name << "' not found !");
+			}
+
+			return true;
+		}, "Destroys a node. Usage: destroyNode(name)");
+
+		this->bindCommand("attachCamera", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 2 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: attachCamera(nodeName, cameraName)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto nodeName = arguments[0].asString();
+			const auto cameraName = arguments[1].asString();
+
+			auto node = m_activeScene->root()->findChild(nodeName);
+
+			if ( node == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << nodeName << "' not found !");
+
+				return false;
+			}
+
+			const auto camera = node->componentBuilder< Component::Camera >(cameraName).asPrimary().build(true);
+
+			if ( camera == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to attach camera '" << cameraName << "' !");
+
+				return false;
+			}
+
+			/* Set as the active camera for the scene. */
+			m_activeScene->setActiveCamera(camera.get());
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Camera '" << cameraName << "' attached to node '" << nodeName << "' and set as active.");
+
+			return true;
+		}, "Attaches a primary camera to a node and sets it as active. Usage: attachCamera(nodeName, cameraName)");
+
+		this->bindCommand("attachMicrophone", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 2 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: attachMicrophone(nodeName, microphoneName)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto nodeName = arguments[0].asString();
+			const auto micName = arguments[1].asString();
+
+			auto node = m_activeScene->root()->findChild(nodeName);
+
+			if ( node == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << nodeName << "' not found !");
+
+				return false;
+			}
+
+			/* Remove default microphone node if it exists. */
+			m_activeScene->root()->destroyChild("DefaultMicrophoneNode");
+
+			const auto microphone = node->componentBuilder< Component::Microphone >(micName).asPrimary().build();
+
+			if ( microphone == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to attach microphone '" << micName << "' !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Microphone '" << micName << "' attached to node '" << nodeName << "'.");
+
+			return true;
+		}, "Attaches a primary microphone to a node. Usage: attachMicrophone(nodeName, microphoneName)");
 
 		this->bindCommand("setBackground", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -399,10 +622,10 @@ namespace EmEn::Scenes
 			return true;
 		}, "Returns scene information (name, node count, entity count, active camera).");
 
-		this->bindCommand("setCameraPosition", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 3 )
+		this->bindCommand("getNode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
 			{
-				outputs.emplace_back(Severity::Error, "Usage: setCameraPosition(x, y, z [, fx, fy, fz])");
+				outputs.emplace_back(Severity::Error, "Usage: getNode(name)");
 
 				return false;
 			}
@@ -414,44 +637,102 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto * camera = m_activeScene->activeCamera();
+			const auto name = arguments[0].asString();
+			auto node = m_activeScene->root()->findChild(name);
 
-			if ( camera == nullptr )
+			if ( node == nullptr )
 			{
-				outputs.emplace_back(Severity::Error, "No active camera !");
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << name << "' not found !");
 
 				return false;
 			}
 
-			/* Find the node that holds the camera entity. */
-			auto cameraNode = m_activeScene->root()->findChild(camera->parentEntity().name());
+			const auto & coords = node->localCoordinates();
+			const auto & pos = coords.position();
 
-			if ( cameraNode == nullptr )
-			{
-				outputs.emplace_back(Severity::Error, "Camera node not found !");
+			std::stringstream info;
+			info << "{";
+			info << "\"name\":\"" << node->name() << "\",";
+			info << "\"address\":\"" << node.get() << "\",";
+			info << "\"position\":[" << pos[0] << "," << pos[1] << "," << pos[2] << "],";
+			info << "\"childCount\":" << node->children().size();
+			info << "}";
 
-				return false;
-			}
-
-			const auto x = arguments[0].asFloat();
-			const auto y = arguments[1].asFloat();
-			const auto z = arguments[2].asFloat();
-
-			cameraNode->setPosition({x, y, z}, Math::TransformSpace::World);
-
-			if ( arguments.size() >= 6 )
-			{
-				const auto fx = arguments[3].asFloat();
-				const auto fy = arguments[4].asFloat();
-				const auto fz = arguments[5].asFloat();
-
-				const Math::Vector< 3, float > target{x + fx, y + fy, z + fz};
-				cameraNode->lookAt(target, false);
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Camera moved to (" << x << ", " << y << ", " << z << ")");
+			outputs.emplace_back(Severity::Info, info.str());
 
 			return true;
-		}, "Moves camera. Usage: setCameraPosition(x, y, z [, fx, fy, fz]) where f* is the forward direction.");
+		}, "Returns node info as JSON. Usage: getNode(name)");
+
+		this->bindCommand("setNodePosition", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 4 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: setNodePosition(nodeName, x, y, z)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+			auto node = m_activeScene->root()->findChild(name);
+
+			if ( node == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << name << "' not found !");
+
+				return false;
+			}
+
+			const auto x = arguments[1].asFloat();
+			const auto y = arguments[2].asFloat();
+			const auto z = arguments[3].asFloat();
+
+			node->setPosition({x, y, z}, Math::TransformSpace::World);
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Node '" << name << "' moved to (" << x << ", " << y << ", " << z << ").");
+
+			return true;
+		}, "Moves a node. Usage: setNodePosition(nodeName, x, y, z)");
+
+		this->bindCommand("setNodeLookAt", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 4 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: setNodeLookAt(nodeName, x, y, z)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+			auto node = m_activeScene->root()->findChild(name);
+
+			if ( node == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << name << "' not found !");
+
+				return false;
+			}
+
+			const auto x = arguments[1].asFloat();
+			const auto y = arguments[2].asFloat();
+			const auto z = arguments[3].asFloat();
+
+			node->lookAt({x, y, z}, false);
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Node '" << name << "' looking at (" << x << ", " << y << ", " << z << ").");
+
+			return true;
+		}, "Orients a node to look at a point. Usage: setNodeLookAt(nodeName, x, y, z)");
 	}
 }
