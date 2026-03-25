@@ -856,8 +856,9 @@ namespace EmEn::Scenes
 
 				this->move(positionDelta, Libs::Math::TransformSpace::World);
 
-				/* If simulation was paused and movement is not significant, stay paused. */
-				if ( wasSimulationPaused && positionDelta.length() < Physics::SI::centimeters(2.0F) )
+				/* If simulation was paused and movement is not significant
+				 * and the entity is not spinning, stay paused. */
+				if ( wasSimulationPaused && positionDelta.length() < Physics::SI::centimeters(2.0F) && !this->isSpinning() )
 				{
 					this->pauseSimulation(true);
 				}
@@ -871,7 +872,7 @@ namespace EmEn::Scenes
 			void
 			rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept override
 			{
-				this->rotate(Libs::Math::Degree(radianAngle), worldDirection, Libs::Math::TransformSpace::Local);
+				this->rotate(radianAngle, worldDirection, Libs::Math::TransformSpace::Local);
 			}
 
 			/**

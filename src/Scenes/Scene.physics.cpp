@@ -82,7 +82,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::simulatePhysics () const noexcept
+	Scene::resolveCollisions () const noexcept
 	{
 		if ( m_physicsOctree == nullptr )
 		{

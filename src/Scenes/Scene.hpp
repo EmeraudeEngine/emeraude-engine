@@ -2126,7 +2126,7 @@ namespace EmEn::Scenes
 			 *
 			 * @note This is a recursive method that descends into subsectors.
 			 */
-			void simulatePhysics () const noexcept;
+			void resolveCollisions () const noexcept;
 
 			/**
 			 * @brief Performs collision tests within a single sector.

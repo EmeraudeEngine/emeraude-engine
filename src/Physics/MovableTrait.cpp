@@ -119,9 +119,8 @@ namespace EmEn::Physics
 		 * - Not grounded at all, OR
 		 * - Grounded on Entity (can fall off dynamic surfaces)
 		 * Exception: free fly mode or massless objects. */
-		const bool shouldApplyGravity = !isOnStableSurface && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull();
 
-		if ( shouldApplyGravity )
+		if ( !isOnStableSurface && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
 		{
 			m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();
 			m_linearSpeed = m_linearVelocity.length();
@@ -175,12 +174,14 @@ namespace EmEn::Physics
 			const auto angularDrag = objectProperties.angularDragCoefficient();
 
 			/* Apply damping: velocity *= (1 - drag) */
-			const auto dampingFactor = 1.0F - angularDrag;
-			m_angularVelocity *= dampingFactor;
+			m_angularVelocity *= 1.0F - angularDrag;
 			m_angularSpeed = m_angularVelocity.length();
 
 			/* Dispatch the final rotation to the entity according to the new angular velocity. */
-			this->rotateFromPhysics(2.0F * std::numbers::pi_v< float > / EngineUpdateCycleDurationS< float >, m_angularVelocity);
+			this->rotateFromPhysics(
+				m_angularSpeed * EngineUpdateCycleDurationS< float >,
+				m_angularVelocity / m_angularSpeed
+			);
 
 			isMoveOccurs = true;
 		}

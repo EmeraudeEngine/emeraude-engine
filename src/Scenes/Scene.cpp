@@ -300,15 +300,6 @@ namespace EmEn::Scenes
 		m_lifetimeUS += EngineUpdateCycleDurationUS< uint64_t >;
 		m_lifetimeMS += EngineUpdateCycleDurationMS< uint32_t >;
 
-		if ( m_groundLevel != nullptr )
-		{
-			const auto worldCoordinates = m_AVConsoleManager.getPrimaryVideoDevice()->getWorldCoordinates();
-
-			m_groundLevel->updateVisibility(worldCoordinates.position());
-		}
-
-		this->simulatePhysics();
-
 		m_nodeController.update();
 
 		/* Update scene static entities logics. */
@@ -352,6 +343,16 @@ namespace EmEn::Scenes
 			{
 				component->processLogics(*this);
 			}
+		}
+
+		/* NOTE: Simulate physical collisions. */
+		this->resolveCollisions();
+
+		if ( m_groundLevel != nullptr )
+		{
+			const auto worldCoordinates = m_AVConsoleManager.getPrimaryVideoDevice()->getWorldCoordinates();
+
+			m_groundLevel->updateVisibility(worldCoordinates.position());
 		}
 
 		/* Update Cascaded Shadow Maps for directional lights.

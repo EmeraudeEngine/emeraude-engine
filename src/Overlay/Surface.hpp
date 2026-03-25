@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <atomic>
 #include <concepts>
 #include <string>
 

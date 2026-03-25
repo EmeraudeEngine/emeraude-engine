@@ -436,9 +436,10 @@ namespace EmEn::Scenes
 	bool
 	AbstractEntity::processLogics (const Scene & scene, size_t engineCycle) noexcept
 	{
-		/* Updates every entity at this Node. */
+		/* Updates every component at this entity. */
 		{
 			std::lock_guard< std::mutex > lock(m_componentsMutex);
+
 			auto componentIt = m_components.begin();
 
 			while ( componentIt != m_components.end() )
