@@ -143,7 +143,8 @@ TEST(ThreadPoolTask, MoveAssignmentSelfAssignment)
 	ThreadPool::Task task{[&value] { value = 42; }};
 
 	/* Self-assignment should be safe. */
-	task = std::move(task);
+	auto & taskRef = task;
+	task = std::move(taskRef);
 
 	EXPECT_FALSE(task.empty());
 

@@ -1106,6 +1106,45 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
+			 * @brief Computes a 4x4 rotation matrix represented by a unit quaternion in column-major layout.
+			 * @note This produces a standard rotation matrix compatible with the engine's column-major Matrix class.
+			 * The result is compatible with Quaternion(Matrix4) for roundtrip conversions, and matches
+			 * the layout produced by CartesianFrame::getModelMatrix() for pure rotations.
+			 * @note rotationMatrix() uses a different convention (row-major data in column-major storage).
+			 * Use toRotationMatrix4() for TRS composition and conversions.
+			 * @return Matrix< 4, precision_t >
+			 */
+			[[nodiscard]]
+			constexpr Matrix< 4, precision_t >
+			toRotationMatrix4 () const noexcept
+			{
+				constexpr auto One = static_cast< precision_t >(1.0);
+				constexpr auto Two = static_cast< precision_t >(2.0);
+				constexpr auto Zero = static_cast< precision_t >(0.0);
+
+				std::array< precision_t, 16 > m{
+					/* Column 0: X basis vector */
+					One - Two * m_data[Y] * m_data[Y] - Two * m_data[Z] * m_data[Z],
+					Two * m_data[X] * m_data[Y] + Two * m_data[Z] * m_data[W],
+					Two * m_data[X] * m_data[Z] - Two * m_data[Y] * m_data[W],
+					Zero,
+					/* Column 1: Y basis vector */
+					Two * m_data[X] * m_data[Y] - Two * m_data[Z] * m_data[W],
+					One - Two * m_data[X] * m_data[X] - Two * m_data[Z] * m_data[Z],
+					Two * m_data[Y] * m_data[Z] + Two * m_data[X] * m_data[W],
+					Zero,
+					/* Column 2: Z basis vector */
+					Two * m_data[X] * m_data[Z] + Two * m_data[Y] * m_data[W],
+					Two * m_data[Y] * m_data[Z] - Two * m_data[X] * m_data[W],
+					One - Two * m_data[X] * m_data[X] - Two * m_data[Y] * m_data[Y],
+					Zero,
+					/* Column 3: no translation */
+					Zero, Zero, Zero, One};
+
+				return Matrix< 4, precision_t >{m};
+			}
+
+			/**
 			 * @brief Sets quaternion to be same as rotation by scaled axis w.
 			 * @param scaledAxis A reference to a vector.
 			 * @return void

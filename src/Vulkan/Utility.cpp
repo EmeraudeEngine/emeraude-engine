@@ -39,7 +39,7 @@ namespace EmEn::Vulkan
 	const char *
 	vkResultToCString (VkResult code) noexcept
 	{
-		switch ( code )
+		switch ( static_cast< int32_t >(code) )
 		{
 			case VK_SUCCESS :
 				return "VK_SUCCESS";

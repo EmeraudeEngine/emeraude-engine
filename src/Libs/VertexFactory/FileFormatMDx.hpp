@@ -41,6 +41,11 @@
 
 /* Local inclusions for usages. */
 #include "Libs/VertexFactory/ShapeBuilder.hpp"
+#include "Libs/Animation/Joint.hpp"
+#include "Libs/Animation/Skeleton.hpp"
+#include "Libs/Animation/Skin.hpp"
+#include "Libs/Math/Quaternion.hpp"
+#include "Libs/Math/TransformUtils.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {
@@ -672,6 +677,74 @@ namespace EmEn::Libs::VertexFactory
 				out[2] = iz * w + iw * -z + ix * -y - iy * -x;
 			}
 
+			/**
+			 * @brief Converts an MD5 position vector from ID Tech coordinate space to engine space.
+			 * @note MD5 uses right-handed Y-up. Engine uses Y-down.
+			 * Combined transform: (md5.y, -md5.z, md5.x) * IDTechUnitScale.
+			 * @param md5Pos The position in MD5 coordinate space.
+			 * @return Math::Vector< 3, vertex_data_t >
+			 */
+			static
+			Math::Vector< 3, vertex_data_t >
+			md5ToEnginePosition (const std::array< float, 3 > & md5Pos) noexcept
+			{
+				return {
+					static_cast< vertex_data_t >(md5Pos[1]) * IDTechUnitScale,
+					-static_cast< vertex_data_t >(md5Pos[2]) * IDTechUnitScale,
+					static_cast< vertex_data_t >(md5Pos[0]) * IDTechUnitScale
+				};
+			}
+
+			/**
+			 * @brief Converts an MD5 quaternion from ID Tech coordinate space to engine space.
+			 * @note Uses the rotation matrix path: quat → matrix → coordinate transform → matrix → quat.
+			 * The coordinate change matrix M maps (x,y,z)_md5 → (y,-z,x)_engine.
+			 * R_engine = M * R_md5 * M^T.
+			 * @param md5Orient The quaternion in MD5 coordinate space (x, y, z, w).
+			 * @return Math::Quaternion< vertex_data_t >
+			 */
+			static
+			Math::Quaternion< vertex_data_t >
+			md5ToEngineRotation (const std::array< float, 4 > & md5Orient) noexcept
+			{
+				/* Build the MD5 quaternion. */
+				const Math::Quaternion< vertex_data_t > qMD5{
+					static_cast< vertex_data_t >(md5Orient[0]),
+					static_cast< vertex_data_t >(md5Orient[1]),
+					static_cast< vertex_data_t >(md5Orient[2]),
+					static_cast< vertex_data_t >(md5Orient[3])
+				};
+
+				/* Get proper column-major rotation matrix from MD5 quaternion. */
+				const auto rotMD5 = qMD5.toRotationMatrix4();
+
+				/* Coordinate change matrix M: engine = (md5.y, -md5.z, md5.x).
+				 * Using row-major constructor: row0=(0,1,0,0), row1=(0,0,-1,0), row2=(1,0,0,0), row3=(0,0,0,1). */
+				constexpr auto Zero = static_cast< vertex_data_t >(0);
+				constexpr auto One = static_cast< vertex_data_t >(1);
+				constexpr auto NegOne = static_cast< vertex_data_t >(-1);
+
+				const Math::Matrix< 4, vertex_data_t > M{
+					Zero, One,    Zero, Zero,
+					Zero, Zero, NegOne, Zero,
+					One,  Zero,   Zero, Zero,
+					Zero, Zero,   Zero, One
+				};
+
+				/* M^T (transpose). Using row-major constructor. */
+				const Math::Matrix< 4, vertex_data_t > MT{
+					Zero, Zero, One,  Zero,
+					One,  Zero, Zero, Zero,
+					Zero, NegOne, Zero, Zero,
+					Zero, Zero, Zero, One
+				};
+
+				/* R_engine = M * R_md5 * M^T */
+				const auto rotEngine = M * rotMD5 * MT;
+
+				return Math::Quaternion< vertex_data_t >{rotEngine};
+			}
+
 			bool
 			loadMD5 (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry)
 			{
@@ -682,6 +755,7 @@ namespace EmEn::Libs::VertexFactory
 				int numJoints = 0;
 				int numMeshes = 0;
 
+				/* ---- Phase 1: Parse MD5 file ---- */
 				while ( std::getline(file, line) )
 				{
 					if ( line.find("numJoints") != std::string::npos )
@@ -710,7 +784,7 @@ namespace EmEn::Libs::VertexFactory
 							ss >> joints[i].parent >> trash
 							   >> joints[i].pos[0] >> joints[i].pos[1] >> joints[i].pos[2] >> trash >> trash
 							   >> joints[i].orient[0] >> joints[i].orient[1] >> joints[i].orient[2];
-							
+
 							computeW(joints[i].orient);
 						}
 					}
@@ -738,7 +812,6 @@ namespace EmEn::Libs::VertexFactory
 									std::stringstream ss(line);
 									std::string temp; char trash;
 
-									// vert <index> ( s t ) <start> <count>
 									ss >> temp >> temp >> trash >> mesh.verts[i].uv[0] >> mesh.verts[i].uv[1] >> trash >> mesh.verts[i].startWeight >> mesh.verts[i].countWeight;
 								}
 							}
@@ -757,7 +830,7 @@ namespace EmEn::Libs::VertexFactory
 									ss >> temp >> temp >> mesh.tris[i][0] >> mesh.tris[i][1] >> mesh.tris[i][2];
 								}
 							}
-							else if (line.find("numweights") != std::string::npos)
+							else if ( line.find("numweights") != std::string::npos )
 							{
 								int num; std::stringstream(line) >> line >> num;
 								mesh.weights.resize(num);
@@ -768,7 +841,6 @@ namespace EmEn::Libs::VertexFactory
 									std::stringstream ss(line);
 									std::string temp; char trash;
 
-									// weight <index> <joint> <bias> ( x y z )
 									ss >> temp >> temp >> mesh.weights[i].jointIndex >> mesh.weights[i].bias >> trash >> mesh.weights[i].pos[0] >> mesh.weights[i].pos[1] >> mesh.weights[i].pos[2];
 								}
 							}
@@ -778,7 +850,65 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				// Calculate Geometry
+				/* ---- Phase 2: Build Skeleton in engine coordinates ---- */
+				const auto jointCount = static_cast< size_t >(numJoints);
+
+				/* Compute world-space transforms for each joint in engine coordinates. */
+				std::vector< Math::Matrix< 4, vertex_data_t > > jointWorldTransforms(jointCount);
+				std::vector< Math::Matrix< 4, vertex_data_t > > inverseBindMatrices(jointCount);
+
+				for ( size_t i = 0; i < jointCount; ++i )
+				{
+					const auto pos = md5ToEnginePosition(joints[i].pos);
+					const auto rot = md5ToEngineRotation(joints[i].orient);
+
+					/* MD5 joints are in world space (not parent-relative). */
+					jointWorldTransforms[i] = Math::composeTRS(
+						pos, rot, Math::Vector< 3, vertex_data_t >{1, 1, 1}
+					);
+
+					inverseBindMatrices[i] = jointWorldTransforms[i].inverse();
+				}
+
+				/* Compute parent-relative local transforms and build Joint structs. */
+				std::vector< Animation::Joint< vertex_data_t > > engineJoints(jointCount);
+
+				for ( size_t i = 0; i < jointCount; ++i )
+				{
+					engineJoints[i].name = joints[i].name;
+					engineJoints[i].parentIndex = joints[i].parent;
+					engineJoints[i].inverseBindMatrix = inverseBindMatrices[i];
+
+					Math::Matrix< 4, vertex_data_t > localTransform;
+
+					if ( joints[i].parent == Animation::NoParent )
+					{
+						localTransform = jointWorldTransforms[i];
+					}
+					else
+					{
+						localTransform = jointWorldTransforms[static_cast< size_t >(joints[i].parent)].inverse() * jointWorldTransforms[i];
+					}
+
+					const auto trs = Math::decomposeTRS(localTransform);
+					engineJoints[i].translation = trs.translation;
+					engineJoints[i].rotation = trs.rotation;
+					engineJoints[i].scale = trs.scale;
+				}
+
+				Animation::Skeleton< vertex_data_t > skeleton{std::move(engineJoints)};
+
+				/* ---- Phase 3: Build geometry with per-vertex bone influences ---- */
+
+				/* Track per-expanded-vertex influence data. */
+				struct VertexInfluence
+				{
+					Math::Vector< 4, int32_t > indices{-1, -1, -1, -1};
+					Math::Vector< 4, vertex_data_t > weights{0, 0, 0, 0};
+				};
+
+				std::vector< VertexInfluence > vertexInfluences;
+
 				ShapeBuilderOptions< vertex_data_t > options{};
 				options.enableGlobalVertexColor(PixelFactory::White);
 				ShapeBuilder builder{geometry, options};
@@ -823,15 +953,86 @@ namespace EmEn::Libs::VertexFactory
 							);
 
 							builder.newVertex();
+
+							/* Collect top-4 bone influences sorted by weight (descending). */
+							VertexInfluence influence;
+							int slotCount = std::min(vert.countWeight, 4);
+
+							if ( vert.countWeight <= 4 )
+							{
+								/* All weights fit directly. */
+								for ( int w = 0; w < slotCount; ++w )
+								{
+									const auto & weight = mesh.weights[vert.startWeight + w];
+									influence.indices[w] = weight.jointIndex;
+									influence.weights[w] = static_cast< vertex_data_t >(weight.bias);
+								}
+							}
+							else
+							{
+								/* More than 4 weights: pick the 4 largest by bias. */
+								struct WeightEntry { int jointIndex; float bias; };
+								std::vector< WeightEntry > allWeights(vert.countWeight);
+
+								for ( int w = 0; w < vert.countWeight; ++w )
+								{
+									const auto & weight = mesh.weights[vert.startWeight + w];
+									allWeights[w] = {weight.jointIndex, weight.bias};
+								}
+
+								std::partial_sort(allWeights.begin(), allWeights.begin() + 4, allWeights.end(),
+									[] (const WeightEntry & a, const WeightEntry & b) { return a.bias > b.bias; });
+
+								/* Renormalize the top 4 weights. */
+								float totalBias = 0;
+								for ( int w = 0; w < 4; ++w )
+								{
+									totalBias += allWeights[w].bias;
+								}
+
+								if ( totalBias > 0 )
+								{
+									for ( int w = 0; w < 4; ++w )
+									{
+										influence.indices[w] = allWeights[w].jointIndex;
+										influence.weights[w] = static_cast< vertex_data_t >(allWeights[w].bias / totalBias);
+									}
+								}
+							}
+
+							vertexInfluences.push_back(influence);
 						}
 					}
 				}
 
 				builder.endConstruction();
 
+				/* ---- Phase 4: Apply bone influences to vertices ---- */
+				auto & vertices = geometry.vertices();
+
+				for ( size_t i = 0; i < vertices.size() && i < vertexInfluences.size(); ++i )
+				{
+					const auto & inf = vertexInfluences[i];
+					vertices[i].setInfluences(inf.indices[0], inf.indices[1], inf.indices[2], inf.indices[3]);
+					vertices[i].setWeights(inf.weights[0], inf.weights[1], inf.weights[2], inf.weights[3]);
+				}
+
 				/* MD5 format doesn't store normals, compute them from geometry. */
 				geometry.computeTriangleNormal();
 				geometry.computeVertexNormal();
+
+				/* ---- Phase 5: Build Skin and attach to Shape ---- */
+				/* MD5 uses direct joint indexing (skin-local == skeleton-global). */
+				std::vector< int32_t > skinJointIndices(jointCount);
+				for ( size_t i = 0; i < jointCount; ++i )
+				{
+					skinJointIndices[i] = static_cast< int32_t >(i);
+				}
+
+				Animation::Skin< vertex_data_t > skin{std::move(skinJointIndices), std::move(inverseBindMatrices)};
+
+				geometry.setSkeleton(std::move(skeleton));
+				geometry.setSkin(std::move(skin));
 
 				return true;
 			}

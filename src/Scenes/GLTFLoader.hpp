@@ -35,8 +35,12 @@
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "Libs/Animation/AnimationClip.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Resources/Manager.hpp"
+
+/* Local inclusions for usages. */
+#include "Libs/VertexFactory/Shape.hpp"
 
 /* Forward declarations. */
 namespace fastgltf
@@ -117,6 +121,10 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			bool loadMeshes (const fastgltf::Asset & asset) noexcept;
 
+			void loadSkins (const fastgltf::Asset & asset) noexcept;
+
+			void loadAnimations (const fastgltf::Asset & asset) noexcept;
+
 			void buildNodeHierarchy (const fastgltf::Asset & asset, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept;
 
 			void processNodeAsStatic (const fastgltf::Asset & asset, size_t nodeIndex, Scene & scene, const Libs::Math::CartesianFrame< float > & parentWorldFrame) noexcept;
@@ -130,6 +138,8 @@ namespace EmEn::Scenes
 			std::vector< std::shared_ptr< Graphics::TextureResource::Texture2D > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
+			std::vector< std::shared_ptr< Libs::VertexFactory::Shape< float > > > m_shapes;
+			std::vector< Libs::Animation::AnimationClip< float > > m_animationClips;
 			bool m_useStaticEntities{true};
 	};
 }

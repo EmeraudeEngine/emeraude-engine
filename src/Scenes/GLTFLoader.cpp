@@ -46,7 +46,13 @@
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Libs/Animation/Joint.hpp"
+#include "Libs/Animation/Skeleton.hpp"
+#include "Libs/Animation/Skin.hpp"
+#include "Libs/Animation/AnimationClip.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
+#include "Libs/Math/Quaternion.hpp"
+#include "Libs/Math/TransformUtils.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/FileIO.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
@@ -61,6 +67,7 @@ namespace EmEn::Scenes
 {
 	using namespace Graphics;
 	using namespace Graphics::Geometry;
+	using namespace Libs::Animation;
 	using namespace Libs::Math;
 	using namespace Libs::VertexFactory;
 	using namespace Libs::PixelFactory;
@@ -161,7 +168,21 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		TraceInfo{ClassId} << "Phase 4: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
+		if ( !asset.skins.empty() )
+		{
+			TraceInfo{ClassId} << "Phase 4: Loading " << asset.skins.size() << " skins...";
+
+			this->loadSkins(asset);
+		}
+
+		if ( !asset.animations.empty() )
+		{
+			TraceInfo{ClassId} << "Phase 5: Loading " << asset.animations.size() << " animations...";
+
+			this->loadAnimations(asset);
+		}
+
+		TraceInfo{ClassId} << "Phase 6: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
 
 		this->buildNodeHierarchy(asset, scene, scene.root());
 
@@ -649,6 +670,7 @@ namespace EmEn::Scenes
 	GLTFLoader::loadMeshes (const fastgltf::Asset & asset) noexcept
 	{
 		m_meshes.resize(asset.meshes.size());
+		m_shapes.resize(asset.meshes.size());
 
 		bool allSuccess = true;
 
@@ -796,6 +818,40 @@ namespace EmEn::Scenes
 						});
 					}
 
+					/* Read bone joint indices (JOINTS_0) for skeletal animation. */
+					const auto jointsIt = glTFPrimitive.findAttribute("JOINTS_0");
+
+					if ( jointsIt != glTFPrimitive.attributes.end() )
+					{
+						const auto & jointsAccessor = asset.accessors[jointsIt->accessorIndex];
+						size_t index = 0;
+
+						fastgltf::iterateAccessor< fastgltf::math::u16vec4 >(asset, jointsAccessor, [&] (const fastgltf::math::u16vec4 & v) {
+							vertices[globalVertexOffset + index].setInfluences(
+								static_cast< int32_t >(v.x()),
+								static_cast< int32_t >(v.y()),
+								static_cast< int32_t >(v.z()),
+								static_cast< int32_t >(v.w())
+							);
+
+							index++;
+						});
+					}
+
+					/* Read bone weights (WEIGHTS_0) for skeletal animation. */
+					const auto weightsIt = glTFPrimitive.findAttribute("WEIGHTS_0");
+
+					if ( weightsIt != glTFPrimitive.attributes.end() )
+					{
+						const auto & weightsAccessor = asset.accessors[weightsIt->accessorIndex];
+						size_t index = 0;
+
+						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, weightsAccessor, [&] (const fastgltf::math::fvec4 & v) {
+							vertices[globalVertexOffset + index].setWeights(v.x(), v.y(), v.z(), v.w());
+							index++;
+						});
+					}
+
 					/* Read indices and build triangles directly. */
 					if ( glTFPrimitive.indicesAccessor.has_value() )
 					{
@@ -912,9 +968,312 @@ namespace EmEn::Scenes
 			}
 
 			m_meshes[meshIndex] = std::move(mesh);
+			m_shapes[meshIndex] = shape;
 		}
 
 		return allSuccess;
+	}
+
+	void
+	GLTFLoader::loadSkins (const fastgltf::Asset & asset) noexcept
+	{
+		if ( asset.skins.empty() )
+		{
+			return;
+		}
+
+		/* Build a node-index → parent-node-index lookup from the node tree.
+		 * GLTF nodes store children, but we need parent references for the skeleton. */
+		std::vector< int32_t > nodeParents(asset.nodes.size(), NoParent);
+
+		for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
+		{
+			for ( const auto childIdx : asset.nodes[nodeIdx].children )
+			{
+				nodeParents[childIdx] = static_cast< int32_t >(nodeIdx);
+			}
+		}
+
+		for ( size_t skinIndex = 0; skinIndex < asset.skins.size(); ++skinIndex )
+		{
+			const auto & glTFSkin = asset.skins[skinIndex];
+			const auto jointCount = glTFSkin.joints.size();
+
+			if ( jointCount == 0 )
+			{
+				continue;
+			}
+
+			/* Build a fast lookup: GLTF node index → skin-local joint index. */
+			std::unordered_map< size_t, int32_t > nodeToJointIndex;
+			nodeToJointIndex.reserve(jointCount);
+
+			for ( size_t j = 0; j < jointCount; ++j )
+			{
+				nodeToJointIndex[glTFSkin.joints[j]] = static_cast< int32_t >(j);
+			}
+
+			/* Read inverse bind matrices from the accessor (if provided). */
+			std::vector< Matrix< 4, float > > inverseBindMatrices(jointCount);
+
+			if ( glTFSkin.inverseBindMatrices.has_value() )
+			{
+				const auto & ibmAccessor = asset.accessors[glTFSkin.inverseBindMatrices.value()];
+				size_t index = 0;
+
+				fastgltf::iterateAccessor< fastgltf::math::fmat4x4 >(asset, ibmAccessor, [&] (const fastgltf::math::fmat4x4 & m) {
+					/* fastgltf fmat4x4 is column-major, same as our Matrix. Copy directly. */
+					std::array< float, 16 > data{};
+
+					for ( size_t col = 0; col < 4; ++col )
+					{
+						for ( size_t row = 0; row < 4; ++row )
+						{
+							data[col * 4 + row] = m.col(col)[row];
+						}
+					}
+
+					inverseBindMatrices[index] = Matrix< 4, float >{data};
+					index++;
+				});
+			}
+			else
+			{
+				/* No inverse bind matrices provided — use identity (bind pose = model space). */
+				for ( auto & ibm : inverseBindMatrices )
+				{
+					ibm = Matrix< 4, float >{};
+				}
+			}
+
+			/* Build Joint array. For each skin joint, find its parent within the skin. */
+			std::vector< Joint< float > > engineJoints(jointCount);
+
+			for ( size_t j = 0; j < jointCount; ++j )
+			{
+				const auto glTFNodeIndex = glTFSkin.joints[j];
+				const auto & glTFNode = asset.nodes[glTFNodeIndex];
+
+				engineJoints[j].name = std::string{glTFNode.name};
+				engineJoints[j].inverseBindMatrix = inverseBindMatrices[j];
+
+				/* Find parent joint: walk up the node tree until we find a node that is in this skin. */
+				engineJoints[j].parentIndex = NoParent;
+				auto parentNodeIdx = nodeParents[glTFNodeIndex];
+
+				while ( parentNodeIdx != NoParent )
+				{
+					const auto it = nodeToJointIndex.find(static_cast< size_t >(parentNodeIdx));
+
+					if ( it != nodeToJointIndex.end() )
+					{
+						engineJoints[j].parentIndex = it->second;
+						break;
+					}
+
+					parentNodeIdx = nodeParents[static_cast< size_t >(parentNodeIdx)];
+				}
+
+				/* Extract local TRS from the node. GLTF stores parent-relative transforms. */
+				if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
+				{
+					engineJoints[j].translation = {trs->translation.x(), trs->translation.y(), trs->translation.z()};
+					engineJoints[j].rotation = Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()};
+					engineJoints[j].scale = {trs->scale.x(), trs->scale.y(), trs->scale.z()};
+				}
+			}
+
+			Skeleton< float > skeleton{std::move(engineJoints)};
+
+			/* Build Skin: skin-local indices map 1:1 (GLTF JOINTS_0 already uses skin-local indices). */
+			std::vector< int32_t > skinJointIndices(jointCount);
+
+			for ( size_t j = 0; j < jointCount; ++j )
+			{
+				skinJointIndices[j] = static_cast< int32_t >(j);
+			}
+
+			Skin< float > skin{std::move(skinJointIndices), std::move(inverseBindMatrices)};
+
+			/* Attach skeleton and skin to all meshes that reference this skin. */
+			for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
+			{
+				const auto & node = asset.nodes[nodeIdx];
+
+				if ( node.skinIndex.has_value() && node.skinIndex.value() == skinIndex && node.meshIndex.has_value() )
+				{
+					const auto meshIdx = node.meshIndex.value();
+
+					if ( meshIdx < m_shapes.size() && m_shapes[meshIdx] != nullptr )
+					{
+						m_shapes[meshIdx]->setSkeleton(skeleton);
+						m_shapes[meshIdx]->setSkin(skin);
+					}
+				}
+			}
+		}
+	}
+
+	void
+	GLTFLoader::loadAnimations (const fastgltf::Asset & asset) noexcept
+	{
+		if ( asset.animations.empty() )
+		{
+			return;
+		}
+
+		/* For mapping node indices to joint indices, we need the skin context.
+		 * Build a node-to-joint-index map from the first skin (most common case).
+		 * Multiple skins would require per-animation skin tracking. */
+		std::unordered_map< size_t, int32_t > nodeToJointIndex;
+
+		if ( !asset.skins.empty() )
+		{
+			const auto & skin = asset.skins[0];
+
+			for ( size_t j = 0; j < skin.joints.size(); ++j )
+			{
+				nodeToJointIndex[skin.joints[j]] = static_cast< int32_t >(j);
+			}
+		}
+
+		m_animationClips.reserve(asset.animations.size());
+
+		for ( const auto & glTFAnim : asset.animations )
+		{
+			std::vector< AnimationChannel< float > > channels;
+			channels.reserve(glTFAnim.channels.size());
+
+			for ( const auto & glTFChannel : glTFAnim.channels )
+			{
+				if ( !glTFChannel.nodeIndex.has_value() )
+				{
+					continue;
+				}
+
+				/* Skip morph target weights — not supported yet. */
+				if ( glTFChannel.path == fastgltf::AnimationPath::Weights )
+				{
+					continue;
+				}
+
+				/* Map GLTF node index to joint index in the skeleton. */
+				const auto nodeIdx = glTFChannel.nodeIndex.value();
+				const auto it = nodeToJointIndex.find(nodeIdx);
+
+				if ( it == nodeToJointIndex.end() )
+				{
+					continue;
+				}
+
+				const auto jointIndex = it->second;
+				const auto & glTFSampler = glTFAnim.samplers[glTFChannel.samplerIndex];
+
+				/* Read keyframe timestamps. */
+				const auto & inputAccessor = asset.accessors[glTFSampler.inputAccessor];
+				std::vector< float > timestamps;
+				timestamps.reserve(inputAccessor.count);
+
+				fastgltf::iterateAccessor< float >(asset, inputAccessor, [&] (float t) {
+					timestamps.push_back(t);
+				});
+
+				/* Map interpolation type. */
+				ChannelInterpolation interp = ChannelInterpolation::Linear;
+
+				switch ( glTFSampler.interpolation )
+				{
+					case fastgltf::AnimationInterpolation::Step :
+						interp = ChannelInterpolation::Step;
+						break;
+
+					case fastgltf::AnimationInterpolation::CubicSpline :
+						interp = ChannelInterpolation::CubicSpline;
+						break;
+
+					default :
+						break;
+				}
+
+				AnimationChannel< float > channel;
+				channel.jointIndex = jointIndex;
+				channel.interpolation = interp;
+
+				const auto & outputAccessor = asset.accessors[glTFSampler.outputAccessor];
+
+				switch ( glTFChannel.path )
+				{
+					case fastgltf::AnimationPath::Translation :
+					{
+						channel.target = ChannelTarget::Translation;
+						size_t index = 0;
+
+						channel.vectorKeyFrames.resize(timestamps.size());
+
+						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
+							if ( index < timestamps.size() )
+							{
+								channel.vectorKeyFrames[index] = {timestamps[index], {v.x(), v.y(), v.z()}};
+								index++;
+							}
+						});
+
+						break;
+					}
+
+					case fastgltf::AnimationPath::Rotation :
+					{
+						channel.target = ChannelTarget::Rotation;
+						size_t index = 0;
+
+						channel.quaternionKeyFrames.resize(timestamps.size());
+
+						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, outputAccessor, [&] (const fastgltf::math::fvec4 & v) {
+							if ( index < timestamps.size() )
+							{
+								channel.quaternionKeyFrames[index] = {timestamps[index], Quaternion< float >{v.x(), v.y(), v.z(), v.w()}};
+								index++;
+							}
+						});
+
+						break;
+					}
+
+					case fastgltf::AnimationPath::Scale :
+					{
+						channel.target = ChannelTarget::Scale;
+						size_t index = 0;
+
+						channel.vectorKeyFrames.resize(timestamps.size());
+
+						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
+							if ( index < timestamps.size() )
+							{
+								channel.vectorKeyFrames[index] = {timestamps[index], {v.x(), v.y(), v.z()}};
+								index++;
+							}
+						});
+
+						break;
+					}
+
+					default :
+						continue;
+				}
+
+				channels.push_back(std::move(channel));
+			}
+
+			if ( !channels.empty() )
+			{
+				m_animationClips.emplace_back(std::string{glTFAnim.name}, std::move(channels));
+			}
+		}
+
+		if ( !m_animationClips.empty() )
+		{
+			TraceInfo{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
+		}
 	}
 
 	/* Helper: Extract a CartesianFrame from a glTF node's TRS transform. */

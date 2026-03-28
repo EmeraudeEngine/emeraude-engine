@@ -36,6 +36,7 @@
 
 /* Local inclusions for usages. */
 #include "Matrix.hpp"
+#include "Quaternion.hpp"
 
 namespace EmEn::Libs::Math
 {
@@ -119,6 +120,25 @@ namespace EmEn::Libs::Math
 			{
 				m_downward.normalize();
 				m_backward.normalize();
+			}
+
+			/**
+			 * @brief Constructs a cartesian frame from a position, a rotation quaternion and an optional scale.
+			 * @param position A reference to a vector for position.
+			 * @param rotation A reference to a quaternion for rotation.
+			 * @param scale A reference to a vector for scaling. Default, no scale.
+			 */
+			CartesianFrame (const Vector< 3, precision_t > & position, const Quaternion< precision_t > & rotation, const Vector< 3, precision_t > & scale = {1, 1, 1}) noexcept
+				: m_position(position),
+				  m_scaling(scale)
+			{
+				const auto rotMatrix = rotation.toRotationMatrix4();
+
+				/* Column 1 of the column-major rotation matrix is the Y axis (downward). */
+				m_downward = {rotMatrix[M4x4Col1Row0], rotMatrix[M4x4Col1Row1], rotMatrix[M4x4Col1Row2]};
+
+				/* Column 2 of the column-major rotation matrix is the Z axis (backward). */
+				m_backward = {rotMatrix[M4x4Col2Row0], rotMatrix[M4x4Col2Row1], rotMatrix[M4x4Col2Row2]};
 			}
 
 			/**
@@ -945,6 +965,19 @@ namespace EmEn::Libs::Math
 			getRotationMatrix4 () const noexcept
 			{
 				return {this->rightVector(), m_downward, m_backward};
+			}
+
+			/**
+			 * @brief Returns the rotation as a quaternion.
+			 * @note This extracts the rotation from the downward and backward axis vectors
+			 * via a 4x4 rotation matrix, then converts to quaternion.
+			 * @return Quaternion< precision_t >
+			 */
+			[[nodiscard]]
+			Quaternion< precision_t >
+			toQuaternion () const
+			{
+				return Quaternion< precision_t >{this->getRotationMatrix4()};
 			}
 
 			/**

@@ -37,6 +37,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <optional>
 #include <vector>
 #include <functional>
 #include <set>
@@ -47,6 +48,8 @@
 #include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
+#include "Libs/Animation/Skeleton.hpp"
+#include "Libs/Animation/Skin.hpp"
 #include "ShapeEdge.hpp"
 #include "ShapeTriangle.hpp"
 #include "ShapeVertex.hpp"
@@ -210,6 +213,8 @@ namespace EmEn::Libs::VertexFactory
 				m_textureCoordinatesDeclared = false;
 				m_normalsDeclared = false;
 				m_computeEdges = false;
+				m_skeleton.reset();
+				m_skin.reset();
 			}
 
 			/**
@@ -459,6 +464,70 @@ namespace EmEn::Libs::VertexFactory
 			groups () noexcept
 			{
 				return m_groups;
+			}
+
+			/**
+			 * @brief Returns whether this shape has skeletal data attached.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasSkeleton () const noexcept
+			{
+				return m_skeleton.has_value();
+			}
+
+			/**
+			 * @brief Returns the attached skeleton.
+			 * @return const Animation::Skeleton< vertex_data_t > &
+			 */
+			[[nodiscard]]
+			const Animation::Skeleton< vertex_data_t > &
+			skeleton () const noexcept
+			{
+				return m_skeleton.value();
+			}
+
+			/**
+			 * @brief Attaches a skeleton to this shape.
+			 * @param skeleton The skeleton to attach.
+			 */
+			void
+			setSkeleton (Animation::Skeleton< vertex_data_t > skeleton) noexcept
+			{
+				m_skeleton = std::move(skeleton);
+			}
+
+			/**
+			 * @brief Returns whether this shape has skin data attached.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasSkin () const noexcept
+			{
+				return m_skin.has_value();
+			}
+
+			/**
+			 * @brief Returns the attached skin.
+			 * @return const Animation::Skin< vertex_data_t > &
+			 */
+			[[nodiscard]]
+			const Animation::Skin< vertex_data_t > &
+			skin () const noexcept
+			{
+				return m_skin.value();
+			}
+
+			/**
+			 * @brief Attaches a skin to this shape.
+			 * @param skin The skin binding to attach.
+			 */
+			void
+			setSkin (Animation::Skin< vertex_data_t > skin) noexcept
+			{
+				m_skin = std::move(skin);
 			}
 
 			/**
@@ -2149,5 +2218,8 @@ namespace EmEn::Libs::VertexFactory
 			bool m_normalsDeclared{false};
 			bool m_computeEdges{false};
 			bool m_boundaryLoopsAnalyzed{false};
+			/* Optional skeletal animation data — populated by loaders that support it. */
+			std::optional< Animation::Skeleton< vertex_data_t > > m_skeleton{};
+			std::optional< Animation::Skin< vertex_data_t > > m_skin{};
 	};
 }

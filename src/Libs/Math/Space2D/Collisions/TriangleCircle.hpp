@@ -58,7 +58,6 @@ namespace EmEn::Libs::Math::Space2D
 
 			/* Check if p is in region of vertex B. */
 			const auto bp = p - b;
-			const auto bc = c - b;
 			precision_t d3 = Vector< 2, precision_t >::dotProduct(ab, bp);
 			precision_t d4 = Vector< 2, precision_t >::dotProduct(ac, bp);
 			
