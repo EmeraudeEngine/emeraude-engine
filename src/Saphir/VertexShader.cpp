@@ -568,7 +568,9 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			code << ShaderVariable::MDIModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);" "\n";
+			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+			code << ShaderVariable::MDIModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
 		else if ( this->isInstancingEnabled() )
 		{
@@ -577,11 +579,15 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			code << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);" "\n";
+			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+			code << Attribute::ModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
 		else
 		{
-			code << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << Attribute::Position << ", 1.0);" "\n";
+			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+			code << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
 
 		if ( scope != VariableScope::ToNextStage )
@@ -622,7 +628,9 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		code << ShaderVariable::PositionViewSpace << " = " << ShaderVariable::ModelViewMatrix << " * vec4(" << Attribute::Position << ", 1.0);" "\n";
+		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+		code << ShaderVariable::PositionViewSpace << " = " << ShaderVariable::ModelViewMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 
 		if ( scope != VariableScope::ToNextStage )
 		{
@@ -663,7 +671,9 @@ namespace EmEn::Saphir
 			MVPMatrix = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
 		}
 
-		outputInstructions.append((std::stringstream{} << "\t" "gl_Position = "  << MVPMatrix << " * vec4(" << Attribute::Position << ", 1.0);" "\n").str());
+		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+		outputInstructions.append((std::stringstream{} << "\t" "gl_Position = "  << MVPMatrix << " * vec4(" << posExpr << ", 1.0);" "\n").str());
 
 		return true;
 	}
@@ -810,17 +820,17 @@ namespace EmEn::Saphir
 		switch ( vectorType )
 		{
 			case VertexAttributeType::Tangent :
-				attributeName = Attribute::Tangent;
+				attributeName = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
 				vectorName = ShaderVariable::TangentWorldSpace;
 				break;
 
 			case VertexAttributeType::Binormal :
-				attributeName = Attribute::Binormal;
+				attributeName = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
 				vectorName = ShaderVariable::BinormalWorldSpace;
 				break;
 
 			case VertexAttributeType::Normal :
-				attributeName = Attribute::Normal;
+				attributeName = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
 				vectorName = ShaderVariable::NormalWorldSpace;
 				break;
 
@@ -899,17 +909,17 @@ namespace EmEn::Saphir
 		switch ( vectorType )
 		{
 			case VertexAttributeType::Tangent :
-				attributeName = Attribute::Tangent;
+				attributeName = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
 				vectorName = ShaderVariable::TangentViewSpace;
 				break;
 
 			case VertexAttributeType::Binormal :
-				attributeName = Attribute::Binormal;
+				attributeName = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
 				vectorName = ShaderVariable::BinormalViewSpace;
 				break;
 
 			case VertexAttributeType::Normal :
-				attributeName = Attribute::Normal;
+				attributeName = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
 				vectorName = ShaderVariable::NormalViewSpace;
 				break;
 
@@ -996,10 +1006,14 @@ namespace EmEn::Saphir
 			modelMatrix = MatrixPC(PushConstant::Component::ModelMatrix);
 		}
 
+		const auto tanExpr = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
+		const auto binExpr = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
+		const auto norExpr = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+
 		topInstructions.append((std::stringstream{} <<
-			"	const vec3 worldT = normalize((" << modelMatrix << " * vec4(" << Attribute::Tangent << ", 0.0)).xyz);" "\n"
-			"	const vec3 worldB = normalize((" << modelMatrix << " * vec4(" << Attribute::Binormal << ", 0.0)).xyz);" "\n"
-			"	const vec3 worldN = normalize((" << modelMatrix << " * vec4(" << Attribute::Normal << ", 0.0)).xyz);" "\n"
+			"	const vec3 worldT = normalize((" << modelMatrix << " * vec4(" << tanExpr << ", 0.0)).xyz);" "\n"
+			"	const vec3 worldB = normalize((" << modelMatrix << " * vec4(" << binExpr << ", 0.0)).xyz);" "\n"
+			"	const vec3 worldN = normalize((" << modelMatrix << " * vec4(" << norExpr << ", 0.0)).xyz);" "\n"
 		).str());
 
 		const auto matrixCode = (std::stringstream{} <<
@@ -1046,11 +1060,17 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		topInstructions.append((std::stringstream{} <<
-			"	const vec3 viewT = normalize(" << ShaderVariable::NormalMatrix << " * " << Attribute::Tangent << ");" "\n"
-			"	const vec3 viewB = normalize(" << ShaderVariable::NormalMatrix << " * " << Attribute::Binormal << ");" "\n"
-			"	const vec3 viewN = normalize(" << ShaderVariable::NormalMatrix << " * " << Attribute::Normal << ");" "\n"
-		).str());
+		{
+			const auto tanExpr = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
+			const auto binExpr = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
+			const auto norExpr = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+
+			topInstructions.append((std::stringstream{} <<
+				"	const vec3 viewT = normalize(" << ShaderVariable::NormalMatrix << " * " << tanExpr << ");" "\n"
+				"	const vec3 viewB = normalize(" << ShaderVariable::NormalMatrix << " * " << binExpr << ");" "\n"
+				"	const vec3 viewN = normalize(" << ShaderVariable::NormalMatrix << " * " << norExpr << ");" "\n"
+			).str());
+		}
 
 		const auto matrixCode = (std::stringstream{} << '\t' << ShaderVariable::ViewTBNMatrix << " = transpose(mat3(viewT, viewB, viewN));" "\n").str();
 
@@ -1094,8 +1114,12 @@ namespace EmEn::Saphir
 			return false;
 		}
 
+		const auto tanExpr = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
+		const auto binExpr = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
+		const auto norExpr = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+
 		const auto matrixCode = (std::stringstream{} <<
-			'\t' << ShaderVariable::TangentToWorldMatrix << " = " << ShaderVariable::NormalMatrix << " * mat3(" << Attribute::Tangent << ", " << Attribute::Binormal << ", " << Attribute::Normal << ");" "\n"
+			'\t' << ShaderVariable::TangentToWorldMatrix << " = " << ShaderVariable::NormalMatrix << " * mat3(" << tanExpr << ", " << binExpr << ", " << norExpr << ");" "\n"
 		).str();
 
 		if ( scope != VariableScope::ToNextStage )
@@ -1419,6 +1443,37 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
+		/* Skeletal skinning: compute skinned position and normal at the top of main().
+		 * Subsequent synthesis methods will use skinnedPosition/skinnedNormal
+		 * instead of the raw vertex attributes. */
+		if ( m_skinningEnabled )
+		{
+			std::string skinCode =
+				"\t" "/* Skeletal skinning. */" "\n"
+				"\t" "ivec4 boneIdx = ivec4(" + std::string{Keys::Attribute::BoneInfluence} + ");" "\n"
+				"\t" "mat4 skinMatrix = " + std::string{Keys::Attribute::BoneWeight} + ".x * ubSkinningMatrices.bones[boneIdx.x]" "\n"
+				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".y * ubSkinningMatrices.bones[boneIdx.y]" "\n"
+				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".z * ubSkinningMatrices.bones[boneIdx.z]" "\n"
+				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".w * ubSkinningMatrices.bones[boneIdx.w];" "\n"
+				"\t" "mat3 skinMatrix3 = mat3(skinMatrix);" "\n"
+				"\t" "vec3 skinnedPosition = (skinMatrix * vec4(" + std::string{Keys::Attribute::Position} + ", 1.0)).xyz;" "\n"
+				"\t" "vec3 skinnedNormal = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Normal} + ");" "\n";
+
+			if ( m_vertexAttributes.contains(Graphics::VertexAttributeType::Tangent) )
+			{
+				skinCode += "\t" "vec3 skinnedTangent = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Tangent} + ");" "\n";
+			}
+
+			if ( m_vertexAttributes.contains(Graphics::VertexAttributeType::Binormal) )
+			{
+				skinCode += "\t" "vec3 skinnedBinormal = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Binormal} + ");" "\n";
+			}
+
+			skinCode += "\n";
+
+			topInstructions.append(skinCode);
+		}
+
 		/* NOTE: This will add some declarations. */
 		if ( !this->generateMainUniqueInstructions(generator, topInstructions, outputInstructions) )
 		{

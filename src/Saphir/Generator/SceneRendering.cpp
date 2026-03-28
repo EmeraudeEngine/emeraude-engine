@@ -311,6 +311,21 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* Skeletal animation: declare bone attributes and SSBO. */
+		if ( this->isSkeletalAnimationEnabled() )
+		{
+			vertexShader->enableSkinning();
+
+			vertexShader->declare(Declaration::InputAttribute{Graphics::VertexAttributeType::BoneInfluence}, true);
+			vertexShader->declare(Declaration::InputAttribute{Graphics::VertexAttributeType::BoneWeight}, true);
+
+			const auto setIndex = program.setIndexes().set(SetType::PerModel);
+
+			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "SkinningMatrices", "ubSkinningMatrices"};
+			ssbo.addArrayMember(Declaration::VariableType::Matrix4, "bones", 0);
+			vertexShader->declare(ssbo);
+		}
+
 		/* NOTE: The position is always required and available. */
 		if ( !vertexShader->requestSynthesizeInstruction(ShaderVariable::PositionScreenSpace) )
 		{

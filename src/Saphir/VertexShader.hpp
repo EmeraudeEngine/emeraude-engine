@@ -299,6 +299,27 @@ namespace EmEn::Saphir
 				return m_MDIEnabled;
 			}
 
+			/**
+			 * @brief Enables skeletal skinning in this vertex shader.
+			 * @return void
+			 */
+			void
+			enableSkinning () noexcept
+			{
+				m_skinningEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether skeletal skinning is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSkinningEnabled () const noexcept
+			{
+				return m_skinningEnabled;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
@@ -505,5 +526,6 @@ namespace EmEn::Saphir
 			bool m_cubemapModeEnabled{false};
 			bool m_csmModeEnabled{false};
 			bool m_MDIEnabled{false};
+			bool m_skinningEnabled{false};
 	};
 }
