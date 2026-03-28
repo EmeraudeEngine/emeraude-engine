@@ -924,6 +924,14 @@ namespace EmEn::Scenes
 				continue;
 			}
 
+			/* Detect if the shape has skeletal bone influences. */
+			uint32_t geometryFlags = EnableTangentSpace | EnablePrimaryTextureCoordinates;
+
+			if ( !shape->vertices().empty() && shape->vertices()[0].influences()[0] >= 0 )
+			{
+				geometryFlags |= EnableInfluence | EnableWeight;
+			}
+
 			/* Phase 2: Tangent computation + GPU upload on thread pool. */
 			auto geometry = m_resources.container< IndexedVertexResource >()
 				->getOrCreateResource(geoName, [shape] (auto & geometryResource) {
@@ -931,7 +939,7 @@ namespace EmEn::Scenes
 					shape->computeVertexTangent();
 
 					return geometryResource.load(*shape);
-				}, EnableTangentSpace | EnablePrimaryTextureCoordinates);
+				}, geometryFlags);
 
 			if ( geometry == nullptr )
 			{

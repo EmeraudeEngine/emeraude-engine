@@ -674,6 +674,8 @@ namespace EmEn::Saphir
 			constexpr auto NormalModelMatrix{"vaNormalModelMatrix"};
 			constexpr auto ModelPosition{"vaModelPosition"};
 			constexpr auto ModelScaling{"vaModelScaling"};
+			constexpr auto BoneInfluence{"vaBoneInfluence"};
+			constexpr auto BoneWeight{"vaBoneWeight"};
 		}
 
 		/** @brief Structures naming convention. */

@@ -659,7 +659,9 @@ namespace EmEn::Graphics
 		NormalModelMatrixR1 = 14U,
 		NormalModelMatrixR2 = 15U,
 		ModelPosition = 16U,
-		ModelScaling = 17U
+		ModelScaling = 17U,
+		BoneInfluence = 18U,
+		BoneWeight = 19U
 	};
 
 	constexpr auto PositionString{"Position"};
@@ -675,6 +677,8 @@ namespace EmEn::Graphics
 	constexpr auto NormalModelMatrixString{"NormalModelMatrix"};
 	constexpr auto ModelPositionString{"ModelPosition"};
 	constexpr auto ModelScalingString{"ModelScaling"};
+	constexpr auto BoneInfluenceString{"BoneInfluence"};
+	constexpr auto BoneWeightString{"BoneWeight"};
 
 	/**
 	 * @brief Converts a vertex attribute type enumeration value to the corresponding string.
@@ -723,6 +727,8 @@ namespace EmEn::Graphics
 			case VertexAttributeType::ModelMatrixR1 :
 			case VertexAttributeType::ModelMatrixR2 :
 			case VertexAttributeType::ModelMatrixR3 :
+			case VertexAttributeType::BoneInfluence :
+			case VertexAttributeType::BoneWeight :
 				return 4;
 
 			case VertexAttributeType::Position :

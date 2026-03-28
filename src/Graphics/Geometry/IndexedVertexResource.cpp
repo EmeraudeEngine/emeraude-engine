@@ -71,12 +71,17 @@ namespace EmEn::Graphics::Geometry
 		std::vector< float > vertexAttributes;
 		std::vector< uint32_t > indices;
 
+		const auto skeletalAnimationType = (this->isFlagEnabled(EnableInfluence) && this->isFlagEnabled(EnableWeight))
+			? VertexFactory::SkeletalAnimationType::Weighted4
+			: VertexFactory::SkeletalAnimationType::None;
+
 		const auto vertexElementCount = m_localData.createIndexedVertexBuffer(
 			vertexAttributes,
 			indices,
 			this->getNormalsFormat(),
 			this->getPrimaryTextureCoordinatesFormat(),
-			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None
+			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None,
+			skeletalAnimationType
 		);
 
 		if ( vertexAttributes.empty() || indices.empty() || vertexElementCount == 0 )

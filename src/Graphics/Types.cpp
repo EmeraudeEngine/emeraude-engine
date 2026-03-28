@@ -942,6 +942,12 @@ namespace EmEn::Graphics
 
 			case VertexAttributeType::ModelScaling :
 				return ModelScalingString;
+
+			case VertexAttributeType::BoneInfluence :
+				return BoneInfluenceString;
+
+			case VertexAttributeType::BoneWeight :
+				return BoneWeightString;
 		}
 
 		return nullptr;
@@ -1003,6 +1009,16 @@ namespace EmEn::Graphics
 		if ( value == NormalModelMatrixString )
 		{
 			return VertexAttributeType::NormalModelMatrixR0;
+		}
+
+		if ( value == BoneInfluenceString )
+		{
+			return VertexAttributeType::BoneInfluence;
+		}
+
+		if ( value == BoneWeightString )
+		{
+			return VertexAttributeType::BoneWeight;
 		}
 
 		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Position' by default." << "\n";

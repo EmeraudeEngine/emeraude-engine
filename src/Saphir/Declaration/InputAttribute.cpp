@@ -69,6 +69,10 @@ namespace EmEn::Saphir::Declaration
 			case VertexAttributeType::ModelScaling :
 				return GLSL::FloatVector3;
 
+			case VertexAttributeType::BoneInfluence :
+			case VertexAttributeType::BoneWeight :
+				return GLSL::FloatVector4;
+
 			default:
 				return nullptr;
 		}
@@ -122,6 +126,12 @@ namespace EmEn::Saphir::Declaration
 
 			case VertexAttributeType::ModelScaling :
 				return Attribute::ModelScaling;
+
+			case VertexAttributeType::BoneInfluence :
+				return Attribute::BoneInfluence;
+
+			case VertexAttributeType::BoneWeight :
+				return Attribute::BoneWeight;
 
 			default:
 				return nullptr;
