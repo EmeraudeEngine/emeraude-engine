@@ -27,6 +27,7 @@
 #include "Abstract.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
@@ -80,6 +81,16 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
+		bool isSkeletalAnimationEnabled = false;
+
+		if ( m_renderable != nullptr )
+		{
+			if ( const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderable.get()) )
+			{
+				isSkeletalAnimationEnabled = skeletalData->hasSkeletalData();
+			}
+		}
+
 		return Renderable::ProgramCacheKey{
 			.programType = programType,
 			.renderPassType = renderPassType,
@@ -91,7 +102,8 @@ namespace EmEn::Graphics::RenderableInstance
 			.isDepthTestDisabled = this->isDepthTestDisabled(),
 			.isDepthWriteDisabled = this->isDepthWriteDisabled(),
 			.isBindlessEnabled = isBindlessEnabled,
-			.isMDIEnabled = isMDIEnabled
+			.isMDIEnabled = isMDIEnabled,
+			.isSkeletalAnimationEnabled = isSkeletalAnimationEnabled
 		};
 	}
 

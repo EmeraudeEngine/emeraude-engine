@@ -340,6 +340,46 @@ namespace EmEn::Graphics
 					}
 				}
 
+				/* Checking bone influence indices. */
+				if ( requestedVertexAttributes.contains(VertexAttributeType::BoneInfluence) )
+				{
+					if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::EnableInfluence) )
+					{
+						TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs bone influence attributes !";
+
+						return nullptr;
+					}
+
+					this->declareAttribute(VertexAttributeType::BoneInfluence);
+				}
+				else
+				{
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableInfluence) )
+					{
+						this->declareJump(VertexAttributeType::BoneInfluence);
+					}
+				}
+
+				/* Checking bone weights. */
+				if ( requestedVertexAttributes.contains(VertexAttributeType::BoneWeight) )
+				{
+					if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::EnableWeight) )
+					{
+						TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs bone weight attributes !";
+
+						return nullptr;
+					}
+
+					this->declareAttribute(VertexAttributeType::BoneWeight);
+				}
+				else
+				{
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableWeight) )
+					{
+						this->declareJump(VertexAttributeType::BoneWeight);
+					}
+				}
+
 				uint32_t bufferFlags{0};
 
 				if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableDynamicVertexBuffer) )
@@ -634,6 +674,50 @@ namespace EmEn::Graphics
 					if ( geometry.vertexColorEnabled() )
 					{
 						this->declareJump(VertexAttributeType::VertexColor);
+					}
+				}
+
+				/* Checking bone influence indices. */
+				if ( requestedVertexAttributes.contains(VertexAttributeType::BoneInfluence) )
+				{
+					if ( !geometry.influenceEnabled() )
+					{
+						TraceError{ClassId} <<
+							"The vertex shader '" << vertexShader.name() << "' needs bone influence attributes, "
+							"but the geometry '" << geometry.name() << "' do not provide these.";
+
+						return nullptr;
+					}
+
+					this->declareAttribute(VertexAttributeType::BoneInfluence);
+				}
+				else
+				{
+					if ( geometry.influenceEnabled() )
+					{
+						this->declareJump(VertexAttributeType::BoneInfluence);
+					}
+				}
+
+				/* Checking bone weights. */
+				if ( requestedVertexAttributes.contains(VertexAttributeType::BoneWeight) )
+				{
+					if ( !geometry.weightEnabled() )
+					{
+						TraceError{ClassId} <<
+							"The vertex shader '" << vertexShader.name() << "' needs bone weight attributes, "
+							"but the geometry '" << geometry.name() << "' do not provide these.";
+
+						return nullptr;
+					}
+
+					this->declareAttribute(VertexAttributeType::BoneWeight);
+				}
+				else
+				{
+					if ( geometry.weightEnabled() )
+					{
+						this->declareJump(VertexAttributeType::BoneWeight);
 					}
 				}
 

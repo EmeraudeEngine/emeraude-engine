@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Saphir/Program.hpp"
 
@@ -74,7 +75,9 @@ namespace EmEn::Saphir::Generator
 		IsLightingEnabled = 1U << 4,
 		BindlessTexturesEnabled = 1U << 5,
 		/** @brief Multi-Draw Indirect enabled: model matrix from SSBO via BDA + gl_DrawID instead of push constants. */
-		IsMultiDrawIndirectEnabled = 1U << 6
+		IsMultiDrawIndirectEnabled = 1U << 6,
+		/** @brief Skeletal animation enabled: bone matrix SSBO and vertex skinning in shaders. */
+		IsSkeletalAnimationEnabled = 1U << 7
 	};
 
 	/**
@@ -266,6 +269,17 @@ namespace EmEn::Saphir::Generator
 			isMultiDrawIndirectEnabled () const noexcept
 			{
 				return this->isFlagEnabled(IsMultiDrawIndirectEnabled);
+			}
+
+			/**
+			 * @brief Returns whether skeletal animation is enabled for this generator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSkeletalAnimationEnabled () const noexcept
+			{
+				return this->isFlagEnabled(IsSkeletalAnimationEnabled);
 			}
 
 			/**
@@ -515,6 +529,14 @@ namespace EmEn::Saphir::Generator
 				if ( renderableInstance->isLightingEnabled() )
 				{
 					this->enableFlag(IsLightingEnabled);
+				}
+
+				if ( const auto * skeletalData = dynamic_cast< const Graphics::Renderable::SkeletalDataTrait * >(renderableInstance->renderable()) )
+				{
+					if ( skeletalData->hasSkeletalData() )
+					{
+						this->enableFlag(IsSkeletalAnimationEnabled);
+					}
 				}
 			}
 
