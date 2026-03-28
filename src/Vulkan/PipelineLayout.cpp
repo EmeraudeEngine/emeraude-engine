@@ -103,7 +103,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Repack vulkan handles to use within the createInfo. */
-		StaticVector< VkDescriptorSetLayout, 4 > setLayouts{};
+		StaticVector< VkDescriptorSetLayout, 5 > setLayouts{};
 
 		std::ranges::transform(m_descriptorSetLayouts, std::back_inserter(setLayouts), [] (const auto & item) -> VkDescriptorSetLayout {
 			return item->handle();
@@ -156,7 +156,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	PipelineLayout::computeHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
+	PipelineLayout::computeHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
 	{
 		/* FIXME: Weak and unstable hash method !! */
 		size_t hash = 0;

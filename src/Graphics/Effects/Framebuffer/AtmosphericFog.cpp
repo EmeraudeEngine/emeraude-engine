@@ -206,7 +206,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(FogPushConstants)}
 			};
 
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(tripleInputLayout);
 			m_fogLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}

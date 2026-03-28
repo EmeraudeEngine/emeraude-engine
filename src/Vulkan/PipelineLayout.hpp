@@ -66,7 +66,7 @@ namespace EmEn::Vulkan
 			 * @param createFlags The createInfo flags. Default none.
 			 */
 			explicit
-			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts = {}, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept
+			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts = {}, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept
 				: AbstractDeviceDependentObject{device},
 				m_UUID{std::move(UUID)},
 				m_descriptorSetLayouts{descriptorSetLayouts},
@@ -89,7 +89,7 @@ namespace EmEn::Vulkan
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layouts. Default empty.
 			 * @param pushConstantRanges A reference to a list of push constant ranges. Default empty.
 			 */
-			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts = {}, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}) noexcept
+			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts = {}, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}) noexcept
 				: AbstractDeviceDependentObject{device},
 				m_createInfo{createInfo},
 				m_UUID{std::move(UUID)},
@@ -195,7 +195,7 @@ namespace EmEn::Vulkan
 			 * @return const Libs::StaticVector< shared_ptr< DescriptorSetLayout >, 4 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > &
+			const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > &
 			descriptorSetLayouts () const noexcept
 			{
 				return m_descriptorSetLayouts;
@@ -231,7 +231,7 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t computeHash (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept;
+			static size_t computeHash (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept;
 
 		private:
 
@@ -246,7 +246,7 @@ namespace EmEn::Vulkan
 			VkPipelineLayout m_handle{VK_NULL_HANDLE};
 			VkPipelineLayoutCreateInfo m_createInfo{};
 			std::string m_UUID;
-			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > m_descriptorSetLayouts;
+			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > m_descriptorSetLayouts;
 			Libs::StaticVector< VkPushConstantRange, 4 > m_pushConstantRanges;
 	};
 

@@ -107,7 +107,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::shared_ptr< PipelineLayout >
-	LayoutManager::getPipelineLayout (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags createFlags) noexcept
+	LayoutManager::getPipelineLayout (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags createFlags) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 

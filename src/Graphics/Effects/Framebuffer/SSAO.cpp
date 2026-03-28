@@ -289,7 +289,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(dualLayout);
 
 			m_aoLayout = layoutManager.getPipelineLayout(sets, {
@@ -298,7 +298,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(singleLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
@@ -307,7 +307,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(tripleLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {

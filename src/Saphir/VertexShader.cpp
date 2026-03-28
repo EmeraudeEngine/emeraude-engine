@@ -1443,11 +1443,22 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
-		/* Skeletal skinning: compute skinned position and normal at the top of main().
-		 * Subsequent synthesis methods will use skinnedPosition/skinnedNormal
-		 * instead of the raw vertex attributes. */
+		/* NOTE: This will add some declarations and populate m_vertexAttributes. */
+		if ( !this->generateMainUniqueInstructions(generator, topInstructions, outputInstructions) )
+		{
+			return false;
+		}
+
+		/* Skeletal skinning: compute skinned position/normal/tangent/binormal at the top of main().
+		 * This runs AFTER generateMainUniqueInstructions so m_vertexAttributes is fully populated.
+		 * The code is PREPENDED to topInstructions so it executes before any synthesis code. */
 		if ( m_skinningEnabled )
 		{
+			const bool hasNormal = m_vertexAttributes.contains(Graphics::VertexAttributeType::Normal);
+			const bool hasTangent = m_vertexAttributes.contains(Graphics::VertexAttributeType::Tangent);
+			const bool hasBinormal = m_vertexAttributes.contains(Graphics::VertexAttributeType::Binormal);
+			const bool needsSkinMatrix3 = hasNormal || hasTangent || hasBinormal;
+
 			std::string skinCode =
 				"\t" "/* Skeletal skinning. */" "\n"
 				"\t" "ivec4 boneIdx = ivec4(" + std::string{Keys::Attribute::BoneInfluence} + ");" "\n"
@@ -1455,29 +1466,32 @@ namespace EmEn::Saphir
 				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".y * ubSkinningMatrices.bones[boneIdx.y]" "\n"
 				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".z * ubSkinningMatrices.bones[boneIdx.z]" "\n"
 				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".w * ubSkinningMatrices.bones[boneIdx.w];" "\n"
-				"\t" "mat3 skinMatrix3 = mat3(skinMatrix);" "\n"
-				"\t" "vec3 skinnedPosition = (skinMatrix * vec4(" + std::string{Keys::Attribute::Position} + ", 1.0)).xyz;" "\n"
-				"\t" "vec3 skinnedNormal = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Normal} + ");" "\n";
+				"\t" "vec3 skinnedPosition = (skinMatrix * vec4(" + std::string{Keys::Attribute::Position} + ", 1.0)).xyz;" "\n";
 
-			if ( m_vertexAttributes.contains(Graphics::VertexAttributeType::Tangent) )
+			if ( needsSkinMatrix3 )
+			{
+				skinCode += "\t" "mat3 skinMatrix3 = mat3(skinMatrix);" "\n";
+			}
+
+			if ( hasNormal )
+			{
+				skinCode += "\t" "vec3 skinnedNormal = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Normal} + ");" "\n";
+			}
+
+			if ( hasTangent )
 			{
 				skinCode += "\t" "vec3 skinnedTangent = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Tangent} + ");" "\n";
 			}
 
-			if ( m_vertexAttributes.contains(Graphics::VertexAttributeType::Binormal) )
+			if ( hasBinormal )
 			{
 				skinCode += "\t" "vec3 skinnedBinormal = normalize(skinMatrix3 * " + std::string{Keys::Attribute::Binormal} + ");" "\n";
 			}
 
 			skinCode += "\n";
 
-			topInstructions.append(skinCode);
-		}
-
-		/* NOTE: This will add some declarations. */
-		if ( !this->generateMainUniqueInstructions(generator, topInstructions, outputInstructions) )
-		{
-			return false;
+			/* Prepend: skinning must execute before any other topInstructions. */
+			topInstructions.insert(0, skinCode);
 		}
 
 		/* MDI: Declare the buffer_reference struct for per-draw SSBO access via BDA.

@@ -209,7 +209,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	SceneRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	SceneRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		if ( m_scene != nullptr && setIndexes.isSetEnabled(SetType::PerLight) )
 		{
@@ -322,7 +322,7 @@ namespace EmEn::Saphir::Generator
 			const auto setIndex = program.setIndexes().set(SetType::PerModel);
 
 			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "SkinningMatrices", "ubSkinningMatrices"};
-			ssbo.addArrayMember(Declaration::VariableType::Matrix4, "bones", 0);
+			ssbo.addMember(Declaration::VariableType::Matrix4, "bones[]");
 			vertexShader->declare(ssbo);
 		}
 

@@ -121,7 +121,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	ShadowCasting::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	ShadowCasting::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
 
@@ -270,7 +270,7 @@ namespace EmEn::Saphir::Generator
 			const auto setIndex = program.setIndexes().set(SetType::PerModel);
 
 			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "SkinningMatrices", "ubSkinningMatrices"};
-			ssbo.addArrayMember(Declaration::VariableType::Matrix4, "bones", 0);
+			ssbo.addMember(Declaration::VariableType::Matrix4, "bones[]");
 			vertexShader->declare(ssbo);
 		}
 

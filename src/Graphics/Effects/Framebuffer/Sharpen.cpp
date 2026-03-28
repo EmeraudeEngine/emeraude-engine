@@ -163,7 +163,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Pipeline layout. */
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(descriptorSetLayout);
 
 			/* Push constant range (16 bytes). */

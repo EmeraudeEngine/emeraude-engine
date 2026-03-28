@@ -286,7 +286,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(tripleLayout);
 
 			m_cocLayout = renderer.layoutManager().getPipelineLayout(sets, {
@@ -295,7 +295,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(singleLayout);
 
 			m_blurLayout = renderer.layoutManager().getPipelineLayout(sets, {
@@ -304,7 +304,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(dualLayout);
 
 			m_compositeLayout = renderer.layoutManager().getPipelineLayout(sets, {

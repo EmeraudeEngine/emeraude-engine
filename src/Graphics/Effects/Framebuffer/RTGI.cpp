@@ -568,7 +568,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pipeline layouts ---- */
 		{
 			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
@@ -579,7 +579,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(singleLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
@@ -588,7 +588,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(applyLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {

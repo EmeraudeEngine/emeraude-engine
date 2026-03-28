@@ -83,11 +83,12 @@ Context for developing Emeraude Engine utility libraries.
 - Geometric transformations
 - Normal, tangent, UV calculations
 - **Grid**: Terrain height/normal queries with edge clamping (see below)
-- **Shape**: Core geometry container with `BoundaryLoop` support, `surfaceArea()`, `volume()`, `isSurfaceOpened()`. Optionally carries `Skeleton` and `Skin` from any loader.
+- **Shape**: Core geometry container with `BoundaryLoop` support, `surfaceArea()`, `volume()`, `isSurfaceOpened()`. Does NOT carry skeletal data (moved to `ShapeLoadResult` and `SkeletalDataTrait`).
+- **ShapeLoadResult**: Bundles `Shape` + `optional<Skeleton>` + `optional<Skin>` — returned by all `FileFormatInterface::readStream()` implementations. See `VertexFactory/ShapeLoadResult.hpp`.
 - **ShapeProcessor**: Geometry analysis and modification (vertex dedup, boundary loop detection, ear-clipping sealing)
 - **ShapeSplitter**: Plane-based geometry splitting with optional integrated cap sealing (`sealCut` option)
 - Format handlers: Native (ee3d), OBJ, STL, MDx (MDL/MD2/MD3/MD5)
-- MDx formats are read-only (no write support). MD5 loader builds `Skeleton`, `Skin`, and vertex influences/weights (top-4 by bias with renormalization)
+- MDx formats are read-only (no write support). MD5 loader builds `Skeleton`, `Skin`, and vertex influences/weights (top-4 by bias with renormalization) via `ShapeLoadResult`
 - See: `VertexFactory/FileIO.hpp`, `VertexFactory/StreamIO.hpp`
 
 **WaveFactory/** - Audio manipulation (uses unified ByteStream I/O) - See [`@WaveFactory/AGENTS.md`](WaveFactory/AGENTS.md)

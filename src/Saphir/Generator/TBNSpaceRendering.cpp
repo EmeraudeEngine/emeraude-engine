@@ -84,7 +84,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	TBNSpaceRendering::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & /*descriptorSetLayouts*/, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	TBNSpaceRendering::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & /*descriptorSetLayouts*/, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		Abstract::generatePushConstantRanges(
 			this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(),

@@ -131,7 +131,7 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::createDataLayout (Renderer & renderer) noexcept
 	{
-		StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > descriptorSetLayouts;
+		StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > descriptorSetLayouts;
 		StaticVector< VkPushConstantRange, 4 > pushConstantRanges;
 
 		const auto & setIndexes = m_shaderProgram->setIndexes();

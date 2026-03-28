@@ -82,6 +82,12 @@ namespace EmEn::Scenes::Component
 						m_skeletalAnimator->addClip(clip);
 					}
 
+					/* Auto-play the first available clip. */
+					if ( !skeletalData->animationClips().empty() )
+					{
+						m_skeletalAnimator->play(skeletalData->animationClips()[0]->clip().name());
+					}
+
 					/* Create GPU resources for skinning matrices. */
 					const auto boneCount = static_cast< uint32_t >(skeletalData->skin().jointCount());
 
