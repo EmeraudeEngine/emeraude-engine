@@ -132,6 +132,7 @@ and the AI executes, measures, and iterates at industrial speed.
 |---|---|---|---|
 | **Framework** | Core / Tracer | [`src/AGENTS.md`](src/AGENTS.md) | App lifecycle, Logging. |
 | | Libs (Math/Utils) | [`src/Libs/AGENTS.md`](src/Libs/AGENTS.md) | Foundational types. |
+| | Libs/Animation | [`src/Libs/AGENTS.md`](src/Libs/AGENTS.md) | Skeletal data types (Joint, Skeleton, AnimationClip, Skin). |
 | | Platform | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) | OS implementations. |
 | | Testing | [`src/Testing/AGENTS.md`](src/Testing/AGENTS.md) | Unit tests. |
 | **Graphics** | **Graphics Layer** | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) | **Start Here**. High-level. |
@@ -142,7 +143,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) | Keyboard/Mouse/Pad. |
 | **Data** | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) | Async loading. |
 | | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) | Scene graph. |
-| | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. |
+| | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. Data types in `Libs/Animation/`, runtime eval here. |
 | **Tools/UI** | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) | UI & Debug. |
 | | Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) | Runtime control (TCP + in-game). |
 | | AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) | Virtual devices. |

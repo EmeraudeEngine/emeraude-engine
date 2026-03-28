@@ -47,11 +47,20 @@ Context for developing Emeraude Engine utility libraries.
 - File/folder manipulation
 - See: `IO/ByteStream.hpp`, `IO/FileStream.hpp`, `IO/MemoryStream.hpp`
 
+**Animation/** - Skeletal animation data types (header-only)
+- **Joint**: Joint struct (name, parentIndex, localT/R/S, inverseBindMatrix). Namespace: `EmEn::Libs::Animation`
+- **Skeleton**: Ordered joint collection with name lookup and hierarchy validation (topological ordering)
+- **AnimationChannel**: Per-joint keyframes (`VectorKeyFrame` for T/S, `QuaternionKeyFrame` for R), 3 interpolation modes (Step, Linear, CubicSpline), `ChannelTarget` enum
+- **AnimationClip**: Named collection of channels, duration auto-computed, skeleton-independent (joints referenced by index)
+- **Skin**: Mesh-to-skeleton binding (joint index remapping, inverse bind matrices, GLTF JOINTS_0 indirection)
+- Pure data types — no runtime playback. Consumed by `src/Animations/` for runtime evaluation and by loaders (GLTF, MD5)
+
 **Math/** - Complete 2D/3D math library
 - **Vector**: 2D/3D/4D vectors
 - **Matrix**: Transformation matrices
-- **Quaternion**: 3D rotations
-- **CartesianFrame**: Coordinate system (position + orthonormal basis)
+- **Quaternion**: 3D rotations (includes `toRotationMatrix4()` for standard column-major output)
+- **CartesianFrame**: Coordinate system (position + orthonormal basis), `fromQuaternion()` factory, `toQuaternion()` extractor
+- **TransformUtils**: `TRSDecomposition<T>`, `decomposeTRS(Matrix4)`, `composeTRS(T,R,S)` — roundtrip-safe TRS matrix decomposition
 - **Primitives**: Point, Line, Segment, Sphere, Capsule, Triangle, AACuboid
 - **Collision/Intersection**: Geometric detection between primitives
 - **Bezier curves**: Smooth interpolation
@@ -74,11 +83,11 @@ Context for developing Emeraude Engine utility libraries.
 - Geometric transformations
 - Normal, tangent, UV calculations
 - **Grid**: Terrain height/normal queries with edge clamping (see below)
-- **Shape**: Core geometry container with `BoundaryLoop` support, `surfaceArea()`, `volume()`, `isSurfaceOpened()`
+- **Shape**: Core geometry container with `BoundaryLoop` support, `surfaceArea()`, `volume()`, `isSurfaceOpened()`. Optionally carries `Skeleton` and `Skin` from any loader.
 - **ShapeProcessor**: Geometry analysis and modification (vertex dedup, boundary loop detection, ear-clipping sealing)
 - **ShapeSplitter**: Plane-based geometry splitting with optional integrated cap sealing (`sealCut` option)
 - Format handlers: Native (ee3d), OBJ, STL, MDx (MDL/MD2/MD3/MD5)
-- MDx formats are read-only (no write support)
+- MDx formats are read-only (no write support). MD5 loader builds `Skeleton`, `Skin`, and vertex influences/weights (top-4 by bias with renormalization)
 - See: `VertexFactory/FileIO.hpp`, `VertexFactory/StreamIO.hpp`
 
 **WaveFactory/** - Audio manipulation (uses unified ByteStream I/O) - See [`@WaveFactory/AGENTS.md`](WaveFactory/AGENTS.md)
@@ -129,11 +138,19 @@ ctest -R Libs
 
 ## Important Files
 
+### Animation (skeletal data types)
+- `Animation/Joint.hpp` - Joint struct (name, parentIndex, T/R/S, inverseBindMatrix)
+- `Animation/Skeleton.hpp` - Ordered joint collection, name lookup, hierarchy validation
+- `Animation/AnimationChannel.hpp` - Per-joint keyframes, 3 interpolation modes, ChannelTarget enum
+- `Animation/AnimationClip.hpp` - Named channel collection, auto-computed duration
+- `Animation/Skin.hpp` - Mesh-to-skeleton binding, joint remapping, inverse bind matrices
+
 ### Math (critical)
 - `Vector.hpp` - 2D/3D/4D vectors
 - `Matrix.hpp` - Transformation matrices
-- `Quaternion.hpp` - 3D rotations
-- `CartesianFrame.hpp` - Coordinate system with orthonormal basis
+- `Quaternion.hpp` - 3D rotations (`toRotationMatrix4()` for standard column-major 4x4)
+- `CartesianFrame.hpp` - Coordinate system with orthonormal basis (`fromQuaternion()`, `toQuaternion()`)
+- `TransformUtils.hpp` - TRS decomposition/composition (`decomposeTRS()`, `composeTRS()`)
 - `Bezier.hpp` - Bezier curves
 
 ### Math/Space3D Primitives
@@ -195,6 +212,14 @@ float distance = (listenerPos - soundPos).length();
 
 // Entire engine unified via Libs/Math
 ```
+
+### Quaternion Rotation Matrix Conventions (CRITICAL)
+
+Two coexisting conventions in `Quaternion.hpp`:
+- **`rotationMatrix()`** — Stores row-major rotation data in column-major array (effectively R^T). Used by legacy code.
+- **`toRotationMatrix4()`** — Standard column-major 4x4 rotation matrix. Compatible with `Quaternion(Matrix4)` constructor and `CartesianFrame::getModelMatrix()`.
+
+When doing Quaternion ↔ Matrix4 roundtrips, always use `toRotationMatrix4()` + `Quaternion(Matrix4)`. Using `rotationMatrix()` in a roundtrip will produce the transposed rotation.
 
 ### Observer/Observable Pattern
 ```cpp
@@ -760,7 +785,8 @@ CPU-based volumetric cross-section scanner in `Libs/VertexFactory/XRayAnalyzer.h
 ## Detailed Documentation
 
 Libs is referenced by all systems:
-- @src/Scenes/AGENTS.md - Uses CartesianFrame
+- @src/Scenes/AGENTS.md - Uses CartesianFrame, GLTF loader uses Animation types
 - @src/Physics/AGENTS.md - Uses Vector, Matrix, collision detection
 - @src/Graphics/AGENTS.md - Uses Math for transformations
 - @src/Audio/AGENTS.md - Uses Math for 3D positioning, WaveFactory for sound processing
+- @src/Animations/AGENTS.md - Consumes Libs/Animation data types for runtime evaluation

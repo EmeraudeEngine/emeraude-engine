@@ -123,22 +123,26 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Constructs a cartesian frame from a position, a rotation quaternion and an optional scale.
+			 * @brief Creates a cartesian frame from a position, a rotation quaternion and an optional scale.
+			 * @note Static factory method to avoid constructor ambiguity with CartesianFrame(pos, downward, backward).
 			 * @param position A reference to a vector for position.
 			 * @param rotation A reference to a quaternion for rotation.
 			 * @param scale A reference to a vector for scaling. Default, no scale.
+			 * @return CartesianFrame
 			 */
-			CartesianFrame (const Vector< 3, precision_t > & position, const Quaternion< precision_t > & rotation, const Vector< 3, precision_t > & scale = {1, 1, 1}) noexcept
-				: m_position(position),
-				  m_scaling(scale)
+			[[nodiscard]]
+			static
+			CartesianFrame
+			fromQuaternion (const Vector< 3, precision_t > & position, const Quaternion< precision_t > & rotation, const Vector< 3, precision_t > & scale = {1, 1, 1}) noexcept
 			{
 				const auto rotMatrix = rotation.toRotationMatrix4();
 
-				/* Column 1 of the column-major rotation matrix is the Y axis (downward). */
-				m_downward = {rotMatrix[M4x4Col1Row0], rotMatrix[M4x4Col1Row1], rotMatrix[M4x4Col1Row2]};
-
-				/* Column 2 of the column-major rotation matrix is the Z axis (backward). */
-				m_backward = {rotMatrix[M4x4Col2Row0], rotMatrix[M4x4Col2Row1], rotMatrix[M4x4Col2Row2]};
+				return {
+					position,
+					Vector< 3, precision_t >{rotMatrix[M4x4Col1Row0], rotMatrix[M4x4Col1Row1], rotMatrix[M4x4Col1Row2]},
+					Vector< 3, precision_t >{rotMatrix[M4x4Col2Row0], rotMatrix[M4x4Col2Row1], rotMatrix[M4x4Col2Row2]},
+					scale
+				};
 			}
 
 			/**

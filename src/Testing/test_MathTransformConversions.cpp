@@ -214,7 +214,7 @@ TYPED_TEST(MathTransformConversions, QuatToMat4ToQuat_NegatedQuaternion)
 
 TYPED_TEST(MathTransformConversions, ToRotationMatrix4_MatchesCartesianFrame)
 {
-	/* toRotationMatrix4() must produce the same matrix as CartesianFrame(pos, quat).getRotationMatrix4(). */
+	/* toRotationMatrix4() must produce the same matrix as CartesianFrame::fromQuaternion(pos, quat).getRotationMatrix4(). */
 	constexpr auto Angle = std::numbers::pi_v< TypeParam > / 3;
 	auto axis = Vector< 3, TypeParam >{1, 2, 3}.normalize();
 
@@ -222,7 +222,7 @@ TYPED_TEST(MathTransformConversions, ToRotationMatrix4_MatchesCartesianFrame)
 	quat.fromAngleAxis(Angle, axis);
 
 	const auto mat4 = quat.toRotationMatrix4();
-	const CartesianFrame< TypeParam > frame{{0, 0, 0}, quat};
+	const auto frame = CartesianFrame< TypeParam >::fromQuaternion({0, 0, 0}, quat);
 	const auto frameRot = frame.getRotationMatrix4();
 
 	constexpr auto eps = testEpsilon< TypeParam >();
@@ -251,7 +251,7 @@ TYPED_TEST(MathTransformConversions, CartesianFrameToQuatToFrame_Identity)
 {
 	const CartesianFrame< TypeParam > original{};
 	const auto quat = original.toQuaternion();
-	const CartesianFrame< TypeParam > restored{{0, 0, 0}, quat};
+	const auto restored = CartesianFrame< TypeParam >::fromQuaternion({0, 0, 0}, quat);
 
 	constexpr auto eps = testEpsilon< TypeParam >();
 
@@ -267,7 +267,7 @@ TYPED_TEST(MathTransformConversions, CartesianFrameToQuatToFrame_Rotated)
 	original.rotate(std::numbers::pi_v< TypeParam > / 3, Vector< 3, TypeParam >{1, 0, 0}, false);
 
 	const auto quat = original.toQuaternion();
-	const CartesianFrame< TypeParam > restored{original.position(), quat, original.scalingFactor()};
+	const auto restored = CartesianFrame< TypeParam >::fromQuaternion(original.position(), quat, original.scalingFactor());
 
 	constexpr auto eps = testEpsilon< TypeParam >();
 
@@ -284,10 +284,10 @@ TYPED_TEST(MathTransformConversions, CartesianFrameToQuatToFrame_WithPositionAnd
 	Quaternion< TypeParam > rot;
 	rot.fromAngleAxis(static_cast< TypeParam >(0.7), Vector< 3, TypeParam >{0, 1, 0});
 
-	const CartesianFrame< TypeParam > original{pos, rot, scale};
+	const auto original = CartesianFrame< TypeParam >::fromQuaternion(pos, rot, scale);
 
 	const auto quat = original.toQuaternion();
-	const CartesianFrame< TypeParam > restored{pos, quat, scale};
+	const auto restored = CartesianFrame< TypeParam >::fromQuaternion(pos, quat, scale);
 
 	constexpr auto eps = testEpsilon< TypeParam >();
 
@@ -305,7 +305,7 @@ TYPED_TEST(MathTransformConversions, QuatToCartesianFrameToQuat)
 	Quaternion< TypeParam > original;
 	original.fromAngleAxis(Angle, axis);
 
-	const CartesianFrame< TypeParam > frame{{0, 0, 0}, original};
+	const auto frame = CartesianFrame< TypeParam >::fromQuaternion({0, 0, 0}, original);
 	const auto restored = frame.toQuaternion();
 
 	assertQuaternionEquivalent(original, restored);
@@ -468,7 +468,7 @@ TYPED_TEST(MathTransformConversions, ComposeTRSMatchesCartesianFrameModelMatrix)
 	rotation.fromAngleAxis(static_cast< TypeParam >(0.9), Vector< 3, TypeParam >{0, 0, 1});
 
 	/* Build via CartesianFrame. */
-	const CartesianFrame< TypeParam > frame{pos, rotation, scale};
+	const auto frame = CartesianFrame< TypeParam >::fromQuaternion(pos, rotation, scale);
 	const auto frameMatrix = frame.getModelMatrix();
 
 	/* Build via composeTRS. */
@@ -485,7 +485,7 @@ TYPED_TEST(MathTransformConversions, ComposeTRSMatchesCartesianFrame_ArbitraryRo
 	Quaternion< TypeParam > rotation;
 	rotation.fromAngleAxis(static_cast< TypeParam >(1.7), Vector< 3, TypeParam >{1, 1, 1}.normalize());
 
-	const CartesianFrame< TypeParam > frame{pos, rotation, scale};
+	const auto frame = CartesianFrame< TypeParam >::fromQuaternion(pos, rotation, scale);
 	const auto frameMatrix = frame.getModelMatrix();
 	const auto composedMatrix = composeTRS(pos, rotation, scale);
 
