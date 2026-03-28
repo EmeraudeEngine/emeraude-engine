@@ -31,6 +31,8 @@
 #include "Animations/AnimationClipResource.hpp"
 #include "Constants.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Saphir/Generator/SkinningLayoutHelper.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Scenes::Component
@@ -58,6 +60,12 @@ namespace EmEn::Scenes::Component
 		if ( m_skeletalAnimator != nullptr )
 		{
 			m_skeletalAnimator->update(EngineUpdateCycleDurationS< float >);
+
+			/* Upload skinning matrices to GPU. */
+			if ( m_skeletalAnimator->hasPose() && m_renderableInstance->hasSkinningResources() )
+			{
+				m_renderableInstance->updateSkinningMatrices(m_skeletalAnimator->skinningMatrices());
+			}
 		}
 		else if ( !m_renderableInterface.expired() )
 		{
@@ -72,6 +80,17 @@ namespace EmEn::Scenes::Component
 					for ( const auto & clip : skeletalData->animationClips() )
 					{
 						m_skeletalAnimator->addClip(clip);
+					}
+
+					/* Create GPU resources for skinning matrices. */
+					const auto boneCount = static_cast< uint32_t >(skeletalData->skin().jointCount());
+
+					if ( boneCount > 0 )
+					{
+						auto & renderer = skeletalData->skeletonResource()->serviceProvider().graphicsRenderer();
+						auto descriptorSetLayout = Saphir::Generator::getSkinningDescriptorSetLayout(renderer.layoutManager());
+
+						m_renderableInstance->createSkinningResources(renderer.device(), descriptorSetLayout, boneCount);
 					}
 				}
 			}

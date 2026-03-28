@@ -56,6 +56,91 @@ namespace EmEn::Graphics::RenderableInstance
 
 	constexpr auto TracerTag{"RenderableInstance"};
 
+	bool
+	Abstract::createSkinningResources (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Vulkan::DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept
+	{
+		if ( boneCount == 0 || device == nullptr || descriptorSetLayout == nullptr )
+		{
+			return false;
+		}
+
+		const auto bufferSize = static_cast< VkDeviceSize >(boneCount * 16 * sizeof(float));
+
+		/* Create the SSBO (host-visible for CPU write each frame). */
+		m_skinningSSBO = std::make_unique< Vulkan::ShaderStorageBufferObject >(device, bufferSize, true);
+		m_skinningSSBO->setIdentifier(TracerTag, "SkinningMatrices", "SSBO");
+
+		if ( !m_skinningSSBO->createOnHardware() )
+		{
+			Tracer::error(TracerTag, "Unable to create skinning SSBO !");
+
+			m_skinningSSBO.reset();
+
+			return false;
+		}
+
+		/* Create descriptor pool (1 SSBO descriptor, 1 set). */
+		m_skinningDescriptorPool = std::make_shared< Vulkan::DescriptorPool >(
+			device,
+			std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}},
+			1
+		);
+
+		if ( !m_skinningDescriptorPool->createOnHardware() )
+		{
+			Tracer::error(TracerTag, "Unable to create skinning descriptor pool !");
+
+			m_skinningSSBO.reset();
+			m_skinningDescriptorPool.reset();
+
+			return false;
+		}
+
+		/* Allocate descriptor set. */
+		m_skinningDescriptorSet = std::make_unique< Vulkan::DescriptorSet >(m_skinningDescriptorPool, descriptorSetLayout);
+
+		if ( !m_skinningDescriptorSet->create() )
+		{
+			Tracer::error(TracerTag, "Unable to allocate skinning descriptor set !");
+
+			m_skinningSSBO.reset();
+			m_skinningDescriptorPool.reset();
+			m_skinningDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Write descriptor: bind the SSBO to binding 0. */
+		const VkDescriptorBufferInfo bufferInfo{
+			.buffer = m_skinningSSBO->handle(),
+			.offset = 0,
+			.range = VK_WHOLE_SIZE
+		};
+
+		if ( !m_skinningDescriptorSet->writeStorageBuffer(0, bufferInfo) )
+		{
+			Tracer::error(TracerTag, "Unable to write skinning descriptor set !");
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Abstract::updateSkinningMatrices (const std::vector< Libs::Math::Matrix< 4, float > > & matrices) noexcept
+	{
+		if ( m_skinningSSBO == nullptr || matrices.empty() )
+		{
+			return false;
+		}
+
+		return m_skinningSSBO->writeData(Vulkan::MemoryRegion{
+			matrices.data(),
+			matrices.size() * sizeof(Libs::Math::Matrix< 4, float >)
+		});
+	}
+
 	Renderable::ProgramCacheKey
 	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex, bool isMDIEnabled) const noexcept
 	{
@@ -537,6 +622,12 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 		}
 
+		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
+		if ( this->hasSkinningResources() )
+		{
+			commandBuffer.bind(*m_skinningDescriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+		}
+
 		/* Bind material descriptor set for alpha-tested shadows. */
 		const auto * material = m_renderable->material(layerIndex);
 
@@ -653,6 +744,12 @@ namespace EmEn::Graphics::RenderableInstance
 			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
 
 			commandBuffer.bind(*lightEmitter->descriptorSet(useShadowMap), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++, lightEmitter->UBOOffset());
+		}
+
+		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
+		if ( this->hasSkinningResources() )
+		{
+			commandBuffer.bind(*m_skinningDescriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 		}
 
 		/* Bind material UBO and samplers. */
@@ -831,6 +928,12 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			setOffset++;
+		}
+
+		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
+		if ( this->hasSkinningResources() )
+		{
+			commandBuffer.bind(*m_skinningDescriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 		}
 
 		/* Bind material UBO and samplers (skip if already bound). */

@@ -41,9 +41,13 @@
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Types.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
+#include "Libs/Math/Matrix.hpp"
 #include "RenderContext.hpp"
 #include "RenderStateTracker.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
+#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -492,6 +496,44 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Creates GPU resources for skeletal skinning (SSBO, descriptor pool, descriptor set).
+			 * @param device A reference to the Vulkan device.
+			 * @param descriptorSetLayout The descriptor set layout (must match the pipeline layout).
+			 * @param boneCount The number of bone matrices.
+			 * @return bool
+			 */
+			bool createSkinningResources (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Vulkan::DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept;
+
+			/**
+			 * @brief Uploads skinning matrices to the SSBO.
+			 * @param matrices The skinning matrices to upload.
+			 * @return bool
+			 */
+			bool updateSkinningMatrices (const std::vector< Libs::Math::Matrix< 4, float > > & matrices) noexcept;
+
+			/**
+			 * @brief Returns whether skinning GPU resources are available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasSkinningResources () const noexcept
+			{
+				return m_skinningDescriptorSet != nullptr;
+			}
+
+			/**
+			 * @brief Returns the skinning descriptor set for binding during rendering.
+			 * @return const Vulkan::DescriptorSet *
+			 */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet *
+			skinningDescriptorSet () const noexcept
+			{
+				return m_skinningDescriptorSet.get();
+			}
+
+			/**
 			 * @brief Prepares the renderable instance for shadow casting.
 			 *
 			 * Generates shadow casting shader programs for each material layer.
@@ -877,5 +919,9 @@ namespace EmEn::Graphics::RenderableInstance
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Libs::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_frameIndex{0};
+			/* Skeletal skinning GPU resources (per-instance). */
+			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;
+			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
+			std::unique_ptr< Vulkan::DescriptorSet > m_skinningDescriptorSet;
 	};
 }
