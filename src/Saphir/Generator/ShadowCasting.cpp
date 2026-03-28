@@ -27,7 +27,9 @@
 #include "ShadowCasting.hpp"
 
 /* Local inclusions. */
+#include "SkinningLayoutHelper.hpp"
 #include "Graphics/Material/Interface.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Libs/Hash/FNV1a.hpp"
 #include "Vulkan/Framebuffer.hpp"
@@ -64,6 +66,12 @@ namespace EmEn::Saphir::Generator
 		if ( this->isFlagEnabled(IsInstancingEnabled) || this->renderTarget()->isCubemap() || this->renderTarget()->isCascadedShadowMap() )
 		{
 			setIndexes.enableSet(SetType::PerView);
+		}
+
+		/* Enable the bone matrix SSBO set for skeletal meshes. */
+		if ( this->isSkeletalAnimationEnabled() )
+		{
+			setIndexes.enableSet(SetType::PerModel);
 		}
 
 		/* Enable the material set for alpha-tested shadows. */
@@ -113,7 +121,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	ShadowCasting::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	ShadowCasting::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
 
@@ -122,6 +130,21 @@ namespace EmEn::Saphir::Generator
 		if ( this->renderTarget()->isCubemap() || needsAlphaTest )
 		{
 			Abstract::generatePushConstantRanges(this->shaderProgram()->fragmentShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_FRAGMENT_BIT);
+		}
+
+		/* Add the skinning SSBO descriptor set layout for skeletal meshes. */
+		if ( setIndexes.isSetEnabled(SetType::PerModel) )
+		{
+			auto descriptorSetLayout = getSkinningDescriptorSetLayout(renderer.layoutManager());
+
+			if ( descriptorSetLayout == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to get the skinning SSBO descriptor set layout !");
+
+				return false;
+			}
+
+			descriptorSetLayouts.emplace_back(descriptorSetLayout);
 		}
 
 		/* Add the material descriptor set layout for alpha-tested shadows. */

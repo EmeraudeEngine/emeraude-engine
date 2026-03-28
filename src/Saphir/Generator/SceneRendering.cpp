@@ -38,6 +38,9 @@
 #include "Scenes/Scene.hpp"
 #include "Saphir/Code.hpp"
 
+/* Local inclusions. */
+#include "SkinningLayoutHelper.hpp"
+
 namespace EmEn::Saphir::Generator
 {
 	using namespace Libs;
@@ -74,6 +77,11 @@ namespace EmEn::Saphir::Generator
 				default:
 					break;
 			}
+		}
+
+		if ( this->isSkeletalAnimationEnabled() )
+		{
+			setIndexes.enableSet(SetType::PerModel);
 		}
 
 		if ( this->materialEnabled() )
@@ -213,6 +221,21 @@ namespace EmEn::Saphir::Generator
 			if ( descriptorSetLayout == nullptr )
 			{
 				Tracer::error(ClassId, "Unable to get the light descriptor set layout !");
+
+				return false;
+			}
+
+			descriptorSetLayouts.emplace_back(descriptorSetLayout);
+		}
+
+		/* Prepare the descriptor set layout for skeletal animation bone matrices. */
+		if ( setIndexes.isSetEnabled(SetType::PerModel) )
+		{
+			auto descriptorSetLayout = getSkinningDescriptorSetLayout(renderer.layoutManager());
+
+			if ( descriptorSetLayout == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to get the skinning SSBO descriptor set layout !");
 
 				return false;
 			}
