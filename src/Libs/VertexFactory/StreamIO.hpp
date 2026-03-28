@@ -36,16 +36,16 @@
 /* Local inclusions for usages. */
 #include "Libs/IO/MemoryStream.hpp"
 #include "FileFormatNative.hpp"
-#include "Shape.hpp"
+#include "ShapeLoadResult.hpp"
 
 namespace EmEn::Libs::VertexFactory::StreamIO
 {
 	/**
-	 * @brief Decodes geometry data from a memory buffer into a shape.
+	 * @brief Decodes geometry data from a memory buffer into a load result.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
 	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param data A reference to the source byte vector.
-	 * @param shape A writable reference to the destination shape.
+	 * @param result A writable reference to the destination load result.
 	 * @param readOptions A reference to read options. Defaults.
 	 * @return bool
 	 * @note Only supports the native (ee3d) format for stream-based reading.
@@ -53,7 +53,7 @@ namespace EmEn::Libs::VertexFactory::StreamIO
 	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	read (const std::vector< std::byte > & data, Shape< vertex_data_t, index_data_t > & shape, const ReadOptions & readOptions = {})
+	read (const std::vector< std::byte > & data, ShapeLoadResult< vertex_data_t, index_data_t > & result, const ReadOptions & readOptions = {})
 		requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( data.empty() )
@@ -67,7 +67,7 @@ namespace EmEn::Libs::VertexFactory::StreamIO
 
 		FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
-		return fileFormat.readStream(stream, shape, readOptions);
+		return fileFormat.readStream(stream, result, readOptions);
 	}
 
 	/**

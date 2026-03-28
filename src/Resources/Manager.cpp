@@ -61,6 +61,8 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Animations/SkeletonResource.hpp"
+#include "Animations/AnimationClipResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
@@ -517,6 +519,8 @@ namespace EmEn::Resources
 				}
 			}
 
+			m_containers.emplace(typeid(Animations::SkeletonResource), std::make_unique< Skeletons >("Skeleton manager", m_primaryServices, *this, this->getLocalStore("Animations")));
+			m_containers.emplace(typeid(Animations::AnimationClipResource), std::make_unique< AnimationClips >("Animation clip manager", m_primaryServices, *this, this->getLocalStore("Animations")));
 			m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >("Sound manager", m_primaryServices, *this, this->getLocalStore("Sounds")));
 			m_containers.emplace(typeid(Audio::MusicResource), std::make_unique< Musics >("Music manager", m_primaryServices, *this, this->getLocalStore("Musics")));
 			m_containers.emplace(typeid(Audio::SoundfontResource), std::make_unique< Soundfonts >("Soundfont manager", m_primaryServices, *this, this->getLocalStore("SoundBanks")));

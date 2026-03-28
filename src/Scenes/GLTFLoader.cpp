@@ -43,9 +43,12 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Animations/SkeletonResource.hpp"
+#include "Animations/AnimationClipResource.hpp"
 #include "Libs/Animation/Joint.hpp"
 #include "Libs/Animation/Skeleton.hpp"
 #include "Libs/Animation/Skin.hpp"
@@ -180,6 +183,27 @@ namespace EmEn::Scenes
 			TraceInfo{ClassId} << "Phase 5: Loading " << asset.animations.size() << " animations...";
 
 			this->loadAnimations(asset);
+		}
+
+		/* Attach skeletal data to renderables that have associated skins. */
+		for ( const auto & [meshIdx, skinIdx] : m_meshToSkinIndex )
+		{
+			if ( meshIdx >= m_meshes.size() || m_meshes[meshIdx] == nullptr )
+			{
+				continue;
+			}
+
+			if ( skinIdx >= m_skeletons.size() )
+			{
+				continue;
+			}
+
+			if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(m_meshes[meshIdx].get()) )
+			{
+				skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
+
+				TraceInfo{ClassId} << "Attached skeletal data to mesh " << meshIdx << ".";
+			}
 		}
 
 		TraceInfo{ClassId} << "Phase 6: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
@@ -1095,20 +1119,30 @@ namespace EmEn::Scenes
 
 			Skin< float > skin{std::move(skinJointIndices), std::move(inverseBindMatrices)};
 
-			/* Attach skeleton and skin to all meshes that reference this skin. */
+			/* Register the skeleton as a managed resource. */
+			const auto skinName = glTFSkin.name.empty()
+				? "skin_" + std::to_string(skinIndex)
+				: std::string{glTFSkin.name};
+
+			auto skeletonResource = m_resources.container< Animations::SkeletonResource >()
+				->getOrCreateResourceSync(
+					m_resourcePrefix + "/skeleton/" + skinName,
+					[&skeleton] (auto & resource) {
+						return resource.load(std::move(skeleton));
+					}
+				);
+
+			m_skeletons.push_back(std::move(skeletonResource));
+			m_skins.push_back(std::move(skin));
+
+			/* Record which meshes reference this skin for later association with renderables. */
 			for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
 			{
 				const auto & node = asset.nodes[nodeIdx];
 
 				if ( node.skinIndex.has_value() && node.skinIndex.value() == skinIndex && node.meshIndex.has_value() )
 				{
-					const auto meshIdx = node.meshIndex.value();
-
-					if ( meshIdx < m_shapes.size() && m_shapes[meshIdx] != nullptr )
-					{
-						m_shapes[meshIdx]->setSkeleton(skeleton);
-						m_shapes[meshIdx]->setSkin(skin);
-					}
+					m_meshToSkinIndex[node.meshIndex.value()] = skinIndex;
 				}
 			}
 		}
@@ -1266,7 +1300,21 @@ namespace EmEn::Scenes
 
 			if ( !channels.empty() )
 			{
-				m_animationClips.emplace_back(std::string{glTFAnim.name}, std::move(channels));
+				AnimationClip< float > clip{std::string{glTFAnim.name}, std::move(channels)};
+
+				const auto clipName = glTFAnim.name.empty()
+					? "clip_" + std::to_string(m_animationClips.size())
+					: std::string{glTFAnim.name};
+
+				auto clipResource = m_resources.container< Animations::AnimationClipResource >()
+					->getOrCreateResourceSync(
+						m_resourcePrefix + "/animation/" + clipName,
+						[&clip] (auto & resource) {
+							return resource.load(std::move(clip));
+						}
+					);
+
+				m_animationClips.push_back(std::move(clipResource));
 			}
 		}
 

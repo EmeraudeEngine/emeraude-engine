@@ -41,18 +41,18 @@
 namespace EmEn::Libs::VertexFactory::FileIO
 {
 	/**
-	 * @brief Reads a file into a shape structure.
+	 * @brief Reads a file into a shape load result structure.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
 	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param filepath A reference to a filesystem path.
-	 * @param shape A writable reference to a shape.
+	 * @param result A writable reference to a shape load result.
 	 * @param readOptions A reference to read options structure. Defaults.
 	 * @return bool
 	 */
 	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	read (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & shape, const ReadOptions & readOptions = {})
+	read (const std::filesystem::path & filepath, ShapeLoadResult< vertex_data_t, index_data_t > & result, const ReadOptions & readOptions = {})
 		requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( !IO::fileExists(filepath) )
@@ -77,28 +77,28 @@ namespace EmEn::Libs::VertexFactory::FileIO
 		{
 			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readStream(stream, shape, readOptions);
+			return fileFormat.readStream(stream, result, readOptions);
 		}
 
 		if ( extension == "obj" )
 		{
 			FileFormatOBJ< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readStream(stream, shape, readOptions);
+			return fileFormat.readStream(stream, result, readOptions);
 		}
 
 		if ( extension == "stl" )
 		{
 			FileFormatSTL< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readStream(stream, shape, readOptions);
+			return fileFormat.readStream(stream, result, readOptions);
 		}
 
 		if ( extension == "mdl" || extension == "md2" || extension == "md3" || extension == "md5mesh" )
 		{
 			FileFormatMDx< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readStream(stream, shape, readOptions);
+			return fileFormat.readStream(stream, result, readOptions);
 		}
 
 		std::cerr << "[VertexFactory::FileIO] read(), the file '" << filepath << "' format is not handled !\n";

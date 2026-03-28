@@ -27,6 +27,10 @@
 #include "Visual.hpp"
 
 /* Local inclusions. */
+#include "Animations/SkeletonResource.hpp"
+#include "Animations/AnimationClipResource.hpp"
+#include "Constants.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Scenes::Component
@@ -48,6 +52,29 @@ namespace EmEn::Scenes::Component
 		if ( m_renderableInstance->isAnimated() )
 		{
 			m_renderableInstance->updateFrameIndex(scene.lifetimeMS() - this->parentEntity().birthTime());
+		}
+
+		/* Skeletal animation: lazily initialize from renderable, then update each frame. */
+		if ( m_skeletalAnimator != nullptr )
+		{
+			m_skeletalAnimator->update(EngineUpdateCycleDurationS< float >);
+		}
+		else if ( !m_renderableInterface.expired() )
+		{
+			if ( const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderableInterface.lock().get()) )
+			{
+				if ( skeletalData->hasSkeletalData() )
+				{
+					m_skeletalAnimator = std::make_unique< SkeletalAnimator >();
+					m_skeletalAnimator->setSkeleton(skeletalData->skeletonResource());
+					m_skeletalAnimator->setSkin(skeletalData->skin());
+
+					for ( const auto & clip : skeletalData->animationClips() )
+					{
+						m_skeletalAnimator->addClip(clip);
+					}
+				}
+			}
 		}
 
 		this->updateAnimations(scene.cycle());

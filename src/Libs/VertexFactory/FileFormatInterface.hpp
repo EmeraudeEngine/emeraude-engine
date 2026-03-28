@@ -34,7 +34,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/IO/ByteStream.hpp"
-#include "Shape.hpp"
+#include "ShapeLoadResult.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {
@@ -79,13 +79,13 @@ namespace EmEn::Libs::VertexFactory
 			virtual ~FileFormatInterface () = default;
 
 			/**
-			 * @brief Reads geometry data from a byte stream into a shape.
+			 * @brief Reads geometry data from a byte stream into a load result.
 			 * @param stream A reference to the input byte stream.
-			 * @param geometry A reference to the destination shape.
+			 * @param result A reference to the destination load result.
 			 * @param readOptions A reference to read options.
 			 * @return bool
 			 */
-			virtual bool readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept = 0;
+			virtual bool readStream (IO::ByteStream & stream, ShapeLoadResult< vertex_data_t, index_data_t > & result, const ReadOptions & readOptions) noexcept = 0;
 
 			/**
 			 * @brief Writes geometry data from a shape into a byte stream.

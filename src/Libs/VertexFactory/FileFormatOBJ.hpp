@@ -122,8 +122,10 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept override
+			readStream (IO::ByteStream & stream, ShapeLoadResult< vertex_data_t, index_data_t > & result, const ReadOptions & readOptions) noexcept override
 			{
+				auto & geometry = result.shape;
+
 				if ( !stream.isOpen() )
 				{
 					std::cerr << "[VertexFactory::FileFormatOBJ] readStream(), stream is not open !\n";

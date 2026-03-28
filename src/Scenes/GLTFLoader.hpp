@@ -31,11 +31,12 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Animation/AnimationClip.hpp"
+#include "Libs/Animation/Skin.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Resources/Manager.hpp"
 
@@ -46,6 +47,12 @@
 namespace fastgltf
 {
 	class Asset;
+}
+
+namespace EmEn::Animations
+{
+	class SkeletonResource;
+	class AnimationClipResource;
 }
 
 namespace EmEn::Graphics
@@ -139,7 +146,11 @@ namespace EmEn::Scenes
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
 			std::vector< std::shared_ptr< Libs::VertexFactory::Shape< float > > > m_shapes;
-			std::vector< Libs::Animation::AnimationClip< float > > m_animationClips;
+			/* Skeletal animation data — indexed by glTF skin index. */
+			std::vector< std::shared_ptr< Animations::SkeletonResource > > m_skeletons;
+			std::vector< Libs::Animation::Skin< float > > m_skins;
+			std::unordered_map< size_t, size_t > m_meshToSkinIndex;
+			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
 			bool m_useStaticEntities{true};
 	};
 }

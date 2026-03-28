@@ -202,12 +202,19 @@ namespace EmEn::Graphics::Geometry
 		options.requestTextureCoordinates = this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates);
 		options.requestVertexColor = this->isFlagEnabled(EnableVertexColor);
 
-		if ( !VertexFactory::FileIO::read(filepath, m_localData, options) )
+		VertexFactory::ShapeLoadResult< float > loadResult;
+
+		if ( !VertexFactory::FileIO::read(filepath, loadResult, options) )
 		{
 			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
 
 			return this->setLoadSuccess(false);
 		}
+
+		m_localData = std::move(loadResult.shape);
+
+		/* NOTE: Skeletal data (loadResult.skeleton, loadResult.skin) is available here
+		 * but will be propagated to the Renderable level in a subsequent step. */
 
 		return this->setLoadSuccess(true);
 	}

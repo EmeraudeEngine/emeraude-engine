@@ -69,7 +69,7 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
+			readStream (IO::ByteStream & stream, ShapeLoadResult< vertex_data_t, index_data_t > & result, const ReadOptions & /*readOptions*/) noexcept override
 			{
 				if ( !stream.isOpen() )
 				{
@@ -98,19 +98,19 @@ namespace EmEn::Libs::VertexFactory
 				// MDL: "IDPO"
 				if ( ident == (('O' << 24) + ('P' << 16) + ('D' << 8) + 'I') )
 				{
-					return this->loadMDL(input, geometry);
+					return this->loadMDL(input, result.shape);
 				}
 
 				// MD2: "IDP2"
 				if ( ident == (('2' << 24) + ('P' << 16) + ('D' << 8) + 'I') )
 				{
-					return this->loadMD2(input, geometry);
+					return this->loadMD2(input, result.shape);
 				}
 
 				// MD3: "IDP3"
 				if ( ident == (('3' << 24) + ('P' << 16) + ('D' << 8) + 'I') )
 				{
-					return this->loadMD3(input, geometry);
+					return this->loadMD3(input, result.shape);
 				}
 
 				// MD5 Check (Text based)
@@ -121,7 +121,7 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( line.find("MD5Version") != std::string::npos )
 				{
-					return this->loadMD5(input, geometry);
+					return this->loadMD5(input, result);
 				}
 
 				std::cerr << "[VertexFactory::FileFormatMDx] readStream(), unknown format !\n";
@@ -746,8 +746,9 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			bool
-			loadMD5 (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry)
+			loadMD5 (std::istream & file, ShapeLoadResult< vertex_data_t, index_data_t > & result)
 			{
+				auto & geometry = result.shape;
 				std::string line;
 				std::vector< md5_joint_t > joints;
 				std::vector< md5_mesh_t > meshes;
@@ -1031,8 +1032,8 @@ namespace EmEn::Libs::VertexFactory
 
 				Animation::Skin< vertex_data_t > skin{std::move(skinJointIndices), std::move(inverseBindMatrices)};
 
-				geometry.setSkeleton(std::move(skeleton));
-				geometry.setSkin(std::move(skin));
+				result.skeleton = std::move(skeleton);
+				result.skin = std::move(skin);
 
 				return true;
 			}

@@ -33,6 +33,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "SkeletalDataTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
@@ -44,7 +45,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief Simple mesh renderable with only one layer.
 	 * @extends EmEn::Graphics::Renderable::Abstract
 	 */
-	class SimpleMeshResource final : public Abstract
+	class SimpleMeshResource final : public Abstract, public SkeletalDataTrait
 	{
 		friend class Resources::Container< SimpleMeshResource >;
 

@@ -177,12 +177,16 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		if ( !FileIO::read(filepath, m_localData) )
+		VertexFactory::ShapeLoadResult< float > loadResult;
+
+		if ( !FileIO::read(filepath, loadResult) )
 		{
 			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
 
 			return this->setLoadSuccess(false);
 		}
+
+		m_localData = std::move(loadResult.shape);
 
 		/* FIXME: Should set that at reading step. */
 		m_localData.flipYAxis();

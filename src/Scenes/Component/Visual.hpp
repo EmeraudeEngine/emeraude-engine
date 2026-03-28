@@ -36,6 +36,7 @@
 #include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Animations/SkeletalAnimator.hpp"
 #include "Graphics/RenderableInstance/Unique.hpp"
 
 namespace EmEn::Scenes::Component
@@ -73,6 +74,17 @@ namespace EmEn::Scenes::Component
 			getRenderableInstance () const noexcept override
 			{
 				return m_renderableInstance;
+			}
+
+			/**
+			 * @brief Returns the skeletal animator, or nullptr if this visual has no skeletal data.
+			 * @return Animations::SkeletalAnimator *
+			 */
+			[[nodiscard]]
+			Animations::SkeletalAnimator *
+			skeletalAnimator () noexcept
+			{
+				return m_skeletalAnimator.get();
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
@@ -142,5 +154,6 @@ namespace EmEn::Scenes::Component
 
 			std::weak_ptr< Graphics::Renderable::Abstract > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
+			std::unique_ptr< Animations::SkeletalAnimator > m_skeletalAnimator;
 	};
 }
