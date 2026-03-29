@@ -270,6 +270,7 @@ namespace EmEn::Saphir::Generator
 			const auto setIndex = program.setIndexes().set(SetType::PerModel);
 
 			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "SkinningMatrices", "ubSkinningMatrices"};
+			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
 			ssbo.addMember(Declaration::VariableType::Matrix4, "bones[]");
 			vertexShader->declare(ssbo);
 		}

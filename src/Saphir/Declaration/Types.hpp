@@ -275,6 +275,17 @@ namespace EmEn::Saphir::Declaration
 	};
 
 	/**
+	 * @brief The GLSL memory access qualifier for buffer blocks.
+	 * @note Maps to GLSL memory qualifiers: readonly, writeonly.
+	 */
+	enum class AccessQualifier
+	{
+		None, /* No qualifier — read/write access. */
+		ReadOnly, /* Maps to GLSL 'readonly'. */
+		WriteOnly /* Maps to GLSL 'writeonly'. */
+	};
+
+	/**
 	 * @brief The GLSL matrix storage order enumeration.
 	 */
 	enum class MatrixStorageOrder

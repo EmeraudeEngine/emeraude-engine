@@ -79,6 +79,55 @@ enum class Vendor : uint32_t
 };
 ```
 
+### Acronyms
+
+- **Acronyms are always fully uppercase** in variable names, method names, and member names
+- This applies to well-known graphics/engine acronyms: BLAS, TLAS, VBO, IBO, UBO, SSBO, MVP, HDR, PBR, LOD, CSM, PCF, BDA, MDI, etc.
+- Non-acronym compound words remain camelCase
+
+```cpp
+// CORRECT — acronyms uppercase
+AccelerationStructure m_TLAS;
+const auto & BLAS () const noexcept;
+VkBuffer m_VBO{VK_NULL_HANDLE};
+ShaderStorageBufferObject m_SSBO;
+
+// WRONG — acronyms lowercased or mixed
+AccelerationStructure m_tlas;     // Should be m_TLAS
+const auto & blas () const;       // Should be BLAS()
+VkBuffer m_vbo{VK_NULL_HANDLE};   // Should be m_VBO
+```
+
+### Encapsulation — No Public Data Members
+
+- **All data members must be private** (or protected when inheritance requires it)
+- Expose via public accessors (getters) and mutators (setters)
+- This includes static service pointers — they go private with a setter
+
+```cpp
+// WRONG — public member
+class Renderer
+{
+    public:
+        bool m_vsyncEnabled{false};  // Exposed directly
+};
+
+// CORRECT — private member + accessor
+class Renderer
+{
+    public:
+        [[nodiscard]]
+        bool
+        vsyncEnabled () const noexcept
+        {
+            return m_vsyncEnabled;
+        }
+
+    private:
+        bool m_vsyncEnabled{false};
+};
+```
+
 ### Namespaces
 
 - **PascalCase** for namespaces

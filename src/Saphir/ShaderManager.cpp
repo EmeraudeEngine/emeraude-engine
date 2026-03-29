@@ -30,6 +30,7 @@
 #include "Libs/TokenFormatter.hpp"
 
 
+#include <charconv>
 #include <string>
 #include <algorithm>
 
@@ -799,10 +800,23 @@ namespace EmEn::Saphir
 			{
 				const auto chunks = String::explode(error, ':');
 
-				const auto line = std::stoi(chunks[2]);
-				const auto column = std::stoi(chunks[1]);
+				int line = 0;
+				int column = 0;
 
-				parser.annotate(line, column, error);
+				const auto & lineStr = chunks[2];
+				const auto & colStr = chunks[1];
+
+				auto [ptrL, ecL] = std::from_chars(lineStr.data(), lineStr.data() + lineStr.size(), line);
+				auto [ptrC, ecC] = std::from_chars(colStr.data(), colStr.data() + colStr.size(), column);
+
+				if ( ecL == std::errc{} && ecC == std::errc{} )
+				{
+					parser.annotate(line, column, error);
+				}
+				else
+				{
+					parser.annotate(error);
+				}
 			}
 			else
 			{

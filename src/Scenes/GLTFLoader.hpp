@@ -104,15 +104,35 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Disables skeletal animation data loading (skins, bones, weights, animations).
+			 *        The mesh will be loaded as a static object.
+			 * @param skip True to skip skinning, false to load animation data (default).
+			 */
+			void setSkipSkinning (bool skip) noexcept
+			{
+				m_skipSkinning = skip;
+			}
+
+			/**
+			 * @brief Forces all mesh visuals to be attached directly to the caller's node,
+			 *        skipping all intermediate glTF structural nodes regardless of their transforms.
+			 * @param flatten True to flatten, false to preserve the glTF node hierarchy (default).
+			 */
+			void setFlattenHierarchy (bool flatten) noexcept
+			{
+				m_flattenHierarchy = flatten;
+			}
+
+			/**
 			 * @brief Loads a glTF/glb file into the scene.
 			 * @param filepath Path to the .gltf or .glb file.
 			 * @param scene Reference to the scene.
-			 * @param useStaticEntities If true, mesh nodes become StaticEntity (flat, with frustum culling AABB).
-			 *                          If false, all nodes are created in the Node tree under the scene root.
+			 * @param parentNode If nullptr, mesh nodes become StaticEntity (flat, with frustum culling AABB).
+			 *                   Otherwise, the glTF hierarchy is built under the given node.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool load (const std::filesystem::path & filepath, Scene & scene, bool useStaticEntities = true) noexcept;
+			bool load (const std::filesystem::path & filepath, Scene & scene, const std::shared_ptr< Node > & parentNode = nullptr) noexcept;
 
 		private:
 
@@ -151,6 +171,9 @@ namespace EmEn::Scenes
 			std::vector< Libs::Animation::Skin< float > > m_skins;
 			std::unordered_map< size_t, size_t > m_meshToSkinIndex;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
+			std::unordered_set< size_t > m_skinJointNodeIndices;
 			bool m_useStaticEntities{true};
+			bool m_flattenHierarchy{false};
+			bool m_skipSkinning{false};
 	};
 }

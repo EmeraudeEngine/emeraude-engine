@@ -26,6 +26,9 @@
 
 #include "Expression.hpp"
 
+/* STL inclusions. */
+#include <charconv>
+
 /* Local inclusions. */
 #include "Libs/String.hpp"
 
@@ -113,22 +116,29 @@ namespace EmEn::Console
 				continue;
 			}
 
-			if ( argument.find_first_of("0123456789") != std::string::npos )
+			if ( argument.find('.') != std::string::npos )
 			{
-				if ( argument.find('.') != std::string::npos )
+				float value = 0.0F;
+				auto [ptr, ec] = std::from_chars(argument.data(), argument.data() + argument.size(), value);
+
+				if ( ec == std::errc{} && ptr == argument.data() + argument.size() )
 				{
-					const auto value = std::stof(argument);
-
 					m_arguments.emplace_back(value);
+
+					continue;
 				}
-				else
+			}
+			else
+			{
+				int value = 0;
+				auto [ptr, ec] = std::from_chars(argument.data(), argument.data() + argument.size(), value);
+
+				if ( ec == std::errc{} && ptr == argument.data() + argument.size() )
 				{
-					const auto value = std::stoi(argument);
-
 					m_arguments.emplace_back(value);
-				}
 
-				continue;
+					continue;
+				}
 			}
 
 			/* Bare word: treat as string argument. */

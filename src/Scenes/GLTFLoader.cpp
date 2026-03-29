@@ -94,9 +94,9 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	GLTFLoader::load (const std::filesystem::path & filepath, Scene & scene, bool useStaticEntities) noexcept
+	GLTFLoader::load (const std::filesystem::path & filepath, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
 	{
-		m_useStaticEntities = useStaticEntities;
+		m_useStaticEntities = (parentNode == nullptr);
 
 		/* Generate a resource prefix from the filename. */
 		m_resourcePrefix = "glTF:" + filepath.stem().string() + "/";
@@ -171,44 +171,60 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		if ( !asset.skins.empty() )
+		if ( !m_skipSkinning )
 		{
-			TraceInfo{ClassId} << "Phase 4: Loading " << asset.skins.size() << " skins...";
-
-			this->loadSkins(asset);
-		}
-
-		if ( !asset.animations.empty() )
-		{
-			TraceInfo{ClassId} << "Phase 5: Loading " << asset.animations.size() << " animations...";
-
-			this->loadAnimations(asset);
-		}
-
-		/* Attach skeletal data to renderables that have associated skins. */
-		for ( const auto & [meshIdx, skinIdx] : m_meshToSkinIndex )
-		{
-			if ( meshIdx >= m_meshes.size() || m_meshes[meshIdx] == nullptr )
+			if ( !asset.skins.empty() )
 			{
-				continue;
+				TraceInfo{ClassId} << "Phase 4: Loading " << asset.skins.size() << " skins...";
+
+				this->loadSkins(asset);
 			}
 
-			if ( skinIdx >= m_skeletons.size() )
+			if ( !asset.animations.empty() )
 			{
-				continue;
+				TraceInfo{ClassId} << "Phase 5: Loading " << asset.animations.size() << " animations...";
+
+				this->loadAnimations(asset);
 			}
 
-			if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(m_meshes[meshIdx].get()) )
+			/* Attach skeletal data to renderables that have associated skins. */
+			for ( const auto & [meshIdx, skinIdx] : m_meshToSkinIndex )
 			{
-				skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
+				if ( meshIdx >= m_meshes.size() || m_meshes[meshIdx] == nullptr )
+				{
+					continue;
+				}
 
-				TraceInfo{ClassId} << "Attached skeletal data to mesh " << meshIdx << ".";
+				if ( skinIdx >= m_skeletons.size() )
+				{
+					continue;
+				}
+
+				if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(m_meshes[meshIdx].get()) )
+				{
+					skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
+
+					TraceInfo{ClassId} << "Attached skeletal data to mesh " << meshIdx << ".";
+				}
+			}
+		}
+
+		/* Collect all joint node indices from skins so they can be
+		 * skipped during scene hierarchy building. Joint transforms
+		 * are handled by the SkeletalAnimator, not by scene nodes. */
+		m_skinJointNodeIndices.clear();
+
+		for ( const auto & skin : asset.skins )
+		{
+			for ( const auto jointIndex : skin.joints )
+			{
+				m_skinJointNodeIndices.insert(jointIndex);
 			}
 		}
 
 		TraceInfo{ClassId} << "Phase 6: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
 
-		this->buildNodeHierarchy(asset, scene, scene.root());
+		this->buildNodeHierarchy(asset, scene, parentNode != nullptr ? parentNode : scene.root());
 
 		TraceInfo{ClassId} << "Loading complete.";
 
@@ -767,6 +783,19 @@ namespace EmEn::Scenes
 				continue;
 			}
 
+			/* Check if any primitive provides normals. */
+			bool hasNormals = false;
+
+			for ( const auto & primitive : glTFMesh.primitives )
+			{
+				if ( primitive.findAttribute("NORMAL") != primitive.attributes.end() )
+				{
+					hasNormals = true;
+
+					break;
+				}
+			}
+
 			/* Second pass: fill vertices and triangles directly into pre-allocated vectors. */
 			const bool buildSuccess = shape->build([&] (auto & groups, auto & vertices, auto & triangles) {
 				vertices.resize(totalVertexCount);
@@ -842,38 +871,41 @@ namespace EmEn::Scenes
 						});
 					}
 
-					/* Read bone joint indices (JOINTS_0) for skeletal animation. */
-					const auto jointsIt = glTFPrimitive.findAttribute("JOINTS_0");
-
-					if ( jointsIt != glTFPrimitive.attributes.end() )
+					if ( !m_skipSkinning )
 					{
-						const auto & jointsAccessor = asset.accessors[jointsIt->accessorIndex];
-						size_t index = 0;
+						/* Read bone joint indices (JOINTS_0) for skeletal animation. */
+						const auto jointsIt = glTFPrimitive.findAttribute("JOINTS_0");
 
-						fastgltf::iterateAccessor< fastgltf::math::u16vec4 >(asset, jointsAccessor, [&] (const fastgltf::math::u16vec4 & v) {
-							vertices[globalVertexOffset + index].setInfluences(
-								static_cast< int32_t >(v.x()),
-								static_cast< int32_t >(v.y()),
-								static_cast< int32_t >(v.z()),
-								static_cast< int32_t >(v.w())
-							);
+						if ( jointsIt != glTFPrimitive.attributes.end() )
+						{
+							const auto & jointsAccessor = asset.accessors[jointsIt->accessorIndex];
+							size_t index = 0;
 
-							index++;
-						});
-					}
+							fastgltf::iterateAccessor< fastgltf::math::u16vec4 >(asset, jointsAccessor, [&] (const fastgltf::math::u16vec4 & v) {
+								vertices[globalVertexOffset + index].setInfluences(
+									static_cast< int32_t >(v.x()),
+									static_cast< int32_t >(v.y()),
+									static_cast< int32_t >(v.z()),
+									static_cast< int32_t >(v.w())
+								);
 
-					/* Read bone weights (WEIGHTS_0) for skeletal animation. */
-					const auto weightsIt = glTFPrimitive.findAttribute("WEIGHTS_0");
+								index++;
+							});
+						}
 
-					if ( weightsIt != glTFPrimitive.attributes.end() )
-					{
-						const auto & weightsAccessor = asset.accessors[weightsIt->accessorIndex];
-						size_t index = 0;
+						/* Read bone weights (WEIGHTS_0) for skeletal animation. */
+						const auto weightsIt = glTFPrimitive.findAttribute("WEIGHTS_0");
 
-						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, weightsAccessor, [&] (const fastgltf::math::fvec4 & v) {
-							vertices[globalVertexOffset + index].setWeights(v.x(), v.y(), v.z(), v.w());
-							index++;
-						});
+						if ( weightsIt != glTFPrimitive.attributes.end() )
+						{
+							const auto & weightsAccessor = asset.accessors[weightsIt->accessorIndex];
+							size_t index = 0;
+
+							fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, weightsAccessor, [&] (const fastgltf::math::fvec4 & v) {
+								vertices[globalVertexOffset + index].setWeights(v.x(), v.y(), v.z(), v.w());
+								index++;
+							});
+						}
 					}
 
 					/* Read indices and build triangles directly. */
@@ -922,6 +954,22 @@ namespace EmEn::Scenes
 				allSuccess = false;
 
 				continue;
+			}
+
+			/* Generate normals from geometry when the glTF mesh does not provide them. */
+			if ( !hasNormals )
+			{
+				/* Invert normals: triangle winding was swapped (indices 1↔2) to correct
+				 * front-faces after the glTF Y-up → engine coordinate conversion,
+				 * so the cross product points inward. */
+				shape->computeTriangleNormal(true);
+				shape->computeVertexNormal();
+
+				TraceInfo{ClassId} << "Generated smooth normals for mesh '" << glTFMesh.name << "' (not provided by glTF).";
+			}
+			else
+			{
+				shape->declareNormalsAvailable();
 			}
 
 			/* Detect if the shape has skeletal bone influences. */
@@ -1441,13 +1489,62 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			/* Node mode: create node hierarchy under a root node. */
-			const auto glTFRoot = parentNode->createChild(m_resourcePrefix + "root");
-			glTFRoot->rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), TransformSpace::Local);
+			/* Node mode: build glTF content under the caller-provided node.
+			 * Apply the Y-up → Y-down coordinate conversion. */
+			parentNode->rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), TransformSpace::Local);
 
-			for ( const auto nodeIndex : glTFScene.nodeIndices )
+			if ( m_flattenHierarchy )
 			{
-				this->processNodeAsNode(asset, nodeIndex, glTFRoot);
+				/* Flatten mode: skip all intermediate nodes, attach meshes directly. */
+				bool firstMesh = true;
+
+				for ( size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex )
+				{
+					const auto & glTFNode = asset.nodes[nodeIndex];
+
+					if ( !glTFNode.meshIndex.has_value() )
+					{
+						continue;
+					}
+
+					const auto meshIndex = glTFNode.meshIndex.value();
+
+					if ( meshIndex >= m_meshes.size() || m_meshes[meshIndex] == nullptr )
+					{
+						continue;
+					}
+
+					const auto nodeName = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
+
+					if ( firstMesh )
+					{
+						parentNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
+							.setup([] (auto & visual) {
+								visual.getRenderableInstance()->enableLighting();
+							})
+							.build(m_meshes[meshIndex]);
+
+						firstMesh = false;
+					}
+					else
+					{
+						auto childNode = parentNode->createChild(nodeName);
+
+						childNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
+							.setup([] (auto & visual) {
+								visual.getRenderableInstance()->enableLighting();
+							})
+							.build(m_meshes[meshIndex]);
+					}
+				}
+			}
+			else
+			{
+				/* Default mode: build hierarchy with automatic identity flattening. */
+				for ( const auto nodeIndex : glTFScene.nodeIndices )
+				{
+					this->processNodeAsNode(asset, nodeIndex, parentNode);
+				}
 			}
 		}
 	}
@@ -1525,29 +1622,71 @@ namespace EmEn::Scenes
 			return;
 		}
 
+		/* Skip skeleton joint nodes — their transforms are driven by
+		 * the SkeletalAnimator, not by the scene node hierarchy.
+		 * However, if the joint also carries a mesh, we must process it. */
+		if ( m_skinJointNodeIndices.contains(nodeIndex) && !glTFNode.meshIndex.has_value() )
+		{
+			return;
+		}
+
 		const auto nodeName = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
 		const auto frame = extractFrameFromNode(glTFNode);
-		const auto engineNode = engineParent->createChild(nodeName, frame);
+		const bool hasTransform = (frame.getModelMatrix() != CartesianFrame< float >{}.getModelMatrix());
+		const bool hasMesh = glTFNode.meshIndex.has_value();
 
-		/* Attach mesh visual if present. */
-		if ( glTFNode.meshIndex.has_value() )
+		/* Flatten the glTF hierarchy when possible:
+		 * - Identity transform + no mesh → skip this node, pass parent through.
+		 * - Has mesh or has transform → need a node in the scene.
+		 *   If the parent has no Visual yet, attach directly to it.
+		 *   Otherwise, create a child node. */
+		std::shared_ptr< Node > targetNode;
+
+		if ( !hasMesh && !hasTransform )
 		{
+			/* Identity, no mesh: flatten — skip this node entirely. */
+			targetNode = engineParent;
+		}
+		else if ( hasMesh && !hasTransform && !engineParent->hasComponent() )
+		{
+			/* First mesh with identity transform: attach directly to the parent node. */
 			const auto meshIndex = glTFNode.meshIndex.value();
 
 			if ( meshIndex < m_meshes.size() && m_meshes[meshIndex] != nullptr )
 			{
-				engineNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
+				engineParent->componentBuilder< Component::Visual >(nodeName + "/Visual")
 					.setup([] (auto & visual) {
 						visual.getRenderableInstance()->enableLighting();
 					})
 					.build(m_meshes[meshIndex]);
+			}
+
+			targetNode = engineParent;
+		}
+		else
+		{
+			/* Additional mesh or structural node with transform: create a child. */
+			targetNode = engineParent->createChild(nodeName, frame);
+
+			if ( hasMesh )
+			{
+				const auto meshIndex = glTFNode.meshIndex.value();
+
+				if ( meshIndex < m_meshes.size() && m_meshes[meshIndex] != nullptr )
+				{
+					targetNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
+						.setup([] (auto & visual) {
+							visual.getRenderableInstance()->enableLighting();
+						})
+						.build(m_meshes[meshIndex]);
+				}
 			}
 		}
 
 		/* Recurse into children. */
 		for ( const auto childIndex : glTFNode.children )
 		{
-			this->processNodeAsNode(asset, childIndex, engineNode);
+			this->processNodeAsNode(asset, childIndex, targetNode);
 		}
 	}
 }

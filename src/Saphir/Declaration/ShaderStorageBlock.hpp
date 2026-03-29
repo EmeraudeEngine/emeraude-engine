@@ -54,8 +54,34 @@ namespace EmEn::Saphir::Declaration
 
 			}
 
+			/**
+			 * @brief Sets the memory access qualifier for this buffer block.
+			 * @param accessQualifier The access qualifier to apply (ReadOnly, WriteOnly, or None).
+			 * @return void
+			 */
+			void
+			setAccessQualifier (AccessQualifier accessQualifier) noexcept
+			{
+				m_accessQualifier = accessQualifier;
+			}
+
+			/**
+			 * @brief Gets the memory access qualifier.
+			 * @return AccessQualifier
+			 */
+			[[nodiscard]]
+			AccessQualifier
+			accessQualifier () const noexcept
+			{
+				return m_accessQualifier;
+			}
+
 			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
+
+		private:
+
+			AccessQualifier m_accessQualifier{AccessQualifier::None};
 	};
 }

@@ -115,9 +115,16 @@ Both `SkeletonResource` and `AnimationClipResource` are managed resources:
 
 **Shader generation**: When `IsSkeletalAnimationEnabled` flag is set on the generator:
 1. Input attributes `vaBoneInfluence` and `vaBoneWeight` declared
-2. SSBO `SkinningMatrices` declared with `layout(std430)` and runtime-sized `mat4 bones[]` array
+2. SSBO `SkinningMatrices` declared with `layout(std430) readonly buffer` and runtime-sized `mat4 bones[]` array
 3. Skinning code injected in `Location::Top` of vertex shader: computes `skinMatrix`, `skinnedPosition`, `skinnedNormal` (+ tangent/binormal if tangent space enabled)
 4. All position/normal synthesis methods use skinned variants instead of raw attributes
+
+> [!CRITICAL]
+> **The skinning SSBO MUST be declared `readonly`.** Without this qualifier, Vulkan considers the
+> shader *may* write to the buffer, which requires the `vertexPipelineStoresAndAtomics` device
+> feature. Many GPUs/drivers do not enable this feature by default, causing
+> `VUID-RuntimeSpirv-NonWritable-06341` validation errors and pipeline creation failure.
+> The bone matrices are CPU-written and GPU-read-only — `readonly` is both correct and required.
 
 **Render-time binding**: SSBO descriptor set bound between PerLight and PerModelLayer in all three render paths:
 - `castShadows()` — shadow passes
@@ -203,6 +210,7 @@ ctest -R MathTransformConversions
 - **Bone indices as floats**: VBO stores int32→float. Shader does `ivec4(vaBoneInfluence)` to recover indices.
 - **Shape has NO skeletal data**: Skeleton/Skin removed from Shape. Use `ShapeLoadResult` for loading, `SkeletalDataTrait` for renderables.
 - **SSBO array declaration**: Use `addMember(VariableType::Matrix4, "bones[]")` with brackets in the name. `addArrayMember(..., 0)` silently fails (0 means "not an array" in AbstractBufferBackedBlock).
+- **SSBO access qualifier**: Skinning SSBO must use `ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly)` — omitting this causes `VUID-RuntimeSpirv-NonWritable-06341` on GPUs without `vertexPipelineStoresAndAtomics`.
 - **Skinning code timing in VertexShader**: Skinning code must be emitted AFTER `generateMainUniqueInstructions()` (which populates `m_vertexAttributes`), then PREPENDED to `topInstructions` via `insert(0, ...)`. Emitting before causes missing attribute checks.
 - **Conditional normal/tangent/binormal skinning**: Only emit `skinnedNormal`/`skinnedTangent`/`skinnedBinormal` when the corresponding vertex attribute is declared. Shadow shaders don't declare normals.
 

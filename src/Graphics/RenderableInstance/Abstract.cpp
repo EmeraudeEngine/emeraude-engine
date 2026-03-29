@@ -124,6 +124,16 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
+		/* Initialize SSBO with identity matrices so the mesh renders in bind pose
+		 * until the first animation frame uploads real skinning matrices. */
+		{
+			std::vector< Libs::Math::Matrix< 4, float > > identityMatrices(boneCount);
+			m_skinningSSBO->writeData(Vulkan::MemoryRegion{
+				identityMatrices.data(),
+				identityMatrices.size() * sizeof(Libs::Math::Matrix< 4, float >)
+			});
+		}
+
 		return true;
 	}
 

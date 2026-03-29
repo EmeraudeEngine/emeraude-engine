@@ -117,6 +117,34 @@ namespace EmEn::Graphics::Renderable
 				m_animationClips = std::move(clips);
 			}
 
+			/**
+			 * @brief Sets skeletal data without animation clips.
+			 * @note Use addAnimationClips() to attach clips separately.
+			 * @param skeleton The skeleton resource.
+			 * @param skin The per-mesh skin binding.
+			 */
+			void
+			setSkeletalData (
+				std::shared_ptr< Animations::SkeletonResource > skeleton,
+				Libs::Animation::Skin< float > skin
+			) noexcept
+			{
+				m_skeleton = std::move(skeleton);
+				m_skin = std::move(skin);
+			}
+
+			/**
+			 * @brief Appends animation clips to the existing skeletal data.
+			 * @param clips The animation clip resources to add.
+			 */
+			void
+			addAnimationClips (std::vector< std::shared_ptr< Animations::AnimationClipResource > > clips) noexcept
+			{
+				m_animationClips.insert(m_animationClips.end(),
+					std::make_move_iterator(clips.begin()),
+					std::make_move_iterator(clips.end()));
+			}
+
 		protected:
 
 			SkeletalDataTrait () noexcept = default;

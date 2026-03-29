@@ -50,7 +50,23 @@ namespace EmEn::Saphir::Declaration
 			}
 		}
 
-		code << this->getLayoutQualifier() << GLSL::Buffer << ' ' << this->name() << "\n" "{" "\n";
+		code << this->getLayoutQualifier();
+
+		switch ( m_accessQualifier )
+		{
+			case AccessQualifier::ReadOnly :
+				code << GLSL::ReadOnly << ' ';
+				break;
+
+			case AccessQualifier::WriteOnly :
+				code << GLSL::WriteOnly << ' ';
+				break;
+
+			case AccessQualifier::None :
+				break;
+		}
+
+		code << GLSL::Buffer << ' ' << this->name() << "\n" "{" "\n";
 
 		for ( const auto & bufferBackedBlock : this->members() | std::views::values )
 		{
