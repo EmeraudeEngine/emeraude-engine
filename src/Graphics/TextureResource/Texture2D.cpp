@@ -64,6 +64,12 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::createTexture (Renderer & renderer) noexcept
 	{
+		/* Apply normal map Y flip if requested (id Tech → engine convention). */
+		if ( this->isFlipNormalMapYEnabled() )
+		{
+			m_localData->mutableData().flipNormalMapY();
+		}
+
 		if ( !this->validateTexture(m_localData->data(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
 		{
 			return false;

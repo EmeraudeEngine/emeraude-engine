@@ -267,6 +267,16 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 
+			/* Level of Detail */
+			constexpr auto GraphicsLODEnableAutomaticGenerationKey{"Core/Graphics/LOD/EnableAutomaticGeneration"};
+			constexpr auto DefaultGraphicsLODEnableAutomaticGeneration{false};
+			constexpr auto GraphicsLODMinTriangleCountKey{"Core/Graphics/LOD/MinTriangleCount"};
+			constexpr auto DefaultGraphicsLODMinTriangleCount{250U};
+			constexpr auto GraphicsLODScreenCoverageThresholdKey{"Core/Graphics/LOD/ScreenCoverageThreshold"};
+			constexpr auto DefaultGraphicsLODScreenCoverageThreshold{0.75F};
+			constexpr auto GraphicsLODReductionRatioKey{"Core/Graphics/LOD/ReductionRatio"};
+			constexpr auto DefaultGraphicsLODReductionRatio{0.33F};
+
 			/* Multi-Draw Indirect */
 			constexpr auto GraphicsMDIEnabledKey{"Core/Graphics/MDI/Enabled"};
 			constexpr auto DefaultGraphicsMDIEnabled{false};

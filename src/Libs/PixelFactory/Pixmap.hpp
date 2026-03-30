@@ -2937,6 +2937,33 @@ namespace EmEn::Libs::PixelFactory
 				return output.str();
 			}
 
+			/**
+			 * @brief Flips the green (Y) channel of a normal map.
+			 * @note Converts between OpenGL and DirectX normal map conventions.
+			 * OpenGL convention: Y+ points up. DirectX convention: Y+ points down.
+			 * The operation is: G = MaxValue - G for each pixel.
+			 * @return void
+			 */
+			void
+			flipNormalMapY () noexcept
+			{
+				const auto channels = this->colorCount();
+
+				if ( channels < 2 )
+				{
+					return;
+				}
+
+				/* Channel layout: R=0, G=1, B=2, A=3. Flip the green channel. */
+				constexpr auto greenChannel = static_cast< size_t >(1);
+				const auto maxVal = std::numeric_limits< pixel_data_t >::max();
+
+				for ( size_t i = greenChannel; i < m_data.size(); i += channels )
+				{
+					m_data[i] = maxVal - m_data[i];
+				}
+			}
+
 		private:
 
 			/**

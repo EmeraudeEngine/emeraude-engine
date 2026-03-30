@@ -63,14 +63,17 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
 
+		auto & settings = graphicsRenderer.primaryServices().settings();
+
 		/* Initialize per-frame RT SSBOs to match the renderer's frames-in-flight count. */
 		if ( m_sceneMetaData.isRayTracingEnabled() )
 		{
 			static_cast< void >(m_sceneMetaData.initializePerFrameBuffers(graphicsRenderer.framesInFlight()));
 
-			m_tlasDistance = graphicsRenderer.primaryServices().settings()
-				.getOrSetDefault< float >(GraphicsRayTracingTLASDistanceKey, DefaultGraphicsRayTracingTLASDistance);
+			m_TLASDistance = settings.getOrSetDefault< float >(GraphicsRayTracingTLASDistanceKey, DefaultGraphicsRayTracingTLASDistance);
 		}
+
+		m_LODScreenCoverageThreshold = settings.getOrSetDefault< float >(GraphicsLODScreenCoverageThresholdKey, DefaultGraphicsLODScreenCoverageThreshold);
 
 		this->buildOctrees(octreeOptions);
 	}

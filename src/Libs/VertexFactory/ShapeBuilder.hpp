@@ -291,18 +291,36 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			void
-			setInfluences (const Math::Vector< 4, int32_t > & /*influences*/) noexcept
+			setInfluences (const Math::Vector< 4, int32_t > & influences) noexcept
 			{
-				// TODO: Create a vector to store influences
-				//m_triangleVertexColors[m_triangleVertexIndex] = influences;
+				m_triangleInfluences[m_triangleVertexIndex] = influences;
+
 				m_declaredAttributes[InfluencesDeclared] = true;
+				m_influencesEnabled = true;
 			}
 
 			void
-			setWeights (const Math::Vector< 4, vertex_data_t > & /*weights*/) noexcept
+			setInfluences (int32_t i0, int32_t i1, int32_t i2, int32_t i3) noexcept
 			{
-				// TODO: Create a vector to store weights
-				//m_triangleVertexColors[m_triangleVertexIndex] = weights;
+				m_triangleInfluences[m_triangleVertexIndex] = {i0, i1, i2, i3};
+
+				m_declaredAttributes[InfluencesDeclared] = true;
+				m_influencesEnabled = true;
+			}
+
+			void
+			setWeights (const Math::Vector< 4, vertex_data_t > & weights) noexcept
+			{
+				m_triangleWeights[m_triangleVertexIndex] = weights;
+
+				m_declaredAttributes[WeightsDeclared] = true;
+			}
+
+			void
+			setWeights (vertex_data_t w0, vertex_data_t w1, vertex_data_t w2, vertex_data_t w3) noexcept
+			{
+				m_triangleWeights[m_triangleVertexIndex] = {w0, w1, w2, w3};
+
 				m_declaredAttributes[WeightsDeclared] = true;
 			}
 
@@ -597,6 +615,8 @@ namespace EmEn::Libs::VertexFactory
 								m_triangleTextureCoordinates[0] = m_triangleTextureCoordinates[2];
 								m_triangleVertexColors[0] = m_triangleVertexColors[2];
 								m_triangleNormals[0] = m_triangleNormals[2];
+								m_triangleInfluences[0] = m_triangleInfluences[2];
+								m_triangleWeights[0] = m_triangleWeights[2];
 							}
 							else
 							{
@@ -604,6 +624,8 @@ namespace EmEn::Libs::VertexFactory
 								m_triangleTextureCoordinates[1] = m_triangleTextureCoordinates[2];
 								m_triangleVertexColors[1] = m_triangleVertexColors[2];
 								m_triangleNormals[1] = m_triangleNormals[2];
+								m_triangleInfluences[1] = m_triangleInfluences[2];
+								m_triangleWeights[1] = m_triangleWeights[2];
 							}
 							break;
 
@@ -615,6 +637,8 @@ namespace EmEn::Libs::VertexFactory
 							m_triangleTextureCoordinates[1] = m_triangleTextureCoordinates[2];
 							m_triangleVertexColors[1] = m_triangleVertexColors[2];
 							m_triangleNormals[1] = m_triangleNormals[2];
+							m_triangleInfluences[1] = m_triangleInfluences[2];
+							m_triangleWeights[1] = m_triangleWeights[2];
 							break;
 
 						default:
@@ -672,6 +696,19 @@ namespace EmEn::Libs::VertexFactory
 
 						triangle.setVertexColorIndex(vertexIndex, attributeIndex);
 					}
+
+					/* Bone influences and weights (skeletal animation). */
+					if ( m_influencesEnabled )
+					{
+						const auto vertexIdx = triangle.vertexIndex(vertexIndex);
+						auto & vertex = m_destinationShape->vertices()[vertexIdx];
+
+						const auto & inf = m_triangleInfluences[vertexIndex];
+						vertex.setInfluences(inf[0], inf[1], inf[2], inf[3]);
+
+						const auto & wgt = m_triangleWeights[vertexIndex];
+						vertex.setWeights(wgt[0], wgt[1], wgt[2], wgt[3]);
+					}
 				}
 
 				m_destinationShape->addTriangle(triangle);
@@ -691,10 +728,13 @@ namespace EmEn::Libs::VertexFactory
 			std::array< Math::Vector< 3, vertex_data_t >, 3 > m_triangleNormals{};
 			std::array< Math::Vector< 3, vertex_data_t >, 3 > m_triangleTextureCoordinates{};
 			std::array< Math::Vector< 4, vertex_data_t >, 3 > m_triangleVertexColors{};
+			std::array< Math::Vector< 4, int32_t >, 3 > m_triangleInfluences{};
+			std::array< Math::Vector< 4, vertex_data_t >, 3 > m_triangleWeights{};
 			index_data_t m_triangleVertexIndex{0};
 			index_data_t m_triangleCount{0};
 			ShapeBuilderOptions< vertex_data_t > m_options;
 			ConstructionMode m_constructionMode{ConstructionMode::None};
+			bool m_influencesEnabled{false};
 			std::array< bool, 8 > m_declaredAttributes{
 				false/*PositionDeclared*/,
 				false/*NormalDeclared*/,

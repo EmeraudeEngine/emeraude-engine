@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -143,6 +144,34 @@ namespace EmEn::Animations
 			{
 				return m_playing;
 			}
+
+			/**
+			 * @brief Returns the names of all registered animation clips.
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			std::vector< std::string >
+			clipNames () const noexcept
+			{
+				std::vector< std::string > names;
+				names.reserve(m_clips.size());
+
+				for ( const auto & [name, clip] : m_clips )
+				{
+					names.push_back(name);
+				}
+
+				std::sort(names.begin(), names.end());
+
+				return names;
+			}
+
+			/**
+			 * @brief Returns the name of the currently active clip.
+			 * @return std::string Empty string if no clip is active.
+			 */
+			[[nodiscard]]
+			std::string activeClipName () const noexcept;
 
 			/* ---- Evaluation ---- */
 

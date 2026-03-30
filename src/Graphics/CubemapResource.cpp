@@ -202,7 +202,7 @@ namespace EmEn::Graphics
 
 		const auto fileFormat = data[FileFormatKey].asString();
 
-		const auto & fileSystem = this->serviceProvider().fileSystem();
+		const auto & fileSystem = this->serviceProvider().primaryServices().fileSystem();
 
 		/* Checks if cubemap is packed onto one image. */
 		if ( data.isMember(PackedKey) && data[PackedKey].asBool() )

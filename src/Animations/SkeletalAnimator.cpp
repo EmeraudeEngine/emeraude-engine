@@ -188,6 +188,17 @@ namespace EmEn::Animations
 		}
 	}
 
+	std::string
+	SkeletalAnimator::activeClipName () const noexcept
+	{
+		if ( m_activeClip != nullptr )
+		{
+			return m_activeClip->clip().name();
+		}
+
+		return {};
+	}
+
 	/* ---- Direct mode ---- */
 
 	bool

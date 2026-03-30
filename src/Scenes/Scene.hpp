@@ -2238,7 +2238,7 @@ namespace EmEn::Scenes
 			 * @param positionCorrection [out] Accumulated position correction vector.
 			 * @param dominantNormal [out] Normal of the deepest penetration collision.
 			 * @param maxPenetration [out] Deepest penetration depth found.
-			 * @param collidedEntity [out] Pointer to the static entity with deepest penetration.
+			 * @param collidedEntity [out] Pointer to the static entity with the deepest penetration.
 			 * @version 0.8.40
 			 */
 			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
@@ -2314,9 +2314,10 @@ namespace EmEn::Scenes
 			/** @brief RT opaque lighted render list (all scene geometry, no frustum culling). */
 			RenderBatch::List m_rtOpaqueLightedList{};
 			/** @brief Cached TLAS distance setting (read once at scene init, not per-frame). */
-			float m_tlasDistance{1000.0F};
+			float m_TLASDistance{DefaultGraphicsRayTracingTLASDistance};
 			/** @brief Current main camera view distance for LOD computation. Updated per prepareRendering(). */
 			float m_currentViewDistance{1000.0F};
+			float m_LODScreenCoverageThreshold{DefaultGraphicsLODScreenCoverageThreshold};
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
 

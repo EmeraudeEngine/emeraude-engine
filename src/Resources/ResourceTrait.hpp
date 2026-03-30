@@ -73,8 +73,7 @@ namespace EmEn
 		class Manager;
 	}
 
-	class FileSystem;
-	class Settings;
+	class PrimaryServices;
 }
 
 namespace EmEn::Resources
@@ -135,37 +134,20 @@ namespace EmEn::Resources
 			virtual ~AbstractServiceProvider() = default;
 
 			/**
-			 * @brief Returns access to the file system for resource loading operations.
+			 * @brief Returns access to the engine primary services.
 			 *
-			 * Provides read-only access to the FileSystem service used to load resource
-			 * data from disk, archives, or other storage media.
+			 * Provides access to the PrimaryServices instance which owns the
+			 * ThreadPool, FileSystem, Settings, and other core services.
 			 *
-			 * @return Const reference to the FileSystem instance.
+			 * @return Reference to the PrimaryServices instance.
 			 *
-			 * @see FileSystem
+			 * @see PrimaryServices
 			 */
 			[[nodiscard]]
-			const FileSystem &
-			fileSystem () const noexcept
+			PrimaryServices &
+			primaryServices () const noexcept
 			{
-				return m_fileSystem;
-			}
-
-			/**
-			 * @brief Returns access to the settings service for configuration retrieval.
-			 *
-			 * Provides access to the Settings service used to retrieve and modify
-			 * engine configuration values during resource loading.
-			 *
-			 * @return Non-const reference to the Settings instance.
-			 *
-			 * @see Settings
-			 */
-			[[nodiscard]]
-			Settings &
-			settings () const noexcept
-			{
-				return m_settings;
+				return m_primaryServices;
 			}
 
 			/**
@@ -287,14 +269,11 @@ namespace EmEn::Resources
 			 * @brief Constructs a service provider with required service references.
 			 *
 			 * Protected constructor ensures this class can only be instantiated through
-			 * derived classes. The constructor binds references to the FileSystem, Settings,
-			 * and Graphics::Renderer services that will be used throughout the lifetime of
-			 * the service provider.
+			 * derived classes. The constructor binds references to the engine's primary
+			 * services and subsystem managers.
 			 *
-			 * @param fileSystem Const reference to the FileSystem service for loading
-			 *				   resource data from storage.
-			 * @param settings Non-const reference to the Settings service for configuration
-			 *				 retrieval and modification.
+			 * @param primaryServices Reference to the engine primary services
+			 *						 (ThreadPool, FileSystem, Settings, etc.).
 			 * @param graphicsRenderer Non-const reference to the Graphics::Renderer
 			 *						 service for creating GPU resources.
 			 * @param audioManager Non-const reference to the Audio::Manager
@@ -302,9 +281,8 @@ namespace EmEn::Resources
 			 *
 			 * @note The reference members make this class non-copyable and non-movable.
 			 */
-			AbstractServiceProvider (const FileSystem & fileSystem, Settings & settings, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
-				: m_fileSystem{fileSystem},
-				m_settings{settings},
+			AbstractServiceProvider (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
+				: m_primaryServices{primaryServices},
 				m_graphicsRenderer{graphicsRenderer},
 				m_audioManager{audioManager}
 			{
@@ -355,10 +333,9 @@ namespace EmEn::Resources
 
 		private:
 
-			const FileSystem & m_fileSystem; ///< Reference to the FileSystem service for loading resource data.
-			Settings & m_settings; ///< Reference to the Settings service for configuration retrieval.
+			PrimaryServices & m_primaryServices; ///< Reference to the engine primary services (ThreadPool, FileSystem, Settings, etc.).
 			Graphics::Renderer & m_graphicsRenderer; ///< Reference to the Graphics::Renderer service for GPU resource creation.
-			Audio::Manager & m_audioManager; ///< Reference to the Audio::Mnanager service for audio resource creation.
+			Audio::Manager & m_audioManager; ///< Reference to the Audio::Manager service for audio resource creation.
 	};
 
 	/**

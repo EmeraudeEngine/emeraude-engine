@@ -340,7 +340,6 @@ namespace EmEn::Graphics::Renderable
 
 			Libs::StaticVector< std::shared_ptr< Geometry::Interface >, MaxLODLevels > m_geometry;
 			std::vector< MeshLayer > m_layers;
-			std::vector< std::future< void > > m_lodFutures;
 			mutable std::mutex m_geometryMutex;
 	};
 }

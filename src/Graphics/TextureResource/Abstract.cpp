@@ -84,6 +84,15 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
+	void
+	Abstract::applyFlipNormalMapY (Pixmap< uint8_t > & pixmap) const noexcept
+	{
+		if ( m_flipNormalMapY )
+		{
+			pixmap.flipNormalMapY();
+		}
+	}
+
 	bool
 	Abstract::validateTexture (const Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept
 	{

@@ -106,7 +106,7 @@ namespace EmEn::Resources
 			Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 				: ServiceInterface{ClassId},
 				ControllableTrait{ClassId},
-				AbstractServiceProvider{primaryServices.fileSystem(), primaryServices.settings(), graphicsRenderer, audioManager},
+				AbstractServiceProvider{primaryServices, graphicsRenderer, audioManager},
 				m_primaryServices{primaryServices}
 			{
 

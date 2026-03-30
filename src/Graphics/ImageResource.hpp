@@ -225,6 +225,21 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns mutable access to the underlying pixmap.
+			 * @warning Modifications to this pixmap affect ALL texture resources sharing this
+			 * ImageResource. Only use for format normalization operations that make the data
+			 * consistent for the engine (e.g., normal map Y flip). Never use for per-instance
+			 * or per-material transformations — those must go through a separate copy.
+			 * @return Mutable reference to the pixmap.
+			 */
+			[[nodiscard]]
+			Libs::PixelFactory::Pixmap< uint8_t > &
+			mutableData () noexcept
+			{
+				return m_pixmap;
+			}
+
+			/**
 			 * @brief Returns the width of the image in pixels.
 			 *
 			 * @return Image width in pixels (horizontal dimension).

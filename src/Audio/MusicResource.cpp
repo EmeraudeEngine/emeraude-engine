@@ -357,7 +357,7 @@ namespace EmEn::Audio
 		if ( extension == ".mid" || extension == ".midi" )
 		{
 			/* Query the soundfont name from settings. */
-			const auto soundfontName = this->serviceProvider().settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
+			const auto soundfontName = this->serviceProvider().primaryServices().settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
 
 			if ( !soundfontName.empty() )
 			{

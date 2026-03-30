@@ -900,16 +900,6 @@ namespace EmEn::Libs::VertexFactory
 				Animation::Skeleton< vertex_data_t > skeleton{std::move(engineJoints)};
 
 				/* ---- Phase 3: Build geometry with per-vertex bone influences ---- */
-
-				/* Track per-expanded-vertex influence data. */
-				struct VertexInfluence
-				{
-					Math::Vector< 4, int32_t > indices{-1, -1, -1, -1};
-					Math::Vector< 4, vertex_data_t > weights{0, 0, 0, 0};
-				};
-
-				std::vector< VertexInfluence > vertexInfluences;
-
 				ShapeBuilderOptions< vertex_data_t > options{};
 				options.enableGlobalVertexColor(PixelFactory::White);
 				ShapeBuilder builder{geometry, options};
@@ -953,20 +943,21 @@ namespace EmEn::Libs::VertexFactory
 								static_cast< vertex_data_t >(vert.uv[1])
 							);
 
-							builder.newVertex();
-
-							/* Collect top-4 bone influences sorted by weight (descending). */
-							VertexInfluence influence;
-							int slotCount = std::min(vert.countWeight, 4);
+							/* Compute top-4 bone influences sorted by weight (descending)
+							 * and set them BEFORE newVertex() so they're part of the vertex
+							 * data during construction (required for data economy deduplication). */
+							Math::Vector< 4, int32_t > boneIndices{-1, -1, -1, -1};
+							Math::Vector< 4, vertex_data_t > boneWeights{0, 0, 0, 0};
 
 							if ( vert.countWeight <= 4 )
 							{
-								/* All weights fit directly. */
+								const int slotCount = std::min(vert.countWeight, 4);
+
 								for ( int w = 0; w < slotCount; ++w )
 								{
 									const auto & weight = mesh.weights[vert.startWeight + w];
-									influence.indices[w] = weight.jointIndex;
-									influence.weights[w] = static_cast< vertex_data_t >(weight.bias);
+									boneIndices[w] = weight.jointIndex;
+									boneWeights[w] = static_cast< vertex_data_t >(weight.bias);
 								}
 							}
 							else
@@ -986,6 +977,7 @@ namespace EmEn::Libs::VertexFactory
 
 								/* Renormalize the top 4 weights. */
 								float totalBias = 0;
+
 								for ( int w = 0; w < 4; ++w )
 								{
 									totalBias += allWeights[w].bias;
@@ -995,28 +987,20 @@ namespace EmEn::Libs::VertexFactory
 								{
 									for ( int w = 0; w < 4; ++w )
 									{
-										influence.indices[w] = allWeights[w].jointIndex;
-										influence.weights[w] = static_cast< vertex_data_t >(allWeights[w].bias / totalBias);
+										boneIndices[w] = allWeights[w].jointIndex;
+										boneWeights[w] = static_cast< vertex_data_t >(allWeights[w].bias / totalBias);
 									}
 								}
 							}
 
-							vertexInfluences.push_back(influence);
+							builder.setInfluences(boneIndices);
+							builder.setWeights(boneWeights);
+							builder.newVertex();
 						}
 					}
 				}
 
 				builder.endConstruction();
-
-				/* ---- Phase 4: Apply bone influences to vertices ---- */
-				auto & vertices = geometry.vertices();
-
-				for ( size_t i = 0; i < vertices.size() && i < vertexInfluences.size(); ++i )
-				{
-					const auto & inf = vertexInfluences[i];
-					vertices[i].setInfluences(inf.indices[0], inf.indices[1], inf.indices[2], inf.indices[3]);
-					vertices[i].setWeights(inf.weights[0], inf.weights[1], inf.weights[2], inf.weights[3]);
-				}
 
 				/* MD5 format doesn't store normals, compute them from geometry. */
 				geometry.computeTriangleNormal();

@@ -34,6 +34,7 @@
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Resources/Manager.hpp"
+#include "SettingKeys.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -469,38 +470,48 @@ namespace EmEn::Graphics::Renderable
 		/* LOD 0 is ready — mark the renderable as instantiable immediately. */
 		this->setReadyForInstantiation(true);
 
-		/* Attempt automatic LOD generation for IndexedVertexResource with sufficient detail. */
-		auto sourceGeometry = std::dynamic_pointer_cast< IndexedVertexResource >(m_geometry[0]);
+		/* Attempt automatic LOD generation for IndexedVertexResource with sufficient detail.
+		 * Each LOD level reduces the triangle count by the reduction ratio. We only generate
+		 * a level if the result would still have at least MinTriangleCount triangles. */
+		auto & settings = this->serviceProvider().primaryServices().settings();
+		const auto lodEnabled = settings.getOrSetDefault< bool >(GraphicsLODEnableAutomaticGenerationKey, DefaultGraphicsLODEnableAutomaticGeneration);
 
-		if ( sourceGeometry != nullptr )
+		if ( lodEnabled )
 		{
-			const auto triangleCount = sourceGeometry->localData().triangles().size();
+			auto sourceGeometry = std::dynamic_pointer_cast< IndexedVertexResource >(m_geometry[0]);
 
-			/* Determine how many LOD levels to generate based on available detail. */
-			uint32_t levelsToGenerate = 0;
-			float ratio = LODReductionRatio;
-
-			while ( levelsToGenerate < MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= MinTrianglesPerLOD )
+			if ( sourceGeometry != nullptr )
 			{
-				levelsToGenerate++;
+				const auto triangleCount = sourceGeometry->localData().triangles().size();
+				const auto minTriangleCount = static_cast< size_t >(settings.getOrSetDefault< uint32_t >(GraphicsLODMinTriangleCountKey, DefaultGraphicsLODMinTriangleCount));
+				const auto reductionRatio = settings.getOrSetDefault< float >(GraphicsLODReductionRatioKey, DefaultGraphicsLODReductionRatio);
 
-				ratio *= LODReductionRatio;
-			}
+				/* Determine how many LOD levels to generate based on available detail. */
+				uint32_t levelsToGenerate = 0;
+				float ratio = reductionRatio;
 
-			if ( levelsToGenerate > 0 )
-			{
-				TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
+				while ( levelsToGenerate < MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= minTriangleCount )
+				{
+					levelsToGenerate++;
 
-				m_lodFutures.emplace_back(std::async(std::launch::async, [this, sourceGeometry, levelsToGenerate] {
-					float levelRatio = LODReductionRatio;
+					ratio *= reductionRatio;
+				}
 
-					for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
-					{
-						this->generateLODLevel(sourceGeometry, level, levelRatio);
+				if ( levelsToGenerate > 0 )
+				{
+					TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
 
-						levelRatio *= LODReductionRatio;
-					}
-				}));
+					this->serviceProvider().primaryServices().threadPool()->enqueue([this, sourceGeometry, levelsToGenerate, reductionRatio] {
+						float levelRatio = reductionRatio;
+
+						for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
+						{
+							this->generateLODLevel(sourceGeometry, level, levelRatio);
+
+							levelRatio *= reductionRatio;
+						}
+					});
+				}
 			}
 		}
 

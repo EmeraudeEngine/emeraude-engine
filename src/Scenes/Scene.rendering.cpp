@@ -696,10 +696,8 @@ namespace EmEn::Scenes
 		 *
 		 * LODLevel = clamp(MaxLODLevels - screenSize / threshold, 0, MaxLODLevels-1)
 		 * where threshold defines the coverage at which LOD 0 transitions to LOD 1. */
-		constexpr auto LODTransitionThreshold{0.75F};
-
 		const auto screenSize = objectRadius / distance;
-		const auto LODf = static_cast< float >(Renderable::MaxLODLevels) * (static_cast< float >(1) - screenSize / LODTransitionThreshold);
+		const auto LODf = static_cast< float >(Renderable::MaxLODLevels) * (static_cast< float >(1) - screenSize / m_LODScreenCoverageThreshold);
 
 		if ( LODf <= 0.0F )
 		{
@@ -1033,7 +1031,7 @@ namespace EmEn::Scenes
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
 					/* RT list: distance-only culling (no frustum), opaque objects only. */
-					if ( rtEnabled && distance <= m_tlasDistance )
+					if ( rtEnabled && distance <= m_TLASDistance )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
@@ -1090,7 +1088,7 @@ namespace EmEn::Scenes
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
 					/* RT list: distance-only culling (no frustum), opaque objects only. */
-					if ( rtEnabled && distance <= m_tlasDistance )
+					if ( rtEnabled && distance <= m_TLASDistance )
 					{
 						const auto * renderable = renderableInstance->renderable();
 

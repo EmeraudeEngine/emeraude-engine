@@ -660,40 +660,91 @@ Lights without shadow use only the shared UBO descriptor set (binding 0). Shadow
 
 ### Overview
 
-`GLTFLoader` loads glTF 2.0 files into the scene graph. It is a **stack-allocated utility object** created per-load, not a long-lived service. All resource creation is **fully asynchronous** via `getOrCreateResource()`.
+`GLTFLoader` loads glTF 2.0 / GLB files into the scene graph. It is a **stack-allocated utility object** created per-load, not a long-lived service. All resource creation is **fully asynchronous** via `getOrCreateResource()`.
 
-### 5-Phase Async Pipeline
+### Two Operating Modes
+
+The loader operates in one of two modes, determined by the `parentNode` parameter of `load()`:
+
+| Mode | Condition | Entity Type | Use Case |
+|------|-----------|-------------|----------|
+| **StaticEntity** | `parentNode == nullptr` | `StaticEntity` (flat, AABB culling) | Static scene geometry (buildings, props) |
+| **Node** | `parentNode != nullptr` | `Node` (hierarchical, parent-relative) | Animated models, attachments, dynamic objects |
+
+```cpp
+// StaticEntity mode: meshes become flat StaticEntities in world space
+GLTFLoader loader{resources};
+loader.load(path, scene);
+
+// Node mode: hierarchy built under the provided parent node
+auto parentNode = scene.root()->createChild("MyModel");
+loader.load(path, scene, parentNode);
+```
+
+### Configuration Options
+
+| Setter | Default | Effect |
+|--------|---------|--------|
+| `setFlattenHierarchy(true)` | `false` | Skip intermediate nodes, attach all meshes directly to parent |
+| `setSkipSkinning(true)` | `false` | Skip phases 4-5, ignore bone weights (load as static mesh) |
+| `setExcludedNodeNames({...})` | empty | Skip named nodes and their subtrees entirely |
+
+### 6-Phase Loading Pipeline
 
 | Phase | Method | Resource Type | Async |
 |-------|--------|---------------|-------|
 | 1 | `loadImages()` | `ImageResource` | Yes |
-| 2 | `loadTextures()` | `TextureResource::Texture2D` | Yes |
-| 3 | `loadMaterials()` | `Material::PBRResource` | Yes |
-| 4 | `loadMeshes()` | `SimpleMeshResource` + `IndexedVertexResource` | Yes |
-| 5 | `load()` | Scene node hierarchy | Sync (tree walk) |
+| 2 | `loadMaterials()` | `Material::PBRResource` (textures created on-demand) | Yes |
+| 3 | `loadMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` | Yes |
+| 4 | `loadSkins()` | `Animations::SkeletonResource` + `Skin` | Sync |
+| 5 | `loadAnimations()` | `Animations::AnimationClipResource` | Sync |
+| 6 | `buildNodeHierarchy()` | Scene nodes or static entities | Sync |
+
+**Phases 4 and 5 are skipped when `m_skipSkinning = true`.**
+
+After phases 4-5, skeletal data (skeleton, skin, animation clips) is attached to renderables via `SkeletalDataTrait::setSkeletalData()`.
+
+### Node Mode Behavior
+
+**Default (hierarchy preserved):** `processNodeAsNode()` recursively walks the glTF node tree. Automatic **identity flattening** skips nodes that have no mesh and no transform, reducing unnecessary depth.
+
+**Flatten mode:** All meshes attach directly to the `parentNode`, ignoring intermediate glTF structural nodes. The first mesh attaches to the parent itself; subsequent meshes create children.
+
+**Joint node skipping:** Nodes that are skeleton joints (but carry no mesh) are skipped — their transforms are driven by `SkeletalAnimator`, not the scene graph.
+
+> [!WARNING]
+> **Node mode entities are Nodes, not StaticEntities.** Code that uses `findStaticEntity()` will NOT
+> find entities created in Node mode. Use `scene.root()->findChild(name)` instead.
 
 ### Coordinate System Conversion
 
-glTF uses **Y-up, right-handed** coordinates. The engine uses **Y-down**. The loader applies a **180° X rotation** to the root node, which inverts Y and Z.
+glTF uses **Y-up, right-handed** coordinates. The engine uses **Y-down**. The loader applies a **180° X rotation** to the root (parentNode in Node mode, accumulated in StaticEntity mode).
 
-**Winding order compensation:** The 180° rotation flips triangle winding from CCW to CW. The loader swaps indices 1 and 2 during triangle building to restore correct winding:
+**Winding order compensation:** The 180° rotation flips triangle winding from CCW to CW. The loader swaps indices 1 and 2 during triangle building:
 
 ```cpp
 triangles.emplace_back(triBuffer[0], triBuffer[2], triBuffer[1]);  // swap 1↔2
 ```
 
+### Resource Naming Convention
+
+All resources use a prefix derived from the filename: `glTF:{stem}/`
+
+| Category | Pattern | Example |
+|----------|---------|---------|
+| Images | `glTF:Fox/Image/{name}` | `glTF:Fox/Image/Texture` |
+| Materials | `glTF:Fox/Material/{name}` | `glTF:Fox/Material/fox_material` |
+| Geometry | `glTF:Fox/Geometry/{name}` | `glTF:Fox/Geometry/fox1` |
+| Meshes | `glTF:Fox/Mesh/{name}` | `glTF:Fox/Mesh/fox1` |
+| Nodes | `glTF:Fox/Node/{name}` | `glTF:Fox/Node/root` |
+| Skeletons | `glTF:Fox/skeleton/{name}` | `glTF:Fox/skeleton/Armature` |
+| Animations | `glTF:Fox/animation/{name}` | `glTF:Fox/animation/Run` |
+
+When a glTF object has no name, the numeric index is used as fallback.
+
 ### Default Resource on Every Error Path (MANDATORY)
 
-Every resource slot must contain a valid resource — never nullptr. On any loading error, the loader stores the container's default resource and continues:
-
-```cpp
-m_images[i] = m_resources.container< ImageResource >()->getDefaultResource();
-m_textures[i] = m_resources.container< TextureResource::Texture2D >()->getDefaultResource();
-m_materials[i] = m_resources.container< Material::PBRResource >()->getDefaultResource();
-m_meshes[i] = m_resources.container< SimpleMeshResource >()->getDefaultResource();
-```
-
-This respects the engine's fail-safe philosophy: errors are logged but never break the application.
+Every resource slot must contain a valid resource — never nullptr. On any loading error, the loader stores the container's default resource and continues. This respects the engine's fail-safe philosophy.
 
 ### Lambda Capture Safety (CRITICAL)
 
@@ -717,22 +768,32 @@ GLTFLoader is stack-allocated and destroyed when `onBuilding()` returns. Async l
 });
 ```
 
-See also: `Resources/AGENTS.md` → Async Lambda Capture Safety
+### PBR Material Features
+
+Textures are created **on-demand during material loading** with the correct sRGB flag based on material semantic. Supported components:
+- Albedo (sRGB), Metallic-Roughness, Normal, Ambient Occlusion, Emissive (sRGB)
+- Clear coat (KHR_materials_clearcoat), Sheen (KHR_materials_sheen)
+- Transmission (KHR_materials_transmission), Iridescence (KHR_materials_iridescence)
+- Alpha mode: OPAQUE / MASK / BLEND
 
 ### Performance Optimizations
 
-- **String allocation**: `reserve + append` instead of concatenation temporaries for resource names
-- **Tri-buffer streaming**: 3-element stack buffer replaces per-primitive heap-allocated `std::vector<uint32_t>` for index building
+- **String allocation**: `reserve + append` instead of concatenation temporaries
+- **Tri-buffer streaming**: 3-element stack buffer replaces per-primitive heap vector for index building
 - **Move-capture**: `[materialList = std::move(materialList)]` avoids N atomic refcount increments
-- **materialList.reserve**: Pre-allocates material vector to primitive count
+- **Two-pass shape building**: first pass counts vertices/triangles, second pass fills
 
 ### Code References
 
 - `Scenes/GLTFLoader.hpp/.cpp` — Main loader class
 - `Scenes/GLTFLoader.cpp:loadImages()` — Phase 1: async image loading
-- `Scenes/GLTFLoader.cpp:loadTextures()` — Phase 2: async texture creation
-- `Scenes/GLTFLoader.cpp:loadMaterials()` — Phase 3: async PBR material creation with pre-resolved textures
-- `Scenes/GLTFLoader.cpp:loadMeshes()` — Phase 4: async geometry + mesh creation with tri-buffer
+- `Scenes/GLTFLoader.cpp:loadMaterials()` — Phase 2: async PBR materials with on-demand texture creation
+- `Scenes/GLTFLoader.cpp:loadMeshes()` — Phase 3: async geometry + mesh creation
+- `Scenes/GLTFLoader.cpp:loadSkins()` — Phase 4: skeleton and skin building
+- `Scenes/GLTFLoader.cpp:loadAnimations()` — Phase 5: animation clip creation
+- `Scenes/GLTFLoader.cpp:buildNodeHierarchy()` — Phase 6: scene graph construction
+- `Scenes/GLTFLoader.cpp:processNodeAsStatic()` — StaticEntity mode node processing
+- `Scenes/GLTFLoader.cpp:processNodeAsNode()` — Node mode hierarchical processing
 
 ## Detailed Documentation
 

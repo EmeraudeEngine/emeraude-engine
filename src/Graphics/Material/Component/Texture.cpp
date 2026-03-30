@@ -112,6 +112,13 @@ namespace EmEn::Graphics::Material::Component
 		 * The GPU will automatically convert sRGB to linear on sampling. */
 		m_textureResource->enableSRGB(m_variableName.ends_with("Color"));
 
+		/* Normal map Y flip: converts between OpenGL (Y+ up) and DirectX (Y+ down) conventions.
+		 * Enabled per-component in the material JSON via "FlipNormalMapY": true. */
+		if ( data.isMember("FlipNormalMapY") && data["FlipNormalMapY"].isBool() )
+		{
+			m_textureResource->enableFlipNormalMapY(data["FlipNormalMapY"].asBool());
+		}
+
 		/* Check the optional UVW channel. */
 		if ( data.isMember(JKChannel) )
 		{

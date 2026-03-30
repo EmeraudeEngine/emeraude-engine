@@ -146,6 +146,28 @@ namespace EmEn::Graphics::TextureResource
 				return m_sRGB;
 			}
 
+			/**
+			 * @brief Enables flipping the green (Y) channel of a normal map at load time.
+			 * @note Converts between OpenGL (Y+ up) and DirectX (Y+ down) normal map conventions.
+			 * @param enable True to flip the Y channel before GPU upload.
+			 */
+			void
+			enableFlipNormalMapY (bool enable) noexcept
+			{
+				m_flipNormalMapY = enable;
+			}
+
+			/**
+			 * @brief Returns whether the normal map Y channel flip is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFlipNormalMapYEnabled () const noexcept
+			{
+				return m_flipNormalMapY;
+			}
+
 		protected:
 
 			/**
@@ -170,6 +192,13 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			bool validateTexture (const Libs::PixelFactory::Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept;
 
+			/**
+			 * @brief Applies the normal map Y flip if enabled.
+			 * @note Call this after validatePixmap() and before GPU upload.
+			 * @param pixmap A reference to the pixmap to modify.
+			 */
+			void applyFlipNormalMapY (Libs::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
@@ -177,5 +206,6 @@ namespace EmEn::Graphics::TextureResource
 			bool onDependenciesLoaded () noexcept override;
 
 			bool m_sRGB{false};
+			bool m_flipNormalMapY{false};
 	};
 }
