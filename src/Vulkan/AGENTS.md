@@ -156,6 +156,23 @@ void waitEvents(std::span< const VkEvent > events, ...);
 > - `Material/StandardResource.cpp:createDescriptorSetLayout()` - Same pattern
 > - `Material/PBRResource.cpp:createDescriptorSetLayout()` - Same pattern
 
+## Critical: Descriptor Pool FREE_DESCRIPTOR_SET_BIT
+
+> [!CRITICAL]
+> **Any `DescriptorPool` whose descriptor sets are freed individually (via destructor or explicit
+> `vkFreeDescriptorSets`) MUST be created with `VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT`.**
+>
+> Without this flag, `vkFreeDescriptorSets` triggers `VUID-vkFreeDescriptorSets-descriptorPool-00312`
+> at shutdown. The `DescriptorPool` constructor accepts this as the 4th parameter:
+> ```cpp
+> auto pool = std::make_shared< DescriptorPool >(
+>     device, poolSizes, maxSets,
+>     VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT  // Required for individual free
+> );
+> ```
+>
+> **Known case:** Skinning SSBO descriptor pool in `RenderableInstance::Abstract::createSkinningResources()`.
+
 ## Critical: Buffer Descriptor Offset
 
 > [!CRITICAL]

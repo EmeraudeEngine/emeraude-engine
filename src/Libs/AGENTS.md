@@ -89,6 +89,18 @@ Context for developing Emeraude Engine utility libraries.
 - **ShapeSplitter**: Plane-based geometry splitting with optional integrated cap sealing (`sealCut` option)
 - Format handlers: Native (ee3d), OBJ, STL, MDx (MDL/MD2/MD3/MD5)
 - MDx formats are read-only (no write support). MD5 loader builds `Skeleton`, `Skin`, and vertex influences/weights (top-4 by bias with renormalization) via `ShapeLoadResult`
+- **MD5 loader uses direct Shape population** (NOT ShapeBuilder). Two-pass approach matching id Tech 4 `Model_md5.cpp`:
+  - Pass 1: Create all vertices (one per MD5 vert, shared between triangles) with position, UV, bone influences
+  - Pass 2: Create triangles with MD5 indices + per-mesh vertex offset, reverse winding (2,1,0)
+  - TBN computed via `computeTriangleTBNSpace()` + `computeVertexTBNSpace()` on shared vertices (smooth normals)
+  - Normals negated after computation to compensate coordinate conversion reflection (det=-1 of (y,-z,x))
+  - `declareTextureCoordinatesAvailable()` required (direct population bypasses auto-declaration)
+
+> [!WARNING]
+> **ShapeBuilder is for procedural shape construction only** (gem cuts, parametric geometry).
+> File format loaders (MD5, OBJ, etc.) should populate the Shape directly — ShapeBuilder's
+> data economy (vertex deduplication) reorders vertices, which breaks any external index
+> mapping (bone influences, shared vertex references, etc.).
 - See: `VertexFactory/FileIO.hpp`, `VertexFactory/StreamIO.hpp`
 
 **WaveFactory/** - Audio manipulation (uses unified ByteStream I/O) - See [`@WaveFactory/AGENTS.md`](WaveFactory/AGENTS.md)

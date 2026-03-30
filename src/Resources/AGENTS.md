@@ -25,13 +25,30 @@ Services available to resources via `this->serviceProvider()` (injected at const
 
 | Method | Returns | Purpose |
 |--------|---------|---------|
-| `fileSystem()` | `const FileSystem&` | File path resolution |
-| `settings()` | `Settings&` | Configuration retrieval and modification |
+| `primaryServices()` | `PrimaryServices&` | Engine primary services (ThreadPool, FileSystem, Settings) |
 | `graphicsRenderer()` | `Graphics::Renderer&` | GPU resource creation |
 | `audioManager()` | `Audio::Manager&` | Audio system access |
 | `container<T>()` | `Container<T>*` | Access to other resource containers |
 
-**Constructor injection (v0.9+):** ServiceProvider is passed as the first constructor argument to every resource. The `load()` methods no longer receive it — resources access it via `this->serviceProvider()`.
+**Accessing core services:** `fileSystem()` and `settings()` are accessed through `primaryServices()`:
+```cpp
+this->serviceProvider().primaryServices().settings()    // Configuration
+this->serviceProvider().primaryServices().fileSystem()   // File path resolution
+this->serviceProvider().primaryServices().threadPool()   // Background task execution
+```
+
+**ThreadPool access:** The engine's `ThreadPool` is accessed via `primaryServices().threadPool()`.
+Resources can submit background tasks (e.g., LOD generation) without spawning ad-hoc threads:
+```cpp
+this->serviceProvider().primaryServices().threadPool()->enqueue([...] { /* background work */ });
+```
+
+> [!WARNING]
+> **Do NOT use `std::async` for background tasks in resources.** Use the engine ThreadPool via
+> `primaryServices().threadPool()->enqueue()`. Unbounded `std::async` spawns one thread per task,
+> causing CPU contention on heavy scenes (e.g., Sponza with 50+ meshes).
+
+**Constructor injection:** ServiceProvider is passed as the first constructor argument to every resource. The `load()` methods no longer receive it — resources access it via `this->serviceProvider()`.
 
 ```cpp
 // Constructor: ResourceTrait(AbstractServiceProvider & serviceProvider, name, flags)

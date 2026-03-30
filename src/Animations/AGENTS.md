@@ -216,8 +216,19 @@ ctest -R MathTransformConversions
 
 ## Known Issues
 
-- **Fox model black under directional light**: Position skinning works (correct silhouette), shadow casting works, spot light (flashlight) works, but Fox surface is black under directional light. Raw normals produce the same result → NOT a normal skinning issue. Likely material/PBR or shadow self-occlusion. Under investigation.
 - **TBN debug rendering**: TBNSpaceRendering generator does not support skeletal animation — TBN lines may not appear or may appear at bind-pose positions.
+- **MD5 normal map convention**: id Tech normal maps use OpenGL convention (Y+ up). The engine uses DirectX convention (Y+ down). Use `"FlipNormalMapY": true` in the material JSON normal component to flip the green channel at load time. See: `Pixmap::flipNormalMapY()`, `TextureResource::Abstract::enableFlipNormalMapY()`, `Material::Component::Texture` (JSON key `"FlipNormalMapY"`).
+
+### SkeletalAnimator Runtime API
+
+The `SkeletalAnimator` provides runtime clip management:
+- `clipNames()` — Returns sorted list of all registered clip names
+- `activeClipName()` — Returns the name of the currently playing clip
+- `play(clipName, wrap)` — Starts a clip by name (default: `PlaybackWrap::Loop`)
+- `stop()` / `pause()` / `resume()` — Playback control
+- `setSpeed(float)` — Playback speed multiplier
+
+Code references: `Animations/SkeletalAnimator.hpp/.cpp`
 
 ## Detailed Documentation
 

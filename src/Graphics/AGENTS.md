@@ -1084,6 +1084,45 @@ for reads (render thread), exclusive lock for writes (resource loading thread).
 >
 > **Code reference:** `Graphics/PostProcessor.cpp:configure()`
 
+## 15b. Level of Detail (LOD)
+
+### Settings
+
+LOD behavior is controlled via `Core/Graphics/LOD/` settings in `SettingKeys.hpp`:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `EnableAutomaticGeneration` | `false` | Enable/disable automatic LOD mesh generation |
+| `MinTriangleCount` | `250` | Minimum triangles a LOD level must produce to be generated |
+| `ScreenCoverageThreshold` | `0.75` | Screen-space coverage ratio for LOD 0 → LOD 1 transition |
+| `ReductionRatio` | `0.33` | Triangle reduction per LOD level (each level keeps ~33%) |
+
+### LOD Generation Pipeline
+
+When `EnableAutomaticGeneration = true`, LOD meshes are generated automatically in `onDependenciesLoaded()` for both `SimpleMeshResource` and `MeshResource`:
+
+1. Check if source geometry is `IndexedVertexResource` with local data
+2. Determine levels to generate based on triangle count and `MinTriangleCount`
+3. Submit decimation tasks to engine `ThreadPool` (NOT `std::async`)
+4. Each level uses `ShapeDecimator` (QEM) at `ratio^level` reduction
+5. LOD 0 renders immediately — generation is non-blocking
+
+### LOD Selection
+
+`Scene::selectLODLevel(distance, objectRadius)` computes LOD from screen-space coverage:
+```
+screenSize = objectRadius / distance
+LODLevel = clamp(MaxLODLevels × (1 - screenSize / threshold), 0, MaxLODLevels-1)
+```
+
+The threshold is read from `ScreenCoverageThreshold` at scene init (cached in `m_LODScreenCoverageThreshold`).
+
+**Code references:**
+- `Renderable/SimpleMeshResource.cpp:onDependenciesLoaded()` — LOD generation trigger
+- `Renderable/MeshResource.cpp:onDependenciesLoaded()` — Same for multi-layer meshes
+- `Scenes/Scene.rendering.cpp:selectLODLevel()` — Runtime LOD selection
+- `Renderable/Types.hpp` — `MaxLODLevels` (4), legacy constants
+
 ## 16. Frame Synchronization — Double-Buffering
 
 > [!CRITICAL]
