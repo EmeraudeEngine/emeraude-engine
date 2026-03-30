@@ -899,112 +899,151 @@ namespace EmEn::Libs::VertexFactory
 
 				Animation::Skeleton< vertex_data_t > skeleton{std::move(engineJoints)};
 
-				/* ---- Phase 3: Build geometry with per-vertex bone influences ---- */
-				ShapeBuilderOptions< vertex_data_t > options{};
-				options.enableGlobalVertexColor(PixelFactory::White);
-				ShapeBuilder builder{geometry, options};
-				builder.beginConstruction(ConstructionMode::Triangles);
+				/* ---- Phase 3: Build geometry directly into Shape (2-pass, shared vertices) ----
+				 * Pass 1: Create all vertices (one per MD5 vert, shared between triangles).
+				 * Pass 2: Create triangles referencing shared vertex indices.
+				 * This matches the id Tech 4 approach (Model_md5.cpp). */
+				auto & vertices = geometry.vertices();
+				auto & triangles = geometry.triangles();
+
+				/* Count totals across all MD5 sub-meshes for reservation. */
+				size_t totalVertices = 0;
+				size_t totalTriangles = 0;
 
 				for ( const auto & mesh : meshes )
 				{
-					for ( const auto & tri : mesh.tris )
-					{
-						/* Reverse vertex order (2,1,0) to fix winding. */
-						for ( int k = 2; k >= 0; --k )
-						{
-							int vIdx = tri[k];
-							const auto & vert = mesh.verts[vIdx];
+					totalVertices += mesh.verts.size();
+					totalTriangles += mesh.tris.size();
+				}
 
-							/* Calculate bind-pose position. */
-							std::array< float, 3 > finalPos = {0, 0, 0};
+				vertices.reserve(totalVertices);
+				triangles.reserve(totalTriangles);
+
+				for ( const auto & mesh : meshes )
+				{
+					/* Track the vertex offset for this sub-mesh within the global vertex array. */
+					const auto vertexOffset = static_cast< index_data_t >(vertices.size());
+
+					/* Pass 1: Build all vertices for this sub-mesh. */
+					for ( const auto & vert : mesh.verts )
+					{
+						/* Calculate bind-pose position in MD5 world space. */
+						std::array< float, 3 > finalPos = {0, 0, 0};
+
+						for ( int w = 0; w < vert.countWeight; ++w )
+						{
+							const auto & weight = mesh.weights[vert.startWeight + w];
+							const auto & joint = joints[weight.jointIndex];
+
+							std::array< float, 3 > rotPos;
+							rotatePoint(joint.orient, weight.pos, rotPos);
+
+							finalPos[0] += (joint.pos[0] + rotPos[0]) * weight.bias;
+							finalPos[1] += (joint.pos[1] + rotPos[1]) * weight.bias;
+							finalPos[2] += (joint.pos[2] + rotPos[2]) * weight.bias;
+						}
+
+						/* Convert MD5 → engine coordinates: (y, -z, x) * scale. */
+						ShapeVertex< vertex_data_t > vertex{
+							Math::Vector< 3, vertex_data_t >{
+								static_cast< vertex_data_t >(finalPos[1]) * IDTechUnitScale,
+								-static_cast< vertex_data_t >(finalPos[2]) * IDTechUnitScale,
+								static_cast< vertex_data_t >(finalPos[0]) * IDTechUnitScale
+							},
+							{}
+						};
+
+						vertex.setTextureCoordinates(Math::Vector< 2, vertex_data_t >{
+							static_cast< vertex_data_t >(vert.uv[0]),
+							static_cast< vertex_data_t >(vert.uv[1])
+						});
+
+						/* Compute top-4 bone influences sorted by weight (descending). */
+						if ( vert.countWeight <= 4 )
+						{
+							const int slotCount = std::min(vert.countWeight, 4);
+							Math::Vector< 4, int32_t > boneIndices{-1, -1, -1, -1};
+							Math::Vector< 4, vertex_data_t > boneWeights{0, 0, 0, 0};
+
+							for ( int w = 0; w < slotCount; ++w )
+							{
+								const auto & weight = mesh.weights[vert.startWeight + w];
+								boneIndices[w] = weight.jointIndex;
+								boneWeights[w] = static_cast< vertex_data_t >(weight.bias);
+							}
+
+							vertex.setInfluences(boneIndices[0], boneIndices[1], boneIndices[2], boneIndices[3]);
+							vertex.setWeights(boneWeights[0], boneWeights[1], boneWeights[2], boneWeights[3]);
+						}
+						else
+						{
+							/* More than 4 weights: pick the 4 largest by bias. */
+							struct WeightEntry { int jointIndex; float bias; };
+							std::vector< WeightEntry > allWeights(vert.countWeight);
 
 							for ( int w = 0; w < vert.countWeight; ++w )
 							{
 								const auto & weight = mesh.weights[vert.startWeight + w];
-								const auto & joint = joints[weight.jointIndex];
-
-								std::array< float, 3 > rotPos;
-								rotatePoint(joint.orient, weight.pos, rotPos);
-
-								finalPos[0] += (joint.pos[0] + rotPos[0]) * weight.bias;
-								finalPos[1] += (joint.pos[1] + rotPos[1]) * weight.bias;
-								finalPos[2] += (joint.pos[2] + rotPos[2]) * weight.bias;
+								allWeights[w] = {weight.jointIndex, weight.bias};
 							}
 
-							/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
-							builder.setPosition(
-								static_cast< vertex_data_t >(finalPos[1]) * IDTechUnitScale,
-								-static_cast< vertex_data_t >(finalPos[2]) * IDTechUnitScale,
-								static_cast< vertex_data_t >(finalPos[0]) * IDTechUnitScale
-							);
+							std::partial_sort(allWeights.begin(), allWeights.begin() + 4, allWeights.end(),
+								[] (const WeightEntry & a, const WeightEntry & b) { return a.bias > b.bias; });
 
-							builder.setTextureCoordinates(
-								static_cast< vertex_data_t >(vert.uv[0]),
-								static_cast< vertex_data_t >(vert.uv[1])
-							);
+							float totalBias = 0;
 
-							/* Compute top-4 bone influences sorted by weight (descending)
-							 * and set them BEFORE newVertex() so they're part of the vertex
-							 * data during construction (required for data economy deduplication). */
-							Math::Vector< 4, int32_t > boneIndices{-1, -1, -1, -1};
-							Math::Vector< 4, vertex_data_t > boneWeights{0, 0, 0, 0};
-
-							if ( vert.countWeight <= 4 )
+							for ( int w = 0; w < 4; ++w )
 							{
-								const int slotCount = std::min(vert.countWeight, 4);
-
-								for ( int w = 0; w < slotCount; ++w )
-								{
-									const auto & weight = mesh.weights[vert.startWeight + w];
-									boneIndices[w] = weight.jointIndex;
-									boneWeights[w] = static_cast< vertex_data_t >(weight.bias);
-								}
+								totalBias += allWeights[w].bias;
 							}
-							else
+
+							if ( totalBias > 0 )
 							{
-								/* More than 4 weights: pick the 4 largest by bias. */
-								struct WeightEntry { int jointIndex; float bias; };
-								std::vector< WeightEntry > allWeights(vert.countWeight);
-
-								for ( int w = 0; w < vert.countWeight; ++w )
-								{
-									const auto & weight = mesh.weights[vert.startWeight + w];
-									allWeights[w] = {weight.jointIndex, weight.bias};
-								}
-
-								std::partial_sort(allWeights.begin(), allWeights.begin() + 4, allWeights.end(),
-									[] (const WeightEntry & a, const WeightEntry & b) { return a.bias > b.bias; });
-
-								/* Renormalize the top 4 weights. */
-								float totalBias = 0;
-
-								for ( int w = 0; w < 4; ++w )
-								{
-									totalBias += allWeights[w].bias;
-								}
-
-								if ( totalBias > 0 )
-								{
-									for ( int w = 0; w < 4; ++w )
-									{
-										boneIndices[w] = allWeights[w].jointIndex;
-										boneWeights[w] = static_cast< vertex_data_t >(allWeights[w].bias / totalBias);
-									}
-								}
+								vertex.setInfluences(allWeights[0].jointIndex, allWeights[1].jointIndex, allWeights[2].jointIndex, allWeights[3].jointIndex);
+								vertex.setWeights(
+									static_cast< vertex_data_t >(allWeights[0].bias / totalBias),
+									static_cast< vertex_data_t >(allWeights[1].bias / totalBias),
+									static_cast< vertex_data_t >(allWeights[2].bias / totalBias),
+									static_cast< vertex_data_t >(allWeights[3].bias / totalBias)
+								);
 							}
-
-							builder.setInfluences(boneIndices);
-							builder.setWeights(boneWeights);
-							builder.newVertex();
 						}
+
+						vertices.emplace_back(vertex);
+					}
+
+					/* Pass 2: Build triangles referencing the shared vertices.
+					 * Reverse winding (2,1,0) for engine face culling convention. */
+					for ( const auto & tri : mesh.tris )
+					{
+						ShapeTriangle< vertex_data_t > triangle{};
+
+						triangle.setVertexIndex(0, vertexOffset + static_cast< index_data_t >(tri[2]));
+						triangle.setVertexIndex(1, vertexOffset + static_cast< index_data_t >(tri[1]));
+						triangle.setVertexIndex(2, vertexOffset + static_cast< index_data_t >(tri[0]));
+
+						triangles.emplace_back(triangle);
 					}
 				}
 
-				builder.endConstruction();
+				/* Signal that texture coordinates are available (set directly on vertices,
+				 * not via saveVertex which auto-declares them). */
+				geometry.declareTextureCoordinatesAvailable();
 
-				/* MD5 format doesn't store normals, compute them from geometry. */
-				geometry.computeTriangleNormal();
-				geometry.computeVertexNormal();
+				/* Compute the full TBN space (normal + tangent + binormal)
+				 * from shared triangle geometry + UVs. Smooth normals via vertex sharing. */
+				geometry.computeTriangleTBNSpace();
+				geometry.computeVertexTBNSpace();
+
+				/* The coordinate conversion (y, -z, x) is a reflection (determinant -1),
+				 * which inverts the cross product used for normal computation.
+				 * Negate vertex normals to correct the orientation. */
+				for ( auto & v : vertices )
+				{
+					v.setNormal(-v.normal());
+				}
+
+				geometry.updateProperties();
 
 				/* ---- Phase 5: Build Skin and attach to Shape ---- */
 				/* MD5 uses direct joint indexing (skin-local == skeleton-global). */

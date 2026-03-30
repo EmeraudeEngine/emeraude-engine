@@ -79,11 +79,12 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* Create descriptor pool (1 SSBO descriptor, 1 set). */
+		/* Create descriptor pool (1 SSBO descriptor, 1 set, free-able). */
 		m_skinningDescriptorPool = std::make_shared< Vulkan::DescriptorPool >(
 			device,
 			std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}},
-			1
+			1,
+			VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
 		);
 
 		if ( !m_skinningDescriptorPool->createOnHardware() )
