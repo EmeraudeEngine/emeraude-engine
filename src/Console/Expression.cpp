@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <charconv>
+#include <cstdlib>
 
 /* Local inclusions. */
 #include "Libs/String.hpp"
@@ -118,10 +119,17 @@ namespace EmEn::Console
 
 			if ( argument.find('.') != std::string::npos )
 			{
+#ifdef __APPLE__
+				char * end = nullptr;
+				const float value = std::strtof(argument.data(), &end);
+
+				if ( end == argument.data() + argument.size() )
+#else
 				float value = 0.0F;
 				auto [ptr, ec] = std::from_chars(argument.data(), argument.data() + argument.size(), value);
 
 				if ( ec == std::errc{} && ptr == argument.data() + argument.size() )
+#endif
 				{
 					m_arguments.emplace_back(value);
 

@@ -246,7 +246,7 @@ namespace EmEn::Libs::VertexFactory
 				   Alternatively, we can manually populate.
 				*/
 
-				return geometry.build([&file, this] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
+				return geometry.build([&file] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
 					std::string currentLine;
 					std::vector< ShapeVertex< vertex_data_t > > faceVertices;
 					Math::Vector< 3, float > normal;
