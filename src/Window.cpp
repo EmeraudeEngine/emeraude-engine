@@ -41,6 +41,9 @@ namespace EmEn
 	using namespace Graphics;
 	using namespace Vulkan;
 
+	/* Static instance pointer for the GLFW monitor callback. */
+	Window * Window::s_instance{nullptr};
+
 	bool
 	Window::showInformation () const noexcept
 	{
@@ -361,6 +364,8 @@ namespace EmEn
 		/* Reset the window pointer.
 		 * NOTE: It will automatically remove all callbacks. */
 		m_handle.reset();
+
+		s_instance = nullptr;
 
 		return true;
 	}
@@ -961,6 +966,72 @@ namespace EmEn
 		};
 	}
 
+	void
+	Window::refreshMonitorDevices () noexcept
+	{
+		m_monitorDevices.clear();
+
+		const auto monitors = Window::getMonitors();
+
+		if ( monitors.empty() )
+		{
+			return;
+		}
+
+		auto * primaryMonitor = glfwGetPrimaryMonitor();
+
+		for ( auto * monitor : monitors )
+		{
+			if ( m_monitorDevices.full() )
+			{
+				break;
+			}
+
+			MonitorDevice device;
+
+			/* Name. */
+			if ( const auto * monitorName = glfwGetMonitorName(monitor); monitorName != nullptr )
+			{
+				device.name = monitorName;
+			}
+
+			/* Primary flag. */
+			device.primary = (monitor == primaryMonitor);
+
+			/* Physical size in millimeters. */
+			int widthMM = 0;
+			int heightMM = 0;
+			glfwGetMonitorPhysicalSize(monitor, &widthMM, &heightMM);
+			device.physicalWidthMM = widthMM;
+			device.physicalHeightMM = heightMM;
+
+			/* Position on virtual desktop. */
+			int xPos = 0;
+			int yPos = 0;
+			glfwGetMonitorPos(monitor, &xPos, &yPos);
+			device.positionX = xPos;
+			device.positionY = yPos;
+
+			/* Current video mode (resolution, refresh rate, color depth). */
+			if ( const auto * mode = glfwGetVideoMode(monitor); mode != nullptr )
+			{
+				device.currentResolutionX = mode->width;
+				device.currentResolutionY = mode->height;
+				device.refreshRate = mode->refreshRate;
+				device.colorDepth = mode->redBits + mode->greenBits + mode->blueBits;
+			}
+
+			/* Content scale (HiDPI). */
+			float xScale = 1.0F;
+			float yScale = 1.0F;
+			glfwGetMonitorContentScale(monitor, &xScale, &yScale);
+			device.contentScaleX = xScale;
+			device.contentScaleY = yScale;
+
+			m_monitorDevices.emplace_back(std::move(device));
+		}
+	}
+
 	std::array< uint32_t, 2 >
 	Window::getFramebufferSize (bool applyScale) const noexcept
 	{
@@ -1281,11 +1352,12 @@ namespace EmEn
 	}
 
 	bool
-	Window::checkMonitors (bool showInformation) const noexcept
+	Window::checkMonitors (bool showInformation) noexcept
 	{
-		const auto monitors = Window::getMonitors();
+		/* Populate the monitor cache. */
+		this->refreshMonitorDevices();
 
-		if ( monitors.empty() )
+		if ( m_monitorDevices.empty() )
 		{
 			Tracer::fatal(ClassId, "There is no monitor on the system !");
 
@@ -1294,13 +1366,12 @@ namespace EmEn
 
 		if ( showInformation )
 		{
-			TraceInfo{ClassId} << monitors.size() << " monitor(s) available(s).";
-		}
+			TraceInfo{ClassId} << m_monitorDevices.size() << " monitor(s) available(s).";
 
-		for ( auto * monitor : monitors )
-		{
-			/* NOTE: Display monitors information. */
-			if ( showInformation )
+			/* Detailed logging per monitor uses GLFW handles for video modes. */
+			const auto monitors = Window::getMonitors();
+
+			for ( auto * monitor : monitors )
 			{
 				const auto modes = Window::getMonitorModes(monitor);
 
@@ -1317,6 +1388,8 @@ namespace EmEn
 			}
 		}
 
+		/* Register the static instance and the hot-plug callback. */
+		s_instance = this;
 		glfwSetMonitorCallback(monitorConfigurationChanged);
 
 		return true;
@@ -1502,11 +1575,18 @@ namespace EmEn
 				break;
 
 			case GLFW_DISCONNECTED :
-				Tracer::info(ClassId, "New monitor removed to the configuration !");
+				Tracer::info(ClassId, "New monitor removed from the configuration !");
 				break;
 
 			default:
 				break;
+		}
+
+		/* Refresh the monitor cache and notify observers. */
+		if ( s_instance != nullptr )
+		{
+			s_instance->refreshMonitorDevices();
+			s_instance->notify(OSMonitorConfigurationChanged);
 		}
 	}
 

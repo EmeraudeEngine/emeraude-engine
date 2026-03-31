@@ -49,6 +49,7 @@
 /* Local inclusions for usages. */
 #include "Vulkan/Surface.hpp"
 #include "Identification.hpp"
+#include "Libs/StaticVector.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -93,6 +94,33 @@ namespace EmEn
 			static constexpr auto ClassId{"WindowService"};
 
 			/**
+			 * @brief Describe a connected monitor/display device.
+			 */
+			struct MonitorDevice
+			{
+				/** The monitor name as reported by the system. */
+				std::string name{"Unknown"};
+				/** Whether this is the primary monitor. */
+				bool primary{false};
+				/** Physical size of the display in millimeters. */
+				int32_t physicalWidthMM{0};
+				int32_t physicalHeightMM{0};
+				/** Current resolution in pixels. */
+				int32_t currentResolutionX{0};
+				int32_t currentResolutionY{0};
+				/** Position on the virtual desktop in screen coordinates. */
+				int32_t positionX{0};
+				int32_t positionY{0};
+				/** Current refresh rate in Hz. */
+				int32_t refreshRate{0};
+				/** Color depth (sum of red, green and blue bits). */
+				int32_t colorDepth{0};
+				/** Content scale factors (for HiDPI/Retina displays). */
+				float contentScaleX{1.0F};
+				float contentScaleY{1.0F};
+			};
+
+			/**
 			 * @brief Structure to keep the state of the window geometry.
 			 */
 			struct State
@@ -135,6 +163,7 @@ namespace EmEn
 				OSRequestsToRescaleContentBy, /* This tells the graphics framebuffer should be resized according to the new scale. */
 				OSRequestsToRefreshContent,
 				OSRequestsToTerminate,
+				OSMonitorConfigurationChanged,
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -679,6 +708,18 @@ namespace EmEn
 			std::array< uint32_t, 2 > getDesktopSize (GLFWmonitor * monitor = nullptr) const noexcept;
 
 			/**
+			 * @brief Returns the cached list of connected monitors.
+			 * @note The list is populated on initialization and updated on hot-plug events.
+			 * @return const Libs::StaticVector< MonitorDevice, 16 > &
+			 */
+			[[nodiscard]]
+			const Libs::StaticVector< MonitorDevice, 16 > &
+			monitorDevices () const noexcept
+			{
+				return m_monitorDevices;
+			}
+
+			/**
 			 * @brief Recreates the Vulkan surface (destroys then creates).
 			 * @note This is useful on Windows where vkCreateSwapchainKHR can deadlock.
 			 * By destroying the surface completely and recreating it, we avoid the
@@ -727,12 +768,18 @@ namespace EmEn
 			void initializeState (bool fakeWindow) noexcept;
 
 			/**
-			 * @brief Checks monitors information and keeps it to a static member from here.
-			 * @param showInformation
+			 * @brief Checks monitors availability, populates the monitor cache and registers the hot-plug callback.
+			 * @param showInformation Log monitor details to the trace output.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkMonitors (bool showInformation) const noexcept;
+			bool checkMonitors (bool showInformation) noexcept;
+
+			/**
+			 * @brief Refreshes the cached monitor list from GLFW.
+			 * @return void
+			 */
+			void refreshMonitorDevices () noexcept;
 
 			/**
 			 * @brief Creates the window-related objects.
@@ -907,5 +954,9 @@ namespace EmEn
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_isUserResizing{false};
+			Libs::StaticVector< MonitorDevice, 16 > m_monitorDevices;
+
+			/** @brief Static instance pointer for the GLFW monitor callback (no user pointer available on monitor callbacks). */
+			static Window * s_instance;
 	};
 }
