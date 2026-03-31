@@ -183,6 +183,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.hpp
     # PlatformSpecific
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/DiskInfo.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Types.hpp
@@ -269,6 +270,7 @@ if ( UNIX AND NOT APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.linux.cpp
         # PlatformSpecific
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/DiskInfo.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.linux.cpp
@@ -284,6 +286,7 @@ if ( APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.mac.mm
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.mac.mm
         # PlatformSpecific
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/DiskInfo.mac.mm
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.mac.cpp
@@ -299,6 +302,7 @@ if ( MSVC )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.windows.cpp
         # PlatformSpecific
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/DiskInfo.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.windows.cpp

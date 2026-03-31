@@ -336,6 +336,9 @@ elseif ( APPLE )
 
 	# Link CoreWLAN framework for WiFi scanner.
 	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreWLAN")
+
+	# Link DiskArbitration framework for disk info (removable detection).
+	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework DiskArbitration")
 elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 
