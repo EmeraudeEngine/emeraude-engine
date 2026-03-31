@@ -32,42 +32,36 @@
 namespace EmEn::Net::WiFiScanner
 {
 	/**
-	 * @brief Converts a CWSecurity enum to a human-readable string.
-	 * @param security The CWSecurity value.
-	 * @return std::string
+	 * @brief Determines the security type of a CWNetwork by probing supported security modes.
+	 * @note The `CWNetwork.security` property was removed in recent macOS SDKs.
+	 * This function uses `supportsSecurity:` as a compatible replacement.
+	 * @param cwNetwork The CoreWLAN network object.
+	 * @return std::string A human-readable security string.
 	 */
 	static std::string
-	securityToString (CWSecurity security) noexcept
+	detectSecurity (CWNetwork * cwNetwork) noexcept
 	{
-		switch ( security )
+		/* Probe from strongest to weakest; return the first match. */
+		static const struct { CWSecurity type; const char * label; } probes[] = {
+			{ kCWSecurityWPA3Enterprise, "WPA3-EAP" },
+			{ kCWSecurityWPA3Personal,   "WPA3-SAE" },
+			{ kCWSecurityWPA2Enterprise, "WPA2-EAP" },
+			{ kCWSecurityWPA2Personal,   "WPA2-PSK" },
+			{ kCWSecurityWPAEnterprise,  "WPA-EAP" },
+			{ kCWSecurityWPAPersonal,    "WPA-PSK" },
+			{ kCWSecurityWEP,            "WEP" },
+			{ kCWSecurityNone,           "Open" },
+		};
+
+		for ( const auto & probe : probes )
 		{
-			case kCWSecurityNone :
-				return "Open";
-
-			case kCWSecurityWEP :
-				return "WEP";
-
-			case kCWSecurityWPAPersonal :
-				return "WPA-PSK";
-
-			case kCWSecurityWPAEnterprise :
-				return "WPA-EAP";
-
-			case kCWSecurityWPA2Personal :
-				return "WPA2-PSK";
-
-			case kCWSecurityWPA2Enterprise :
-				return "WPA2-EAP";
-
-			case kCWSecurityWPA3Personal :
-				return "WPA3-SAE";
-
-			case kCWSecurityWPA3Enterprise :
-				return "WPA3-EAP";
-
-			default :
-				return "Unknown";
+			if ( [cwNetwork supportsSecurity:probe.type] )
+			{
+				return probe.label;
+			}
 		}
+
+		return "Unknown";
 	}
 
 	/**
@@ -108,7 +102,7 @@ namespace EmEn::Net::WiFiScanner
 			}
 		}
 
-		network.security = securityToString(cwNetwork.security);
+		network.security = detectSecurity(cwNetwork);
 		network.mode = "Infra";
 
 		return network;
@@ -184,7 +178,25 @@ namespace EmEn::Net::WiFiScanner
 				}
 			}
 
-			network.security = securityToString(interface.security);
+			/* CWInterface.security was removed in recent macOS SDKs.
+			 * Find the current network in the cached scan results to determine security. */
+			network.security = "Unknown";
+
+			NSSet< CWNetwork * > * cachedNetworks = [interface cachedScanResults];
+
+			if ( cachedNetworks != nil )
+			{
+				for ( CWNetwork * cachedNetwork in cachedNetworks )
+				{
+					if ( cachedNetwork.bssid != nil && interface.bssid != nil
+						&& [cachedNetwork.bssid isEqualToString:interface.bssid] )
+					{
+						network.security = detectSecurity(cachedNetwork);
+						break;
+					}
+				}
+			}
+
 			network.mode = "Infra";
 
 			connections.emplace_back(std::move(network));
