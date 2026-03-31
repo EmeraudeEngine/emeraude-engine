@@ -46,7 +46,7 @@
 
 namespace EmEn::Net
 {
-	static constexpr auto InvalidHandle = INVALID_HANDLE_VALUE;
+	static const auto InvalidHandle = INVALID_HANDLE_VALUE; // NOLINT: INVALID_HANDLE_VALUE uses reinterpret_cast, incompatible with constexpr on MSVC
 
 	/* =========================================================================
 	 * Lifecycle
