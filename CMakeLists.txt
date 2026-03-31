@@ -333,6 +333,9 @@ elseif ( APPLE )
 
 	# Link UniformTypeIdentifiers framework for UTType (macOS 11.0+)
 	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework UniformTypeIdentifiers")
+
+	# Link CoreWLAN framework for WiFi scanner.
+	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreWLAN")
 elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 

@@ -179,7 +179,9 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/DownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SSDPClient.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Types.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.hpp
     # PlatformSpecific
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.hpp
@@ -263,6 +265,9 @@ if ( UNIX AND NOT APPLE )
     message("Prepare sources for building Emeraude-Engine for Linux.")
 
     list(APPEND EMERAUDE_SOURCE_FILES
+        # Net
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.linux.cpp
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.linux.cpp
@@ -275,6 +280,9 @@ if ( APPLE )
     message("Prepare sources for building Emeraude-Engine for macOS.")
 
     list(APPEND EMERAUDE_SOURCE_FILES
+        # Net
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.mac.mm
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.mac.mm
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.mac.cpp
@@ -287,6 +295,9 @@ if ( MSVC )
     message("Prepare sources for building Emeraude-Engine for Windows.")
 
     list(APPEND EMERAUDE_SOURCE_FILES
+        # Net
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.windows.cpp
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.windows.cpp
