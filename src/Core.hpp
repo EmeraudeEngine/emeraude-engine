@@ -301,6 +301,7 @@ namespace EmEn
 
 			/**
 			 * @brief Stops the engine and initiates shutdown.
+			 * @param userExitCode The user exit code. Default 0.
 			 * @details This method signals the main loop to exit. The shutdown sequence:
 			 * 1. Broadcasts ExecutionStopped notification
 			 * 2. Calls onBeforeCoreStop() for application cleanup
@@ -311,7 +312,7 @@ namespace EmEn
 			 * @see onBeforeCoreStop()
 			 * @see NotificationCode::ExecutionStopped
 			 */
-			void stop () noexcept;
+			void stop (int32_t userExitCode = 0) noexcept;
 
 			/**
 			 * @brief Handles files dropped onto the application window.

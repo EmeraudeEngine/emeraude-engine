@@ -878,12 +878,12 @@ namespace EmEn
 	}
 
 	void
-	Core::stop () noexcept
+	Core::stop (int32_t userExitCode) noexcept
 	{
 		std::cout << "\n"
-			"*******************************" "\n"
-			"   Engine is about to stop !   " "\n"
-			"*******************************" "\n\n";
+			"**************************************************************" "\n"
+			"   Engine is about to stop (User exit code: " << userExitCode << ") !   " "\n"
+			"**************************************************************" "\n\n";
 
 		/* Dispatch the stop event,
 		 * first by sending the event,
