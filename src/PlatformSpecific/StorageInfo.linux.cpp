@@ -1,5 +1,5 @@
 /*
- * src/PlatformSpecific/DiskInfo.linux.cpp
+ * src/PlatformSpecific/StorageInfo.linux.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "DiskInfo.hpp"
+#include "StorageInfo.hpp"
 
 /* STL inclusions. */
 #include <fstream>
@@ -34,7 +34,7 @@
 /* POSIX inclusions. */
 #include <sys/statvfs.h>
 
-namespace EmEn::PlatformSpecific::DiskInfo
+namespace EmEn::PlatformSpecific::StorageInfo
 {
 	/**
 	 * @brief Checks if a block device is removable via sysfs.

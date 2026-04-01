@@ -1,5 +1,5 @@
 /*
- * src/PlatformSpecific/DiskInfo.windows.cpp
+ * src/PlatformSpecific/StorageInfo.windows.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "DiskInfo.hpp"
+#include "StorageInfo.hpp"
 
 /* Windows inclusions. */
 #ifndef NOMINMAX
@@ -37,7 +37,7 @@
 
 #include <Windows.h>
 
-namespace EmEn::PlatformSpecific::DiskInfo
+namespace EmEn::PlatformSpecific::StorageInfo
 {
 	std::vector< DriveInfo >
 	listDrives () noexcept

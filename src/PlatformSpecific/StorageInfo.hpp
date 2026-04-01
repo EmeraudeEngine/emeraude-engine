@@ -1,5 +1,5 @@
 /*
- * src/PlatformSpecific/DiskInfo.hpp
+ * src/PlatformSpecific/StorageInfo.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-namespace EmEn::PlatformSpecific::DiskInfo
+namespace EmEn::PlatformSpecific::StorageInfo
 {
 	/**
 	 * @brief Describes a mounted drive/volume on the system.

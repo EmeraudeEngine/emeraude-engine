@@ -68,10 +68,10 @@ PlatformSpecific/
 ├── SystemInfo.hpp/.cpp          # System information (+ hybrid CPU detection via hwloc)
 ├── UserInfo.hpp/.cpp            # User information (+ platform files)
 ├── Types.hpp                    # Common type definitions (CPU struct with E/P-core counts)
-├── DiskInfo.hpp                 # Cross-platform disk enumeration interface
-├── DiskInfo.linux.cpp           # /proc/mounts + statvfs + sysfs
-├── DiskInfo.mac.mm              # getmntinfo + DiskArbitration
-├── DiskInfo.windows.cpp         # GetLogicalDriveStrings + GetDiskFreeSpaceEx
+├── StorageInfo.hpp              # Cross-platform storage enumeration interface
+├── StorageInfo.linux.cpp        # /proc/mounts + statvfs + sysfs
+├── StorageInfo.mac.mm           # getmntinfo + DiskArbitration
+├── StorageInfo.windows.cpp      # GetLogicalDriveStrings + GetDiskFreeSpaceEx
 ├── VideoCaptureDevice.hpp       # Cross-platform video capture interface
 ├── VideoCaptureDevice.cpp       # Shared code (width/height accessors, YUYV→RGBA)
 ├── VideoCaptureDevice.linux.cpp # V4L2 implementation
@@ -395,15 +395,15 @@ Cross-platform webcam/video capture via `VideoCaptureDevice`.
 
 ---
 
-## Disk Information (`PlatformSpecific::DiskInfo`)
+## Storage Information (`PlatformSpecific::StorageInfo`)
 
-**Files**: `DiskInfo.hpp` + `DiskInfo.{linux,mac,windows}.cpp`
+**Files**: `StorageInfo.hpp` + `StorageInfo.{linux,mac,windows}.cpp`
 
 Cross-platform mounted drive enumeration with space usage and removable detection.
 
 **API**:
 ```cpp
-namespace EmEn::PlatformSpecific::DiskInfo
+namespace EmEn::PlatformSpecific::StorageInfo
 {
     struct DriveInfo {
         std::string filesystem;      // Device path ("/dev/sda1") or description

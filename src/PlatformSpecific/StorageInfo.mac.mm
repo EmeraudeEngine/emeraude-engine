@@ -1,5 +1,5 @@
 /*
- * src/PlatformSpecific/DiskInfo.mac.mm
+ * src/PlatformSpecific/StorageInfo.mac.mm
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "DiskInfo.hpp"
+#include "StorageInfo.hpp"
 
 /* macOS inclusions. */
 #include <sys/mount.h>
@@ -32,7 +32,7 @@
 #import <Foundation/Foundation.h>
 #import <DiskArbitration/DiskArbitration.h>
 
-namespace EmEn::PlatformSpecific::DiskInfo
+namespace EmEn::PlatformSpecific::StorageInfo
 {
 	/**
 	 * @brief Checks if a device is removable using DiskArbitration.
