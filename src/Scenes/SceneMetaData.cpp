@@ -256,22 +256,28 @@ namespace EmEn::Scenes
 				/* --- TLAS instance --- */
 				VkTransformMatrixKHR transform{};
 
-				if ( const auto * worldCoordinates = batch.worldCoordinates(); worldCoordinates != nullptr )
 				{
-					const auto modelMatrix = worldCoordinates->getModelMatrix();
-					const auto * m = modelMatrix.data();
+					/* Build the TLAS instance transform by combining the entity's world
+					 * coordinates (position + rotation) with the renderable instance's
+					 * transformation matrix (which contains the uniform scale from
+					 * setUniformScale / setTransformationMatrix).
+					 *
+					 * Without this, the BLAS geometry remains at its raw object-space size
+					 * in the acceleration structure, causing RT effects to trace against
+					 * un-scaled geometry while the rasterizer renders the scaled version. */
+					auto finalMatrix = batch.renderableInstance()->transformationMatrix();
+
+					if ( const auto * worldCoordinates = batch.worldCoordinates(); worldCoordinates != nullptr )
+					{
+						finalMatrix = worldCoordinates->getModelMatrix() * finalMatrix;
+					}
+
+					const auto * m = finalMatrix.data();
 
 					/* Column-major 4x4 → Row-major 3x4 transpose. */
 					transform.matrix[0][0] = m[0]; transform.matrix[0][1] = m[4]; transform.matrix[0][2] = m[8];  transform.matrix[0][3] = m[12];
 					transform.matrix[1][0] = m[1]; transform.matrix[1][1] = m[5]; transform.matrix[1][2] = m[9];  transform.matrix[1][3] = m[13];
 					transform.matrix[2][0] = m[2]; transform.matrix[2][1] = m[6]; transform.matrix[2][2] = m[10]; transform.matrix[2][3] = m[14];
-				}
-				else
-				{
-					/* Identity transform. */
-					transform.matrix[0][0] = 1.0F;
-					transform.matrix[1][1] = 1.0F;
-					transform.matrix[2][2] = 1.0F;
 				}
 
 				TLASInstanceInput instance{};

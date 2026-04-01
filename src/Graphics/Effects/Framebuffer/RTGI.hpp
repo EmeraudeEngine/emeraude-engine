@@ -64,6 +64,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float intensity{1.5F};
 				float bias{0.02F};
 				uint32_t sampleCount{4};
+				uint32_t blurRadius{4};
+				float depthSigma{1.0F};
+				float normalSigma{0.5F};
 			};
 
 			/**
@@ -85,7 +88,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the blur pass.
+			 * @brief Push constants for the bilateral blur pass.
 			 */
 			struct BlurPushConstants
 			{
@@ -93,6 +96,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float texelSizeY;
 				float directionX;
 				float directionY;
+				float depthSigma;
+				float normalSigma;
+				int32_t blurRadius;
+				float padding;
 			};
 
 			/**
@@ -210,11 +217,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
-			/* Descriptor sets (fixed -- never updated after creation). */
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
 	};
 }

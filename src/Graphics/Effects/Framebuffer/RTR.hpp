@@ -64,6 +64,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float maxDistance{100.0F};
 				float intensity{0.8F};
 				float fadeScreenEdge{0.15F};
+				uint32_t blurRadius{2};
+				float depthSigma{0.5F};
+				float normalSigma{0.3F};
 			};
 
 			/**
@@ -93,6 +96,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float texelSizeY;
 				float directionX;
 				float directionY;
+				float depthSigma;
+				float normalSigma;
+				int32_t blurRadius;
+				float padding;
 			};
 
 			/**
@@ -218,11 +225,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
-			/* Descriptor sets. */
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
 	};
 }

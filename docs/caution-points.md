@@ -5,6 +5,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 ## Table of Contents
 
 - [Graphics/Material System](#graphicsmaterial-system)
+- [Ray Tracing / Acceleration Structures](#ray-tracing--acceleration-structures)
 - [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
 - [Platform-Specific](#platform-specific)
@@ -112,6 +113,63 @@ if ( materialType == PBRResource::ClassId )
 > **Code references:**
 > - `Saphir/Keys.hpp:ShaderVariable::TangentToWorldMatrix`
 > - `Saphir/VertexShader.cpp:synthesizeTangentToWorldMatrix()`
+
+---
+
+## Ray Tracing / Acceleration Structures
+
+### Fixed: TLAS Instance Transform Must Include Renderable Scale (Apr 2026)
+
+> [!CRITICAL]
+> **The TLAS instance transform must combine entity world coordinates WITH the
+> renderable instance's transformation matrix (which carries `uniformScale`).**
+>
+> **Bug pattern (fixed Apr 2026):**
+> - `SceneMetaData::rebuild()` built the TLAS instance transform from
+>   `worldCoordinates->getModelMatrix()` only (position + rotation)
+> - The `renderableInstance->transformationMatrix()` (containing `uniformScale`)
+>   was ignored
+> - Result: RT effects traced against raw object-space geometry while the
+>   rasterizer rendered the scaled version → **phantom/ghost shapes** for any
+>   mesh with a non-identity transformation matrix (e.g. scaled meshes)
+>
+> **Fix:**
+> ```cpp
+> auto finalMatrix = batch.renderableInstance()->transformationMatrix();
+> if ( const auto * worldCoordinates = batch.worldCoordinates(); worldCoordinates != nullptr )
+> {
+>     finalMatrix = worldCoordinates->getModelMatrix() * finalMatrix;
+> }
+> ```
+>
+> **Files involved:**
+> - `Scenes/SceneMetaData.cpp:rebuild()` - TLAS instance construction
+
+### Known Issue: MRT Normal Blend for Translucent Materials
+
+> [!WARNING]
+> **The MRT normal attachment for TranslucentGB materials uses incorrect alpha
+> for blending, making normal-mapped reflections nearly invisible on low-roughness
+> translucent surfaces (e.g. water).**
+>
+> **Problem:**
+> - `SceneRendering::onCreateGraphicsPipeline()` duplicates the color blend state
+>   for MRT normal/material property attachments
+> - The MRT normal output packs roughness+metalness into alpha:
+>   `outNormal.a = roughness + metalness * 2.0`
+> - For the AmbientPass of translucent materials (Normal blending mode),
+>   `SRC_ALPHA` uses `outNormal.a` (e.g. 0.03 for water) instead of visual opacity
+> - Result: water normal contributes only 3% to MRT — ground normal dominates at 97%
+> - RT post-process effects (RTR, SSR, SSAO, RTAO) see a flat surface
+>
+> **Status:** Diagnosed. A fix using `blendEnable = VK_FALSE` for MRT attachments
+> in AmbientPass was tested and confirmed working (visible with exaggerated normal
+> intensity), but caused the water surface to disappear. Needs a more careful approach —
+> possibly separate blend states per attachment using Vulkan independent blend.
+>
+> **Files involved:**
+> - `Saphir/Generator/SceneRendering.cpp:onCreateGraphicsPipeline()` - MRT blend state duplication
+> - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` - Blend state per render pass type
 
 ---
 
