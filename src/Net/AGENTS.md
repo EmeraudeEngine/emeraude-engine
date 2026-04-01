@@ -106,6 +106,129 @@ netManager.clearCache();
 netManager.forceDownload(url, callback);
 ```
 
+## Hardware & Discovery Utilities
+
+Beyond the download manager, the Net module provides cross-platform hardware utilities for device discovery and communication. These are **standalone utility libraries** (not services), called on-demand.
+
+### SSDP Discovery (`Net::SSDPDiscovery`)
+
+**File**: `SSDPClient.hpp/.cpp`
+
+UPnP device discovery via UDP multicast M-SEARCH (239.255.255.250:1900).
+
+**API**:
+```cpp
+namespace EmEn::Net::SSDPDiscovery
+{
+    struct Device {
+        std::string address;                             // IP address
+        uint16_t port{0};
+        std::map< std::string, std::string > headers;   // SSDP response headers
+    };
+
+    [[nodiscard]]
+    std::vector< Device > discover (const std::string & searchTarget,
+                                     int timeoutSeconds = DefaultTimeoutSeconds) noexcept;
+}
+```
+
+**Platform**: Cross-platform (BSD sockets on Linux/macOS, Winsock on Windows). No external dependencies.
+
+---
+
+### Serial Port (`Net::SerialPort`)
+
+**Files**: `SerialPort.hpp` + `SerialPort.{linux,mac,windows}.cpp`
+
+Full cross-platform serial port abstraction: enumeration, open/close, read/write with timeout, flow control.
+
+**API**:
+```cpp
+namespace EmEn::Net
+{
+    struct SerialPortInfo {
+        std::string path;            // "/dev/ttyUSB0", "COM3"
+        std::string manufacturer;
+        std::string serialNumber;
+        std::string pnpId;
+        std::string locationId;
+        uint16_t vendorId{0};        // USB VID
+        uint16_t productId{0};       // USB PID
+    };
+
+    struct SerialPortConfig {
+        uint32_t baudRate{9600};
+        uint8_t dataBits{8};
+        uint8_t stopBits{1};
+        char parity{'N'};            // 'N', 'E', 'O'
+        bool rtscts{false};
+        bool xon{false};
+        bool xoff{false};
+    };
+
+    class SerialPort final {
+    public:
+        static std::vector< SerialPortInfo > listPorts () noexcept;
+        bool open (const std::string & path, const SerialPortConfig & config = {}) noexcept;
+        void close () noexcept;
+        bool isOpen () const noexcept;
+        int write (const void * data, size_t length) noexcept;
+        int write (const std::string & data) noexcept;
+        int read (void * buffer, size_t maxLength, uint32_t timeoutMs = 0) noexcept;
+        std::string readString (size_t maxLength = 4096, uint32_t timeoutMs = 0) noexcept;
+        const std::string & path () const noexcept;
+    };
+}
+```
+
+**Platform details**:
+| Platform | Enumeration | I/O | Dependencies |
+|----------|-------------|-----|--------------|
+| Linux | `/sys/class/tty` + sysfs | POSIX termios + select | None (kernel APIs) |
+| macOS | IOKit (IOSerialKeys, IOUSBLib) | POSIX termios | IOKit framework |
+| Windows | SetupAPI + GUID_DEVCLASS_PORTS | CreateFile + DCB | SetupAPI.lib |
+
+**Design**: RAII (closes in destructor), movable, non-copyable, all functions `noexcept`.
+
+---
+
+### WiFi Scanner (`Net::WiFiScanner`)
+
+**Files**: `WiFiScanner.hpp` + `WiFiScanner.{linux,mac,windows}.cpp`
+
+Cross-platform WiFi network enumeration and current connection query.
+
+**API**:
+```cpp
+namespace EmEn::Net::WiFiScanner
+{
+    struct Network {
+        std::string ssid;
+        std::string bssid;
+        int32_t signalLevel{0};     // dBm (e.g., -50)
+        int32_t quality{0};         // 0-100%
+        uint32_t frequency{0};      // MHz
+        int32_t channel{0};
+        std::string security;       // "WPA2", "WPA3", "Open", etc.
+        std::string mode;           // "Infra", "Ad-Hoc"
+    };
+
+    [[nodiscard]] std::vector< Network > scan () noexcept;
+    [[nodiscard]] std::vector< Network > getCurrentConnections () noexcept;
+}
+```
+
+**Platform details**:
+| Platform | Scan method | Dependencies |
+|----------|-------------|--------------|
+| Linux | `nmcli` (NetworkManager CLI) | Requires NetworkManager |
+| macOS | CoreWLAN framework (CWWiFiClient) | CoreWLAN.framework |
+| Windows | WLAN API (WlanScan, WlanGetNetworkBssList) | wlanapi.lib |
+
+**Note**: Windows was migrated from `netsh` shell parsing to the native WLAN API for reliability and performance.
+
+---
+
 ## Critical Points
 
 - **ASIO handles complexity**: Timeouts, retries, network errors handled by ASIO
@@ -114,6 +237,17 @@ netManager.forceDownload(url, callback);
 - **URLs in stores**: Resources stores can contain URLs instead of paths
 - **Fail-safe integration**: Download failure → Resources returns neutral resource
 - **No multiplayer**: Net is for assets, not gameplay networking
+- **Hardware utilities are standalone**: SSDPClient, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO
+- **noexcept everywhere**: All hardware utility functions are noexcept, errors return false/empty containers
+
+## Important Files
+
+- `Manager.cpp/.hpp` - Main manager, download requests
+- `SSDPClient.hpp/.cpp` - UPnP device discovery
+- `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction
+- `WiFiScanner.hpp` + `.{linux,mac,windows}.cpp` - WiFi scanning
+- Local cache (location to be documented)
+- `@docs/resource-management.md` - Resources integration
 
 ## Detailed Documentation
 

@@ -65,9 +65,13 @@ PlatformSpecific/
 ├── Helpers.linux.cpp            # Linux helper implementations
 ├── Helpers.mac.cpp              # macOS helper implementations
 ├── Helpers.windows.cpp          # Windows helper implementations
-├── SystemInfo.hpp/.cpp          # System information (+ platform files)
+├── SystemInfo.hpp/.cpp          # System information (+ hybrid CPU detection via hwloc)
 ├── UserInfo.hpp/.cpp            # User information (+ platform files)
-├── Types.hpp                    # Common type definitions
+├── Types.hpp                    # Common type definitions (CPU struct with E/P-core counts)
+├── DiskInfo.hpp                 # Cross-platform disk enumeration interface
+├── DiskInfo.linux.cpp           # /proc/mounts + statvfs + sysfs
+├── DiskInfo.mac.mm              # getmntinfo + DiskArbitration
+├── DiskInfo.windows.cpp         # GetLogicalDriveStrings + GetDiskFreeSpaceEx
 ├── VideoCaptureDevice.hpp       # Cross-platform video capture interface
 ├── VideoCaptureDevice.cpp       # Shared code (width/height accessors, YUYV→RGBA)
 ├── VideoCaptureDevice.linux.cpp # V4L2 implementation
@@ -388,6 +392,58 @@ Cross-platform webcam/video capture via `VideoCaptureDevice`.
 | macOS | `AVFoundation`, `CoreMedia`, `CoreVideo` frameworks |
 | Windows | `Mfplat.lib`, `Mfreadwrite.lib`, `Mf.lib`, `Mfuuid.lib` |
 | Linux | None (V4L2 uses kernel headers) |
+
+---
+
+## Disk Information (`PlatformSpecific::DiskInfo`)
+
+**Files**: `DiskInfo.hpp` + `DiskInfo.{linux,mac,windows}.cpp`
+
+Cross-platform mounted drive enumeration with space usage and removable detection.
+
+**API**:
+```cpp
+namespace EmEn::PlatformSpecific::DiskInfo
+{
+    struct DriveInfo {
+        std::string filesystem;      // Device path ("/dev/sda1") or description
+        std::string mounted;         // Mount point ("/", "C:")
+        std::string fsType;          // "ext4", "NTFS", "apfs", "exfat"
+        uint64_t totalBytes{0};
+        uint64_t usedBytes{0};
+        uint64_t availableBytes{0};
+        bool removable{false};       // USB, SD card, etc.
+    };
+
+    [[nodiscard]]
+    std::vector< DriveInfo > listDrives () noexcept;
+}
+```
+
+**Platform details**:
+| Platform | Source | Space API | Removable detection |
+|----------|--------|-----------|---------------------|
+| Linux | `/proc/mounts` | `statvfs()` | `/sys/block/{dev}/removable` |
+| macOS | `getmntinfo()` | `statfs` struct | DiskArbitration framework |
+| Windows | `GetLogicalDriveStringsW()` | `GetDiskFreeSpaceExW()` | `GetDriveTypeW()` (DRIVE_REMOVABLE/DRIVE_CDROM) |
+
+**Filtering**: Virtual/pseudo filesystems excluded. Linux skips `/dev/loop*` (snaps). Windows skips network/unknown drives.
+
+---
+
+## CPU Hybrid Core Detection (SystemInfo Enhancement)
+
+**Files**: `SystemInfo.cpp`, `Types.hpp`
+
+Enhanced CPU information with efficiency/performance core counts for hybrid architectures (Intel 12th gen+, Apple M1/M2/M3).
+
+**New fields** in `PlatformSpecific::CPU` struct (`Types.hpp`):
+```cpp
+uint32_t efficiencyCores{0};   // E-cores (via hwloc cpukinds API)
+uint32_t performanceCores{0};  // P-cores (via hwloc cpukinds API)
+```
+
+**Detection**: Uses hwloc >= 2.4 `cpukinds` API. Kind 0 = lowest performance (E-cores), Kind N-1 = highest (P-cores). On non-hybrid CPUs (`numKinds < 2`), both fields remain 0.
 
 ---
 

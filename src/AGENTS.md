@@ -42,6 +42,9 @@ private:
 };
 ```
 
+**Shutdown**:
+- `stop(int32_t userExitCode = 0)` — Stops the engine with an optional user exit code (displayed in console output). Broadcasts `ExecutionStopping`/`ExecutionStopped` notifications, calls `onBeforeCoreStop()`, stops all loops.
+
 **Mandatory callbacks** (pure virtual):
 - `onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings)` - Scene initialization, return true to continue
 - `onCoreProcessLogics(size_t)` - Game logic (separate thread)
@@ -211,7 +214,28 @@ The assembly script is generated only when **video is active**. It adapts to ava
 - **OS Window**: Creation, resize, movement, fullscreen
 - **Events**: OS event handling (close, focus, minimize, etc.)
 - **Vulkan Surface**: SwapChain creation for rendering
+- **Monitor enumeration**: Connected displays with hot-plug support
 - **Platform-specific**: OS-specialized code (Linux/macOS/Windows)
+
+**Monitor Device Info** (`Window::MonitorDevice`):
+```cpp
+struct MonitorDevice {
+    std::string name{"Unknown"};
+    bool primary{false};
+    int32_t physicalWidthMM{0}, physicalHeightMM{0};
+    int32_t currentResolutionX{0}, currentResolutionY{0};
+    int32_t positionX{0}, positionY{0};   // Virtual desktop coordinates
+    int32_t refreshRate{0};                // Hz
+    int32_t colorDepth{0};                 // Sum of R+G+B bits
+    float contentScaleX{1.0F}, contentScaleY{1.0F};  // HiDPI/Retina
+};
+```
+
+**Accessor**: `monitorDevices()` returns `const StaticVector< MonitorDevice, 16 > &` (stack-allocated, no heap pressure during hot-plug).
+
+**Hot-plug**: `refreshMonitorDevices()` called on GLFW monitor callback. Observers receive `OSMonitorConfigurationChanged` notification. Uses static `s_instance` pointer (GLFW monitor callbacks have no user pointer).
+
+**Implementation**: GLFW 3.4+ API (cross-platform: `glfwGetMonitors`, `glfwGetVideoMode`, `glfwGetMonitorContentScale`, `glfwSetMonitorCallback`).
 
 **Integration**:
 - Used by Core to create main window

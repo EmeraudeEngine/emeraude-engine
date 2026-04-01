@@ -148,7 +148,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | | Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) | Runtime control (TCP + in-game). |
 | | AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) | Virtual devices. |
 | | Tool | [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) | Editor tools. |
-| **Net** | Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) | HTTP/Download. |
+| **Net** | Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) | HTTP/Download, SSDP, Serial, WiFi. |
 
 ## 3. Core Axioms
 
