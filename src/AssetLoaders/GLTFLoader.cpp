@@ -1,5 +1,5 @@
 /*
- * src/Scenes/GLTFLoader.cpp
+ * src/AssetLoaders/GLTFLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
-#include <numbers>
 #include <variant>
 
 /* 3rd inclusions. */
@@ -38,6 +37,7 @@
 #include "fastgltf/types.hpp"
 
 /* Local inclusions. */
+#include "AssetData.hpp"
 #include "Graphics/Geometry/Helpers.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
@@ -61,12 +61,9 @@
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Libs/PixelFactory/StreamIO.hpp"
 #include "Libs/VertexFactory/Shape.hpp"
-#include "Node.hpp"
-#include "Scene.hpp"
-#include "Scenes/Component/Visual.hpp"
 #include "Tracer.hpp"
 
-namespace EmEn::Scenes
+namespace EmEn::AssetLoaders
 {
 	using namespace Graphics;
 	using namespace Graphics::Geometry;
@@ -93,11 +90,83 @@ namespace EmEn::Scenes
 		}
 	}
 
-	bool
-	GLTFLoader::load (const std::filesystem::path & filepath, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
+	/* Helper: Extract a CartesianFrame from a glTF node's TRS transform. */
+	static
+	CartesianFrame< float >
+	extractFrameFromNode (const fastgltf::Node & glTFNode) noexcept
 	{
-		m_useStaticEntities = (parentNode == nullptr);
+		CartesianFrame< float > frame;
 
+		if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
+		{
+			/* Rotation: quaternion (x, y, z, w) → rotation matrix. */
+			const auto qx = trs->rotation.x();
+			const auto qy = trs->rotation.y();
+			const auto qz = trs->rotation.z();
+			const auto qw = trs->rotation.w();
+
+			const auto xx = qx * qx;
+			const auto yy = qy * qy;
+			const auto zz = qz * qz;
+			const auto xy = qx * qy;
+			const auto xz = qx * qz;
+			const auto yz = qy * qz;
+			const auto wx = qw * qx;
+			const auto wy = qw * qy;
+			const auto wz = qw * qz;
+
+			/* 4x4 rotation matrix (column-major). */
+			Matrix< 4, float > rotMatrix;
+			rotMatrix[0]  = 1.0F - 2.0F * (yy + zz);
+			rotMatrix[1]  = 2.0F * (xy + wz);
+			rotMatrix[2]  = 2.0F * (xz - wy);
+			rotMatrix[3]  = 0.0F;
+			rotMatrix[4]  = 2.0F * (xy - wz);
+			rotMatrix[5]  = 1.0F - 2.0F * (xx + zz);
+			rotMatrix[6]  = 2.0F * (yz + wx);
+			rotMatrix[7]  = 0.0F;
+			rotMatrix[8]  = 2.0F * (xz + wy);
+			rotMatrix[9]  = 2.0F * (yz - wx);
+			rotMatrix[10] = 1.0F - 2.0F * (xx + yy);
+			rotMatrix[11] = 0.0F;
+			rotMatrix[12] = 0.0F;
+			rotMatrix[13] = 0.0F;
+			rotMatrix[14] = 0.0F;
+			rotMatrix[15] = 1.0F;
+
+			/* Build frame from rotation matrix + scale, then set position. */
+			frame = CartesianFrame< float >(rotMatrix, {trs->scale.x(), trs->scale.y(), trs->scale.z()});
+			frame.setPosition({trs->translation.x(), trs->translation.y(), trs->translation.z()});
+		}
+
+		return frame;
+	}
+
+	/* Helper: Build a node name from the glTF node. */
+	static
+	std::string
+	buildNodeName (const std::string & prefix, const fastgltf::Node & glTFNode, size_t nodeIndex) noexcept
+	{
+		std::string name;
+		name.reserve(prefix.size() + 6 + glTFNode.name.size());
+		name = prefix;
+		name += "Node/";
+
+		if ( glTFNode.name.empty() )
+		{
+			name += std::to_string(nodeIndex);
+		}
+		else
+		{
+			name.append(glTFNode.name.data(), glTFNode.name.size());
+		}
+
+		return name;
+	}
+
+	bool
+	GLTFLoader::load (const std::filesystem::path & filepath, AssetData & output) noexcept
+	{
 		/* Generate a resource prefix from the filename. */
 		m_resourcePrefix = "glTF:" + filepath.stem().string() + "/";
 
@@ -144,10 +213,7 @@ namespace EmEn::Scenes
 
 		const auto & asset = result.get();
 
-		/* Load pipeline: Images → Materials → Meshes → Nodes.
-		 * NOTE: Textures (Texture2D) are created on-demand inside loadMaterials()
-		 * when the material semantic is known (albedo vs normal vs data).
-		 * This allows setting the correct VkFormat (sRGB vs UNORM) before GPU creation. */
+		/* Load pipeline: Images → Materials → Meshes → Skins → Animations → Node descriptors. */
 		TraceInfo{ClassId} << "Phase 1: Loading " << asset.images.size() << " images...";
 
 		if ( !this->loadImages(asset, parentPath) )
@@ -164,27 +230,27 @@ namespace EmEn::Scenes
 
 		TraceInfo{ClassId} << "Phase 3: Loading " << asset.meshes.size() << " meshes...";
 
-		if ( !this->loadMeshes(asset) )
+		if ( !this->loadMeshes(asset, output) )
 		{
 			Tracer::error(ClassId, "Failed to load meshes !");
 
 			return false;
 		}
 
-		if ( !m_skipSkinning )
+		if ( !m_options.skipSkinning )
 		{
 			if ( !asset.skins.empty() )
 			{
 				TraceInfo{ClassId} << "Phase 4: Loading " << asset.skins.size() << " skins...";
 
-				this->loadSkins(asset);
+				this->loadSkins(asset, output);
 			}
 
 			if ( !asset.animations.empty() )
 			{
 				TraceInfo{ClassId} << "Phase 5: Loading " << asset.animations.size() << " animations...";
 
-				this->loadAnimations(asset);
+				this->loadAnimations(asset, output);
 			}
 
 			/* Attach skeletal data to renderables that have associated skins. */
@@ -222,9 +288,15 @@ namespace EmEn::Scenes
 			}
 		}
 
-		TraceInfo{ClassId} << "Phase 6: Building " << (m_useStaticEntities ? "static entities" : "node hierarchy") << "...";
+		/* Build format-agnostic node descriptors. */
+		TraceInfo{ClassId} << "Phase 6: Building node descriptors...";
 
-		this->buildNodeHierarchy(asset, scene, parentNode != nullptr ? parentNode : scene.root());
+		this->buildNodeDescriptors(asset, output);
+
+		/* Populate output with loaded resources. */
+		output.skeletons = m_skeletons;
+		output.animationClips = m_animationClips;
+		output.skinJointNodeIndices = m_skinJointNodeIndices;
 
 		TraceInfo{ClassId} << "Loading complete.";
 
@@ -356,68 +428,6 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	GLTFLoader::loadTextures (const fastgltf::Asset & asset) noexcept
-	{
-		m_textures.resize(asset.textures.size());
-
-		bool allSuccess = true;
-
-		for ( size_t textureIndex = 0; textureIndex < asset.textures.size(); ++textureIndex )
-		{
-			const auto & glTFTexture = asset.textures[textureIndex];
-
-			if ( !glTFTexture.imageIndex.has_value() )
-			{
-				TraceWarning{ClassId} << "Texture " << textureIndex << " has no image index, using default.";
-
-				m_textures[textureIndex] = m_resources.container< TextureResource::Texture2D >()->getDefaultResource();
-
-				allSuccess = false;
-
-				continue;
-			}
-
-			const auto imageIndex = glTFTexture.imageIndex.value();
-
-			if ( imageIndex >= m_images.size() )
-			{
-				TraceWarning{ClassId} << "Texture " << textureIndex << " references out-of-range image " << imageIndex << ", using default.";
-
-				m_textures[textureIndex] = m_resources.container< TextureResource::Texture2D >()->getDefaultResource();
-
-				allSuccess = false;
-
-				continue;
-			}
-
-			std::string name;
-			name.reserve(m_resourcePrefix.size() + 9 + glTFTexture.name.size());
-			name = m_resourcePrefix;
-			name += "Texture/";
-			if ( glTFTexture.name.empty() )
-				name += std::to_string(textureIndex);
-			else
-				name.append(glTFTexture.name.data(), glTFTexture.name.size());
-
-			m_textures[textureIndex] = m_resources.container< TextureResource::Texture2D >()
-				->getOrCreateResource(name, [image = m_images[imageIndex]] (auto & textureResource) {
-					return textureResource.load(image);
-				});
-
-			if ( m_textures[textureIndex] == nullptr )
-			{
-				TraceWarning{ClassId} << "Texture " << textureIndex << " failed to create, using default.";
-
-				m_textures[textureIndex] = m_resources.container< TextureResource::Texture2D >()->getDefaultResource();
-
-				allSuccess = false;
-			}
-		}
-
-		return allSuccess;
-	}
-
-	bool
 	GLTFLoader::loadMaterials (const fastgltf::Asset & asset) noexcept
 	{
 		m_materials.resize(asset.materials.size());
@@ -438,10 +448,7 @@ namespace EmEn::Scenes
 			else
 				name.append(glTFMaterial.name.data(), glTFMaterial.name.size());
 
-			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand.
-			 * This defers Texture2D creation to material loading time so the material semantic
-			 * (color vs data) is known before GPU resources are created. Uses m_textures as cache
-			 * since multiple materials may reference the same texture. */
+			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand. */
 			const auto resolveTexture = [&] (size_t textureIndex, bool sRGB = false) -> std::shared_ptr< TextureResource::Texture2D > {
 				if ( textureIndex >= asset.textures.size() )
 				{
@@ -707,7 +714,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	GLTFLoader::loadMeshes (const fastgltf::Asset & asset) noexcept
+	GLTFLoader::loadMeshes (const fastgltf::Asset & asset, AssetData & output) noexcept
 	{
 		m_meshes.resize(asset.meshes.size());
 		m_shapes.resize(asset.meshes.size());
@@ -855,9 +862,7 @@ namespace EmEn::Scenes
 						});
 					}
 
-					/* Read texture coordinates directly into vertex array.
-				 * NOTE: glTF and Vulkan share the same UV convention: (0,0) = top-left, V increases downward.
-				 * No V-flip is needed. */
+					/* Read texture coordinates directly into vertex array. */
 					const auto textureCoordinatesIt = glTFPrimitive.findAttribute("TEXCOORD_0");
 
 					if ( textureCoordinatesIt != glTFPrimitive.attributes.end() )
@@ -871,7 +876,7 @@ namespace EmEn::Scenes
 						});
 					}
 
-					if ( !m_skipSkinning )
+					if ( !m_options.skipSkinning )
 					{
 						/* Read bone joint indices (JOINTS_0) for skeletal animation. */
 						const auto jointsIt = glTFPrimitive.findAttribute("JOINTS_0");
@@ -959,9 +964,6 @@ namespace EmEn::Scenes
 			/* Generate normals from geometry when the glTF mesh does not provide them. */
 			if ( !hasNormals )
 			{
-				/* Invert normals: triangle winding was swapped (indices 1↔2) to correct
-				 * front-faces after the glTF Y-up → engine coordinate conversion,
-				 * so the cross product points inward. */
 				shape->computeTriangleNormal(true);
 				shape->computeVertexNormal();
 
@@ -1047,23 +1049,40 @@ namespace EmEn::Scenes
 					});
 			}
 
-			m_meshes[meshIndex] = std::move(mesh);
+			m_meshes[meshIndex] = mesh;
 			m_shapes[meshIndex] = shape;
+
+			/* Store in AssetData for consumer access. */
+			MeshDescriptor descriptor;
+			descriptor.renderable = mesh;
+			descriptor.geometry = std::static_pointer_cast< Geometry::Interface >(geometry);
+			descriptor.materials = materialList.empty()
+				? std::vector< std::shared_ptr< Material::Interface > >{m_resources.container< Material::PBRResource >()->getDefaultResource()}
+				: std::move(materialList);
+
+			/* Ensure output.meshes is indexed by glTF mesh index. */
+			if ( output.meshes.size() <= meshIndex )
+			{
+				output.meshes.resize(meshIndex + 1);
+			}
+
+			output.meshes[meshIndex] = std::move(descriptor);
 		}
 
 		return allSuccess;
 	}
 
 	void
-	GLTFLoader::loadSkins (const fastgltf::Asset & asset) noexcept
+	GLTFLoader::loadSkins (const fastgltf::Asset & asset, AssetData & /*output*/) noexcept
 	{
 		if ( asset.skins.empty() )
 		{
 			return;
 		}
 
-		/* Build a node-index → parent-node-index lookup from the node tree.
-		 * GLTF nodes store children, but we need parent references for the skeleton. */
+		/* Build a node-index → parent-node-index lookup from the node tree. */
+		constexpr auto NoParent = static_cast< int32_t >(-1);
+
 		std::vector< int32_t > nodeParents(asset.nodes.size(), NoParent);
 
 		for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
@@ -1102,7 +1121,6 @@ namespace EmEn::Scenes
 				size_t index = 0;
 
 				fastgltf::iterateAccessor< fastgltf::math::fmat4x4 >(asset, ibmAccessor, [&] (const fastgltf::math::fmat4x4 & m) {
-					/* fastgltf fmat4x4 is column-major, same as our Matrix. Copy directly. */
 					std::array< float, 16 > data{};
 
 					for ( size_t col = 0; col < 4; ++col )
@@ -1119,7 +1137,6 @@ namespace EmEn::Scenes
 			}
 			else
 			{
-				/* No inverse bind matrices provided — use identity (bind pose = model space). */
 				for ( auto & ibm : inverseBindMatrices )
 				{
 					ibm = Matrix< 4, float >{};
@@ -1165,7 +1182,7 @@ namespace EmEn::Scenes
 
 			Skeleton< float > skeleton{std::move(engineJoints)};
 
-			/* Build Skin: skin-local indices map 1:1 (GLTF JOINTS_0 already uses skin-local indices). */
+			/* Build Skin: skin-local indices map 1:1. */
 			std::vector< int32_t > skinJointIndices(jointCount);
 
 			for ( size_t j = 0; j < jointCount; ++j )
@@ -1205,16 +1222,14 @@ namespace EmEn::Scenes
 	}
 
 	void
-	GLTFLoader::loadAnimations (const fastgltf::Asset & asset) noexcept
+	GLTFLoader::loadAnimations (const fastgltf::Asset & asset, AssetData & /*output*/) noexcept
 	{
 		if ( asset.animations.empty() )
 		{
 			return;
 		}
 
-		/* For mapping node indices to joint indices, we need the skin context.
-		 * Build a node-to-joint-index map from the first skin (most common case).
-		 * Multiple skins would require per-animation skin tracking. */
+		/* For mapping node indices to joint indices, we need the skin context. */
 		std::unordered_map< size_t, int32_t > nodeToJointIndex;
 
 		if ( !asset.skins.empty() )
@@ -1380,82 +1395,8 @@ namespace EmEn::Scenes
 		}
 	}
 
-	/* Helper: Extract a CartesianFrame from a glTF node's TRS transform. */
-	static
-	CartesianFrame< float >
-	extractFrameFromNode (const fastgltf::Node & glTFNode) noexcept
-	{
-		CartesianFrame< float > frame;
-
-		if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
-		{
-			/* Rotation: quaternion (x, y, z, w) → rotation matrix. */
-			const auto qx = trs->rotation.x();
-			const auto qy = trs->rotation.y();
-			const auto qz = trs->rotation.z();
-			const auto qw = trs->rotation.w();
-
-			const auto xx = qx * qx;
-			const auto yy = qy * qy;
-			const auto zz = qz * qz;
-			const auto xy = qx * qy;
-			const auto xz = qx * qz;
-			const auto yz = qy * qz;
-			const auto wx = qw * qx;
-			const auto wy = qw * qy;
-			const auto wz = qw * qz;
-
-			/* 4x4 rotation matrix (column-major). */
-			Matrix< 4, float > rotMatrix;
-			rotMatrix[0]  = 1.0F - 2.0F * (yy + zz);
-			rotMatrix[1]  = 2.0F * (xy + wz);
-			rotMatrix[2]  = 2.0F * (xz - wy);
-			rotMatrix[3]  = 0.0F;
-			rotMatrix[4]  = 2.0F * (xy - wz);
-			rotMatrix[5]  = 1.0F - 2.0F * (xx + zz);
-			rotMatrix[6]  = 2.0F * (yz + wx);
-			rotMatrix[7]  = 0.0F;
-			rotMatrix[8]  = 2.0F * (xz + wy);
-			rotMatrix[9]  = 2.0F * (yz - wx);
-			rotMatrix[10] = 1.0F - 2.0F * (xx + yy);
-			rotMatrix[11] = 0.0F;
-			rotMatrix[12] = 0.0F;
-			rotMatrix[13] = 0.0F;
-			rotMatrix[14] = 0.0F;
-			rotMatrix[15] = 1.0F;
-
-			/* Build frame from rotation matrix + scale, then set position. */
-			frame = CartesianFrame< float >(rotMatrix, {trs->scale.x(), trs->scale.y(), trs->scale.z()});
-			frame.setPosition({trs->translation.x(), trs->translation.y(), trs->translation.z()});
-		}
-
-		return frame;
-	}
-
-	/* Helper: Build a node name from the glTF node. */
-	static
-	std::string
-	buildNodeName (const std::string & prefix, const fastgltf::Node & glTFNode, size_t nodeIndex) noexcept
-	{
-		std::string name;
-		name.reserve(prefix.size() + 6 + glTFNode.name.size());
-		name = prefix;
-		name += "Node/";
-
-		if ( glTFNode.name.empty() )
-		{
-			name += std::to_string(nodeIndex);
-		}
-		else
-		{
-			name.append(glTFNode.name.data(), glTFNode.name.size());
-		}
-
-		return name;
-	}
-
 	void
-	GLTFLoader::buildNodeHierarchy (const fastgltf::Asset & asset, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
+	GLTFLoader::buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) noexcept
 	{
 		/* Determine the default scene. */
 		size_t sceneIndex = 0;
@@ -1474,219 +1415,52 @@ namespace EmEn::Scenes
 
 		const auto & glTFScene = asset.scenes[sceneIndex];
 
-		/* glTF is Y-up, engine is Y-down: 180° rotation around X.
-		 * Build the root transform that will be applied to all children. */
-		CartesianFrame< float > yUpToYDownFrame;
-		yUpToYDownFrame.rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), true);
+		/* Pre-allocate nodes vector (one per glTF node). */
+		output.nodes.resize(asset.nodes.size());
 
-		if ( m_useStaticEntities )
-		{
-			/* Static mode: create StaticEntity for each mesh node with world coordinates. */
-			for ( const auto nodeIndex : glTFScene.nodeIndices )
+		/* Recursive lambda to build node descriptors. */
+		const auto buildNode = [&] (auto & self, size_t nodeIndex) -> void {
+			if ( nodeIndex >= asset.nodes.size() )
 			{
-				this->processNodeAsStatic(asset, nodeIndex, scene, yUpToYDownFrame);
+				return;
 			}
-		}
-		else
-		{
-			/* Node mode: build glTF content under the caller-provided node.
-			 * Apply the Y-up → Y-down coordinate conversion. */
-			parentNode->rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), TransformSpace::Local);
 
-			if ( m_flattenHierarchy )
+			const auto & glTFNode = asset.nodes[nodeIndex];
+
+			/* Skip excluded nodes and their entire subtree. */
+			if ( !glTFNode.name.empty() && m_options.excludedNodeNames.contains(std::string{glTFNode.name}) )
 			{
-				/* Flatten mode: skip all intermediate nodes, attach meshes directly. */
-				bool firstMesh = true;
-
-				for ( size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex )
-				{
-					const auto & glTFNode = asset.nodes[nodeIndex];
-
-					if ( !glTFNode.meshIndex.has_value() )
-					{
-						continue;
-					}
-
-					const auto meshIndex = glTFNode.meshIndex.value();
-
-					if ( meshIndex >= m_meshes.size() || m_meshes[meshIndex] == nullptr )
-					{
-						continue;
-					}
-
-					const auto nodeName = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
-
-					if ( firstMesh )
-					{
-						parentNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
-							.setup([] (auto & visual) {
-								visual.getRenderableInstance()->enableLighting();
-							})
-							.build(m_meshes[meshIndex]);
-
-						firstMesh = false;
-					}
-					else
-					{
-						auto childNode = parentNode->createChild(nodeName);
-
-						childNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
-							.setup([] (auto & visual) {
-								visual.getRenderableInstance()->enableLighting();
-							})
-							.build(m_meshes[meshIndex]);
-					}
-				}
+				return;
 			}
-			else
+
+			auto & descriptor = output.nodes[nodeIndex];
+			descriptor.name = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
+			descriptor.localFrame = extractFrameFromNode(glTFNode);
+
+			if ( glTFNode.meshIndex.has_value() )
 			{
-				/* Default mode: build hierarchy with automatic identity flattening. */
-				for ( const auto nodeIndex : glTFScene.nodeIndices )
-				{
-					this->processNodeAsNode(asset, nodeIndex, parentNode);
-				}
+				descriptor.meshIndex = glTFNode.meshIndex.value();
 			}
-		}
-	}
 
-	void
-	GLTFLoader::processNodeAsStatic (const fastgltf::Asset & asset, size_t nodeIndex, Scene & scene, const CartesianFrame< float > & parentWorldFrame) noexcept
-	{
-		if ( nodeIndex >= asset.nodes.size() )
-		{
-			return;
-		}
+			/* Process children. */
+			descriptor.childIndices.reserve(glTFNode.children.size());
 
-		const auto & glTFNode = asset.nodes[nodeIndex];
+			for ( const auto childIndex : glTFNode.children )
+			{
+				descriptor.childIndices.push_back(childIndex);
 
-		/* Skip excluded nodes and their entire subtree. */
-		if ( !glTFNode.name.empty() && m_excludedNodeNames.contains(std::string{glTFNode.name}) )
-		{
-			return;
-		}
-
-		/* Compute this node's local frame and accumulate into world coordinates.
-		 * NOTE: Extract scale from the combined matrix column lengths before
-		 * CartesianFrame normalizes the direction vectors (which would lose scale). */
-		const auto localFrame = extractFrameFromNode(glTFNode);
-		const auto worldMatrix = parentWorldFrame.getModelMatrix() * localFrame.getModelMatrix();
-		const Vector< 3, float > worldScale{
-			Vector< 3, float >{worldMatrix[M4x4Col0Row0], worldMatrix[M4x4Col0Row1], worldMatrix[M4x4Col0Row2]}.length(),
-			Vector< 3, float >{worldMatrix[M4x4Col1Row0], worldMatrix[M4x4Col1Row1], worldMatrix[M4x4Col1Row2]}.length(),
-			Vector< 3, float >{worldMatrix[M4x4Col2Row0], worldMatrix[M4x4Col2Row1], worldMatrix[M4x4Col2Row2]}.length()
+				self(self, childIndex);
+			}
 		};
-		const CartesianFrame< float > worldFrame{worldMatrix, worldScale};
 
-		/* Create a StaticEntity if this node has a mesh. */
-		if ( glTFNode.meshIndex.has_value() )
+		/* Build from scene root nodes. */
+		output.rootNodeIndices.reserve(glTFScene.nodeIndices.size());
+
+		for ( const auto nodeIndex : glTFScene.nodeIndices )
 		{
-			const auto meshIndex = glTFNode.meshIndex.value();
+			output.rootNodeIndices.push_back(nodeIndex);
 
-			if ( meshIndex < m_meshes.size() && m_meshes[meshIndex] != nullptr )
-			{
-				const auto nodeName = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
-
-				auto staticEntity = scene.createStaticEntity(nodeName, worldFrame);
-
-				if ( staticEntity != nullptr )
-				{
-					staticEntity->componentBuilder< Component::Visual >(nodeName + "/Visual")
-						.setup([] (auto & visual) {
-							visual.getRenderableInstance()->enableLighting();
-						})
-						.build(m_meshes[meshIndex]);
-				}
-			}
-		}
-
-		/* Recurse into children with accumulated world transform. */
-		for ( const auto childIndex : glTFNode.children )
-		{
-			this->processNodeAsStatic(asset, childIndex, scene, worldFrame);
-		}
-	}
-
-	void
-	GLTFLoader::processNodeAsNode (const fastgltf::Asset & asset, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept
-	{
-		if ( nodeIndex >= asset.nodes.size() )
-		{
-			return;
-		}
-
-		const auto & glTFNode = asset.nodes[nodeIndex];
-
-		/* Skip excluded nodes and their entire subtree. */
-		if ( !glTFNode.name.empty() && m_excludedNodeNames.contains(std::string{glTFNode.name}) )
-		{
-			return;
-		}
-
-		/* Skip skeleton joint nodes — their transforms are driven by
-		 * the SkeletalAnimator, not by the scene node hierarchy.
-		 * However, if the joint also carries a mesh, we must process it. */
-		if ( m_skinJointNodeIndices.contains(nodeIndex) && !glTFNode.meshIndex.has_value() )
-		{
-			return;
-		}
-
-		const auto nodeName = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
-		const auto frame = extractFrameFromNode(glTFNode);
-		const bool hasTransform = (frame.getModelMatrix() != CartesianFrame< float >{}.getModelMatrix());
-		const bool hasMesh = glTFNode.meshIndex.has_value();
-
-		/* Flatten the glTF hierarchy when possible:
-		 * - Identity transform + no mesh → skip this node, pass parent through.
-		 * - Has mesh or has transform → need a node in the scene.
-		 *   If the parent has no Visual yet, attach directly to it.
-		 *   Otherwise, create a child node. */
-		std::shared_ptr< Node > targetNode;
-
-		if ( !hasMesh && !hasTransform )
-		{
-			/* Identity, no mesh: flatten — skip this node entirely. */
-			targetNode = engineParent;
-		}
-		else if ( hasMesh && !hasTransform && !engineParent->hasComponent() )
-		{
-			/* First mesh with identity transform: attach directly to the parent node. */
-			const auto meshIndex = glTFNode.meshIndex.value();
-
-			if ( meshIndex < m_meshes.size() && m_meshes[meshIndex] != nullptr )
-			{
-				engineParent->componentBuilder< Component::Visual >(nodeName + "/Visual")
-					.setup([] (auto & visual) {
-						visual.getRenderableInstance()->enableLighting();
-					})
-					.build(m_meshes[meshIndex]);
-			}
-
-			targetNode = engineParent;
-		}
-		else
-		{
-			/* Additional mesh or structural node with transform: create a child. */
-			targetNode = engineParent->createChild(nodeName, frame);
-
-			if ( hasMesh )
-			{
-				const auto meshIndex = glTFNode.meshIndex.value();
-
-				if ( meshIndex < m_meshes.size() && m_meshes[meshIndex] != nullptr )
-				{
-					targetNode->componentBuilder< Component::Visual >(nodeName + "/Visual")
-						.setup([] (auto & visual) {
-							visual.getRenderableInstance()->enableLighting();
-						})
-						.build(m_meshes[meshIndex]);
-				}
-			}
-		}
-
-		/* Recurse into children. */
-		for ( const auto childIndex : glTFNode.children )
-		{
-			this->processNodeAsNode(asset, childIndex, targetNode);
+			buildNode(buildNode, nodeIndex);
 		}
 	}
 }

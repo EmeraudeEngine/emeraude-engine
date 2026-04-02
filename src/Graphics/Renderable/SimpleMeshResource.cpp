@@ -27,6 +27,8 @@
 #include "SimpleMeshResource.hpp"
 
 /* Local inclusions. */
+#include "AssetLoaders/AssetData.hpp"
+#include "AssetLoaders/GLTFLoader.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Libs/VertexFactory/ShapeDecimator.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
@@ -76,6 +78,76 @@ namespace EmEn::Graphics::Renderable
 		if ( !this->setMaterial(this->serviceProvider().container< BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	SimpleMeshResource::load (const std::filesystem::path & filepath) noexcept
+	{
+		const auto ext = filepath.extension().string();
+
+		/* Only handle glTF/glb. Fall back to base class (JSON) for other formats. */
+		if ( ext != ".gltf" && ext != ".glb" )
+		{
+			return ResourceTrait::load(filepath);
+		}
+
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		/* Load via AssetLoaders. */
+		AssetLoaders::GLTFLoader loader{static_cast< Resources::Manager & >(this->serviceProvider())};
+		AssetLoaders::AssetData assetData;
+
+		if ( !loader.load(filepath, assetData) )
+		{
+			TraceError{ClassId} << "Failed to load glTF asset: " << filepath;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !assetData.isSingleMesh() )
+		{
+			TraceError{ClassId} <<
+				"Asset '" << filepath << "' contains multiple mesh nodes. "
+				"Use Scene loading for multi-node assets.";
+
+			return this->setLoadSuccess(false);
+		}
+
+		const auto nodeIdx = assetData.singleMeshNodeIndex();
+		const auto meshIdx = assetData.nodes[nodeIdx].meshIndex.value();
+		const auto & meshDesc = assetData.meshes[meshIdx];
+
+		/* Attach geometry + material (same pattern as load(Json)). */
+		if ( !this->setGeometry(meshDesc.geometry) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !meshDesc.materials.empty() )
+		{
+			if ( !this->setMaterial(meshDesc.materials[0]) )
+			{
+				return this->setLoadSuccess(false);
+			}
+		}
+
+		/* Transfer skeletal data if present. */
+		if ( auto * srcSkeletal = dynamic_cast< SkeletalDataTrait * >(meshDesc.renderable.get()) )
+		{
+			if ( srcSkeletal->hasSkeletalData() )
+			{
+				this->setSkeletalData(
+					srcSkeletal->skeletonResource(),
+					srcSkeletal->skin(),
+					srcSkeletal->animationClips()
+				);
+			}
 		}
 
 		return this->setLoadSuccess(true);
