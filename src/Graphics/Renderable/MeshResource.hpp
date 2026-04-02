@@ -235,6 +235,9 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			bool load (const std::filesystem::path & filepath) noexcept override;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 

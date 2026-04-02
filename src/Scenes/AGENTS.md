@@ -656,15 +656,20 @@ Lights without shadow use only the shared UBO descriptor set (binding 0). Shadow
 - `Component/AbstractLightEmitter.cpp:registerColorProjectionInBindless()` - Bindless registration
 - `Component/AbstractLightEmitter.cpp:onNotification()` - Async texture load callback
 
-## GLTFLoader
+## GLTFLoader → AssetLoaders (Refactored)
+
+> **MOVED:** `Scenes::GLTFLoader` has been refactored into `AssetLoaders::GLTFLoader` (`src/AssetLoaders/`).
+> The loader no longer depends on Scenes/ types. See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md) for the full loader documentation.
+>
+> Scene-side consumption is now handled by `Scenes::AssetDataConsumer`.
 
 ### Overview
 
-`GLTFLoader` loads glTF 2.0 / GLB files into the scene graph. It is a **stack-allocated utility object** created per-load, not a long-lived service. All resource creation is **fully asynchronous** via `getOrCreateResource()`.
+`AssetDataConsumer` (`Scenes/AssetDataConsumer.hpp`) builds scene objects from an `AssetLoaders::AssetData`.
 
 ### Two Operating Modes
 
-The loader operates in one of two modes, determined by the `parentNode` parameter of `load()`:
+`AssetDataConsumer::build()` operates in one of two modes:
 
 | Mode | Condition | Entity Type | Use Case |
 |------|-----------|-------------|----------|
@@ -672,37 +677,31 @@ The loader operates in one of two modes, determined by the `parentNode` paramete
 | **Node** | `parentNode != nullptr` | `Node` (hierarchical, parent-relative) | Animated models, attachments, dynamic objects |
 
 ```cpp
-// StaticEntity mode: meshes become flat StaticEntities in world space
-GLTFLoader loader{resources};
-loader.load(path, scene);
+// Step 1: Load resources (no Scene dependency)
+AssetLoaders::GLTFLoader loader{act.resourceManager()};
+AssetLoaders::AssetData assetData;
+loader.load(gltfPath, assetData);
 
-// Node mode: hierarchy built under the provided parent node
-auto parentNode = scene.root()->createChild("MyModel");
-loader.load(path, scene, parentNode);
+// Step 2: Build scene hierarchy
+Scenes::AssetDataConsumer consumer;
+consumer.build(assetData, scene);                // StaticEntity mode
+consumer.build(assetData, scene, parentNode);    // Node mode
 ```
 
 ### Configuration Options
 
+**On the loader** (affects resource loading):
+
+| Setter | Default | Effect |
+|--------|---------|--------|
+| `LoaderOptions::skipSkinning` | `false` | Skip phases 4-5, ignore bone weights (load as static mesh) |
+| `LoaderOptions::excludedNodeNames` | empty | Skip named nodes and their subtrees entirely |
+
+**On the consumer** (affects scene building):
+
 | Setter | Default | Effect |
 |--------|---------|--------|
 | `setFlattenHierarchy(true)` | `false` | Skip intermediate nodes, attach all meshes directly to parent |
-| `setSkipSkinning(true)` | `false` | Skip phases 4-5, ignore bone weights (load as static mesh) |
-| `setExcludedNodeNames({...})` | empty | Skip named nodes and their subtrees entirely |
-
-### 6-Phase Loading Pipeline
-
-| Phase | Method | Resource Type | Async |
-|-------|--------|---------------|-------|
-| 1 | `loadImages()` | `ImageResource` | Yes |
-| 2 | `loadMaterials()` | `Material::PBRResource` (textures created on-demand) | Yes |
-| 3 | `loadMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` | Yes |
-| 4 | `loadSkins()` | `Animations::SkeletonResource` + `Skin` | Sync |
-| 5 | `loadAnimations()` | `Animations::AnimationClipResource` | Sync |
-| 6 | `buildNodeHierarchy()` | Scene nodes or static entities | Sync |
-
-**Phases 4 and 5 are skipped when `m_skipSkinning = true`.**
-
-After phases 4-5, skeletal data (skeleton, skin, animation clips) is attached to renderables via `SkeletalDataTrait::setSkeletalData()`.
 
 ### Node Mode Behavior
 
@@ -785,15 +784,12 @@ Textures are created **on-demand during material loading** with the correct sRGB
 
 ### Code References
 
-- `Scenes/GLTFLoader.hpp/.cpp` — Main loader class
-- `Scenes/GLTFLoader.cpp:loadImages()` — Phase 1: async image loading
-- `Scenes/GLTFLoader.cpp:loadMaterials()` — Phase 2: async PBR materials with on-demand texture creation
-- `Scenes/GLTFLoader.cpp:loadMeshes()` — Phase 3: async geometry + mesh creation
-- `Scenes/GLTFLoader.cpp:loadSkins()` — Phase 4: skeleton and skin building
-- `Scenes/GLTFLoader.cpp:loadAnimations()` — Phase 5: animation clip creation
-- `Scenes/GLTFLoader.cpp:buildNodeHierarchy()` — Phase 6: scene graph construction
-- `Scenes/GLTFLoader.cpp:processNodeAsStatic()` — StaticEntity mode node processing
-- `Scenes/GLTFLoader.cpp:processNodeAsNode()` — Node mode hierarchical processing
+- `AssetLoaders/GLTFLoader.hpp/.cpp` — Resource loading (phases 1-6). See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md)
+- `AssetLoaders/AssetData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor)
+- `AssetLoaders/Interface.hpp` — Loader interface + LoaderOptions
+- `Scenes/AssetDataConsumer.hpp/.cpp` — Scene builder (StaticEntity/Node modes, Y-up conversion)
+- `Graphics/Renderable/SimpleMeshResource.cpp:load(path)` — Transparent single-mesh glTF loading
+- `Graphics/Renderable/MeshResource.cpp:load(path)` — Transparent multi-material glTF loading
 
 ## Detailed Documentation
 
