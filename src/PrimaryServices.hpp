@@ -87,7 +87,7 @@ namespace EmEn
 			 * @param processName A reference to a string.
 			 * @param additionalArguments A reference to a vector of strings. Default none.
 			 */
-			PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments = {}) noexcept;
+			PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments = {}) noexcept;
 #endif
 
 			/**
@@ -276,13 +276,13 @@ namespace EmEn
 		private:
 
 			std::string m_processName;
-			std::shared_ptr< Libs::ThreadPool > m_threadPool;
-			PlatformSpecific::SystemInfo m_systemInfo;
-			PlatformSpecific::UserInfo m_userInfo;
 			Arguments m_arguments;
 			FileSystem m_fileSystem;
 			Settings m_settings;
+			PlatformSpecific::SystemInfo m_systemInfo;
+			PlatformSpecific::UserInfo m_userInfo;
 			Net::Manager m_networkManager;
+			std::shared_ptr< Libs::ThreadPool > m_threadPool;
 			std::vector< ServiceInterface * > m_servicesEnabled;
 			bool m_childProcess{false};
 			bool m_showInformation{false};

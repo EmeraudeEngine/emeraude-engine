@@ -30,10 +30,12 @@
 #include <string>
 #include <ostream>
 #include <sstream>
-#include <vector>
 #include <filesystem>
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
+#include "Arguments.hpp"
+#include "Settings.hpp"
 #include "Types.hpp"
 
 namespace EmEn::PlatformSpecific
@@ -50,15 +52,17 @@ namespace EmEn::PlatformSpecific
 
 			/** 
 			 * @brief Constructs a system info structure.
+			 * @param arguments A reference to the arguments.
+			 * @param settings A reference to the settings.
 			 */
-			SystemInfo () noexcept
+			SystemInfo (const Arguments & arguments, Settings & settings) noexcept
 			{
-				if ( this->fetchOSInformation() )
+				if ( this->fetchOSInformation(arguments, settings) )
 				{
 					m_informationFound = true;
 				}
 
-				if ( this->fetchCPUInformation() )
+				if ( this->fetchCPUInformation(arguments, settings) )
 				{
 					m_informationFound = true;
 				}
@@ -82,7 +86,7 @@ namespace EmEn::PlatformSpecific
 			 * @return void
 			 */
 			void
-			setGPUDevices (const std::vector< GPUDevice > & devices) noexcept
+			setGPUDevices (const Libs::StaticVector< GPUDevice, 8 > & devices) noexcept
 			{
 				m_GPUDevices = devices;
 			}
@@ -122,10 +126,10 @@ namespace EmEn::PlatformSpecific
 
 			/**
 			 * @brief Returns a list of available GPU devices.
-			 * @return const std::vector< GPUDevice > &
+			 * @return const Libs::StaticVector< GPUDevice, 8 > &
 			 */
 			[[nodiscard]]
-			const std::vector< GPUDevice > &
+			const Libs::StaticVector< GPUDevice, 8 > &
 			getGPUDeviceInformation () const noexcept
 			{
 				return m_GPUDevices;
@@ -149,15 +153,19 @@ namespace EmEn::PlatformSpecific
 
 			/**
 			 * @brief Fetches OS information on the system.
+			 * @param arguments A reference to the arguments.
+			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
-			bool fetchOSInformation () noexcept;
+			bool fetchOSInformation (const Arguments & arguments, Settings & settings) noexcept;
 
 			/**
 			 * @brief Fetches CPU information on the system.
+			 * @param arguments A reference to the arguments.
+			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
-			bool fetchCPUInformation () noexcept;
+			bool fetchCPUInformation (const Arguments & arguments, Settings & settings) noexcept;
 
 			/**
 			 * @brief Returns the total memory available on the system.
@@ -197,7 +205,7 @@ namespace EmEn::PlatformSpecific
 
 			OperatingSystem m_OSInformation{};
 			CPU m_CPUInformation{};
-			std::vector< GPUDevice > m_GPUDevices;
+			Libs::StaticVector< GPUDevice, 8 > m_GPUDevices;
 			bool m_informationFound{false};
 	};
 

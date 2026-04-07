@@ -29,10 +29,8 @@
 /* Project configuration files. */
 #include "emeraude_config.hpp"
 
-/* STL inclusions. */
-#include <iostream>
-#include <sstream>
-#include <cstddef>
+/* Local inclusions. */
+#include "SettingKeys.hpp"
 
 /* Third-party inclusions. */
 #if IS_ARM_ARCH
@@ -45,7 +43,7 @@
 namespace EmEn::PlatformSpecific
 {
 	bool
-	SystemInfo::fetchCPUInformation () noexcept
+	SystemInfo::fetchCPUInformation (const Arguments & /*arguments*/, Settings & settings) noexcept
 	{
 #if IS_ARM_ARCH
 		const auto cpuInfo = cpu_features::GetAarch64Info();
@@ -70,6 +68,14 @@ namespace EmEn::PlatformSpecific
 #endif
 
 		{
+			const auto verbosity = settings.getOrSetDefault< std::string >(HWLOCVerbosityKey, DefaultHWLOCVerbosityKey);
+
+#if IS_WINDOWS
+			_putenv_s("HWLOC_HIDE_ERRORS", verbosity.c_str());
+#else
+			setenv("HWLOC_HIDE_ERRORS", verbosity.c_str(), 1);
+#endif
+
 			hwloc_topology_t topology = nullptr;
 
 			hwloc_topology_init(&topology);
@@ -99,7 +105,7 @@ namespace EmEn::PlatformSpecific
 			 * hwloc ranks kinds by ascending performance:
 			 *   kind 0     = lowest performance, highest energy-efficiency (E-cores)
 			 *   kind N-1   = highest performance, lowest energy-efficiency (P-cores)
-			 * On non-hybrid CPUs, numKinds is 0 or 1 and we leave both fields at 0. */
+			 * On non-hybrid CPUs, numKinds is 0 or 1, and we leave both fields at 0. */
 			{
 				const auto numKinds = hwloc_cpukinds_get_nr(topology, 0);
 
@@ -107,16 +113,16 @@ namespace EmEn::PlatformSpecific
 				{
 					for ( int kindIndex = 0; kindIndex < numKinds; kindIndex++ )
 					{
-						hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+						hwloc_bitmap_t CPUSet = hwloc_bitmap_alloc();
 						int efficiency = -1;
 
-						if ( hwloc_cpukinds_get_info(topology, static_cast< unsigned >(kindIndex), cpuset, &efficiency, nullptr, nullptr, 0) == 0 )
+						if ( hwloc_cpukinds_get_info(topology, static_cast< unsigned >(kindIndex), CPUSet, &efficiency, nullptr, nullptr, 0) == 0 )
 						{
-							/* Count physical cores in this kind's cpuset. */
+							/* Count physical cores in this kind's CPUSet. */
 							uint32_t coreCount = 0;
 							hwloc_obj_t obj = nullptr;
 
-							while ( (obj = hwloc_get_next_obj_inside_cpuset_by_type(topology, cpuset, HWLOC_OBJ_CORE, obj)) != nullptr )
+							while ( (obj = hwloc_get_next_obj_inside_cpuset_by_type(topology, CPUSet, HWLOC_OBJ_CORE, obj)) != nullptr )
 							{
 								coreCount++;
 							}
@@ -131,7 +137,7 @@ namespace EmEn::PlatformSpecific
 							}
 						}
 
-						hwloc_bitmap_free(cpuset);
+						hwloc_bitmap_free(CPUSet);
 					}
 				}
 			}

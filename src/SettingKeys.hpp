@@ -337,4 +337,8 @@ namespace EmEn
 		constexpr auto DefaultUserAccountID{0};
 		constexpr auto UserAccountNameKey{"Core/User/AccountName"};
 		constexpr auto DefaultUserAccountName{"John.Doe"};
+
+		/* External libs control */
+		constexpr auto HWLOCVerbosityKey{"Core/HWLOC/Verbosity"};
+		constexpr auto DefaultHWLOCVerbosityKey{"2"}; // 0:All, 1:no ENOSYS, 2:None
 }

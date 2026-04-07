@@ -44,6 +44,7 @@ namespace EmEn
 		m_arguments{argc, argv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
 		m_settings{m_arguments, m_fileSystem, false},
+		m_systemInfo{m_arguments, m_settings},
 		m_networkManager{m_fileSystem, m_threadPool}
 	{
 		/* NOTE: This must be done immediately! */
@@ -65,6 +66,7 @@ namespace EmEn
 		m_arguments{argc, argv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
 		m_settings{m_arguments, m_fileSystem, true},
+		m_systemInfo{m_arguments, m_settings},
 		m_networkManager{m_fileSystem, m_threadPool},
 		m_childProcess{true}
 	{
@@ -100,6 +102,7 @@ namespace EmEn
 		m_arguments{argc, wargv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
 		m_settings{m_arguments, m_fileSystem, false},
+		m_systemInfo{m_arguments, m_settings},
 		m_networkManager{m_fileSystem, m_threadPool}
 	{
 		/* NOTE: This must be done immediately! */
@@ -116,11 +119,12 @@ namespace EmEn
 		}
 	}
 
-	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
+	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
 		: m_processName{std::move(processName)},
 		m_arguments{argc, wargv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
 		m_settings{m_arguments, m_fileSystem, true},
+		m_systemInfo{m_arguments, m_settings},
 		m_networkManager{m_fileSystem, m_threadPool},
 		m_childProcess{true}
 	{
