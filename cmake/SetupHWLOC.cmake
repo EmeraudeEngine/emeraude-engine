@@ -20,7 +20,6 @@ else ()
 	if ( MSVC )
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/hwloc.lib)
 	else ()
-
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libhwloc.a)
 
 		if ( APPLE )

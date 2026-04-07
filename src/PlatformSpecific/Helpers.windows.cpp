@@ -268,10 +268,19 @@ namespace EmEn::PlatformSpecific
 		std::cerr.clear();
 		std::cin.clear();
 
+		enableConsoleANSI();
+
+		return true;
+	}
+
+	void
+	enableConsoleANSI ()
+	{
 		auto hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleMode(hOutput, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
-		return true;
+		auto hError = GetStdHandle(STD_ERROR_HANDLE);
+		SetConsoleMode(hError, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 	}
 
 	void

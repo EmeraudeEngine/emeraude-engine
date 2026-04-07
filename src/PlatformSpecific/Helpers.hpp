@@ -110,6 +110,13 @@ namespace EmEn::PlatformSpecific
 	bool attachToParentConsole ();
 
 	/**
+	 * @brief Enables ANSI escape sequence processing on stdout and stderr.
+	 * @warning Used only for Windows OS. Requires an already attached console.
+	 * @return void
+	 */
+	void enableConsoleANSI ();
+
+	/**
 	 * @brief Waits for a key press before closing the console.
 	 * @note Displays "Press any key to close this window..." and waits.
 	 * @return void

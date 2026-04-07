@@ -68,11 +68,11 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		m_name = userData.pw_gecos;
+		m_username = userData.pw_gecos;
 		m_accountName = userData.pw_name;
 		m_homePath = userData.pw_dir;
 
-		if ( m_name.empty() )
+		if ( m_username.empty() )
 		{
 			std::cerr << "Warning: Unable to get the username !" "\n";
 		}
