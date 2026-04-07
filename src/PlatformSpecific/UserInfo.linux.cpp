@@ -54,7 +54,8 @@ namespace EmEn::PlatformSpecific
 		buffer.resize(bufferSize, '\0');
 	}
 
-	UserInfo::UserInfo () noexcept
+	bool
+	UserInfo::onInitialize () noexcept
 	{
 		passwd userData{};
 		std::string buffer;
@@ -64,14 +65,14 @@ namespace EmEn::PlatformSpecific
 
 		if ( getpwuid_r(getuid(), &userData, buffer.data(), buffer.size(), &result) > 0 || result == nullptr )
 		{
-			return;
+			return false;
 		}
 
-		m_name = userData.pw_gecos;
+		m_username = userData.pw_gecos;
 		m_accountName = userData.pw_name;
 		m_homePath = userData.pw_dir;
 
-		if ( m_name.empty() )
+		if ( m_username.empty() )
 		{
 			std::cerr << "Warning: Unable to get the username !" "\n";
 		}
@@ -80,17 +81,17 @@ namespace EmEn::PlatformSpecific
 		{
 			std::cerr << "Error: Unable to get the account name !" "\n";
 
-			return;
+			return false;
 		}
 
 		if ( m_homePath.empty() )
 		{
 			std::cerr << "Warning: Unable to get the home directory !" "\n";
 
-			return;
+			return false;
 		}
 
-		m_informationFound = true;
+		return true;
 	}
 }
 

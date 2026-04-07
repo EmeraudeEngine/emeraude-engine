@@ -31,10 +31,16 @@
 
 namespace EmEn::PlatformSpecific
 {
+	bool
+	UserInfo::onTerminate () noexcept
+	{
+		return true;
+	}
+
 	std::ostream &
 	operator<< (std::ostream & out, const UserInfo & obj)
 	{
-		if ( !obj.informationFound() )
+		if ( !obj.usable() )
 		{
 			return out << "User information : Not found !" "\n";
 		}

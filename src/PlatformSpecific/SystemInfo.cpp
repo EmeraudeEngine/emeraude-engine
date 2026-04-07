@@ -43,7 +43,29 @@
 namespace EmEn::PlatformSpecific
 {
 	bool
-	SystemInfo::fetchCPUInformation (const Arguments & /*arguments*/, Settings & settings) noexcept
+	SystemInfo::onInitialize () noexcept
+	{
+		if ( this->fetchOSInformation() )
+		{
+			m_informationFound = true;
+		}
+
+		if ( this->fetchCPUInformation() )
+		{
+			m_informationFound = true;
+		}
+
+		return true;
+	}
+
+	bool
+	SystemInfo::onTerminate () noexcept
+	{
+		return true;
+	}
+
+	bool
+	SystemInfo::fetchCPUInformation () noexcept
 	{
 #if IS_ARM_ARCH
 		const auto cpuInfo = cpu_features::GetAarch64Info();
@@ -68,7 +90,7 @@ namespace EmEn::PlatformSpecific
 #endif
 
 		{
-			const auto verbosity = settings.getOrSetDefault< std::string >(HWLOCVerbosityKey, DefaultHWLOCVerbosityKey);
+			const auto verbosity = m_settings.getOrSetDefault< std::string >(HWLOCVerbosityKey, DefaultHWLOCVerbosityKey);
 
 #if IS_WINDOWS
 			_putenv_s("HWLOC_HIDE_ERRORS", verbosity.c_str());

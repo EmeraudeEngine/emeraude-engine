@@ -47,7 +47,7 @@
 namespace EmEn::PlatformSpecific
 {
 	bool
-	SystemInfo::fetchOSInformation (const Arguments & arguments, Settings & settings) noexcept
+	SystemInfo::fetchOSInformation () noexcept
 	{
 		{
 			std::ifstream file{"/etc/os-release"};

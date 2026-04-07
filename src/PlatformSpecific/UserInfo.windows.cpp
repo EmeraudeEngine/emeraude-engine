@@ -47,66 +47,61 @@
 #include <Lmcons.h>
 #include <Shlobj.h>
 
+#define SECURITY_WIN32
+#include <Security.h>
+
 /* Local inclusions. */
 #include "Helpers.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific
 {
 	bool
-	getAccountName (std::string & accountName) noexcept
+	UserInfo::onInitialize () noexcept
 	{
 		std::array< wchar_t, UNLEN + 1 > buffer{};
 		auto size = static_cast< DWORD >(buffer.size());
 
 		if ( GetUserNameW(buffer.data(), &size) == 0 )
 		{
+			TraceError{ClassId} << "Unable to get the account name!";
+
 			return false;
 		}
 
-		accountName = convertWideToUTF8({buffer.data(), size - 1});
+		m_accountName = convertWideToUTF8({buffer.data(), size - 1});
+
+		size = static_cast< DWORD >(buffer.size());
+
+		if ( GetUserNameExW(NameDisplay, buffer.data(), &size) != 0 && size > 0 )
+		{
+			m_username = convertWideToUTF8({buffer.data(), size});
+		}
+		else
+		{
+			/* Fallback to account name if display name is unavailable. */
+			m_username = m_accountName;
+		}
+
+		{
+			PWSTR path = nullptr;
+
+			const HRESULT hr = SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &path);
+
+			if ( FAILED(hr) )
+			{
+				TraceError{ClassId} << "Unable to get the home directory!";
+
+				return false;
+			}
+
+			m_homePath.assign(path);
+
+			/* NOTE: No memory leak as a SHGetKnownFolderPath() failure guarantees there is no allocation. */
+			CoTaskMemFree(path);
+		}
 
 		return true;
-	}
-
-	bool
-	getHomeDirectory (std::filesystem::path & homePath) noexcept
-	{
-		PWSTR path = nullptr;
-
-		HRESULT hr = SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &path);
-
-		if ( FAILED(hr) )
-		{
-			return false;
-		}
-
-		homePath.assign(path);
-
-		CoTaskMemFree(path);
-
-		return true;
-	}
-
-	UserInfo::UserInfo () noexcept
-	{
-		if ( !getAccountName(m_accountName) )
-		{
-			std::cerr << "Error: Unable to get the account name !" "\n";
-
-			return;
-		}
-
-		/* NOTE: On Windows the account name is the username. */
-		m_name = m_accountName;
-
-		if ( !getHomeDirectory(m_homePath) )
-		{
-			std::cerr << "Warning: Unable to get the home directory !" "\n";
-
-			return;
-		}
-
-		m_informationFound = true;
 	}
 }
 

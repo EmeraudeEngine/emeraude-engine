@@ -277,12 +277,12 @@ namespace EmEn
 
 			std::string m_processName;
 			Arguments m_arguments;
+			PlatformSpecific::UserInfo m_userInfo;
 			FileSystem m_fileSystem;
 			Settings m_settings;
-			PlatformSpecific::SystemInfo m_systemInfo;
-			PlatformSpecific::UserInfo m_userInfo;
-			Net::Manager m_networkManager;
+			PlatformSpecific::SystemInfo m_systemInfo{m_arguments, m_settings};
 			std::shared_ptr< Libs::ThreadPool > m_threadPool;
+			Net::Manager m_networkManager{m_fileSystem, m_threadPool};
 			std::vector< ServiceInterface * > m_servicesEnabled;
 			bool m_childProcess{false};
 			bool m_showInformation{false};

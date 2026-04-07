@@ -32,32 +32,29 @@
 #include <sstream>
 #include <filesystem>
 
+/* Local inclusions for inheritance. */
+#include "ServiceInterface.hpp"
+
 namespace EmEn::PlatformSpecific
 {
 	/**
 	 * @brief The user info class. This will gather information on the current user.
+	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class UserInfo final
+	class UserInfo final : public ServiceInterface
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"UserInfo"};
+			static constexpr auto ClassId{"UserInfoService"};
 
 			/** 
 			 * @brief Constructs a user info structure.
 			 */
-			UserInfo () noexcept;
-
-			/**
-			 * @brief Returns whether the current user information has been reached.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			informationFound () const noexcept
+			UserInfo () noexcept
+				: ServiceInterface{ClassId}
 			{
-				return m_informationFound;
+
 			}
 
 			/**
@@ -66,9 +63,9 @@ namespace EmEn::PlatformSpecific
 			 */
 			[[nodiscard]]
 			const std::string &
-			name () const noexcept
+			username () const noexcept
 			{
-				return m_name;
+				return m_username;
 			}
 
 			/**
@@ -95,6 +92,12 @@ namespace EmEn::PlatformSpecific
 
 		private:
 
+			/** @copydoc EmEn::ServiceInterface::onInitialize() */
+			bool onInitialize () noexcept override;
+
+			/** @copydoc EmEn::ServiceInterface::onTerminate() */
+			bool onTerminate () noexcept override;
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -103,10 +106,9 @@ namespace EmEn::PlatformSpecific
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const UserInfo & obj);
 
-			std::string m_name;
+			std::string m_username;
 			std::string m_accountName;
 			std::filesystem::path m_homePath;
-			bool m_informationFound{false};
 	};
 
 	/**

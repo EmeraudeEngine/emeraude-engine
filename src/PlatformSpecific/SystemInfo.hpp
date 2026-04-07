@@ -32,6 +32,9 @@
 #include <sstream>
 #include <filesystem>
 
+/* Local inclusions for inheritance. */
+#include "ServiceInterface.hpp"
+
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
 #include "Arguments.hpp"
@@ -42,13 +45,14 @@ namespace EmEn::PlatformSpecific
 {
 	/**
 	 * @brief The system info class. This will gather system information.
+	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class SystemInfo final
+	class SystemInfo final : public ServiceInterface
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"SystemInfo"};
+			static constexpr auto ClassId{"SystemInfoService"};
 
 			/** 
 			 * @brief Constructs a system info structure.
@@ -56,16 +60,11 @@ namespace EmEn::PlatformSpecific
 			 * @param settings A reference to the settings.
 			 */
 			SystemInfo (const Arguments & arguments, Settings & settings) noexcept
+				: ServiceInterface{ClassId},
+				m_arguments{arguments},
+				m_settings{settings}
 			{
-				if ( this->fetchOSInformation(arguments, settings) )
-				{
-					m_informationFound = true;
-				}
 
-				if ( this->fetchCPUInformation(arguments, settings) )
-				{
-					m_informationFound = true;
-				}
 			}
 
 			/**
@@ -151,21 +150,23 @@ namespace EmEn::PlatformSpecific
 
 		private:
 
+			/** @copydoc EmEn::ServiceInterface::onInitialize() */
+			bool onInitialize () noexcept override;
+
+			/** @copydoc EmEn::ServiceInterface::onTerminate() */
+			bool onTerminate () noexcept override;
+
 			/**
 			 * @brief Fetches OS information on the system.
-			 * @param arguments A reference to the arguments.
-			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
-			bool fetchOSInformation (const Arguments & arguments, Settings & settings) noexcept;
+			bool fetchOSInformation () noexcept;
 
 			/**
 			 * @brief Fetches CPU information on the system.
-			 * @param arguments A reference to the arguments.
-			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
-			bool fetchCPUInformation (const Arguments & arguments, Settings & settings) noexcept;
+			bool fetchCPUInformation () noexcept;
 
 			/**
 			 * @brief Returns the total memory available on the system.
@@ -203,6 +204,8 @@ namespace EmEn::PlatformSpecific
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const SystemInfo & obj);
 
+			const Arguments & m_arguments;
+			Settings & m_settings;
 			OperatingSystem m_OSInformation{};
 			CPU m_CPUInformation{};
 			Libs::StaticVector< GPUDevice, 8 > m_GPUDevices;

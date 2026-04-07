@@ -43,9 +43,7 @@ namespace EmEn
 		: m_processName{"main"},
 		m_arguments{argc, argv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
-		m_settings{m_arguments, m_fileSystem, false},
-		m_systemInfo{m_arguments, m_settings},
-		m_networkManager{m_fileSystem, m_threadPool}
+		m_settings{m_arguments, m_fileSystem, false}
 	{
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
@@ -66,8 +64,6 @@ namespace EmEn
 		m_arguments{argc, argv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
 		m_settings{m_arguments, m_fileSystem, true},
-		m_systemInfo{m_arguments, m_settings},
-		m_networkManager{m_fileSystem, m_threadPool},
 		m_childProcess{true}
 	{
 		/* NOTE: This must be done immediately! */
@@ -101,9 +97,7 @@ namespace EmEn
 		: m_processName{"main"},
 		m_arguments{argc, wargv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
-		m_settings{m_arguments, m_fileSystem, false},
-		m_systemInfo{m_arguments, m_settings},
-		m_networkManager{m_fileSystem, m_threadPool}
+		m_settings{m_arguments, m_fileSystem, false}
 	{
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
@@ -124,8 +118,6 @@ namespace EmEn
 		m_arguments{argc, wargv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
 		m_settings{m_arguments, m_fileSystem, true},
-		m_systemInfo{m_arguments, m_settings},
-		m_networkManager{m_fileSystem, m_threadPool},
 		m_childProcess{true}
 	{
 		/* NOTE: This must be done immediately! */
@@ -158,13 +150,15 @@ namespace EmEn
 	bool
 	PrimaryServices::initialize () noexcept
 	{
-		if constexpr ( ThreadPoolDebugEnabled )
+		if ( m_userInfo.initialize(m_servicesEnabled) )
 		{
-			m_threadPool = std::make_shared< ThreadPool >(ThreadPoolDebugEnabledNumThreads);
+			TraceSuccess{ClassId} << m_userInfo.name() << " primary service up! [" << m_processName << "]";
 		}
 		else
 		{
-			m_threadPool = std::make_shared< ThreadPool >(std::thread::hardware_concurrency());
+			TraceFatal{ClassId} << m_userInfo.name() << " primary service failed to execute! [" << m_processName << "!";
+
+			return false;
 		}
 
 		/* Initialize the file system to reach every useful directory. */
@@ -209,6 +203,37 @@ namespace EmEn
 				m_fileSystem.name() << " primary service failed to execute! [" << m_processName << "]" "\n"
 				"There is a problem to read or write the core settings file." "\n"
 				"The engine will use the default configuration.";
+		}
+
+		if ( m_systemInfo.initialize(m_servicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_systemInfo.name() << " primary service up! [" << m_processName << "]";
+		}
+		else
+		{
+			TraceFatal{ClassId} << m_systemInfo.name() << " primary service failed to execute! [" << m_processName << "!";
+
+			return false;
+		}
+
+		if constexpr ( ThreadPoolDebugEnabled )
+		{
+			m_threadPool = std::make_shared< ThreadPool >(ThreadPoolDebugEnabledNumThreads);
+		}
+		else
+		{
+			m_threadPool = std::make_shared< ThreadPool >(std::thread::hardware_concurrency());
+		}
+
+		if ( m_networkManager.initialize(m_servicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_networkManager.name() << " primary service up! [" << m_processName << "]";
+		}
+		else
+		{
+			TraceFatal{ClassId} << m_networkManager.name() << " primary service failed to execute! [" << m_processName << "!";
+
+			return false;
 		}
 
 		return true;

@@ -280,6 +280,9 @@ if ( MSVC )
 		VERSION ${PROJECT_VERSION}
 		WINDOWS_EXPORT_ALL_SYMBOLS ON # TODO: Change this by creating a real API with "emeraude_export.hpp"
 	)
+
+	# Link Secur32 for GetUserNameExW (Extended Security API).
+	target_link_libraries(${PROJECT_NAME} PRIVATE Secur32)
 elseif ( APPLE )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
 

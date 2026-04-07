@@ -46,7 +46,7 @@
 namespace EmEn::PlatformSpecific
 {
 	bool
-	SystemInfo::fetchOSInformation (const Arguments & arguments, Settings & settings) noexcept
+	SystemInfo::fetchOSInformation () noexcept
 	{
 		char OSVersion[32];
 		size_t OSVersionLength = sizeof(OSVersion) - 1;
