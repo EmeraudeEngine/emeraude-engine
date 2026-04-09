@@ -303,6 +303,35 @@ namespace EmEn::Net
 #endif
 	}
 
+	bool
+	UDPClient::getLocalAddress (std::string & address, uint16_t & port) const noexcept
+	{
+		if ( !isOpen() )
+		{
+			return false;
+		}
+
+		struct sockaddr_in localAddr{};
+		auto addrLen = static_cast< socklen_t >(sizeof(localAddr));
+
+#ifdef _WIN32
+		if ( getsockname(static_cast< SocketType >(m_socket), reinterpret_cast< struct sockaddr * >(&localAddr), &addrLen) != 0 )
+#else
+		if ( getsockname(m_fd, reinterpret_cast< struct sockaddr * >(&localAddr), &addrLen) != 0 )
+#endif
+		{
+			return false;
+		}
+
+		std::array< char, INET_ADDRSTRLEN > addrStr{};
+		inet_ntop(AF_INET, &localAddr.sin_addr, addrStr.data(), addrStr.size());
+
+		address = addrStr.data();
+		port = ntohs(localAddr.sin_port);
+
+		return true;
+	}
+
 	/* ---- Send / Receive ---- */
 
 	int

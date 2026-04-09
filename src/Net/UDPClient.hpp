@@ -138,6 +138,14 @@ namespace EmEn::Net
 			std::string receiveString (size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
 
 			/**
+			 * @brief Retrieves the local address and port the socket is bound to.
+			 * @param address [out] The bound IP address.
+			 * @param port [out] The bound port.
+			 * @return bool True if the address was retrieved successfully.
+			 */
+			bool getLocalAddress (std::string & address, uint16_t & port) const noexcept;
+
+			/**
 			 * @brief Enables or disables the SO_BROADCAST socket option.
 			 * @param enable True to enable broadcast, false to disable.
 			 * @return bool True if the option was set successfully.
