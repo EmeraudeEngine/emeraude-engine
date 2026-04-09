@@ -9,7 +9,7 @@ if ( EMERAUDE_USE_SYSTEM_LIBS )
 
 	pkg_check_modules(JPEG REQUIRED libjpeg)
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${JPEG_INCLUDE_DIRS})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${JPEG_INCLUDE_DIRS})
 
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${JPEG_LIBRARY_DIRS})
 

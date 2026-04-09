@@ -8,7 +8,7 @@ if ( EMERAUDE_USE_SYSTEM_LIBS )
 	# NOTE: https://cmake.org/cmake/help/latest/module/FindBZip2.html
 	find_package(BZip2 REQUIRED)
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${BZIP2_INCLUDE_DIRS})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${BZIP2_INCLUDE_DIRS})
 
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${BZIP2_LIBRARIES})
 

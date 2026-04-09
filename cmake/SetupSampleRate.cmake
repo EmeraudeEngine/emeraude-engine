@@ -9,7 +9,7 @@ if ( EMERAUDE_USE_SYSTEM_LIBS )
 
 	pkg_check_modules(SAMPLERATE REQUIRED samplerate)
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SAMPLERATE_INCLUDE_DIRS})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${SAMPLERATE_INCLUDE_DIRS})
 
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SAMPLERATE_LIBRARY_DIRS})
 

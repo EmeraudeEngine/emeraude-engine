@@ -14,7 +14,7 @@ add_library(bc7enc_rdo STATIC
 	${BC7ENC_RDO_DIR}/bc7decomp.cpp
 )
 
-target_include_directories(bc7enc_rdo PUBLIC ${BC7ENC_RDO_DIR})
+target_include_directories(bc7enc_rdo SYSTEM PUBLIC ${BC7ENC_RDO_DIR})
 
 # Suppress warnings from third-party code (compiled with -Werror in the engine).
 # Optimization flags are inherited from the build type (Release/Debug) —
@@ -25,6 +25,6 @@ else ()
 	target_compile_options(bc7enc_rdo PRIVATE /w)
 endif ()
 
-target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${BC7ENC_RDO_DIR})
+target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${BC7ENC_RDO_DIR})
 
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE bc7enc_rdo)

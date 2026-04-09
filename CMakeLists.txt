@@ -432,7 +432,7 @@ target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
 
 message("[EmeraudeEngine] '${PROJECT_NAME}' will be compiled with flags: ${EMERAUDE_COMPILE_OPTIONS}")
 
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
     ${CMAKE_BINARY_DIR}/include
     ${LOCAL_LIB_DIR}/include
 )

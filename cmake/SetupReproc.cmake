@@ -21,7 +21,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc EXCLUDE_FROM_AL
 # Enable Position Independent Code for shared library compatibility
 set_target_properties(reproc reproc++ PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC
+target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc++/include
 )

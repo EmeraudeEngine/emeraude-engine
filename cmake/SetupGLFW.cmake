@@ -11,6 +11,6 @@ set(GLFW_INSTALL Off)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw EXCLUDE_FROM_ALL)
 
-target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw/include)
+target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw/include)
 
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE glfw)

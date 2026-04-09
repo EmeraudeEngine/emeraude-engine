@@ -9,7 +9,7 @@ if ( EMERAUDE_USE_SYSTEM_LIBS )
 
 	pkg_check_modules(ZLIB REQUIRED zlib)
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${ZLIB_INCLUDE_DIRS})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${ZLIB_INCLUDE_DIRS})
 
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${ZLIB_LIBRARY_DIRS})
 

@@ -18,7 +18,7 @@ if ( MSVC )
 		)
 	endif ()
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SNDFILE_PATH}/include)
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${SNDFILE_PATH}/include)
 
 	#target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SNDFILE_PATH}/lib)
 
@@ -30,7 +30,7 @@ else ()
 
 	pkg_check_modules(SNDFILE REQUIRED sndfile)
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SNDFILE_INCLUDE_DIRS})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${SNDFILE_INCLUDE_DIRS})
 
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SNDFILE_LIBRARY_DIRS})
 

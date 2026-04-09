@@ -7,7 +7,7 @@ if ( EMERAUDE_USE_SYSTEM_OPENAL )
 
 	find_package(OpenAL REQUIRED)
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${OPENAL_INCLUDE_DIR})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${OPENAL_INCLUDE_DIR})
 
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${OPENAL_LIBRARY_DIRS})
 

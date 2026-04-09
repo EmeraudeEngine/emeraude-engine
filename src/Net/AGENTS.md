@@ -110,27 +110,49 @@ netManager.forceDownload(url, callback);
 
 Beyond the download manager, the Net module provides cross-platform hardware utilities for device discovery and communication. These are **standalone utility libraries** (not services), called on-demand.
 
-### SSDP Discovery (`Net::SSDPDiscovery`)
+### UDP Client (`Net::UDPClient`)
 
-**File**: `SSDPClient.hpp/.cpp`
+**File**: `UDPClient.hpp/.cpp`
 
-UPnP device discovery via UDP multicast M-SEARCH (239.255.255.250:1900).
+Cross-platform UDP client providing both generic datagram socket operations (open/bind/send/receive/close) and self-contained SSDP discovery.
 
 **API**:
 ```cpp
-namespace EmEn::Net::SSDPDiscovery
+namespace EmEn::Net
 {
-    struct Device {
-        std::string address;                             // IP address
+    struct SSDPDevice {
+        std::string address;
         uint16_t port{0};
-        std::map< std::string, std::string > headers;   // SSDP response headers
+        std::map< std::string, std::string > headers;
     };
 
-    [[nodiscard]]
-    std::vector< Device > discover (const std::string & searchTarget,
-                                     int timeoutSeconds = DefaultTimeoutSeconds) noexcept;
+    class UDPClient final {
+    public:
+        // Socket lifecycle
+        bool open () noexcept;
+        bool bind (uint16_t port, const std::string & address = {}) noexcept;
+        void close () noexcept;
+        bool isOpen () const noexcept;
+
+        // Data transfer
+        int send (const std::string & host, uint16_t port, const void * data, size_t length) noexcept;
+        int send (const std::string & host, uint16_t port, const std::string & data) noexcept;
+        int receive (void * buffer, size_t maxLength, std::string & senderAddress,
+                     uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
+        std::string receiveString (size_t maxLength, std::string & senderAddress,
+                                   uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
+
+        // Options
+        bool setBroadcast (bool enable) noexcept;
+
+        // SSDP convenience (static, self-contained)
+        static std::vector< SSDPDevice > ssdpDiscover (const std::string & searchTarget,
+                                                        int timeoutSeconds = 5) noexcept;
+    };
 }
 ```
+
+**Design**: RAII (closes in destructor), movable, non-copyable, all functions `noexcept`. The `ssdpDiscover()` static method creates a temporary socket internally for UDP multicast M-SEARCH (239.255.255.250:1900).
 
 **Platform**: Cross-platform (BSD sockets on Linux/macOS, Winsock on Windows). No external dependencies.
 
@@ -237,13 +259,13 @@ namespace EmEn::Net::WiFiScanner
 - **URLs in stores**: Resources stores can contain URLs instead of paths
 - **Fail-safe integration**: Download failure → Resources returns neutral resource
 - **No multiplayer**: Net is for assets, not gameplay networking
-- **Hardware utilities are standalone**: SSDPClient, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO
+- **Hardware utilities are standalone**: UDPClient, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO
 - **noexcept everywhere**: All hardware utility functions are noexcept, errors return false/empty containers
 
 ## Important Files
 
 - `Manager.cpp/.hpp` - Main manager, download requests
-- `SSDPClient.hpp/.cpp` - UPnP device discovery
+- `UDPClient.hpp/.cpp` - UDP client and SSDP discovery
 - `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction
 - `WiFiScanner.hpp` + `.{linux,mac,windows}.cpp` - WiFi scanning
 - Local cache (location to be documented)

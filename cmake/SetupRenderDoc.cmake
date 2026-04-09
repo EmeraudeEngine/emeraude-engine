@@ -10,7 +10,7 @@ if ( NOT EXISTS "${RENDERDOC_INCLUDE_DIR}/renderdoc_app.h" )
 	message(FATAL_ERROR "[EmeraudeEngine] RenderDoc submodule not found! Run: git submodule update --init dependencies/renderdoc")
 endif ()
 
-target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${RENDERDOC_INCLUDE_DIR})
+target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${RENDERDOC_INCLUDE_DIR})
 target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PUBLIC EMERAUDE_ENABLE_RENDERDOC)
 
 if ( UNIX )
