@@ -142,6 +142,9 @@ namespace EmEn::Net
         std::string receiveString (size_t maxLength, std::string & senderAddress,
                                    uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
 
+        // Query
+        bool getLocalAddress (std::string & address, uint16_t & port) const noexcept;
+
         // Options
         bool setBroadcast (bool enable) noexcept;
 
