@@ -39,6 +39,8 @@
 #include "Graphics/FontResource.hpp"
 #include "Graphics/Geometry/AdaptiveVertexGridResource.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/RawIndexedVertexResource.hpp"
+#include "Graphics/Geometry/RawVertexResource.hpp"
 #include "Graphics/Geometry/VertexGridResource.hpp"
 #include "Graphics/Geometry/VertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
@@ -537,6 +539,8 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::TextureResource::AnimatedTextureCubemap), std::make_unique< AnimatedTextureCubemaps >("Animated texture cubemap manager", m_primaryServices, *this, this->getLocalStore("CubemapMovies")));
 			m_containers.emplace(typeid(Graphics::Geometry::VertexResource), std::make_unique< VertexGeometries >("Geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::IndexedVertexResource), std::make_unique< IndexedVertexGeometries >("Indexed geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
+			m_containers.emplace(typeid(Graphics::Geometry::RawVertexResource), std::make_unique< RawVertexGeometries >("Raw geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
+			m_containers.emplace(typeid(Graphics::Geometry::RawIndexedVertexResource), std::make_unique< RawIndexedVertexGeometries >("Raw indexed geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::VertexGridResource), std::make_unique< VertexGridGeometries >("Grid geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::AdaptiveVertexGridResource), std::make_unique< AdaptiveVertexGridGeometries >("Adaptive grid geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Material::BasicResource), std::make_unique< BasicMaterials >("Basic material manager", m_primaryServices, *this, this->getLocalStore("Materials")));

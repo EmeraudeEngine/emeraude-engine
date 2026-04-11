@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Geometry/Geometries.hpp
+ * src/Graphics/Geometry/RawGeometryOptions.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,26 +26,29 @@
 
 #pragma once
 
-/* STL inclusions */
-#include <array>
-#include <string_view>
+/* STL inclusions. */
+#include <optional>
 
-/* Local inclusions. */
-#include "VertexResource.hpp"
-#include "IndexedVertexResource.hpp"
-#include "RawVertexResource.hpp"
-#include "RawIndexedVertexResource.hpp"
-#include "VertexGridResource.hpp"
-#include "AdaptiveVertexGridResource.hpp"
+/* Local inclusions for usages. */
+#include "Graphics/Types.hpp"
+#include "Libs/Math/Space3D/Point.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
-	constexpr auto Types = std::array< std::string_view, 6 >{
-		VertexResource::ClassId,
-		IndexedVertexResource::ClassId,
-		RawVertexResource::ClassId,
-		RawIndexedVertexResource::ClassId,
-		VertexGridResource::ClassId,
-		AdaptiveVertexGridResource::ClassId
+	/**
+	 * @brief Options for raw geometry resource loading.
+	 * @note Provides optional topology override and explicit bounding box specification.
+	 * When bounding box min/max are not provided, they are auto-computed from vertex positions.
+	 */
+	struct RawGeometryOptions
+	{
+		/** @brief The primitive topology for this geometry. Default: TriangleList. */
+		Topology topology{Topology::TriangleList};
+
+		/** @brief Optional explicit bounding box minimum point. */
+		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMin{};
+
+		/** @brief Optional explicit bounding box maximum point. */
+		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMax{};
 	};
 }
