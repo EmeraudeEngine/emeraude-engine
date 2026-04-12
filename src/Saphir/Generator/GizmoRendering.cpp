@@ -40,6 +40,27 @@ namespace EmEn::Saphir::Generator
 	using namespace Vulkan;
 	using namespace Saphir::Keys;
 
+	/** @brief Gizmo push constant component names. */
+	static constexpr auto HighlightFactor{"highlightFactor"};
+
+	/**
+	 * @brief Declares the gizmo push constant block in a shader.
+	 * Layout: mat4 MVP (64B) + float frameIndex (4B) + float highlightFactor (4B) = 72 bytes.
+	 * @param shader The shader to declare the block in.
+	 * @return bool
+	 */
+	static
+	bool
+	declareGizmoPushConstantBlock (AbstractShader & shader) noexcept
+	{
+		Declaration::PushConstantBlock pushConstantBlock{PushConstant::Type::Matrices, PushConstant::Matrices};
+		pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ModelViewProjectionMatrix);
+		pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::FrameIndex);
+		pushConstantBlock.addMember(Declaration::VariableType::Float, HighlightFactor);
+
+		return shader.declare(pushConstantBlock);
+	}
+
 	void
 	GizmoRendering::prepareUniformSets (SetIndexes & /*setIndexes*/) noexcept
 	{
@@ -76,8 +97,8 @@ namespace EmEn::Saphir::Generator
 	bool
 	GizmoRendering::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & /*descriptorSetLayouts*/, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
-		/* NOTE: No descriptor sets needed. Only push constants for the MVP matrix. */
-		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
+		/* NOTE: Push constants visible to both vertex (MVP) and fragment (highlightFactor) stages. */
+		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
 		return true;
 	}
@@ -88,8 +109,8 @@ namespace EmEn::Saphir::Generator
 		auto * vertexShader = program.initVertexShader(this->name() + "VertexShader", false, false, false);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
-		/* NOTE: Declare the MVP push constant block (mat4 + float frameIndex). */
-		if ( !this->declareMatrixPushConstantBlock(*vertexShader) )
+		/* NOTE: Declare the gizmo push constant block (MVP + frameIndex + highlightFactor). */
+		if ( !declareGizmoPushConstantBlock(*vertexShader) )
 		{
 			return false;
 		}
@@ -131,15 +152,25 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* NOTE: Declare the same push constant block for fragment access to highlightFactor. */
+		if ( !declareGizmoPushConstantBlock(*fragmentShader) )
+		{
+			return false;
+		}
+
 		/* NOTE: Declare default output fragment (location 0, vec4). */
 		if ( !fragmentShader->declareDefaultOutputFragment() )
 		{
 			return false;
 		}
 
-		/* NOTE: Output the vertex color directly without any lighting. */
+		/* NOTE: Apply highlight factor to vertex color.
+		 * highlightFactor = 1.0 → normal color.
+		 * highlightFactor > 1.0 → brighter (lerp toward white). */
 		Code{*fragmentShader, Location::Output} <<
-			ShaderVariable::OutputFragment << " = " << ShaderVariable::PrimaryVertexColor << ';';
+			"float hf = " << MatrixPC(HighlightFactor) << ';' << '\n' <<
+			'\t' << "vec4 baseColor = " << ShaderVariable::PrimaryVertexColor << ';' << '\n' <<
+			'\t' << ShaderVariable::OutputFragment << " = vec4(mix(baseColor.rgb, vec3(1.0), clamp(hf - 1.0, 0.0, 1.0)), baseColor.a);";
 
 		return fragmentShader->generateSourceCode(*this);
 	}

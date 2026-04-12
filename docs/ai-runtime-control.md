@@ -672,6 +672,7 @@ Core
 +-- AudioManagerService
 |   +-- TrackMixerService   (play, pause, stop, volume, playlist, etc.)
 +-- FileSystemService       (getJson, get, print)
++-- InputManagerService     (keyPress, mouseClick, mouseMove)
 +-- RendererService         (screenshot, getStatus)
 +-- ResourcesManagerService (listContainers, listResources)
 +-- SceneManagerService     (createScene, setGround, setBackground, addMesh, etc.)
@@ -681,25 +682,62 @@ Core
 
 ---
 
-## 13. CEF Integration (JavaScript)
+## 13. Input Injection (AI Interaction)
 
-All console commands are accessible from JavaScript in CEF pages via a single unified driver:
+> **This is critical for AI autonomy.** The AI can simulate keyboard and mouse events, enabling full interaction with the running application without a physical user.
 
-```javascript
-// Execute any console command
-window.engine.execute("Core.SettingsService.getJson()");
-window.engine.execute("Core.SceneManagerService.createScene(MyScene, 512.0, Cam, 0, 5, 20, Miramar)");
+### Keyboard events
+
+```bash
+# Inject a key press + release. Args: key_code, modifiers (optional)
+echo "Core.InputManagerService.keyPress(292, 1)" | nc -q 1 localhost 7777
+# 292 = F3, 1 = Shift → Shift+F3
 ```
 
-Pages implement `onEngineResponse(command, outputs)` to receive results:
+Key codes follow GLFW constants (see `Input/Types.hpp`). Common keys:
+- F1-F12: 290-301
+- Escape: 256, Enter: 257, Space: 32
+- Letters: ASCII values (A=65, G=71, R=82, S=83)
 
-```javascript
-function onEngineResponse(command, outputs) {
-    if (command.indexOf("getJson") !== -1 && outputs.length > 0) {
-        const data = JSON.parse(outputs[0].message);
-        // Use data...
-    }
-}
+Modifier flags: Shift=1, Ctrl=2, Alt=4, Super=8
+
+### Mouse events
+
+```bash
+# Click at screen coordinates. Args: x, y, button (0=left), modifiers
+echo "Core.InputManagerService.mouseClick(1920, 1000)" | nc -q 1 localhost 7777
+
+# Move pointer to coordinates
+echo "Core.InputManagerService.mouseMove(500, 300)" | nc -q 1 localhost 7777
 ```
 
-This replaces all previous specialized drivers (TrackMixer, Settings, FileSystem, Arguments). The `window.engine.execute()` interface is the sole entry point for all engine commands from CEF.
+**Coordinate space:** query `Core.WindowService.getState()` to get `windowWidth`, `framebufferWidth`, and `contentXScale`. GLFW mouse coordinates may differ from framebuffer pixels on HiDPI displays.
+
+### The AI interaction loop
+
+```
+Screenshot → Analyze image → Decide action → Inject input → Screenshot → Verify
+```
+
+The AI can:
+1. **See** the application state via `screenshot()`
+2. **Act** on it via `keyPress()` / `mouseClick()` / `mouseMove()`
+3. **Verify** the result via another `screenshot()`
+4. **Navigate** the camera via scene commands (`Act.setPosition`, `Act.lookAt`)
+
+This enables fully autonomous testing, debugging, and scene editing.
+
+---
+
+## 14. Clean Shutdown
+
+```bash
+# Graceful quit (Shift+Escape)
+echo "Core.InputManagerService.keyPress(256, 1)" | nc -q 1 localhost 7777
+```
+
+Prefer this over `kill` or `timeout` — it lets the engine clean up resources properly (GPU, audio, files).
+
+---
+
+<!-- NOTE: CEF integration is handled at the application level (projet-alpha), not in the engine. -->

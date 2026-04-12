@@ -26,6 +26,9 @@
 
 #include "Manager.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Input/Manager.hpp"
 #include "Input/Types.hpp"
@@ -133,8 +136,15 @@ namespace EmEn::Scenes::Editor
 			return;
 		}
 
-		/* NOTE: Update gizmo position to follow the selected entity. */
-		const auto worldFrame = m_selectedEntity->getWorldCoordinates();
+		/* NOTE: Update gizmo position (and rotation in Local mode) to follow the selected entity. */
+		auto worldFrame = m_selectedEntity->getWorldCoordinates();
+
+		if ( m_transformSpace == TransformSpace::World )
+		{
+			/* NOTE: In World mode, keep position but reset rotation to identity. */
+			worldFrame.resetRotation();
+		}
+
 		m_translateGizmo.setWorldFrame(worldFrame);
 
 		/* NOTE: Update gizmo scale for constant screen size (uses configurable ratio). */
@@ -359,6 +369,76 @@ namespace EmEn::Scenes::Editor
 		m_selectedEntity = nullptr;
 	}
 
+	float
+	Manager::projectMouseOnAxis (float screenX, float screenY, const Vector< 3, float > & axisOrigin, const Vector< 3, float > & axisDirection) const noexcept
+	{
+		const auto ray = this->screenToWorldRay(screenX, screenY);
+
+		if ( !ray.isValid() )
+		{
+			return 0.0F;
+		}
+
+		/* NOTE: Closest point between two lines (axis line and mouse ray).
+		 * Axis: P(t) = axisOrigin + t * axisDir
+		 * Ray:  Q(s) = rayStart  + s * rayDir
+		 * Solve for t that minimizes distance. */
+		const auto rayDir = (ray.endPoint() - ray.startPoint()).normalize();
+		const auto c = ray.startPoint() - axisOrigin;
+
+		const float aa = Vector< 3, float >::dotProduct(axisDirection, axisDirection);
+		const float ab = Vector< 3, float >::dotProduct(axisDirection, rayDir);
+		const float bb = Vector< 3, float >::dotProduct(rayDir, rayDir);
+		const float ca = Vector< 3, float >::dotProduct(c, axisDirection);
+		const float cb = Vector< 3, float >::dotProduct(c, rayDir);
+
+		const float denom = aa * bb - ab * ab;
+
+		if ( std::abs(denom) < 0.0001F )
+		{
+			return 0.0F;
+		}
+
+		return (cb * ab - ca * bb) / denom;
+	}
+
+	bool
+	Manager::onPointerMove (float positionX, float positionY) noexcept
+	{
+		/* NOTE: Handle drag if active. */
+		if ( m_dragActive && m_selectedEntity != nullptr )
+		{
+			const float currentT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+			float delta = (m_dragInitialT - currentT) * m_moveRatio;
+
+			/* NOTE: Apply stepping if enabled. */
+			if ( m_moveStep > 0.0F )
+			{
+				delta = std::round(delta / m_moveStep) * m_moveStep;
+			}
+
+			/* NOTE: Compute new position: initial + delta along axis. */
+			const auto newPosition = m_dragInitialEntityPos + m_dragAxisDirection * delta;
+
+			m_selectedEntity->setPosition(newPosition, Libs::Math::TransformSpace::World);
+
+			return true;
+		}
+
+		/* NOTE: Update gizmo hover highlight. */
+		if ( m_selectedEntity != nullptr && m_translateGizmo.isCreated() )
+		{
+			const auto ray = this->screenToWorldRay(positionX, positionY);
+
+			if ( ray.isValid() )
+			{
+				m_translateGizmo.setHighlightedAxis(m_translateGizmo.hitTest(ray));
+			}
+		}
+
+		return false;
+	}
+
 	bool
 	Manager::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
 	{
@@ -378,8 +458,39 @@ namespace EmEn::Scenes::Editor
 
 				if ( hitAxis != Gizmo::AxisID::None )
 				{
-					/* TODO: Start drag operation on hitAxis. */
-					TraceInfo{ClassId} << "Gizmo axis hit: " << static_cast< int >(hitAxis);
+					/* NOTE: Start drag operation. */
+					m_dragActive = true;
+					m_dragAxis = hitAxis;
+					m_dragInitialEntityPos = m_selectedEntity->getWorldCoordinates().position();
+
+					/* NOTE: Determine axis direction based on transform space. */
+					const auto & entityFrame = m_selectedEntity->getWorldCoordinates();
+
+					switch ( hitAxis )
+					{
+						case Gizmo::AxisID::X :
+							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
+								? entityFrame.rightVector()
+								: Vector< 3, float >{1.0F, 0.0F, 0.0F};
+							break;
+
+						case Gizmo::AxisID::Y :
+							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
+								? entityFrame.downwardVector()
+								: Vector< 3, float >{0.0F, 1.0F, 0.0F};
+							break;
+
+						case Gizmo::AxisID::Z :
+							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
+								? entityFrame.backwardVector()
+								: Vector< 3, float >{0.0F, 0.0F, 1.0F};
+							break;
+
+						default :
+							break;
+					}
+
+					m_dragInitialT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
 
 					return true;
 				}
@@ -397,6 +508,25 @@ namespace EmEn::Scenes::Editor
 		}
 
 		return true;
+	}
+
+	bool
+	Manager::onButtonRelease (float /*positionX*/, float /*positionY*/, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
+	{
+		if ( buttonNumber != Button1Left )
+		{
+			return false;
+		}
+
+		if ( m_dragActive )
+		{
+			m_dragActive = false;
+			m_dragAxis = Gizmo::AxisID::None;
+
+			return true;
+		}
+
+		return false;
 	}
 
 	bool
@@ -418,15 +548,36 @@ namespace EmEn::Scenes::Editor
 			}
 		}
 
-		/* NOTE: Shift+G/R/S for gizmo mode switching. */
+		/* NOTE: Shift+key shortcuts for editor controls. */
 		if ( isKeyboardModifierPressed(ModKeyShift, modifiers) )
 		{
 			switch ( key )
 			{
+				/* Shift+G: cycle transform space (Local → World → Parent → Local). */
 				case KeyG :
-					this->setGizmoMode(GizmoMode::Translate);
-					return true;
+				{
+					switch ( m_transformSpace )
+					{
+						case TransformSpace::Local :
+							m_transformSpace = TransformSpace::World;
+							m_notifier.push("Transform space: World");
+							break;
 
+						case TransformSpace::World :
+							m_transformSpace = TransformSpace::Local;
+							m_notifier.push("Transform space: Local");
+							break;
+
+						case TransformSpace::Parent :
+							m_transformSpace = TransformSpace::Local;
+							m_notifier.push("Transform space: Local");
+							break;
+					}
+
+					return true;
+				}
+
+				/* Shift+R/S: gizmo mode switching. */
 				case KeyR :
 					this->setGizmoMode(GizmoMode::Rotate);
 					return true;

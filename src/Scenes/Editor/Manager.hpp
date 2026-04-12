@@ -91,7 +91,8 @@ namespace EmEn::Scenes::Editor
 	enum class TransformSpace : uint8_t
 	{
 		Local,
-		World
+		World,
+		Parent
 	};
 
 	/**
@@ -244,6 +245,28 @@ namespace EmEn::Scenes::Editor
 			}
 
 			/**
+			 * @brief Sets the movement ratio for free move mode. Default 1.0.
+			 * @param ratio The ratio multiplier.
+			 * @return void
+			 */
+			void
+			setMoveRatio (float ratio) noexcept
+			{
+				m_moveRatio = ratio;
+			}
+
+			/**
+			 * @brief Sets the movement step. 0 = free move, >0 = snap to grid.
+			 * @param step The step size (e.g. 0.1, 1.0, 5.0). 0 disables snapping.
+			 * @return void
+			 */
+			void
+			setMoveStep (float step) noexcept
+			{
+				m_moveStep = step;
+			}
+
+			/**
 			 * @brief Updates the viewport dimensions (call when window is resized).
 			 * @param viewportWidth The new width.
 			 * @param viewportHeight The new height.
@@ -298,11 +321,28 @@ namespace EmEn::Scenes::Editor
 
 			/* Input listener overrides. */
 
+			/** @copydoc EmEn::Input::PointerListenerInterface::onPointerMove() */
+			bool onPointerMove (float positionX, float positionY) noexcept override;
+
 			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonPress() */
 			bool onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
 
+			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonRelease() */
+			bool onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
+
 			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
 			bool onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override;
+
+			/**
+			 * @brief Computes the closest point parameter on a world-space axis for a screen position.
+			 * @param screenX Screen X coordinate.
+			 * @param screenY Screen Y coordinate.
+			 * @param axisOrigin The origin of the axis in world space.
+			 * @param axisDirection The normalized direction of the axis in world space.
+			 * @return float The t parameter along the axis (distance from origin).
+			 */
+			[[nodiscard]]
+			float projectMouseOnAxis (float screenX, float screenY, const Libs::Math::Vector< 3, float > & axisOrigin, const Libs::Math::Vector< 3, float > & axisDirection) const noexcept;
 
 			/* References. */
 			Input::Manager & m_inputManager;
@@ -323,10 +363,21 @@ namespace EmEn::Scenes::Editor
 
 			/* Editing modes. */
 			GizmoMode m_gizmoMode{GizmoMode::Translate};
-			TransformSpace m_transformSpace{TransformSpace::World};
+			TransformSpace m_transformSpace{TransformSpace::Local};
 			float m_gizmoScreenRatio{Gizmo::Abstract::DefaultScreenRatio};
+
+			/* Drag state. */
+			Libs::Math::Vector< 3, float > m_dragAxisDirection;
+			Libs::Math::Vector< 3, float > m_dragInitialEntityPos;
+			float m_dragInitialT{0.0F};
+			Gizmo::AxisID m_dragAxis{Gizmo::AxisID::None};
+
+			/* Movement options. */
+			float m_moveRatio{1.0F};
+			float m_moveStep{0.0F};
 
 			/* Activation. */
 			bool m_active{false};
+			bool m_dragActive{false};
 	};
 }

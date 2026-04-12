@@ -58,36 +58,53 @@ namespace EmEn::Scenes::Editor::Gizmo
 			return true;
 		}
 
-		/* NOTE: Create the axis geometry (3 colored arrows + origin sphere). */
-		m_geometry = Geometry::ResourceGenerator{resourceManager, Geometry::EnableVertexColor}.axis(AxisLength, "+EditorGizmoTranslate");
-
-		if ( m_geometry == nullptr )
+		/* NOTE: Create individual arrow geometries with per-axis colors. */
 		{
-			Tracer::error(ClassId, "Failed to create gizmo geometry !");
+			Geometry::ResourceGenerator gen{resourceManager, Geometry::EnableVertexColor};
 
-			return false;
+			/* NOTE: Arrows point in NEGATIVE axis directions to compensate for the
+			 * view/projection pipeline inversion. Visually, this makes the arrows
+			 * align with the compass reference spheres (R=X+, G=Y+, B=Z+). */
+			gen.parameters().setGlobalVertexColor({1.0F, 0.0F, 0.0F, 1.0F});
+			m_subGeometries[ArrowX] = gen.arrow(AxisLength, PointTo::NegativeX, "+EditorGizmoArrowX");
+
+			gen.parameters().setGlobalVertexColor({0.0F, 1.0F, 0.0F, 1.0F});
+			m_subGeometries[ArrowY] = gen.arrow(AxisLength, PointTo::NegativeY, "+EditorGizmoArrowY");
+
+			gen.parameters().setGlobalVertexColor({0.0F, 0.0F, 1.0F, 1.0F});
+			m_subGeometries[ArrowZ] = gen.arrow(AxisLength, PointTo::NegativeZ, "+EditorGizmoArrowZ");
+
+			gen.parameters().setGlobalVertexColor({1.0F, 1.0F, 1.0F, 1.0F});
+			m_subGeometries[CenterSphere] = gen.sphere(CenterRadius, 8, 6, "+EditorGizmoCenter");
 		}
 
-		/* NOTE: Generate the gizmo shader program and pipeline.
-		 * The geometry uses position + vertex color (EnableVertexColor = 1 << 4). */
+		for ( size_t i = 0; i < SubElementCount; ++i )
 		{
-			Saphir::Generator::GizmoRendering generator{renderTarget, Topology::TriangleList, Geometry::EnableVertexColor};
+			if ( m_subGeometries[i] == nullptr )
+			{
+				Tracer::error(ClassId, "Failed to create gizmo sub-geometry !");
 
-			/* NOTE: Use the post-process framebuffer for pipeline compatibility
-			 * (the gizmo renders in the post-process pass, not the scene pass). */
+				return false;
+			}
+		}
+
+		/* NOTE: Generate the gizmo shader program and pipeline. */
+		{
+			Saphir::Generator::GizmoRendering gizmoGenerator{renderTarget, Topology::TriangleList, Geometry::EnableVertexColor};
+
 			if ( const auto * overlayFB = renderer.overlayFramebuffer(); overlayFB != nullptr )
 			{
-				generator.setPipelineFramebuffer(overlayFB);
+				gizmoGenerator.setPipelineFramebuffer(overlayFB);
 			}
 
-			if ( !generator.generateShaderProgram(renderer) )
+			if ( !gizmoGenerator.generateShaderProgram(renderer) )
 			{
 				Tracer::error(ClassId, "Failed to generate gizmo shader program !");
 
 				return false;
 			}
 
-			m_program = generator.shaderProgram();
+			m_program = gizmoGenerator.shaderProgram();
 		}
 
 		if ( m_program == nullptr || m_program->graphicsPipeline() == nullptr )
@@ -104,6 +121,17 @@ namespace EmEn::Scenes::Editor::Gizmo
 		return true;
 	}
 
+	void
+	Translate::destroy () noexcept
+	{
+		for ( auto & subGeometry : m_subGeometries )
+		{
+			subGeometry.reset();
+		}
+
+		Abstract::destroy();
+	}
+
 	AxisID
 	Translate::hitTest (const Segment< float > & ray) const noexcept
 	{
@@ -112,81 +140,47 @@ namespace EmEn::Scenes::Editor::Gizmo
 			return AxisID::None;
 		}
 
-		/* NOTE: Transform the ray into gizmo local space by applying the inverse
-		 * of the gizmo's world transform and scale. */
-		const float invScale = (m_screenScale > 0.001F) ? (1.0F / m_screenScale) : 1.0F;
-		const auto & gizmoPos = m_worldFrame.position();
-
-		/* NOTE: Build local-space ray by translating and scaling. */
-		const auto localStart = (ray.startPoint() - gizmoPos) * invScale;
-		const auto localEnd = (ray.endPoint() - gizmoPos) * invScale;
-		const Segment< float > localRay{localStart, localEnd};
-
-		/* NOTE: Test against each axis as an elongated AABB (bounding box around the arrow). */
-		const float halfRadius = HitRadius;
+		const auto & pos = m_worldFrame.position();
+		const float s = m_screenScale;
+		const float r = s * 0.15F;
 
 		AxisID closestAxis = AxisID::None;
 		float closestDistance = std::numeric_limits< float >::max();
 
-		/* X axis: extends along positive X. */
-		{
-			const AACuboid< float > xBox{
-				Vector< 3, float >{0.0F, -halfRadius, -halfRadius},
-				Vector< 3, float >{AxisLength, halfRadius, halfRadius}
-			};
+		/* NOTE: Build world-space AABBs for each axis directly from gizmo position + scale.
+		 * Arrows use NegativeX/Y/Z, so they extend in negative directions from center.
+		 * No local-space transformation — test the world ray directly. */
 
+		const std::array< std::pair< AACuboid< float >, AxisID >, 3 > axes{{
+			/* X axis: extends in -X from gizmo center. */
+			{AACuboid< float >{
+				pos + Vector< 3, float >{-CenterRadius * s, r, r},
+				pos + Vector< 3, float >{-AxisLength * s, -r, -r}
+			}, AxisID::X},
+			/* Y axis: extends in -Y from gizmo center. */
+			{AACuboid< float >{
+				pos + Vector< 3, float >{r, -CenterRadius * s, r},
+				pos + Vector< 3, float >{-r, -AxisLength * s, -r}
+			}, AxisID::Y},
+			/* Z axis: extends in -Z from gizmo center. */
+			{AACuboid< float >{
+				pos + Vector< 3, float >{r, r, -CenterRadius * s},
+				pos + Vector< 3, float >{-r, -r, -AxisLength * s}
+			}, AxisID::Z}
+		}};
+
+		for ( const auto & [box, axisId] : axes )
+		{
 			Point< float > hitPoint;
 
-			if ( isIntersecting(localRay, xBox, hitPoint) )
+			if ( isIntersecting(ray, box, hitPoint) )
 			{
-				const float distance = hitPoint.length();
+				const float distance = (hitPoint - ray.startPoint()).length();
 
 				if ( distance < closestDistance )
 				{
 					closestDistance = distance;
-					closestAxis = AxisID::X;
-				}
-			}
-		}
-
-		/* Y axis: extends along positive Y (down in Vulkan convention). */
-		{
-			const AACuboid< float > yBox{
-				Vector< 3, float >{-halfRadius, 0.0F, -halfRadius},
-				Vector< 3, float >{halfRadius, AxisLength, halfRadius}
-			};
-
-			Point< float > hitPoint;
-
-			if ( isIntersecting(localRay, yBox, hitPoint) )
-			{
-				const float distance = hitPoint.length();
-
-				if ( distance < closestDistance )
-				{
-					closestDistance = distance;
-					closestAxis = AxisID::Y;
-				}
-			}
-		}
-
-		/* Z axis: extends along positive Z (back in Vulkan convention). */
-		{
-			const AACuboid< float > zBox{
-				Vector< 3, float >{-halfRadius, -halfRadius, 0.0F},
-				Vector< 3, float >{halfRadius, halfRadius, AxisLength}
-			};
-
-			Point< float > hitPoint;
-
-			if ( isIntersecting(localRay, zBox, hitPoint) )
-			{
-				const float distance = hitPoint.length();
-
-				if ( distance < closestDistance )
-				{
-					closestDistance = distance;
-					closestAxis = AxisID::Z;
+					closestAxis = axisId;
 				}
 			}
 		}
@@ -195,54 +189,80 @@ namespace EmEn::Scenes::Editor::Gizmo
 	}
 
 	void
-	Translate::render (const Vulkan::CommandBuffer & commandBuffer, const ViewMatricesInterface & viewMatrices) const noexcept
+	Translate::renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept
 	{
-		if ( !m_created || m_program == nullptr || m_geometry == nullptr )
+		const auto & geometry = m_subGeometries[subElementIndex];
+
+		if ( geometry == nullptr )
 		{
 			return;
 		}
 
-		const auto & pipeline = m_program->graphicsPipeline();
 		const auto & pipelineLayout = m_program->pipelineLayout();
 
-		if ( pipeline == nullptr || pipelineLayout == nullptr )
-		{
-			return;
-		}
+		/* NOTE: Bind the sub-element geometry. */
+		commandBuffer.bind(*geometry, 0);
 
-		/* NOTE: Bind the gizmo graphics pipeline. */
-		commandBuffer.bind(*pipeline);
+		/* NOTE: Compute model matrix: position + entity rotation (local mode) + scale. */
+		const float finalScale = isHighlighted ? (m_screenScale * HighlightScale) : m_screenScale;
 
-		/* NOTE: Bind the geometry (VBO + IBO). */
-		commandBuffer.bind(*m_geometry, 0);
+		/* NOTE: Use the full rotation from the entity's CartesianFrame.
+		 * In World mode, m_worldFrame has identity rotation (set by Manager).
+		 * In Local mode, m_worldFrame carries the entity's orientation. */
+		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.downwardVector(), m_worldFrame.backwardVector());
 
-		/* NOTE: Compute the model matrix: position + uniform scale for constant screen size. */
-		const auto modelMatrix = Matrix< 4, float >::translation(m_worldFrame.position()) * Matrix< 4, float >::scaling(m_screenScale);
+		const auto modelMatrix = Matrix< 4, float >::translation(m_worldFrame.position()) * rotationMatrix * Matrix< 4, float >::scaling(finalScale) * axisRotation;
 
 		/* NOTE: Compute MVP. */
 		const auto & projMatrix = viewMatrices.projectionMatrix();
 		const auto & viewMatrix = viewMatrices.viewMatrix(false, 0);
 		const auto mvp = projMatrix * viewMatrix * modelMatrix;
 
-		/* NOTE: Push MVP + frameIndex (68 bytes). */
+		/* NOTE: Push MVP + frameIndex + highlightFactor (72 bytes). */
 		constexpr uint32_t Matrix4Floats{16};
 		constexpr uint32_t MatrixBytes{Matrix4Floats * sizeof(float)};
 
-		std::array< float, Matrix4Floats + 1 > buffer{};
+		std::array< float, Matrix4Floats + 2 > buffer{};
 		std::memcpy(buffer.data(), mvp.data(), MatrixBytes);
-		buffer[Matrix4Floats] = 0.0F; /* frameIndex — not used by gizmo. */
+		buffer[Matrix4Floats] = 0.0F; /* frameIndex */
+		buffer[Matrix4Floats + 1] = isHighlighted ? HighlightBrightness : 1.0F; /* highlightFactor */
 
 		vkCmdPushConstants(
 			commandBuffer.handle(),
 			pipelineLayout->handle(),
-			VK_SHADER_STAGE_VERTEX_BIT,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			0,
-			MatrixBytes + sizeof(float),
+			MatrixBytes + sizeof(float) * 2,
 			buffer.data()
 		);
 
-		/* NOTE: Draw the full geometry. */
-		const auto indexRange = m_geometry->subGeometryRange(0);
+		/* NOTE: Draw the sub-element. */
+		const auto indexRange = geometry->subGeometryRange(0);
 		commandBuffer.drawIndexed(indexRange[0], indexRange[1], 1);
+	}
+
+	void
+	Translate::render (const Vulkan::CommandBuffer & commandBuffer, const ViewMatricesInterface & viewMatrices) const noexcept
+	{
+		if ( !m_created || m_program == nullptr )
+		{
+			return;
+		}
+
+		const auto & pipeline = m_program->graphicsPipeline();
+
+		if ( pipeline == nullptr )
+		{
+			return;
+		}
+
+		/* NOTE: Bind the gizmo pipeline once for all sub-elements. */
+		commandBuffer.bind(*pipeline);
+
+		/* NOTE: Render each sub-element with its own model matrix and highlight state. */
+		this->renderSubElement(commandBuffer, viewMatrices, ArrowX, Matrix< 4, float >::identity(), m_highlightedAxis == AxisID::X);
+		this->renderSubElement(commandBuffer, viewMatrices, ArrowY, Matrix< 4, float >::identity(), m_highlightedAxis == AxisID::Y);
+		this->renderSubElement(commandBuffer, viewMatrices, ArrowZ, Matrix< 4, float >::identity(), m_highlightedAxis == AxisID::Z);
+		this->renderSubElement(commandBuffer, viewMatrices, CenterSphere, Matrix< 4, float >::identity(), false);
 	}
 }

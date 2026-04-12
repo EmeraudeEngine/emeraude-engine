@@ -118,6 +118,21 @@ and the AI executes, measures, and iterates at industrial speed.
 > python3 tools/remote-console.py "Core.ResourcesManagerService.listResources(MeshResource)"
 > ```
 >
+> **The AI can inject keyboard and mouse events** — interact with the running app like a user:
+> ```bash
+> # Inject Shift+F3 key press (key=292, modifiers=1=Shift)
+> python3 tools/remote-console.py "Core.InputManagerService.keyPress(292, 1)"
+>
+> # Click at screen coordinates (x, y)
+> python3 tools/remote-console.py "Core.InputManagerService.mouseClick(1920, 1000)"
+>
+> # Quit the application gracefully (Shift+Escape)
+> python3 tools/remote-console.py "Core.InputManagerService.keyPress(256, 1)"
+> ```
+>
+> **The AI interaction loop**: Screenshot → Analyze → Inject input → Screenshot → Verify.
+> This gives full autonomy: see the app, click on things, verify results, iterate.
+>
 > **The AI can create 3D scenes autonomously** — via live commands or JSON:
 > ```bash
 > python3 tools/remote-console.py '{"Name":"Scene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar"},...}'

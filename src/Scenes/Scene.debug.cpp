@@ -55,12 +55,12 @@ namespace EmEn::Scenes
 			{{0.0F, 100.0F, 0.0F}, {0.0F, 1.0F, 0.0F, 1.0F}},
 			/* NOTE: Z+ sphere color in bright blue. */
 			{{0.0F, 0.0F, 100.0F}, {0.0F, 0.0F, 1.0F, 1.0F}},
-			/* NOTE: X- sphere color in washed red. */
-			{{-100.0F, 0.0F, 0.0F}, {0.2F, 0.1F, 0.1F, 1.0F}},
-			/* NOTE: Y- sphere color in washed green. */
-			{{0.0F, -100.0F, 0.0F}, {0.1F, 0.2F, 0.1F, 1.0F}},
-			/* NOTE: Z- sphere color in washed blue. */
-			{{0.0F, 0.0F, -100.0F}, {0.1F, 0.1F, 0.2F, 1.0F}}
+			/* NOTE: X- sphere color in cyan (complementary of red). */
+			{{-100.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 1.0F, 1.0F}},
+			/* NOTE: Y- sphere color in magenta (complementary of green). */
+			{{0.0F, -100.0F, 0.0F}, {1.0F, 0.0F, 1.0F, 1.0F}},
+			/* NOTE: Z- sphere color in yellow (complementary of blue). */
+			{{0.0F, 0.0F, -100.0F}, {1.0F, 1.0F, 0.0F, 1.0F}}
 		}};
 
 		size_t count = 0;
