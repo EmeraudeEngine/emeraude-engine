@@ -96,10 +96,20 @@ namespace EmEn::Scenes::Editor
 		/* NOTE: Unlock the pointer so the user can click freely. */
 		m_inputManager.unlockPointer();
 
-		/* NOTE: Pre-create the gizmo GPU resources. */
-		if ( !this->ensureGizmoCreated() )
+		/* NOTE: Pre-create ALL gizmo GPU resources so they are uploaded before first render. */
 		{
-			Tracer::warning(ClassId, "Failed to pre-create gizmo resources.");
+			auto & renderer = m_resourceManager.graphicsRenderer();
+			const auto renderTarget = renderer.mainRenderTarget();
+
+			if ( !m_translateGizmo.isCreated() && !m_translateGizmo.create(renderer, m_resourceManager, renderTarget) )
+			{
+				Tracer::warning(ClassId, "Failed to pre-create translate gizmo.");
+			}
+
+			if ( !m_rotateGizmo.isCreated() && !m_rotateGizmo.create(renderer, m_resourceManager, renderTarget) )
+			{
+				Tracer::warning(ClassId, "Failed to pre-create rotate gizmo.");
+			}
 		}
 
 		m_notifier.push("Editor mode activated.");
@@ -118,8 +128,9 @@ namespace EmEn::Scenes::Editor
 		m_inputManager.removeKeyboardListener(this);
 		m_inputManager.removePointerListener(this);
 
-		/* NOTE: Destroy gizmo GPU resources. */
+		/* NOTE: Destroy all gizmo GPU resources. */
 		m_translateGizmo.destroy();
+		m_rotateGizmo.destroy();
 
 		m_scene = nullptr;
 		m_viewMatrices = nullptr;
@@ -146,9 +157,11 @@ namespace EmEn::Scenes::Editor
 		}
 
 		m_translateGizmo.setWorldFrame(worldFrame);
+		m_rotateGizmo.setWorldFrame(worldFrame);
 
 		/* NOTE: Update gizmo scale for constant screen size (uses configurable ratio). */
 		m_translateGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
+		m_rotateGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
 	}
 
 	void
@@ -159,10 +172,26 @@ namespace EmEn::Scenes::Editor
 			return;
 		}
 
-		/* NOTE: Render the active gizmo. */
-		if ( m_translateGizmo.isCreated() )
+		/* NOTE: Render the active gizmo based on current mode. */
+		switch ( m_gizmoMode )
 		{
-			m_translateGizmo.render(commandBuffer, *m_viewMatrices);
+			case GizmoMode::Translate :
+				if ( m_translateGizmo.isCreated() )
+				{
+					m_translateGizmo.render(commandBuffer, *m_viewMatrices);
+				}
+				break;
+
+			case GizmoMode::Rotate :
+				if ( m_rotateGizmo.isCreated() )
+				{
+					m_rotateGizmo.render(commandBuffer, *m_viewMatrices);
+				}
+				break;
+
+			case GizmoMode::Scale :
+				/* TODO */
+				break;
 		}
 	}
 
@@ -203,8 +232,17 @@ namespace EmEn::Scenes::Editor
 			}
 
 			case GizmoMode::Rotate :
+			{
+				if ( !m_rotateGizmo.isCreated() )
+				{
+					return m_rotateGizmo.create(renderer, m_resourceManager, renderer.mainRenderTarget());
+				}
+
+				return true;
+			}
+
 			case GizmoMode::Scale :
-				/* TODO: Implement rotate and scale gizmos. */
+				/* TODO: Implement scale gizmo. */
 				return false;
 		}
 
@@ -425,14 +463,32 @@ namespace EmEn::Scenes::Editor
 			return true;
 		}
 
-		/* NOTE: Update gizmo hover highlight. */
-		if ( m_selectedEntity != nullptr && m_translateGizmo.isCreated() )
+		/* NOTE: Update gizmo hover highlight on the active gizmo. */
+		if ( m_selectedEntity != nullptr )
 		{
 			const auto ray = this->screenToWorldRay(positionX, positionY);
 
 			if ( ray.isValid() )
 			{
-				m_translateGizmo.setHighlightedAxis(m_translateGizmo.hitTest(ray));
+				switch ( m_gizmoMode )
+				{
+					case GizmoMode::Translate :
+						if ( m_translateGizmo.isCreated() )
+						{
+							m_translateGizmo.setHighlightedAxis(m_translateGizmo.hitTest(ray));
+						}
+						break;
+
+					case GizmoMode::Rotate :
+						if ( m_rotateGizmo.isCreated() )
+						{
+							m_rotateGizmo.setHighlightedAxis(m_rotateGizmo.hitTest(ray));
+						}
+						break;
+
+					case GizmoMode::Scale :
+						break;
+				}
 			}
 		}
 
@@ -448,13 +504,29 @@ namespace EmEn::Scenes::Editor
 		}
 
 		/* NOTE: If a gizmo is active, test it first (priority over scene picking). */
-		if ( m_selectedEntity != nullptr && m_translateGizmo.isCreated() )
+		Gizmo::Abstract * activeGizmo = nullptr;
+
+		switch ( m_gizmoMode )
+		{
+			case GizmoMode::Translate :
+				if ( m_translateGizmo.isCreated() ) { activeGizmo = &m_translateGizmo; }
+				break;
+
+			case GizmoMode::Rotate :
+				if ( m_rotateGizmo.isCreated() ) { activeGizmo = &m_rotateGizmo; }
+				break;
+
+			case GizmoMode::Scale :
+				break;
+		}
+
+		if ( m_selectedEntity != nullptr && activeGizmo != nullptr )
 		{
 			const auto ray = this->screenToWorldRay(positionX, positionY);
 
 			if ( ray.isValid() )
 			{
-				const auto hitAxis = m_translateGizmo.hitTest(ray);
+				const auto hitAxis = activeGizmo->hitTest(ray);
 
 				if ( hitAxis != Gizmo::AxisID::None )
 				{

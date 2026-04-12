@@ -38,6 +38,7 @@
 #include "Libs/Math/Space3D/Segment.hpp"
 #include "Gizmo/Abstract.hpp"
 #include "Gizmo/Translate.hpp"
+#include "Gizmo/Rotate.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -358,8 +359,9 @@ namespace EmEn::Scenes::Editor
 			/* Selection state. */
 			AbstractEntity * m_selectedEntity{nullptr};
 
-			/* Gizmo. */
+			/* Gizmos. */
 			Gizmo::Translate m_translateGizmo;
+			Gizmo::Rotate m_rotateGizmo;
 
 			/* Editing modes. */
 			GizmoMode m_gizmoMode{GizmoMode::Translate};

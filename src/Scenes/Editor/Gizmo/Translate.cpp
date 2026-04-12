@@ -213,7 +213,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	{
 		const auto & geometry = m_subGeometries[subElementIndex];
 
-		if ( geometry == nullptr )
+		if ( geometry == nullptr || !geometry->isCreated() )
 		{
 			return;
 		}
