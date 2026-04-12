@@ -521,11 +521,23 @@ namespace EmEn::Scenes::Editor
 				 * Local mode: axis is already in entity's local directions, use Local transform. */
 				if ( m_transformSpace == TransformSpace::Local )
 				{
-					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Libs::Math::TransformSpace::Local);
+					/* NOTE: Local mode: pass unit axis + TransformSpace::Local.
+					 * The CartesianFrame will convert from local to world internally. */
+					Vector< 3, float > localAxis{0.0F, 0.0F, 0.0F};
+
+					switch ( m_dragAxis )
+					{
+						case Gizmo::AxisID::X : localAxis = {1.0F, 0.0F, 0.0F}; break;
+						case Gizmo::AxisID::Y : localAxis = {0.0F, 1.0F, 0.0F}; break;
+						case Gizmo::AxisID::Z : localAxis = {0.0F, 0.0F, 1.0F}; break;
+						default : break;
+					}
+
+					m_selectedEntity->rotate(deltaAngle, localAxis, Libs::Math::TransformSpace::Local);
 				}
 				else
 				{
-					/* NOTE: World rotation changes position (orbit). Save and restore to rotate in-place. */
+					/* NOTE: World mode: save/restore position to rotate in-place. */
 					const auto savedPos = m_selectedEntity->getWorldCoordinates().position();
 
 					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Libs::Math::TransformSpace::World);

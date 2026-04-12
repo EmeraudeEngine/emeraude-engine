@@ -67,17 +67,17 @@ namespace EmEn::Scenes::Editor::Gizmo
 			/* X ring (Red): rotate torus 90° around Z so it lies in YZ plane (ring around X). */
 			gen.parameters().setGlobalVertexColor({1.0F, 0.0F, 0.0F, 1.0F});
 			gen.parameters().setTransformMatrix(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 0.0F, 0.0F, 1.0F));
-			m_subGeometries[RingX] = gen.torus(RingMajorRadius, RingMinorRadius, 32, 8, "+GizmoRotateX");
+			m_subGeometries[RingX] = gen.torus(RingMajorRadius, RingMinorRadius, 16, 32, "+GizmoRotateX");
 
 			/* Y ring (Green): no rotation, default XZ plane (ring around Y). */
 			gen.parameters().setGlobalVertexColor({0.0F, 1.0F, 0.0F, 1.0F});
 			gen.parameters().setTransformMatrix(Matrix< 4, float >::identity());
-			m_subGeometries[RingY] = gen.torus(RingMajorRadius, RingMinorRadius, 32, 8, "+GizmoRotateY");
+			m_subGeometries[RingY] = gen.torus(RingMajorRadius, RingMinorRadius, 16, 32, "+GizmoRotateY");
 
 			/* Z ring (Blue): rotate torus 90° around X so it lies in XY plane (ring around Z). */
 			gen.parameters().setGlobalVertexColor({0.0F, 0.0F, 1.0F, 1.0F});
 			gen.parameters().setTransformMatrix(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 1.0F, 0.0F, 0.0F));
-			m_subGeometries[RingZ] = gen.torus(RingMajorRadius, RingMinorRadius, 32, 8, "+GizmoRotateZ");
+			m_subGeometries[RingZ] = gen.torus(RingMajorRadius, RingMinorRadius, 16, 32, "+GizmoRotateZ");
 		}
 
 		for ( size_t i = 0; i < SubElementCount; ++i )
