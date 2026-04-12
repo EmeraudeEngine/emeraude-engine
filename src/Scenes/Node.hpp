@@ -336,6 +336,9 @@ namespace EmEn::Scenes
 			 */
 			void roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
 
+			/** @copydoc EmEn::Scenes::LocatableInterface::setScalingFactor() */
+			void setScalingFactor (const Libs::Math::Vector< 3, float > & factor) noexcept override;
+
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
 			 * @note Does nothing if called on root node.

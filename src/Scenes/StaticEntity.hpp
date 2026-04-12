@@ -325,6 +325,9 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
+			/** @copydoc EmEn::Scenes::LocatableInterface::setScalingFactor() */
+			void setScalingFactor (const Libs::Math::Vector< 3, float > & factor) noexcept override;
+
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.

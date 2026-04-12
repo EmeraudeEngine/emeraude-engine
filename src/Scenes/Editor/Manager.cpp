@@ -110,6 +110,11 @@ namespace EmEn::Scenes::Editor
 			{
 				Tracer::warning(ClassId, "Failed to pre-create rotate gizmo.");
 			}
+
+			if ( !m_scaleGizmo.isCreated() && !m_scaleGizmo.create(renderer, m_resourceManager, renderTarget) )
+			{
+				Tracer::warning(ClassId, "Failed to pre-create scale gizmo.");
+			}
 		}
 
 		m_notifier.push("Editor mode activated.");
@@ -131,6 +136,7 @@ namespace EmEn::Scenes::Editor
 		/* NOTE: Destroy all gizmo GPU resources. */
 		m_translateGizmo.destroy();
 		m_rotateGizmo.destroy();
+		m_scaleGizmo.destroy();
 
 		m_scene = nullptr;
 		m_viewMatrices = nullptr;
@@ -158,10 +164,12 @@ namespace EmEn::Scenes::Editor
 
 		m_translateGizmo.setWorldFrame(worldFrame);
 		m_rotateGizmo.setWorldFrame(worldFrame);
+		m_scaleGizmo.setWorldFrame(worldFrame);
 
 		/* NOTE: Update gizmo scale for constant screen size (uses configurable ratio). */
 		m_translateGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
 		m_rotateGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
+		m_scaleGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
 	}
 
 	void
@@ -190,7 +198,10 @@ namespace EmEn::Scenes::Editor
 				break;
 
 			case GizmoMode::Scale :
-				/* TODO */
+				if ( m_scaleGizmo.isCreated() )
+				{
+					m_scaleGizmo.render(commandBuffer, *m_viewMatrices);
+				}
 				break;
 		}
 	}
@@ -547,6 +558,25 @@ namespace EmEn::Scenes::Editor
 				/* NOTE: Update initial angle for next delta. */
 				m_dragInitialAngle = currentAngle;
 			}
+			else if ( m_gizmoMode == GizmoMode::Scale )
+			{
+				/* NOTE: Absolute scale from horizontal mouse delta.
+				 * Right = bigger, Left = smaller. ~300px = double size. */
+				const float pixelDelta = (positionX - m_dragInitialMouseX) - (positionY - m_dragInitialT);
+				const float factor = std::max(0.01F, 1.0F + pixelDelta * 0.003F * m_moveRatio);
+
+				auto newScaling = m_dragInitialScaling;
+
+				switch ( m_dragAxis )
+				{
+					case Gizmo::AxisID::X : newScaling[0] = m_dragInitialScaling[0] * factor; break;
+					case Gizmo::AxisID::Y : newScaling[1] = m_dragInitialScaling[1] * factor; break;
+					case Gizmo::AxisID::Z : newScaling[2] = m_dragInitialScaling[2] * factor; break;
+					default : newScaling = m_dragInitialScaling * factor; break;
+				}
+
+				m_selectedEntity->setScalingFactor(newScaling);
+			}
 
 			return true;
 		}
@@ -575,6 +605,10 @@ namespace EmEn::Scenes::Editor
 						break;
 
 					case GizmoMode::Scale :
+						if ( m_scaleGizmo.isCreated() )
+						{
+							m_scaleGizmo.setHighlightedAxis(m_scaleGizmo.hitTest(ray));
+						}
 						break;
 				}
 			}
@@ -605,6 +639,7 @@ namespace EmEn::Scenes::Editor
 				break;
 
 			case GizmoMode::Scale :
+				if ( m_scaleGizmo.isCreated() ) { activeGizmo = &m_scaleGizmo; }
 				break;
 		}
 
@@ -658,6 +693,12 @@ namespace EmEn::Scenes::Editor
 					else if ( m_gizmoMode == GizmoMode::Rotate )
 					{
 						m_dragInitialAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+					}
+					else if ( m_gizmoMode == GizmoMode::Scale )
+					{
+						m_dragInitialMouseX = positionX;
+						m_dragInitialT = positionY;
+						m_dragInitialScaling = m_selectedEntity->getWorldCoordinates().scalingFactor();
 					}
 
 					return true;

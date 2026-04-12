@@ -185,6 +185,13 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the scale.
 			 * @return void
 			 */
+			/**
+			 * @brief Sets the absolute scaling factor.
+			 * @param factor A reference to a scale vector.
+			 * @return void
+			 */
+			virtual void setScalingFactor (const Libs::Math::Vector< 3, float > & /*factor*/) noexcept { }
+
 			virtual void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**

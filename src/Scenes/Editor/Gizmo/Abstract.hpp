@@ -77,7 +77,8 @@ namespace EmEn::Scenes::Editor::Gizmo
 		None,
 		X,
 		Y,
-		Z
+		Z,
+		All
 	};
 
 	/**

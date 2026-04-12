@@ -36,6 +36,14 @@ namespace EmEn::Scenes
 	using namespace Physics;
 
 	void
+	StaticEntity::setScalingFactor (const Vector< 3, float > & factor) noexcept
+	{
+		m_logicStateCoordinates.setScalingFactor(factor);
+
+		this->onLocationDataUpdate();
+	}
+
+	void
 	StaticEntity::scale (const Vector< 3, float > & factor, TransformSpace transformSpace) noexcept
 	{
 		switch ( transformSpace )

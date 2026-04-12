@@ -591,6 +591,19 @@ namespace EmEn::Scenes
 	}
 
 	void
+	Node::setScalingFactor (const Vector< 3, float > & factor) noexcept
+	{
+		if ( this->isRoot() ) [[unlikely]]
+		{
+			return;
+		}
+
+		m_logicStateCoordinates.setScalingFactor(factor);
+
+		this->onLocationDataUpdate();
+	}
+
+	void
 	Node::scale (const Vector< 3, float > & factor, TransformSpace transformSpace) noexcept
 	{
 		if ( this->isRoot() ) [[unlikely]]

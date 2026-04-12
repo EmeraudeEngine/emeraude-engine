@@ -102,6 +102,9 @@ namespace EmEn::Physics
 			/** @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace) */
 			void roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
 
+			/** @copydoc EmEn::Scenes::LocatableInterface::setScalingFactor() */
+			void setScalingFactor (const Libs::Math::Vector< 3, float > & factor) noexcept override;
+
 			/** @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
 			void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 

@@ -39,6 +39,7 @@
 #include "Gizmo/Abstract.hpp"
 #include "Gizmo/Translate.hpp"
 #include "Gizmo/Rotate.hpp"
+#include "Gizmo/Scale.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -373,6 +374,7 @@ namespace EmEn::Scenes::Editor
 			/* Gizmos. */
 			Gizmo::Translate m_translateGizmo;
 			Gizmo::Rotate m_rotateGizmo;
+			Gizmo::Scale m_scaleGizmo;
 
 			/* Editing modes. */
 			GizmoMode m_gizmoMode{GizmoMode::Translate};
@@ -389,6 +391,10 @@ namespace EmEn::Scenes::Editor
 
 			/* Drag state (rotation). */
 			float m_dragInitialAngle{0.0F};
+
+			/* Drag state (scale). */
+			float m_dragInitialMouseX{0.0F};
+			Libs::Math::Vector< 3, float > m_dragInitialScaling{1.0F, 1.0F, 1.0F};
 
 			/* Movement options. */
 			float m_moveRatio{1.0F};

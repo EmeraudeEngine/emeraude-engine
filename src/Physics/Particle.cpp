@@ -283,6 +283,12 @@ namespace EmEn::Physics
 	}
 
 	void
+	Particle::setScalingFactor (const Vector< 3, float > & factor) noexcept
+	{
+		m_cartesianFrame.setScalingFactor(factor);
+	}
+
+	void
 	Particle::scale (const Vector< 3, float > & factor, TransformSpace transformSpace) noexcept
 	{
 		switch ( transformSpace )
