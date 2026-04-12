@@ -786,7 +786,11 @@ namespace EmEn::Scenes::Editor
 					return true;
 				}
 
-				/* Shift+R/S: gizmo mode switching. */
+				/* Shift+T/R/S: gizmo mode switching. */
+				case KeyT :
+					this->setGizmoMode(GizmoMode::Translate);
+					return true;
+
 				case KeyR :
 					this->setGizmoMode(GizmoMode::Rotate);
 					return true;
