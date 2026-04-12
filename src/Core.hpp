@@ -1353,7 +1353,7 @@ namespace EmEn
 			Overlay::Manager m_overlayManager{m_primaryServices, m_resourceManager}; ///< ImGui overlay system.
 			Notifier m_notifier{m_overlayManager};				  ///< On-screen notifications.
 			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
-			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager}; ///< Scene graph management.
+			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_notifier}; ///< Scene graph management.
 			/* Reusable capture buffer for screenshots. */
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};
 			/* Service tracking. */

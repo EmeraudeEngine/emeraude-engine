@@ -143,6 +143,9 @@ namespace EmEn
 					activeScene->publishStateForRendering();
 				}, true);
 
+				/* Editor logic update (gizmo scale, hover). */
+				m_sceneManager.editorManager().processLogics();
+
 				/* User-application cyclic update. */
 				this->onCoreProcessLogics(m_cycle);
 
@@ -198,14 +201,16 @@ namespace EmEn
 				/* This should only synchronize UBOs for the overlay. */
 				m_overlayManager.updateVideoMemory();
 
-				/* Render the scene (optional) and the overlay on top. */
+				/* Render the scene (optional), editor gizmos, and the overlay on top. */
+				const auto * editorPtr = m_sceneManager.editorManager().isActive() ? &m_sceneManager.editorManager() : nullptr;
+
 				if ( m_graphicsRenderer.isWindowLess() )
 				{
-					m_graphicsRenderer.renderOffscreenFrame(activeScene, m_overlayManager);
+					m_graphicsRenderer.renderOffscreenFrame(activeScene, m_overlayManager, editorPtr);
 				}
 				else
 				{
-					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager, editorPtr);
 				}
 
 				if ( m_graphicsRenderer.recorder().isRecording() && m_graphicsRenderer.recorder().shouldCaptureFrame() )
@@ -480,7 +485,7 @@ namespace EmEn
 			m_coreHelp.registerShortcut("Quit the application.", KeyEscape, ModKeyShift);
 			m_coreHelp.registerShortcut("Print the active scene content in console.", KeyF1, ModKeyShift);
 			m_coreHelp.registerShortcut("Provoke a swap-chain re-creation (Experimental).", KeyF2, ModKeyShift);
-			m_coreHelp.registerShortcut("Test dialog (Experimental).", KeyF3, ModKeyShift);
+			m_coreHelp.registerShortcut("Toggle scene editor mode.", KeyF3, ModKeyShift);
 			m_coreHelp.registerShortcut("Reset the window size to defaults.", KeyF4, ModKeyShift);
 			m_coreHelp.registerShortcut("Open settings file in text editor.", KeyF5, ModKeyShift);
 			m_coreHelp.registerShortcut("Open file explorer to application configuration directory.", KeyF6, ModKeyShift);
@@ -665,7 +670,7 @@ namespace EmEn
 		/* Initialization of the input manager. */
 		if ( m_inputManager.initialize(m_secondaryServicesEnabled) )
 		{
-
+			m_inputManager.registerToObject(*this);
 
 			/* Configure the input manager. */
 			m_inputManager.enableKeyboardListening(true);
@@ -1097,17 +1102,12 @@ namespace EmEn
 
 				case KeyF3 :
 				{
-					const auto bytes = m_resourceManager.memoryOccupied();
-					const auto MiB = static_cast< float >(bytes) / 1024.0F / 1024.0F;
+					const auto windowSize = m_window.getSize();
 
-					this->notifyUser(BlobTrait{} << "Resource memory loaded : " << bytes << " bytes (" << MiB << " Mib)");
-				}
-
-				{
-					const auto bytes = m_resourceManager.unusedMemoryOccupied();
-					const auto MiB = static_cast< float >(bytes) / 1024.0F / 1024.0F;
-
-					this->notifyUser(BlobTrait{} << "Resource memory wasted : " << bytes << " bytes (" << MiB << " Mib)");
+					m_sceneManager.toggleEditorMode(
+						static_cast< float >(windowSize[0]),
+						static_cast< float >(windowSize[1])
+					);
 				}
 					return true;
 

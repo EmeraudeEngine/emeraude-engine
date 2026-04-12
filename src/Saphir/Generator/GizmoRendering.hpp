@@ -43,12 +43,13 @@ namespace EmEn::Saphir::Generator
 			static constexpr auto ClassId{"GizmoRendering"};
 
 			/**
-			 * @brief Constructs a graphics shader generator for a geometry.
+			 * @brief Constructs a graphics shader generator for gizmo geometry.
 			 * @param renderTarget A reference to a render target smart pointer.
+			 * @param topology The primitive topology. Default TriangleList.
+			 * @param geometryFlags The geometry flags (must include EnableVertexColor).
 			 */
-			explicit
-			GizmoRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept
-				: Abstract{ClassId, renderTarget}
+			GizmoRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, Graphics::Topology topology, uint32_t geometryFlags) noexcept
+				: Abstract{ClassId, renderTarget, topology, geometryFlags}
 			{
 
 			}

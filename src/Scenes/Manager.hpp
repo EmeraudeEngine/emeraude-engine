@@ -41,6 +41,7 @@
 
 /* Local inclusions for usages. */
 #include "DefinitionResource.hpp"
+#include "Editor/Manager.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Scene.hpp"
 
@@ -58,6 +59,7 @@ namespace EmEn
 	}
 
 	class PrimaryServices;
+	class Notifier;
 }
 
 namespace EmEn::Scenes
@@ -176,13 +178,15 @@ namespace EmEn::Scenes
 			 * @param primaryServices A reference to primary services.
 			 * @param resourceManager A reference to the resource manager.
 			 * @param inputManager A reference to the input manager.
+			 * @param notifier A reference to the engine notifier.
 			 */
-			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Input::Manager & inputManager) noexcept
+			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Input::Manager & inputManager, Notifier & notifier) noexcept
 				: ServiceInterface{ClassId},
 				ControllableTrait{ClassId},
 				m_primaryServices{primaryServices},
 				m_resourceManager{resourceManager},
-				m_inputManager{inputManager}
+				m_inputManager{inputManager},
+				m_notifier{notifier}
 			{
 
 			}
@@ -360,6 +364,36 @@ namespace EmEn::Scenes
 				processActiveScene(m_activeScene);
 			}
 
+			/**
+			 * @brief Toggles the scene editor mode on the active scene.
+			 * @param viewportWidth The width of the viewport in pixels.
+			 * @param viewportHeight The height of the viewport in pixels.
+			 * @return bool
+			 */
+			void toggleEditorMode (float viewportWidth, float viewportHeight) noexcept;
+
+			/**
+			 * @brief Returns the scene editor manager.
+			 * @return Editor::Manager &
+			 */
+			[[nodiscard]]
+			Editor::Manager &
+			editorManager () noexcept
+			{
+				return m_editorManager;
+			}
+
+			/**
+			 * @brief Returns the scene editor manager.
+			 * @return const Editor::Manager &
+			 */
+			[[nodiscard]]
+			const Editor::Manager &
+			editorManager () const noexcept
+			{
+				return m_editorManager;
+			}
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -374,9 +408,11 @@ namespace EmEn::Scenes
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			Input::Manager & m_inputManager;
+			Notifier & m_notifier;
 			std::map< std::string, std::shared_ptr< Scene > > m_scenes;
 			std::shared_ptr< Scene > m_activeScene;
 			ConsoleMemory m_consoleMemory;
+			Editor::Manager m_editorManager{m_inputManager, m_resourceManager, m_notifier}; ///< Scene editor mode (picking, gizmo).
 			/** @brief Handle the thread-safe access to the member 'm_scenes', when creating, adding, moving a scene. */
 			mutable std::mutex m_sceneListAccess;
 			/** @brief Handle a shared thread-safe access to the member 'm_activeScene', when manipulating the content of a scene. 'Readers' can share the access, while 'Writers' can have an exclusive lock.  */

@@ -189,17 +189,44 @@ inputManager.unregisterMouseListener(&controller);
 // Then destroy controller
 ```
 
+## Synthetic Event Injection (Remote Automation)
+
+The Input::Manager supports injecting synthetic input events that bypass GLFW, enabling remote automation via the TCP console (port 7777). Manager inherits `Console::ControllableTrait` and registers as `Core.InputManagerService`.
+
+### Console Commands
+| Command | Example | Description |
+|---------|---------|-------------|
+| `keyPress(key, modifiers)` | `keyPress(292, 1)` = Shift+F3 | Injects key press + release |
+| `mouseClick(x, y, button, mods)` | `mouseClick(1017, 1165)` = left click | Injects mouse press + release |
+| `mouseMove(x, y)` | `mouseMove(960, 540)` | Injects pointer move (absolute) |
+
+### Static Methods
+```cpp
+static void injectKeyEvent(int32_t key, int32_t modifiers, int32_t action = 1) noexcept;
+static void injectMouseClickEvent(float positionX, float positionY, int32_t button = 0, int32_t modifiers = 0, int32_t action = 1) noexcept;
+static void injectPointerMoveEvent(float positionX, float positionY) noexcept;
+```
+
+### Critical: Copy-Before-Iterate
+Inject methods copy the listener vector before iterating. Handlers may add/remove listeners during dispatch (e.g., editor activation adds itself as listener), which would invalidate iterators on the original vector. GLFW callbacks don't hit this because press/release arrive in separate `glfwPollEvents()` calls.
+
+### Coordinate Space
+Mouse coordinates must match GLFW's coordinate space. Query `Core.WindowService.getState()` to get `windowWidth`, `framebufferWidth`, and `contentXScale` to determine the correct range.
+
 ## Critical Points
 
 - **Unregistration**: Unregister listeners before destruction
 - **No built-in mapping**: Application responsible for action mapping
 - **Dual approach**: Choose events (reactive) or polling (direct) based on need
 - **GLFW dependency**: Input wraps GLFW, follows its limitations/capabilities
-- **Thread safety**: GLFW events come from main thread
+- **Thread safety**: GLFW events come from main thread; inject methods are called from main thread via console poll
 - **OverlayManager priority**: Automatically registered, may consume events
+- **Copy-before-iterate**: Inject methods MUST copy listener list before dispatch (see above)
 
 ## Detailed Documentation
 
 Related systems:
 - @src/Overlay/AGENTS.md - Major Input system client
+- @src/Scenes/Editor/AGENTS.md - Editor uses input injection for remote testing
+- @src/Console/AGENTS.md - Console ControllableTrait for remote commands
 - GLFW documentation - For supported device details

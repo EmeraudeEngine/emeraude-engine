@@ -45,6 +45,7 @@
 #include "Scenes/Scene.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Overlay/Manager.hpp"
+#include "Scenes/Editor/Manager.hpp"
 #include "PrimaryServices.hpp"
 #include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
@@ -1111,7 +1112,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
+	Renderer::renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
 	{
 		/* NOTE: Record frame start time for the optional frame limiter. */
 		if ( this->isSoftwareFrameLimiterEnabled() )
@@ -1186,6 +1187,12 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Render the editor gizmos over the 3D-rendered scene. */
+		if ( editorManager != nullptr )
+		{
+			editorManager->render(*commandBuffer);
+		}
+
 		/* Then render the overlay system over the 3D-rendered scene. */
 		overlayManager.render(m_windowLessView, *commandBuffer);
 
@@ -1219,7 +1226,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
+	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
 	{
 		/* NOTE: Record frame start time for the optional frame limiter. */
 		if ( this->isSoftwareFrameLimiterEnabled() )
@@ -1372,11 +1379,11 @@ namespace EmEn::Graphics
 		/* Dispatch to the appropriate rendering strategy. */
 		if ( m_sceneTarget != nullptr && m_postProcessor.isEnabled() )
 		{
-			this->renderFrameWithInternal(scene, overlayManager, currentFrameScope, commandBuffer);
+			this->renderFrameWithInternal(scene, overlayManager, editorManager, currentFrameScope, commandBuffer);
 		}
 		else
 		{
-			this->renderFrameDirect(scene, overlayManager, currentFrameScope, commandBuffer);
+			this->renderFrameDirect(scene, overlayManager, editorManager, currentFrameScope, commandBuffer);
 		}
 
 		if ( !commandBuffer->end() )
@@ -1416,7 +1423,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
+	Renderer::renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
 	{
 		auto * const scenePtr = scene.get();
 
@@ -1505,6 +1512,12 @@ namespace EmEn::Graphics
 			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
 		}
 
+		/* Render the editor gizmos over the scene. */
+		if ( editorManager != nullptr )
+		{
+			editorManager->render(*commandBuffer);
+		}
+
 		/* Render the overlay system over the scene. */
 		overlayManager.render(m_swapChain, *commandBuffer);
 
@@ -1512,7 +1525,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
+	Renderer::renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
 	{
 		auto * const scenePtr = scene.get();
 
@@ -1645,6 +1658,12 @@ namespace EmEn::Graphics
 		const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
 
 		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
+
+		/* Render the editor gizmos over the post-processed scene. */
+		if ( editorManager != nullptr )
+		{
+			editorManager->render(*commandBuffer);
+		}
 
 		/* Render the overlay system over the post-processed scene. */
 		overlayManager.render(m_swapChain, *commandBuffer);

@@ -88,6 +88,7 @@ size_t MyGenerator::computeProgramCacheKey () const noexcept
 1. **SceneGenerator**: 3D objects with full lighting, materials, effects
 2. **OverlayRendering**: 2D elements (UI, HUD, text, sprites) - generates 4 program variants
 3. **ShadowManager**: Minimal shaders for shadow map generation
+4. **GizmoRendering**: Editor gizmos (vertex color, no lighting, depth test OFF). See `Scenes/Editor/AGENTS.md`
 
 ### OverlayRendering Generator
 

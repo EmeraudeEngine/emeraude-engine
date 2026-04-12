@@ -41,6 +41,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usage */
@@ -64,7 +65,7 @@ namespace EmEn::Input
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 */
-	class Manager final : public ServiceInterface, public Libs::ObservableTrait
+	class Manager final : public ServiceInterface, public Libs::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 
@@ -86,6 +87,7 @@ namespace EmEn::Input
 			 */
 			Manager (PrimaryServices & primaryServices, Window & window) noexcept
 				: ServiceInterface{ClassId},
+				ControllableTrait{ClassId},
 				m_primaryServices{primaryServices},
 				m_window{window}
 			{
@@ -434,6 +436,34 @@ namespace EmEn::Input
 			void removeMacOSGestureHandlers () noexcept;
 #endif
 
+			/**
+			 * @brief Injects a synthetic keyboard event, bypassing GLFW.
+			 * @param key The key code (see Input::Key enum).
+			 * @param modifiers The modifier keys mask (see Input::ModKey enum).
+			 * @param action GLFW action: 1 = press, 0 = release, 2 = repeat.
+			 * @return void
+			 */
+			static void injectKeyEvent (int32_t key, int32_t modifiers, int32_t action = 1) noexcept;
+
+			/**
+			 * @brief Injects a synthetic mouse click event at the given screen coordinates.
+			 * @param positionX The X coordinate in screen pixels.
+			 * @param positionY The Y coordinate in screen pixels.
+			 * @param button The mouse button number (0 = left, 1 = right, 2 = middle).
+			 * @param modifiers The modifier keys mask.
+			 * @param action GLFW action: 1 = press, 0 = release.
+			 * @return void
+			 */
+			static void injectMouseClickEvent (float positionX, float positionY, int32_t button = 0, int32_t modifiers = 0, int32_t action = 1) noexcept;
+
+			/**
+			 * @brief Injects a synthetic pointer move event.
+			 * @param positionX The X coordinate in screen pixels (absolute mode).
+			 * @param positionY The Y coordinate in screen pixels (absolute mode).
+			 * @return void
+			 */
+			static void injectPointerMoveEvent (float positionX, float positionY) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -441,6 +471,9 @@ namespace EmEn::Input
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
+
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
 
 			/**
 			 * @brief Main method to attach all events callbacks from a glfw handle.

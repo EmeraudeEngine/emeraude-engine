@@ -45,6 +45,7 @@
 #include "PrimaryServices.hpp"
 #include "Window.hpp"
 #include "SettingKeys.hpp"
+#include "Console/Command.hpp"
 
 namespace EmEn::Input
 {
@@ -230,7 +231,7 @@ namespace EmEn::Input
 		if constexpr ( KeyboardInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Keyboard input detected !" "\n"
+				"Keyboard input detected!" "\n"
 				"Key: " << key << "\n"
 				"ScanCode: " << scancode << "\n"
 				"Action: " << ( action == GLFW_RELEASE ? "Release" : "Press") << "\n"
@@ -322,7 +323,7 @@ namespace EmEn::Input
 		if constexpr ( KeyboardInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Unicode input detected !" "\n"
+				"Unicode input detected!" "\n"
 				"Unicode: " << codepoint << "\n"
 				"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
 		}
@@ -417,7 +418,7 @@ namespace EmEn::Input
 		if constexpr ( PointerInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Pointer move detected !" "\n"
+				"Pointer move detected!" "\n"
 				"[AbsoluteMode] X:" << xPosition << ", Y:" << yPosition << '\n';
 		}
 
@@ -444,12 +445,12 @@ namespace EmEn::Input
 		if constexpr ( PointerInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Pointer window interaction detected !" "\n"
+				"Pointer window interaction detected!" "\n"
 				"Action: " << ( entered == GLFW_TRUE ? "entering" : "leaving" ) <<  "\n";
 		}
 
 		/* NOTE: Retrieve the pointer position to set the entering/leaving coordinates. */
-		const auto position = getPointerLocation(window);
+		const auto position = Manager::getPointerLocation(window);
 
 		/* NOTE: This must always be processed to avoid bug. */
 		if ( s_instance->m_moveEventsTracking != nullptr )
@@ -492,17 +493,18 @@ namespace EmEn::Input
 	void
 	Manager::mouseButtonCallback (GLFWwindow * window, int button, int action, int modifiers) noexcept
 	{
+		/* NOTE: Retrieve the pointer position to set the click coordinates. */
+		const auto position = Manager::getPointerLocation(window);
+
 		if constexpr ( PointerInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Pointer click detected !" "\n"
+				"Pointer click detected!" "\n"
 				"Button number:" << button << "\n"
+				"Position: " << position[0] << ", " << position[1] << "\n"
 				"Action:" << ( action == GLFW_PRESS ? "Press" : "Release" ) << "\n"
 				"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
 		}
-
-		/* NOTE: Retrieve the pointer position to set the click coordinates. */
-		const auto position = Manager::getPointerLocation(window);
 
 		/* NOTE: On release, automatically stop the tracking. */
 		if ( s_instance->m_moveEventsTracking != nullptr && action == GLFW_RELEASE )
@@ -550,12 +552,12 @@ namespace EmEn::Input
 		if constexpr ( PointerInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Scrolling detected !" "\n"
+				"Scrolling detected!" "\n"
 				"Offset X:" << xOffset << ", Y:" << yOffset << '\n';
 		}
 
 		/* NOTE: Retrieve the pointer position to set the scroll coordinates. */
-		const auto position = getPointerLocation(window);
+		const auto position = Manager::getPointerLocation(window);
 
 		const auto xOffsetF = static_cast< float >(xOffset);
 		const auto yOffsetF = static_cast< float >(yOffset);
@@ -625,7 +627,7 @@ namespace EmEn::Input
 
 			if ( !IO::fileExists(filepath) )
 			{
-				TraceError{ClassId} << "File '" << filepath << "' doesn't exists !";
+				TraceError{ClassId} << "File '" << filepath << "' doesn't exists!";
 
 				continue;
 			}
@@ -642,7 +644,7 @@ namespace EmEn::Input
 		if constexpr ( PointerInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
-				"Joystick/gamepad configuration changed !" "\n"
+				"Joystick/gamepad configuration changed!" "\n"
 				"Device ID #" << jid << " is " << ( event == GLFW_CONNECTED ? "connected" : "disconnected" ) << "." "\n";
 		}
 
@@ -665,7 +667,7 @@ namespace EmEn::Input
 
 			case GLFW_DISCONNECTED :
 			{
-				TraceInfo{ClassId} << "Game device #" << jid << " disconnected !";
+				TraceInfo{ClassId} << "Game device #" << jid << " disconnected!";
 
 				/* NOTE: Here we don't know if it's a joystick or a gamepad.
 				 * But we don't care a bit because IDs are shared between gamepads and joysticks. */
@@ -705,7 +707,7 @@ namespace EmEn::Input
 
 		if ( !m_window.usable() )
 		{
-			Tracer::error(ClassId, "No handle available, cannot link input listeners !");
+			Tracer::error(ClassId, "No handle available, cannot link input listeners!");
 
 			return false;
 		}
@@ -723,7 +725,7 @@ namespace EmEn::Input
 			{
 				if ( m_showInformation )
 				{
-					TraceInfo{ClassId} << "The file " << filepath << " is not present there !";
+					TraceInfo{ClassId} << "The file " << filepath << " is not present there!";
 				}
 
 				continue;
@@ -738,20 +740,20 @@ namespace EmEn::Input
 
 			if ( glfwUpdateGamepadMappings(devicesDatabase.c_str()) == GLFW_FALSE )
 			{
-				TraceError{ClassId} << "Update input devices from " << filepath << " failed !";
+				TraceError{ClassId} << "Update input devices from " << filepath << " failed!";
 
 				continue;
 			}
 
 			if ( m_showInformation )
 			{
-				TraceSuccess{ClassId} << "Update input devices from " << filepath << " succeed !";
+				TraceSuccess{ClassId} << "Update input devices from " << filepath << " succeed!";
 			}
 		}
 
 		if ( devicesDatabase.empty() )
 		{
-			TraceWarning{ClassId} << "There was no " << GameControllerDBFile << " file available !";
+			TraceWarning{ClassId} << "There was no " << GameControllerDBFile << " file available!";
 		}
 
 		/* Checks every device connected. */
@@ -792,7 +794,7 @@ namespace EmEn::Input
 	{
 		if ( !m_window.usable() )
 		{
-			Tracer::warning(ClassId, "No handle was available !");
+			Tracer::warning(ClassId, "No handle was available!");
 
 			return false;
 		}
@@ -854,7 +856,7 @@ namespace EmEn::Input
 	{
 		if ( std::ranges::binary_search(std::as_const(m_keyboardListeners), listener) )
 		{
-			TraceWarning{ClassId} << "Listener @" << listener << " already added !";
+			TraceWarning{ClassId} << "Listener @" << listener << " already added!";
 
 			return;
 		}
@@ -879,7 +881,7 @@ namespace EmEn::Input
 	{
 		if ( std::ranges::binary_search(std::as_const(m_pointerListeners), listener) )
 		{
-			TraceWarning{ClassId} << "Listener @" << listener << " already added !";
+			TraceWarning{ClassId} << "Listener @" << listener << " already added!";
 
 			return;
 		}
@@ -908,7 +910,7 @@ namespace EmEn::Input
 
 		if ( glfwRawMouseMotionSupported() == GLFW_TRUE )
 		{
-			TraceSuccess{ClassId} << "Raw mouse motion enabled !";
+			TraceSuccess{ClassId} << "Raw mouse motion enabled!";
 
 			glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 		}
@@ -929,5 +931,173 @@ namespace EmEn::Input
 		}
 
 		m_pointerLocked = false;
+	}
+
+	void
+	Manager::injectKeyEvent (int32_t key, int32_t modifiers, int32_t action) noexcept
+	{
+		if ( s_instance == nullptr )
+		{
+			return;
+		}
+
+		/* NOTE: Copy the listener list before iterating. Handlers may add/remove
+		 * listeners during dispatch (e.g. editor activation adds itself as listener). */
+		const auto keyboardListeners = s_instance->m_keyboardListeners;
+
+		for ( const auto & listener : keyboardListeners )
+		{
+			if ( !listener->isListeningKeyboard() )
+			{
+				continue;
+			}
+
+			auto eventProcessed = false;
+
+			switch ( action )
+			{
+				case GLFW_PRESS :
+					eventProcessed = listener->onKeyPress(key, 0, modifiers, false);
+					break;
+
+				case GLFW_REPEAT :
+					eventProcessed = listener->onKeyPress(key, 0, modifiers, true);
+					break;
+
+				case GLFW_RELEASE :
+					eventProcessed = listener->onKeyRelease(key, 0, modifiers);
+					break;
+
+				default:
+					break;
+			}
+
+			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
+			{
+				break;
+			}
+		}
+	}
+
+	void
+	Manager::injectMouseClickEvent (float positionX, float positionY, int32_t button, int32_t modifiers, int32_t action) noexcept
+	{
+		if ( s_instance == nullptr )
+		{
+			return;
+		}
+
+		/* NOTE: Copy the listener list before iterating (same reason as keyboard). */
+		const auto pointerListeners = s_instance->m_pointerListeners;
+
+		for ( const auto & listener : pointerListeners )
+		{
+			if ( !listener->isListeningPointer() )
+			{
+				continue;
+			}
+
+			auto eventProcessed = false;
+
+			if ( action == GLFW_PRESS )
+			{
+				eventProcessed = listener->onButtonPress(positionX, positionY, button, modifiers);
+			}
+			else
+			{
+				eventProcessed = listener->onButtonRelease(positionX, positionY, button, modifiers);
+			}
+
+			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
+			{
+				break;
+			}
+		}
+	}
+
+	void
+	Manager::injectPointerMoveEvent (float positionX, float positionY) noexcept
+	{
+		if ( s_instance == nullptr )
+		{
+			return;
+		}
+
+		const auto pointerListeners = s_instance->m_pointerListeners;
+
+		for ( const auto & listener : pointerListeners )
+		{
+			if ( !listener->isListeningPointer() || listener->isRelativeModeEnabled() )
+			{
+				continue;
+			}
+
+			if ( listener->onPointerMove(positionX, positionY) && !listener->isPropagatingProcessedEvents() )
+			{
+				break;
+			}
+		}
+	}
+
+	void
+	Manager::onRegisterToConsole () noexcept
+	{
+		this->bindCommand("keyPress", {[this] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+			if ( arguments.size() < 1 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: keyPress(key, modifiers)");
+
+				return false;
+			}
+
+			const auto key = arguments[0].asInteger();
+			const auto modifiers = (arguments.size() >= 2) ? arguments[1].asInteger() : 0;
+
+			this->injectKeyEvent(key, modifiers, GLFW_PRESS);
+			this->injectKeyEvent(key, modifiers, GLFW_RELEASE);
+
+			outputs.emplace_back(Severity::Success, "Key event injected.");
+
+			return true;
+		}}, "Inject a key press+release event. Args: key, modifiers");
+
+		this->bindCommand("mouseClick", {[this] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+			if ( arguments.size() < 2 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: mouseClick(x, y, button, modifiers)");
+
+				return false;
+			}
+
+			const auto x = arguments[0].asFloat();
+			const auto y = arguments[1].asFloat();
+			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
+			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
+
+			this->injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+			this->injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
+
+			outputs.emplace_back(Severity::Success, "Mouse click injected.");
+
+			return true;
+		}}, "Inject a mouse click event. Args: x, y, button, modifiers");
+
+		this->bindCommand("mouseMove", {[this] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+			if ( arguments.size() < 2 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: mouseMove(x, y)");
+
+				return false;
+			}
+
+			const auto x = arguments[0].asFloat();
+			const auto y = arguments[1].asFloat();
+
+			this->injectPointerMoveEvent(x, y);
+
+			outputs.emplace_back(Severity::Success, "Mouse move injected.");
+
+			return true;
+		}}, "Inject a pointer move event. Args: x, y");
 	}
 }

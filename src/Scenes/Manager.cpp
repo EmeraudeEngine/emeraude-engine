@@ -37,6 +37,7 @@
 
 /* Local inclusions. */
 #include "DefinitionResource.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Libs/FastJSON.hpp"
 #include "PrimaryServices.hpp"
@@ -326,6 +327,12 @@ namespace EmEn::Scenes
 			return false;
 		}
 
+		/* NOTE: Deactivate the editor before releasing the scene. */
+		if ( m_editorManager.isActive() )
+		{
+			m_editorManager.deactivate();
+		}
+
 		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
 		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
@@ -386,5 +393,42 @@ namespace EmEn::Scenes
 		}
 
 		return sceneIt->second;
+	}
+
+	void
+	Manager::toggleEditorMode (float viewportWidth, float viewportHeight) noexcept
+	{
+		if ( m_editorManager.isActive() )
+		{
+			m_editorManager.deactivate();
+
+			return;
+		}
+
+		if ( m_activeScene == nullptr )
+		{
+			Tracer::warning(ClassId, "No active scene to edit !");
+
+			return;
+		}
+
+		/* NOTE: Get the view matrices from the first render-to-view target (main camera). */
+		const Graphics::ViewMatricesInterface * viewMatrices = nullptr;
+
+		m_activeScene->forEachRenderToView([&viewMatrices] (const auto & renderTarget) {
+			if ( viewMatrices == nullptr )
+			{
+				viewMatrices = &renderTarget->viewMatrices();
+			}
+		});
+
+		if ( viewMatrices == nullptr )
+		{
+			Tracer::warning(ClassId, "No render-to-view target found in the active scene !");
+
+			return;
+		}
+
+		m_editorManager.activate(*m_activeScene, *viewMatrices, viewportWidth, viewportHeight);
 	}
 }

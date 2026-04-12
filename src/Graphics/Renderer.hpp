@@ -128,6 +128,11 @@ namespace EmEn
 	namespace Scenes
 	{
 		class Scene;
+
+		namespace Editor
+		{
+			class Manager;
+		}
 	}
 
 	namespace Overlay
@@ -1266,7 +1271,7 @@ namespace EmEn::Graphics
 			 * @param overlayManager A reference to the overlay manager.
 			 * @return void
 			 */
-			void renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
+			void renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
 
 			/**
 			 * @brief Render a new frame for the active scene.
@@ -1274,7 +1279,7 @@ namespace EmEn::Graphics
 			 * @param overlayManager A reference to the overlay manager.
 			 * @return void
 			 */
-			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
+			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
 
 			/**
 			 * @brief Captures the framebuffer.
@@ -1425,7 +1430,7 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the command buffer smart pointer.
 			 * @return void
 			 */
-			void renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
+			void renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
 
 			/**
 			 * @brief Renders a frame through the internal scene render target.
@@ -1438,7 +1443,7 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the command buffer smart pointer.
 			 * @return void
 			 */
-			void renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
+			void renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
 
 			/**
 			 * @brief Applies software frame rate limiting if enabled.

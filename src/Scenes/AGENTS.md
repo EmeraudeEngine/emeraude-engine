@@ -33,6 +33,15 @@ See @docs/scene-graph-architecture.md for complete details.
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
 **Utilities:** Camera, ParticlesEmitter
 
+### Editor Subsystem
+
+Standalone scene editor for entity picking and gizmo manipulation. See [`Editor/AGENTS.md`](Editor/AGENTS.md).
+
+- **Owned by**: `Scenes::Manager` (auto-deactivates on scene change)
+- **Namespace**: `Scenes::Editor` (Manager) + `Scenes::Editor::Gizmo` (Abstract, Translate)
+- **Activation**: Shift+F3 via Core → `Scenes::Manager::toggleEditorMode()`
+- **Rendering**: Standalone pipeline (not scene entities), renders before overlay
+
 ### Level Interfaces (Ground & Sea)
 
 Two interfaces define scene-wide physical levels for gameplay queries:
