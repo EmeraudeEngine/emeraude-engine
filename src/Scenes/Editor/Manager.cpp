@@ -440,25 +440,101 @@ namespace EmEn::Scenes::Editor
 		return (cb * ab - ca * bb) / denom;
 	}
 
+	float
+	Manager::projectMouseAngleOnPlane (float screenX, float screenY, const Vector< 3, float > & planeOrigin, const Vector< 3, float > & planeNormal) const noexcept
+	{
+		const auto ray = this->screenToWorldRay(screenX, screenY);
+
+		if ( !ray.isValid() )
+		{
+			return 0.0F;
+		}
+
+		/* NOTE: Intersect ray with the rotation plane.
+		 * Plane: dot(P - planeOrigin, planeNormal) = 0
+		 * Ray: P = rayStart + t * rayDir
+		 * t = dot(planeOrigin - rayStart, planeNormal) / dot(rayDir, planeNormal) */
+		const auto rayDir = (ray.endPoint() - ray.startPoint()).normalize();
+		const float denom = Vector< 3, float >::dotProduct(rayDir, planeNormal);
+
+		if ( std::abs(denom) < 0.0001F )
+		{
+			return 0.0F;
+		}
+
+		const float t = Vector< 3, float >::dotProduct(planeOrigin - ray.startPoint(), planeNormal) / denom;
+		const auto hitPoint = ray.startPoint() + rayDir * t;
+
+		/* NOTE: Project hit point into the plane's 2D coordinate system.
+		 * Build two orthogonal axes on the plane. */
+		const auto localHit = hitPoint - planeOrigin;
+
+		/* NOTE: Choose a reference direction not parallel to the normal. */
+		Vector< 3, float > refDir{1.0F, 0.0F, 0.0F};
+
+		if ( std::abs(Vector< 3, float >::dotProduct(refDir, planeNormal)) > 0.9F )
+		{
+			refDir = Vector< 3, float >{0.0F, 1.0F, 0.0F};
+		}
+
+		const auto u = Vector< 3, float >::crossProduct(planeNormal, refDir).normalize();
+		const auto v = Vector< 3, float >::crossProduct(planeNormal, u).normalize();
+
+		const float x = Vector< 3, float >::dotProduct(localHit, u);
+		const float y = Vector< 3, float >::dotProduct(localHit, v);
+
+		return std::atan2(y, x);
+	}
+
 	bool
 	Manager::onPointerMove (float positionX, float positionY) noexcept
 	{
 		/* NOTE: Handle drag if active. */
 		if ( m_dragActive && m_selectedEntity != nullptr )
 		{
-			const float currentT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
-			float delta = (m_dragInitialT - currentT) * m_moveRatio;
-
-			/* NOTE: Apply stepping if enabled. */
-			if ( m_moveStep > 0.0F )
+			if ( m_gizmoMode == GizmoMode::Translate )
 			{
-				delta = std::round(delta / m_moveStep) * m_moveStep;
+				const float currentT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+				float delta = (m_dragInitialT - currentT) * m_moveRatio;
+
+				if ( m_moveStep > 0.0F )
+				{
+					delta = std::round(delta / m_moveStep) * m_moveStep;
+				}
+
+				const auto newPosition = m_dragInitialEntityPos + m_dragAxisDirection * delta;
+
+				m_selectedEntity->setPosition(newPosition, Libs::Math::TransformSpace::World);
 			}
+			else if ( m_gizmoMode == GizmoMode::Rotate )
+			{
+				const float currentAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+				float deltaAngle = (currentAngle - m_dragInitialAngle);
 
-			/* NOTE: Compute new position: initial + delta along axis. */
-			const auto newPosition = m_dragInitialEntityPos + m_dragAxisDirection * delta;
+				if ( m_rotateStep > 0.0F )
+				{
+					deltaAngle = std::round(deltaAngle / m_rotateStep) * m_rotateStep;
+				}
 
-			m_selectedEntity->setPosition(newPosition, Libs::Math::TransformSpace::World);
+				/* NOTE: Apply rotation around the axis, centered on the entity (not orbiting).
+				 * World mode: axis is in world space, rotate orientation only (save/restore position).
+				 * Local mode: axis is already in entity's local directions, use Local transform. */
+				if ( m_transformSpace == TransformSpace::Local )
+				{
+					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Libs::Math::TransformSpace::Local);
+				}
+				else
+				{
+					/* NOTE: World rotation changes position (orbit). Save and restore to rotate in-place. */
+					const auto savedPos = m_selectedEntity->getWorldCoordinates().position();
+
+					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Libs::Math::TransformSpace::World);
+					m_selectedEntity->setPosition(savedPos, Libs::Math::TransformSpace::World);
+				}
+
+				/* NOTE: Update initial angle for next delta. */
+				m_dragInitialAngle = currentAngle;
+			}
 
 			return true;
 		}
@@ -562,7 +638,15 @@ namespace EmEn::Scenes::Editor
 							break;
 					}
 
-					m_dragInitialT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+					/* NOTE: Initialize mode-specific drag state. */
+					if ( m_gizmoMode == GizmoMode::Translate )
+					{
+						m_dragInitialT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+					}
+					else if ( m_gizmoMode == GizmoMode::Rotate )
+					{
+						m_dragInitialAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+					}
 
 					return true;
 				}

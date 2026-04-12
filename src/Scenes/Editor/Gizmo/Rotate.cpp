@@ -41,7 +41,7 @@
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
-#include "Libs/Math/Space3D/Intersections/SegmentSphere.hpp"
+#include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::Editor::Gizmo
@@ -144,73 +144,45 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 		const auto & pos = m_worldFrame.position();
 		const float s = m_screenScale;
+		const float r = RingMajorRadius * s;
+		const float thickness = s * 0.12F;
 
-		/* NOTE: Hit-test for rings: test intersection with a thin spherical shell.
-		 * If the ray hits near the ring radius, it's a hit on that ring.
-		 * We use two spheres: outer and inner, and check if the hit is in the shell. */
-		const float outerRadius = (RingMajorRadius + RingMinorRadius * 4.0F) * s;
-		const float innerRadius = (RingMajorRadius - RingMinorRadius * 4.0F) * s;
-
-		/* NOTE: First check if the ray intersects the outer sphere at all. */
-		const Sphere< float > outerSphere{outerRadius, pos};
-
-		if ( !isIntersecting(ray, outerSphere) )
-		{
-			return AxisID::None;
-		}
-
-		/* NOTE: For each ring, check if the hit point is near the ring plane.
-		 * A ring around axis A lies in the plane perpendicular to A.
-		 * The hit point's distance to the plane (along A) should be small. */
 		AxisID closestAxis = AxisID::None;
-		float closestPlaneDist = std::numeric_limits< float >::max();
+		float closestDistance = std::numeric_limits< float >::max();
 
-		/* NOTE: Compute intersection point with outer sphere. */
-		const auto rayDir = (ray.endPoint() - ray.startPoint()).normalize();
-		const auto toCenter = pos - ray.startPoint();
-		const float tca = Vector< 3, float >::dotProduct(toCenter, rayDir);
-		const auto projection = ray.startPoint() + rayDir * tca;
-		const auto hitApprox = projection; /* Approximate hit point on sphere surface. */
+		/* NOTE: World-space AABBs for each ring.
+		 * Each ring is a flat box: wide on the ring plane, thin on the ring axis. */
+		const std::array< std::pair< AACuboid< float >, AxisID >, 3 > rings{{
+			/* X ring: lies in YZ plane, thin in X. */
+			{AACuboid< float >{
+				pos + Vector< 3, float >{thickness, r, r},
+				pos + Vector< 3, float >{-thickness, -r, -r}
+			}, AxisID::X},
+			/* Y ring: lies in XZ plane, thin in Y. */
+			{AACuboid< float >{
+				pos + Vector< 3, float >{r, thickness, r},
+				pos + Vector< 3, float >{-r, -thickness, -r}
+			}, AxisID::Y},
+			/* Z ring: lies in XY plane, thin in Z. */
+			{AACuboid< float >{
+				pos + Vector< 3, float >{r, r, thickness},
+				pos + Vector< 3, float >{-r, -r, -thickness}
+			}, AxisID::Z}
+		}};
 
-		const auto localHit = hitApprox - pos;
-		const float distFromCenter = localHit.length();
-
-		/* NOTE: Check if we're in the ring shell (between inner and outer radius). */
-		if ( distFromCenter < innerRadius || distFromCenter > outerRadius )
+		for ( const auto & [box, axisId] : rings )
 		{
-			return AxisID::None;
-		}
+			Point< float > hitPoint;
 
-		/* NOTE: X ring: lies in YZ plane. Distance to plane = |localHit.x|. */
-		{
-			const float planeDist = std::abs(localHit[0]) / s;
-
-			if ( planeDist < RingMinorRadius * 6.0F && planeDist < closestPlaneDist )
+			if ( isIntersecting(ray, box, hitPoint) )
 			{
-				closestPlaneDist = planeDist;
-				closestAxis = AxisID::X;
-			}
-		}
+				const float distance = (hitPoint - ray.startPoint()).length();
 
-		/* NOTE: Y ring: lies in XZ plane. Distance to plane = |localHit.y|. */
-		{
-			const float planeDist = std::abs(localHit[1]) / s;
-
-			if ( planeDist < RingMinorRadius * 6.0F && planeDist < closestPlaneDist )
-			{
-				closestPlaneDist = planeDist;
-				closestAxis = AxisID::Y;
-			}
-		}
-
-		/* NOTE: Z ring: lies in XY plane. Distance to plane = |localHit.z|. */
-		{
-			const float planeDist = std::abs(localHit[2]) / s;
-
-			if ( planeDist < RingMinorRadius * 6.0F && planeDist < closestPlaneDist )
-			{
-				closestPlaneDist = planeDist;
-				closestAxis = AxisID::Z;
+				if ( distance < closestDistance )
+				{
+					closestDistance = distance;
+					closestAxis = axisId;
+				}
 			}
 		}
 

@@ -345,6 +345,17 @@ namespace EmEn::Scenes::Editor
 			[[nodiscard]]
 			float projectMouseOnAxis (float screenX, float screenY, const Libs::Math::Vector< 3, float > & axisOrigin, const Libs::Math::Vector< 3, float > & axisDirection) const noexcept;
 
+			/**
+			 * @brief Computes the angle of the mouse position projected onto a rotation plane.
+			 * @param screenX Screen X coordinate.
+			 * @param screenY Screen Y coordinate.
+			 * @param planeOrigin The center of rotation in world space.
+			 * @param planeNormal The normal of the rotation plane (the rotation axis).
+			 * @return float The angle in radians.
+			 */
+			[[nodiscard]]
+			float projectMouseAngleOnPlane (float screenX, float screenY, const Libs::Math::Vector< 3, float > & planeOrigin, const Libs::Math::Vector< 3, float > & planeNormal) const noexcept;
+
 			/* References. */
 			Input::Manager & m_inputManager;
 			Resources::Manager & m_resourceManager;
@@ -368,15 +379,21 @@ namespace EmEn::Scenes::Editor
 			TransformSpace m_transformSpace{TransformSpace::Local};
 			float m_gizmoScreenRatio{Gizmo::Abstract::DefaultScreenRatio};
 
-			/* Drag state. */
+			/* Drag state (shared). */
 			Libs::Math::Vector< 3, float > m_dragAxisDirection;
 			Libs::Math::Vector< 3, float > m_dragInitialEntityPos;
-			float m_dragInitialT{0.0F};
 			Gizmo::AxisID m_dragAxis{Gizmo::AxisID::None};
+
+			/* Drag state (translation). */
+			float m_dragInitialT{0.0F};
+
+			/* Drag state (rotation). */
+			float m_dragInitialAngle{0.0F};
 
 			/* Movement options. */
 			float m_moveRatio{1.0F};
 			float m_moveStep{0.0F};
+			float m_rotateStep{0.0F};
 
 			/* Activation. */
 			bool m_active{false};
