@@ -28,8 +28,10 @@
 
 /* Local inclusions. */
 #include "Graphics/Geometry/Helpers.hpp"
-#include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Libs/VertexFactory/ShapeAssembler.hpp"
+#include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -58,24 +60,42 @@ namespace EmEn::Scenes::Editor::Gizmo
 			return true;
 		}
 
-		/* NOTE: Create individual arrow geometries with per-axis colors. */
+		/* NOTE: Build arrows via ResourceGenerator (cylinder + cone), no sphere.
+		 * Two sub-elements per axis (shaft + tip) for pure flat RGB color.
+		 * Default geometry is built along -Y. Tip is offset to end of shaft. */
 		{
 			Geometry::ResourceGenerator gen{resourceManager, Geometry::EnableVertexColor};
 
-			/* NOTE: Arrows point in NEGATIVE axis directions to compensate for the
-			 * view/projection pipeline inversion. Visually, this makes the arrows
-			 * align with the compass reference spheres (R=X+, G=Y+, B=Z+). */
+			constexpr float shaftRadius{0.02F};
+			constexpr float tipRadius{0.06F};
+			constexpr float gap{0.1F};
+			constexpr float shaftLength{AxisLength * 0.65F};
+			constexpr float tipLength{AxisLength * 0.25F};
+			const auto shaftOffset = Matrix< 4, float >::translation(0.0F, -gap, 0.0F);
+			const auto tipOffset = Matrix< 4, float >::translation(0.0F, -(gap + shaftLength), 0.0F);
+
+			/* X axis (Red): rotate -90° around Z to point in -X. */
+			const auto rotX = Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 0.0F, 0.0F, 1.0F);
 			gen.parameters().setGlobalVertexColor({1.0F, 0.0F, 0.0F, 1.0F});
-			m_subGeometries[ArrowX] = gen.arrow(AxisLength, PointTo::NegativeX, "+EditorGizmoArrowX");
+			gen.parameters().setTransformMatrix(rotX * shaftOffset);
+			m_subGeometries[ShaftX] = gen.cylinder(shaftRadius, shaftRadius, shaftLength, 8, 1, {}, "+GizmoShaftX");
+			gen.parameters().setTransformMatrix(rotX * tipOffset);
+			m_subGeometries[TipX] = gen.cone(tipRadius, tipLength, 8, 1, {}, "+GizmoTipX");
 
+			/* Y axis (Green): no rotation, default -Y direction. */
 			gen.parameters().setGlobalVertexColor({0.0F, 1.0F, 0.0F, 1.0F});
-			m_subGeometries[ArrowY] = gen.arrow(AxisLength, PointTo::NegativeY, "+EditorGizmoArrowY");
+			gen.parameters().setTransformMatrix(shaftOffset);
+			m_subGeometries[ShaftY] = gen.cylinder(shaftRadius, shaftRadius, shaftLength, 8, 1, {}, "+GizmoShaftY");
+			gen.parameters().setTransformMatrix(tipOffset);
+			m_subGeometries[TipY] = gen.cone(tipRadius, tipLength, 8, 1, {}, "+GizmoTipY");
 
+			/* Z axis (Blue): rotate +90° around X to point in -Z. */
+			const auto rotZ = Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 1.0F, 0.0F, 0.0F);
 			gen.parameters().setGlobalVertexColor({0.0F, 0.0F, 1.0F, 1.0F});
-			m_subGeometries[ArrowZ] = gen.arrow(AxisLength, PointTo::NegativeZ, "+EditorGizmoArrowZ");
-
-			gen.parameters().setGlobalVertexColor({1.0F, 1.0F, 1.0F, 1.0F});
-			m_subGeometries[CenterSphere] = gen.sphere(CenterRadius, 8, 6, "+EditorGizmoCenter");
+			gen.parameters().setTransformMatrix(rotZ * shaftOffset);
+			m_subGeometries[ShaftZ] = gen.cylinder(shaftRadius, shaftRadius, shaftLength, 8, 1, {}, "+GizmoShaftZ");
+			gen.parameters().setTransformMatrix(rotZ * tipOffset);
+			m_subGeometries[TipZ] = gen.cone(tipRadius, tipLength, 8, 1, {}, "+GizmoTipZ");
 		}
 
 		for ( size_t i = 0; i < SubElementCount; ++i )
@@ -259,10 +279,16 @@ namespace EmEn::Scenes::Editor::Gizmo
 		/* NOTE: Bind the gizmo pipeline once for all sub-elements. */
 		commandBuffer.bind(*pipeline);
 
-		/* NOTE: Render each sub-element with its own model matrix and highlight state. */
-		this->renderSubElement(commandBuffer, viewMatrices, ArrowX, Matrix< 4, float >::identity(), m_highlightedAxis == AxisID::X);
-		this->renderSubElement(commandBuffer, viewMatrices, ArrowY, Matrix< 4, float >::identity(), m_highlightedAxis == AxisID::Y);
-		this->renderSubElement(commandBuffer, viewMatrices, ArrowZ, Matrix< 4, float >::identity(), m_highlightedAxis == AxisID::Z);
-		this->renderSubElement(commandBuffer, viewMatrices, CenterSphere, Matrix< 4, float >::identity(), false);
+		/* NOTE: Render shaft + tip per axis. */
+		const bool hlX = (m_highlightedAxis == AxisID::X);
+		const bool hlY = (m_highlightedAxis == AxisID::Y);
+		const bool hlZ = (m_highlightedAxis == AxisID::Z);
+
+		this->renderSubElement(commandBuffer, viewMatrices, ShaftX, Matrix< 4, float >::identity(), hlX);
+		this->renderSubElement(commandBuffer, viewMatrices, TipX, Matrix< 4, float >::identity(), hlX);
+		this->renderSubElement(commandBuffer, viewMatrices, ShaftY, Matrix< 4, float >::identity(), hlY);
+		this->renderSubElement(commandBuffer, viewMatrices, TipY, Matrix< 4, float >::identity(), hlY);
+		this->renderSubElement(commandBuffer, viewMatrices, ShaftZ, Matrix< 4, float >::identity(), hlZ);
+		this->renderSubElement(commandBuffer, viewMatrices, TipZ, Matrix< 4, float >::identity(), hlZ);
 	}
 }

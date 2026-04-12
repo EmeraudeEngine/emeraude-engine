@@ -71,14 +71,16 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 		private:
 
-			/** @brief Sub-element count: X arrow + Y arrow + Z arrow + center sphere. */
-			static constexpr size_t SubElementCount{4};
+			/** @brief Sub-element count: shaft + tip per axis = 6. */
+			static constexpr size_t SubElementCount{6};
 
 			/** @brief Indices into the sub-element array. */
-			static constexpr size_t ArrowX{0};
-			static constexpr size_t ArrowY{1};
-			static constexpr size_t ArrowZ{2};
-			static constexpr size_t CenterSphere{3};
+			static constexpr size_t ShaftX{0};
+			static constexpr size_t TipX{1};
+			static constexpr size_t ShaftY{2};
+			static constexpr size_t TipY{3};
+			static constexpr size_t ShaftZ{4};
+			static constexpr size_t TipZ{5};
 
 			/** @brief Hit-test tolerance radius for axis cylinders (in gizmo local space). */
 			static constexpr float HitRadius{0.2F};
