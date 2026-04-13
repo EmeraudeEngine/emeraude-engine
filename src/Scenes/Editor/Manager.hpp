@@ -402,7 +402,10 @@ namespace EmEn::Scenes::Editor
 			float m_rotateStep{0.0F};
 
 			/* Activation. */
+			float m_dragStartX{0.0F};
+			float m_dragStartY{0.0F};
 			bool m_active{false};
 			bool m_dragActive{false};
+			bool m_dragMoved{false};
 	};
 }

@@ -63,7 +63,9 @@ namespace EmEn::Scenes::Editor
 		m_resourceManager{resourceManager},
 		m_notifier{notifier}
 	{
-
+		/* NOTE: Register once. Listening is controlled by enableKeyboardListening/enablePointerListening. */
+		m_inputManager.addKeyboardListener(this);
+		m_inputManager.addPointerListener(this);
 	}
 
 	Manager::~Manager ()
@@ -72,6 +74,9 @@ namespace EmEn::Scenes::Editor
 		{
 			this->deactivate();
 		}
+
+		m_inputManager.removeKeyboardListener(this);
+		m_inputManager.removePointerListener(this);
 	}
 
 	void
@@ -88,10 +93,11 @@ namespace EmEn::Scenes::Editor
 		m_viewportHeight = viewportHeight;
 		m_active = true;
 
-		/* NOTE: Register as input listener. Pointer must be in absolute mode for clicking. */
+		/* NOTE: Enable input listening. The editor is permanently registered
+		 * as a listener; activation just enables the filtering flags. */
 		this->enableAbsoluteMode();
-		m_inputManager.addKeyboardListener(this);
-		m_inputManager.addPointerListener(this);
+		this->enableKeyboardListening(true);
+		this->enablePointerListening(true);
 
 		/* NOTE: Unlock the pointer so the user can click freely. */
 		m_inputManager.unlockPointer();
@@ -130,8 +136,8 @@ namespace EmEn::Scenes::Editor
 
 		this->clearSelection();
 
-		m_inputManager.removeKeyboardListener(this);
-		m_inputManager.removePointerListener(this);
+		this->enableKeyboardListening(false);
+		this->enablePointerListening(false);
 
 		/* NOTE: Destroy all gizmo GPU resources. */
 		m_translateGizmo.destroy();
@@ -503,6 +509,8 @@ namespace EmEn::Scenes::Editor
 		/* NOTE: Handle drag if active. */
 		if ( m_dragActive && m_selectedEntity != nullptr )
 		{
+			m_dragMoved = true;
+
 			if ( m_gizmoMode == GizmoMode::Translate )
 			{
 				const float currentT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
@@ -655,6 +663,9 @@ namespace EmEn::Scenes::Editor
 				{
 					/* NOTE: Start drag operation. */
 					m_dragActive = true;
+					m_dragMoved = false;
+					m_dragStartX = positionX;
+					m_dragStartY = positionY;
 					m_dragAxis = hitAxis;
 					m_dragInitialEntityPos = m_selectedEntity->getWorldCoordinates().position();
 
@@ -720,7 +731,7 @@ namespace EmEn::Scenes::Editor
 	}
 
 	bool
-	Manager::onButtonRelease (float /*positionX*/, float /*positionY*/, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
+	Manager::onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
 	{
 		if ( buttonNumber != Button1Left )
 		{
@@ -729,8 +740,25 @@ namespace EmEn::Scenes::Editor
 
 		if ( m_dragActive )
 		{
+			const bool wasDrag = m_dragMoved;
+
 			m_dragActive = false;
+			m_dragMoved = false;
 			m_dragAxis = Gizmo::AxisID::None;
+
+			/* NOTE: If the user clicked on a gizmo but didn't actually drag (just a click),
+			 * fall through to scene picking so they can change target. */
+			if ( !wasDrag )
+			{
+				if ( auto * entity = this->pickEntity(positionX, positionY); entity != nullptr )
+				{
+					this->setSelection(entity);
+				}
+				else
+				{
+					this->clearSelection();
+				}
+			}
 
 			return true;
 		}

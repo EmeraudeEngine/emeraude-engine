@@ -941,11 +941,7 @@ namespace EmEn::Input
 			return;
 		}
 
-		/* NOTE: Copy the listener list before iterating. Handlers may add/remove
-		 * listeners during dispatch (e.g. editor activation adds itself as listener). */
-		const auto keyboardListeners = s_instance->m_keyboardListeners;
-
-		for ( const auto & listener : keyboardListeners )
+		for ( const auto & listener : s_instance->m_keyboardListeners )
 		{
 			if ( !listener->isListeningKeyboard() )
 			{
@@ -1042,8 +1038,8 @@ namespace EmEn::Input
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("keyPress", {[this] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
-			if ( arguments.size() < 1 )
+		this->bindCommand("keyPress", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Error, "Usage: keyPress(key, modifiers)");
 
@@ -1053,15 +1049,15 @@ namespace EmEn::Input
 			const auto key = arguments[0].asInteger();
 			const auto modifiers = (arguments.size() >= 2) ? arguments[1].asInteger() : 0;
 
-			this->injectKeyEvent(key, modifiers, GLFW_PRESS);
-			this->injectKeyEvent(key, modifiers, GLFW_RELEASE);
+			Manager::injectKeyEvent(key, modifiers, GLFW_PRESS);
+			Manager::injectKeyEvent(key, modifiers, GLFW_RELEASE);
 
 			outputs.emplace_back(Severity::Success, "Key event injected.");
 
 			return true;
 		}}, "Inject a key press+release event. Args: key, modifiers");
 
-		this->bindCommand("mouseClick", {[this] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+		this->bindCommand("mouseClick", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
 			if ( arguments.size() < 2 )
 			{
 				outputs.emplace_back(Severity::Error, "Usage: mouseClick(x, y, button, modifiers)");
@@ -1074,15 +1070,15 @@ namespace EmEn::Input
 			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
 			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
 
-			this->injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
-			this->injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
+			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
 
 			outputs.emplace_back(Severity::Success, "Mouse click injected.");
 
 			return true;
 		}}, "Inject a mouse click event. Args: x, y, button, modifiers");
 
-		this->bindCommand("mouseMove", {[this] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+		this->bindCommand("mouseMove", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
 			if ( arguments.size() < 2 )
 			{
 				outputs.emplace_back(Severity::Error, "Usage: mouseMove(x, y)");
@@ -1093,7 +1089,7 @@ namespace EmEn::Input
 			const auto x = arguments[0].asFloat();
 			const auto y = arguments[1].asFloat();
 
-			this->injectPointerMoveEvent(x, y);
+			Manager::injectPointerMoveEvent(x, y);
 
 			outputs.emplace_back(Severity::Success, "Mouse move injected.");
 

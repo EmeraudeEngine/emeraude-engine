@@ -57,7 +57,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 		{
 			return true;
 		}
-
+		
 		/* NOTE: Three torus rings via ResourceGenerator. Pure flat RGB.
 		 * Default torus lies in XZ plane (ring around Y axis).
 		 * Rotate to get rings around X and Z axes. */
