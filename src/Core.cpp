@@ -38,6 +38,7 @@
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
+#include "Input/KeyboardListenerInterface.hpp"
 #include "Libs/IO/IO.hpp"
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/Time/Time.hpp"
@@ -1380,9 +1381,8 @@ namespace EmEn
 
 		/* Voice-over: start microphone capture if enabled. */
 		auto & settings = m_primaryServices.settings();
-		const auto enableVoiceOver = settings.getOrSetDefault< bool >(RushMakerEnableVoiceOverKey, DefaultRushMakerEnableVoiceOver);
 
-		if ( enableVoiceOver )
+		if ( settings.getOrSetDefault< bool >(RushMakerEnableVoiceOverKey, DefaultRushMakerEnableVoiceOver) )
 		{
 			if ( m_audioManager.externalInput().usable() )
 			{
@@ -1395,14 +1395,15 @@ namespace EmEn
 				else
 				{
 					TraceError{ClassId} << "Failed to start voice-over recording to " << m_rushVoiceOverPath;
+
 					m_rushVoiceOverPath.clear();
 				}
 			}
 			else
 			{
 				TraceWarning{ClassId} <<
-				"Voice-over is enabled but the audio capture service is not available. "
-				"Ensure '" << AudioCaptureEnableKey << "' is set to true in settings to allow microphone access.";
+					"Voice-over is enabled but the audio capture service is not available. "
+					"Ensure '" << AudioCaptureEnableKey << "' is set to true in settings to allow microphone access.";
 			}
 		}
 
