@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * Simulates the blocky pixels of low-resolution displays by snapping
 	 * UV coordinates to a grid before sampling, producing visible pixel blocks.
 	 */
-	class Pixelation final : public Graphics::DirectPostProcessEffect
+	class Pixelation final : public DirectPostProcessEffect
 	{
 		public:
 

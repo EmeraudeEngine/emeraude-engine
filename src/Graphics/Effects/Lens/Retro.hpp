@@ -41,7 +41,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * Quantizes each RGB channel to a configurable number of discrete levels,
 	 * simulating the limited color palettes of retro hardware.
 	 */
-	class Retro final : public Graphics::DirectPostProcessEffect
+	class Retro final : public DirectPostProcessEffect
 	{
 		public:
 

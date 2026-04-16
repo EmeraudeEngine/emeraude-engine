@@ -1022,7 +1022,12 @@ namespace EmEn
 		/* Execute a command (Only in debug) */
 		if constexpr ( IsDebug )
 		{
-			system(command.c_str());
+			const auto subCode = system(command.c_str());
+
+			if ( subCode > 0 )
+			{
+				TraceWarning{ClassId} << "Command " << command << " exitd with code: " << subCode;
+			}
 		}
 
 		while ( true )
@@ -1216,19 +1221,16 @@ namespace EmEn
 					return true;
 
 				case KeyC :
-				{
-					auto & renderDoc = m_vulkanInstance.renderDocCapture();
-
-					if ( renderDoc.isAvailable() )
+					if ( auto & renderDoc = m_vulkanInstance.renderDocCapture(); renderDoc.isAvailable() )
 					{
 						renderDoc.triggerCapture();
+
 						this->notifyUser("RenderDoc: triggered frame capture.");
 					}
 					else
 					{
 						this->notifyUser("RenderDoc not available (not injected).");
 					}
-				}
 					return true;
 
 				case KeyR :

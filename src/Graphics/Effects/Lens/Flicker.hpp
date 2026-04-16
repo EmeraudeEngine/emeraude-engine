@@ -41,7 +41,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * Simulates the random luminosity variations of vintage arc-lamp film projectors.
 	 * The entire frame brightens or darkens uniformly per film frame (snapped to 24fps).
 	 */
-	class Flicker final : public Graphics::DirectPostProcessEffect
+	class Flicker final : public DirectPostProcessEffect
 	{
 		public:
 

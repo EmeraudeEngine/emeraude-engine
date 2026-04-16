@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * signal has lower bandwidth than luminance (brightness), causing
 	 * horizontal color smearing characteristic of analog composite video.
 	 */
-	class ChromaBleeding final : public Graphics::DirectPostProcessEffect
+	class ChromaBleeding final : public DirectPostProcessEffect
 	{
 		public:
 

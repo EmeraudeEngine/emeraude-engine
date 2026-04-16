@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * @brief The color grading lens effect class.
 	 * @extends EmEn::Graphics::DirectPostProcessEffect This is a framebuffer effect.
 	 */
-	class ColorGrading final : public Graphics::DirectPostProcessEffect
+	class ColorGrading final : public DirectPostProcessEffect
 	{
 		public:
 

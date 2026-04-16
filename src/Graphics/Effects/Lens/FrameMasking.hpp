@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * Simulates the rounded corners of a CRT tube bezel by applying
 	 * a soft black mask using a signed distance field rounded rectangle.
 	 */
-	class FrameMasking final : public Graphics::DirectPostProcessEffect
+	class FrameMasking final : public DirectPostProcessEffect
 	{
 		public:
 

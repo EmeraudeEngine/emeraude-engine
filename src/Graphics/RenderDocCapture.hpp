@@ -167,29 +167,80 @@ namespace EmEn::Graphics
 			RenderDocCapture () noexcept = default;
 
 			[[nodiscard]]
-			bool initialize () noexcept { return false; }
+			bool
+			initialize () noexcept
+			{
+				return false;
+			}
 
-			void setDevice (void *) noexcept {}
-			void shutdown () noexcept {}
+			void
+			setDevice (void *) noexcept
+			{
 
-			[[nodiscard]]
-			bool isAvailable () const noexcept { return false; }
+			}
+			void
+			shutdown () noexcept
+			{
 
-			void startCapture () noexcept {}
-
-			[[nodiscard]]
-			bool endCapture () noexcept { return false; }
-
-			void triggerCapture () noexcept {}
-			void triggerMultiFrameCapture (uint32_t) noexcept {}
-			void setCaptureFilePath (const std::string &) noexcept {}
-			void setCaptureTitle (const std::string &) noexcept {}
-
-			[[nodiscard]]
-			bool isCapturing () const noexcept { return false; }
+			}
 
 			[[nodiscard]]
-			bool launchReplayUI () noexcept { return false; }
+			bool
+			isAvailable () const noexcept
+			{
+				return false;
+			}
+
+			void
+			startCapture () noexcept
+			{
+
+			}
+
+			[[nodiscard]]
+			bool
+			endCapture () noexcept
+			{
+				return false;
+			}
+
+			void
+			triggerCapture () noexcept
+			{
+
+			}
+
+			void
+			triggerMultiFrameCapture (uint32_t) noexcept
+			{
+
+			}
+
+			void
+			setCaptureFilePath (const std::string &) noexcept
+			{
+
+			}
+
+			void
+			setCaptureTitle (const std::string &) noexcept
+			{
+
+			}
+
+			[[nodiscard]]
+			bool
+			isCapturing () const noexcept
+			{
+				return false;
+			}
+
+			[[nodiscard]]
+			bool
+			launchReplayUI () noexcept
+			{
+				return false;
+			}
 	};
 }
 

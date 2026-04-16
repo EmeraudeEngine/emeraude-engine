@@ -41,7 +41,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * Applies ordered Bayer dithering to simulate the limited color depth
 	 * of 8-bit and 16-bit era hardware. Uses a 4x4 Bayer matrix by default.
 	 */
-	class Dithering final : public Graphics::DirectPostProcessEffect
+	class Dithering final : public DirectPostProcessEffect
 	{
 		public:
 

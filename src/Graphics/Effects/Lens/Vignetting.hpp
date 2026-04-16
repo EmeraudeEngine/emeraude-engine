@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * @brief The vignetting lens effect class.
 	 * @extends EmEn::Graphics::DirectPostProcessEffect This is a framebuffer effect.
 	 */
-	class Vignetting final : public Graphics::DirectPostProcessEffect
+	class Vignetting final : public DirectPostProcessEffect
 	{
 		public:
 

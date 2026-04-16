@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * cast as semi-transparent shadows onto the projected image. Dust particles
 	 * appear and disappear quickly, while hair fibers persist longer.
 	 */
-	class DustAndHair final : public Graphics::DirectPostProcessEffect
+	class DustAndHair final : public DirectPostProcessEffect
 	{
 		public:
 

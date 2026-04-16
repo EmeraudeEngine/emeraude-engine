@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * pattern on CRT monitors, where individual red, green and blue phosphor
 	 * columns are visible at close viewing distances.
 	 */
-	class CRTPhosphor final : public Graphics::DirectPostProcessEffect
+	class CRTPhosphor final : public DirectPostProcessEffect
 	{
 		public:
 

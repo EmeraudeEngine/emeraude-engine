@@ -41,7 +41,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * Simulates the luminous halo produced by CRT phosphors around bright areas,
 	 * using a weighted 9-tap cross filter on the color buffer.
 	 */
-	class PhosphorBloom final : public Graphics::DirectPostProcessEffect
+	class PhosphorBloom final : public DirectPostProcessEffect
 	{
 		public:
 

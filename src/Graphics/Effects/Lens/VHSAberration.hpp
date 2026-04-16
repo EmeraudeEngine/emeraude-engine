@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * displacement and luminance noise that scrolls near the bottom of the frame,
 	 * characteristic of worn analog videotapes from the 1980s.
 	 */
-	class VHSAberration final : public Graphics::DirectPostProcessEffect
+	class VHSAberration final : public DirectPostProcessEffect
 	{
 		public:
 

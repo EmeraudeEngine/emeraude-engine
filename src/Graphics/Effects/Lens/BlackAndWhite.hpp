@@ -39,7 +39,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * @brief The black and white lens effect class.
 	 * @extends EmEn::Graphics::DirectPostProcessEffect This is a framebuffer effect.
 	 */
-	class BlackAndWhite final : public Graphics::DirectPostProcessEffect
+	class BlackAndWhite final : public DirectPostProcessEffect
 	{
 		public:
 

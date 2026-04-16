@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * @brief The chromatic aberration lens effect class.
 	 * @extends EmEn::Graphics::DirectPostProcessEffect This is a framebuffer effect.
 	 */
-	class ChromaticAberration final : public Graphics::DirectPostProcessEffect
+	class ChromaticAberration final : public DirectPostProcessEffect
 	{
 		public:
 
