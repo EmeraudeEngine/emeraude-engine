@@ -1081,9 +1081,7 @@ namespace EmEn::AssetLoaders
 		}
 
 		/* Build a node-index → parent-node-index lookup from the node tree. */
-		constexpr auto NoParent = static_cast< int32_t >(-1);
-
-		std::vector< int32_t > nodeParents(asset.nodes.size(), NoParent);
+		std::vector< int32_t > nodeParents(asset.nodes.size(), Libs::Animation::NoParent);
 
 		for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
 		{
