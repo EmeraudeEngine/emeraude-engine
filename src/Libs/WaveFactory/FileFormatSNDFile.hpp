@@ -189,6 +189,13 @@ namespace EmEn::Libs::WaveFactory
 					return false;
 				}
 
+				/* NOTE: Enable libsndfile clipping when converting float samples (Ogg/Vorbis, FLAC 24-bit,
+				 * etc.) to int16_t. Without this, inter-sample peaks that go above +1.0 or below -1.0
+				 * (common on transients like drum hits and vocal sibilants) wrap around int16_t range
+				 * instead of being clipped, producing sharp audible clicks exactly at those peaks.
+				 * SFC_SET_CLIPPING is a no-op for non-float input formats, so it's safe to apply here. */
+				sf_command(file, SFC_SET_CLIPPING, nullptr, SF_TRUE);
+
 				auto isDataValid = true;
 
 				const auto samples = static_cast< size_t >(soundFileInfos.frames);
@@ -226,9 +233,51 @@ namespace EmEn::Libs::WaveFactory
 				{
 					if ( wave.initialize(samples, channels, frequency) )
 					{
-						if ( sf_readf_short(file, wave.data().data(), soundFileInfos.frames) != soundFileInfos.frames )
+						/* NOTE: libsndfile decodes Ogg Vorbis (and FLAC > 16-bit) internally as floats.
+						 * sf_readf_short() does a float→int16 conversion, and for lossy codecs the decoded
+						 * floats can exceed [-1.0, +1.0] on transients (drum hits, vocal sibilants). On int16
+						 * conversion without explicit clipping, those overshoots wrap the value, producing
+						 * sharp clicks exactly at those peaks. SFC_SET_CLIPPING is documented to handle this,
+						 * but the effect is not reliable across all codec paths. To be safe, we decode as
+						 * float and perform the conversion + explicit clamp ourselves. sf_info.frames is an
+						 * *estimate* for VBR formats; we trust the actual count returned by sf_readf_float. */
+						std::vector< float > floatBuffer(static_cast< size_t >(soundFileInfos.frames) * soundFileInfos.channels);
+
+						const auto actualRead = sf_readf_float(file, floatBuffer.data(), soundFileInfos.frames);
+
+						if ( actualRead <= 0 )
 						{
+							std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), libsndfile returned no frames: " << sf_strerror(file) << "\n";
+
 							isDataValid = false;
+						}
+						else
+						{
+							if ( actualRead < soundFileInfos.frames )
+							{
+								/* Trim the wave to the actual frame count (estimate was optimistic). */
+								wave.initialize(static_cast< size_t >(actualRead), channels, frequency);
+							}
+
+							/* Manual float→int16 conversion with hard clipping at ±1.0. */
+							const auto sampleCount = static_cast< size_t >(actualRead) * soundFileInfos.channels;
+							auto * out = wave.data().data();
+
+							for ( size_t i = 0; i < sampleCount; ++i )
+							{
+								float s = floatBuffer[i];
+
+								if ( s > 1.0F )
+								{
+									s = 1.0F;
+								}
+								else if ( s < -1.0F )
+								{
+									s = -1.0F;
+								}
+
+								out[i] = static_cast< int16_t >(s * 32767.0F);
+							}
 						}
 					}
 					else
