@@ -31,6 +31,7 @@
 #include <limits>
 #include <random>
 #include <numeric>
+#include <set>
 
 /* Emeraude-Engine configuration. */
 #include "emeraude_config.hpp"
@@ -600,6 +601,33 @@ namespace EmEn::Audio
 		return m_playlist[m_musicIndex]->duration();
 	}
 
+	std::vector< std::string >
+	TrackMixer::availablePlaylistNames () const noexcept
+	{
+		auto * container = m_resourceManager.container< PlaylistResource >();
+
+		if ( container == nullptr )
+		{
+			return {};
+		}
+
+		/* Merge store-backed (disk .json) + loaded-in-memory (includes runtime-created via createResource)
+		 * into a sorted, deduplicated set so callers get a single canonical list. */
+		std::set< std::string > unique;
+
+		for ( const auto & name : container->getResourceNames() )
+		{
+			unique.insert(name);
+		}
+
+		for ( const auto & name : container->loadedResourceNames() )
+		{
+			unique.insert(name);
+		}
+
+		return {unique.begin(), unique.end()};
+	}
+
 	bool
 	TrackMixer::loadPlaylist (const std::shared_ptr< PlaylistResource > & playlist) noexcept
 	{
@@ -658,7 +686,14 @@ namespace EmEn::Audio
 			this->addToPlaylist(track);
 		}
 
+		/* Record the backing manifest AFTER the addToPlaylist loop — each addToPlaylist() resets
+		 * m_loadedPlaylist to preserve the invariant "any ad-hoc mutation severs the manifest link". */
+		m_loadedPlaylist = playlist;
+
 		TraceSuccess{ClassId} << "Loaded playlist '" << playlist->name() << "' with " << resolved.size() << " track(s).";
+
+		/* Notify observers (UI layer, AI tooling, etc.) that the playlist changed. Carries the new manifest name. */
+		this->notify(PlaylistSwapped, playlist->name());
 
 		if ( wasPlaying )
 		{

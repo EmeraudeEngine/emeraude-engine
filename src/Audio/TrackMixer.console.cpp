@@ -490,13 +490,27 @@ namespace EmEn::Audio
 			return true;
 		}, "Show the track currently playing (title, artist, position, playlist index). Alias: 'np'.");
 
+		this->bindCommand("currentPlaylist,cpl", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			const auto & manifest = this->loadedPlaylist();
+
+			if ( manifest == nullptr )
+			{
+				outputs.emplace_back(Severity::Info, std::stringstream{} << "No playlist manifest loaded (ad-hoc or empty playlist). Tracks: " << m_playlist.size() << ".");
+
+				return true;
+			}
+
+			outputs.emplace_back(Severity::Info, std::stringstream{} << "Current playlist: '" << manifest->name() << "' (" << m_playlist.size() << " tracks).");
+
+			return true;
+		}, "Show the manifest name currently backing the playlist. Returns 'no manifest' if the playlist was modified ad-hoc via addToPlaylist. Alias: 'cpl'.");
+
 		this->bindCommand("listPlaylists,lpl", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			auto * playlists = m_resourceManager.container< PlaylistResource >();
-			const auto names = playlists->getResourceNames();
+			const auto names = this->availablePlaylistNames();
 
 			if ( names.empty() )
 			{
-				outputs.emplace_back(Severity::Info, "No playlist manifest available in the MusicPlaylists store.");
+				outputs.emplace_back(Severity::Info, "No playlist manifest available.");
 
 				return true;
 			}
@@ -512,7 +526,7 @@ namespace EmEn::Audio
 			outputs.emplace_back(Severity::Info, list.str());
 
 			return true;
-		}, "List available playlist manifests discovered in the MusicPlaylists store. Alias: 'lpl'.");
+		}, "List available playlists (store-backed manifests + runtime-created). Alias: 'lpl'.");
 
 		this->bindCommand("loadPlaylist,lp", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( !this->usable() )

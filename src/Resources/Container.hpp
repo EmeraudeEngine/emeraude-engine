@@ -700,6 +700,32 @@ namespace EmEn::Resources
 				return names;
 			}
 
+			/**
+			 * @brief Returns the names of all currently live resources in memory.
+			 *
+			 * Includes both resources loaded from the local store AND resources created at runtime
+			 * via createResource() (which do not appear in the store). Useful to enumerate the full
+			 * set of resource names the application can reach, in addition to the store-backed
+			 * catalog returned by getResourceNames().
+			 *
+			 * @return Vector of resource names currently held in memory.
+			 * @see getResourceNames() For store-backed names only.
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 */
+			[[nodiscard]]
+			std::vector< std::string >
+			loadedResourceNames () const noexcept
+			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				std::vector< std::string > names;
+				names.reserve(m_resources.size());
+
+				std::ranges::copy(m_resources | std::views::keys, std::back_inserter(names));
+
+				return names;
+			}
+
 			/** @copydoc EmEn::Resources::ContainerInterface::resourceClassId() const noexcept */
 			[[nodiscard]]
 			const char *

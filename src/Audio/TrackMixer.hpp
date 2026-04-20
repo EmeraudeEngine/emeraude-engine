@@ -97,6 +97,7 @@ namespace EmEn::Audio
 				MusicResumed,
 				MusicStopped,
 				TrackChanged, /**< @brief Notifies that the current track index has changed (without playback). */
+				PlaylistSwapped, /**< @brief Notifies that the playlist has been fully replaced via loadPlaylist(). Observers may refresh their UI. */
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -201,6 +202,9 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Adds a soundtrack to the playlist.
+			 * @note Ad-hoc addition severs the link to any previously loaded playlist manifest
+			 *       (loadedPlaylist() will return nullptr after this call). Use loadPlaylist() to
+			 *       rebuild a playlist that is still backed by a named manifest.
 			 * @param track A reference to a music resource.
 			 * @return void
 			 */
@@ -208,6 +212,7 @@ namespace EmEn::Audio
 			addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept
 			{
 				m_playlist.push_back(track);
+				m_loadedPlaylist.reset();
 			}
 
 			/**
@@ -226,12 +231,38 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Removes all soundtracks from the playlist.
+			 * @note Also drops the loaded playlist manifest reference — there is no manifest backing an empty playlist.
 			 * @return void
 			 */
 			void
 			clearPlaylist ()
 			{
 				m_playlist.clear();
+				m_loadedPlaylist.reset();
+			}
+
+			/**
+			 * @brief Returns the sorted, deduplicated list of all PlaylistResource names the application can reach.
+			 * @note Union of store-backed manifests (`data-stores/MusicPlaylists/` JSON files) and any PlaylistResource
+			 *       created at runtime via `Resources::Container::createResource()`. Useful for populating UI
+			 *       dropdowns without having to touch the Resources system directly.
+			 * @return std::vector< std::string > Sorted playlist names. Empty if the container is unreachable.
+			 */
+			[[nodiscard]]
+			std::vector< std::string > availablePlaylistNames () const noexcept;
+
+			/**
+			 * @brief Returns the manifest currently backing the playlist, if any.
+			 * @note Returns nullptr when: no manifest was ever loaded, the playlist was cleared, or the current
+			 *       content was built ad-hoc via addToPlaylist() (any manual mutation severs the manifest link).
+			 *       Callers can query loadedPlaylist()->name() / trackCount() for display purposes.
+			 * @return const std::shared_ptr< PlaylistResource > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< PlaylistResource > &
+			loadedPlaylist () const noexcept
+			{
+				return m_loadedPlaylist;
 			}
 
 			/**
@@ -473,6 +504,7 @@ namespace EmEn::Audio
 			PlayingTrack m_playingTrack{PlayingTrack::None};
 			size_t m_musicIndex{0};
 			std::vector< std::shared_ptr< MusicResource > > m_playlist;
+			std::shared_ptr< PlaylistResource > m_loadedPlaylist;
 			std::shared_ptr< MusicResource > m_loadingTrack;
 			std::thread m_eventThread;
 			mutable std::mutex m_stateAccess;
