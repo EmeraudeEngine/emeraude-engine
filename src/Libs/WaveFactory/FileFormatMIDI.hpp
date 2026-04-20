@@ -95,7 +95,27 @@ namespace EmEn::Libs::WaveFactory
 					return false;
 				}
 
-				std::istringstream input(buffer, std::ios::binary);
+				/* Detect and unwrap RMID (Resource Interchange File Format MIDI) — a Microsoft container
+				 * that wraps a standard SMF inside a RIFF chunk. Layout is:
+				 *   [0..3]   "RIFF"
+				 *   [4..7]   uint32 LE: total file size minus 8
+				 *   [8..11]  "RMID"
+				 *   [12..15] "data"
+				 *   [16..19] uint32 LE: SMF payload size
+				 *   [20..N]  standard SMF starting with "MThd"
+				 * The inner SMF can be parsed by the existing code as-is, we just need to start the
+				 * stream past the 20-byte wrapper. */
+				size_t parseOffset = 0;
+
+				if ( buffer.size() >= 20
+					&& buffer.compare(0, 4, "RIFF") == 0
+					&& buffer.compare(8, 4, "RMID") == 0
+					&& buffer.compare(12, 4, "data") == 0 )
+				{
+					parseOffset = 20;
+				}
+
+				std::istringstream input(buffer.substr(parseOffset), std::ios::binary);
 
 				return this->processIStream(input, wave);
 			}
