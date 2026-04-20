@@ -33,7 +33,7 @@
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	bool
-	SaveFile::execute (Window * /*window*/) noexcept
+	SaveFile::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
 	{
 		std::string command;
 

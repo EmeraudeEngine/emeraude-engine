@@ -98,6 +98,29 @@ const auto & blas () const;       // Should be BLAS()
 VkBuffer m_vbo{VK_NULL_HANDLE};   // Should be m_VBO
 ```
 
+### Trademarks and Brand Names
+
+Trademarks and official brand names (e.g. **macOS**, **iOS**, **iPadOS**, **OpenGL**, **DirectX**) have a canonical casing owned by the brand. Two rules apply depending on whether the text is user-visible or purely internal to the code:
+
+- **User-visible text** — log messages, UI strings, console output, documentation comments, any string literal that may be displayed or printed publicly: **respect the official casing** of the trademark (e.g. `macOS`, not `MacOS` or `MACOS`).
+- **Internal code identifiers** — class names, method names, variable names, enum values, setting key C++ constants: follow the engine's standard **PascalCase / camelCase** rules. The trademark exception does **not** apply here; consistency of the naming scheme takes priority (e.g. `MacOS` in a PascalCase identifier, `macOS` in a setting path string that is displayed/logged).
+
+```cpp
+// Setting path — user-visible (printed in config files, logs): official casing
+constexpr auto CompatibilityMacOSSampleKey{"Core/Compatibility/macOS/Sample"};
+
+// C++ identifier — internal only: PascalCase, no trademark exception
+constexpr auto DefaultCompatibilityMacOSSample{false};
+
+// Comment — user-visible: official casing
+// Use this on macOS to bypass the Cocoa dialog path.
+
+// Log message — user-visible: official casing
+Tracer::info(ClassId, "Running on macOS, enabling legacy path.");
+```
+
+The distinction: code identifiers are read by compilers and follow a *grammar*; displayed strings are read by humans and must respect the *brand*. Mixing the two breaks either readability or trademark fidelity.
+
 ### Encapsulation — No Public Data Members
 
 - **All data members must be private** (or protected when inheritance requires it)

@@ -73,7 +73,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 
 			/** @copydoc EmEn::PlatformSpecific::Desktop::Dialog::Abstract::execute() */
-			bool execute (Window * window) noexcept override;
+			bool execute (Window & window, bool parentToWindow = true) noexcept override;
 
 			/**
 			 * @brief Returns whether the user has canceled the dialog.

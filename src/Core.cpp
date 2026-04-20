@@ -445,7 +445,7 @@ namespace EmEn
 
 		this->pause();
 
-		dialog.execute(&this->window());
+		dialog.execute(this->window());
 
 		this->resume();
 	}

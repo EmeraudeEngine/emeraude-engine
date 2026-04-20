@@ -67,7 +67,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	CustomMessage::execute (Window * window) noexcept
+	CustomMessage::execute (Window & window, bool parentToWindow) noexcept
 	{
 		if ( m_buttons.empty() )
 		{
@@ -107,7 +107,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		/* Configure the task dialog. */
 		TASKDIALOGCONFIG config{};
 		config.cbSize = sizeof(TASKDIALOGCONFIG);
-		config.hwndParent = window != nullptr ? window->getWin32Window() : nullptr;
+		config.hwndParent = parentToWindow ? window.getWin32Window() : nullptr;
 		config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
 		config.pszWindowTitle = wideTitle.c_str();
 		config.pszMainInstruction = wideMessage.c_str();

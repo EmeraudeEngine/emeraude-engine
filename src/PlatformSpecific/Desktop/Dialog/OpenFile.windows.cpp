@@ -24,6 +24,13 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* NOTE: Must be defined before any header that may transitively include <windows.h>
+ * (e.g. <filesystem> on MSVC). Prevents the min/max macros from polluting template
+ * code pulled in later via project headers (PrimaryServices -> ThreadPool). */
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "OpenFile.hpp"
 
 /* STL inclusions. */
@@ -33,18 +40,219 @@
 
 /* Third-party inclusions. */
 #include <shobjidl.h>
+#include <shlobj.h>
 #include <commdlg.h>
 
 /* Local inclusions. */
 #include "PlatformSpecific/Helpers.hpp"
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
 #include "Window.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
-	bool
-	OpenFile::execute (Window * window) noexcept
+	namespace
 	{
+		/**
+		 * @brief Builds a Win32 legacy filter string (double-null terminated) from the extension filter list.
+		 * The returned buffer must stay alive while OPENFILENAMEW references it.
+		 */
+		std::vector< wchar_t >
+		buildLegacyFilter (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters) noexcept
+		{
+			std::vector< wchar_t > buffer;
+
+			const auto append = [&buffer] (const std::wstring & str) {
+				buffer.insert(buffer.end(), str.begin(), str.end());
+				buffer.push_back(L'\0');
+			};
+
+			if ( filters.empty() )
+			{
+				append(L"All files");
+				append(L"*.*");
+			}
+			else
+			{
+				for ( const auto & filter : filters )
+				{
+					append(convertUTF8ToWide(filter.first));
+
+					std::wstring spec;
+
+					for ( const auto & extension : filter.second )
+					{
+						if ( !spec.empty() )
+						{
+							spec.push_back(L';');
+						}
+
+						const auto wideExt = convertUTF8ToWide(extension);
+
+						if ( wideExt.starts_with(L"*.") )
+						{
+							spec.append(wideExt);
+						}
+						else if ( wideExt.starts_with(L".") )
+						{
+							spec.append(L"*").append(wideExt);
+						}
+						else
+						{
+							spec.append(L"*.").append(wideExt);
+						}
+					}
+
+					append(spec);
+				}
+			}
+
+			/* Extra null to form a double-null terminator. */
+			buffer.push_back(L'\0');
+
+			return buffer;
+		}
+
+		bool
+		executeLegacyFolderPicker (const std::string & title, HWND parentWindow, const std::filesystem::path & defaultDirectory, std::vector< std::filesystem::path > & filepaths) noexcept
+		{
+			Tracer::debug(OpenFile::ClassId, "[LEGACY] Using Win32 folder picker (SHBrowseForFolderW).");
+
+			const auto wideTitle = convertUTF8ToWide(title);
+
+			BROWSEINFOW info{};
+			info.hwndOwner = parentWindow;
+			info.lpszTitle = wideTitle.c_str();
+			info.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_EDITBOX;
+
+			std::wstring defaultDir;
+
+			if ( !defaultDirectory.empty() )
+			{
+				defaultDir = defaultDirectory.wstring();
+				info.lParam = reinterpret_cast< LPARAM >(defaultDir.c_str());
+				info.lpfn = [] (HWND hwnd, UINT msg, LPARAM /*lp*/, LPARAM data) -> int {
+					if ( msg == BFFM_INITIALIZED && data != 0 )
+					{
+						SendMessageW(hwnd, BFFM_SETSELECTIONW, TRUE, data);
+					}
+					return 0;
+				};
+			}
+
+			LPITEMIDLIST idList = SHBrowseForFolderW(&info);
+
+			if ( idList == nullptr )
+			{
+				/* User cancelled. */
+				return true;
+			}
+
+			wchar_t pathBuffer[MAX_PATH]{};
+
+			if ( SHGetPathFromIDListW(idList, pathBuffer) )
+			{
+				filepaths.emplace_back(pathBuffer);
+			}
+
+			CoTaskMemFree(idList);
+
+			return true;
+		}
+
+		bool
+		executeLegacyOpenFile (const std::string & title, HWND parentWindow, bool multiSelect, const std::filesystem::path & defaultDirectory, const std::vector< std::pair< std::string, std::vector< std::string > > > & extensionFilters, std::vector< std::filesystem::path > & filepaths) noexcept
+		{
+			Tracer::debug(OpenFile::ClassId, "[LEGACY] Using Win32 open file dialog (GetOpenFileNameW).");
+
+			const auto wideTitle = convertUTF8ToWide(title);
+			auto filterBuffer = buildLegacyFilter(extensionFilters);
+
+			/* Large buffer to bypass MAX_PATH, especially required for multi-select. */
+			std::vector< wchar_t > fileBuffer(32768, L'\0');
+
+			std::wstring initialDir;
+
+			if ( !defaultDirectory.empty() )
+			{
+				initialDir = defaultDirectory.wstring();
+			}
+
+			OPENFILENAMEW ofn{};
+			ofn.lStructSize = sizeof(ofn);
+			ofn.hwndOwner = parentWindow;
+			ofn.lpstrFilter = filterBuffer.data();
+			ofn.nFilterIndex = 1;
+			ofn.lpstrFile = fileBuffer.data();
+			ofn.nMaxFile = static_cast< DWORD >(fileBuffer.size());
+			ofn.lpstrTitle = wideTitle.c_str();
+			ofn.lpstrInitialDir = initialDir.empty() ? nullptr : initialDir.c_str();
+			ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+			if ( multiSelect )
+			{
+				ofn.Flags |= OFN_ALLOWMULTISELECT;
+			}
+
+			if ( !GetOpenFileNameW(&ofn) )
+			{
+				/* User cancelled or dialog failed. CommDlgExtendedError() would detail the cause. */
+				return true;
+			}
+
+			if ( !multiSelect )
+			{
+				filepaths.emplace_back(ofn.lpstrFile);
+
+				return true;
+			}
+
+			/* Multi-select: buffer holds directory, null, filename, null, ..., filename, null, null.
+			 * If only one file was selected, the first field already contains the full path. */
+			const wchar_t * cursor = ofn.lpstrFile;
+			const std::wstring directory{cursor};
+			cursor += directory.size() + 1;
+
+			if ( *cursor == L'\0' )
+			{
+				filepaths.emplace_back(directory);
+
+				return true;
+			}
+
+			const std::filesystem::path directoryPath{directory};
+
+			while ( *cursor != L'\0' )
+			{
+				const std::wstring filename{cursor};
+				filepaths.emplace_back(directoryPath / filename);
+				cursor += filename.size() + 1;
+			}
+
+			return true;
+		}
+	}
+
+	bool
+	OpenFile::execute (Window & window, bool parentToWindow) noexcept
+	{
+		HWND parentWindow = parentToWindow ? window.getWin32Window() : nullptr;
+
+		/* NOTE: Branch to the Win32 legacy path when the compatibility setting is enabled.
+		 * Useful on Windows 11 when the modern COM dialog misbehaves with accessibility tools. */
+		if ( window.primaryServices().settings().getOrSetDefault< bool >(CompatibilityWindowsUseLegacyFileDialogsKey, DefaultCompatibilityWindowsUseLegacyFileDialogs) )
+		{
+			if ( m_selectFolder )
+			{
+				return executeLegacyFolderPicker(this->title(), parentWindow, m_defaultDirectory, m_filepaths);
+			}
+
+			return executeLegacyOpenFile(this->title(), parentWindow, m_multiSelect, m_defaultDirectory, m_extensionFilters, m_filepaths);
+		}
+
+		Tracer::debug(ClassId, "[COM] Using modern open file dialog (IFileOpenDialog).");
+
 		IFileOpenDialog * dialogHandle = nullptr;
 
 		HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast< void * * >(&dialogHandle));
@@ -169,7 +377,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		}
 
 		/* NOTE: Open the dialog box. */
-		hr = dialogHandle->Show(window != nullptr ? window->getWin32Window() : nullptr);
+		hr = dialogHandle->Show(parentWindow);
 		if ( hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) ) // No item was selected.
 		{
 			return true;

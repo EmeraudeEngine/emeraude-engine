@@ -341,4 +341,12 @@ namespace EmEn
 		/* External libs control */
 		constexpr auto HWLOCVerbosityKey{"Core/HWLOC/Verbosity"};
 		constexpr auto DefaultHWLOCVerbosityKey{"2"}; // 0:All, 1:no ENOSYS, 2:None
+
+		/* Cross-platform specific control */
+		constexpr auto CompatibilityWindowsUseLegacyFileDialogsKey{"Core/Compatibility/Windows/UseLegacyFileDialogs"};
+		constexpr auto DefaultCompatibilityWindowsUseLegacyFileDialogs{false}; // Use Win32 API instead of COM
+		/*constexpr auto CompatibilityLinuxSampleKey{"Core/Compatibility/Linux/XXX"}; // Linux example
+		constexpr auto DefaultCompatibilityLinuxSample{false};*/
+		/*constexpr auto CompatibilityMacOSSampleKey{"Core/Compatibility/macOS/XXX"}; // macOS example
+		constexpr auto DefaultCompatibilityMacOSSample{false};*/
 }

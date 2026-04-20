@@ -244,7 +244,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	TextInput::execute (Window * window) noexcept
+	TextInput::execute (Window & window, bool parentToWindow) noexcept
 	{
 		const std::wstring wsTitle = convertUTF8ToWide(this->title());
 		const std::wstring wsMessage = convertUTF8ToWide(m_message);
@@ -260,7 +260,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		auto templateBuffer = buildDialogTemplate(wsTitle, m_inputMode);
 
-		HWND parentWindow = window != nullptr ? window->getWin32Window() : nullptr;
+		HWND parentWindow = parentToWindow ? window.getWin32Window() : nullptr;
 
 		INT_PTR result = DialogBoxIndirectParamW(
 			GetModuleHandle(nullptr),

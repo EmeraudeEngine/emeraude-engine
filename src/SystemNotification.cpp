@@ -88,7 +88,7 @@ namespace EmEn
 			Dialog::MessageType::Question
 		};
 
-		dialog.execute(nullptr);
+		dialog.execute(m_window, false);
 
 		if ( dialog.getUserAnswer() == Dialog::Answer::Yes )
 		{

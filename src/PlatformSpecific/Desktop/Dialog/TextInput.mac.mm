@@ -35,7 +35,7 @@
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	bool
-	TextInput::execute (Window * /*window*/) noexcept
+	TextInput::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
 	{
 		@autoreleasepool
 		{

@@ -74,7 +74,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	Message::execute (Window * window) noexcept
+	Message::execute (Window & window, bool parentToWindow) noexcept
 	{
 		UINT messageType = getMessageType(m_messageType);
 		UINT layout = getButtonLayout(m_buttonLayout);
@@ -83,7 +83,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		const std::wstring wsTitle = convertUTF8ToWide(this->title());
 		const std::wstring wsMessage = convertUTF8ToWide(m_message);
 
-		HWND parentWindow = window != nullptr ? window->getWin32Window() : nullptr;
+		HWND parentWindow = parentToWindow ? window.getWin32Window() : nullptr;
 
 		switch ( MessageBoxW(parentWindow, wsMessage.data(), wsTitle.data(), messageType | layout) )
 		{

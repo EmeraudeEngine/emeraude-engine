@@ -64,7 +64,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	OpenFile::execute (Window * /*window*/) noexcept
+	OpenFile::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
 	{
 		std::string command;
 

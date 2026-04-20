@@ -217,6 +217,17 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the primary services bundle.
+			 * @return PrimaryServices &
+			 */
+			[[nodiscard]]
+			PrimaryServices &
+			primaryServices () const noexcept
+			{
+				return m_primaryServices;
+			}
+
+			/**
 			 * @brief Returns whether the application started in window less mode.
 			 * @return bool
 			 */

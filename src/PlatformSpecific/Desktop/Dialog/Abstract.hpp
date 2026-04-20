@@ -89,10 +89,11 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			/**
 			 * @brief Executes the dialog, if something goes wrong, the method will return false.
-			 * @param window A pointer to the window to set parenting (Optional).
+			 * @param window A reference to the main window (used to reach application services and, optionally, to parent the dialog).
+			 * @param parentToWindow Whether the dialog should be parented to the provided window. Default true.
 			 * @return bool
 			 */
-			virtual bool execute (Window * window) noexcept = 0;
+			virtual bool execute (Window & window, bool parentToWindow = true) noexcept = 0;
 
 		protected:
 

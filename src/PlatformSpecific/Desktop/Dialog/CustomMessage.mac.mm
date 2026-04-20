@@ -35,7 +35,7 @@
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	bool
-	CustomMessage::execute (Window * /*window*/) noexcept
+	CustomMessage::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
 	{
 		if ( m_buttons.empty() )
 		{
