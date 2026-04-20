@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <limits>
 #include <random>
 #include <numeric>
 
@@ -35,6 +36,7 @@
 #include "emeraude_config.hpp"
 
 /* Local inclusions. */
+#include "Libs/String.hpp"
 #include "OpenALExtensions.hpp"
 #include "Resources/Manager.hpp"
 #include "Manager.hpp"
@@ -315,6 +317,22 @@ namespace EmEn::Audio
 			const std::lock_guard< std::mutex > lock{m_stateAccess};
 
 			m_userState = UserState::Playing;
+
+			/* Sync m_musicIndex with the track's position in the playlist (if any).
+			 * Without this, direct play(track) calls (e.g. from the console) leave
+			 * m_musicIndex stale, so nowPlaying/status/currentPosition/currentDuration
+			 * all report the previous track. SIZE_MAX signals "out of playlist". */
+			m_musicIndex = std::numeric_limits< size_t >::max();
+
+			for ( size_t index = 0; index < m_playlist.size(); ++index )
+			{
+				if ( m_playlist[index] == track )
+				{
+					m_musicIndex = index;
+
+					break;
+				}
+			}
 		}
 
 		/* Check if we need to wait the track to be loaded in memory. */
@@ -580,6 +598,100 @@ namespace EmEn::Audio
 		}
 
 		return m_playlist[m_musicIndex]->duration();
+	}
+
+	bool
+	TrackMixer::loadPlaylist (const std::shared_ptr< PlaylistResource > & playlist) noexcept
+	{
+		if ( !this->usable() )
+		{
+			Tracer::warning(ClassId, "The track mixer is unavailable !");
+
+			return false;
+		}
+
+		if ( playlist == nullptr )
+		{
+			Tracer::error(ClassId, "The playlist manifest is a null pointer !");
+
+			return false;
+		}
+
+		/* Resolve each track name against the MusicResource container BEFORE touching the current playlist,
+		 * so that a failed resolution never destroys user state. */
+		auto * musics = m_resourceManager.container< MusicResource >();
+
+		std::vector< std::shared_ptr< MusicResource > > resolved;
+		resolved.reserve(playlist->trackCount());
+
+		for ( const auto & trackName : playlist->trackNames() )
+		{
+			if ( !musics->isResourceExists(trackName) )
+			{
+				TraceWarning{ClassId} << "Playlist manifest '" << playlist->name() << "' references unknown track '" << trackName << "'. Skipped.";
+
+				continue;
+			}
+
+			resolved.push_back(musics->getResource(trackName));
+		}
+
+		if ( resolved.empty() )
+		{
+			TraceError{ClassId} << "Playlist manifest '" << playlist->name() << "' resolved to zero valid tracks. Previous playlist preserved.";
+
+			return false;
+		}
+
+		/* Commit phase: capture state, tear down, refill.
+		 * NOTE: use userState() rather than isPlaying() because isPlaying() only reflects whether a source is
+		 * actively emitting now. MIDI rendering is async — a track that the user asked to play may still be
+		 * in the "loading/rendering" window, which would read isPlaying()==false. userState() captures the
+		 * persistent intent ("user wants music"), which is the correct trigger for auto-resume after a swap. */
+		const bool wasPlaying = this->userState() == UserState::Playing;
+
+		this->stop();
+		this->clearPlaylist();
+
+		for ( const auto & track : resolved )
+		{
+			this->addToPlaylist(track);
+		}
+
+		TraceSuccess{ClassId} << "Loaded playlist '" << playlist->name() << "' with " << resolved.size() << " track(s).";
+
+		if ( wasPlaying )
+		{
+			return this->playIndex(0);
+		}
+
+		return true;
+	}
+
+	std::shared_ptr< MusicResource >
+	TrackMixer::findPlaylistTrack (const std::string & partialName) const noexcept
+	{
+		if ( partialName.empty() || m_playlist.empty() )
+		{
+			return nullptr;
+		}
+
+		const auto needle = String::toLower(partialName);
+
+		for ( const auto & track : m_playlist )
+		{
+			if ( track == nullptr )
+			{
+				continue;
+			}
+
+			if ( String::toLower(track->name()).find(needle) != std::string::npos )
+			{
+				return track;
+			}
+		}
+
+		return nullptr;
 	}
 
 	void

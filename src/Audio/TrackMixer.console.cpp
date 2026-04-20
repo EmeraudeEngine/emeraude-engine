@@ -27,6 +27,7 @@
 #include "TrackMixer.hpp"
 
 /* Local inclusions. */
+#include "Libs/String.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Audio
@@ -73,22 +74,39 @@ namespace EmEn::Audio
 			}
 
 			/* Search the song by name. */
-			const auto soundTrackName = arguments[0].asString();
-			const auto soundtrack = m_resourceManager.container< MusicResource >()->getResource(soundTrackName);
+			const auto query = arguments[0].asString();
+			auto * container = m_resourceManager.container< MusicResource >();
+
+			std::shared_ptr< MusicResource > soundtrack;
+
+			/* 1. Exact resource name lookup — only if actually present in the store.
+			 * Rationale: container->getResource() silently returns the "Default" fallback resource
+			 * when the name is unknown; checking existence first lets us detect a real miss and fall
+			 * through to the fuzzy path. */
+			if ( container->isResourceExists(query) )
+			{
+				soundtrack = container->getResource(query);
+			}
+
+			/* 2. Fallback: case-insensitive substring match against the loaded playlist. */
+			if ( soundtrack == nullptr )
+			{
+				soundtrack = this->findPlaylistTrack(query);
+			}
 
 			if ( soundtrack == nullptr )
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Soundtrack '" << soundTrackName << "' doesn't exist !");
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "No track matches '" << query << "' (exact resource name or substring in current playlist) !");
 
 				return false;
 			}
 
 			this->play(soundtrack);
 
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing '" << soundTrackName << "' ...");
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing '" << soundtrack->name() << "' ...");
 
 			return true;
-		}, "Play or resume a music. Without argument: resumes or starts the playlist.");
+		}, "Play or resume a music. Argument: exact resource name OR case-insensitive substring of a playlist entry. Without argument: resumes or starts the playlist.");
 
 		this->bindCommand("pause", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			if ( !this->usable() )
@@ -428,6 +446,135 @@ namespace EmEn::Audio
 
 			return true;
 		}, "Show current track mixer status.");
+
+		this->bindCommand("nowPlaying,np", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			if ( !this->usable() )
+			{
+				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
+
+				return false;
+			}
+
+			if ( m_playingTrack == PlayingTrack::None )
+			{
+				outputs.emplace_back(Severity::Info, "No track is currently playing.");
+
+				return true;
+			}
+
+			if ( m_playlist.empty() || m_musicIndex >= m_playlist.size() )
+			{
+				outputs.emplace_back(Severity::Warning, "Playing state is inconsistent (no playlist entry at current index) !");
+
+				return false;
+			}
+
+			const auto & track = m_playlist[m_musicIndex];
+
+			if ( track == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "Current playlist entry is a null pointer !");
+
+				return false;
+			}
+
+			std::stringstream info;
+			info << "=== Now Playing ===" "\n";
+			info << "Title: " << track->title() << "\n";
+			info << "Artist: " << track->artist() << "\n";
+			info << "Position: " << this->currentPosition() << "s / " << this->currentDuration() << "s" "\n";
+			info << "Index: " << (m_musicIndex + 1) << "/" << m_playlist.size();
+
+			outputs.emplace_back(Severity::Info, info.str());
+
+			return true;
+		}, "Show the track currently playing (title, artist, position, playlist index). Alias: 'np'.");
+
+		this->bindCommand("listPlaylists,lpl", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			auto * playlists = m_resourceManager.container< PlaylistResource >();
+			const auto names = playlists->getResourceNames();
+
+			if ( names.empty() )
+			{
+				outputs.emplace_back(Severity::Info, "No playlist manifest available in the MusicPlaylists store.");
+
+				return true;
+			}
+
+			std::stringstream list;
+			list << "=== Available Playlists (" << names.size() << ") ===" "\n";
+
+			for ( const auto & name : names )
+			{
+				list << "  " << name << "\n";
+			}
+
+			outputs.emplace_back(Severity::Info, list.str());
+
+			return true;
+		}, "List available playlist manifests discovered in the MusicPlaylists store. Alias: 'lpl'.");
+
+		this->bindCommand("loadPlaylist,lp", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( !this->usable() )
+			{
+				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
+
+				return false;
+			}
+
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: loadPlaylist <name>");
+
+				return false;
+			}
+
+			const auto query = arguments[0].asString();
+			auto * playlists = m_resourceManager.container< PlaylistResource >();
+
+			std::shared_ptr< PlaylistResource > manifest;
+
+			/* 1. Exact match guarded by isResourceExists to avoid the Default fallback.
+			 * asyncLoad=false forces the JSON to be parsed synchronously before we touch the playlist. */
+			if ( playlists->isResourceExists(query) )
+			{
+				manifest = playlists->getResource(query, false);
+			}
+
+			/* 2. Fuzzy fallback: case-insensitive substring over available playlist names. */
+			if ( manifest == nullptr )
+			{
+				const auto needle = String::toLower(query);
+
+				for ( const auto & name : playlists->getResourceNames() )
+				{
+					if ( String::toLower(name).find(needle) != std::string::npos )
+					{
+						manifest = playlists->getResource(name, false);
+
+						break;
+					}
+				}
+			}
+
+			if ( manifest == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "No playlist manifest matches '" << query << "' !");
+
+				return false;
+			}
+
+			if ( !this->loadPlaylist(manifest) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to load playlist '" << manifest->name() << "' (empty or unresolved tracks) !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Loaded playlist '" << manifest->name() << "' (" << manifest->trackCount() << " tracks).");
+
+			return true;
+		}, "Swap the current playlist for a manifest from the MusicPlaylists store. Argument: exact name OR substring. If music was playing, restarts from track 1 of the new playlist.");
 
 		this->bindCommand("playlist,pl", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( !this->usable() )

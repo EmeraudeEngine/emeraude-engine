@@ -161,12 +161,19 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the title of the music.
+			 * @note Falls back to the resource name (filename-derived) when no ID3/metadata title is available.
+			 *       Useful for formats without tag support (e.g. MIDI) where m_title remains at its default.
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
 			const std::string &
 			title () const noexcept
 			{
+				if ( m_title.empty() || m_title == DefaultInfo )
+				{
+					return this->name();
+				}
+
 				return m_title;
 			}
 

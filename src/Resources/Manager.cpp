@@ -33,6 +33,7 @@
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
 #include "Audio/MusicResource.hpp"
+#include "Audio/PlaylistResource.hpp"
 #include "Audio/SoundResource.hpp"
 #include "Audio/SoundfontResource.hpp"
 #include "Graphics/CubemapResource.hpp"
@@ -525,6 +526,7 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Animations::AnimationClipResource), std::make_unique< AnimationClips >("Animation clip manager", m_primaryServices, *this, this->getLocalStore("Animations")));
 			m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >("Sound manager", m_primaryServices, *this, this->getLocalStore("Sounds")));
 			m_containers.emplace(typeid(Audio::MusicResource), std::make_unique< Musics >("Music manager", m_primaryServices, *this, this->getLocalStore("Musics")));
+			m_containers.emplace(typeid(Audio::PlaylistResource), std::make_unique< Playlists >("Playlist manager", m_primaryServices, *this, this->getLocalStore("MusicPlaylists")));
 			m_containers.emplace(typeid(Audio::SoundfontResource), std::make_unique< Soundfonts >("Soundfont manager", m_primaryServices, *this, this->getLocalStore("SoundBanks")));
 			m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >("Font manager", m_primaryServices, *this, this->getLocalStore("Fonts")));
 			m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >("Image manager", m_primaryServices, *this, this->getLocalStore("Images")));

@@ -40,6 +40,7 @@
 
 /* Local inclusions for usages. */
 #include "MusicResource.hpp"
+#include "PlaylistResource.hpp"
 #include "Source.hpp"
 #include "Types.hpp"
 
@@ -210,6 +211,20 @@ namespace EmEn::Audio
 			}
 
 			/**
+			 * @brief Replaces the current playlist with the content of a PlaylistResource manifest.
+			 * @note Semantics:
+			 *       - Captures whether playback was active before any mutation.
+			 *       - Resolves every track name via the MusicResource container; unknown entries are skipped with a warning.
+			 *       - If the manifest is null or resolves to zero valid tracks, the previous playlist is left intact and the call returns false.
+			 *       - Otherwise: stops current playback, clears the playlist, refills it from the resolved tracks, and if playback was active
+			 *         AND the new playlist is non-empty, starts from index 0 via playIndex(0).
+			 *       - Shuffle ordering (if enabled) is regenerated automatically by the next playback start.
+			 * @param playlist A shared pointer to the playlist manifest.
+			 * @return bool True on successful swap, false on null pointer or empty resolution (no mutation performed).
+			 */
+			bool loadPlaylist (const std::shared_ptr< PlaylistResource > & playlist) noexcept;
+
+			/**
 			 * @brief Removes all soundtracks from the playlist.
 			 * @return void
 			 */
@@ -251,6 +266,17 @@ namespace EmEn::Audio
 			{
 				return m_musicIndex;
 			}
+
+			/**
+			 * @brief Finds the first playlist entry whose resource name contains the given substring (case-insensitive).
+			 * @note Intended for remote-console and AI-driven workflows where the caller provides an approximate
+			 *       title, e.g. "Volcanian" resolves to "Kyrandia2/Volcanian Salesperson". Matching is restricted
+			 *       to the currently loaded playlist — not the full MusicResource container.
+			 * @param partialName A partial or full track resource name. Empty input yields a nullptr result.
+			 * @return std::shared_ptr< MusicResource > The first matching track, or nullptr if no entry matches.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< MusicResource > findPlaylistTrack (const std::string & partialName) const noexcept;
 
 			/**
 			 * @brief Returns the user state.
