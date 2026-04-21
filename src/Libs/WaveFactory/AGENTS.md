@@ -82,6 +82,14 @@ All format handlers operate on `IO::ByteStream &` (polymorphic: file or memory).
 - Virtual I/O callbacks (get_filelen/seek/read/write/tell) delegate to `IO::ByteStream`
 - Supports WAV, FLAC, OGG (read/write)
 - WriteOptions::AudioFormat selects output format
+- **Lossy decode path** (int16_t specialization): reads via `sf_readf_float` then converts manually
+  with explicit clamp to ±1.0 before scaling to int16. This is mandatory for Vorbis/MP3/FLAC-24:
+  - Lossy codecs produce float samples that can overshoot ±1.0 on transients (drum hits, sibilants).
+    Direct `sf_readf_short` would wrap the int16 instead of clipping → audible clicks at peaks.
+    `SFC_SET_CLIPPING` is unreliable across codec paths — manual clamp is the only safe path.
+  - `sf_info.frames` is documented as an *estimate* for VBR formats. The reader trims the wave
+    to the actual frame count returned, never treats a short read as failure.
+  - Silent failure now logs `sf_strerror(file)` so any future decoder issue is diagnosable.
 - See: `FileFormatSNDFile.hpp`
 
 **FileFormatJSON** - Procedural audio via SFXScript
@@ -93,6 +101,11 @@ All format handlers operate on `IO::ByteStream &` (polymorphic: file or memory).
 - Reads ByteStream to memory, creates `std::istringstream`, processes via `processIStream()`
 - ReadOptions provides `synthesisFrequency` and optional `soundfont` (tsf*)
 - Write not supported (returns false)
+- **RMID unwrap**: detects the Microsoft RIFF/RMID/data 20-byte container that wraps a standard
+  SMF (Tyrian and other mid-1990s game soundtracks). Header signature is `RIFF...RMID...data`;
+  when matched, `istringstream::seekg(20)` skips to the inner SMF without reallocating the buffer.
+  Files without the prefix are parsed as-is. Optional embedded DLS sound bank is currently
+  ignored — rendering uses the application-level SF2 configured via `Core/Audio/MusicSoundfont`.
 - See: `FileFormatMIDI.hpp`
 
 **ReadOptions / WriteOptions** — Defined in `Types.hpp`

@@ -104,18 +104,17 @@ namespace EmEn::Libs::WaveFactory
 				 *   [16..19] uint32 LE: SMF payload size
 				 *   [20..N]  standard SMF starting with "MThd"
 				 * The inner SMF can be parsed by the existing code as-is, we just need to start the
-				 * stream past the 20-byte wrapper. */
-				size_t parseOffset = 0;
+				 * stream past the 20-byte wrapper. We use seekg() to skip in place rather than
+				 * allocating a substring copy of the (potentially large) buffer. */
+				std::istringstream input(buffer, std::ios::binary);
 
 				if ( buffer.size() >= 20
 					&& buffer.compare(0, 4, "RIFF") == 0
 					&& buffer.compare(8, 4, "RMID") == 0
 					&& buffer.compare(12, 4, "data") == 0 )
 				{
-					parseOffset = 20;
+					input.seekg(20);
 				}
-
-				std::istringstream input(buffer.substr(parseOffset), std::ios::binary);
 
 				return this->processIStream(input, wave);
 			}
