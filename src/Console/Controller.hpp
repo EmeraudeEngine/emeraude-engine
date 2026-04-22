@@ -210,6 +210,15 @@ namespace EmEn::Console
 			 */
 			static bool loopOverObjectsName (const std::map< std::string, ControllableTrait * > & objects, Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) noexcept;
 
+			/**
+			 * @brief Recursively appends the help tree of a controllable to an output stream.
+			 * @note Public so ControllableTrait::checkBuiltInCommands can delegate scoped `.help()` calls here.
+			 * @param controllable A reference to the controllable to dump.
+			 * @param out A writable reference to the output string stream.
+			 * @param path The dotted path accumulated so far (e.g. "Core.RendererService").
+			 */
+			static void dumpControllable (const ControllableTrait & controllable, std::stringstream & out, const std::string & path) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

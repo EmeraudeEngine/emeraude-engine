@@ -293,12 +293,61 @@ namespace EmEn::Console
 		return false;
 	}
 
+	void
+	Controller::dumpControllable (const ControllableTrait & controllable, std::stringstream & out, const std::string & path) noexcept
+	{
+		const auto & commands = controllable.commands();
+
+		if ( !commands.empty() )
+		{
+			for ( const auto & [name, command] : commands )
+			{
+				out << "  " << path << "." << name << "()\n"
+					<< "      " << command.help() << "\n";
+			}
+		}
+
+		for ( const auto & [subName, subPtr] : controllable.subObjects() )
+		{
+			if ( subPtr != nullptr )
+			{
+				Controller::dumpControllable(*subPtr, out, path + "." + subName);
+			}
+		}
+	}
+
 	bool
 	Controller::executeBuiltInCommand (const std::string & command, Outputs & outputs) noexcept
 	{
-		if ( command == "help" || command == "lsfunc()" )
+		if ( command == "help" || command == "help()" || command == "lsfunc()" )
 		{
-			outputs.emplace_back(Severity::Info, "Help command invoked !");
+			std::stringstream message;
+
+			message <<
+				"Remote Console — available commands\n"
+				"\n"
+				"Top-level built-ins:\n"
+				"  help, help(), lsfunc()  Show this recursive command reference\n"
+				"  listObjects, lsobj()    List top-level controllable objects\n"
+				"  exit, quit, shutdown    Graceful shutdown (saves settings)\n"
+				"  hardExit                Immediate shutdown (no save)\n"
+				"\n"
+				"Per-object built-ins (any depth):\n"
+				"  <path>.lsfunc()         List commands bound at that level\n"
+				"  <path>.lsobj()          List sub-objects at that level\n"
+				"  <path>.help()           Recursive dump from that level\n"
+				"\n"
+				"Registered objects and commands:\n";
+
+			for ( const auto & [name, controllable] : m_consoleObjects )
+			{
+				if ( controllable != nullptr )
+				{
+					Controller::dumpControllable(*controllable, message, name);
+				}
+			}
+
+			outputs.emplace_back(Severity::Info, message);
 
 			return true;
 		}

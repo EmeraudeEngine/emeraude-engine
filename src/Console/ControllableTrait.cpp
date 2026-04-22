@@ -217,7 +217,7 @@ namespace EmEn::Console
 
 			for ( const auto & commandIt : m_commands )
 			{
-				message << commandIt.first << " (" << commandIt.second.help() << ")" "\n";
+				message << commandIt.first << "() - " << commandIt.second.help() << "\n";
 			}
 
 			outputs.emplace_back(Severity::Info, message);
@@ -233,6 +233,17 @@ namespace EmEn::Console
 			{
 				message << "'" << key << "'" "\n";
 			}
+
+			outputs.emplace_back(Severity::Info, message);
+
+			return true;
+		}
+
+		if ( expression.commandName() == "help" )
+		{
+			std::stringstream message;
+
+			Controller::dumpControllable(*this, message, m_identifier);
 
 			outputs.emplace_back(Severity::Info, message);
 

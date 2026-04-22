@@ -76,12 +76,31 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777
 
 ## 3. Built-in Commands
 
+### Top-level (no dot in the command)
+
 | Command | Effect |
 |---------|--------|
-| `help`, `lsfunc()` | List available commands |
-| `listObjects`, `lsobj()` | List registered controllable objects |
+| `help`, `help()`, `lsfunc()` | **Recursive dump** of every registered object with each command's description — the single entry point for discovering the whole API |
+| `listObjects`, `lsobj()` | List top-level controllable object names only (no recursion) |
 | `exit`, `quit`, `shutdown` | Graceful shutdown (saves settings) |
-| `hardExit` | Immediate shutdown |
+| `hardExit` | Immediate shutdown (no save) |
+
+### Per-object (available at any depth in the tree)
+
+| Command | Effect |
+|---------|--------|
+| `<path>.help()` | Recursive dump of that object's sub-tree (commands + nested objects) |
+| `<path>.lsfunc()` | List commands bound at that level only, in `name() - description` form |
+| `<path>.lsobj()` | List sub-objects at that level only |
+
+Example: `Core.RendererService.help()` shows every command reachable under `RendererService`, while `Core.RendererService.lsfunc()` shows only commands directly bound there.
+
+### Rule: mandatory help string at registration
+
+`ControllableTrait::bindCommand()` takes **three mandatory arguments** (name, binding, help). There is no default help value — every command must ship a useful one-line description so the `help` dump is never empty. Conventions for the help text:
+- Start with a capital, end with a period.
+- Mention the signature if the command takes arguments (e.g. `"Sets position. Usage: setPosition(x, y, z)"`).
+- If the command is an alias, say so at the end (e.g. `"... Alias: 'cpl'."`).
 
 ## 4. Common AI Operations
 
@@ -282,6 +301,7 @@ YourService::onRegisterToConsole () noexcept
 - Return `true` for success, `false` for failure
 - For JSON responses, put the JSON string in a single output message
 - Convention: separate `*.console.cpp` file (e.g., `Settings.console.cpp`)
+- **The help string is mandatory.** `bindCommand()` has no default value for `help` — the compiler rejects any call that omits it. This keeps the `help` dump always useful.
 
 ## 8. CEF Integration (JavaScript)
 

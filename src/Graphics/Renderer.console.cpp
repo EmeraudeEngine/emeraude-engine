@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <iomanip>
 #include <sstream>
 
 /* Local inclusions. */
@@ -36,6 +37,7 @@
 #include "FileSystem.hpp"
 #include "PrimaryServices.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "MDI/BatchBuilder.hpp"
 
 namespace EmEn::Graphics
 {
@@ -100,5 +102,39 @@ namespace EmEn::Graphics
 
 			return true;
 		}, "Returns renderer statistics (FPS, frame time, resolution).");
+
+		this->bindCommand("getMDIStats", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			std::stringstream json;
+
+			if ( !m_MDIEnabled || m_MDIBatchBuilder == nullptr )
+			{
+				json << R"({"enabled":false,"reason":)"
+					<< ( m_device == nullptr ? R"("no device")" : R"("setting disabled or hardware unsupported")" )
+					<< "}";
+				outputs.emplace_back(Severity::Info, json.str());
+
+				return true;
+			}
+
+			const auto * builder = m_MDIBatchBuilder.get();
+			const auto batched = builder->totalDrawsBatched();
+			const auto fallback = builder->totalFallbackDraws();
+			const auto skipped = builder->skippedCount();
+			const auto total = batched + fallback;
+			const double batchedRatio = total > 0 ? 100.0 * static_cast< double >(batched) / static_cast< double >(total) : 0.0;
+
+			json << R"({"enabled":true,)"
+				<< R"("ready":)" << ( builder->isReady() ? "true" : "false" ) << ","
+				<< R"("totalDrawsBatched":)" << batched << ","
+				<< R"("totalFallbackDraws":)" << fallback << ","
+				<< R"("skippedCount":)" << skipped << ","
+				<< R"("totalDraws":)" << total << ","
+				<< R"("batchedRatio":)" << std::fixed << std::setprecision(2) << batchedRatio
+				<< "}";
+
+			outputs.emplace_back(Severity::Info, json.str());
+
+			return true;
+		}, "Returns Multi-Draw Indirect statistics from the last frame as JSON (batched/fallback/skipped counts, batched ratio %).");
 	}
 }

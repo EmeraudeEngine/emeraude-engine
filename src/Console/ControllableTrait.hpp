@@ -86,6 +86,30 @@ namespace EmEn::Console
 			}
 
 			/**
+			 * @brief Returns the commands bound on this controllable.
+			 * @note Used by the `help` built-in to walk the console tree.
+			 * @return const std::map< std::string, Command > &
+			 */
+			[[nodiscard]]
+			const std::map< std::string, Command > &
+			commands () const noexcept
+			{
+				return m_commands;
+			}
+
+			/**
+			 * @brief Returns the sub-objects registered under this controllable.
+			 * @note Used by the `help` built-in to walk the console tree.
+			 * @return const std::map< std::string, ControllableTrait * > &
+			 */
+			[[nodiscard]]
+			const std::map< std::string, ControllableTrait * > &
+			subObjects () const noexcept
+			{
+				return m_consoleObjects;
+			}
+
+			/**
 			 * @brief Register this controllable object below another one.
 			 * @param object A reference to the parent object.
 			 * @return bool
@@ -125,11 +149,11 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Register a command for this console-controllable object.
-			 * @param commandNames The way of calling the command inside the console.
+			 * @param commandNames The way of calling the command inside the console (comma-separated aliases supported).
 			 * @param binding The binding to execute in the command.
-			 * @param help A way to explain that command. By default, "NoHelp" will be displayed.
+			 * @param help A human-readable description of the command. Mandatory so the `help` built-in command always has meaningful content to display; use a concise sentence with the expected signature (e.g. "Sets position. Usage: setPosition(x, y, z)").
 			 */
-			void bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help = {"No help"}) noexcept;
+			void bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help) noexcept;
 
 			/**
 			 * @brief Removes a command from the console.

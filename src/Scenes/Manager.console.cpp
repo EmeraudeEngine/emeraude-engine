@@ -546,7 +546,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Info, list.str());
 
 			return true;
-		});
+		}, "Lists every registered scene name.");
 
 		this->bindCommand("getActiveSceneName", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			if ( m_activeScene != nullptr )
@@ -559,7 +559,7 @@ namespace EmEn::Scenes
 			}
 
 			return true;
-		});
+		}, "Returns the name of the currently active scene.");
 
 		this->bindCommand("targetActiveScene", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 
@@ -573,7 +573,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Now targeting scene '" << m_activeScene->name() << "'.");
 
 			return true;
-		});
+		}, "Targets the active scene for subsequent node/entity commands (listNodes, targetNode, ...).");
 
 		this->bindCommand("targetScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -599,7 +599,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Now targeting scene '" << scene->name() << "'.");
 
 			return true;
-		});
+		}, "Targets the named scene. Usage: targetScene(sceneName)");
 
 		this->bindCommand("listNodes", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			const auto scene = m_consoleMemory.scene();
@@ -622,7 +622,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Info, list.str());
 
 			return true;
-		});
+		}, "Lists root-level nodes of the currently targeted scene. Requires targetScene() or targetActiveScene() first.");
 
 		this->bindCommand("targetNode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -657,7 +657,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Now targeting node '" << sceneNode->name() << "' from scene '" << scene->name() << "'.");
 
 			return true;
-		});
+		}, "Targets a node within the currently targeted scene. Usage: targetNode(nodeName)");
 
 		this->bindCommand("listStaticEntities", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			const auto scene = m_consoleMemory.scene();
@@ -679,7 +679,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Info, list.str());
 
 			return true;
-		});
+		}, "Lists static entities of the currently targeted scene.");
 
 		this->bindCommand("targetStaticEntity", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -714,7 +714,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Now targeting static entity '" << staticEntity->name() << "' from scene '" << scene->name() << "'.");
 
 			return true;
-		});
+		}, "Targets a static entity within the currently targeted scene. Usage: targetStaticEntity(name)");
 
 		this->bindCommand("targetEntityComponent", [] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
@@ -725,7 +725,7 @@ namespace EmEn::Scenes
 			}
 
 			return true;
-		});
+		}, "Targets a component on the currently targeted entity. Usage: targetEntityComponent(name) [not fully implemented]");
 
 		this->bindCommand("moveNodeTo", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.size() < 3 )
@@ -751,7 +751,7 @@ namespace EmEn::Scenes
 			sceneNode->setPosition({positionX, positionY, positionZ}, Math::TransformSpace::World);
 
 			return true;
-		});
+		}, "Moves the currently targeted node to world coordinates. Usage: moveNodeTo(x, y, z)");
 
 		this->bindCommand("getSceneInfo", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			if ( m_activeScene == nullptr )
