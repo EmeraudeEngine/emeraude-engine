@@ -235,7 +235,7 @@ namespace EmEn::Overlay
 
 			m_videoMemoryUpToDate = true;
 
-			TraceDebug{ClassId} << "Surface '" << this->name() << "' pixmap uploaded to GPU (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px, framebuffer:" << m_framebufferProperties.width() << "x" << m_framebufferProperties.height() << "px, scale:" << m_framebufferProperties.maxScreenScale() << ").";
+			//TraceDebug{ClassId} << "Surface '" << this->name() << "' pixmap uploaded to GPU (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px, framebuffer:" << m_framebufferProperties.width() << "x" << m_framebufferProperties.height() << "px, scale:" << m_framebufferProperties.maxScreenScale() << ").";
 		}
 
 		m_framebufferAccess.unlock();
