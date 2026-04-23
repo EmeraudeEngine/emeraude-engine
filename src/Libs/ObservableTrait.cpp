@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <iostream>
+#include <vector>
 
 /* Local inclusions. */
 #include "ObserverTrait.hpp"
@@ -36,13 +37,20 @@ namespace EmEn::Libs
 {
 	ObservableTrait::~ObservableTrait ()
 	{
-		/* NOTE: Wait for Observable::notify() to finish. */
-		const std::lock_guard< std::mutex > lockGuard{m_notificationMutex};
-
-		/* NOTE: Only erase "this" observable to every looking observer.
-		 * Do not use ObserverTrait::release(); */
-		for ( auto * observer : m_observers )
+		/* NOTE: Snapshot our observers under our own lock, then detach ourselves
+		 * from each one. Taking the observer lock per-entry serialises with any
+		 * observe()/forget() or parallel destruction on those observers. */
+		std::set< ObserverTrait * > snapshot;
 		{
+			const std::lock_guard< std::mutex > selfLock{m_notificationMutex};
+
+			snapshot.swap(m_observers);
+		}
+
+		for ( auto * observer : snapshot )
+		{
+			const std::lock_guard< std::mutex > observerLock{observer->m_observationMutex};
+
 			observer->m_observables.erase(this);
 		}
 	}
@@ -50,34 +58,52 @@ namespace EmEn::Libs
 	void
 	ObservableTrait::notify (int notificationCode, const std::any & data) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_notificationMutex};
-
-		if constexpr ( ObserverDebugEnabled )
+		/* Phase 1: snapshot the observer set under our own lock. We deliberately
+		 * release the lock before invoking onNotification() so that callbacks
+		 * may safely call observe()/forget()/notify() without deadlocking,
+		 * and so that concurrent notify() on this same observable can proceed. */
+		std::vector< ObserverTrait * > observers;
 		{
-			if ( m_observers.empty() )
-			{
-				std::cout << "Observable @" << this << " tries to notify the code '" << notificationCode << "', but no one was listening !" "\n";
+			const std::lock_guard< std::mutex > selfLock{m_notificationMutex};
 
-				return;
+			if constexpr ( ObserverDebugEnabled )
+			{
+				if ( m_observers.empty() )
+				{
+					std::cout << "Observable @" << this << " tries to notify the code '" << notificationCode << "', but no one was listening !" "\n";
+
+					return;
+				}
+			}
+
+			observers.assign(m_observers.begin(), m_observers.end());
+		}
+
+		/* Phase 2: invoke callbacks without any lock held and collect the
+		 * observers that asked to be detached (by returning false). */
+		std::vector< ObserverTrait * > toDetach;
+		toDetach.reserve(observers.size());
+
+		for ( auto * observer : observers )
+		{
+			if ( !observer->onNotification(this, notificationCode, data) )
+			{
+				toDetach.push_back(observer);
 			}
 		}
 
-		/* [ERASE IN LOOP] */
-		auto observerIt = m_observers.begin();
-
-		while ( observerIt != m_observers.end() )
+		/* Phase 3: apply the detachments atomically per observer. std::scoped_lock
+		 * uses a deadlock-avoidance algorithm to acquire both mutexes safely,
+		 * regardless of the order used by concurrent callers. The double-check on
+		 * m_observers.erase() tolerates observers that were already removed via
+		 * forget() or a concurrent notify(). */
+		for ( auto * observer : toDetach )
 		{
-			/* If onNotification() returns false, we automatically remove the observer. */
-			if ( auto * observer = *observerIt; !observer->onNotification(this, notificationCode, data) )
+			const std::scoped_lock cross{m_notificationMutex, observer->m_observationMutex};
+
+			if ( m_observers.erase(observer) > 0 )
 			{
 				observer->m_observables.erase(this);
-
-				/* NOTE: set::erase() gives the next iterator. */
-				observerIt = m_observers.erase(observerIt);
-			}
-			else
-			{
-				++observerIt;
 			}
 		}
 	}

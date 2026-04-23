@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <any>
+#include <mutex>
 #include <set>
 
 /* Forward declarations. */
@@ -138,5 +139,6 @@ namespace EmEn::Libs
 		private:
 
 			std::set< ObservableTrait * > m_observables;
+			mutable std::mutex m_observationMutex;
 	};
 }

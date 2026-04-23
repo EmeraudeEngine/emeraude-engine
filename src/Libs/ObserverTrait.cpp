@@ -39,10 +39,20 @@ namespace EmEn::Libs
 {
 	ObserverTrait::~ObserverTrait ()
 	{
-		/* NOTE: Only erase "this" observer to every attached observable.
-		 * Do not use Observable::removeObserver(); */
-		for ( auto * observable : m_observables )
+		/* NOTE: Snapshot our observables under our own lock, then detach
+		 * ourselves from each one. Taking the observable lock per-entry
+		 * serialises with any in-flight notify() on those observables. */
+		std::set< ObservableTrait * > snapshot;
 		{
+			const std::lock_guard< std::mutex > selfLock{m_observationMutex};
+
+			snapshot.swap(m_observables);
+		}
+
+		for ( auto * observable : snapshot )
+		{
+			const std::lock_guard< std::mutex > observableLock{observable->m_notificationMutex};
+
 			observable->m_observers.erase(this);
 		}
 	}
@@ -50,7 +60,10 @@ namespace EmEn::Libs
 	void
 	ObserverTrait::observe (ObservableTrait * observable) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{observable->m_notificationMutex};
+		/* NOTE: Lock both mutexes atomically. std::scoped_lock uses a
+		 * deadlock-avoidance algorithm, which is required because the
+		 * destructor path acquires locks in the opposite order. */
+		const std::scoped_lock lock{m_observationMutex, observable->m_notificationMutex};
 
 		const auto result = m_observables.emplace(observable);
 
@@ -70,6 +83,8 @@ namespace EmEn::Libs
 	void
 	ObserverTrait::forget (ObservableTrait * observable) noexcept
 	{
+		const std::scoped_lock lock{m_observationMutex, observable->m_notificationMutex};
+
 		if ( m_observables.erase(observable) == 0 )
 		{
 			if constexpr ( ObserverDebugEnabled )
