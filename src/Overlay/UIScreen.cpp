@@ -118,6 +118,13 @@ namespace EmEn::Overlay
 	{
 		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
 
+		/* NOTE: Wait for the GPU to finish all pending work before destroying the surface.
+		 * The rendering thread records Vulkan commands (bind descriptor set, draw) that reference
+		 * the surface's texture. vkQueueSubmit returns immediately while the GPU executes
+		 * asynchronously. Without this wait, erasing the surface frees the Vulkan texture
+		 * while the GPU is still reading it, causing VK_ERROR_DEVICE_LOST. */
+		m_graphicsRenderer.device()->waitIdle("UIScreen::destroySurface()");
+
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
 		});
@@ -129,9 +136,6 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		// TODO: Check why we can't explicitly kill the surface here.
-		//(*surfaceIt)->destroyFromHardware();
-
 		m_surfaces.erase(surfaceIt);
 
 		return true;
@@ -141,6 +145,9 @@ namespace EmEn::Overlay
 	UIScreen::clearSurfaces () noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		/* NOTE: Same GPU sync rationale as destroySurface(). */
+		m_graphicsRenderer.device()->waitIdle("UIScreen::clearSurfaces()");
 
 		m_surfaces.clear();
 	}
