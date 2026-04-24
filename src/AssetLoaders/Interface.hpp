@@ -28,11 +28,19 @@
 
 /* STL inclusions. */
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 /* Forward declarations. */
+namespace EmEn::Animations
+{
+	class SkeletonResource;
+	class AnimationClipResource;
+}
+
 namespace EmEn::AssetLoaders
 {
 	struct AssetData;
@@ -89,6 +97,29 @@ namespace EmEn::AssetLoaders
 			 */
 			[[nodiscard]]
 			virtual bool supportsExtension (std::string_view extension) const noexcept = 0;
+
+			/**
+			 * @brief Loads animation clips from an asset file and binds them to an existing skeleton.
+			 * @note Used to attach motion data exported as standalone files (Mixamo split animations,
+			 * Maya/Blender per-action exports). Bones are resolved by name against @a targetSkeleton —
+			 * channels referencing missing joints are silently dropped.
+			 * @note The default implementation returns false. Loaders must override to opt in.
+			 * @param filepath Path to the animation-only asset file.
+			 * @param targetSkeleton The skeleton whose joint names drive bone resolution.
+			 * @param output Vector to which the produced clip resources are appended.
+			 * @return bool True if at least one clip was produced.
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			loadAnimationClipsOnly (
+				const std::filesystem::path & /*filepath*/,
+				const Animations::SkeletonResource & /*targetSkeleton*/,
+				std::vector< std::shared_ptr< Animations::AnimationClipResource > > & /*output*/
+			) noexcept
+			{
+				return false;
+			}
 
 		protected:
 

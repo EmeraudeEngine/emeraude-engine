@@ -145,6 +145,17 @@ namespace EmEn::Graphics::Renderable
 					std::make_move_iterator(clips.end()));
 			}
 
+			/**
+			 * @brief Replaces the animation clip list (drops any previously attached clips).
+			 * @note Skeleton and skin bindings are preserved.
+			 * @param clips The new clip list.
+			 */
+			void
+			setAnimationClips (std::vector< std::shared_ptr< Animations::AnimationClipResource > > clips) noexcept
+			{
+				m_animationClips = std::move(clips);
+			}
+
 		protected:
 
 			SkeletalDataTrait () noexcept = default;

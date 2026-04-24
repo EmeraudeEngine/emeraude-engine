@@ -32,3 +32,6 @@
 [submodule "dependencies/bc7enc_rdo"]
 	path = dependencies/bc7enc_rdo
 	url = https://github.com/richgel999/bc7enc_rdo.git
+[submodule "dependencies/ufbx"]
+	path = dependencies/ufbx
+	url = https://github.com/ufbx/ufbx.git

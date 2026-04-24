@@ -518,6 +518,8 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupFastGLTF)
 
+	include(SetupUFBX) # FBX parsing library
+
 	include(SetupBC7EncRDO) # BC7 texture compression
 
 	if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )

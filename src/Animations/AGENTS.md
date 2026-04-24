@@ -88,12 +88,14 @@ Both modes produce the same output: `skinningMatrices[]` ready for GPU upload.
 
 **Shape no longer carries skeletal data.** The `ShapeLoadResult<V,I>` struct bundles `Shape` + `optional<Skeleton>` + `optional<Skin>`. All file format interfaces (`FileFormatInterface::readStream()`) use this struct.
 
-**GLTF** (`Scenes/GLTFLoader.cpp`):
+**GLTF** (`AssetLoaders/GLTFLoader.cpp`) and **FBX** (`AssetLoaders/FBXLoader.cpp`):
 - `loadSkins()` builds Skeleton, creates `SkeletonResource` via resource manager, stores `Skin` per skin index
-- `loadAnimations()` reads channels/samplers, creates `AnimationClipResource` via resource manager
+- `loadAnimations()` reads channels/samplers (glTF) or resamples `anim_stack` at 30 Hz (FBX), creates `AnimationClipResource` via resource manager
 - After loading: attaches skeletal data to renderables via `SkeletalDataTrait::setSkeletalData()`
 - Pipeline order: Images → Materials → Meshes → Skins → Animations → **Attach skeletal data** → Nodes
 - Bone influences detected from vertex data: `shape->vertices()[0].influences()[0] >= 0` sets `EnableInfluence | EnableWeight` geometry flags
+
+**FBX split-animation workflow** — `FBXLoader::loadAnimationClipsOnly(path, skeleton, output)` resamples a standalone animation FBX against an externally-loaded skeleton, resolving bones by **joint name**. Used for Mixamo / Maya / Blender per-action exports where the rig and each animation live in separate files. See `AssetLoaders/AGENTS.md` for the full recipe.
 
 **MD5** (`VertexFactory/FileFormatMDx.hpp`):
 - `loadMD5()` returns `ShapeLoadResult` with skeleton and skin alongside the shape
@@ -137,7 +139,10 @@ Both `SkeletonResource` and `AnimationClipResource` are managed resources:
 - Inherited by `MeshResource` and `SimpleMeshResource`
 - Carries: `shared_ptr<SkeletonResource>`, `Skin<float>`, `vector<shared_ptr<AnimationClipResource>>`
 - `hasSkeletalData()` returns true when skeleton is set
-- `setSkeletalData()` public setter called by GLTFLoader after loading
+- `setSkeletalData(skel, skin, clips)` — full setter, called by GLTFLoader/FBXLoader after loading
+- `setSkeletalData(skel, skin)` — sets skel + skin only, leaves clips untouched
+- `addAnimationClips(clips)` — **appends** to the existing clip list (use for incremental loading from multiple sources, but mind the **order**: the runtime auto-plays index 0 at lazy init, see `Scenes::Component::Visual`)
+- `setAnimationClips(clips)` — **replaces** the clip list (use when an external clip set should fully supersede whatever the loader attached, e.g. discarding a bind-pose clip embedded in the rig file in favor of split-animation clips)
 
 ### Remaining Work
 - CubicSpline keyframe interpolation (data parsed from glTF but falls back to linear)
