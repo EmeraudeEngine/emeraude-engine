@@ -42,9 +42,35 @@ class Interface {
 
 `LoaderOptions` controls resource loading behavior:
 - `excludedNodeNames` — skip specific nodes and their subtrees
+- `onMeshLoaded` — `std::function<void(MeshDescriptor &)>` callback invoked once per mesh, right after the renderable, geometry and materials have been registered in their containers and pushed to `output.meshes` (before nodes are wired). Lets the caller patch the descriptor in place — typical use cases: enable IBL reflection on PBR materials (`pbr->setReflectionComponentFromEnvironmentCubemap`), swap a renderable, override geometry. Symmetric across `FBXLoader` and `GLTFLoader` (5 invocation sites total: 4 in FBXLoader including the fallback paths, 1 in GLTFLoader).
+- `materialMode` — `MaterialMode { PBR, Standard }`, default `PBR`. Selects which material container the loader populates. Both loaders go through the same generic configuration lambda thanks to the cross-material setter aliases on `StandardResource` (see *Cross-material setters* below). Both PBR and Standard paths are validated end-to-end on the Paladin asset.
 - `skipSkinning` — skip bone weights, skins, and animations
+- `uniformScale` — `float`, default `1.0F`. Uniform scale applied at load time, **coherently across the full skinned-mesh pipeline**: vertex positions (in `loadMeshes`), joint local TRS translations + inverse bind matrix translation columns (in `loadSkins`), and animation translation keyframes (in `sampleAnimStack`, covers both `load()` embedded clips AND `loadAnimationClipsOnly()` external clips). Rotations and scales of joint TRS plus per-vertex influence weights are never touched. Linear (rotation + uniform 1×1 scale) parts of the inverse bind matrix are unaffected by uniform scaling around origin, so only the translation column needs scaling there. **Critical**: the same factor must be passed to BOTH the rig load (`load()`) AND every subsequent `loadAnimationClipsOnly()` against that rig — otherwise animation translation keyframes describe positions in a different unit than the scaled bind pose, joints snap to wrong positions on every keyframe, and the rig visually collapses on the first animated frame. Also propagates to the renderable's bounding box, so collision shapes derived from the bbox reflect the scaled size automatically. Use cases: enlarging a Mixamo humanoid that ships at 1.7 m to 1.9 m for a knight silhouette (validated end-to-end on the Paladin); shrinking oversized Maya/Blender assets without re-export.
+- `stripRootMotion` — `bool`, default `false`. When set, `loadAnimationClipsOnly()` zeroes the **horizontal (X, Z) components** of every translation keyframe on every root joint of the produced clips. Rotation + scale of the root and *all* channels of every other joint stay intact. The vertical (Y) component is preserved on purpose: it carries both the bind-pose hip-height offset (~0.85 m on a Mixamo humanoid — wiping it would sink the model halfway into the ground) and the natural up/down bounce of walking, jumping or crouching. Idiomatic "convert per-action FBX into in-place clip" pass at load time. Required for any FBX (Mixamo, Maya/Blender per-action) where the root bone carries forward locomotion AND the actor's displacement is also driven by gameplay code (physics force, navmesh) — without this, the two motions stack and the model snaps backward at every clip loop. Has no effect on `load()` (full-pipeline import) — only on `loadAnimationClipsOnly()`. **Future work — Option C (root-motion mode):** instead of stripping, extract the root delta per frame and feed it back to the actor as actual displacement (foot-planting, no foot-sliding, animation-driven speed). Would replace the actor-side `addForce` for animation-driven characters; tracked as a TODO for the locomotion subsystem.
 
 **Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::AssetDataConsumer`.
+
+**Default behaviour preserved:** if neither `onMeshLoaded` nor `materialMode` is set, the loader behaves exactly like before (PBR container, no callback, every existing call site unaffected). Both fields are gated: `onMeshLoaded` is invoked under `if ( m_options.onMeshLoaded )` (a default-constructed `std::function` evaluates to `false`); `materialMode` defaults to `MaterialMode::PBR`.
+
+### Cross-material setters on StandardResource
+
+To keep the loaders' material-configuration lambda generic (one code path that works for both `PBRResource` and `StandardResource`), `Graphics::Material::StandardResource` exposes PBR-named alias setters that map onto its Phong/Blinn parameters order-independently:
+
+| Alias setter (Standard) | Forwarded to / mapping |
+|-------------------------|------------------------|
+| `setAlbedoComponent(Color)` | `setDiffuseComponent(Color)` + tracks `m_pbrAlbedoColor` |
+| `setAlbedoComponent(texture)` | `setDiffuseComponent(texture)` (color tracked stays at previous value) |
+| `setRoughnessComponent(value)` | tracks `m_pbrRoughness`, recomputes specular |
+| `setRoughnessComponent(texture, value, invert)` | texture **ignored**, only the factor is honored |
+| `setMetalnessComponent(value)` | tracks `m_pbrMetalness`, recomputes specular |
+| `setMetalnessComponent(texture, value)` | texture **ignored**, only the factor is honored |
+| `setAmbientOcclusionComponent`, `setClearCoatComponent`, `setSheenComponent`, `setTransmissionComponent`, `setIridescenceComponent` | no-op stubs (no Phong/Blinn equivalent) |
+
+`recomputeSpecularFromPBR()` derives `(specularColor, shininess)` from the tracked triple at every call:
+- `shininess = (1 - roughness)² × MaxPBRShininess` (default `MaxPBRShininess = 128`)
+- `specularColor = mix(vec3(DielectricF0), albedo, metalness)` with `DielectricF0 = 0.04`
+
+It bails early if no `ComponentType::Diffuse` has been registered yet — emitting Specular alone would produce a shader sampling an undeclared `SurfaceDiffuseColor`. Diffuse is always created by `setAlbedoComponent` before any roughness/metalness setter in normal usage, so the early-out is a safety net.
 
 `loadAnimationClipsOnly()` covers the **split-animation workflow** (Mixamo per-action exports, Maya/Blender per-action FBX). The asset file is opened, every `anim_stack` is sampled against the bones of `targetSkeleton` resolved **by joint name**, and the produced clips are appended to `output`. Joints with no matching node are silently dropped (kept at bind pose). See FBXLoader section for the concrete implementation.
 
@@ -120,6 +146,7 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 - Per-face triangulation via `ufbx_triangulate_face` with a buffer sized by `mesh.max_face_triangles`.
 - Multi-material meshes are split into sub-geometry groups (one per `ufbx_mesh_part`).
 - Per-corner vertex emission (position/normal/UV via `ufbx_get_vertex_vec3`/`vec2`) — the same vertex is written 3 times per triangle. A deduplication pass via `ufbx_generate_indices` can be added later if the overhead becomes measurable.
+- **UV V-flip on read** — FBX stores UVs with V=0 at the bottom (OpenGL convention) ; the engine and Vulkan use V=0 at the top, matching glTF. The loader stores `(u, 1.0F - v)` in the vertex stream so embedded textures sample the correct region. **Without this flip, FBX models render with shuffled / black-region UVs** (regression marker — see `Paladin` recette below).
 - Winding pre-compensates for the 180° X rotation applied by `AssetDataConsumer` (indices 1 and 2 swapped), identical to GLTFLoader.
 - Materials are resolved per-part via `mesh.materials.data[partIdx]->typed_id` → `m_materials[...]`, falling back to the default PBR resource when the FBX has no material connected.
 
@@ -214,7 +241,7 @@ Maya's USD → FBX converter drops all texture connections. The material still e
 **Recette assets** (demo `./projet-alpha --load-demo fbx-loader`):
 - **Option 0 — Mixamo X Bot** (`data/data-stores/FBX/Mixamo/X Bot.fbx`): validates materials color path, skinning pipeline (2 skin deformers + 2 meshes), animation clip construction (2 anim stacks). **Still exhibits the legacy dislocation bug** — kept as a regression marker.
 - **Option 1 — Intel Knight** (`data/data-stores/FBX/Knight/...`): Maya USD Preview Surface quirk (textures stripped). Skinning guard filters it out → renders as clean static T-pose.
-- **Option 2 — Paladin** (`data/data-stores/FBX/Paladin/`): full split-animation workflow. `base_model.fbx` (rig + skin + bind pose) + 48 per-action `.fbx` files in the same folder, loaded via `loadAnimationClipsOnly` and bound to the rig by joint name. `slash_1` is placed at index 0 and auto-loops at lazy-init time. **Animation pipeline validated end-to-end** (no dislocation). Known cosmetic issues unrelated to animation: model renders dark (likely PBR albedo / normals) + UV alignment looks off — see follow-up tasks.
+- **Option 2 — Paladin** (`data/data-stores/FBX/Paladin/`): full split-animation workflow. `base_model.fbx` (rig + skin + bind pose) + 48 per-action `.fbx` files in the same folder, loaded via `loadAnimationClipsOnly` and bound to the rig by joint name. `slash_1` is placed at index 0 and auto-loops at lazy-init time. **Animation pipeline validated end-to-end** (no dislocation). **UV bug resolved** (V-flip on read, see *Mesh loading specifics* above). **Dark-render investigation closed**: turned out to be the expected PBR rendering with the default opt-out IBL — PBR materials must explicitly call `setReflectionComponentFromEnvironmentCubemap()` to consume the scene's environment cubemap, otherwise they render markedly darker than `StandardResource` for the same direct lighting. The `projet-alpha` demo wires this via the `onMeshLoaded` hook (see `src/Builtin/FBXLoader.cpp`).
 
 ## Consumers
 

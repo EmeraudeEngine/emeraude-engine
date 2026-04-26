@@ -146,7 +146,7 @@ namespace EmEn::AssetLoaders
 			 */
 			[[nodiscard]]
 			static std::vector< Libs::Animation::AnimationChannel< float > >
-			sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode) noexcept;
+			sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

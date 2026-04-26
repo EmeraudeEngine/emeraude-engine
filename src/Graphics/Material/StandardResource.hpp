@@ -284,6 +284,121 @@ namespace EmEn::Graphics::Material
 			bool setAmbientComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
 
 			/**
+			 * @brief Alias of setDiffuseComponent for cross-material compatibility (PBR convention).
+			 * @warning This function is available before creation time.
+			 * @note Tracks the albedo color for the PBR-to-Phong specular conversion driven by
+			 * setRoughnessComponent / setMetalnessComponent. Calling these setters in any order
+			 * yields a consistent specular component (color, shininess).
+			 * @param color A reference to a color.
+			 * @return bool
+			 */
+			bool setAlbedoComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+
+			/**
+			 * @brief Alias of setDiffuseComponent for cross-material compatibility (PBR convention).
+			 * @warning This function is available before creation time.
+			 * @note Texture is forwarded to the diffuse component. The albedo color tracked for
+			 * specular conversion keeps its previously set value (default grey otherwise).
+			 * @param texture A reference to a texture smart pointer.
+			 * @return bool
+			 */
+			bool setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+
+			/**
+			 * @brief Sets the roughness factor (PBR convention) — converted to shininess.
+			 * @warning This function is available before creation time.
+			 * @note Conversion: shininess = (1 - roughness)² × MaxPBRShininess. Final specular
+			 * (color, shininess) is recomputed from the tracked albedo / metalness / roughness.
+			 * @param value Roughness in [0, 1]. Default DefaultPBRRoughness.
+			 * @return bool
+			 */
+			bool setRoughnessComponent (float value = DefaultPBRRoughness) noexcept;
+
+			/**
+			 * @brief Sets the roughness factor (PBR convention) — texture is ignored.
+			 * @warning This function is available before creation time.
+			 * @note Standard material has no roughness map; only @a value is honored.
+			 * @param texture Ignored (kept for API parity with PBRResource).
+			 * @param value Roughness in [0, 1]. Default DefaultPBRRoughness.
+			 * @param invert If true, the value is inverted before use (glossiness → roughness).
+			 * @return bool
+			 */
+			bool setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultPBRRoughness, bool invert = false) noexcept;
+
+			/**
+			 * @brief Sets the metalness factor (PBR convention) — converted to specular tint.
+			 * @warning This function is available before creation time.
+			 * @note Conversion: specularColor = mix(vec3(0.04), albedo, metalness). Final specular
+			 * (color, shininess) is recomputed from the tracked albedo / metalness / roughness.
+			 * @param value Metalness in [0, 1]. Default DefaultPBRMetalness.
+			 * @return bool
+			 */
+			bool setMetalnessComponent (float value = DefaultPBRMetalness) noexcept;
+
+			/**
+			 * @brief Sets the metalness factor (PBR convention) — texture is ignored.
+			 * @warning This function is available before creation time.
+			 * @note Standard material has no metalness map; only @a value is honored.
+			 * @param texture Ignored (kept for API parity with PBRResource).
+			 * @param value Metalness in [0, 1]. Default DefaultPBRMetalness.
+			 * @return bool
+			 */
+			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultPBRMetalness) noexcept;
+
+			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no AO channel.
+			 * @warning This function is available before creation time.
+			 * @param texture Ignored.
+			 * @param intensity Ignored.
+			 * @return bool Always true.
+			 */
+			bool
+			setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float /*intensity*/ = 1.0F) noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no clearcoat layer.
+			 * @return bool Always true.
+			 */
+			bool
+			setClearCoatComponent (float /*factor*/, float /*roughness*/) noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no sheen layer.
+			 * @return bool Always true.
+			 */
+			bool
+			setSheenComponent (const Libs::PixelFactory::Color< float > & /*color*/, float /*roughness*/) noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no transmission.
+			 * @return bool Always true.
+			 */
+			bool
+			setTransmissionComponent (float /*factor*/) noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no iridescence.
+			 * @return bool Always true.
+			 */
+			bool
+			setIridescenceComponent (float /*factor*/) noexcept
+			{
+				return true;
+			}
+
+			/**
 			 * @brief Sets the diffuse component as a color.
 			 * @warning This function is available before creation time.
 			 * @param color A reference to a color.
@@ -777,6 +892,12 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultHeightScale{0.02F}; /* Parallax occlusion mapping depth. */
 			static constexpr auto DefaultEmissiveStrength{1.0F}; /* KHR_materials_emissive_strength: HDR multiplier (1.0 = pass-through). */
 
+			/* PBR-to-Phong cross-material conversion (used by setAlbedo/setRoughness/setMetalness aliases). */
+			static constexpr auto DefaultPBRRoughness{0.5F};
+			static constexpr auto DefaultPBRMetalness{0.0F};
+			static constexpr auto MaxPBRShininess{128.0F};
+			static constexpr auto DielectricF0{0.04F};
+
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
 			BlendingMode m_blendingMode{BlendingMode::None};
@@ -802,12 +923,23 @@ namespace EmEn::Graphics::Material
 			float m_alphaThresholdToDiscard{0.1F};
 			uint32_t m_sharedUBOIndex{0};
 			/* TODO: Unify video memory update mechanism between all materials. */
+			/* PBR-to-Phong tracking (used by setAlbedo/setRoughness/setMetalness aliases). */
+			Libs::PixelFactory::Color< float > m_pbrAlbedoColor{DefaultDiffuseColor};
+			float m_pbrRoughness{DefaultPBRRoughness};
+			float m_pbrMetalness{DefaultPBRMetalness};
 			bool m_videoMemoryUpdated{false};
-			float m_postProcessReflectivityAmount{-1.0F};
 			bool m_isUsingEnvironmentCubemap{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_useParallaxOcclusionMapping{false};
 			mutable bool m_pomGenerationActive{false};
+			float m_postProcessReflectivityAmount{-1.0F};
+
+			/**
+			 * @brief Recomputes the specular component (color, shininess) from the tracked
+			 * PBR triple (albedo, roughness, metalness).
+			 * @return void
+			 */
+			void recomputeSpecularFromPBR () noexcept;
 	};
 }
 

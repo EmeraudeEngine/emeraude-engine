@@ -27,7 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -44,6 +46,7 @@ namespace EmEn::Animations
 namespace EmEn::AssetLoaders
 {
 	struct AssetData;
+	struct MeshDescriptor;
 }
 
 namespace EmEn::AssetLoaders
@@ -53,10 +56,71 @@ namespace EmEn::AssetLoaders
 	 * @note flattenHierarchy is NOT here — it only affects scene building,
 	 * not resource loading, and belongs in Scenes::AssetDataConsumer.
 	 */
+	/**
+	 * @brief Material container selected for the resources produced by a loader.
+	 * @note Standard maps the FBX/glTF PBR factors (albedo, roughness, metalness)
+	 * onto a Phong/Blinn surface via the cross-material setters of StandardResource.
+	 */
+	enum class MaterialMode : uint8_t
+	{
+		PBR,
+		Standard
+	};
+
 	struct LoaderOptions
 	{
 		std::unordered_set< std::string > excludedNodeNames;
+		/**
+		 * @brief Optional per-mesh hook invoked right after a mesh's renderable, geometry
+		 * and materials have been registered. Lets the caller patch the descriptor in place
+		 * (e.g. enable IBL reflection on PBR materials, override geometry, swap a renderable).
+		 * Called once per loaded mesh, in load order, before nodes are wired.
+		 */
+		std::function< void (MeshDescriptor &) > onMeshLoaded;
+		MaterialMode materialMode{MaterialMode::PBR};
 		bool skipSkinning{false};
+		/**
+		 * @brief Strips the translation track of every root joint from animation
+		 * clips produced by `loadAnimationClipsOnly`. Rotation and scale tracks
+		 * are kept intact, and non-root joints are not touched.
+		 *
+		 * Mixamo (and many other DCC) per-action FBX clips bake forward
+		 * locomotion into the root bone — the model physically translates
+		 * meters during the clip. When the actor's displacement is also driven
+		 * by gameplay code (physics force, navmesh, etc.), the two motions
+		 * stack and the model snaps backward at every loop boundary. Enabling
+		 * this flag turns Mixamo locomotion clips into "in-place" clips at
+		 * load time without re-exporting from the DCC.
+		 *
+		 * @note Has no effect on `load()` (full-pipeline import) — only on
+		 * `loadAnimationClipsOnly()`. Tracked TODO: a future "root-motion
+		 * mode" will instead extract the root delta and feed it to the actor
+		 * as actual displacement (foot-planting, no sliding) — see
+		 * `dependencies/emeraude-engine/docs/` and the engine TODO list.
+		 */
+		bool stripRootMotion{false};
+		/**
+		 * @brief Uniform scale applied at load time, coherently across the
+		 * full skinned-mesh pipeline: vertex positions, joint local
+		 * translations, inverse bind matrix translation columns, and
+		 * animation translation keyframes (both in `load()` embedded clips
+		 * and `loadAnimationClipsOnly()` external clips). Rotations and
+		 * scales of joint TRS, plus the per-vertex influence weights, are
+		 * never touched.
+		 *
+		 * The scale must be passed identically to BOTH the rig load and
+		 * every subsequent `loadAnimationClipsOnly()` call against that rig
+		 * — otherwise animation keyframes would describe translations in a
+		 * different unit than the scaled bind pose, and joints would snap
+		 * to wrong positions at every keyframe (visual: the rig would
+		 * collapse on the first animated frame).
+		 *
+		 * Default `1.0F` is a no-op. Set `< 1.0` to shrink, `> 1.0` to
+		 * enlarge. Also propagates to the bounding box of the produced
+		 * renderables, so collision shapes derived from the bbox reflect
+		 * the scaled size automatically.
+		 */
+		float uniformScale{1.0F};
 	};
 
 	/**

@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <ranges>
 #include <sstream>
@@ -1716,14 +1717,17 @@ namespace EmEn::Graphics::Material
 				return false;
 			}
 
-			if ( this->isComponentPresent(ComponentType::AutoIllumination) || !lightGenerator.isAmbientPass() )
+			/* The Diffuse texture sample is always emitted when the component is a Texture.
+			 * Even the Ambient pass needs it: when no explicit Ambient component is set on
+			 * the material, the LightGenerator derives the surface ambient color as
+			 * `SurfaceDiffuseColor * 0.05`, which would otherwise reference an undeclared
+			 * identifier (regression observed via FBXLoader → MaterialMode::Standard with
+			 * a textured albedo on the Paladin asset). */
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Diffuse, simpleGenerator, fragmentShader, materialSet) )
 			{
-				if ( !this->generateTextureComponentFragmentShader(ComponentType::Diffuse, simpleGenerator, fragmentShader, materialSet) )
-				{
-					TraceError{ClassId} << "Unable to generate fragment code for the diffuse component of material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to generate fragment code for the diffuse component of material '" << this->name() << "' !";
 
-					return false;
-				}
+				return false;
 			}
 
 			if ( !this->generateTextureComponentFragmentShader(ComponentType::Specular, simpleGenerator, fragmentShader, materialSet) )
@@ -2095,6 +2099,110 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
+	}
+
+	bool
+	StandardResource::setAlbedoComponent (const PixelFactory::Color< float > & color) noexcept
+	{
+		m_pbrAlbedoColor = color;
+
+		if ( !this->setDiffuseComponent(color) )
+		{
+			return false;
+		}
+
+		this->recomputeSpecularFromPBR();
+
+		return true;
+	}
+
+	bool
+	StandardResource::setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	{
+		if ( !this->setDiffuseComponent(texture) )
+		{
+			return false;
+		}
+
+		this->recomputeSpecularFromPBR();
+
+		return true;
+	}
+
+	bool
+	StandardResource::setRoughnessComponent (float value) noexcept
+	{
+		m_pbrRoughness = std::clamp(value, 0.0F, 1.0F);
+
+		this->recomputeSpecularFromPBR();
+
+		return true;
+	}
+
+	bool
+	StandardResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value, bool invert) noexcept
+	{
+		m_pbrRoughness = std::clamp(invert ? (1.0F - value) : value, 0.0F, 1.0F);
+
+		this->recomputeSpecularFromPBR();
+
+		return true;
+	}
+
+	bool
+	StandardResource::setMetalnessComponent (float value) noexcept
+	{
+		m_pbrMetalness = std::clamp(value, 0.0F, 1.0F);
+
+		this->recomputeSpecularFromPBR();
+
+		return true;
+	}
+
+	bool
+	StandardResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value) noexcept
+	{
+		m_pbrMetalness = std::clamp(value, 0.0F, 1.0F);
+
+		this->recomputeSpecularFromPBR();
+
+		return true;
+	}
+
+	void
+	StandardResource::recomputeSpecularFromPBR () noexcept
+	{
+		/* Skip if no Diffuse has been registered yet. The Standard shader generator
+		 * declares SurfaceDiffuseColor only when ComponentType::Diffuse is in the
+		 * material's component map ; emitting a Specular alone would yield a shader
+		 * that samples an undeclared variable. Diffuse is always created by
+		 * setAlbedoComponent before any roughness/metalness setter in normal usage. */
+		if ( m_components.find(ComponentType::Diffuse) == m_components.end() )
+		{
+			return;
+		}
+
+		const auto shininess = std::pow(1.0F - m_pbrRoughness, 2.0F) * MaxPBRShininess;
+
+		const PixelFactory::Color< float > specColor{
+			std::lerp(DielectricF0, m_pbrAlbedoColor.red(),   m_pbrMetalness),
+			std::lerp(DielectricF0, m_pbrAlbedoColor.green(), m_pbrMetalness),
+			std::lerp(DielectricF0, m_pbrAlbedoColor.blue(),  m_pbrMetalness),
+			1.0F
+		};
+
+		/* The specular component map only allows one insertion ; if it does not exist
+		 * yet, create it with setSpecularComponent (which also wires up the uniform).
+		 * Subsequent recomputes update the values directly. */
+		if ( m_components.find(ComponentType::Specular) == m_components.end() )
+		{
+			this->setSpecularComponent(specColor, shininess);
+		}
+		else
+		{
+			this->setSpecularColor(specColor);
+			this->setShininess(shininess);
+		}
 	}
 
 	bool

@@ -45,6 +45,7 @@
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/PBRResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
@@ -628,75 +629,89 @@ namespace EmEn::AssetLoaders
 			const bool isAlphaBlend = pbr.opacity.texture != nullptr
 				|| (pbr.opacity.has_value && pbr.opacity.value_real < 0.999F);
 
-			auto material = m_resources.container< Material::PBRResource >()
-				->getOrCreateResource(name, [
-					albedoTex = std::move(albedoTex), albedoColor,
-					roughnessTex = std::move(roughnessTex), roughnessFactor,
-					metalnessTex = std::move(metalnessTex), metalnessFactor,
-					normalTex = std::move(normalTex),
-					aoTex = std::move(aoTex),
-					emissiveTex = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
-					isAlphaBlend
-				] (auto & materialResource) {
-					if ( albedoTex != nullptr )
-					{
-						materialResource.setAlbedoComponent(albedoTex);
-					}
-					else
-					{
-						materialResource.setAlbedoComponent(albedoColor);
-					}
+			auto configure = [
+				albedoTex = std::move(albedoTex), albedoColor,
+				roughnessTex = std::move(roughnessTex), roughnessFactor,
+				metalnessTex = std::move(metalnessTex), metalnessFactor,
+				normalTex = std::move(normalTex),
+				aoTex = std::move(aoTex),
+				emissiveTex = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
+				isAlphaBlend
+			] (auto & materialResource) {
+				if ( albedoTex != nullptr )
+				{
+					materialResource.setAlbedoComponent(albedoTex);
+				}
+				else
+				{
+					materialResource.setAlbedoComponent(albedoColor);
+				}
 
-					if ( roughnessTex != nullptr )
-					{
-						materialResource.setRoughnessComponent(roughnessTex, roughnessFactor);
-					}
-					else
-					{
-						materialResource.setRoughnessComponent(roughnessFactor);
-					}
+				if ( roughnessTex != nullptr )
+				{
+					materialResource.setRoughnessComponent(roughnessTex, roughnessFactor);
+				}
+				else
+				{
+					materialResource.setRoughnessComponent(roughnessFactor);
+				}
 
-					if ( metalnessTex != nullptr )
-					{
-						materialResource.setMetalnessComponent(metalnessTex, metalnessFactor);
-					}
-					else
-					{
-						materialResource.setMetalnessComponent(metalnessFactor);
-					}
+				if ( metalnessTex != nullptr )
+				{
+					materialResource.setMetalnessComponent(metalnessTex, metalnessFactor);
+				}
+				else
+				{
+					materialResource.setMetalnessComponent(metalnessFactor);
+				}
 
-					if ( normalTex != nullptr )
-					{
-						materialResource.setNormalComponent(normalTex);
-					}
+				if ( normalTex != nullptr )
+				{
+					materialResource.setNormalComponent(normalTex);
+				}
 
-					if ( aoTex != nullptr )
-					{
-						materialResource.setAmbientOcclusionComponent(aoTex);
-					}
+				if ( aoTex != nullptr )
+				{
+					materialResource.setAmbientOcclusionComponent(aoTex);
+				}
 
-					if ( emissiveTex != nullptr )
-					{
-						materialResource.setAutoIlluminationComponent(emissiveTex, emissiveStrength);
-					}
-					else if ( hasEmissiveColor )
-					{
-						materialResource.setAutoIlluminationComponent(emissiveColor, emissiveStrength);
-					}
+				if ( emissiveTex != nullptr )
+				{
+					materialResource.setAutoIlluminationComponent(emissiveTex, emissiveStrength);
+				}
+				else if ( hasEmissiveColor )
+				{
+					materialResource.setAutoIlluminationComponent(emissiveColor, emissiveStrength);
+				}
 
-					if ( isAlphaBlend )
-					{
-						materialResource.enableBlending(BlendingMode::Normal);
-					}
+				if ( isAlphaBlend )
+				{
+					materialResource.enableBlending(BlendingMode::Normal);
+				}
 
-					return materialResource.setManualLoadSuccess(true);
-				});
+				return materialResource.setManualLoadSuccess(true);
+			};
+
+			std::shared_ptr< Material::Interface > material;
+
+			if ( m_options.materialMode == MaterialMode::Standard )
+			{
+				material = m_resources.container< Material::StandardResource >()
+					->getOrCreateResource(name, configure);
+			}
+			else
+			{
+				material = m_resources.container< Material::PBRResource >()
+					->getOrCreateResource(name, configure);
+			}
 
 			if ( material == nullptr )
 			{
 				TraceWarning{ClassId} << "Material " << materialIndex << " ('" << name << "') failed to create, using default.";
 
-				m_materials[materialIndex] = m_resources.container< Material::PBRResource >()->getDefaultResource();
+				m_materials[materialIndex] = (m_options.materialMode == MaterialMode::Standard)
+					? std::static_pointer_cast< Material::Interface >(m_resources.container< Material::StandardResource >()->getDefaultResource())
+					: std::static_pointer_cast< Material::Interface >(m_resources.container< Material::PBRResource >()->getDefaultResource());
 				allSuccess = false;
 			}
 			else
@@ -714,6 +729,15 @@ namespace EmEn::AssetLoaders
 		output.meshes.reserve(scene.meshes.count);
 
 		bool allSuccess = true;
+
+		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
+			if ( m_options.materialMode == MaterialMode::Standard )
+			{
+				return m_resources.container< Material::StandardResource >()->getDefaultResource();
+			}
+
+			return m_resources.container< Material::PBRResource >()->getDefaultResource();
+		};
 
 		for ( size_t meshIndex = 0; meshIndex < scene.meshes.count; ++meshIndex )
 		{
@@ -760,8 +784,13 @@ namespace EmEn::AssetLoaders
 
 				MeshDescriptor descriptor;
 				descriptor.renderable = defaultMesh;
-				descriptor.materials = {m_resources.container< Material::PBRResource >()->getDefaultResource()};
+				descriptor.materials = {defaultMaterial()};
 				output.meshes.push_back(std::move(descriptor));
+
+				if ( m_options.onMeshLoaded )
+				{
+					m_options.onMeshLoaded(output.meshes.back());
+				}
 
 				allSuccess = false;
 
@@ -858,9 +887,9 @@ namespace EmEn::AssetLoaders
 								const auto pos = ufbx_get_vertex_vec3(&mesh.vertex_position, corner);
 
 								vertices[globalVertexOffset + k].setPosition(Vector< 3, float >{
-									static_cast< float >(pos.x),
-									static_cast< float >(pos.y),
-									static_cast< float >(pos.z)
+									static_cast< float >(pos.x) * m_options.uniformScale,
+									static_cast< float >(pos.y) * m_options.uniformScale,
+									static_cast< float >(pos.z) * m_options.uniformScale
 								});
 
 								if ( hasNormals )
@@ -875,10 +904,13 @@ namespace EmEn::AssetLoaders
 
 								if ( hasUV )
 								{
+									/* FBX stores UVs with V=0 at the bottom (OpenGL convention).
+									 * The engine and Vulkan use V=0 at the top, matching glTF. Flip V
+									 * here so embedded textures sample the correct region. */
 									const auto uv = ufbx_get_vertex_vec2(&mesh.vertex_uv, corner);
 									vertices[globalVertexOffset + k].setTextureCoordinates(Vector< 3, float >{
 										static_cast< float >(uv.x),
-										static_cast< float >(uv.y),
+										1.0F - static_cast< float >(uv.y),
 										0.0F
 									});
 								}
@@ -955,8 +987,13 @@ namespace EmEn::AssetLoaders
 
 				MeshDescriptor descriptor;
 				descriptor.renderable = defaultMesh;
-				descriptor.materials = {m_resources.container< Material::PBRResource >()->getDefaultResource()};
+				descriptor.materials = {defaultMaterial()};
 				output.meshes.push_back(std::move(descriptor));
+
+				if ( m_options.onMeshLoaded )
+				{
+					m_options.onMeshLoaded(output.meshes.back());
+				}
 
 				allSuccess = false;
 
@@ -1012,8 +1049,13 @@ namespace EmEn::AssetLoaders
 
 				MeshDescriptor descriptor;
 				descriptor.renderable = defaultMesh;
-				descriptor.materials = {m_resources.container< Material::PBRResource >()->getDefaultResource()};
+				descriptor.materials = {defaultMaterial()};
 				output.meshes.push_back(std::move(descriptor));
+
+				if ( m_options.onMeshLoaded )
+				{
+					m_options.onMeshLoaded(output.meshes.back());
+				}
 
 				allSuccess = false;
 
@@ -1050,7 +1092,7 @@ namespace EmEn::AssetLoaders
 
 				if ( material == nullptr )
 				{
-					material = m_resources.container< Material::PBRResource >()->getDefaultResource();
+					material = defaultMaterial();
 				}
 
 				materialList.push_back(std::move(material));
@@ -1094,6 +1136,11 @@ namespace EmEn::AssetLoaders
 			descriptor.materials = std::move(materialList);
 
 			output.meshes.push_back(std::move(descriptor));
+
+			if ( m_options.onMeshLoaded )
+			{
+				m_options.onMeshLoaded(output.meshes.back());
+			}
 		}
 
 		return allSuccess;
@@ -1166,6 +1213,14 @@ namespace EmEn::AssetLoaders
 				/* geometry_to_bone is ufbx's inverse bind matrix in Vulkan-friendly
 				 * form (local vertex → bone space). Perfect match for the engine. */
 				inverseBindMatrices[ci] = convertUfbxMatrix(cluster->geometry_to_bone);
+
+				/* Scale the translation column of the inverse bind matrix to keep
+				 * the binding math coherent with scaled vertex positions and
+				 * scaled joint TRS translations. Linear part (rotation + uniform
+				 * 1x1 scale) is unaffected by uniform scaling around origin. */
+				inverseBindMatrices[ci][M4x4Col3Row0] *= m_options.uniformScale;
+				inverseBindMatrices[ci][M4x4Col3Row1] *= m_options.uniformScale;
+				inverseBindMatrices[ci][M4x4Col3Row2] *= m_options.uniformScale;
 				joints[ci].inverseBindMatrix = inverseBindMatrices[ci];
 
 				/* Walk up the bone's parent chain until we hit another bone
@@ -1195,9 +1250,9 @@ namespace EmEn::AssetLoaders
 				const auto & trs = bone.local_transform;
 
 				joints[ci].translation = {
-					static_cast< float >(trs.translation.x),
-					static_cast< float >(trs.translation.y),
-					static_cast< float >(trs.translation.z)
+					static_cast< float >(trs.translation.x) * m_options.uniformScale,
+					static_cast< float >(trs.translation.y) * m_options.uniformScale,
+					static_cast< float >(trs.translation.z) * m_options.uniformScale
 				};
 
 				joints[ci].rotation = Quaternion< float >{
@@ -1287,7 +1342,7 @@ namespace EmEn::AssetLoaders
 		{
 			const ufbx_anim_stack & stack = *scene.anim_stacks.data[si];
 
-			auto channels = sampleAnimStack(stack, jointToNode);
+			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale);
 
 			if ( channels.empty() )
 			{
@@ -1321,7 +1376,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	std::vector< AnimationChannel< float > >
-	FBXLoader::sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode) noexcept
+	FBXLoader::sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept
 	{
 		std::vector< AnimationChannel< float > > channels;
 
@@ -1392,9 +1447,9 @@ namespace EmEn::AssetLoaders
 				const float relTime = static_cast< float >(t - t0);
 
 				translation.vectorKeyFrames.push_back({relTime, Vector< 3, float >{
-					static_cast< float >(xf.translation.x),
-					static_cast< float >(xf.translation.y),
-					static_cast< float >(xf.translation.z)
+					static_cast< float >(xf.translation.x) * uniformScale,
+					static_cast< float >(xf.translation.y) * uniformScale,
+					static_cast< float >(xf.translation.z) * uniformScale
 				}});
 
 				rotation.quaternionKeyFrames.push_back({relTime, Quaternion< float >{
@@ -1511,17 +1566,69 @@ namespace EmEn::AssetLoaders
 		const std::string resourcePrefix = "FBX:" + fileStem + "/Animation/";
 		const size_t producedBefore = output.size();
 
+		/* When stripRootMotion is enabled, collect the indices of every root
+		 * joint once — they're the only ones whose translation track will be
+		 * zeroed after sampling. Computed outside the per-stack loop so a
+		 * multi-stack file pays the cost only once. */
+		std::vector< size_t > rootJointIndices;
+
+		if ( m_options.stripRootMotion )
+		{
+			rootJointIndices = skeleton.rootJoints();
+		}
+
 		output.reserve(output.size() + scene->anim_stacks.count);
 
 		for ( size_t si = 0; si < scene->anim_stacks.count; ++si )
 		{
 			const ufbx_anim_stack & stack = *scene->anim_stacks.data[si];
 
-			auto channels = sampleAnimStack(stack, jointToNode);
+			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale);
 
 			if ( channels.empty() )
 			{
 				continue;
+			}
+
+			/* Strip the HORIZONTAL components (X, Z) of root-bone translation
+			 * tracks if requested. Mixamo locomotion clips (walk_*, run_*,
+			 * strafe_*) bake forward displacement into the root joint —
+			 * keeping it would stack with gameplay-driven motion (addForce,
+			 * navmesh, etc.) and produce a yo-yo at each clip loop.
+			 *
+			 * The vertical (Y) component is preserved on purpose: it carries
+			 * both the bind-pose hip-height offset (~0.85 m on a Mixamo
+			 * humanoid — wiping it would sink the model halfway into the
+			 * ground) and the natural up/down bounce of walking, jumping or
+			 * crouching, which is part of the visual we want to keep.
+			 * Rotation + scale of the root and every channel of every other
+			 * joint stay intact. Idiomatic "convert to in-place clip" pass at
+			 * load time. */
+			if ( m_options.stripRootMotion && !rootJointIndices.empty() )
+			{
+				for ( auto & channel : channels )
+				{
+					if ( channel.target != ChannelTarget::Translation )
+					{
+						continue;
+					}
+
+					const auto isRoot = std::ranges::find(
+						rootJointIndices,
+						static_cast< size_t >(channel.jointIndex)
+					) != rootJointIndices.end();
+
+					if ( !isRoot )
+					{
+						continue;
+					}
+
+					for ( auto & keyFrame : channel.vectorKeyFrames )
+					{
+						keyFrame.value[X] = 0.0F;
+						keyFrame.value[Z] = 0.0F;
+					}
+				}
 			}
 
 			/* Mixamo names every stack `mixamo.com` (or similar) — useless. The

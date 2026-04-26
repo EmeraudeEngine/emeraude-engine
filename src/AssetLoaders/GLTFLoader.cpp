@@ -42,6 +42,7 @@
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/PBRResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
@@ -605,9 +606,11 @@ namespace EmEn::AssetLoaders
 			/* Alpha mode (OPAQUE, MASK, BLEND). */
 			const bool isAlphaBlend = glTFMaterial.alphaMode == fastgltf::AlphaMode::Blend;
 
-			/* Async material creation — lambda is fully self-contained, no this/reference captures. */
-			auto material = m_resources.container< Material::PBRResource >()
-				->getOrCreateResource(name, [
+			/* Async material creation — lambda is fully self-contained, no this/reference captures.
+			 * The lambda is generic so the same configuration code path applies whether the
+			 * loader produces a PBRResource or a StandardResource (cross-material aliases
+			 * convert PBR factors to Phong/Blinn parameters when targeting Standard). */
+			auto configure = [
 					albedoTex = std::move(albedoTex), albedoColor,
 					metallicRoughnessTex = std::move(metallicRoughnessTex), roughnessFactor, metallicFactor,
 					normalTex = std::move(normalTex), normalScale,
@@ -694,13 +697,28 @@ namespace EmEn::AssetLoaders
 					}
 
 					return materialResource.setManualLoadSuccess(true);
-				});
+				};
+
+			std::shared_ptr< Material::Interface > material;
+
+			if ( m_options.materialMode == MaterialMode::Standard )
+			{
+				material = m_resources.container< Material::StandardResource >()
+					->getOrCreateResource(name, configure);
+			}
+			else
+			{
+				material = m_resources.container< Material::PBRResource >()
+					->getOrCreateResource(name, configure);
+			}
 
 			if ( material == nullptr )
 			{
 				TraceWarning{ClassId} << "Material " << materialIndex << " ('" << name << "') failed to create, using default.";
 
-				m_materials[materialIndex] = m_resources.container< Material::PBRResource >()->getDefaultResource();
+				m_materials[materialIndex] = (m_options.materialMode == MaterialMode::Standard)
+					? std::static_pointer_cast< Material::Interface >(m_resources.container< Material::StandardResource >()->getDefaultResource())
+					: std::static_pointer_cast< Material::Interface >(m_resources.container< Material::PBRResource >()->getDefaultResource());
 
 				allSuccess = false;
 			}
@@ -720,6 +738,15 @@ namespace EmEn::AssetLoaders
 		m_shapes.resize(asset.meshes.size());
 
 		bool allSuccess = true;
+
+		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
+			if ( m_options.materialMode == MaterialMode::Standard )
+			{
+				return m_resources.container< Material::StandardResource >()->getDefaultResource();
+			}
+
+			return m_resources.container< Material::PBRResource >()->getDefaultResource();
+		};
 
 		for ( size_t meshIndex = 0; meshIndex < asset.meshes.size(); ++meshIndex )
 		{
@@ -1018,12 +1045,12 @@ namespace EmEn::AssetLoaders
 					}
 					else
 					{
-						materialList.push_back(m_resources.container< Material::PBRResource >()->getDefaultResource());
+						materialList.push_back(defaultMaterial());
 					}
 				}
 				else
 				{
-					materialList.push_back(m_resources.container< Material::PBRResource >()->getDefaultResource());
+					materialList.push_back(defaultMaterial());
 				}
 			}
 
@@ -1033,7 +1060,7 @@ namespace EmEn::AssetLoaders
 			if ( materialList.size() <= 1 )
 			{
 				auto singleMaterial = materialList.empty()
-					? std::static_pointer_cast< Material::Interface >(m_resources.container< Material::PBRResource >()->getDefaultResource())
+					? defaultMaterial()
 					: materialList[0];
 
 				mesh = m_resources.container< Renderable::SimpleMeshResource >()
@@ -1067,6 +1094,11 @@ namespace EmEn::AssetLoaders
 			}
 
 			output.meshes[meshIndex] = std::move(descriptor);
+
+			if ( m_options.onMeshLoaded )
+			{
+				m_options.onMeshLoaded(output.meshes[meshIndex]);
+			}
 		}
 
 		return allSuccess;

@@ -1859,6 +1859,13 @@ namespace EmEn::Scenes
 			 */
 			void toggleBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;
 
+			/**
+			 * @brief Loops over each renderable instance of the scene
+			 * @param function A reference to a function.
+			 * @return void
+			 */
+			void forEachRenderableInstance (const std::function< void (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept;
+
 		private:
 
 			/* ============================================================
@@ -2043,13 +2050,6 @@ namespace EmEn::Scenes
 			 * @return void
 			 */
 			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager) const noexcept;
-
-			/**
-			 * @brief Loops over each renderable instance of the scene
-			 * @param function A reference to a function.
-			 * @return void
-			 */
-			void forEachRenderableInstance (const std::function< void (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept;
 
 			/**
 			 * @brief Initializes a render target with all scene renderable instances.

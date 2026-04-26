@@ -38,10 +38,9 @@
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Resources/Manager.hpp"
-
-/* Local inclusions. */
-#include "Component/Camera.hpp"
 
 namespace EmEn::Scenes
 {
@@ -861,6 +860,35 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Moves a node. Usage: setNodePosition(nodeName, x, y, z)");
+
+		this->bindCommand("enableTBN", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const bool state = arguments.empty() ? true : arguments[0].asBoolean();
+
+			m_resourceManager.graphicsRenderer().enableTBNSpaceRendering(state);
+
+			size_t toggled = 0;
+
+			m_activeScene->forEachRenderableInstance([state, &toggled] (const auto & renderableInstance) {
+				if ( renderableInstance != nullptr )
+				{
+					renderableInstance->enableDisplayTBNSpace(state);
+					++toggled;
+				}
+			});
+
+			outputs.emplace_back(Severity::Success, std::stringstream{}
+				<< "TBN space rendering " << (state ? "enabled" : "disabled")
+				<< " on " << toggled << " renderable instance(s) of scene '" << m_activeScene->name() << "'.");
+
+			return true;
+		}, "Toggles TBN space debug rendering on the active scene's renderables. Usage: enableTBN([true|false]) — defaults to true.");
 
 		this->bindCommand("setNodeLookAt", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.size() < 4 )
