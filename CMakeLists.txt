@@ -93,6 +93,7 @@ option(EMERAUDE_DEBUG_VERTEX_FACTORY "Enable the debug output of vertex factory 
 option(EMERAUDE_DEBUG_WAVE_FACTORY "Enable the debug output of wave factory library (Default Off)." Off)
 option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)
+option(EMERAUDE_DEBUG_POINTER_HEAVY_INPUT "Enable printing of events to the console from pointer heavy (move/wheel) inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
 option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)

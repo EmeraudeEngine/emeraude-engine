@@ -26,9 +26,14 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
-#include <iostream>
+
+/* Local inclusions. */
+#include "Tracer.hpp"
 
 namespace EmEn::Input
 {
@@ -38,6 +43,8 @@ namespace EmEn::Input
 	class KeyboardListenerInterface
 	{
 		friend class Manager;
+
+		static constexpr auto TracerTag{"KeyboardListenerInterface"};
 
 		public:
 
@@ -162,8 +169,18 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onKeyPress (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/, bool /*repeat*/) noexcept
+			onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
 			{
+				static_cast< void >(key);
+				static_cast< void >(scancode);
+				static_cast< void >(modifiers);
+				static_cast< void >(repeat);
+
+				if constexpr ( KeyboardInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a keyboard key press event!");
+				}
+
 				return false;
 			}
 
@@ -177,8 +194,17 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onKeyRelease (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/) noexcept
+			onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept
 			{
+				static_cast< void >(key);
+				static_cast< void >(scancode);
+				static_cast< void >(modifiers);
+
+				if constexpr ( KeyboardInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a keyboard key release event!");
+				}
+
 				return false;
 			}
 
@@ -190,9 +216,14 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onCharacterType (uint32_t /*unicode*/) noexcept
+			onCharacterType (uint32_t unicode) noexcept
 			{
-				std::cerr << "Text mode has been enabled on a listener which not overriding the method onCharacterType() !" "\n";
+				static_cast< void >(unicode);
+
+				if constexpr ( KeyboardInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a keyboard character type event!");
+				}
 
 				return false;
 			}

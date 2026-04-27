@@ -351,7 +351,7 @@ namespace EmEn::Input
 		const auto deltaX = static_cast< float >(xPosition - s_instance->m_lastPointerCoordinates[0]);
 		const auto deltaY = static_cast< float >(yPosition - s_instance->m_lastPointerCoordinates[1]);
 
-		if constexpr ( PointerInputDebugEnabled )
+		if constexpr ( PointerHeavyInputDebugEnabled )
 		{
 			TraceDebug{ClassId} << "[RelativeMode] X:" << deltaX << ", Y:" << deltaY << '\n';
 		}
@@ -415,7 +415,7 @@ namespace EmEn::Input
 	void
 	Manager::cursorPositionCallback (GLFWwindow * /*window*/, double xPosition, double yPosition) noexcept
 	{
-		if constexpr ( PointerInputDebugEnabled )
+		if constexpr ( PointerHeavyInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
 				"Pointer move detected!" "\n"
@@ -549,7 +549,7 @@ namespace EmEn::Input
 	void
 	Manager::scrollCallback (GLFWwindow * window, double xOffset, double yOffset) noexcept
 	{
-		if constexpr ( PointerInputDebugEnabled )
+		if constexpr ( PointerHeavyInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
 				"Scrolling detected!" "\n"

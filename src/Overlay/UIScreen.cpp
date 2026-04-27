@@ -204,6 +204,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) const noexcept
 	{
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable keyboard key press event!";
+		}
+
 		const auto dispatchEvent = [key, scancode, modifiers, repeat] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
@@ -226,6 +231,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) const noexcept
 	{
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable keyboard key release event!";
+		}
+
 		const auto dispatchEvent = [key, scancode, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
@@ -248,6 +258,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onCharacterType (uint32_t unicode) const noexcept
 	{
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable keyboard character type event!";
+		}
+
 		const auto dispatchEvent = [unicode] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
@@ -270,6 +285,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onPointerMove (float positionX, float positionY) const noexcept
 	{
+		if constexpr ( PointerHeavyInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer move event!";
+		}
+
 		const auto dispatchEvent = [positionX, positionY] (const std::shared_ptr< Surface > & surface) -> bool {
 			/* NOTE: Always check if the pointer is over the surface. */
 			const auto pointerOver = surface->isBelowPoint(positionX, positionY);
@@ -318,6 +338,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) const noexcept
 	{
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer button press event!";
+		}
+
 		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
@@ -333,10 +358,13 @@ namespace EmEn::Overlay
 
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
+			TraceDebug{ClassId} << "Dispatch to EXCLUSIVE surface '" << exclusiveSurface->name() << "' !";
+
 			return dispatchEvent(exclusiveSurface);
 		}
 
 		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
+			TraceDebug{ClassId} << "Dispatch to surface '" << surface->name() << "' !";
 			return dispatchEvent(surface);
 		});
 	}
@@ -344,6 +372,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) const noexcept
 	{
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer button release event!";
+		}
+
 		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
@@ -366,6 +399,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) const noexcept
 	{
+		if constexpr ( PointerHeavyInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable mouse wheel event!";
+		}
+
 		const auto dispatchEvent = [positionX, positionY, xOffset, yOffset, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{

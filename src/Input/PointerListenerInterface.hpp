@@ -26,8 +26,14 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
+
+/* Local inclusions. */
+#include "Tracer.hpp"
 
 namespace EmEn::Input
 {
@@ -38,6 +44,8 @@ namespace EmEn::Input
 	class PointerListenerInterface
 	{
 		friend class Manager;
+
+		static constexpr auto TracerTag{"PointerListenerInterface"};
 
 		public:
 
@@ -205,8 +213,16 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onPointerEnter (float /*positionX*/, float /*positionY*/) noexcept
+			onPointerEnter (float positionX, float positionY) noexcept
 			{
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a pointer enter event!");
+				}
+
 				return false;
 			}
 
@@ -219,8 +235,16 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onPointerLeave (float /*positionX*/, float /*positionY*/) noexcept
+			onPointerLeave (float positionX, float positionY) noexcept
 			{
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a pointer leave event!");
+				}
+
 				return false;
 			}
 
@@ -233,8 +257,16 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onPointerMove (float /*positionX*/, float /*positionY*/) noexcept
+			onPointerMove (float positionX, float positionY) noexcept
 			{
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+
+				if constexpr ( PointerHeavyInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a pointer move event!");
+				}
+
 				return false;
 			}
 
@@ -249,8 +281,18 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onButtonPress (float /*positionX*/, float /*positionY*/, int32_t /*buttonNumber*/, int32_t /*modifiers*/) noexcept
+			onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
 			{
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+				static_cast< void >(buttonNumber);
+				static_cast< void >(modifiers);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a pointer button press event!");
+				}
+
 				return false;
 			}
 
@@ -265,8 +307,18 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onButtonRelease (float /*positionX*/, float /*positionY*/, int32_t /*buttonNumber*/, int32_t /*modifiers*/) noexcept
+			onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
 			{
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+				static_cast< void >(buttonNumber);
+				static_cast< void >(modifiers);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a pointer button release event!");
+				}
+
 				return false;
 			}
 
@@ -282,8 +334,19 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/, int32_t /*modifiers*/ = 0) noexcept
+			onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) noexcept
 			{
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+				static_cast< void >(xOffset);
+				static_cast< void >(yOffset);
+				static_cast< void >(modifiers);
+
+				if constexpr ( PointerHeavyInputDebugEnabled )
+				{
+					Tracer::debug(TracerTag, "Non-overridden pointer listener received a mouse wheel event!");
+				}
+
 				return false;
 			}
 

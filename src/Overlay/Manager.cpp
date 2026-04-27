@@ -72,6 +72,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
 	{
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable keyboard key press event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -102,6 +107,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept
 	{
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable keyboard key release event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -132,6 +142,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onCharacterType (uint32_t unicode) noexcept
 	{
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable keyboard character type event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -162,6 +177,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onPointerMove (float positionX, float positionY) noexcept
 	{
+		if constexpr ( PointerHeavyInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable pointer move event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -192,6 +212,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
 	{
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable pointer button press event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -222,6 +247,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
 	{
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable pointer button release event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -252,6 +282,11 @@ namespace EmEn::Overlay
 	bool
 	Manager::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) noexcept
 	{
+		if constexpr ( PointerHeavyInputDebugEnabled )
+		{
+			Tracer::debug(ClassId, "Received a dispatchable mouse wheel event!");
+		}
+
 		if ( m_screens.empty() )
 		{
 			return false;

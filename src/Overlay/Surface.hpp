@@ -26,9 +26,11 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
-#include <atomic>
 #include <concepts>
 #include <string>
 
@@ -41,6 +43,7 @@
 #include "FramebufferProperties.hpp"
 #include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -968,6 +971,11 @@ namespace EmEn::Overlay
 				static_cast< void >(modifiers);
 				static_cast< void >(repeat);
 
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused keyboard key press event!";
+				}
+
 				return false;
 			}
 
@@ -988,6 +996,11 @@ namespace EmEn::Overlay
 				static_cast< void >(scancode);
 				static_cast< void >(modifiers);
 
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused keyboard key release event!";
+				}
+
 				return false;
 			}
 
@@ -1003,6 +1016,11 @@ namespace EmEn::Overlay
 			{
 				/* Unused by default. */
 				static_cast< void >(unicode);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused keyboard character type event!";
+				}
 
 				return false;
 			}
@@ -1021,6 +1039,11 @@ namespace EmEn::Overlay
 				/* Unused by default. */
 				static_cast< void >(positionX);
 				static_cast< void >(positionY);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused pointer enter event!";
+				}
 			}
 
 			/**
@@ -1037,6 +1060,11 @@ namespace EmEn::Overlay
 				/* Unused by default. */
 				static_cast< void >(positionX);
 				static_cast< void >(positionY);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused pointer leave event!";
+				}
 			}
 
 			/**
@@ -1053,6 +1081,11 @@ namespace EmEn::Overlay
 				/* Unused by default. */
 				static_cast< void >(positionX);
 				static_cast< void >(positionY);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused pointer move event!";
+				}
 
 				return this->isBlockingEvent();
 			}
@@ -1076,6 +1109,11 @@ namespace EmEn::Overlay
 				static_cast< void >(buttonNumber);
 				static_cast< void >(modifiers);
 
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused pointer button press event!";
+				}
+
 				return this->isBlockingEvent();
 			}
 
@@ -1097,6 +1135,11 @@ namespace EmEn::Overlay
 				static_cast< void >(positionY);
 				static_cast< void >(buttonNumber);
 				static_cast< void >(modifiers);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused pointer button release event!";
+				}
 
 				return this->isBlockingEvent();
 			}
@@ -1121,6 +1164,11 @@ namespace EmEn::Overlay
 				static_cast< void >(xOffset);
 				static_cast< void >(yOffset);
 				static_cast< void >(modifiers);
+
+				if constexpr ( PointerInputDebugEnabled )
+				{
+					TraceDebug{ClassId} << "The surface " << this->name() << " received an unused mouse wheel event!";
+				}
 
 				return this->isBlockingEvent();
 			}

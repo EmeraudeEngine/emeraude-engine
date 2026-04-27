@@ -112,6 +112,7 @@
 	#cmakedefine EMERAUDE_DEBUG_WAVE_FACTORY
 	#cmakedefine EMERAUDE_DEBUG_KEYBOARD_INPUT
 	#cmakedefine EMERAUDE_DEBUG_POINTER_INPUT
+	#cmakedefine EMERAUDE_DEBUG_POINTER_MOVE_INPUT
 	#cmakedefine EMERAUDE_DEBUG_WINDOW_EVENTS
 	#cmakedefine EMERAUDE_DEBUG_VULKAN_TRACKING
 #endif
@@ -173,6 +174,7 @@ namespace EmEn
 		constexpr bool WaveFactoryDebugEnabled{@EMERAUDE_DEBUG_WAVE_FACTORY@};
 		constexpr bool KeyboardInputDebugEnabled{@EMERAUDE_DEBUG_KEYBOARD_INPUT@};
 		constexpr bool PointerInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_INPUT@};
+		constexpr bool PointerHeavyInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_HEAVY_INPUT@};
 		constexpr bool WindowEventsDebugEnabled{@EMERAUDE_DEBUG_WINDOW_EVENTS@};
 		constexpr bool VulkanTrackingDebugEnabled{@EMERAUDE_DEBUG_VULKAN_TRACKING@};
 	#else
