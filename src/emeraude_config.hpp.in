@@ -187,6 +187,7 @@ namespace EmEn
 		constexpr bool WaveFactoryDebugEnabled{false};
 		constexpr bool KeyboardInputDebugEnabled{false};
 		constexpr bool PointerInputDebugEnabled{false};
+		constexpr bool PointerHeavyInputDebugEnabled{false};
 		constexpr bool WindowEventsDebugEnabled{false};
 		constexpr bool VulkanTrackingDebugEnabled{false};
 	#endif
