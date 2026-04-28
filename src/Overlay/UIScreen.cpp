@@ -138,6 +138,10 @@ namespace EmEn::Overlay
 
 		m_surfaces.erase(surfaceIt);
 
+		/* NOTE: Surfaces above the erased one keep their previous index until we shift
+		 * their internal depth back to match the new positions. */
+		this->recomputeDepths();
+
 		return true;
 	}
 
@@ -424,11 +428,266 @@ namespace EmEn::Overlay
 	}
 
 	void
-	UIScreen::sortSurfacesByDepth () noexcept
+	UIScreen::recomputeDepths () noexcept
 	{
-		std::ranges::sort(m_surfaces, [] (const auto & a, const auto & b) {
-			return a->depth() < b->depth();
+		/* NOTE: Caller holds m_surfacesMutex. We walk the stack and let each surface
+		 * derive its internal depth from its index. The actual step value is owned by
+		 * Surface::setStackIndex(). */
+		for ( size_t index = 0; index < m_surfaces.size(); ++index )
+		{
+			m_surfaces[index]->setStackIndex(index);
+		}
+	}
+
+	bool
+	UIScreen::bringToFront (const std::string & name) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
 		});
+
+		if ( it == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "bringToFront: no surface named '" << name << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* Already at the top — nothing to do. */
+		if ( std::next(it) == m_surfaces.end() )
+		{
+			return true;
+		}
+
+		auto surface = std::move(*it);
+		m_surfaces.erase(it);
+		m_surfaces.emplace_back(std::move(surface));
+
+		this->recomputeDepths();
+
+		return true;
+	}
+
+	bool
+	UIScreen::sendToBack (const std::string & name) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
+
+		if ( it == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "sendToBack: no surface named '" << name << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* Already at the bottom — nothing to do. */
+		if ( it == m_surfaces.begin() )
+		{
+			return true;
+		}
+
+		auto surface = std::move(*it);
+		m_surfaces.erase(it);
+		m_surfaces.insert(m_surfaces.begin(), std::move(surface));
+
+		this->recomputeDepths();
+
+		return true;
+	}
+
+	bool
+	UIScreen::bringForward (const std::string & name) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
+
+		if ( it == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "bringForward: no surface named '" << name << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* Already at the top — no-op. */
+		if ( std::next(it) == m_surfaces.end() )
+		{
+			return true;
+		}
+
+		std::iter_swap(it, std::next(it));
+
+		this->recomputeDepths();
+
+		return true;
+	}
+
+	bool
+	UIScreen::sendBackward (const std::string & name) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
+
+		if ( it == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "sendBackward: no surface named '" << name << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* Already at the bottom — no-op. */
+		if ( it == m_surfaces.begin() )
+		{
+			return true;
+		}
+
+		std::iter_swap(it, std::prev(it));
+
+		this->recomputeDepths();
+
+		return true;
+	}
+
+	bool
+	UIScreen::moveAbove (const std::string & name, const std::string & reference) noexcept
+	{
+		if ( name == reference )
+		{
+			TraceWarning{ClassId} << "moveAbove: a surface cannot be moved relative to itself ('" << name << "').";
+
+			return false;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto srcIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
+
+		if ( srcIt == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "moveAbove: no surface named '" << name << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		const auto refIt = std::ranges::find_if(m_surfaces, [&reference] (const auto & s) {
+			return s->name() == reference;
+		});
+
+		if ( refIt == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "moveAbove: no reference surface named '" << reference << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* Extract the source surface, then insert just past the reference. The
+		 * reference iterator must be re-located after the erase since indices shift. */
+		auto surface = std::move(*srcIt);
+		m_surfaces.erase(srcIt);
+
+		const auto refItAfterErase = std::ranges::find_if(m_surfaces, [&reference] (const auto & s) {
+			return s->name() == reference;
+		});
+
+		m_surfaces.insert(std::next(refItAfterErase), std::move(surface));
+
+		this->recomputeDepths();
+
+		return true;
+	}
+
+	bool
+	UIScreen::moveBelow (const std::string & name, const std::string & reference) noexcept
+	{
+		if ( name == reference )
+		{
+			TraceWarning{ClassId} << "moveBelow: a surface cannot be moved relative to itself ('" << name << "').";
+
+			return false;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto srcIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
+
+		if ( srcIt == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "moveBelow: no surface named '" << name << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		const auto refIt = std::ranges::find_if(m_surfaces, [&reference] (const auto & s) {
+			return s->name() == reference;
+		});
+
+		if ( refIt == m_surfaces.end() )
+		{
+			TraceWarning{ClassId} << "moveBelow: no reference surface named '" << reference << "' in screen '" << this->name() << "'.";
+
+			return false;
+		}
+
+		auto surface = std::move(*srcIt);
+		m_surfaces.erase(srcIt);
+
+		const auto refItAfterErase = std::ranges::find_if(m_surfaces, [&reference] (const auto & s) {
+			return s->name() == reference;
+		});
+
+		m_surfaces.insert(refItAfterErase, std::move(surface));
+
+		this->recomputeDepths();
+
+		return true;
+	}
+
+	std::optional< size_t >
+	UIScreen::indexOf (const std::string & name) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
+
+		if ( it == m_surfaces.end() )
+		{
+			return std::nullopt;
+		}
+
+		return static_cast< size_t >(std::distance(m_surfaces.begin(), it));
+	}
+
+	std::vector< std::string >
+	UIScreen::stackOrder () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+
+		std::vector< std::string > order;
+		order.reserve(m_surfaces.size());
+
+		for ( const auto & surface : m_surfaces )
+		{
+			order.emplace_back(surface->name());
+		}
+
+		return order;
 	}
 
 	std::ostream &

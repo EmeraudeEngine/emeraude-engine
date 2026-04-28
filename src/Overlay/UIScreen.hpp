@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -242,9 +243,11 @@ namespace EmEn::Overlay
 					return nullptr;
 				}
 
+				/* NOTE: New surfaces always join the top of the stack. The application can
+				 * call sendToBack(), moveBelow(), etc. immediately after creation to position
+				 * the surface elsewhere in the pile. */
 				m_surfaces.emplace_back(surface);
-
-				this->sortSurfacesByDepth();
+				surface->setStackIndex(m_surfaces.size() - 1);
 
 				return surface;
 			}
@@ -285,8 +288,84 @@ namespace EmEn::Overlay
 			 */
 			void clearSurfaces () noexcept;
 
+			/* ============================================================================
+			 *   Stack ordering — natural pile-of-sheets API
+			 * ============================================================================
+			 * The screen's surfaces form a stack where index 0 is the bottom (drawn first,
+			 * behind everything) and index N-1 is the top (drawn last, visible above all).
+			 * Input dispatch iterates the stack in reverse, so the topmost surface receives
+			 * events first — matching the visual order without surprise.
+			 *
+			 * The internal Z-depth of each surface is recomputed automatically after every
+			 * stack mutation; applications never deal with raw depth values.
+			 *
+			 * All methods return false when the named surface (or reference) is not found.
+			 * ========================================================================= */
+
 			/**
-			 * @brief Returns the screen surfaces list sorted by depth.
+			 * @brief Moves a named surface to the top of the stack (above every other).
+			 * @param name The name of the surface to bring forward.
+			 * @return bool
+			 */
+			bool bringToFront (const std::string & name) noexcept;
+
+			/**
+			 * @brief Moves a named surface to the bottom of the stack (below every other).
+			 * @param name The name of the surface to send back.
+			 * @return bool
+			 */
+			bool sendToBack (const std::string & name) noexcept;
+
+			/**
+			 * @brief Moves a named surface up by one position in the stack.
+			 * @note No-op if the surface is already at the top.
+			 * @param name The name of the surface to raise by one step.
+			 * @return bool
+			 */
+			bool bringForward (const std::string & name) noexcept;
+
+			/**
+			 * @brief Moves a named surface down by one position in the stack.
+			 * @note No-op if the surface is already at the bottom.
+			 * @param name The name of the surface to lower by one step.
+			 * @return bool
+			 */
+			bool sendBackward (const std::string & name) noexcept;
+
+			/**
+			 * @brief Moves a named surface to sit immediately above a reference surface.
+			 * @param name The name of the surface to move.
+			 * @param reference The name of the reference surface (must be different from `name`).
+			 * @return bool
+			 */
+			bool moveAbove (const std::string & name, const std::string & reference) noexcept;
+
+			/**
+			 * @brief Moves a named surface to sit immediately below a reference surface.
+			 * @param name The name of the surface to move.
+			 * @param reference The name of the reference surface (must be different from `name`).
+			 * @return bool
+			 */
+			bool moveBelow (const std::string & name, const std::string & reference) noexcept;
+
+			/**
+			 * @brief Returns the index of a named surface in the stack.
+			 * @param name The name of the surface.
+			 * @return std::optional< size_t > The index (0 = bottom, stack size − 1 = top), or std::nullopt if not found.
+			 */
+			[[nodiscard]]
+			std::optional< size_t > indexOf (const std::string & name) const noexcept;
+
+			/**
+			 * @brief Returns the names of all surfaces in stack order, bottom to top.
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			std::vector< std::string > stackOrder () const noexcept;
+
+			/**
+			 * @brief Returns the screen surfaces in stack order (bottom to top).
+			 * @details Index 0 = bottom (drawn first), index N-1 = top (drawn last).
 			 * @return const std::vector< std::shared_ptr< Surface > > &
 			 */
 			[[nodiscard]]
@@ -421,10 +500,15 @@ namespace EmEn::Overlay
 		private:
 
 			/**
-			 * @brief Sort surfaces by depth when adding or removing surface from the screen.
+			 * @brief Reassigns the internal depth of every surface from its index in the
+			 * stack vector.
+			 * @details Called after every stack mutation (creation, destruction, bring/send,
+			 * move above/below). Each surface receives a depth derived from its index, which
+			 * the model matrix uses for the Z translation. The user never sees these values.
+			 * @note The caller MUST hold m_surfacesMutex when invoking this method.
 			 * @return void
 			 */
-			void sortSurfacesByDepth () noexcept;
+			void recomputeDepths () noexcept;
 
 			/**
 			 * @brief STL streams printable object.

@@ -585,7 +585,7 @@ namespace EmEn::Overlay
 	std::ostream &
 	operator<< (std::ostream & out, const Surface & obj)
 	{
-		return out << "Surface '" << obj.name() << "' [depth:" << obj.depth() << "] " << obj.geometry() << "Model matrix : " << obj.modelMatrix();
+		return out << "Surface '" << obj.name() << "' [stack-depth:" << obj.m_depth << "] " << obj.geometry() << "Model matrix : " << obj.modelMatrix();
 	}
 
 	std::string

@@ -237,17 +237,20 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Constructs a surface.
+			 * @note The stack ordering (rendering order, input dispatch priority) is owned by
+			 * the parent UIScreen — surfaces no longer carry an explicit depth in their public
+			 * API. The UIScreen assigns an internal depth value automatically based on the
+			 * surface's index in its stack. Use UIScreen's stack mutation methods
+			 * (bringToFront, sendToBack, moveAbove, moveBelow, ...) to reorder.
 			 * @param framebufferProperties A reference to the overlay framebuffer properties.
 			 * @param name A string [std::move].
 			 * @param rectangle A reference to a rectangle for the surface geometry on screen. Default the whole screen.
-			 * @param depth A depth value to order surface on the screen. Default 0.0.
 			 * @param visible Set visibility state on startup. Default true.
 			 */
-			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Libs::Math::Space2D::AARectangle< float > & rectangle = {}, float depth = 0.0F, bool visible = true) noexcept
+			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Libs::Math::Space2D::AARectangle< float > & rectangle = {}, bool visible = true) noexcept
 				: NameableTrait{std::move(name)},
 				m_framebufferProperties{framebufferProperties},
-				m_rectangle{rectangle},
-				m_depth{depth}
+				m_rectangle{rectangle}
 			{
 				m_isVisible = visible;
 
@@ -334,17 +337,6 @@ namespace EmEn::Overlay
 			geometry () const noexcept
 			{
 				return m_rectangle;
-			}
-
-			/**
-			 * @brief Returns the surface depth on screen.
-			 * @return float
-			 */
-			[[nodiscard]]
-			float
-			depth () const noexcept
-			{
-				return m_depth;
 			}
 
 			/**
@@ -437,19 +429,6 @@ namespace EmEn::Overlay
 
 				/* NOTE: The texture must be resized. */
 				this->invalidate();
-			}
-
-			/**
-			 * @brief Sets the surface depth in the screen.
-			 * @param depth A scalar value.
-			 * @return void
-			 */
-			void
-			setDepth (float depth) noexcept
-			{
-				m_depth = depth;
-
-				this->updateModelMatrix();
 			}
 
 			/**
@@ -1174,6 +1153,31 @@ namespace EmEn::Overlay
 			}
 
 		private:
+
+			/* NOTE: UIScreen owns the stack ordering. It is the only entity allowed to
+			 * assign the internal depth value used for the model matrix Z translation
+			 * (and hence draw-call order). Surfaces never carry a user-facing depth. */
+			friend class UIScreen;
+
+			/**
+			 * @brief Sets the surface depth from its stack index in the parent UIScreen.
+			 * @details Called by UIScreen after any stack mutation (creation, bring/send,
+			 * move above/below, destruction of a peer). The depth is computed as
+			 * `index * StackDepthStep` and fed to the model matrix Z translation, keeping
+			 * the GPU pipeline consistent without exposing depth as a public concept.
+			 * @param stackIndex The 0-based index of this surface in the UIScreen stack
+			 * (0 = bottom, N-1 = top).
+			 * @return void
+			 */
+			void
+			setStackIndex (size_t stackIndex) noexcept
+			{
+				constexpr auto StackDepthStep = 0.001F;
+
+				m_depth = static_cast< float >(stackIndex) * StackDepthStep;
+
+				this->updateModelMatrix();
+			}
 
 			/**
 			 * @brief Gets a Vulkan sampler.

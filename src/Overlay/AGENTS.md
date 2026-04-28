@@ -11,15 +11,48 @@ Context for developing the Emeraude Engine 2D overlay system.
 ### Hierarchical Architecture
 
 **Manager**: Main overlay system manager
-**Screen**: Logical Surface group (no graphical dimensions, just organization)
-**Surface**: Graphical element with Pixmap (bitmap), position, dimensions, Z coordinate
+**Screen**: Logical Surface group (no graphical dimensions, just organization). **Owns the stack ordering** of its surfaces.
+**Surface**: Graphical element with Pixmap (bitmap), position, dimensions. Carries no public depth/Z concept.
 
 ### Surface Concept
 - **Pixmap**: Bitmap/image representing Surface content
 - **Position**: X, Y screen coordinates
 - **Dimensions**: Width, height in pixels
-- **Z-ordering**: Z coordinate for Surface layering
+- **Stack order**: Defined and owned by the parent UIScreen — see *Stack Ordering* below
 - Multiple Surfaces can coexist in a Screen
+
+### Stack Ordering (UIScreen)
+
+**The screen is a pile of sheets.** Surfaces are arranged in a stack vector where:
+- **Index `0` = bottom** (drawn first, behind every other surface)
+- **Index `N-1` = top** (drawn last, visible above every other)
+
+This convention matches DOM paint order, UIKit `addSubview`, and Photoshop layer panels: items added later or moved up appear visually on top.
+
+**Input dispatch is the inverse**: events traverse the stack from top to bottom (`std::views::reverse`), so the topmost surface receives a pointer/key event first — visually consistent with what the user sees.
+
+**Surfaces never carry a public depth.** The internal `m_depth` member exists only to feed the Z translation of the model matrix (avoids any z-fighting if the 2D pipeline uses a depth test); it is recomputed automatically by `UIScreen::recomputeDepths()` after every stack mutation. Applications never see or set this value.
+
+**Stack mutation API on `UIScreen`** (all methods take a surface name; the parent screen owns the order):
+
+| Method | Effect |
+|---|---|
+| `bringToFront(name)` | Moves the surface to index `N-1` (top). |
+| `sendToBack(name)` | Moves the surface to index `0` (bottom). |
+| `bringForward(name)` | Swaps the surface with its upper neighbor (one step up). |
+| `sendBackward(name)` | Swaps the surface with its lower neighbor (one step down). |
+| `moveAbove(name, reference)` | Inserts the surface just above `reference`. |
+| `moveBelow(name, reference)` | Inserts the surface just below `reference`. |
+| `indexOf(name)` | Returns `std::optional< size_t >` — current stack index or `nullopt`. |
+| `stackOrder()` | Returns the names in stack order, bottom to top. |
+
+**Creation always pushes onto the top** of the stack. To start a surface elsewhere, create it then call `sendToBack()` / `moveBelow()` immediately after.
+
+**Code references:**
+- `UIScreen.hpp` — Stack ordering API declarations
+- `UIScreen.cpp:recomputeDepths()` — Internal depth assignment (bottom = `0.0F`, step `0.001F` per index)
+- `Surface.hpp:setStackIndex()` — Private, friend-accessed by `UIScreen` only
+- `Surface.cpp:updateModelMatrix()` — Consumes the internal `m_depth` for the Z translation
 
 ### Double Buffering System (Transition Buffer)
 
@@ -194,18 +227,26 @@ ctest -R Overlay
 ### Creating a Screen with Surfaces
 ```cpp
 // Create a Screen
-auto hudScreen = overlayManager.createScreen("hud");
+auto hudScreen = overlayManager.createScreen("hud", true, true);
 
-// Create Surfaces in Screen
-auto healthBar = hudScreen->createSurface("health_bar");
-healthBar->setPosition(10, 10);
-healthBar->setDimensions(200, 20);
-healthBar->setZ(10);  // Z-ordering
-
+// Create Surfaces — each call pushes the new surface on top of the pile
 auto minimap = hudScreen->createSurface("minimap");
 minimap->setPosition(screenWidth - 210, 10);
-minimap->setDimensions(200, 200);
-minimap->setZ(5);  // Behind health bar if overlap
+minimap->setSize(200, 200);
+
+auto healthBar = hudScreen->createSurface("health_bar");
+healthBar->setPosition(10, 10);
+healthBar->setSize(200, 20);
+// healthBar is on top of minimap (it was created last)
+
+// Reorder explicitly using the natural pile API:
+hudScreen->bringToFront("minimap");          // minimap now on top
+hudScreen->sendToBack("health_bar");         // health bar at the bottom
+hudScreen->moveAbove("crosshair", "minimap"); // crosshair sits just above minimap
+
+// Inspect the stack
+auto order = hudScreen->stackOrder();        // bottom → top names
+auto idx   = hudScreen->indexOf("minimap");  // std::optional<size_t>
 ```
 
 ### Modifying Surface Content
@@ -308,7 +349,9 @@ class CustomSurface : public Surface {
 
 ## Critical Points
 
-- **Z-ordering**: Z coordinate determines render order and input priority
+- **Stack ordering owned by UIScreen**: Surfaces never carry a public depth. Use `bringToFront`, `sendToBack`, `moveAbove`, `moveBelow` etc. on the parent screen. The internal `m_depth` is recomputed automatically and is only used for the model matrix Z translation.
+- **Stack convention**: index 0 = bottom (drawn first), index N-1 = top (drawn last, visible above). Input dispatch is the reverse — topmost surface gets events first.
+- **Creation pushes on top**: every `createSurface` adds the new surface to the top of the pile. Position elsewhere with a follow-up call to `sendToBack()` / `moveBelow()` if needed.
 - **Pixmap dirty flag**: Mark Surface dirty after modification for GPU re-upload
 - **Screen organization**: Logically group Surfaces by functionality
 - **Performance**: Avoid too frequent Pixmap modifications (GPU upload cost)
