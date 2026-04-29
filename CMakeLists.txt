@@ -83,7 +83,6 @@ option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to 
 option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." On)
-option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [LOCAL] (Default On)." On)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 option(EMERAUDE_ENABLE_LIBSNDFILE "Enable 'libsndfile' library. Adds a GUI to the engine [LOCAL] (Default On)." On)
 # Debug preprocessor macros control (Ignored in Release).
@@ -490,13 +489,7 @@ include(SetupLZMA)
 
 include(SetupZSTD)
 
-if ( EMERAUDE_ENABLE_ASIO )
-	if ( EMERAUDE_ENABLE_TSAN )
-		message(WARNING "[EmeraudeEngine] Disabling ASIO when ThreadSanitizer is requested !")
-	else ()
-		include(SetupASIO)
-	endif ()
-endif ()
+include(SetupASIO)
 
 if ( EMERAUDE_ENABLE_LIBSNDFILE )
 	include(SetupSndFile)

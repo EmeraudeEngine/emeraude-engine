@@ -29,8 +29,6 @@
 /* Emeraude-Engine configuration. */
 #include "emeraude_config.hpp"
 
-#ifdef ASIO_ENABLED
-
 /* STL inclusions. */
 #include <atomic>
 #include <memory>
@@ -144,5 +142,3 @@ namespace EmEn::Console
 			std::atomic< bool > m_running{false};
 	};
 }
-
-#endif // ASIO_ENABLED

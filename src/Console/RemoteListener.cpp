@@ -26,8 +26,6 @@
 
 #include "RemoteListener.hpp"
 
-#ifdef ASIO_ENABLED
-
 /* Local inclusions. */
 #include "Tracer.hpp"
 
@@ -311,5 +309,3 @@ namespace EmEn::Console
 		m_clients.erase(socket);
 	}
 }
-
-#endif // ASIO_ENABLED

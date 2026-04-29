@@ -122,7 +122,6 @@
 
 /* Third-party libraries enabled at compile-time. */
 #cmakedefine EMERAUDE_USE_SYSTEM_LIBS
-#cmakedefine ASIO_ENABLED
 #cmakedefine IMGUI_ENABLED
 #cmakedefine LIBSNDFILE_ENABLED
 #cmakedefine RENDERDOC_ENABLED

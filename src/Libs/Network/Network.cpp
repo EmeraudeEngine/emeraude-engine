@@ -33,9 +33,7 @@
 #include <iostream>
 
 /* Third party inclusions. */
-#ifdef ASIO_ENABLED
 #include "Libs/Network/asio_throw_exception.hpp"
-#endif
 
 /* Local inclusions. */
 #include "Libs/IO/IO.hpp"
@@ -48,22 +46,17 @@ namespace EmEn::Libs::Network
 	bool
 	hasInternetConnexion () noexcept
 	{
-#ifdef ASIO_ENABLED
 		asio::io_context context;
 		asio::ip::tcp::resolver resolver{context};
 
 		const asio::ip::basic_resolver< asio::ip::tcp >::results_type results = resolver.resolve(InternetCheckDomain, "80");
 
 		return !results.empty();
-#else
-		return false;
-#endif
 	}
 
 	bool
 	download (const URI & uri, const std::filesystem::path & filepath, bool verbose) noexcept
 	{
-#ifdef ASIO_ENABLED
 		/* Gets a list of endpoints to reach the resource. */
 		asio::io_context context;
 		asio::ip::tcp::resolver resolver{context};
@@ -223,14 +216,6 @@ namespace EmEn::Libs::Network
 		}
 
 		return false;
-#else
-		if ( verbose )
-		{
-			std::cout << "ASIO has been disabled, unable to download " << uri << " to " << filepath.string() << " !" "\n";
-		}
-
-		return false;
-#endif
 	}
 
 	std::string
@@ -262,7 +247,6 @@ namespace EmEn::Libs::Network
 		return request.toString();
 	}
 
-#ifdef ASIO_ENABLED
 	HTTPResponse
 	extractHeaders (asio::streambuf & buffer, const std::string & delimiter) noexcept
 	{
@@ -281,5 +265,4 @@ namespace EmEn::Libs::Network
 
 		return HTTPResponse{rawResponseHeaders};
 	}
-#endif
 }

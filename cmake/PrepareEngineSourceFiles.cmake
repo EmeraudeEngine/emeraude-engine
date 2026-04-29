@@ -178,7 +178,9 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/CachedDownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/DownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.hpp
-     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPClient.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPServer.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/UDPClient.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/WiFiScanner.hpp
@@ -243,6 +245,8 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Variant.cpp
     # Net
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPServer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/UDPClient.cpp
     # PlatformSpecific
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.cpp

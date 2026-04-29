@@ -161,6 +161,155 @@ namespace EmEn::Net
 
 ---
 
+### TCP Client (`Net::TCPClient`)
+
+**File**: `TCPClient.hpp/.cpp`
+
+Cross-platform stateful TCP client built on Asio. Exposes a simple blocking-with-timeout API so the consumer never has to deal with the Asio model directly. Designed for printer protocols (MKS, Chitu), RTSP control channels, LAN gaming, and any application needing a stateful TCP connection.
+
+**API**:
+```cpp
+namespace EmEn::Net
+{
+    class TCPClient final {
+    public:
+        // Lifecycle
+        TCPClient () noexcept;
+        ~TCPClient () noexcept;
+        // Movable, non-copyable.
+
+        // Connection
+        bool connect (const std::string & host, uint16_t port,
+                      uint32_t timeoutMs = 5000) noexcept;
+        void close () noexcept;
+        bool isConnected () const noexcept;
+
+        // Data transfer
+        int  send (const void * data, size_t length) noexcept;
+        int  send (const std::string & data) noexcept;
+        int  receive (void * buffer, size_t maxLength,
+                      uint32_t timeoutMs = 0) noexcept;          // 0 = block forever
+        std::string receiveString (size_t maxLength,
+                                   uint32_t timeoutMs = 0) noexcept;
+
+        // Address queries
+        bool getLocalAddress  (std::string & address, uint16_t & port) const noexcept;
+        bool getRemoteAddress (std::string & address, uint16_t & port) const noexcept;
+
+        // Socket options (long-lived sessions, low-latency traffic)
+        bool setNoDelay     (bool enable) noexcept;                // TCP_NODELAY
+        bool setKeepAlive   (bool enable,
+                             uint32_t initialDelaySeconds = 7200) noexcept;
+        bool setRecvTimeout (uint32_t timeoutMs) noexcept;         // SO_RCVTIMEO
+        bool setSendTimeout (uint32_t timeoutMs) noexcept;         // SO_SNDTIMEO
+
+        // Last error (Node.js-like error code mapping in wrapping layers)
+        std::error_code lastError () const noexcept;
+    };
+}
+```
+
+**Design**:
+- Each instance owns its own `asio::io_context` — multiple `TCPClient` instances are independent and safe to use concurrently from different threads.
+- Blocking operations (`connect`, `receive`) drive the io_context via `run_for(timeout)` + an `async_*` operation, with a `would_block` sentinel to detect timeouts.
+- `send` uses `asio::write` (synchronous, completes when the kernel send buffer accepts everything).
+- Hostname resolution supports both IPv4 and IPv6 endpoints.
+- Move-only via two `unique_ptr` members (`io_context` + `socket`), so the socket's executor reference stays valid across moves.
+
+**Platform-specific socket options**:
+- `TCP_NODELAY`, `SO_KEEPALIVE`, `SO_RCVTIMEO`, `SO_SNDTIMEO` — universal (Linux, macOS, Windows).
+- Initial keep-alive delay — Linux uses `TCP_KEEPIDLE`, macOS uses `TCP_KEEPALIVE`, Windows uses `WSAIoctl(SIO_KEEPALIVE_VALS, ...)`. Best-effort; granularity is platform-specific.
+
+**Recommended use cases**:
+- **Printer sessions** (MKS, Chitu): `setKeepAlive(true, 60)` to detect NAT timeouts.
+- **RTSP control + game packets**: `setNoDelay(true)` to disable Nagle.
+- **Long-running connections**: `setTimeout(timeoutMs)` to detect a frozen peer in seconds rather than minutes.
+
+---
+
+### TCP Server (`Net::TCPServer`)
+
+**File**: `TCPServer.hpp/.cpp`
+
+Cross-platform TCP server built on Asio. Exposes a simple blocking-with-timeout `accept()` that returns a fully-owned `TCPClient`. Each accepted client owns its own io_context, so the server's lifetime is independent from the lifetime of the clients it produced.
+
+**API**:
+```cpp
+namespace EmEn::Net
+{
+    class TCPServer final {
+    public:
+        static const int DefaultBacklog;       // = asio::socket_base::max_listen_connections
+
+        // Lifecycle
+        TCPServer () noexcept;
+        ~TCPServer () noexcept;
+        // Movable, non-copyable.
+
+        // Listening
+        bool listen (uint16_t port,
+                     int backlog = DefaultBacklog,
+                     const std::string & address = {}) noexcept;
+        void close () noexcept;
+        bool isListening () const noexcept;
+
+        // Accept (blocks up to timeoutMs, 0 = block forever)
+        std::optional< TCPClient > accept (uint32_t timeoutMs = 0) noexcept;
+
+        // Address query (recovers OS-assigned port if listen() was called with port = 0)
+        bool getLocalAddress (std::string & address, uint16_t & port) const noexcept;
+
+        std::error_code lastError () const noexcept;
+    };
+}
+```
+
+**Design**:
+- The server holds a single `asio::io_context` + `asio::ip::tcp::acceptor`.
+- `listen(port = 0, ...)` lets the OS pick a free port — recover it via `getLocalAddress()`.
+- `accept(timeoutMs)` uses `async_accept` + `run_for(timeout)` and returns `std::nullopt` on timeout/error.
+- On a successful accept, the underlying socket is **detached** from the server's io_context (`socket.release()`) and **migrated** onto a fresh io_context owned by the returned `TCPClient` (`socket.assign()`). This decouples the lifetimes — destroying the server does not affect already-accepted clients.
+- `SO_REUSEADDR` is enabled on a best-effort basis.
+
+**Expected usage pattern**:
+```cpp
+EmEn::Net::TCPServer server;
+if ( !server.listen(7777) ) {
+    // Inspect server.lastError()
+    return;
+}
+
+std::atomic< bool > running{true};
+
+std::thread acceptThread([&] {
+    while ( running ) {
+        auto client = server.accept(/* timeoutMs = */ 200);   // Short timeout for graceful shutdown
+        if ( !client ) {
+            continue;
+        }
+
+        client->setNoDelay(true);   // Game / RTSP traffic
+        // Hand off to a connection manager / per-client thread.
+        handleClient(std::move(*client));
+    }
+});
+
+// ... main loop ...
+
+running = false;
+server.close();   // Cancels the pending accept; the thread sees nullopt and exits.
+acceptThread.join();
+```
+
+**Recommended use cases**:
+- **Local MQTT broker** (Chitu WiFi printers): one accept loop, one socket per client.
+- **LAN game server**: 4-8 player FPS — trivially handled by a thread-per-client or shared poll loop.
+- **Remote console / debug listeners**: see `RemoteListener` for a higher-level Asio-async variant when you need concurrent multi-client broadcast.
+
+**Platform**: Cross-platform via Asio (any OS that compiles standalone Asio with `ASIO_NO_EXCEPTIONS`).
+
+---
+
 ### Serial Port (`Net::SerialPort`)
 
 **Files**: `SerialPort.hpp` + `SerialPort.{linux,mac,windows}.cpp`
@@ -262,13 +411,15 @@ namespace EmEn::Net::WiFiScanner
 - **URLs in stores**: Resources stores can contain URLs instead of paths
 - **Fail-safe integration**: Download failure → Resources returns neutral resource
 - **No multiplayer**: Net is for assets, not gameplay networking
-- **Hardware utilities are standalone**: UDPClient, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO
-- **noexcept everywhere**: All hardware utility functions are noexcept, errors return false/empty containers
+- **Hardware utilities are standalone**: UDPClient, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO. TCPClient/TCPServer use ASIO internally but expose a simple blocking-with-timeout API — consumers never see ASIO types.
+- **noexcept everywhere**: All hardware utility functions are noexcept, errors return false/empty containers (ASIO is configured with `ASIO_NO_EXCEPTIONS`).
 
 ## Important Files
 
 - `Manager.cpp/.hpp` - Main manager, download requests
 - `UDPClient.hpp/.cpp` - UDP client and SSDP discovery
+- `TCPClient.hpp/.cpp` - TCP client (Asio-based, blocking-with-timeout API)
+- `TCPServer.hpp/.cpp` - TCP server (Asio-based, accept returns owned TCPClient)
 - `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction
 - `WiFiScanner.hpp` + `.{linux,mac,windows}.cpp` - WiFi scanning
 - Local cache (location to be documented)

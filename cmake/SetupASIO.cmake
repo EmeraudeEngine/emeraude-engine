@@ -12,5 +12,3 @@ target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PUBLIC ASIO_STANDALONE ASI
 if ( APPLE )
 	target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PUBLIC ASIO_DISABLE_CO_AWAIT)
 endif ()
-
-set(ASIO_ENABLED On)

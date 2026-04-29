@@ -40,7 +40,6 @@ namespace EmEn::Console
 	bool
 	Controller::onInitialize () noexcept
 	{
-#ifdef ASIO_ENABLED
 		const auto remoteListenerPort = m_primaryServices.settings().getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
 
 		m_remoteListener = std::make_unique< RemoteListener >(remoteListenerPort);
@@ -51,7 +50,6 @@ namespace EmEn::Console
 
 			TraceWarning{ClassId} << "Remote listener failed to initialize, remote console will be unavailable.";
 		}
-#endif
 
 		return true;
 	}
@@ -59,12 +57,10 @@ namespace EmEn::Console
 	bool
 	Controller::onTerminate () noexcept
 	{
-#ifdef ASIO_ENABLED
 		if ( m_remoteListener != nullptr )
 		{
 			m_remoteListener.reset();
 		}
-#endif
 
 		m_consoleObjects.clear();
 
@@ -193,7 +189,6 @@ namespace EmEn::Console
 	void
 	Controller::poll () noexcept
 	{
-#ifdef ASIO_ENABLED
 		if ( m_remoteListener != nullptr )
 		{
 			RemoteListener::PendingCommand pending;
@@ -226,7 +221,6 @@ namespace EmEn::Console
 				}
 			}
 		}
-#endif
 	}
 
 	bool

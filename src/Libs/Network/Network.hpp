@@ -34,13 +34,11 @@
 #include <filesystem>
 
 /* Third party inclusions. */
-#ifdef ASIO_ENABLED
 /* NOTE: asio_throw_exception.hpp MUST be included before asio.hpp.
  * It defines ASIO_STANDALONE, ASIO_NO_EXCEPTIONS, and provides
  * the custom throw_exception() function required when exceptions are disabled. */
 #include "asio_throw_exception.hpp"
 #include "asio.hpp"
-#endif
 
 /* Local inclusions for usages. */
 #include "URI.hpp"
@@ -74,7 +72,6 @@ namespace EmEn::Libs::Network
 	[[nodiscard]]
 	std::string getGETHeaderRequest (const URI & uri) noexcept;
 
-#ifdef ASIO_ENABLED
 	/**
 	 * @brief extractHeaders
 	 * @param buffer
@@ -83,5 +80,4 @@ namespace EmEn::Libs::Network
 	 */
 	[[nodiscard]]
 	HTTPResponse extractHeaders (asio::streambuf & buffer, const std::string & delimiter) noexcept;
-#endif
 }
