@@ -114,7 +114,7 @@ The Vulkan SDK must be installed manually (future versions may include it in the
 
 Debian 13
 ```bash
-sudo apt install build-essential cmake python3 ninja-build libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev libfontconfig-dev
+sudo apt install build-essential cmake python3 ninja-build libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev libfontconfig-dev libwayland-dev libxkbcommon-dev
 ```
 
 Ubuntu 24.04 
