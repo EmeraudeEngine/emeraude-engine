@@ -54,4 +54,12 @@ namespace EmEn::Libs::Hash
 	 */
 	[[nodiscard]]
 	std::string sha512 (const std::string & input) noexcept;
+
+	/**
+	 * @brief Hash a string using the CRC-32 algorithm (IEEE 802.3 / zlib / PNG).
+	 * @param input A reference to a string.
+	 * @return std::string.
+	 */
+	[[nodiscard]]
+	std::string crc32 (const std::string & input) noexcept;
 }

@@ -37,6 +37,7 @@
 #include "MD5.hpp"
 #include "SHA256.hpp"
 #include "SHA512.hpp"
+#include "CRC32.hpp"
 
 namespace EmEn::Libs::Hash
 {
@@ -88,5 +89,17 @@ namespace EmEn::Libs::Hash
 		hash.final(digest);
 
 		return _toString(digest.data(), digest.size(), SHA512::HashLength);
+	}
+
+	std::string
+	crc32 (const std::string & input) noexcept
+	{
+		std::array< uint8_t, 4 > digest{0};
+
+		CRC32 hash{};
+		hash.update(reinterpret_cast< const uint8_t * >(input.data()), input.size());
+		hash.final(digest);
+
+		return _toString(digest.data(), digest.size(), CRC32::HashLength);
 	}
 }

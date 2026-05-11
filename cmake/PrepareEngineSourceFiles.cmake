@@ -15,11 +15,13 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/GameTools/CardDeck.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/GameTools/CardHand.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/GameTools/Dice.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/CRC32.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/FNV1a.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/Hash.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/MD5.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/SHA256.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/SHA512.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/Types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/IO/IO.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/IO/ZipReader.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/IO/ZipWriter.hpp
@@ -214,6 +216,7 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Compression/ZLIB.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Debug/Statistics.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/GameTools/CardDeck.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/CRC32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/Hash.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/MD5.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Hash/SHA256.cpp

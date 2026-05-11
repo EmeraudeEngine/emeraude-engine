@@ -1,5 +1,5 @@
 /*
- * src/Libs/Hash/SHA512.hpp
+ * src/Libs/Hash/CRC32.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -27,74 +27,57 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 
 namespace EmEn::Libs::Hash
 {
 	/**
-	 * @brief The SHA512 class
-	 * @note http://www.zedwood.com/article/cpp-sha512-function
+	 * @brief The CRC32 class.
+	 * @note Standard CRC-32 (IEEE 802.3 / zlib / PNG / gzip) using the reflected polynomial 0xEDB88320.
 	 */
-	class SHA512 final
+	class CRC32 final
 	{
 		public:
 
-			static constexpr auto HashLength = 128UL;
+			static constexpr auto HashLength = 8UL;
 
 			/**
-			 * @brief Constructs the SHA512 hash object.
+			 * @brief Default constructor.
 			 */
-			SHA512 () noexcept = default;
+			CRC32 () noexcept = default;
 
 			/**
-			 * @brief processLogics
-			 * @param message
-			 * @param length
+			 * @brief Continues a CRC32 computation, processing another message block.
+			 * @param message A pointer to the input data.
+			 * @param length The size of the input data in bytes.
 			 * @return void
 			 */
 			void update (const uint8_t * message, size_t length) noexcept;
 
 			/**
-			 * @brief final
-			 * @param digest
+			 * @brief Finalizes the CRC32 computation and writes the 4-byte digest in big-endian order.
+			 * @param digest A reference to a 4-byte array receiving the result.
 			 * @return void
 			 */
-			void final (std::array< uint8_t, 64 > & digest) noexcept;
+			void final (std::array< uint8_t, 4 > & digest) noexcept;
 
 			/**
-			 * @brief reset
+			 * @brief Returns the current CRC32 value (post-finalization XOR applied).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t value () const noexcept;
+
+			/**
+			 * @brief Resets the internal state to start a new computation.
 			 * @return void
 			 */
 			void reset () noexcept;
 
 		private:
 
-			static constexpr auto BlockSize = 1024UL / 8UL;
-
-			static const std::array< uint64_t, 80 > sha512_k;
-
-			/**
-			 * @brief transform
-			 * @param message
-			 * @param length
-			 * @return void
-			 */
-			void transform (const uint8_t * message, size_t length) noexcept;
-
-			size_t m_totalLength{0};
-			size_t m_length{0};
-			std::array< uint8_t, 2 * BlockSize > m_block{};
-			std::array< uint64_t, 8 > m_h{
-				0x6a09e667f3bcc908ULL,
-				0xbb67ae8584caa73bULL,
-				0x3c6ef372fe94f82bULL,
-				0xa54ff53a5f1d36f1ULL,
-				0x510e527fade682d1ULL,
-				0x9b05688c2b3e6c1fULL,
-				0x1f83d9abfb41bd6bULL,
-				0x5be0cd19137e2179ULL
-			};
+			uint32_t m_state{0xFFFFFFFF};
 	};
 }
