@@ -4,6 +4,7 @@ Checks: >
   clang-analyzer-*,
   concurrency-*,
   misc-*,
+  -misc-multiple-inheritance,
   -misc-include-cleaner,
   mpi-*,
   openmp-*,
