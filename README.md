@@ -112,14 +112,9 @@ The Vulkan SDK must be installed manually (future versions may include it in the
 
 **Linux:**
 
-Debian 13
+Debian 13+ / Ubuntu 24.04+ / Mint 22.3+
 ```bash
-sudo apt install build-essential cmake python3 ninja-build libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev libfontconfig-dev libwayland-dev libxkbcommon-dev
-```
-
-Ubuntu 24.04 
-```bash
-sudo apt install build-essential cmake python3 ninja-build libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-utility-libraries-dev libfontconfig-dev libwayland-bin
+sudo apt install build-essential cmake python3 ninja-build libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev libfontconfig-dev libwayland-dev libxkbcommon-dev xorg-dev
 ```
 
 **macOS:**
