@@ -32,7 +32,7 @@
 #include <cstring>
 
 /* 3rd party inclusions. */
-#include "bc7enc.h"
+#include <bc7enc_rdo/bc7enc.h>
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/Processor.hpp"

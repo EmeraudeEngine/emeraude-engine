@@ -2,27 +2,10 @@ if ( NOT TARGET_BINARY_FOR_SETUP )
 	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
 endif ()
 
-message("Configuring reproc/reproc++ library as sub-project ...")
+message("Enabling reproc/reproc++ library from local precompiled source ...")
 
-set(REPROC++ ON)
-set(REPROC_MULTITHREADED ON)
+find_package(reproc CONFIG REQUIRED PATHS ${LOCAL_LIB_DIR} NO_DEFAULT_PATH)
+find_package(reproc++ CONFIG REQUIRED PATHS ${LOCAL_LIB_DIR} NO_DEFAULT_PATH)
 
-set(REPROC_DEVELOP OFF)
-set(REPROC_TEST OFF)
-set(REPROC_EXAMPLES OFF)
-set(REPROC_WARNINGS ON)
-set(REPROC_TIDY OFF)
-set(REPROC_SANITIZERS OFF)
-set(REPROC_WARNINGS_AS_ERRORS OFF)
-set(REPROC_OBJECT_LIBRARIES ON)
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc EXCLUDE_FROM_ALL)
-
-# Enable Position Independent Code for shared library compatibility
-set_target_properties(reproc reproc++ PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc++/include
-)
+# Headers are already included via ${LOCAL_LIB_DIR}/include in the main CMakeLists.txt.
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE reproc reproc++)

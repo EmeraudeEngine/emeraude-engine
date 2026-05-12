@@ -7,15 +7,9 @@
 [submodule "dependencies/glfw"]
 	path = dependencies/glfw
 	url = https://github.com/EmeraudeEngine/glfw.git
-[submodule "dependencies/glslang"]
-	path = dependencies/glslang
-	url = https://github.com/KhronosGroup/glslang.git
 [submodule "dependencies/asio"]
 	path = dependencies/asio
 	url = https://github.com/chriskohlhoff/asio
-[submodule "dependencies/reproc"]
-	path = dependencies/reproc
-	url = https://github.com/DaanDeMeyer/reproc
 [submodule "dependencies/magic_enum"]
 	path = dependencies/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
@@ -29,9 +23,3 @@
 	path = dependencies/renderdoc
 	url = https://github.com/baldurk/renderdoc.git
 	branch = v1.x
-[submodule "dependencies/bc7enc_rdo"]
-	path = dependencies/bc7enc_rdo
-	url = https://github.com/richgel999/bc7enc_rdo.git
-[submodule "dependencies/ufbx"]
-	path = dependencies/ufbx
-	url = https://github.com/ufbx/ufbx.git

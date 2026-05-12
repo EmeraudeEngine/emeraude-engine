@@ -35,11 +35,7 @@
 #include <algorithm>
 
 /* Third-party inclusions. */
-#ifdef EMERAUDE_USE_SYSTEM_LIBS
 #include <glslang/SPIRV/GlslangToSpv.h>
-#else
-#include "SPIRV/GlslangToSpv.h"
-#endif
 
 /* Local inclusions. */
 #include "Libs/SourceCodeParser.hpp"

@@ -35,7 +35,7 @@
 #include <vector>
 
 /* 3rd inclusions. */
-#include "ufbx.h"
+#include <ufbx/ufbx.h>
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"

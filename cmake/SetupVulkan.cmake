@@ -62,43 +62,14 @@ target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${CMAKE_CURR
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE VulkanMemoryAllocator)
 
 # GLSLang
-message("Configuring GLSLang library as sub-project ...")
+message("Enabling GLSLang (with SPIR-V codegen) from local precompiled source ...")
 
-if ( NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang/External/spirv-tools )
-	message("Launching '${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang/update_glslang_sources.py' ...")
+# glslang's exported config calls find_dependency(SPIRV-Tools-opt), which itself
+# pulls SPIRV-Tools. find_dependency follows CMAKE_PREFIX_PATH, so we point both
+# the initial find_package and the transitive ones at LOCAL_LIB_DIR.
+list(PREPEND CMAKE_PREFIX_PATH ${LOCAL_LIB_DIR})
 
-	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(glslang CONFIG REQUIRED PATHS ${LOCAL_LIB_DIR} NO_DEFAULT_PATH)
 
-	execute_process(
-		COMMAND ${Python3_EXECUTABLE} update_glslang_sources.py
-		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang
-		COMMAND_ERROR_IS_FATAL ANY
-	)
-endif ()
-
-set(GLSLANG_TESTS_DEFAULT Off CACHE BOOL "" FORCE)
-set(GLSLANG_ENABLE_INSTALL_DEFAULT Off CACHE BOOL "" FORCE)
-set(ENABLE_GLSLANG_BINARIES Off CACHE BOOL "" FORCE)
-set(ENABLE_GLSLANG_JS Off CACHE BOOL "" FORCE)
-set(ENABLE_HLSL Off CACHE BOOL "" FORCE)
-set(ENABLE_RTTI Off CACHE BOOL "" FORCE)
-set(ENABLE_EXCEPTIONS Off CACHE BOOL "" FORCE)
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang EXCLUDE_FROM_ALL)
-
-# Disable strict warnings for third-party glslang library (GCC 14 false positives)
-if ( UNIX AND NOT APPLE )
-	foreach(_glslang_target IN ITEMS glslang SPIRV glslang-default-resource-limits)
-		if ( TARGET ${_glslang_target} )
-			target_compile_options(${_glslang_target} PRIVATE
-				-Wno-error=array-bounds
-				-Wno-error=stringop-overflow
-				-Wno-error=maybe-uninitialized
-			)
-		endif ()
-	endforeach()
-endif ()
-
-target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang)
-
-target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE SPIRV glslang)
+# Headers are already included via ${LOCAL_LIB_DIR}/include in the main CMakeLists.txt.
+target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE glslang::SPIRV glslang::glslang)
