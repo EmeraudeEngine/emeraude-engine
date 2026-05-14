@@ -125,13 +125,15 @@ namespace EmEn::Graphics::Geometry
 			return;
 		}
 
-		BLASGeometryInput geometry{};
-		geometry.vertexBuffer = vbo->handle();
-		geometry.vertexCount = vbo->vertexCount();
-		geometry.vertexStride = vbo->vertexElementCount() * sizeof(float);
+		/* Shared header: same VB/IB across all sub-geometries of this Geometry::Interface. */
+		BLASGeometryInput sharedHeader{};
+		sharedHeader.vertexBuffer = vbo->handle();
+		sharedHeader.vertexCount = vbo->vertexCount();
+		sharedHeader.vertexStride = vbo->vertexElementCount() * sizeof(float);
 
 		/* For TriangleStrip topologies, convert indices to TriangleList via the virtual override. */
 		std::vector< uint32_t > convertedIndices;
+		uint32_t totalIndexCount = 0;
 
 		if ( topo == Topology::TriangleStrip )
 		{
@@ -154,10 +156,9 @@ namespace EmEn::Graphics::Geometry
 
 			if ( m_rtIndexBufferObject->createOnHardware() && m_rtIndexBufferObject->transferData(transferManager, convertedIndices) )
 			{
-				/* Use the persistent RT IBO for the BLAS build. */
-				geometry.indexBuffer = m_rtIndexBufferObject->handle();
-				geometry.indexCount = indexCount;
-				geometry.indexType = VK_INDEX_TYPE_UINT32;
+				sharedHeader.indexBuffer = m_rtIndexBufferObject->handle();
+				sharedHeader.indexType = VK_INDEX_TYPE_UINT32;
+				totalIndexCount = indexCount;
 			}
 			else
 			{
@@ -166,8 +167,9 @@ namespace EmEn::Graphics::Geometry
 				m_rtIndexBufferObject.reset();
 
 				/* Fall back to CPU index upload in the builder. */
-				geometry.cpuIndices = convertedIndices.data();
-				geometry.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
+				sharedHeader.cpuIndices = convertedIndices.data();
+				sharedHeader.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
+				totalIndexCount = sharedHeader.cpuIndexCount;
 			}
 		}
 		else
@@ -177,13 +179,49 @@ namespace EmEn::Graphics::Geometry
 
 			if ( ibo != nullptr && ibo->isCreated() )
 			{
-				geometry.indexBuffer = ibo->handle();
-				geometry.indexCount = ibo->indexCount();
-				geometry.indexType = VK_INDEX_TYPE_UINT32;
+				sharedHeader.indexBuffer = ibo->handle();
+				sharedHeader.indexType = VK_INDEX_TYPE_UINT32;
+				totalIndexCount = ibo->indexCount();
 			}
 		}
 
-		m_accelerationStructure = s_accelerationStructureBuilder->buildBLAS(geometry);
+		/* Partition by sub-geometry: each sub-geometry becomes its own
+		 * VkAccelerationStructureGeometryKHR inside the BLAS. The ray query then
+		 * uses rayQueryGetIntersectionGeometryIndexEXT to identify which sub-geometry
+		 * was hit, so the trace shader can look up the right material per hit (vs the
+		 * old "one BLAS, one material per instance" scheme that aliased materials
+		 * across the same BLAS).
+		 *
+		 * Caveat: the TriangleStrip→TriangleList CPU-indices fallback path produces a
+		 * single flat triangle list; we DON'T partition that case (the converted
+		 * indices don't map cleanly to original sub-geometry ranges). Procedural
+		 * shapes (cuboid, sphere) currently are single-sub-geometry anyway, so this
+		 * is fine in practice. */
+		std::vector< BLASGeometryInput > geometries;
+		const auto subGeoCount = this->subGeometryCount();
+
+		if ( subGeoCount <= 1 || sharedHeader.cpuIndices != nullptr )
+		{
+			BLASGeometryInput single = sharedHeader;
+			single.firstIndex = 0;
+			single.indexCount = totalIndexCount;
+			geometries.emplace_back(single);
+		}
+		else
+		{
+			geometries.reserve(subGeoCount);
+
+			for ( uint32_t i = 0; i < subGeoCount; ++i )
+			{
+				const auto range = this->subGeometryRange(i); /* {firstIndex, indexCount} */
+				BLASGeometryInput sub = sharedHeader;
+				sub.firstIndex = range[0];
+				sub.indexCount = range[1];
+				geometries.emplace_back(sub);
+			}
+		}
+
+		m_accelerationStructure = s_accelerationStructureBuilder->buildBLAS(geometries);
 
 		if ( m_accelerationStructure == nullptr )
 		{

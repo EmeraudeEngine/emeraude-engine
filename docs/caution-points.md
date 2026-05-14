@@ -145,6 +145,105 @@ if ( materialType == PBRResource::ClassId )
 > **Files involved:**
 > - `Scenes/SceneMetaData.cpp:rebuild()` - TLAS instance construction
 
+### Fixed: RTR Self-Reflection Rejection Too Aggressive (May 2026)
+
+> [!WARNING]
+> **The RTR trace shader's self-reflection rejection rejected any hit whose
+> normal was within ~25° of the ray-origin surface normal — silently excluding
+> all reflections off parallel surfaces at a distance (cube tops, ceilings,
+> stacked horizontal walls reflected in the floor).**
+>
+> **Old check** (`Graphics/Effects/Framebuffer/RTR.cpp` ~line 372):
+> ```glsl
+> if (dot(hitNormal, worldNormal) > 0.9) { outReflection = vec4(0.0); return; }
+> ```
+> Intent was to reject the floor reflecting itself (a numerical artifact from
+> imperfect normal-offset). But cube tops have normal=(0,−1,0) identical to the
+> floor's UP, so `dot=1.0 > 0.9` → rejected → cube *never* appears in the floor's
+> reflection. Curved surfaces (sphere, sphere of the palm-like meshes) happen to
+> work because their normals vary, never hitting the threshold.
+>
+> **Fix:** combined check that requires BOTH normal-parallelism AND tiny hitT:
+> ```glsl
+> if (dot(hitNormal, worldNormal) > 0.99 && hitT < 0.05) { /* reject */ }
+> ```
+> Real reflections off parallel surfaces have `hitT >> 0.05` and pass through.
+> True self-intersection artifacts are caught by the `hitT < 0.05` clause.
+>
+> **Open thread:** SSR.cpp likely shares this pattern (memory references both
+> SSR and RTR using the rejection). Not modified in this fix; verify next time
+> SSR is tuned.
+>
+> **Files involved:**
+> - `Graphics/Effects/Framebuffer/RTR.cpp` — trace shader self-rejection check
+
+### Fixed: RT TLAS Collection Hardcoded to Layer 0 (May 2026)
+
+> [!CRITICAL]
+> **The RT batch creation in `Scenes/Scene.rendering.cpp` only checked
+> `renderable->isOpaque(0)` — a renderable whose first layer was alpha-tested
+> or transparent was excluded *entirely* from the TLAS, even if other layers
+> were opaque.**
+>
+> **Symptom:** the palm tree (`MultiLayerMesh` with leaves on layer 0 + opacity
+> map → `isOpaque(0) = false`) was completely invisible to RT rays. The user
+> could see the sphere's reflection in the floor *through* the palm trunk's
+> position — proof that rays were passing through where the palm geometry should
+> have been. Even the opaque trunk on a later layer was missed.
+>
+> **Old code** (three call sites: scene visuals ~line 994, static entities
+> ~line 1041, scene nodes ~line 1098):
+> ```cpp
+> if ( renderable != nullptr && renderable->isOpaque(0) )
+> {
+>     RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, 0);
+> }
+> ```
+>
+> **Fix:** iterate all layers, emit one RT batch per opaque layer with the
+> correct `subGeometryIndex`. Each batch becomes a separate TLAS instance with
+> its own material lookup in `SceneMetaData::rebuild`:
+> ```cpp
+> if ( renderable != nullptr )
+> {
+>     const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+>     auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
+>     const auto layerCount = renderable->layerCount();
+>     for ( uint32_t layer = 0; layer < layerCount; ++layer )
+>     {
+>         if ( renderable->isOpaque(layer) )
+>         {
+>             RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, layer);
+>         }
+>     }
+> }
+> ```
+> Validated visually 2026-05-14: palm trunk reflects in the floor and correctly
+> *occludes* the sphere's reflection that was previously visible through the
+> trunk's screen position.
+>
+> **Open threads:**
+> - **Alpha-test layers still excluded.** `isOpaque(layer)` is false for opacity-
+>   mapped materials, so palm leaves never enter the TLAS. Proper handling needs
+>   either an any-hit shader doing alpha-test against the opacity map at hit time,
+>   or a relaxed filter that admits alpha-test layers (with the cutout simply
+>   ignored — visible but wrong-looking foliage in reflections).
+> - **Multi-instance / same-BLAS material ambiguity.** When a renderable has
+>   multiple opaque layers, multiple TLAS instances point to the *same* BLAS
+>   (different materials each). The BLAS doesn't separate triangles by
+>   sub-geometry, so Vulkan reports whichever instance is found first — the
+>   material may not match the triangle's actual sub-geometry. Architectural fix:
+>   build multi-geometry BLAS (one `VkAccelerationStructureGeometryKHR` per
+>   sub-geometry) and use `rayQueryGetIntersectionGeometryIndexEXT` in the trace
+>   shader. Not observed in current scenes (palm has only one opaque layer);
+>   flag if multi-opaque-layer renderables appear later.
+>
+> **Files involved:**
+> - `Scenes/Scene.rendering.cpp` — three RT-batch-creation sites (scene visuals,
+>   static entities, scene nodes)
+> - `Scenes/SceneMetaData.cpp:rebuild()` — already supports per-batch
+>   `subGeometryIndex` for material lookup (no change needed)
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]

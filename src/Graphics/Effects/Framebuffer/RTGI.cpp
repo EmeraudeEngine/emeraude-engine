@@ -146,12 +146,13 @@ struct MeshAccessor
 	uint idx0, idx1, idx2;
 };
 
+/* GPUMeshMetaData layout: 3 uvec4 per instance (see RTR.cpp for details). */
 MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 {
 	MeshAccessor m;
 
-	uvec4 meta0 = meshSSBO.meshEntries[instanceIndex * 2u];
-	uvec4 meta1 = meshSSBO.meshEntries[instanceIndex * 2u + 1u];
+	uvec4 meta0 = meshSSBO.meshEntries[instanceIndex * 3u];
+	uvec4 meta1 = meshSSBO.meshEntries[instanceIndex * 3u + 1u];
 
 	m.vb = VertexBuffer(uvec2(meta0.x, meta0.y));
 	m.ib = IndexBuffer(uvec2(meta0.z, meta0.w));
@@ -355,8 +356,13 @@ void main()
 			/* Unpack mesh data. */
 			MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
 
-			/* Look up material. */
-			uint materialIndex = meshSSBO.meshEntries[instanceIndex * 2u + 1u].w;
+			/* Look up material per sub-geometry via geometryIndex from the ray query.
+			 * Clamp to subGeometryCount to handle BLAS with more sub-geometries than the
+			 * renderable has material slots (e.g. animated sprite frame groups). */
+			uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
+			uint subGeoCount = meshSSBO.meshEntries[instanceIndex * 3u + 1u].w;
+			uint effectiveGeomIdx = (geomIdx < subGeoCount) ? geomIdx : 0u;
+			uint materialIndex = meshSSBO.meshEntries[instanceIndex * 3u + 2u][effectiveGeomIdx];
 			uint matBase = materialIndex * 7u;
 
 			vec3 albedo = materialSSBO.materials[matBase].rgb;

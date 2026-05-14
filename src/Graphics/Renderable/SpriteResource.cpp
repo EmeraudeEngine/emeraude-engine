@@ -143,11 +143,14 @@ namespace EmEn::Graphics::Renderable
 					materialResource.setAutoIlluminationAmount(autoIllumination);
 				}
 
-				/* Check the optional global opacity. */
-				if ( const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F); opacity < 1.0F )
-				{
-					materialResource.setOpacity(opacity);
-				}
+				/* Always declare opacity for sprites: their texture is intrinsically
+				 * alpha-mapped (cutout). Calling setOpacity sets the OpacityEnabled flag,
+				 * which the RT pipeline reads (Material::Interface::isAlphaTest) to know
+				 * it must alpha-test against the texture at hit time. Without this, sprites
+				 * with the default Opacity=1.0 would not enter the RT TLAS as alpha-test
+				 * and would never appear in reflections. */
+				const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F);
+				materialResource.setOpacity(opacity);
 
 				return materialResource.setManualLoadSuccess(true);
 			}, 0);

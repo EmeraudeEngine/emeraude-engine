@@ -46,7 +46,8 @@ namespace EmEn::Graphics::Material
 		Normal,
 		Roughness,
 		Metalness,
-		Emission
+		Emission,
+		Opacity
 	};
 
 	/**
@@ -95,9 +96,15 @@ namespace EmEn::Graphics::Material
 		int32_t roughnessTextureIndex{-1};
 		int32_t metalnessTextureIndex{-1};
 		int32_t emissionTextureIndex{-1};
+		int32_t opacityTextureIndex{-1};
+
+		/* Alpha-test threshold (0..1). When IsAlphaTest is set, hits where the sampled
+		 * opacity (or albedo alpha if no opacity texture) is below this threshold are
+		 * rejected by the RT trace shader (the ray continues past the hit). */
+		float alphaCutoff{0.5F};
 
 		/* Padding to align to 16 bytes (std430). */
-		int32_t _padding[3]{0, 0, 0};
+		int32_t _padding{0};
 
 		/* Flag bits for the 'flags' field. */
 		static constexpr uint32_t HasAlbedoTexture       = 1U << 0;
@@ -107,6 +114,8 @@ namespace EmEn::Graphics::Material
 		static constexpr uint32_t HasEmissionTexture      = 1U << 4;
 		static constexpr uint32_t HasClearCoat            = 1U << 5;
 		static constexpr uint32_t IsEmissive              = 1U << 6;
+		static constexpr uint32_t HasOpacityTexture       = 1U << 7;
+		static constexpr uint32_t IsAlphaTest             = 1U << 8;
 	};
 
 	/* Verify struct size is a multiple of 16 bytes for std430 alignment. */

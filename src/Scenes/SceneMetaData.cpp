@@ -37,10 +37,14 @@
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
 #include "Vulkan/Device.hpp"
 #include "Tracer.hpp"
+
+/* For wall-clock animation time (passed to AnimatedTexture2D::frameIndexAt). */
+#include <chrono>
 
 namespace EmEn::Scenes
 {
@@ -117,7 +121,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex) noexcept
+	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Libs::Math::Vector< 3, float > & cameraPosition) noexcept
 	{
 		if ( m_accelerationStructureBuilder == nullptr )
 		{
@@ -206,26 +210,18 @@ namespace EmEn::Scenes
 					break;
 				}
 
-				/* --- Material deduplication --- */
-				const auto * material = renderable->material(batch.subGeometryIndex());
-				uint32_t materialIndex = 0;
-
-				if ( material != nullptr )
-				{
-					if ( auto it = materialMap.find(material); it != materialMap.end() )
-					{
-						materialIndex = it->second;
-					}
-					else if ( materialEntries.size() < MaxRTMaterials )
-					{
-						materialIndex = static_cast< uint32_t >(materialEntries.size());
-						materialMap.emplace(material, materialIndex);
-
-						Material::GPURTMaterialData rtMat{};
-						material->exportRTMaterialData(rtMat);
-						materialEntries.emplace_back(rtMat);
-					}
-				}
+				/* --- Per-sub-geometry material lookup ---
+				 * For each of the renderable's layers (capped at MaxSubGeometriesPerMesh),
+				 * resolve its material index in the RT material SSBO. The RT trace shader
+				 * uses materialIndices[rayQueryGetIntersectionGeometryIndexEXT(...)] to
+				 * pick the right material at hit time. Without this, multi-layer meshes
+				 * (e.g. palm trunk + alpha-test leaves) would alias their materials.
+				 *
+				 * Also tracks whether ANY sub-geometry is alpha-test, which triggers the
+				 * FORCE_NO_OPAQUE TLAS instance flag (so the ray query receives candidate
+				 * hits and the shader can sample the opacity texture). */
+				const auto subGeoCount = std::min(renderable->subGeometryCount(), MaxSubGeometriesPerMesh);
+				bool anyAlphaTest = false;
 
 				/* --- Mesh metadata --- */
 				const auto instanceIndex = static_cast< uint32_t >(meshEntries.size());
@@ -249,7 +245,37 @@ namespace EmEn::Scenes
 
 				meshMeta.normalByteOffset = computeNormalByteOffset(geometry);
 				meshMeta.primaryUVByteOffset = computeUVByteOffset(geometry);
-				meshMeta.materialIndex = materialIndex;
+				meshMeta.subGeometryCount = subGeoCount;
+
+				for ( uint32_t subGeo = 0; subGeo < subGeoCount; ++subGeo )
+				{
+					const auto * subMaterial = renderable->material(subGeo);
+					uint32_t subMaterialIndex = 0;
+
+					if ( subMaterial != nullptr )
+					{
+						if ( auto it = materialMap.find(subMaterial); it != materialMap.end() )
+						{
+							subMaterialIndex = it->second;
+						}
+						else if ( materialEntries.size() < MaxRTMaterials )
+						{
+							subMaterialIndex = static_cast< uint32_t >(materialEntries.size());
+							materialMap.emplace(subMaterial, subMaterialIndex);
+
+							Material::GPURTMaterialData rtMat{};
+							subMaterial->exportRTMaterialData(rtMat);
+							materialEntries.emplace_back(rtMat);
+						}
+
+						if ( subMaterial->isAlphaTest() )
+						{
+							anyAlphaTest = true;
+						}
+					}
+
+					meshMeta.materialIndices[subGeo] = subMaterialIndex;
+				}
 
 				meshEntries.emplace_back(meshMeta);
 
@@ -287,6 +313,61 @@ namespace EmEn::Scenes
 				instance.mask = 0xFF;
 				instance.shaderBindingTableRecordOffset = 0;
 				instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+
+				/* Force this instance non-opaque when ANY of its sub-geometry materials
+				 * uses alpha-test, so the ray query receives candidate intersections
+				 * (instead of auto-confirmed). The shader then samples the opacity
+				 * texture per hit, and the alpha-test per-material flag determines
+				 * whether to actually run the test or auto-accept. Materials without
+				 * alpha-test on any sub-geometry keep the BLAS default opacity. */
+				if ( anyAlphaTest )
+				{
+					instance.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+				}
+
+				/* Sprite billboard rotation (CPU-side, per frame): the sprite's BLAS quad
+				 * is a flat XY plane in object space — the rasterizer billboards it via
+				 * vertex shader, but the RT pipeline only sees the BLAS geometry, so we
+				 * must bake the face-camera rotation into the TLAS instance transform.
+				 * Cylindrical billboard: only rotates around the vertical (Y) axis so the
+				 * sprite stays upright regardless of camera elevation. Uniform scale and
+				 * translation are preserved from the original transform. */
+				if ( renderable->isSprite() )
+				{
+					auto & rm = instance.transform.matrix;
+
+					/* Recover uniform scale from the first column's magnitude — sprites
+					 * are always uniformly scaled via SpriteResource's UniformScale. */
+					const float scale = std::sqrt(rm[0][0] * rm[0][0] + rm[1][0] * rm[1][0] + rm[2][0] * rm[2][0]);
+
+					const float dx = cameraPosition[0] - rm[0][3];
+					const float dz = cameraPosition[2] - rm[2][3];
+					const float horizLen = std::sqrt(dx * dx + dz * dz);
+
+					float fx;
+					float fz;
+
+					if ( horizLen > 0.0001F )
+					{
+						fx = dx / horizLen;
+						fz = dz / horizLen;
+					}
+					else
+					{
+						/* Camera directly above/below the sprite — fall back to a default
+						 * facing so the rotation matrix stays well-defined. */
+						fx = 0.0F;
+						fz = 1.0F;
+					}
+
+					/* RHS basis: col 1 (local +Y) preserved as world up axis,
+					 * col 2 (local +Z, the sprite's normal) = forward_horiz,
+					 * col 0 (local +X) = col 1 × col 2 = (fz, 0, -fx). */
+					rm[0][0] = scale * fz;   rm[0][1] = 0.0F;    rm[0][2] = scale * fx;
+					rm[1][0] = 0.0F;          rm[1][1] = scale;    rm[1][2] = 0.0F;
+					rm[2][0] = -scale * fx;  rm[2][1] = 0.0F;    rm[2][2] = scale * fz;
+					/* Translation (column 3) intentionally preserved. */
+				}
 
 				instances.emplace_back(instance);
 			}
@@ -366,6 +447,11 @@ namespace EmEn::Scenes
 							rtMat.emissionTextureIndex = static_cast< int32_t >(bindlessIndex);
 							rtMat.flags |= Material::GPURTMaterialData::HasEmissionTexture;
 							break;
+
+						case Material::RTTextureRole::Opacity :
+							rtMat.opacityTextureIndex = static_cast< int32_t >(bindlessIndex);
+							rtMat.flags |= Material::GPURTMaterialData::HasOpacityTexture;
+							break;
 					}
 				}
 			}
@@ -382,6 +468,43 @@ namespace EmEn::Scenes
 				{
 					++it;
 				}
+			}
+
+			/* Refresh animated textures' bindless slots with the current frame's 2D view.
+			 * AnimatedTexture2D's main imageView is a VK_IMAGE_VIEW_TYPE_2D_ARRAY which is
+			 * invalid for sampling via the bindless sampler2D[] descriptor used by the RT
+			 * trace shaders. We pre-create one VK_IMAGE_VIEW_TYPE_2D view per frame and
+			 * swap them into the slot each rebuild — UPDATE_AFTER_BIND lets us patch the
+			 * descriptor while the GPU may still be reading the previous frame's value.
+			 * This makes sprites animate AND alpha-test correctly in RT reflections. */
+			for ( const auto & [texturePtr, bindlessIndex] : m_textureRegistrationCache )
+			{
+				if ( texturePtr == nullptr || texturePtr->frameCount() <= 1 )
+				{
+					continue;
+				}
+
+				const auto * animated = dynamic_cast< const Graphics::TextureResource::AnimatedTexture2D * >(texturePtr);
+
+				if ( animated == nullptr )
+				{
+					continue;
+				}
+
+				const auto currentFrame = animated->frameIndexAt(sceneTimeMS);
+				const auto frameView = animated->imageViewForFrame(currentFrame);
+
+				if ( frameView == nullptr || animated->sampler() == nullptr )
+				{
+					continue;
+				}
+
+				VkDescriptorImageInfo info{};
+				info.sampler = animated->sampler()->handle();
+				info.imageView = frameView->handle();
+				info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+				static_cast< void >(bindlessTextureManager->updateTexture2DFromDescriptorInfo(bindlessIndex, info));
 			}
 		}
 

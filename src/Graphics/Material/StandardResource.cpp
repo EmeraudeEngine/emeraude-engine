@@ -1121,6 +1121,15 @@ namespace EmEn::Graphics::Material
 			outData.flags |= GPURTMaterialData::IsEmissive;
 		}
 
+		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time
+		 * and skip hits below the cutoff. Cutout materials (foliage, sprites) need
+		 * this so rays pass through transparent texels. */
+		if ( this->isAlphaTest() )
+		{
+			outData.flags |= GPURTMaterialData::IsAlphaTest;
+			outData.alphaCutoff = 0.5F;
+		}
+
 		/* NOTE: Texture bindless indices are set by SceneMetaData during material collection.
 		 * The textures are accessible via m_components[ComponentType::Diffuse], etc. */
 	}
@@ -1130,7 +1139,8 @@ namespace EmEn::Graphics::Material
 	{
 		static constexpr std::pair< ComponentType, RTTextureRole > mappings[] = {
 			{ComponentType::Diffuse, RTTextureRole::Albedo},
-			{ComponentType::Normal, RTTextureRole::Normal}
+			{ComponentType::Normal, RTTextureRole::Normal},
+			{ComponentType::Opacity, RTTextureRole::Opacity}
 		};
 
 		for ( const auto & [compType, role] : mappings )
@@ -2346,6 +2356,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		this->enableFlag(BlendingEnabled);
+		this->enableFlag(OpacityEnabled);
 
 		this->setOpacity(amount);
 
@@ -2379,6 +2390,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		this->enableFlag(BlendingEnabled);
+		this->enableFlag(OpacityEnabled);
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 

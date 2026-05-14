@@ -580,6 +580,14 @@ namespace EmEn::Graphics::Material
 			outData.flags |= GPURTMaterialData::IsEmissive;
 		}
 
+		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time.
+		 * For BasicResource the opacity comes from the diffuse texture's alpha channel
+		 * (no dedicated opacity texture in this material type). */
+		if ( this->isAlphaTest() )
+		{
+			outData.flags |= GPURTMaterialData::IsAlphaTest;
+			outData.alphaCutoff = 0.5F;
+		}
 	}
 
 	void

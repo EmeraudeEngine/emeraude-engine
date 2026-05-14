@@ -382,7 +382,7 @@ namespace EmEn::Scenes
 		 * RT effects cast rays in world space and need ALL scene geometry, not just what's on screen. */
 		auto * mutableBindlessManager = bindlessManager.usable() ? &m_AVConsoleManager.graphicsRenderer().bindlessTextureManager() : nullptr;
 		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
-		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessManager, frameIndex);
+		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessManager, frameIndex, this->lifetimeMS(), renderTarget->viewMatrices().position());
 
 		return true;
 	}
@@ -986,15 +986,36 @@ namespace EmEn::Scenes
 
 			/* NOTE: Scene visual is the skybox or the ground, frustum culling step is not relevant here. */
 
-			/* RT list: scene visuals (ground) are always included (distance 0). */
+			/* RT list: scene visuals (ground) are always included (distance 0).
+			 * ONE batch per renderable — per-sub-geometry materials are resolved in the
+			 * RT trace shader via materialIndices[geometryIndex] (multi-geometry BLAS).
+			 * The renderable is included if ANY of its layers is opaque or alpha-test. */
 			if ( rtEnabled )
 			{
 				const auto * renderable = renderableInstance->renderable();
 
-				if ( renderable != nullptr && renderable->isOpaque(0) )
+				if ( renderable != nullptr )
 				{
-					const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-					RenderBatch::create(isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList, 0.0F, renderableInstance, nullptr, 0);
+					const auto layerCount = renderable->layerCount();
+					bool rtVisible = false;
+
+					for ( uint32_t layer = 0; layer < layerCount; ++layer )
+					{
+						const auto * layerMaterial = renderable->material(layer);
+
+						if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
+						{
+							rtVisible = true;
+							break;
+						}
+					}
+
+					if ( rtVisible )
+					{
+						const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+						auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
+						RenderBatch::create(rtList, 0.0F, renderableInstance, nullptr, 0);
+					}
 				}
 			}
 
@@ -1030,15 +1051,35 @@ namespace EmEn::Scenes
 
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					/* RT list: distance-only culling (no frustum), opaque objects only. */
+					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
+					 * looked up by the RT trace shader via materialIndices[geometryIndex]
+					 * (multi-geometry BLAS). Distance-only culling, no frustum. */
 					if ( rtEnabled && distance <= m_TLASDistance )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
-						if ( renderable != nullptr && renderable->isOpaque(0) )
+						if ( renderable != nullptr )
 						{
-							const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-							RenderBatch::create(isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList, distance, renderableInstance, &worldCoordinates, 0);
+							const auto layerCount = renderable->layerCount();
+							bool rtVisible = false;
+
+							for ( uint32_t layer = 0; layer < layerCount; ++layer )
+							{
+								const auto * layerMaterial = renderable->material(layer);
+
+								if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
+								{
+									rtVisible = true;
+									break;
+								}
+							}
+
+							if ( rtVisible )
+							{
+								const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+								auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
+								RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, 0);
+							}
 						}
 					}
 
@@ -1087,15 +1128,34 @@ namespace EmEn::Scenes
 
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					/* RT list: distance-only culling (no frustum), opaque objects only. */
+					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
+					 * looked up by the RT trace shader via materialIndices[geometryIndex]. */
 					if ( rtEnabled && distance <= m_TLASDistance )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
-						if ( renderable != nullptr && renderable->isOpaque(0) )
+						if ( renderable != nullptr )
 						{
-							const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-							RenderBatch::create(isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList, distance, renderableInstance, &worldCoordinates, 0);
+							const auto layerCount = renderable->layerCount();
+							bool rtVisible = false;
+
+							for ( uint32_t layer = 0; layer < layerCount; ++layer )
+							{
+								const auto * layerMaterial = renderable->material(layer);
+
+								if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
+								{
+									rtVisible = true;
+									break;
+								}
+							}
+
+							if ( rtVisible )
+							{
+								const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+								auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
+								RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, 0);
+							}
 						}
 					}
 

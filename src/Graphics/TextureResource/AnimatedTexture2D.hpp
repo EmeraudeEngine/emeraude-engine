@@ -117,6 +117,27 @@ namespace EmEn::Graphics::TextureResource
 				return m_imageView;
 			}
 
+			/**
+			 * @brief Returns a 2D image view of one specific frame (single array layer).
+			 * @note Used by the RT bindless texture path which cannot sample a 2D_ARRAY
+			 * view via a `sampler2D[]` descriptor. The per-frame 2D views are pre-created
+			 * in createTexture(). Returns nullptr if frame is out of range or views haven't
+			 * been created.
+			 * @param frame The frame (layer) index.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			imageViewForFrame (uint32_t frame) const noexcept
+			{
+				if ( frame >= m_frame2DViews.size() )
+				{
+					return nullptr;
+				}
+
+				return m_frame2DViews[frame];
+			}
+
 			/** @copydoc EmEn::Vulkan::TextureInterface::sampler() const noexcept */
 			[[nodiscard]]
 			std::shared_ptr< Vulkan::Sampler >
@@ -226,6 +247,10 @@ namespace EmEn::Graphics::TextureResource
 			std::shared_ptr< Vulkan::Image > m_image;
 			std::shared_ptr< Vulkan::ImageView > m_imageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
+			/** @brief Per-frame VK_IMAGE_VIEW_TYPE_2D views (one per layer), so that the
+			 * RT bindless `sampler2D[]` descriptor can sample a single frame at a time
+			 * (the main `m_imageView` is a 2D_ARRAY and isn't valid for sampler2D). */
+			std::vector< std::shared_ptr< Vulkan::ImageView > > m_frame2DViews;
 	};
 }
 

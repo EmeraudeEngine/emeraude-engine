@@ -51,7 +51,12 @@ namespace EmEn::Vulkan
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief Describes a geometry input for BLAS building.
+	 * @brief Describes one sub-geometry input for BLAS building.
+	 * @note Multiple instances of this struct can be packed into a single BLAS
+	 * via the vector overload of buildBLAS — they share the vertex/index buffer
+	 * and differ only by firstIndex/indexCount. The shader-side ray query then
+	 * uses rayQueryGetIntersectionGeometryIndexEXT to identify which sub-geometry
+	 * was hit and look up the right material.
 	 */
 	struct BLASGeometryInput final
 	{
@@ -59,12 +64,13 @@ namespace EmEn::Vulkan
 		uint32_t vertexCount{0};
 		uint32_t vertexStride{0};
 		VkBuffer indexBuffer{VK_NULL_HANDLE};
-		uint32_t indexCount{0};
+		uint32_t firstIndex{0};    /* First index (uint32) for this sub-geometry; ignored if cpuIndices is set. */
+		uint32_t indexCount{0};    /* Number of indices for this sub-geometry. */
 		VkIndexType indexType{VK_INDEX_TYPE_UINT32};
 
 		/* Optional CPU-side triangle-list indices (e.g. converted from TriangleStrip).
 		 * When non-null, the builder creates a temporary GPU buffer from these indices
-		 * and ignores indexBuffer/indexCount above. */
+		 * and ignores indexBuffer/firstIndex/indexCount above. */
 		const uint32_t * cpuIndices{nullptr};
 		uint32_t cpuIndexCount{0};
 	};
@@ -137,14 +143,18 @@ namespace EmEn::Vulkan
 			bool initialize () noexcept;
 
 			/**
-			 * @brief Builds a bottom-level acceleration structure from geometry.
+			 * @brief Builds a bottom-level acceleration structure from one or more sub-geometries.
 			 * @note This is a synchronous operation (fence wait). BLAS are typically
 			 * built once at load time, so the stall is acceptable.
-			 * @param geometry The geometry input describing vertex/index buffers.
+			 * @note When the vector contains multiple sub-geometries, they share the
+			 * vertex/index buffer (one BLAS, multiple VkAccelerationStructureGeometryKHR
+			 * entries). The shader uses rayQueryGetIntersectionGeometryIndexEXT to know
+			 * which sub-geometry was hit and look up its specific material.
+			 * @param geometries The sub-geometry inputs.
 			 * @return std::unique_ptr< AccelerationStructure > The built BLAS, or nullptr on failure.
 			 */
 			[[nodiscard]]
-			std::unique_ptr< AccelerationStructure > buildBLAS (const BLASGeometryInput & geometry) noexcept;
+			std::unique_ptr< AccelerationStructure > buildBLAS (const std::vector< BLASGeometryInput > & geometries) noexcept;
 
 			/**
 			 * @brief Prepares a TLAS build (CPU-side): uploads instances, allocates AS and scratch.

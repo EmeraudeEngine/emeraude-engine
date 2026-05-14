@@ -38,6 +38,7 @@
 #include "GPUMeshMetaData.hpp"
 #include "RenderBatch.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
+#include "Libs/Math/Vector.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
@@ -135,8 +136,16 @@ namespace EmEn::Scenes
 			 * @param opaqueLightedList The opaque lighted render batch list (not frustum-culled).
 			 * @param bindlessTextureManager A pointer to the bindless texture manager for RT texture registration.
 			 * @param frameIndex The current frame-in-flight index for SSBO double-buffering.
+			 * @param sceneTimeMS The current scene time in milliseconds (Scene::lifetimeMS) —
+			 *        used to compute the current frame index for animated textures so the
+			 *        RT bindless slot stays in sync with the rasterizer's animation state.
+			 * @param cameraPosition The current camera world-space position. Used to compute
+			 *        face-camera billboard rotation for sprite renderables — the BLAS quad
+			 *        is a flat XY in object space, the rasterizer billboards it via vertex
+			 *        shader, and the RT side needs the equivalent rotation baked into the
+			 *        TLAS instance transform so reflection rays hit the correct quad face.
 			 */
-			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex) noexcept;
+			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Libs::Math::Vector< 3, float > & cameraPosition) noexcept;
 
 			/**
 			 * @brief Records the pending TLAS build into an external command buffer.

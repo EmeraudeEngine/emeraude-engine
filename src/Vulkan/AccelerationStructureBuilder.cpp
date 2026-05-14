@@ -129,8 +129,15 @@ namespace EmEn::Vulkan
 	}
 
 	std::unique_ptr< AccelerationStructure >
-	AccelerationStructureBuilder::buildBLAS (const BLASGeometryInput & geometry) noexcept
+	AccelerationStructureBuilder::buildBLAS (const std::vector< BLASGeometryInput > & geometries) noexcept
 	{
+		if ( geometries.empty() )
+		{
+			Tracer::error(ClassId, "No geometries provided for BLAS build !");
+
+			return nullptr;
+		}
+
 		const std::lock_guard< std::mutex > lock{m_buildAccess};
 
 		if ( m_deviceLost )
@@ -157,94 +164,133 @@ namespace EmEn::Vulkan
 
 		const auto deviceHandle = m_device->handle();
 
-		/* 1. Get vertex buffer device address. */
-		VkBufferDeviceAddressInfo vertexAddressInfo{};
-		vertexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-		vertexAddressInfo.buffer = geometry.vertexBuffer;
-		const auto vertexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &vertexAddressInfo);
+		/* Per-sub-geometry build state. */
+		std::vector< VkAccelerationStructureGeometryKHR > asGeometries;
+		std::vector< VkAccelerationStructureBuildRangeInfoKHR > buildRangeInfos;
+		std::vector< uint32_t > primitiveCounts;
+		asGeometries.reserve(geometries.size());
+		buildRangeInfos.reserve(geometries.size());
+		primitiveCounts.reserve(geometries.size());
 
-		/* 2. Handle index buffer: either from CPU indices (temporary upload) or existing GPU buffer. */
-		VkDeviceAddress indexAddress = 0;
-		uint32_t effectiveIndexCount = 0;
-		Buffer cpuIndexBuffer{m_device, 0, 0, 0, false}; /* Placeholder; only used when cpuIndices != null. */
+		/* CPU-uploaded index buffers (one per sub-geometry that uses cpuIndices) must
+		 * outlive the build submission — keep them in this vector. */
+		std::vector< Buffer > cpuIndexBuffers;
+		cpuIndexBuffers.reserve(geometries.size());
 
-		if ( geometry.cpuIndices != nullptr && geometry.cpuIndexCount > 0 )
+		/* Track shared buffer handles for the post-build acquire-barrier (assume all
+		 * sub-geometries share the same VB/IB, which is the case for our sub-geometry
+		 * partitioning of a single Geometry::Interface). */
+		VkBuffer sharedVertexBuffer = VK_NULL_HANDLE;
+		VkBuffer sharedIndexBuffer = VK_NULL_HANDLE;
+		uint32_t totalPrimitives = 0;
+
+		for ( const auto & geometry : geometries )
 		{
-			/* Upload CPU-provided triangle-list indices to a temporary GPU buffer. */
-			const auto bufferSize = static_cast< VkDeviceSize >(geometry.cpuIndexCount * sizeof(uint32_t));
+			/* Get vertex buffer device address. */
+			VkBufferDeviceAddressInfo vertexAddressInfo{};
+			vertexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+			vertexAddressInfo.buffer = geometry.vertexBuffer;
+			const auto vertexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &vertexAddressInfo);
+			sharedVertexBuffer = geometry.vertexBuffer;
 
-			cpuIndexBuffer = Buffer{m_device, 0, bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true};
+			/* Handle index buffer: either from CPU indices (temporary upload) or existing GPU buffer. */
+			VkDeviceAddress indexAddress = 0;
+			uint32_t effectiveIndexCount = 0;
+			uint32_t effectiveFirstIndex = 0;
 
-			if ( !cpuIndexBuffer.createOnHardware() )
+			if ( geometry.cpuIndices != nullptr && geometry.cpuIndexCount > 0 )
 			{
-				Tracer::error(ClassId, "Unable to create temporary index buffer for BLAS build !");
+				const auto bufferSize = static_cast< VkDeviceSize >(geometry.cpuIndexCount * sizeof(uint32_t));
 
-				return nullptr;
+				cpuIndexBuffers.emplace_back(m_device, 0, bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true);
+				auto & cpuIndexBuffer = cpuIndexBuffers.back();
+
+				if ( !cpuIndexBuffer.createOnHardware() )
+				{
+					Tracer::error(ClassId, "Unable to create temporary index buffer for BLAS build !");
+
+					return nullptr;
+				}
+
+				if ( !cpuIndexBuffer.writeData(MemoryRegion{geometry.cpuIndices, bufferSize}) )
+				{
+					Tracer::error(ClassId, "Unable to write temporary index data for BLAS build !");
+
+					return nullptr;
+				}
+
+				VkBufferDeviceAddressInfo cpuIndexAddressInfo{};
+				cpuIndexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+				cpuIndexAddressInfo.buffer = cpuIndexBuffer.handle();
+				indexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &cpuIndexAddressInfo);
+				effectiveIndexCount = geometry.cpuIndexCount;
+				effectiveFirstIndex = 0;
+			}
+			else if ( geometry.indexBuffer != VK_NULL_HANDLE )
+			{
+				VkBufferDeviceAddressInfo indexAddressInfo{};
+				indexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+				indexAddressInfo.buffer = geometry.indexBuffer;
+				indexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &indexAddressInfo);
+				effectiveIndexCount = geometry.indexCount;
+				effectiveFirstIndex = geometry.firstIndex;
+				sharedIndexBuffer = geometry.indexBuffer;
 			}
 
-			if ( !cpuIndexBuffer.writeData(MemoryRegion{geometry.cpuIndices, bufferSize}) )
-			{
-				Tracer::error(ClassId, "Unable to write temporary index data for BLAS build !");
+			const bool hasIndices = indexAddress != 0;
 
-				return nullptr;
-			}
+			VkAccelerationStructureGeometryTrianglesDataKHR trianglesData{};
+			trianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+			trianglesData.pNext = nullptr;
+			trianglesData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+			trianglesData.vertexData.deviceAddress = vertexAddress;
+			trianglesData.vertexStride = geometry.vertexStride;
+			trianglesData.maxVertex = geometry.vertexCount - 1;
+			trianglesData.indexType = hasIndices ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_NONE_KHR;
+			trianglesData.indexData.deviceAddress = indexAddress;
+			trianglesData.transformData.deviceAddress = 0;
 
-			VkBufferDeviceAddressInfo cpuIndexAddressInfo{};
-			cpuIndexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-			cpuIndexAddressInfo.buffer = cpuIndexBuffer.handle();
-			indexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &cpuIndexAddressInfo);
-			effectiveIndexCount = geometry.cpuIndexCount;
+			VkAccelerationStructureGeometryKHR asGeometry{};
+			asGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+			asGeometry.pNext = nullptr;
+			asGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+			asGeometry.geometry.triangles = trianglesData;
+			asGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+			const uint32_t primitiveCount = hasIndices
+				? effectiveIndexCount / 3
+				: geometry.vertexCount / 3;
+
+			VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo{};
+			buildRangeInfo.primitiveCount = primitiveCount;
+			/* primitiveOffset is the byte offset to the first index for this sub-geometry. */
+			buildRangeInfo.primitiveOffset = effectiveFirstIndex * static_cast< uint32_t >(sizeof(uint32_t));
+			buildRangeInfo.firstVertex = 0;
+			buildRangeInfo.transformOffset = 0;
+
+			asGeometries.emplace_back(asGeometry);
+			buildRangeInfos.emplace_back(buildRangeInfo);
+			primitiveCounts.emplace_back(primitiveCount);
+			totalPrimitives += primitiveCount;
 		}
-		else if ( geometry.indexBuffer != VK_NULL_HANDLE )
-		{
-			VkBufferDeviceAddressInfo indexAddressInfo{};
-			indexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-			indexAddressInfo.buffer = geometry.indexBuffer;
-			indexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &indexAddressInfo);
-			effectiveIndexCount = geometry.indexCount;
-		}
 
-		const bool hasIndices = indexAddress != 0;
-
-		/* 3. Describe the geometry. */
-		VkAccelerationStructureGeometryTrianglesDataKHR trianglesData{};
-		trianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-		trianglesData.pNext = nullptr;
-		trianglesData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-		trianglesData.vertexData.deviceAddress = vertexAddress;
-		trianglesData.vertexStride = geometry.vertexStride;
-		trianglesData.maxVertex = geometry.vertexCount - 1;
-		trianglesData.indexType = hasIndices ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_NONE_KHR;
-		trianglesData.indexData.deviceAddress = indexAddress;
-		trianglesData.transformData.deviceAddress = 0;
-
-		VkAccelerationStructureGeometryKHR asGeometry{};
-		asGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-		asGeometry.pNext = nullptr;
-		asGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-		asGeometry.geometry.triangles = trianglesData;
-		asGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-
-		const uint32_t primitiveCount = hasIndices
-			? effectiveIndexCount / 3
-			: geometry.vertexCount / 3;
-
-		/* 3. Query build sizes. */
+		/* Query build sizes — passes ALL primitive counts so the implementation
+		 * accounts for the cumulative geometry size. */
 		VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo{};
 		buildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
 		buildGeometryInfo.pNext = nullptr;
 		buildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 		buildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 		buildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-		buildGeometryInfo.geometryCount = 1;
-		buildGeometryInfo.pGeometries = &asGeometry;
+		buildGeometryInfo.geometryCount = static_cast< uint32_t >(asGeometries.size());
+		buildGeometryInfo.pGeometries = asGeometries.data();
 
 		VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo{};
 		buildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
 
-		m_fpGetBuildSizes(deviceHandle, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildGeometryInfo, &primitiveCount, &buildSizesInfo);
+		m_fpGetBuildSizes(deviceHandle, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildGeometryInfo, primitiveCounts.data(), &buildSizesInfo);
 
-		/* 4. Create the acceleration structure. */
+		/* Create the acceleration structure. */
 		auto blas = std::make_unique< AccelerationStructure >(m_device, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, buildSizesInfo.accelerationStructureSize);
 
 		if ( !blas->createOnHardware() )
@@ -254,7 +300,7 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		/* 5. Create scratch buffer (over-allocate for alignment padding). */
+		/* Create scratch buffer (over-allocate for alignment padding). */
 		constexpr VkDeviceSize ScratchAlignment = 256;
 		const auto scratchAllocSize = buildSizesInfo.buildScratchSize + ScratchAlignment;
 		Buffer scratchBuffer{m_device, 0, scratchAllocSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, false};
@@ -272,36 +318,33 @@ namespace EmEn::Vulkan
 		const auto scratchAddress = m_fpGetBufferDeviceAddress(deviceHandle, &scratchAddressInfo);
 		const auto alignedScratchAddress = (scratchAddress + ScratchAlignment - 1) & ~(ScratchAlignment - 1);
 
-		/* 6. Fill build info with the created AS and scratch buffer. */
 		buildGeometryInfo.dstAccelerationStructure = blas->handle();
 		buildGeometryInfo.scratchData.deviceAddress = alignedScratchAddress;
 
-		VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo{};
-		buildRangeInfo.primitiveCount = primitiveCount;
-		buildRangeInfo.primitiveOffset = 0;
-		buildRangeInfo.firstVertex = 0;
-		buildRangeInfo.transformOffset = 0;
+		/* Build needs an array of pointers to build range infos, one per geometry. */
+		std::vector< const VkAccelerationStructureBuildRangeInfoKHR * > pBuildRangeInfos;
+		pBuildRangeInfos.reserve(buildRangeInfos.size());
 
-		const auto * pBuildRangeInfo = &buildRangeInfo;
+		const auto * rangeBase = buildRangeInfos.data();
+
+		/* vkCmdBuildAccelerationStructuresKHR expects an array of ranges
+		 * (one per build), each range itself being a pointer to an array of
+		 * VkAccelerationStructureBuildRangeInfoKHR (one per geometry). For a
+		 * single build with N geometries, we pass &rangeBase as the outer
+		 * array of size 1, and rangeBase itself is an array of N infos. */
+		const auto * pSingleBuildRangeArray = rangeBase;
 
 		TraceDebug{ClassId} <<
-			"BLAS build: vertices=" << geometry.vertexCount <<
-			" stride=" << geometry.vertexStride <<
-			" indices=" << effectiveIndexCount <<
-			" primitives=" << primitiveCount <<
-			" vertexAddr=0x" << std::hex << vertexAddress <<
-			" indexAddr=0x" << indexAddress <<
-			" scratchSize=" << std::dec << buildSizesInfo.buildScratchSize <<
-			" asSize=" << buildSizesInfo.accelerationStructureSize <<
-			" scratchAddr=0x" << std::hex << alignedScratchAddress << std::dec;
+			"BLAS build: subGeometries=" << asGeometries.size() <<
+			" totalPrimitives=" << totalPrimitives <<
+			" scratchSize=" << buildSizesInfo.buildScratchSize <<
+			" asSize=" << buildSizesInfo.accelerationStructureSize;
 
-		/* 7. Record and submit the build command. */
+		/* Record and submit the build command. */
 		if ( !this->submitOneShot([&] (VkCommandBuffer cmdBuf) {
 			if ( m_transferFamilyIndex != m_graphicsFamilyIndex )
 			{
-				/* Acquire queue family ownership for vertex/index buffers that
-				 * were transferred on a dedicated transfer queue.  The matching
-				 * release barrier is recorded in BufferTransferOperation::transfer(). */
+				/* Acquire queue family ownership for the SHARED vertex/index buffers. */
 				VkBufferMemoryBarrier acquireBarriers[2]{};
 				uint32_t barrierCount = 0;
 
@@ -310,19 +353,19 @@ namespace EmEn::Vulkan
 				acquireBarriers[barrierCount].dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 				acquireBarriers[barrierCount].srcQueueFamilyIndex = m_transferFamilyIndex;
 				acquireBarriers[barrierCount].dstQueueFamilyIndex = m_graphicsFamilyIndex;
-				acquireBarriers[barrierCount].buffer = geometry.vertexBuffer;
+				acquireBarriers[barrierCount].buffer = sharedVertexBuffer;
 				acquireBarriers[barrierCount].offset = 0;
 				acquireBarriers[barrierCount].size = VK_WHOLE_SIZE;
 				barrierCount++;
 
-				if ( geometry.indexBuffer != VK_NULL_HANDLE )
+				if ( sharedIndexBuffer != VK_NULL_HANDLE )
 				{
 					acquireBarriers[barrierCount].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 					acquireBarriers[barrierCount].srcAccessMask = 0;
 					acquireBarriers[barrierCount].dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 					acquireBarriers[barrierCount].srcQueueFamilyIndex = m_transferFamilyIndex;
 					acquireBarriers[barrierCount].dstQueueFamilyIndex = m_graphicsFamilyIndex;
-					acquireBarriers[barrierCount].buffer = geometry.indexBuffer;
+					acquireBarriers[barrierCount].buffer = sharedIndexBuffer;
 					acquireBarriers[barrierCount].offset = 0;
 					acquireBarriers[barrierCount].size = VK_WHOLE_SIZE;
 					barrierCount++;
@@ -340,8 +383,6 @@ namespace EmEn::Vulkan
 			}
 			else
 			{
-				/* Same queue family: a simple memory barrier ensures prior
-				 * transfer writes are visible to the AS build stage. */
 				VkMemoryBarrier memoryBarrier{};
 				memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 				memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
@@ -358,7 +399,7 @@ namespace EmEn::Vulkan
 				);
 			}
 
-			m_fpCmdBuild(cmdBuf, 1, &buildGeometryInfo, &pBuildRangeInfo);
+			m_fpCmdBuild(cmdBuf, 1, &buildGeometryInfo, &pSingleBuildRangeArray);
 		}) )
 		{
 			Tracer::error(ClassId, "BLAS build command submission failed !");
@@ -366,7 +407,7 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		TraceDebug{ClassId} << "BLAS built successfully (" << primitiveCount << " triangles, " << buildSizesInfo.accelerationStructureSize << " bytes).";
+		TraceDebug{ClassId} << "BLAS built successfully (" << asGeometries.size() << " sub-geometries, " << totalPrimitives << " triangles, " << buildSizesInfo.accelerationStructureSize << " bytes).";
 
 		return blas;
 	}

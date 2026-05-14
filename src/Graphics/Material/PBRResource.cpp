@@ -1638,6 +1638,13 @@ namespace EmEn::Graphics::Material
 			outData.flags |= GPURTMaterialData::HasClearCoat;
 		}
 
+		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time. */
+		if ( this->isAlphaTest() )
+		{
+			outData.flags |= GPURTMaterialData::IsAlphaTest;
+			outData.alphaCutoff = 0.5F;
+		}
+
 		/* NOTE: Texture bindless indices are set by SceneMetaData during material collection.
 		 * The textures are accessible via m_components[ComponentType::Albedo], etc. */
 	}
@@ -1650,7 +1657,8 @@ namespace EmEn::Graphics::Material
 			{ComponentType::Normal, RTTextureRole::Normal},
 			{ComponentType::Roughness, RTTextureRole::Roughness},
 			{ComponentType::Metalness, RTTextureRole::Metalness},
-			{ComponentType::AutoIllumination, RTTextureRole::Emission}
+			{ComponentType::AutoIllumination, RTTextureRole::Emission},
+			{ComponentType::Opacity, RTTextureRole::Opacity}
 		};
 
 		for ( const auto & [compType, role] : mappings )

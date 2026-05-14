@@ -122,7 +122,9 @@ layout(push_constant) uniform PushConstants
 };
 
 /* Material flag bits (must match GPURTMaterialData). */
-const uint HasAlbedoTexture = 1u;
+const uint HasAlbedoTexture   = 1u << 0;
+const uint HasOpacityTexture  = 1u << 7;
+const uint IsAlphaTest        = 1u << 8;
 
 /* Light type constants. */
 const float LIGHT_DIRECTIONAL = 0.0;
@@ -162,12 +164,17 @@ struct MeshAccessor
 	uint idx0, idx1, idx2;
 };
 
+/* GPUMeshMetaData layout (3 uvec4 = 48 bytes per instance):
+ *   [0] = (vbAddrLo, vbAddrHi, ibAddrLo, ibAddrHi)
+ *   [1] = (strideBytes, uvOffsetBytes, normalOffsetBytes, subGeometryCount)
+ *   [2] = materialIndices[4]   — one per sub-geometry in the BLAS, looked up via
+ *                                 rayQueryGetIntersectionGeometryIndexEXT */
 MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 {
 	MeshAccessor m;
 
-	uvec4 meta0 = meshSSBO.meshEntries[instanceIndex * 2u];
-	uvec4 meta1 = meshSSBO.meshEntries[instanceIndex * 2u + 1u];
+	uvec4 meta0 = meshSSBO.meshEntries[instanceIndex * 3u];
+	uvec4 meta1 = meshSSBO.meshEntries[instanceIndex * 3u + 1u];
 
 	m.vb = VertexBuffer(uvec2(meta0.x, meta0.y));
 	m.ib = IndexBuffer(uvec2(meta0.z, meta0.w));
@@ -180,6 +187,23 @@ MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 	m.idx2 = m.ib.i[primitiveIndex * 3u + 2u];
 
 	return m;
+}
+
+/* Look up the materialIndex for a hit by combining the instance and sub-geometry.
+ * For single-sub-geometry BLAS the geomIdx is always 0 (materialIndices[0]).
+ * For multi-sub-geometry BLAS (e.g. palm trunk + leaves) each sub-geometry maps to
+ * its own material — no more cross-sub-geo material aliasing.
+ *
+ * Some BLAS may have many more sub-geometries than the renderable has "logical"
+ * material slots — typically animated sprites where the procedural quad builder
+ * creates one group per animation frame slot, even when only a few frames are
+ * actually used. In that case subGeometryCount (meta1.w) is 1 and we clamp the
+ * BLAS-side geomIdx to 0 so we always read the renderable's only material. */
+uint getHitMaterialIndex (uint instanceIndex, uint geomIdx)
+{
+	uint subGeoCount = meshSSBO.meshEntries[instanceIndex * 3u + 1u].w;
+	uint effectiveIdx = (geomIdx < subGeoCount) ? geomIdx : 0u;
+	return meshSSBO.meshEntries[instanceIndex * 3u + 2u][effectiveIdx];
 }
 
 /* Interpolate geometric normal at hit point. */
@@ -319,14 +343,76 @@ void main()
 	/* Offset ray origin along normal to prevent self-intersection. */
 	vec3 rayOrigin = worldPos + worldNormal * 0.01;
 
-	/* Trace reflection ray. */
+	/* Trace reflection ray.
+	 * Ray flag is NoneEXT (not OpaqueEXT) so candidate intersections on TLAS instances
+	 * flagged FORCE_NO_OPAQUE (alpha-test materials) are returned to us for confirmation
+	 * via rayQueryProceedEXT. We then sample the opacity texture at the candidate's
+	 * barycentrics and confirm only if the texel is above the material's alphaCutoff —
+	 * letting rays pass through the transparent texels of foliage, sprites, etc. */
 	rayQueryEXT rayQuery;
 	rayQueryInitializeEXT(
-		rayQuery, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF,
+		rayQuery, topLevelAS, gl_RayFlagsNoneEXT, 0xFF,
 		rayOrigin, 0.001, reflDir, maxDistance
 	);
 
-	while (rayQueryProceedEXT(rayQuery)) {}
+	while (rayQueryProceedEXT(rayQuery))
+	{
+		/* Only triangle candidates need our handling. */
+		if (rayQueryGetIntersectionTypeEXT(rayQuery, false) != gl_RayQueryCandidateIntersectionTriangleEXT)
+		{
+			continue;
+		}
+
+		uint candidateInstanceIndex  = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, false);
+		uint candidateGeomIdx        = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, false);
+		uint candidateMaterialIndex  = getHitMaterialIndex(candidateInstanceIndex, candidateGeomIdx);
+		uint candidateMatBase        = candidateMaterialIndex * 7u;
+		uint candidateFlags          = floatBitsToUint(materialSSBO.materials[candidateMatBase + 4u].w);
+
+		/* Non-alpha-test materials: confirm immediately (BLAS-default behaviour). */
+		if ((candidateFlags & IsAlphaTest) == 0u)
+		{
+			rayQueryConfirmIntersectionEXT(rayQuery);
+			continue;
+		}
+
+		/* Alpha-test path: sample the opacity (or albedo alpha) at the hit UV. */
+		uint candidatePrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, false);
+		vec2 candidateBary           = rayQueryGetIntersectionBarycentricsEXT(rayQuery, false);
+		MeshAccessor candidateMesh   = getMeshAccessor(candidateInstanceIndex, candidatePrimitiveIndex);
+		vec2 candidateUV             = getHitUV(candidateMesh, candidateBary);
+		float candidateAlpha         = 1.0;
+
+		if ((candidateFlags & HasOpacityTexture) != 0u)
+		{
+			int opacityIdx = floatBitsToInt(materialSSBO.materials[candidateMatBase + 6u].y);
+			if (opacityIdx >= 0)
+			{
+				candidateAlpha = texture(textures2D[nonuniformEXT(opacityIdx)], candidateUV).r;
+			}
+		}
+		else if ((candidateFlags & HasAlbedoTexture) != 0u)
+		{
+			int albedoIdx = floatBitsToInt(materialSSBO.materials[candidateMatBase + 5u].x);
+			if (albedoIdx >= 0)
+			{
+				candidateAlpha = texture(textures2D[nonuniformEXT(albedoIdx)], candidateUV).a;
+			}
+		}
+		else
+		{
+			/* No texture to sample — fall back to scalar albedo alpha. */
+			candidateAlpha = materialSSBO.materials[candidateMatBase].a;
+		}
+
+		float cutoff = materialSSBO.materials[candidateMatBase + 6u].z;
+
+		if (candidateAlpha >= cutoff)
+		{
+			rayQueryConfirmIntersectionEXT(rayQuery);
+		}
+		/* else: do not confirm — ray continues past this triangle. */
+	}
 
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
 	{
@@ -338,8 +424,11 @@ void main()
 		/* Unpack mesh data. */
 		MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
 
-		/* Look up material. */
-		uint materialIndex = meshSSBO.meshEntries[instanceIndex * 2u + 1u].w;
+		/* Look up material per sub-geometry — the BLAS may have several sub-geometries
+		 * with distinct materials (e.g. palm trunk + alpha-test leaves) and we pick the
+		 * one matching the actual hit triangle's sub-geometry. */
+		uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
+		uint materialIndex = getHitMaterialIndex(instanceIndex, geomIdx);
 		uint matBase = materialIndex * 7u;
 
 		vec3 albedo = materialSSBO.materials[matBase].rgb;
@@ -367,9 +456,12 @@ void main()
 		mat4x3 objectToWorld = rayQueryGetIntersectionObjectToWorldEXT(rayQuery, true);
 		vec3 hitNormal = normalize(mat3(objectToWorld) * objectNormal);
 
-		/* Reject self-reflection: if hit normal is too similar to origin normal,
-		 * this is a flat surface reflecting itself (e.g. floor → floor). */
-		if (dot(hitNormal, worldNormal) > 0.9)
+		/* Reject true numerical self-intersection: hit normal nearly identical to origin
+		 * normal AND hitT minuscule (ray hits the same triangle it started from due to
+		 * imperfect normal-offset). Real reflections from other geometry with parallel
+		 * normals — cube tops reflected in floor below, ceilings in floor, walls in
+		 * parallel walls — are LEGITIMATE and must not be rejected. */
+		if (dot(hitNormal, worldNormal) > 0.99 && hitT < 0.05)
 		{
 			outReflection = vec4(0.0);
 			return;

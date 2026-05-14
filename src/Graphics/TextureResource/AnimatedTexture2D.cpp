@@ -113,6 +113,38 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
+		/* Pre-create one VK_IMAGE_VIEW_TYPE_2D view per layer so the RT bindless
+		 * `sampler2D[]` descriptor can sample a single frame at a time. The main
+		 * imageView (above) is a 2D_ARRAY view used by the rasterization path. */
+		const auto layerCount = m_image->createInfo().arrayLayers;
+		const auto mipLevels = m_image->createInfo().mipLevels;
+		m_frame2DViews.reserve(layerCount);
+
+		for ( uint32_t layer = 0; layer < layerCount; ++layer )
+		{
+			auto frameView = std::make_shared< ImageView >(
+				m_image,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = mipLevels,
+					.baseArrayLayer = layer,
+					.layerCount = 1
+				}
+			);
+			frameView->setIdentifier(ClassId, this->name() + "_Frame" + std::to_string(layer), "ImageView");
+
+			if ( !frameView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create per-frame 2D image view (layer " << layer << ") for '" << this->name() << "' !";
+
+				return false;
+			}
+
+			m_frame2DViews.emplace_back(std::move(frameView));
+		}
+
 		/* Get a Vulkan sampler. */
 		m_sampler = renderer.getSampler("AnimatedTexture2D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
 			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
@@ -163,6 +195,15 @@ namespace EmEn::Graphics::TextureResource
 			m_imageView->destroyFromHardware();
 			m_imageView.reset();
 		}
+
+		for ( auto & frameView : m_frame2DViews )
+		{
+			if ( frameView != nullptr )
+			{
+				frameView->destroyFromHardware();
+			}
+		}
+		m_frame2DViews.clear();
 
 		if ( m_sampler != nullptr )
 		{
