@@ -170,6 +170,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
+			[[nodiscard]]
+			bool
+			requiresMaterialProperties () const noexcept override
+			{
+				return true;
+			}
+
 			/**
 			 * @brief Overrides the inscattering color (instead of reading from LightSet).
 			 * @param color The override color.

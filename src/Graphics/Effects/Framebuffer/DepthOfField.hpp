@@ -144,6 +144,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
+			[[nodiscard]]
+			bool
+			requiresMaterialProperties () const noexcept override
+			{
+				return true;
+			}
+
 			/**
 			 * @brief Sets the depth of field parameters.
 			 * @param parameters The new parameters.

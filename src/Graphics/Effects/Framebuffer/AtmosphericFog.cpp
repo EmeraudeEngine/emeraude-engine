@@ -65,6 +65,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -154,6 +155,14 @@ void main()
 
 	float fogAmount = 1.0 - exp(-max(fogOpticalDepth, 0.0));
 
+	/* Modulate fog amount by per-pixel material fog response (A channel high nibble).
+	 * fogResponse = 1.0 → full fog (default), fogResponse = 0.0 → immune to fog
+	 * (e.g. HUD overlays, in-world icons, decals that must remain crisp). */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint aPacked = uint(mp.a * 255.0);
+	float fogResponse = float(aPacked >> 4u) / 15.0;
+	fogAmount *= fogResponse;
+
 	/* Directional inscattering (simplified Henyey-Greenstein).
 	 * lightDir is the emission direction (sun → scene), negate it
 	 * to get the source direction so inscattering peaks when
@@ -190,8 +199,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* ---- Descriptor set layout (dual-input: scene color + depth) ---- */
-		auto tripleInputLayout = this->getInputLayout(2);
+		/* ---- Descriptor set layout (triple-input: scene color + depth + material properties) ---- */
+		auto tripleInputLayout = this->getInputLayout(3);
 
 		if ( tripleInputLayout == nullptr )
 		{
@@ -266,7 +275,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	AtmosphericFog::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	AtmosphericFog::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -303,6 +312,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+		}
+
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* Build push constants. */

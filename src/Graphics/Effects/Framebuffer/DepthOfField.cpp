@@ -187,6 +187,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D originalTex;
 layout(set = 0, binding = 1) uniform sampler2D blurredTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -203,7 +204,15 @@ void main()
 
 	/* Blend between sharp and blurred based on CoC stored in blurred alpha. */
 	float coc = blurred.a;
-	outColor = vec4(mix(original.rgb, blurred.rgb, coc), original.a);
+
+	/* Modulate CoC by per-pixel material DoF mask (A channel low nibble).
+	 * dofMask = 1.0 → full DoF (default), dofMask = 0.0 → always sharp
+	 * (e.g. HUD overlays, weapon sights, in-world icons). */
+	vec4 mp = texture(materialPropsTex, vUV);
+	uint aPacked = uint(mp.a * 255.0);
+	float dofMask = float(aPacked & 0xFu) / 15.0;
+
+	outColor = vec4(mix(original.rgb, blurred.rgb, coc * dofMask), original.a);
 }
 )GLSL";
 }
@@ -265,6 +274,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* CoC pass uses dual-input: color + depth. */
 		auto dualLayout = this->getInputLayout(2);
 
 		if ( dualLayout == nullptr )
@@ -274,8 +284,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* CoC pass uses triple-input: color + depth + material properties. */
-		auto tripleLayout = this->getInputLayout(2);
+		/* Composite pass uses triple-input: original color + blurred + material properties. */
+		auto tripleLayout = this->getInputLayout(3);
 
 		if ( tripleLayout == nullptr )
 		{
@@ -287,7 +297,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pipeline layouts ---- */
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
-			sets.emplace_back(tripleLayout);
+			sets.emplace_back(dualLayout);
 
 			m_cocLayout = renderer.layoutManager().getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CoCPushConstants)}
@@ -305,7 +315,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
-			sets.emplace_back(dualLayout);
+			sets.emplace_back(tripleLayout);
 
 			m_compositeLayout = renderer.layoutManager().getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
@@ -345,8 +355,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create descriptor sets ---- */
 
-		/* CoC: reads color + depth + material properties (updated per-frame, needs per-frame copies). */
-		m_cocPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "CoC_DescSet");
+		/* CoC: reads color + depth (updated per-frame, needs per-frame copies). */
+		m_cocPerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "CoC_DescSet");
 
 		if ( m_cocPerFrame.empty() )
 		{
@@ -391,8 +401,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Composite: reads original color + blurred result (binding 0 updated per-frame). */
-		m_compositePerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "Composite_DescSet");
+		/* Composite: reads original color + blurred result + material properties (binding 0 and 2 updated per-frame). */
+		m_compositePerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "Composite_DescSet");
 
 		if ( m_compositePerFrame.empty() )
 		{
@@ -435,12 +445,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	DepthOfField::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	DepthOfField::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		/* Update per-frame descriptor sets to avoid conflicts with pending command buffers. */
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		/* Update CoC descriptor: binding 0 = color, binding 1 = depth, binding 2 = material properties. */
+		/* Update CoC descriptor: binding 0 = color, binding 1 = depth. */
 		static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
 		if ( inputDepth != nullptr )
@@ -448,8 +458,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_cocPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
 		}
 
-		/* Update composite descriptor: binding 0 = original color. */
+		/* Update composite descriptor: binding 0 = original color, binding 2 = material properties.
+		 * Binding 1 (blurred result) was bound once at creation in create(). */
 		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+		if ( inputMaterialProperties != nullptr )
+		{
+			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
 
 		/* ---- Pass 1: CoC Computation ---- */
 		{

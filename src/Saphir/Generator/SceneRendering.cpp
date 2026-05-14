@@ -451,14 +451,19 @@ namespace EmEn::Saphir::Generator
 				 * Nibble-packed RGBA: R[hi:lo]=reflection:reserved, G[hi:lo]=aoResponse:shadowResponse,
 				 * B[hi:lo]=bloomContrib:emissiveMask, A[hi:lo]=fogResponse:dofMask.
 				 * Values derived from declared surface properties (metalness, roughness, AO, emissive).
-				 * Light passes output zero (additive blending preserves the existing values). */
+				 *
+				 * RGB is preserved across light passes via additive blend (write 0, add 0).
+				 * Alpha uses REPLACE blend (srcAlpha=ONE, dstAlpha=ZERO) in light passes, so we
+				 * MUST write A=1.0 to preserve the AmbientPass-encoded fogResponse/dofMask nibbles;
+				 * writing vec4(0.0) here would zero out alpha and break AtmosphericFog/DepthOfField
+				 * material modulation in every lit pixel. */
 				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
 				{
 					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = " << m_lightGenerator.materialPropertiesExpression() << ";";
 				}
 				else
 				{
-					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0);";
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 0.0, 0.0, 1.0);";
 				}
 			}
 		}

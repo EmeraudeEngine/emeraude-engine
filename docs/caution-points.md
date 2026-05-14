@@ -171,6 +171,50 @@ if ( materialType == PBRResource::ClassId )
 > - `Saphir/Generator/SceneRendering.cpp:onCreateGraphicsPipeline()` - MRT blend state duplication
 > - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` - Blend state per render pass type
 
+### Fixed: MRT Material Properties Alpha Preservation in Light Passes (May 2026)
+
+> [!WARNING]
+> **MRT attachments inherit the color attachment's blend state, but opaque light
+> passes use REPLACE alpha (`srcAlpha=ONE, dstAlpha=ZERO`). A light-pass shader
+> writing `vec4(0.0)` to an alpha-encoded MRT attachment zeroes out the alpha
+> channel in every lit pixel — silently corrupting any data stored in alpha.**
+>
+> **Symptom:** post-process effects reading the matprops MRT alpha (fog response,
+> DoF mask) saw `A = 1.0` only on sky/unlit pixels (untouched clear value) and
+> `A = 0` on lit pixels. AtmosphericFog modulation `fogAmount *= fogResponse`
+> produced visible halos at lit/unlit transitions (cube silhouettes, object
+> edges, SSR reflections).
+>
+> **Fix:** light-pass shader writes `vec4(0.0, 0.0, 0.0, 1.0)` instead of
+> `vec4(0.0)`. With opaque-light-pass REPLACE alpha blend, `srcAlpha=1` →
+> `newA = 1.0`, preserving the AmbientPass-encoded matprops alpha nibbles
+> (fogResponse | dofMask) in every lit pixel. RGB is unchanged because the
+> additive RGB blend with `srcRGB=0` still adds 0.
+>
+> **Why not modify the blend state instead?** Attempted: lambda-override on the
+> matprops attachment to set `srcAlphaBlendFactor=ZERO, dstAlphaBlendFactor=ONE`.
+> Result: the entire framebuffer rendered as a uniform fog blob — geometry color
+> never reached the final image. Root cause unconfirmed (possibly pipeline-cache
+> hash mismatch or unexpected interaction with color attachment writes). The
+> shader-level fix is more surgical: no pipeline-state change, no side effects.
+>
+> **Same root cause as the Translucent Normal MRT issue above**, but a different
+> symptom path. The normals attachment also writes `vec4(0.0)` in light passes
+> and theoretically loses `roughness+metalness` from alpha in lit pixels; SSR/RTR
+> appear to work anyway (likely reading the AmbientPass normal value before
+> light passes overwrite, or not depending on alpha). Not fixed here.
+>
+> **Future:** if a material ever needs a per-pixel non-`1.0` matprops alpha
+> (e.g., HUD with custom fogResponse/dofMask), the light pass write must emit
+> the AmbientPass alpha value instead of the hardcoded `1.0` — currently
+> `LightGenerator::materialPropertiesExpression()` hardcodes alpha nibbles to
+> 15 (full), so this constraint is dormant.
+>
+> **Files involved:**
+> - `Saphir/Generator/SceneRendering.cpp` (~line 461): light-pass matprops write
+> - `Saphir/LightGenerator.cpp` (`materialPropertiesExpression()`): AmbientPass alpha is hardcoded `1.0`
+> - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` (~line 668): opaque light-pass alpha=REPLACE
+
 ---
 
 ## Scene Rendering
