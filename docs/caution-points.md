@@ -222,27 +222,106 @@ if ( materialType == PBRResource::ClassId )
 > *occludes* the sphere's reflection that was previously visible through the
 > trunk's screen position.
 >
-> **Open threads:**
-> - **Alpha-test layers still excluded.** `isOpaque(layer)` is false for opacity-
->   mapped materials, so palm leaves never enter the TLAS. Proper handling needs
->   either an any-hit shader doing alpha-test against the opacity map at hit time,
->   or a relaxed filter that admits alpha-test layers (with the cutout simply
->   ignored — visible but wrong-looking foliage in reflections).
-> - **Multi-instance / same-BLAS material ambiguity.** When a renderable has
->   multiple opaque layers, multiple TLAS instances point to the *same* BLAS
->   (different materials each). The BLAS doesn't separate triangles by
->   sub-geometry, so Vulkan reports whichever instance is found first — the
->   material may not match the triangle's actual sub-geometry. Architectural fix:
->   build multi-geometry BLAS (one `VkAccelerationStructureGeometryKHR` per
->   sub-geometry) and use `rayQueryGetIntersectionGeometryIndexEXT` in the trace
->   shader. Not observed in current scenes (palm has only one opaque layer);
->   flag if multi-opaque-layer renderables appear later.
+> **Resolved follow-ups** (May 2026, see entries below):
+> - Alpha-test layers in RT — handled via ray-query candidate confirmation +
+>   `gl_RayFlagsNoneEXT` + per-material `IsAlphaTest` flag + opacity sampling.
+> - Multi-instance / same-BLAS material aliasing — replaced by multi-geometry
+>   BLAS (one `VkAccelerationStructureGeometryKHR` per sub-geometry) + shader-
+>   side `rayQueryGetIntersectionGeometryIndexEXT` lookup. One TLAS instance per
+>   renderable now, with per-sub-geo material in `GPUMeshMetaData::materialIndices`.
 >
 > **Files involved:**
 > - `Scenes/Scene.rendering.cpp` — three RT-batch-creation sites (scene visuals,
 >   static entities, scene nodes)
 > - `Scenes/SceneMetaData.cpp:rebuild()` — already supports per-batch
 >   `subGeometryIndex` for material lookup (no change needed)
+
+### Fixed: Multi-Geometry BLAS Resolves Multi-Layer Material Aliasing (May 2026)
+
+> [!CRITICAL]
+> **Renderables with multiple opaque layers used to produce multiple TLAS
+> instances pointing to the same BLAS. Vulkan's ray query picks one instance
+> per hit, so triangles from layer A could be attributed to layer B's material
+> — e.g. palm trunk wood texture appeared on the leaves' triangles in
+> reflections, and vice versa.**
+>
+> **Fix:** each `Geometry::Interface` now builds a BLAS with one
+> `VkAccelerationStructureGeometryKHR` per sub-geometry (sharing VB/IB but each
+> with its own `primitiveOffset`/`primitiveCount` derived from `subGeometryRange(i)`).
+> A single TLAS instance per renderable suffices; the RT trace shaders use
+> `rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true/false)` to identify
+> which sub-geometry was hit and look up the correct material via
+> `GPUMeshMetaData::materialIndices[geomIdx]`.
+>
+> **Data layout change:** `GPUMeshMetaData` grew from 32 B to 48 B (3 `uvec4`
+> instead of 2). The new third `uvec4` is `materialIndices[MaxSubGeometriesPerMesh]`
+> with `MaxSubGeometriesPerMesh = 4`. RTR/RTGI shader indexing uses `* 3u` stride.
+>
+> **Caveat — animated sprites:** the procedural sprite quad builder emits one
+> group per animation frame slot (`MaxFrames = 120`), so the BLAS has many more
+> sub-geometries than the renderable's logical material count (1). The shader
+> clamps `geomIdx` to 0 when `meshMeta.subGeometryCount == 1`, so multi-frame
+> sprite BLAS still resolves to a single material. If you add new procedural
+> geometries that produce more than `MaxSubGeometriesPerMesh` materials, bump
+> the constant in `Scenes/GPUMeshMetaData.hpp` (memory grows linearly with
+> instance count).
+>
+> **Files involved:**
+> - `Vulkan/AccelerationStructureBuilder.{hpp,cpp}` — `buildBLAS` now takes
+>   `std::vector<BLASGeometryInput>`, each input has a `firstIndex` field
+> - `Graphics/Geometry/Interface.cpp:buildAccelerationStructure` — iterates
+>   sub-geometries via `subGeometryRange(i)`
+> - `Scenes/GPUMeshMetaData.hpp` — 48 B layout with `materialIndices[4]`
+> - `Scenes/SceneMetaData.cpp:rebuild` — fills `materialIndices` per sub-geo,
+>   adds one TLAS instance per renderable, FORCE_NO_OPAQUE if any sub-geo is
+>   alpha-test
+> - `Scenes/Scene.rendering.cpp` — one RT batch per renderable (was per layer)
+> - `Graphics/Effects/Framebuffer/RTR.cpp`, `RTGI.cpp` — `getHitMaterialIndex`
+>   uses `rayQueryGetIntersectionGeometryIndexEXT` + clamp on `subGeometryCount`
+
+### Fixed: Sprite RT Pipeline — Per-Frame Bindless + CPU Billboard (May 2026)
+
+> [!WARNING]
+> **Sprites combine two RT-hostile features: their albedo is an
+> `AnimatedTexture2D` (a `VK_IMAGE_VIEW_TYPE_2D_ARRAY` not samplable via the
+> bindless `sampler2D[]` descriptor), and their geometry is a flat XY quad in
+> object space, rotated face-camera only by the rasterizer's vertex shader.**
+>
+> **AnimatedTexture path:** `AnimatedTexture2D` now pre-creates one
+> `VK_IMAGE_VIEW_TYPE_2D` view per layer (in addition to the main 2D_ARRAY
+> view). `SceneMetaData::rebuild` walks `m_textureRegistrationCache` each
+> frame, detects textures with `frameCount() > 1` via `dynamic_cast` to
+> `AnimatedTexture2D`, computes the current frame from `Scene::lifetimeMS()`,
+> and refreshes the bindless slot via `updateTexture2DFromDescriptorInfo` —
+> UPDATE_AFTER_BIND makes this safe while the GPU is reading. Animation in
+> reflections stays in sync with the rasterizer's animation state.
+>
+> **Billboard path:** for `Renderable::isSprite()` instances,
+> `SceneMetaData::rebuild` overwrites the rotation columns of the TLAS instance
+> transform with a cylindrical (Y-axis-only) face-camera rotation toward the
+> current camera position. Translation and uniform scale are preserved. The
+> sprite stays upright regardless of camera elevation.
+>
+> **Caveats:**
+> - Texture-array bindless slot would be cleaner long-term (no per-frame
+>   descriptor update churn) but requires a new descriptor binding. The
+>   pragmatic per-frame swap is fine for the current sprite count.
+> - Cylindrical billboard means cameras directly above/below a sprite see a
+>   degenerate horizontal direction — the code falls back to a default
+>   `(fx=0, fz=1)` facing to keep the rotation well-defined.
+> - Sprites also need `Material::Interface::isAlphaTest()` to return true so
+>   the trace shader skips transparent texels — see `SpriteResource.cpp` where
+>   `setOpacity` is ALWAYS called (even at Opacity=1.0) to set the
+>   `OpacityEnabled` flag.
+>
+> **Files involved:**
+> - `Graphics/TextureResource/AnimatedTexture2D.{hpp,cpp}` — per-frame 2D views
+>   and `imageViewForFrame(uint32_t)` accessor
+> - `Scenes/SceneMetaData.{hpp,cpp}` — `rebuild()` signature adds `sceneTimeMS`
+>   and `cameraPosition`; per-frame bindless refresh + billboard rotation
+> - `Scenes/Scene.rendering.cpp` — passes `lifetimeMS()` and
+>   `viewMatrices().position()` to `rebuild()`
+> - `Graphics/Renderable/SpriteResource.cpp` — `setOpacity` always called
 
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
