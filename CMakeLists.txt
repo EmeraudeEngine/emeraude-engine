@@ -68,6 +68,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 # Emeraude libraries project variables and options.
 set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to check internet connexion (Default google.com).")
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
+option(EMERAUDE_DL_DEPENDENCIES "Enable the Emeraude-Engine to automatically download external dependencies archives (Default On)." On)
 option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
 option(EMERAUDE_DISABLE_PARANOID_COMPILATION "Disable warnings as errors for compilation (Default Off)." Off)
@@ -210,6 +211,10 @@ include(PrepareEngineSourceFiles)
 # ImGui library source files
 if ( EMERAUDE_ENABLE_IMGUI )
 	list(APPEND EMERAUDE_SOURCE_FILES ${IMGUI_SOURCE_FILES})
+endif ()
+
+if ( EMERAUDE_DL_DEPENDENCIES )
+	include(InstallDependencies)
 endif ()
 
 

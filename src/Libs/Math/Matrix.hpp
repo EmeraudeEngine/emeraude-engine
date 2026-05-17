@@ -168,10 +168,8 @@ namespace EmEn::Libs::Math
 			 * @note This helps the matrix notation.
 			 */
 			constexpr
-			Matrix (
-				precision_t r0c0, precision_t r0c1,
-				precision_t r1c0, precision_t r1c1
-			) noexcept requires (dim_t == 2)
+			Matrix (precision_t r0c0, precision_t r0c1, precision_t r1c0, precision_t r1c1) noexcept
+				requires (dim_t == 2)
 				: m_data({
 					r0c0, r1c0,
 					r0c1, r1c1
@@ -185,11 +183,8 @@ namespace EmEn::Libs::Math
 			 * @note This helps the matrix notation.
 			 */
 			constexpr
-			Matrix (
-				precision_t r0c0, precision_t r0c1, precision_t r0c2,
-				precision_t r1c0, precision_t r1c1, precision_t r1c2,
-				precision_t r2c0, precision_t r2c1, precision_t r2c2
-			) noexcept requires (dim_t == 3)
+			Matrix (precision_t r0c0, precision_t r0c1, precision_t r0c2, precision_t r1c0, precision_t r1c1, precision_t r1c2, precision_t r2c0, precision_t r2c1, precision_t r2c2) noexcept
+				requires (dim_t == 3)
 				: m_data({
 					r0c0, r1c0, r2c0,
 					r0c1, r1c1, r2c1,
@@ -204,12 +199,8 @@ namespace EmEn::Libs::Math
 			 * @note This helps the matrix notation.
 			 */
 			constexpr
-			Matrix (
-				precision_t r0c0, precision_t r0c1, precision_t r0c2, precision_t r0c3,
-				precision_t r1c0, precision_t r1c1, precision_t r1c2, precision_t r1c3,
-				precision_t r2c0, precision_t r2c1, precision_t r2c2, precision_t r2c3,
-				precision_t r3c0, precision_t r3c1, precision_t r3c2, precision_t r3c3
-			) noexcept requires (dim_t == 4)
+			Matrix (precision_t r0c0, precision_t r0c1, precision_t r0c2, precision_t r0c3, precision_t r1c0, precision_t r1c1, precision_t r1c2, precision_t r1c3, precision_t r2c0, precision_t r2c1, precision_t r2c2, precision_t r2c3, precision_t r3c0, precision_t r3c1, precision_t r3c2, precision_t r3c3) noexcept
+				requires (dim_t == 4)
 				: m_data({
 					r0c0, r1c0, r2c0, r3c0,
 					r0c1, r1c1, r2c1, r3c1,
@@ -226,7 +217,8 @@ namespace EmEn::Libs::Math
 			 * @param column1 A reference to a vector< 2, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 2, precision_t > & column0, const Vector< 2, precision_t > & column1) noexcept requires (dim_t == 2)
+			Matrix (const Vector< 2, precision_t > & column0, const Vector< 2, precision_t > & column1) noexcept
+				requires (dim_t == 2)
 				: m_data{
 					column0[X], column0[Y],
 					column1[X], column1[Y]
@@ -241,7 +233,8 @@ namespace EmEn::Libs::Math
 			 * @param column1 A reference to a vector< 3, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1) noexcept requires (dim_t == 2)
+			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1) noexcept
+				requires (dim_t == 2)
 				: m_data{
 					column0[X], column0[Y],
 					column1[X], column1[Y]
@@ -256,7 +249,8 @@ namespace EmEn::Libs::Math
 			 * @param column1 A reference to a vector< 4, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1) noexcept requires (dim_t == 2)
+			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1) noexcept
+				requires (dim_t == 2)
 				: m_data{
 					column0[X], column0[Y],
 					column1[X], column1[Y]
@@ -272,7 +266,8 @@ namespace EmEn::Libs::Math
 			 * @param column2 A reference to a vector< 3, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1, const Vector< 3, precision_t > & column2) noexcept requires (dim_t == 3)
+			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1, const Vector< 3, precision_t > & column2) noexcept
+				requires (dim_t == 3)
 				: m_data{
 					column0[X], column0[Y], column0[Z],
 					column1[X], column1[Y], column1[Z],
@@ -289,7 +284,8 @@ namespace EmEn::Libs::Math
 			 * @param column2 A reference to a vector< 4, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1, const Vector< 4, precision_t > & column2) noexcept requires (dim_t == 3)
+			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1, const Vector< 4, precision_t > & column2) noexcept
+				requires (dim_t == 3)
 				: m_data{
 					column0[X], column0[Y], column0[Z],
 					column1[X], column1[Y], column1[Z],
@@ -306,7 +302,8 @@ namespace EmEn::Libs::Math
 			 * @param column2 A reference to a vector< 3, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1, const Vector< 3, precision_t > & column2) noexcept requires (dim_t == 4)
+			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1, const Vector< 3, precision_t > & column2) noexcept
+				requires (dim_t == 4)
 				: m_data{
 					column0[X], column0[Y], column0[Z], 0,
 					column1[X], column1[Y], column1[Z], 0,
@@ -324,7 +321,8 @@ namespace EmEn::Libs::Math
 			 * @param column2 A reference to a vector< 4, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1, const Vector< 4, precision_t > & column2) noexcept requires (dim_t == 4)
+			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1, const Vector< 4, precision_t > & column2) noexcept
+				requires (dim_t == 4)
 				: m_data{
 					column0[X], column0[Y], column0[Z], column0[W],
 					column1[X], column1[Y], column1[Z], column1[W],
@@ -343,7 +341,8 @@ namespace EmEn::Libs::Math
 			 * @param column3 A reference to a vector< 3, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1, const Vector< 3, precision_t > & column2, const Vector< 3, precision_t > & column3) noexcept requires (dim_t == 4)
+			Matrix (const Vector< 3, precision_t > & column0, const Vector< 3, precision_t > & column1, const Vector< 3, precision_t > & column2, const Vector< 3, precision_t > & column3) noexcept
+				requires (dim_t == 4)
 				: m_data{
 					column0[X], column0[Y], column0[Z], 0,
 					column1[X], column1[Y], column1[Z], 0,
@@ -362,7 +361,8 @@ namespace EmEn::Libs::Math
 			 * @param column3 A reference to a vector< 4, precision_t >.
 			 */
 			constexpr
-			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1, const Vector< 4, precision_t > & column2, const Vector< 4, precision_t > & column3) noexcept requires (dim_t == 4)
+			Matrix (const Vector< 4, precision_t > & column0, const Vector< 4, precision_t > & column1, const Vector< 4, precision_t > & column2, const Vector< 4, precision_t > & column3) noexcept
+				requires (dim_t == 4)
 				: m_data{
 					column0[X], column0[Y], column0[Z], column0[W],
 					column1[X], column1[Y], column1[Z], column1[W],
@@ -377,8 +377,7 @@ namespace EmEn::Libs::Math
 			 * @brief Constructs a matrix from STL array (Column major).
 			 * @param data Array of dim_t * dim_t value.
 			 */
-			explicit
-			constexpr
+			explicit constexpr
 			Matrix (const std::array< precision_t, dim_t * dim_t > & data) noexcept
 				: m_data{data}
 			{
@@ -491,7 +490,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			operator== (const Matrix & operand) const noexcept requires (std::is_floating_point_v< precision_t > )
+			operator== (const Matrix & operand) const noexcept
+				requires (std::is_floating_point_v< precision_t > )
 			{
 				if ( this != &operand )
 				{
@@ -515,7 +515,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			operator== (const Matrix & operand) const noexcept requires (std::is_integral_v< precision_t > )
+			operator== (const Matrix & operand) const noexcept
+				requires (std::is_integral_v< precision_t > )
 			{
 				if ( this != &operand )
 				{
@@ -754,7 +755,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			equal (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept requires (std::is_floating_point_v< precision_t >)
+			equal (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
 				if ( this != &operand )
 				{
@@ -778,7 +780,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			different (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept requires (std::is_floating_point_v< precision_t >)
+			different (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
 				return !this->equal(operand, epsilon);
 			}
@@ -793,7 +796,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			bool
-			equal (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept requires (std::is_floating_point_v< precision_t >)
+			equal (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
 				if ( &a != &b )
 				{
@@ -819,7 +823,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			bool
-			different (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept requires (std::is_floating_point_v< precision_t >)
+			different (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
 				return !Matrix::equal(a, b, epsilon);
 			}
@@ -905,7 +910,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			setRow (size_t row, precision_t x, precision_t y) noexcept requires (dim_t == 2)
+			setRow (size_t row, precision_t x, precision_t y) noexcept
+				requires (dim_t == 2)
 			{
 				assert(row < dim_t);
 
@@ -922,7 +928,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			setRow (size_t row, precision_t x, precision_t y, precision_t z) noexcept requires (dim_t == 3)
+			setRow (size_t row, precision_t x, precision_t y, precision_t z) noexcept
+				requires (dim_t == 3)
 			{
 				assert(row < dim_t);
 
@@ -941,7 +948,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			setRow (size_t row, precision_t x, precision_t y, precision_t z, precision_t w) noexcept requires (dim_t == 4)
+			setRow (size_t row, precision_t x, precision_t y, precision_t z, precision_t w) noexcept
+				requires (dim_t == 4)
 			{
 				assert(row < dim_t);
 
@@ -997,7 +1005,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			setColumn (size_t col, precision_t x, precision_t y) noexcept requires (dim_t == 2)
+			setColumn (size_t col, precision_t x, precision_t y) noexcept
+				requires (dim_t == 2)
 			{
 				assert(col < dim_t);
 
@@ -1016,7 +1025,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			setColumn (size_t col, precision_t x, precision_t y, precision_t z) noexcept requires (dim_t == 3)
+			setColumn (size_t col, precision_t x, precision_t y, precision_t z) noexcept
+				requires (dim_t == 3)
 			{
 				assert(col < dim_t);
 
@@ -1037,7 +1047,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			setColumn (size_t col, precision_t x, precision_t y, precision_t z, precision_t w) noexcept requires (dim_t == 4)
+			setColumn (size_t col, precision_t x, precision_t y, precision_t z, precision_t w) noexcept
+				requires (dim_t == 4)
 			{
 				assert(col < dim_t);
 
@@ -1149,7 +1160,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector< dim_t, precision_t >
-			forwardVector () const noexcept requires (dim_t == 3 || dim_t == 4)
+			forwardVector () const noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				if constexpr ( dim_t == 3 )
 				{
@@ -1170,7 +1182,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector< dim_t, precision_t >
-			position () const noexcept requires (dim_t == 4)
+			position () const noexcept
+				requires (dim_t == 4)
 			{
 				return {m_data[M4x4Col3Row0], m_data[M4x4Col3Row1], m_data[M4x4Col3Row2]};
 			}
@@ -1508,8 +1521,7 @@ namespace EmEn::Libs::Math
 			 * @return Matrix
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Matrix
 			identity () noexcept
 			{
@@ -1521,7 +1533,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			clearTranslation () noexcept requires (dim_t == 4)
+			clearTranslation () noexcept
+				requires (dim_t == 4)
 			{
 				m_data[M4x4Col3Row0] = 0;
 				m_data[M4x4Col3Row1] = 0;
@@ -1533,7 +1546,8 @@ namespace EmEn::Libs::Math
 			 * @return Matrix
 			 */
 			Matrix
-			noTranslation () const noexcept requires (dim_t == 4)
+			noTranslation () const noexcept
+				requires (dim_t == 4)
 			{
 				const std::array< precision_t, dim_t * dim_t > data{
 					m_data[M4x4Col0Row0], m_data[M4x4Col1Row0], m_data[M4x4Col2Row0], 0,
@@ -1554,7 +1568,8 @@ namespace EmEn::Libs::Math
 			};
 
 			Matrix< 2, precision_t >
-			reduceMatrix (Quadrant quadrant) const noexcept requires dim_t == 3
+			reduceMatrix (Quadrant quadrant) const noexcept
+				requires (dim_t == 3)
 			{
 				Matrix< 2, precision_t > matrix;
 
@@ -1597,7 +1612,8 @@ namespace EmEn::Libs::Math
 			}
 
 			Matrix< 3, precision_t >
-			reduceMatrix (Quadrant quadrant) const noexcept requires dim_t == 4
+			reduceMatrix (Quadrant quadrant) const noexcept
+				requires (dim_t == 4)
 			{
 				Matrix< 3, precision_t > matrix;
 
@@ -1669,7 +1685,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Matrix< 2, precision_t >
-			toMatrix2 () const noexcept requires (dim_t == 3 || dim_t == 4)
+			toMatrix2 () const noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				Matrix< 2, precision_t > matrix;
 
@@ -1700,7 +1717,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Matrix< 3, precision_t >
-			toMatrix3 () const noexcept requires (dim_t == 2 || dim_t == 4)
+			toMatrix3 () const noexcept
+				requires (dim_t == 2 || dim_t == 4)
 			{
 				Matrix< 3, precision_t > matrix;
 
@@ -1737,7 +1755,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Matrix< 4, precision_t >
-			toMatrix4 () const noexcept requires (dim_t == 2 || dim_t == 3)
+			toMatrix4 () const noexcept
+				requires (dim_t == 2 || dim_t == 3)
 			{
 				Matrix< 4, precision_t > matrix;
 
@@ -1783,7 +1802,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			rotationX (precision_t radian) noexcept requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
+			rotationX (precision_t radian) noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
 			{
 				const auto sine = std::sin(radian);
 				const auto cosine = std::cos(radian);
@@ -1826,7 +1846,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			rotationY (precision_t radian) noexcept requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
+			rotationY (precision_t radian) noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
 			{
 				const auto sine = std::sin(radian);
 				const auto cosine = std::cos(radian);
@@ -1869,7 +1890,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			rotationZ (precision_t radian) noexcept requires ((dim_t == 2 || dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
+			rotationZ (precision_t radian) noexcept
+				requires ((dim_t == 2 || dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
 			{
 				const auto sine = std::sin(radian);
 				const auto cosine = std::cos(radian);
@@ -1923,7 +1945,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			rotation (precision_t radian, precision_t x, precision_t y, precision_t z) noexcept requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
+			rotation (precision_t radian, precision_t x, precision_t y, precision_t z) noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
 			{
 				Matrix matrix;
 
@@ -1975,7 +1998,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			rotation (precision_t radian, const Vector< vec_dim_t, precision_t > & axis) noexcept requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
+			rotation (precision_t radian, const Vector< vec_dim_t, precision_t > & axis) noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
 			{
 				return Matrix::rotation(radian, axis[X], axis[Y], axis[Z]);
 			}
@@ -1994,7 +2018,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			rotation (const Vector< vec_dim_t, precision_t > & xVector, const Vector< vec_dim_t, precision_t > & yVector, const Vector< vec_dim_t, precision_t > & zVector) noexcept requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
+			rotation (const Vector< vec_dim_t, precision_t > & xVector, const Vector< vec_dim_t, precision_t > & yVector, const Vector< vec_dim_t, precision_t > & zVector) noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::floating_point< precision_t >)
 			{
 				return {xVector, yVector, zVector};
 			}
@@ -2028,7 +2053,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			scaling (precision_t xScale, precision_t yScale) noexcept requires (dim_t == 2)
+			scaling (precision_t xScale, precision_t yScale) noexcept
+				requires (dim_t == 2)
 			{
 				Matrix matrix;
 
@@ -2048,7 +2074,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			scaling (precision_t xScale, precision_t yScale, precision_t zScale) noexcept requires (dim_t == 3 || dim_t == 4)
+			scaling (precision_t xScale, precision_t yScale, precision_t zScale) noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				Matrix matrix;
 
@@ -2080,7 +2107,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			scaling (const Vector< vec_dim_t, precision_t > & scaleVector) noexcept requires (dim_t == 2)
+			scaling (const Vector< vec_dim_t, precision_t > & scaleVector) noexcept
+				requires (dim_t == 2)
 			{
 				return Matrix::scaling(scaleVector[X], scaleVector[Y]);
 			}
@@ -2096,7 +2124,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			scaling (const Vector< vec_dim_t, precision_t > & scaleVector) noexcept requires (dim_t == 3 || dim_t == 4)
+			scaling (const Vector< vec_dim_t, precision_t > & scaleVector) noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				return Matrix::scaling(scaleVector[X], scaleVector[Y], scaleVector[Z]);
 			}
@@ -2109,7 +2138,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			uniformScaling (precision_t scale) noexcept requires (dim_t == 4)
+			uniformScaling (precision_t scale) noexcept
+				requires (dim_t == 4)
 			{
 				Matrix matrix;
 
@@ -2128,7 +2158,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			translation (precision_t xShift, precision_t yShift, precision_t zShift) noexcept requires (dim_t == 4)
+			translation (precision_t xShift, precision_t yShift, precision_t zShift) noexcept
+				requires (dim_t == 4)
 			{
 				Matrix matrix;
 
@@ -2150,7 +2181,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			translation (const Vector< vec_dim_t, precision_t > & shiftVector) noexcept requires (dim_t == 4)
+			translation (const Vector< vec_dim_t, precision_t > & shiftVector) noexcept
+				requires (dim_t == 4)
 			{
 				return Matrix::translation(shiftVector[X], shiftVector[Y], shiftVector[Z]);
 			}
@@ -2168,7 +2200,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			frustum (precision_t xLeft, precision_t xRight, precision_t yBottom, precision_t yTop, precision_t zNear, precision_t zFar) noexcept requires (dim_t == 4)
+			frustum (precision_t xLeft, precision_t xRight, precision_t yBottom, precision_t yTop, precision_t zNear, precision_t zFar) noexcept
+				requires (dim_t == 4)
 			{
 				Matrix matrix;
 
@@ -2204,7 +2237,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			orthographicProjection (precision_t xLeft, precision_t xRight, precision_t yBottom, precision_t yTop, precision_t zNear = -1, precision_t zFar = 1) noexcept requires (dim_t == 4)
+			orthographicProjection (precision_t xLeft, precision_t xRight, precision_t yBottom, precision_t yTop, precision_t zNear = -1, precision_t zFar = 1) noexcept
+				requires (dim_t == 4)
 			{
 				Matrix matrix;
 
@@ -2245,7 +2279,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			perspectiveProjection (precision_t fov, precision_t aspectRatio, precision_t zNear = 0, precision_t zFar = 1) noexcept requires (dim_t == 4)
+			perspectiveProjection (precision_t fov, precision_t aspectRatio, precision_t zNear = 0, precision_t zFar = 1) noexcept
+				requires (dim_t == 4)
 			{
 				if ( zNear < 0 )
 				{
@@ -2287,7 +2322,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			lookAt (const Vector< 3, precision_t > & eye, const Vector< 3, precision_t > & center, const Vector< 3, precision_t > & up) noexcept requires (dim_t == 4)
+			lookAt (const Vector< 3, precision_t > & eye, const Vector< 3, precision_t > & center, const Vector< 3, precision_t > & up) noexcept
+				requires (dim_t == 4)
 			{
 				const auto f = (center - eye).normalize();
 				const auto s = Vector< 3, precision_t >::crossProduct(f, up).normalize();
@@ -2324,7 +2360,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Matrix
-			lookAt (const Vector< 4, precision_t > & eye, const Vector< 4, precision_t > & center, const Vector< 4, precision_t > & up) noexcept requires (dim_t == 4)
+			lookAt (const Vector< 4, precision_t > & eye, const Vector< 4, precision_t > & center, const Vector< 4, precision_t > & up) noexcept
+				requires (dim_t == 4)
 			{
 				const auto f = (center - eye).normalize();
 				const auto s = Vector< 4, precision_t >::crossProduct(f, up).normalize();
@@ -2366,6 +2403,8 @@ namespace EmEn::Libs::Math
 				}
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @note This will print the matrix in row-major notation.
@@ -2394,27 +2433,25 @@ namespace EmEn::Libs::Math
 				return out;
 			}
 
-			/**
-			 * @brief Stringifies the object.
-			 * @note This will print the matrix in row-major notation.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const Matrix & obj) noexcept
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
-
 			std::array< precision_t, dim_t * dim_t > m_data{0};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @note This will print the matrix in row-major notation.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	template< size_t dim_t, typename precision_t >
+	std::string
+	to_string (const Matrix< dim_t, precision_t > & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 
 	/* NOTE: Trait and concept to check a matrix in the template. */
 	template< typename T >

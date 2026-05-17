@@ -9,6 +9,10 @@ endif ()
 if ( MSVC )
 	message("Enabling SNDFile library from local source ...")
 
+	# mpg123 uses PathCombineW / PathIsRelativeW / PathIsUNCW from shlwapi
+	# when WANT_WIN32_UNICODE is on (the default in our recipe). The official
+	# mpg123-targets.cmake declares this as INTERFACE_LINK_LIBRARIES, but
+	# since we link mpg123.lib by path we must add shlwapi.lib here too.
 	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE
 		${LOCAL_LIB_DIR}/lib/sndfile.lib
 		${LOCAL_LIB_DIR}/lib/FLAC.lib
@@ -18,6 +22,7 @@ if ( MSVC )
 		${LOCAL_LIB_DIR}/lib/mpg123.lib
 		${LOCAL_LIB_DIR}/lib/mp3lame.lib
 		${LOCAL_LIB_DIR}/lib/ogg.lib
+		shlwapi.lib
 	)
 elseif ( EMERAUDE_USE_SYSTEM_LIBS )
 	message("Enabling SNDFile library from system ...")

@@ -120,7 +120,7 @@ namespace EmEn::Libs::Math
 		requires (std::is_floating_point_v< number_t >)
 	{
 		auto euler = [] (const int number) {
-			return static_cast< number_t >(std::pow(1 + 1.0 / number, number));
+			return static_cast< number_t >(std::pow(1 + (1.0 / number), number));
 		};
 
 		number_t tmpA = euler(1);
@@ -373,7 +373,7 @@ namespace EmEn::Libs::Math
 	linearInterpolation (number_t operandA, number_t operandB, scale_number_t factor) noexcept
 		requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
-		return operandA + (operandB - operandA) * factor;
+		return operandA + ((operandB - operandA) * factor);
 	}
 
 	/**
@@ -421,7 +421,7 @@ namespace EmEn::Libs::Math
 		const auto tmpD = valueB;
 
 #ifdef OPTIMIZED
-		return ((tmpA * factor + tmpB) * factor + tmpC) * factor + tmpD;
+		return (((((tmpA * factor) + tmpB) * factor) + tmpC) * factor) + tmpD;
 #else
 		const auto factor2 = factor * factor;
 
@@ -445,13 +445,15 @@ namespace EmEn::Libs::Math
 	cubicInterpolationCatmullRom (data_t p0, data_t p1, data_t p2, data_t p3, data_t factor) noexcept
 		requires (std::is_floating_point_v< data_t >)
 	{
+		constexpr auto Half = static_cast< data_t >(0.5F);
+
 		const data_t t2 = factor * factor;
 		const data_t t3 = t2 * factor;
 
 		data_t result =
-			0.5F * (-p0 + 3.0F * p1 - 3.0F * p2 + p3) * t3 +
-			0.5F * (2.0F * p0 - 5.0F * p1 + 4.0F * p2 - p3) * t2 +
-			0.5F * (-p0 + p2) * factor +
+			(Half * (-p0 + (static_cast< data_t >(3) * p1) - (static_cast< data_t >(3) * p2) + p3) * t3) +
+			(Half * ((static_cast< data_t >(2) * p0) - (static_cast< data_t >(5) * p1) + (static_cast< data_t >(4) * p2) - p3) * t2) +
+			(Half * (-p0 + p2) * factor) +
 			p1;
 
 		return result;
@@ -474,13 +476,13 @@ namespace EmEn::Libs::Math
 	cubicCatmullRomInterpolation (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_number_t factor) noexcept
 		requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
-		const auto tmpA = static_cast< scale_number_t >(-0.5) * valueA + static_cast< scale_number_t >(1.5) * valueB - static_cast< scale_number_t >(1.5) * valueC + static_cast< scale_number_t >(0.5) * valueD;
-		const auto tmpB = valueA - static_cast< scale_number_t >(2.5) * valueB + static_cast< scale_number_t >(2.0) * valueC - static_cast< scale_number_t >(0.5) * valueD;
-		const auto tmpC = static_cast< scale_number_t >(-0.5) * valueA + static_cast< scale_number_t >(0.5) * valueC;
+		const auto tmpA = (static_cast< scale_number_t >(-0.5) * valueA) + (static_cast< scale_number_t >(1.5) * valueB) - (static_cast< scale_number_t >(1.5) * valueC) + (static_cast< scale_number_t >(0.5) * valueD);
+		const auto tmpB = valueA - (static_cast< scale_number_t >(2.5) * valueB) + (static_cast< scale_number_t >(2) * valueC) - (static_cast< scale_number_t >(0.5) * valueD);
+		const auto tmpC = (static_cast< scale_number_t >(-0.5) * valueA) + (static_cast< scale_number_t >(0.5) * valueC);
 		const auto tmpD = valueB;
 
 #ifdef OPTIMIZED
-		return ((tmpA * factor + tmpB) * factor + tmpC) * factor + tmpD;
+		return (((((tmpA * factor) + tmpB) * factor) + tmpC) * factor) + tmpD;
 #else
 		const auto factor2 = factor * factor;
 
@@ -510,18 +512,18 @@ namespace EmEn::Libs::Math
 		const auto factor2 = factor * factor;
 		const auto factor3 = factor2 * factor;
 
-		const auto tmpA = static_cast< scale_number_t >(2.0) * factor3 - static_cast< scale_number_t >(3.0) * factor2 + static_cast< scale_number_t >(1.0);
-		const auto tmpB = factor3 - static_cast< scale_number_t >(2.0) * factor2 + factor;
+		const auto tmpA = (static_cast< scale_number_t >(2) * factor3) - (static_cast< scale_number_t >(3) * factor2) + static_cast< scale_number_t >(1);
+		const auto tmpB = factor3 - (static_cast< scale_number_t >(2) * factor2) + factor;
 		const auto tmpC = factor3 - factor2;
-		const auto tmpD = - static_cast< scale_number_t >(2.0) * factor3 + static_cast< scale_number_t >(3.0) * factor2;
+		const auto tmpD = (-static_cast< scale_number_t >(2) * factor3) + (static_cast< scale_number_t >(3) * factor2);
 
-		auto mult0 = (valueB - valueA) * (static_cast< scale_number_t >(1.0) + bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
-		mult0 += (valueC - valueB) * (static_cast< scale_number_t >(1.0) - bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
+		auto mult0 = (valueB - valueA) * (static_cast< scale_number_t >(1) + bias) * (static_cast< scale_number_t >(1) - tension) * static_cast< scale_number_t >(0.5);
+		mult0 += (valueC - valueB) * (static_cast< scale_number_t >(1) - bias) * (static_cast< scale_number_t >(1) - tension) * static_cast< scale_number_t >(0.5);
 
-		auto mult1 = (valueC - valueB) * (static_cast< scale_number_t >(1.0) + bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
-		mult1 += (valueD - valueC) * (static_cast< scale_number_t >(1.0) - bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
+		auto mult1 = (valueC - valueB) * (static_cast< scale_number_t >(1) + bias) * (static_cast< scale_number_t >(1) - tension) * static_cast< scale_number_t >(0.5);
+		mult1 += (valueD - valueC) * (static_cast< scale_number_t >(1) - bias) * (static_cast< scale_number_t >(1) - tension) * static_cast< scale_number_t >(0.5);
 
-		return tmpA * valueB + tmpB * mult0 + tmpC * mult1 + tmpD * valueC;
+		return (tmpA * valueB) + (tmpB * mult0) + (tmpC * mult1) + (tmpD * valueC);
 	}
 
 	/**
@@ -731,8 +733,7 @@ namespace EmEn::Libs::Math
 	 */
 	template< typename integral_t = uint32_t >
 	[[nodiscard]]
-	static
-	constexpr
+	static constexpr
 	bool
 	isPowerOfTwo (integral_t value) noexcept
 		requires (std::is_arithmetic_v< integral_t >)

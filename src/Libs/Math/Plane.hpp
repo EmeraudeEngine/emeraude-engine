@@ -61,8 +61,8 @@ namespace EmEn::Libs::Math
 			 * @param point A reference to a vector.
 			 */
 			Plane (const Vector< 3, data_t > & direction, const Vector< 3, data_t > & point)
-				: m_normal(direction.normalized()),
-				m_distance(-Vector< 3, data_t >::dotProduct(m_normal, point))
+				: m_normal{direction.normalized()},
+				m_distance{-Vector< 3, data_t >::dotProduct(m_normal, point)}
 			{
 
 			}
@@ -74,8 +74,8 @@ namespace EmEn::Libs::Math
 			 * @param pointC A reference to a vector.
 			 */
 			Plane (const Vector< 3, data_t > & pointA, const Vector< 3, data_t > & pointB, const Vector< 3, data_t > & pointC)
-				: m_normal(Vector< 3, data_t >::normal(pointA, pointB, pointC)),
-				m_distance(-Vector< 3, data_t >::dotProduct(m_normal, pointA))
+				: m_normal{Vector< 3, data_t >::normal(pointA, pointB, pointC)},
+				m_distance{-Vector< 3, data_t >::dotProduct(m_normal, pointA)}
 			{
 
 			}
@@ -86,8 +86,8 @@ namespace EmEn::Libs::Math
 			 * @param distance A value.
 			 */
 			Plane (const Vector< 3, data_t > & normal, data_t distance) noexcept
-				: m_normal(normal),
-				m_distance(distance)
+				: m_normal{normal},
+				m_distance{distance}
 			{
 				assert(std::abs(m_normal.lengthSquared() - static_cast< data_t >(1.0)) < static_cast< data_t >(1e-5) && "Plane(normal, distance) requires the normal vector to be normalized!");
 			}
@@ -137,6 +137,8 @@ namespace EmEn::Libs::Math
 				return m_distance;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -155,25 +157,24 @@ namespace EmEn::Libs::Math
 				return out;
 			}
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const Plane & obj)
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
-
 			Vector< 3, data_t > m_normal{0, 0, 1};
 			data_t m_distance{0};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @tparam data_t The type of floating point number. Default float.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	template< typename data_t = float >
+	std::string
+	to_string (const Plane< data_t > & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

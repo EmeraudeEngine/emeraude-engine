@@ -50,57 +50,82 @@ A modern, cross-platform 3D graphics engine built with **Vulkan API** and **C++2
 
 ### Precompiled External Libraries
 
-The engine requires several precompiled external libraries provided by [ext-deps-generator](https://github.com/EmeraudeEngine/ext-deps-generator). This separate repository builds Debug and Release binaries that must be copied or symlinked into the engine's `dependencies/` folder to significantly speed up compilation.
+The engine requires several precompiled external libraries produced by [ext-deps-generator](https://github.com/EmeraudeEngine/ext-deps-generator). These prebuilt Debug and Release binaries are distributed as platform-specific ZIP archives that must be extracted (or symlinked) into the engine's `dependencies/` folder to significantly speed up compilation.
 
-**Setup Instructions:**
+Current package version: **`010`**.
 
-1. Clone and build the ext-deps-generator repository (see its README for details)
-2. Copy or symlink the output directories to your engine's dependencies folder
+**Quick Download:** Pre-built ZIP archives are available from [Google Drive](https://drive.google.com/drive/folders/1nDv35NuAPEg-XAGQIMZ7uCoqK3SK0VxZ?usp=drive_link) (note: this URL may change or become unavailable in the future). Otherwise, clone and build [ext-deps-generator](https://github.com/EmeraudeEngine/ext-deps-generator) yourself.
 
-**Expected directory structure:**
+#### Nomenclature
 
-**Linux:**
+**Archive filename:**
+
+```
+{OS(-SUB_OS)}.{ARCH_TYPE}-{BUILD_TYPE(-SUB_TYPE)}-{PCK_VERSION}.zip
+```
+
+**Extracted folder** (what CMake expects under `dependencies/`):
+
+```
+{OS}.{ARCH_TYPE}-{BUILD_TYPE(-SUB_TYPE)}
+```
+
+`SUB_OS` and `PCK_VERSION` only exist in the archive name and are stripped on extraction. `SUB_TYPE` is kept (CMake uses it to pick the right libs at link time).
+
+| Token         | Values                                       | Required for |
+|---------------|----------------------------------------------|--------------|
+| `OS`          | `linux`, `mac`, `windows`                    | all          |
+| `SUB_OS`      | `Debian`, `Ubuntu`, `Linuxmint`              | Linux only   |
+| `ARCH_TYPE`   | `x86_64`, `arm64`                            | all          |
+| `BUILD_TYPE`  | `Release`, `Debug`                           | all          |
+| `SUB_TYPE`    | `MT` (static MSVC runtime), `MD` (dynamic)   | Windows only |
+| `PCK_VERSION` | e.g. `010`                                   | archive only |
+
+#### Concrete archives and target folders (version 010)
+
+Extracting any archive **inside `<your-project>/dependencies/emeraude-engine/dependencies/`** produces the folder name CMake expects — no rename needed.
+
+| Platform        | Archive (Release)                        | Extracted folder              |
+|-----------------|------------------------------------------|-------------------------------|
+| Linux x86_64    | `linux-<distro>.x86_64-Release-010.zip`  | `linux.x86_64-Release`        |
+| macOS arm64     | `mac.arm64-Release-010.zip`              | `mac.arm64-Release`           |
+| macOS x86_64    | `mac.x86_64-Release-010.zip`             | `mac.x86_64-Release`          |
+| Windows x86_64  | `windows.x86_64-Release-MT-010.zip`      | `windows.x86_64-Release-MT`   |
+
+For Debug builds, swap `Release` → `Debug` in both columns. On Windows, the engine convention pairs Debug with `-MD` (dynamic runtime) rather than `-MT`.
+
+Linux distro variants (`Debian`, `Ubuntu`, `Linuxmint`) all extract to the same `linux.x86_64-<config>` folder — pick the one matching your host, CMake doesn't care which one you used afterwards.
+
+**Expected directory layout once everything is in place:**
+
 ```
 <your-project>/dependencies/emeraude-engine/dependencies/
-├── linux.x86_64.Release/
-└── linux.x86_64.Debug/
+├── linux.x86_64-Release/             # Linux only
+├── linux.x86_64-Debug/               # Linux only
+├── mac.arm64-Release/                # macOS arm64 only
+├── mac.arm64-Debug/                  # macOS arm64 only
+├── mac.x86_64-Release/               # macOS Intel only
+├── mac.x86_64-Debug/                 # macOS Intel only
+├── windows.x86_64-Release-MT/        # Windows only
+└── windows.x86_64-Debug-MD/          # Windows only
 ```
 
-**macOS:**
-```
-<your-project>/dependencies/emeraude-engine/dependencies/
-├── mac.arm64.Release/
-├── mac.arm64.Debug/
-├── mac.x86_64.Release/
-└── mac.x86_64.Debug/
-```
-
-**Windows:**
-```
-<your-project>/dependencies/emeraude-engine/dependencies/
-├── windows.x86_64.Release-MD/
-├── windows.x86_64.Debug-MD/
-├── windows.x86_64.Release-MT/
-└── windows.x86_64.Debug-MT/
-```
-
-**Quick Download:** Pre-built binaries are available as ZIP archives from [Google Drive](https://drive.google.com/drive/folders/1nDv35NuAPEg-XAGQIMZ7uCoqK3SK0VxZ?usp=drive_link) (note: this URL may change or become unavailable in the future).
+You only need the folders matching the platforms and configurations you actually build.
 
 ### Git Submodules
 
 The following dependencies are included as git submodules and compiled directly with the engine:
 
-| Library                     | Version           | Repository |
-|-----------------------------|-------------------|------------|
-| **Asio**                    | 1.36.0            | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio) |
-| **GLFW**                    | master(2026.02.16) | [github.com/EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw.git) [FORK] |
-| **Glslang**                 | 16.2.0            | [github.com/KhronosGroup/glslang](https://github.com/KhronosGroup/glslang.git) |
-| **ImGui**                   | 1.92.6            | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git) |
-| **magic_enum**              | 0.9.7~            | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
-| **reproc**                  | 14.2.5            | [github.com/DaanDeMeyer/reproc](https://github.com/DaanDeMeyer/reproc) |
-| **SDL_GameControllerDB**    | unversioned       | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git) |
-| **tinysoundfont**          | unversioned       | [github.com/schellingb/TinySoundFont](https://github.com/schellingb/TinySoundFont.git) |
-| **Vulkan Memory Allocator** | 3.3.0~            | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
+| Library                     | Version                   | Repository                                                                                              |
+|-----------------------------|---------------------------|---------------------------------------------------------------------------------------------------------|
+| **Asio**                    | 1.38.0                    | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio)                                  |
+| **GLFW**                    | `3bbf4c12` (2025-01-12)   | [github.com/EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw.git) [FORK]                     |
+| **ImGui**                   | 1.92.8                    | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git)                                        |
+| **magic_enum**              | 0.9.8                     | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum)                                  |
+| **RenderDoc**               | v1.44 (branch `v1.x`)     | [github.com/baldurk/renderdoc](https://github.com/baldurk/renderdoc.git) — GPU debug tooling            |
+| **SDL_GameControllerDB**    | unversioned (`366c416`)   | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git)          |
+| **tinysoundfont**           | unversioned (`fbc9135`)   | [github.com/schellingb/TinySoundFont](https://github.com/schellingb/TinySoundFont.git)                  |
+| **Vulkan Memory Allocator** | 3.3.0+46 (`b3cbbb43`)     | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
 
 ### Vulkan SDK
 

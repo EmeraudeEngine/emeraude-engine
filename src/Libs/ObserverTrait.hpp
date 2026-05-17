@@ -125,6 +125,8 @@ namespace EmEn::Libs
 			 */
 			ObserverTrait () noexcept = default;
 
+		private:
+
 			/**
 			 * @brief Consumes the event from an observable.
 			 * @note Returning false will detach the observable.
@@ -135,8 +137,6 @@ namespace EmEn::Libs
 			 */
 			[[nodiscard]]
 			virtual bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
-
-		private:
 
 			std::set< ObservableTrait * > m_observables;
 			mutable std::mutex m_observationMutex;

@@ -184,8 +184,8 @@ namespace EmEn::Libs::Math
 
 		private:
 
-			std::vector< data_t > m_xValues{};
-			std::vector< data_t > m_yValues{};
+			std::vector< data_t > m_xValues;
+			std::vector< data_t > m_yValues;
 			data_t m_slope{0};
 			data_t m_r2{0};
 			data_t m_yIntercept{0};

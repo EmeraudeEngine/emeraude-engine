@@ -80,9 +80,9 @@ namespace EmEn::Libs::Math
 			 * @param vector A reference to a Vector< 3, precision_t >.
 			 */
 			template< size_t N = dim_t >
-			constexpr
-			explicit
-			Vector (const Vector< 3, precision_t > & vector) noexcept requires (N == 2)
+			explicit constexpr
+			Vector (const Vector< 3, precision_t > & vector) noexcept
+				requires (N == 2)
 				: m_data({vector[X], vector[Y]})
 			{
 
@@ -93,9 +93,9 @@ namespace EmEn::Libs::Math
 			 * @param vector A reference to a Vector< 4, precision_t >.
 			 */
 			template< size_t N = dim_t >
-			constexpr
-			explicit
-			Vector (const Vector< 4, precision_t > & vector) noexcept requires (N == 2)
+			explicit constexpr
+			Vector (const Vector< 4, precision_t > & vector) noexcept
+				requires (N == 2)
 				: m_data({vector[X], vector[Y]})
 			{
 
@@ -107,9 +107,9 @@ namespace EmEn::Libs::Math
 			 * @param z Z component value. Default 0.
 			 */
 			template< size_t N = dim_t >
-			constexpr
-			explicit
-			Vector (const Vector< 2, precision_t > & vector, precision_t z = 0) noexcept requires (N == 3)
+			explicit constexpr
+			Vector (const Vector< 2, precision_t > & vector, precision_t z = 0) noexcept
+				requires (N == 3)
 				: m_data({vector[X], vector[Y], z})
 			{
 
@@ -120,9 +120,9 @@ namespace EmEn::Libs::Math
 			 * @param vector A reference to a Vector< 4, precision_t >.
 			 */
 			template< size_t N = dim_t >
-			constexpr
-			explicit
-			Vector (const Vector< 4, precision_t > & vector) noexcept requires (N == 3)
+			explicit constexpr
+			Vector (const Vector< 4, precision_t > & vector) noexcept
+				requires (N == 3)
 				: m_data({vector[X], vector[Y], vector[Z]})
 			{
 
@@ -135,9 +135,9 @@ namespace EmEn::Libs::Math
 			 * @param w W component value. Default 0.
 			 */
 			template< size_t N = dim_t >
-			constexpr
-			explicit
-			Vector (const Vector< 2, precision_t > & vector, precision_t z = 0, precision_t w = 0) noexcept requires (N == 4)
+			explicit constexpr
+			Vector (const Vector< 2, precision_t > & vector, precision_t z = 0, precision_t w = 0) noexcept
+				requires (N == 4)
 				: m_data({vector[X], vector[Y], z, w})
 			{
 
@@ -149,9 +149,9 @@ namespace EmEn::Libs::Math
 			 * @param w W component value. Default 0.
 			 */
 			template< size_t N = dim_t >
-			constexpr
-			explicit
-			Vector (const Vector< 3, precision_t > & vector, precision_t w = 0) noexcept requires (N == 4)
+			explicit constexpr
+			Vector (const Vector< 3, precision_t > & vector, precision_t w = 0) noexcept
+				requires (N == 4)
 				: m_data({vector[X], vector[Y], vector[Z], w})
 			{
 
@@ -164,7 +164,8 @@ namespace EmEn::Libs::Math
 			 */
 			template< size_t N = dim_t >
 			constexpr
-			Vector (precision_t x, precision_t y) noexcept requires (N == 2)
+			Vector (precision_t x, precision_t y) noexcept
+				requires (N == 2)
 				: m_data({x, y})
 			{
 
@@ -178,7 +179,8 @@ namespace EmEn::Libs::Math
 			 */
 			template< size_t N = dim_t >
 			constexpr
-			Vector (precision_t x, precision_t y, precision_t z) noexcept requires (N == 3)
+			Vector (precision_t x, precision_t y, precision_t z) noexcept
+				requires (N == 3)
 				: m_data({x, y, z})
 			{
 
@@ -193,7 +195,8 @@ namespace EmEn::Libs::Math
 			 */
 			template< size_t N = dim_t >
 			constexpr
-			Vector (precision_t x, precision_t y, precision_t z, precision_t w = 0) noexcept requires (N == 4)
+			Vector (precision_t x, precision_t y, precision_t z, precision_t w = 0) noexcept
+				requires (N == 4)
 				: m_data({x, y, z, w})
 			{
 
@@ -203,8 +206,7 @@ namespace EmEn::Libs::Math
 			 * @brief Constructs a vector from an STL array.
 			 * @param data A std::array of N value.
 			 */
-			explicit
-			constexpr
+			explicit constexpr
 			Vector (const std::array< precision_t, dim_t > & data) noexcept
 				: m_data(data)
 			{
@@ -262,7 +264,8 @@ namespace EmEn::Libs::Math
 			 */
 			template< size_t N = dim_t >
 			Vector &
-			operator= (const Vector< 2, precision_t > & copy) noexcept requires (N != 2)
+			operator= (const Vector< 2, precision_t > & copy) noexcept
+				requires (N != 2)
 			{
 				m_data[X] = copy[X];
 				m_data[Y] = copy[Y];
@@ -287,7 +290,8 @@ namespace EmEn::Libs::Math
 			 */
 			template< size_t N = dim_t >
 			Vector &
-			operator= (const Vector< 3, precision_t > & copy) noexcept requires (N != 3)
+			operator= (const Vector< 3, precision_t > & copy) noexcept
+				requires (N != 3)
 			{
 				m_data[X] = copy[X];
 				m_data[Y] = copy[Y];
@@ -307,7 +311,8 @@ namespace EmEn::Libs::Math
 			 */
 			template< size_t N = dim_t >
 			Vector &
-			operator= (const Vector< 4, precision_t > & copy) noexcept requires (N != 4)
+			operator= (const Vector< 4, precision_t > & copy) noexcept
+				requires (N != 4)
 			{
 				m_data[X] = copy[X];
 				m_data[Y] = copy[Y];
@@ -388,14 +393,21 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			operator== (const Vector & operand) const noexcept requires (std::is_floating_point_v< precision_t > )
+			operator== (const Vector & operand) const noexcept
+				requires (std::is_floating_point_v< precision_t > )
 			{
-				if (this == &operand) return true;
+				if ( this == &operand )
+				{
+					return true;
+				}
 
 				bool result = true;
-				for (size_t i = 0; i < dim_t; ++i) {
+
+				for ( size_t i = 0; i < dim_t; ++i )
+				{
 					result = result && Utility::equal(m_data[i], operand.m_data[i]);
 				}
+
 				return result;
 			}
 
@@ -407,14 +419,21 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			operator== (const Vector & operand) const noexcept requires (std::is_integral_v< precision_t > )
+			operator== (const Vector & operand) const noexcept
+				requires (std::is_integral_v< precision_t > )
 			{
-				if (this == &operand) return true;
+				if ( this == &operand )
+				{
+					return true;
+				}
 				
 				bool result = true;
-				for (size_t i = 0; i < dim_t; ++i) {
+
+				for ( size_t i = 0; i < dim_t; ++i )
+				{
 					result = result && (m_data[i] == operand.m_data[i]);
 				}
+
 				return result;
 			}
 
@@ -726,7 +745,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			precision_t
-			z () const noexcept requires (dim_t == 3 || dim_t == 4)
+			z () const noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				return m_data[Z];
 			}
@@ -737,7 +757,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			precision_t
-			w () const noexcept requires (dim_t == 4)
+			w () const noexcept
+				requires (dim_t == 4)
 			{
 				return m_data[W];
 			}
@@ -923,11 +944,10 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			normalize () noexcept requires (std::is_floating_point_v< precision_t >)
+			normalize () noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
-				const auto length = this->lengthSquared();
-
-				if ( !Utility::isZero(length) )
+				if ( const auto length = this->lengthSquared(); !Utility::isZero(length) )
 				{
 					this->scale(1 / static_cast< precision_t >(std::sqrt(length)));
 				}
@@ -942,7 +962,8 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			normalize () noexcept requires (dim_t == 2 && std::is_integral_v< precision_t >)
+			normalize () noexcept
+				requires (dim_t == 2 && std::is_integral_v< precision_t >)
 			{
 				const auto absX = std::abs(m_data[X]);
 				const auto absY = std::abs(m_data[Y]);
@@ -973,7 +994,8 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			normalize () noexcept requires ((dim_t == 3 || dim_t == 4) && std::is_integral_v< precision_t >)
+			normalize () noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::is_integral_v< precision_t >)
 			{
 				const auto absX = std::abs(m_data[X]);
 				const auto absY = std::abs(m_data[Y]);
@@ -1019,11 +1041,10 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector
-			normalized () const noexcept requires (std::is_floating_point_v< precision_t >)
+			normalized () const noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
-				const auto length = this->lengthSquared();
-
-				if ( !Utility::isZero(length) )
+				if ( const auto length = this->lengthSquared(); !Utility::isZero(length) )
 				{
 					return this->scaled(static_cast< precision_t >(1) / std::sqrt(length));
 				}
@@ -1039,10 +1060,13 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector
-			normalized () const noexcept requires (dim_t == 2 && std::is_integral_v< precision_t >)
+			normalized () const noexcept
+				requires (dim_t == 2 && std::is_integral_v< precision_t >)
 			{
 				auto copy = *this;
+
 				copy.normalize();
+
 				return copy;
 			}
 
@@ -1054,10 +1078,13 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector
-			normalized () const noexcept requires ((dim_t == 3 || dim_t == 4) && std::is_integral_v< precision_t >)
+			normalized () const noexcept
+				requires ((dim_t == 3 || dim_t == 4) && std::is_integral_v< precision_t >)
 			{
 				auto copy = *this;
+
 				copy.normalize();
+
 				return copy;
 			}
 
@@ -1070,8 +1097,7 @@ namespace EmEn::Libs::Math
 			 * @return precision_t
 			 */
 			[[nodiscard]]
-			constexpr
-			static
+			static constexpr
 			precision_t
 			dotProduct (const Vector & lhs, const Vector & rhs) noexcept
 			{
@@ -1095,7 +1121,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			precision_t
-			crossProduct (const Vector & lhs, const Vector & rhs) noexcept requires (dim_t == 2)
+			crossProduct (const Vector & lhs, const Vector & rhs) noexcept
+				requires (dim_t == 2)
 			{
 				return (lhs[X] * rhs[Y]) - (lhs[Y] * rhs[X]);
 			}
@@ -1110,7 +1137,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			Vector
-			crossProduct (const Vector & lhs, const Vector & rhs) noexcept requires (dim_t == 3 || dim_t == 4)
+			crossProduct (const Vector & lhs, const Vector & rhs) noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				if constexpr ( dim_t == 3 )
 				{
@@ -1267,7 +1295,8 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			precision_t
-			angle (const Vector & vectorA, const Vector & vectorB) noexcept requires (std::is_floating_point_v< precision_t >)
+			angle (const Vector & vectorA, const Vector & vectorB) noexcept
+				requires (std::is_floating_point_v< precision_t >)
 			{
 				precision_t factor = vectorA.length() * vectorB.length();
 
@@ -1287,8 +1316,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			precision_t
-			angle2D ()
-			const noexcept requires (dim_t == 2 && std::is_floating_point_v< precision_t >)
+			angle2D () const noexcept
+				requires (dim_t == 2 && std::is_floating_point_v< precision_t >)
 			{
 				return std::atan2(this->y(), this->x());
 			}
@@ -1323,14 +1352,14 @@ namespace EmEn::Libs::Math
 			{
 				const auto d = Vector::dotProduct(normal, incident);
 
-				const auto k = 1.0 - (eta * eta * (1.0 - d * d));
+				const auto k = 1.0 - (eta * eta * (1.0 - (d * d)));
 
 				if ( k < 0.0 )
 				{
 					return {};
 				}
 
-				return (eta * incident) - ((eta * d + std::sqrt(k)) * normal);
+				return (eta * incident) - (((eta * d) + std::sqrt(k)) * normal);
 			}
 
 			/**
@@ -1415,8 +1444,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			constexpr
-			static
+			static constexpr
 			Vector
 			midPoint (const Vector & lhs, const Vector & rhs) noexcept
 			{
@@ -1451,7 +1479,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			isOne (precision_t tolerance = std::numeric_limits< precision_t >::epsilon() * 100) const noexcept requires std::is_floating_point_v< precision_t >
+			isOne (precision_t tolerance = std::numeric_limits< precision_t >::epsilon() * 100) const noexcept
+				requires std::is_floating_point_v< precision_t >
 			{
 				const precision_t lenSq = this->lengthSquared();
 
@@ -1465,7 +1494,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			isOne () const noexcept requires std::is_integral_v< precision_t >
+			isOne () const noexcept
+				requires std::is_integral_v< precision_t >
 			{
 				return this->lengthSquared() == static_cast< precision_t >(1);
 			}
@@ -1490,8 +1520,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			constexpr
-			static
+			static constexpr
 			Vector
 			min (const Vector & a, const Vector & b) noexcept
 			{
@@ -1512,8 +1541,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			constexpr
-			static
+			static constexpr
 			Vector
 			max (const Vector & a, const Vector & b) noexcept
 			{
@@ -1532,7 +1560,8 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			swapAxis () noexcept requires (dim_t == 2)
+			swapAxis () noexcept
+				requires (dim_t == 2)
 			{
 				std::swap(m_data[X], m_data[Y]);
 			}
@@ -1543,7 +1572,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector< 2, precision_t >
-			toVector2 () const noexcept requires (dim_t == 3 || dim_t == 4)
+			toVector2 () const noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				return {m_data[X], m_data[Y]};
 			}
@@ -1554,7 +1584,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector< 3, precision_t >
-			toVector3 () const noexcept requires (dim_t == 2 || dim_t == 4)
+			toVector3 () const noexcept
+				requires (dim_t == 2 || dim_t == 4)
 			{
 				if constexpr ( dim_t == 2 )
 				{
@@ -1578,7 +1609,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector< 4, precision_t >
-			toVector4 (precision_t lastComponent = 0) const noexcept requires (dim_t == 2 || dim_t == 3)
+			toVector4 (precision_t lastComponent = 0) const noexcept
+				requires (dim_t == 2 || dim_t == 3)
 			{
 				if constexpr ( dim_t == 2 )
 				{
@@ -1614,8 +1646,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
 			origin () noexcept
 			{
@@ -1636,8 +1667,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
 			positiveX (precision_t distance = 1) noexcept
 			{
@@ -1668,8 +1698,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
 			negativeX (precision_t distance = 1) noexcept
 			{
@@ -1700,8 +1729,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
 			positiveY (precision_t distance = 1) noexcept
 			{
@@ -1732,8 +1760,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
 			negativeY (precision_t distance = 1) noexcept
 			{
@@ -1764,10 +1791,10 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
-			positiveZ (precision_t distance = 1) noexcept requires (dim_t == 3 || dim_t == 4)
+			positiveZ (precision_t distance = 1) noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				if constexpr ( dim_t == 3 )
 				{
@@ -1791,10 +1818,10 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			static
-			constexpr
+			static constexpr
 			Vector
-			negativeZ (precision_t distance = 1) noexcept requires (dim_t == 3 || dim_t == 4)
+			negativeZ (precision_t distance = 1) noexcept
+				requires (dim_t == 3 || dim_t == 4)
 			{
 				if constexpr ( dim_t == 3 )
 				{
@@ -1940,7 +1967,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector
-			project (const Vector & onto) const noexcept requires std::is_floating_point_v< precision_t >
+			project (const Vector & onto) const noexcept
+				requires std::is_floating_point_v< precision_t >
 			{
 				const precision_t D = onto.lengthSquared();
 
@@ -1959,7 +1987,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			Vector
-			reject (const Vector& from) const noexcept requires std::is_floating_point_v< precision_t >
+			reject (const Vector& from) const noexcept
+				requires std::is_floating_point_v< precision_t >
 			{
 				return *this - this->project(from);
 			}
@@ -1972,7 +2001,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			isParallel (const Vector & other, precision_t tolerance = std::numeric_limits< precision_t >::epsilon() * 100) const noexcept requires std::is_floating_point_v< precision_t >
+			isParallel (const Vector & other, precision_t tolerance = std::numeric_limits< precision_t >::epsilon() * 100) const noexcept
+				requires std::is_floating_point_v< precision_t >
 			{
 				const precision_t lenSqA = this->lengthSquared();
 				const precision_t lenSqB = other.lengthSquared();
@@ -1993,7 +2023,8 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			isPerpendicular (const Vector & other, precision_t tolerance = std::numeric_limits< precision_t >::epsilon() * 100) const noexcept requires std::is_floating_point_v< precision_t >
+			isPerpendicular (const Vector & other, precision_t tolerance = std::numeric_limits< precision_t >::epsilon() * 100) const noexcept
+				requires std::is_floating_point_v< precision_t >
 			{
 				const precision_t lenSqA = this->lengthSquared();
 				const precision_t lenSqB = other.lengthSquared();
@@ -2076,10 +2107,13 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			constexpr
 			Vector
-			saturate () const noexcept requires std::is_floating_point_v< precision_t >
+			saturate () const noexcept
+				requires std::is_floating_point_v< precision_t >
 			{
 				return this->clamp(static_cast< precision_t >(0), static_cast< precision_t >(1));
 			}
+
+		private:
 
 			/**
 			 * @brief STL streams printable object.
@@ -2113,26 +2147,24 @@ namespace EmEn::Libs::Math
 				}
 			}
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const Vector & obj)
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
-
 			std::array< precision_t, dim_t > m_data{};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	template< size_t dim_t, typename precision_t >
+	std::string
+	to_string (const Vector< dim_t, precision_t > & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 
 	/* NOTE: Trait and concept to check a vector in the template. */
 	template< typename T >

@@ -314,6 +314,30 @@ namespace EmEn::Libs::Math
 				return m_depth;
 			}
 
+		private:
+
+			enum VertexIndex
+			{
+				PositiveXPositiveYPositiveZ = 0,
+				PositiveXPositiveYNegativeZ = 1,
+				PositiveXNegativeYPositiveZ = 2,
+				PositiveXNegativeYNegativeZ = 3,
+				NegativeXPositiveYPositiveZ = 4,
+				NegativeXPositiveYNegativeZ = 5,
+				NegativeXNegativeYPositiveZ = 6,
+				NegativeXNegativeYNegativeZ = 7
+			};
+
+			enum NormalIndex
+			{
+				PositiveX = 0,
+				NegativeX = 1,
+				PositiveY = 2,
+				NegativeY = 3,
+				PositiveZ = 4,
+				NegativeZ = 5
+			};
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -344,46 +368,6 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const OrientedCuboid & obj) noexcept
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
-
-			enum VertexIndex
-			{
-				PositiveXPositiveYPositiveZ = 0,
-				PositiveXPositiveYNegativeZ = 1,
-				PositiveXNegativeYPositiveZ = 2,
-				PositiveXNegativeYNegativeZ = 3,
-				NegativeXPositiveYPositiveZ = 4,
-				NegativeXPositiveYNegativeZ = 5,
-				NegativeXNegativeYPositiveZ = 6,
-				NegativeXNegativeYNegativeZ = 7
-			};
-
-			enum NormalIndex
-			{
-				PositiveX = 0,
-				NegativeX = 1,
-				PositiveY = 2,
-				NegativeY = 3,
-				PositiveZ = 4,
-				NegativeZ = 5
-			};
-
-			/**
 			 * @brief Projects the cuboid on a range.
 			 * @param normal A reference to a vector.
 			 * @return Range< data_t >
@@ -405,8 +389,24 @@ namespace EmEn::Libs::Math
 			VertexArray m_vertices{};
 			NormalArray m_normals{};
 			/* FIXME : Extract these from vertices ! */
-			data_t m_width = 0;
-			data_t m_height = 0;
-			data_t m_depth = 0;
+			data_t m_width{0};
+			data_t m_height{0};
+			data_t m_depth{0};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	template< typename data_t = float >
+	std::string
+	to_string (const OrientedCuboid< data_t > & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

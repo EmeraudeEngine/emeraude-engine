@@ -60,6 +60,9 @@ namespace EmEn::Libs::Math
 	TRSDecomposition< precision_t >
 	decomposeTRS (const Matrix< 4, precision_t > & matrix) noexcept
 	{
+		constexpr auto Zero = static_cast< precision_t >(0);
+		constexpr auto One = static_cast< precision_t >(1);
+
 		TRSDecomposition< precision_t > result;
 
 		/* Extract translation from column 3. */
@@ -74,16 +77,22 @@ namespace EmEn::Libs::Math
 		result.scale = {col0.length(), col1.length(), col2.length()};
 
 		/* Remove scale from columns to get pure rotation. */
-		constexpr auto Epsilon = std::numeric_limits< precision_t >::epsilon();
+		if ( result.scale[X] > std::numeric_limits< precision_t >::epsilon() )
+		{
+			col0 /= result.scale[X];
+		}
 
-		if ( result.scale[X] > Epsilon ) col0 /= result.scale[X];
-		if ( result.scale[Y] > Epsilon ) col1 /= result.scale[Y];
-		if ( result.scale[Z] > Epsilon ) col2 /= result.scale[Z];
+		if ( result.scale[Y] > std::numeric_limits< precision_t >::epsilon() )
+		{
+			col1 /= result.scale[Y];
+		}
+
+		if ( result.scale[Z] > std::numeric_limits< precision_t >::epsilon() )
+		{
+			col2 /= result.scale[Z];
+		}
 
 		/* Build a pure rotation 4x4 matrix in column-major layout and extract quaternion. */
-		constexpr auto Zero = static_cast< precision_t >(0);
-		constexpr auto One = static_cast< precision_t >(1);
-
 		std::array< precision_t, 16 > rotData{
 			col0[X], col0[Y], col0[Z], Zero,
 			col1[X], col1[Y], col1[Z], Zero,
@@ -112,20 +121,20 @@ namespace EmEn::Libs::Math
 	composeTRS (const Vector< 3, precision_t > & translation, const Quaternion< precision_t > & rotation, const Vector< 3, precision_t > & scale) noexcept
 	{
 		/* Start with a pure rotation matrix. */
-		auto m = rotation.toRotationMatrix4();
+		auto matrix = rotation.toRotationMatrix4();
 
 		/* Apply scale to the rotation columns (right-multiplication by scale matrix). */
 		if ( !scale.isAllComponentOne() )
 		{
-			m *= Matrix< 4, precision_t >::scaling(scale);
+			matrix *= Matrix< 4, precision_t >::scaling(scale);
 		}
 
 		/* Set translation in column 3. */
-		m[M4x4Col3Row0] = translation[X];
-		m[M4x4Col3Row1] = translation[Y];
-		m[M4x4Col3Row2] = translation[Z];
+		matrix[M4x4Col3Row0] = translation[X];
+		matrix[M4x4Col3Row1] = translation[Y];
+		matrix[M4x4Col3Row2] = translation[Z];
 
-		return m;
+		return matrix;
 	}
 
 	using TRSDecompositionF = TRSDecomposition< float >;

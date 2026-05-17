@@ -42,14 +42,14 @@ namespace EmEn::Libs
 		 * observe()/forget() or parallel destruction on those observers. */
 		std::set< ObserverTrait * > snapshot;
 		{
-			const std::lock_guard< std::mutex > selfLock{m_notificationMutex};
+			const std::scoped_lock selfLock{m_notificationMutex};
 
 			snapshot.swap(m_observers);
 		}
 
 		for ( auto * observer : snapshot )
 		{
-			const std::lock_guard< std::mutex > observerLock{observer->m_observationMutex};
+			const std::scoped_lock observerLock{observer->m_observationMutex};
 
 			observer->m_observables.erase(this);
 		}
@@ -64,7 +64,7 @@ namespace EmEn::Libs
 		 * and so that concurrent notify() on this same observable can proceed. */
 		std::vector< ObserverTrait * > observers;
 		{
-			const std::lock_guard< std::mutex > selfLock{m_notificationMutex};
+			const std::scoped_lock selfLock{m_notificationMutex};
 
 			if constexpr ( ObserverDebugEnabled )
 			{
@@ -94,7 +94,7 @@ namespace EmEn::Libs
 
 		/* Phase 3: apply the detachments atomically per observer. std::scoped_lock
 		 * uses a deadlock-avoidance algorithm to acquire both mutexes safely,
-		 * regardless of the order used by concurrent callers. The double-check on
+		 * regardless of the order used by concurrent callers. To double-check on
 		 * m_observers.erase() tolerates observers that were already removed via
 		 * forget() or a concurrent notify(). */
 		for ( auto * observer : toDetach )

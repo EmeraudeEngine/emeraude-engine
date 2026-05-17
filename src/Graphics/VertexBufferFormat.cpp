@@ -164,14 +164,4 @@ namespace EmEn::Graphics
 
 		return out << "\n";
 	}
-
-	std::string
-	to_string (const VertexBufferFormat & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
 }

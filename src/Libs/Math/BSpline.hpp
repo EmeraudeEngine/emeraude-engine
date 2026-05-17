@@ -51,11 +51,11 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief The B-Spline point class.
-	 * @tparam dim_t The dimension of the vector. This can be 2, 3 or 4.
-	 * @tparam number_t The type of number. Default float.
+	 * @tparam vector_dim_t The dimension of the vector. This can be 2, 3 or 4.
+	 * @tparam vector_precision_t The type of number. Default float.
 	 */
-	template< size_t dim_t, typename number_t = float >
-	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< number_t >
+	template< size_t vector_dim_t, typename vector_precision_t = float >
+	requires (vector_dim_t == 2 || vector_dim_t == 3 || vector_dim_t == 4) && std::is_arithmetic_v< vector_precision_t >
 	class BSplinePoint final
 	{
 		public:
@@ -66,8 +66,10 @@ namespace EmEn::Libs::Math
 			 * @param curveType The curve type.
 			 * @param segments The number of segments.
 			 */
-			BSplinePoint (const Vector< dim_t, number_t > & position, CurveType curveType, size_t segments) noexcept
-				: m_position(position), m_curveType(curveType), m_segments(segments)
+			BSplinePoint (const Vector< vector_dim_t, vector_precision_t > & position, CurveType curveType, size_t segments) noexcept
+				: m_position{position},
+				m_curveType{curveType},
+				m_segments{segments}
 			{
 
 			}
@@ -79,8 +81,12 @@ namespace EmEn::Libs::Math
 			 * @param curveType The curve type.
 			 * @param segments The number of segments.
 			 */
-			BSplinePoint (const Vector< dim_t, number_t > & position, const Vector< dim_t, number_t > & handle, CurveType curveType, size_t segments) noexcept
-				: m_position(position), m_handleIn(-handle), m_handleOut(handle), m_curveType(curveType), m_segments(segments)
+			BSplinePoint (const Vector< vector_dim_t, vector_precision_t > & position, const Vector< vector_dim_t, vector_precision_t > & handle, CurveType curveType, size_t segments) noexcept
+				: m_position{position},
+				m_handleIn{-handle},
+				m_handleOut{handle},
+				m_curveType{curveType},
+				m_segments{segments}
 			{
 
 			}
@@ -93,8 +99,12 @@ namespace EmEn::Libs::Math
 			 * @param curveType The curve type.
 			 * @param segments The number of segments.
 			 */
-			BSplinePoint (const Vector< dim_t, number_t > & position, const Vector< dim_t, number_t > & handleIn, const Vector< dim_t, number_t > & handleOut, CurveType curveType, size_t segments) noexcept
-				: m_position(position), m_handleIn(handleIn), m_handleOut(handleOut), m_curveType(curveType), m_segments(segments)
+			BSplinePoint (const Vector< vector_dim_t, vector_precision_t > & position, const Vector< vector_dim_t, vector_precision_t > & handleIn, const Vector< vector_dim_t, vector_precision_t > & handleOut, CurveType curveType, size_t segments) noexcept
+				: m_position{position},
+				m_handleIn{handleIn},
+				m_handleOut{handleOut},
+				m_curveType{curveType},
+				m_segments{segments}
 			{
 
 			}
@@ -159,7 +169,7 @@ namespace EmEn::Libs::Math
 			 * @return const Vector< dim_t, type_t > &
 			 */
 			[[nodiscard]]
-			const Vector< dim_t, number_t > &
+			const Vector< vector_dim_t, vector_precision_t > &
 			position () const noexcept
 			{
 				return m_position;
@@ -170,7 +180,7 @@ namespace EmEn::Libs::Math
 			 * @return const Vector< dim_t, type_t > &
 			 */
 			[[nodiscard]]
-			const Vector< dim_t, number_t > &
+			const Vector< vector_dim_t, vector_precision_t > &
 			handleIn () const noexcept
 			{
 				return m_handleIn;
@@ -181,7 +191,7 @@ namespace EmEn::Libs::Math
 			 * @return const Vector< dim_t, type_t > &
 			 */
 			[[nodiscard]]
-			const Vector< dim_t, number_t > &
+			const Vector< vector_dim_t, vector_precision_t > &
 			handleOut () const noexcept
 			{
 				return m_handleOut;
@@ -189,25 +199,25 @@ namespace EmEn::Libs::Math
 
 		private:
 
-			Vector< dim_t, number_t > m_position;
-			Vector< dim_t, number_t > m_handleIn{};
-			Vector< dim_t, number_t > m_handleOut{};
+			Vector< vector_dim_t, vector_precision_t > m_position;
+			Vector< vector_dim_t, vector_precision_t > m_handleIn;
+			Vector< vector_dim_t, vector_precision_t > m_handleOut;
 			CurveType m_curveType{CurveType::None};
 			size_t m_segments{1};
 	};
 
 	/**
 	 * @brief The BSpline class.
-	 * @tparam dim_t The dimension of the vector. This can be 2, 3 or 4.
-	 * @tparam number_t The type of number. Default float.
+	 * @tparam vector_dim_t The dimension of the vector. This can be 2, 3 or 4.
+	 * @tparam vector_precision_t The type of number. Default float.
 	 */
-	template< size_t dim_t, typename number_t = float >
-	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< number_t >
+	template< size_t vector_dim_t, typename vector_precision_t = float >
+	requires (vector_dim_t == 2 || vector_dim_t == 3 || vector_dim_t == 4) && std::is_arithmetic_v< vector_precision_t >
 	class BSpline final
 	{
 		public:
 
-			using Callback = std::function< bool (float time, const Vector< dim_t, number_t > & position) >;
+			using Callback = std::function< bool (float time, const Vector< vector_dim_t, vector_precision_t > & position) >;
 
 			/**
 			 * @brief Default constructor.
@@ -221,7 +231,8 @@ namespace EmEn::Libs::Math
 			 */
 			explicit
 			BSpline (size_t defaultSegments, CurveType defaultCurveType = CurveType::BezierQuadratic) noexcept
-				: m_defaultSegments(defaultSegments), m_defaultCurveType(defaultCurveType)
+				: m_defaultSegments{defaultSegments},
+				m_defaultCurveType{defaultCurveType}
 			{
 
 			}
@@ -236,7 +247,7 @@ namespace EmEn::Libs::Math
 			{
 				if ( defaultSegments < 1 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", default segment should at least be 1 !" "\n";
+					std::cerr << "BSpline::setDefaultSegments(), default segment should at least be 1 !" "\n";
 
 					return;
 				}
@@ -282,8 +293,8 @@ namespace EmEn::Libs::Math
 			 * @param position A reference to a vector.
 			 * @return BSplinePoint< dim_t, number_t > &
 			 */
-			BSplinePoint< dim_t, number_t > &
-			addPoint (const Vector< dim_t, number_t > & position) noexcept
+			BSplinePoint< vector_dim_t, vector_precision_t > &
+			addPoint (const Vector< vector_dim_t, vector_precision_t > & position) noexcept
 			{
 				return m_points.emplace_back(position, m_defaultCurveType, m_defaultSegments);
 			}
@@ -294,8 +305,8 @@ namespace EmEn::Libs::Math
 			 * @param handle A reference to a vector.
 			 * @return BSplinePoint< dim_t, number_t > &
 			 */
-			BSplinePoint< dim_t, number_t > &
-			addPoint (const Vector< dim_t, number_t > & position, const Vector< dim_t, number_t > & handle) noexcept
+			BSplinePoint< vector_dim_t, vector_precision_t > &
+			addPoint (const Vector< vector_dim_t, vector_precision_t > & position, const Vector< vector_dim_t, vector_precision_t > & handle) noexcept
 			{
 				return m_points.emplace_back(position, handle, m_defaultCurveType, m_defaultSegments);
 			}
@@ -307,8 +318,8 @@ namespace EmEn::Libs::Math
 			 * @param handleOut A reference to a vector.
 			 * @return BSplinePoint< dim_t, number_t > &
 			 */
-			BSplinePoint< dim_t, number_t > &
-			addPoint (const Vector< dim_t, number_t > & position, const Vector< dim_t, number_t > & handleIn, const Vector< dim_t, number_t > & handleOut) noexcept
+			BSplinePoint< vector_dim_t, vector_precision_t > &
+			addPoint (const Vector< vector_dim_t, vector_precision_t > & position, const Vector< vector_dim_t, vector_precision_t > & handleIn, const Vector< vector_dim_t, vector_precision_t > & handleOut) noexcept
 			{
 				return m_points.emplace_back(position, handleIn, handleOut, m_defaultCurveType, m_defaultSegments);
 			}
@@ -414,7 +425,7 @@ namespace EmEn::Libs::Math
 			 * @return bool
 			 */
 			bool
-			synthesizeLinear (const Callback & callback, const BSplinePoint< dim_t, number_t > & currentPoint, const BSplinePoint< dim_t, number_t > & nextPoint, float & currentTime, float timeStep) const noexcept
+			synthesizeLinear (const Callback & callback, const BSplinePoint< vector_dim_t, vector_precision_t > & currentPoint, const BSplinePoint< vector_dim_t, vector_precision_t > & nextPoint, float & currentTime, float timeStep) const noexcept
 			{
 				/* Time to step along a segment. */
 				const auto factorStep = 1.0F / currentPoint.segments();
@@ -446,7 +457,7 @@ namespace EmEn::Libs::Math
 			 * @return bool
 			 */
 			bool
-			synthesizeQuadratic (const Callback & callback, const BSplinePoint< dim_t, number_t > & currentPoint, const BSplinePoint< dim_t, number_t > & nextPoint, float & currentTime, float timeStep) const noexcept
+			synthesizeQuadratic (const Callback & callback, const BSplinePoint< vector_dim_t, vector_precision_t > & currentPoint, const BSplinePoint< vector_dim_t, vector_precision_t > & nextPoint, float & currentTime, float timeStep) const noexcept
 			{
 				/* Time to step along a segment. */
 				const auto factorStep = 1.0F / currentPoint.segments();
@@ -458,7 +469,7 @@ namespace EmEn::Libs::Math
 					/* Gets the handle in absolute position. */
 					const auto handleOut = currentPoint.position() + currentPoint.handleOut();
 
-					if ( !callback(currentTime, Vector< dim_t, number_t >::quadraticBezierInterpolation(currentPoint.position(), handleOut, nextPoint.position(), factor)) )
+					if ( !callback(currentTime, Vector< vector_dim_t, vector_precision_t >::quadraticBezierInterpolation(currentPoint.position(), handleOut, nextPoint.position(), factor)) )
 					{
 						return false;
 					}
@@ -481,7 +492,7 @@ namespace EmEn::Libs::Math
 			 * @return bool
 			 */
 			bool
-			synthesizeCubic (const Callback & callback, const BSplinePoint< dim_t, number_t > & currentPoint, const BSplinePoint< dim_t, number_t > & nextPoint, float & currentTime, float timeStep) const noexcept
+			synthesizeCubic (const Callback & callback, const BSplinePoint< vector_dim_t, vector_precision_t > & currentPoint, const BSplinePoint< vector_dim_t, vector_precision_t > & nextPoint, float & currentTime, float timeStep) const noexcept
 			{
 				/* Time to step along a segment. */
 				const auto factorStep = 1.0F / currentPoint.segments();
@@ -494,7 +505,7 @@ namespace EmEn::Libs::Math
 					const auto handleOut = currentPoint.position() + currentPoint.handleOut();
 					const auto handleIn = nextPoint.position() + nextPoint.handleIn();
 
-					if ( !callback(currentTime, Vector< dim_t, number_t >::cubicBezierInterpolation(currentPoint.position(), handleOut, handleIn, nextPoint.position(), factor)) )
+					if ( !callback(currentTime, Vector< vector_dim_t, vector_precision_t >::cubicBezierInterpolation(currentPoint.position(), handleOut, handleIn, nextPoint.position(), factor)) )
 					{
 						return false;
 					}
@@ -507,7 +518,7 @@ namespace EmEn::Libs::Math
 				return true;
 			}
 
-			std::vector< BSplinePoint< dim_t, number_t > > m_points{};
+			std::vector< BSplinePoint< vector_dim_t, vector_precision_t > > m_points{};
 			size_t m_defaultSegments{1};
 			CurveType m_defaultCurveType{CurveType::None};
 	};

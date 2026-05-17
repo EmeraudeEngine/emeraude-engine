@@ -56,8 +56,10 @@ namespace EmEn::Libs::Math
 			 * @param minimum A value for the maximum.
 			 * @param maximum A value for the minimum.
 			 */
+			constexpr
 			Range (data_t minimum, data_t maximum) noexcept
-				: m_minimum(std::min(minimum, maximum)), m_maximum(std::max(minimum, maximum))
+				: m_minimum{std::min(minimum, maximum)},
+				m_maximum{std::max(minimum, maximum)}
 			{
 
 			}
@@ -148,6 +150,8 @@ namespace EmEn::Libs::Math
 				return otherRange.m_maximum - m_minimum;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -161,25 +165,23 @@ namespace EmEn::Libs::Math
 				return out << "Range(" << obj.m_minimum << " -> " << obj.m_maximum << ')';
 			}
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const Range & obj) noexcept
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
-
 			data_t m_minimum{std::numeric_limits< data_t >::max()};
 			data_t m_maximum{std::numeric_limits< data_t >::lowest()};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	template< typename data_t = float >
+	std::string
+	to_string (const Range< data_t > & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

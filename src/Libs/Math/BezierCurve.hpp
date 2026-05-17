@@ -40,19 +40,19 @@ namespace EmEn::Libs::Math
 {
 	/**
 	 * @brief Bezier curve.
-	 * @tparam dim_t The dimension of the point.
-	 * @tparam number_t The type of number. Default float.
+	 * @tparam vector_dim_t The dimension of the point.
+	 * @tparam vector_precision_t The type of number. Default float.
 	 */
-	template< size_t dim_t, typename number_t = float >
-	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< number_t >
+	template< size_t vector_dim_t, typename vector_precision_t = float >
+	requires (vector_dim_t == 2 || vector_dim_t == 3 || vector_dim_t == 4) && std::is_arithmetic_v< vector_precision_t >
 	class BezierCurve final
 	{
 		public:
 
-			using Callback = std::function< bool (float time, const Vector< dim_t, number_t > & position) >;
+			using Callback = std::function< bool (float time, const Vector< vector_dim_t, vector_precision_t > & position) >;
 
 			/**
-			 * @brief Constructs a bezier curve.
+			 * @brief Constructs a Bézier curve.
 			 */
 			BezierCurve () noexcept = default;
 
@@ -61,8 +61,8 @@ namespace EmEn::Libs::Math
 			 * @param position The absolute position of the control point.
 			 * @return Vector< dim_t, type_t > &
 			 */
-			Vector< dim_t, number_t > &
-			addPoint (const Vector< dim_t, number_t > & position) noexcept
+			Vector< vector_dim_t, vector_precision_t > &
+			addPoint (const Vector< vector_dim_t, vector_precision_t > & position) noexcept
 			{
 				return m_points.emplace_back(position);
 			}
@@ -88,14 +88,14 @@ namespace EmEn::Libs::Math
 			{
 				if ( m_points.size() < 3 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the curve needs at least 3 points !" "\n";
+					std::cerr << "BezierCurve::synthesize(), the curve needs at least 3 points !" "\n";
 
 					return false;
 				}
 
 				if ( segments < 2 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the segment parameter must be at least 2 !" "\n";
+					std::cerr << "BezierCurve::synthesize(), the segment parameter must be at least 2 !" "\n";
 
 					return false;
 				}
@@ -126,13 +126,13 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
-			Vector< dim_t, number_t >
+			Vector< vector_dim_t, vector_precision_t >
 			synthesizePoint (float globalTimePoint) const noexcept
 			{
 				/* Case where the curve has only one quadratic segment. */
 				if ( m_points.size() == 3 && !m_closed )
 				{
-					return Vector< dim_t, number_t >::quadraticBezierInterpolation(m_points[0], m_points[1], m_points[2], globalTimePoint);
+					return Vector< vector_dim_t, vector_precision_t >::quadraticBezierInterpolation(m_points[0], m_points[1], m_points[2], globalTimePoint);
 				}
 
 				/* Managing extreme cases for open curves. */
@@ -172,7 +172,7 @@ namespace EmEn::Libs::Math
 
 				const float localTimePoint = scaledTime - static_cast< float >(segmentIndex);
 
-				Vector< dim_t, number_t > pointA, pointB, pointC;
+				Vector< vector_dim_t, vector_precision_t > pointA, pointB, pointC;
 
 				if ( m_closed )
 				{
@@ -194,10 +194,10 @@ namespace EmEn::Libs::Math
 				/* NOTE: This logic assumes a chain of quadratic Bézier curves where P_i, P_i+1, P_i+2 form a curve.
 				 * Another interpretation (Catmull-Rom type) would use the points differently (e.g. P_i+1 is the control point).
 				 * The above logic is simple and avoids crashes. */
-				return Vector< dim_t, number_t >::quadraticBezierInterpolation(pointA, pointB, pointC, localTimePoint);
+				return Vector< vector_dim_t, vector_precision_t >::quadraticBezierInterpolation(pointA, pointB, pointC, localTimePoint);
 			}
 
-			std::vector< Vector< dim_t, number_t > > m_points;
+			std::vector< Vector< vector_dim_t, vector_precision_t > > m_points;
 			bool m_closed{false};
 	};
 }

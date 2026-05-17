@@ -194,6 +194,8 @@ namespace EmEn::Graphics
 				});
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -202,17 +204,24 @@ namespace EmEn::Graphics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const VertexBufferFormat & obj);
 
-			/**
-			 * @brief Stringify the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const VertexBufferFormat & obj) noexcept;
-
-		private:
-
 			std::vector< VkVertexInputBindingDescription > m_bindings;
 			std::vector< VkVertexInputAttributeDescription > m_attributes;
 			std::map< uint32_t, VertexBufferBinding > m_bindingFormats;
 	};
+
+	/**
+	 * @brief Stringify the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const VertexBufferFormat & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

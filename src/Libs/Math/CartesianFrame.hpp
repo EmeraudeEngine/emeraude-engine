@@ -56,7 +56,8 @@ namespace EmEn::Libs::Math
 	 *  - Z axis: positive back, negative front
 	 * @tparam precision_t The data precision should be a floating point number. Default float.
 	 */
-	template< typename precision_t = float > requires (std::is_floating_point_v< precision_t >)
+	template< typename precision_t = float >
+	requires (std::is_floating_point_v< precision_t >)
 	class CartesianFrame final
 	{
 		public:
@@ -1290,6 +1291,8 @@ namespace EmEn::Libs::Math
 				};
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -1309,24 +1312,6 @@ namespace EmEn::Libs::Math
 					"Backward (Z+) : " << obj.backwardVector() << "\n"
 					"Forward (Z-) : " << obj.forwardVector() << '\n';
 			}
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const CartesianFrame & obj) noexcept
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
 
 			/**
 			 * @brief Computes the downward (Y-Axis) vector from backward vector (Z-Axis).
@@ -1381,6 +1366,22 @@ namespace EmEn::Libs::Math
 			Vector< 3, precision_t > m_backward{Vector< 3, precision_t >::positiveZ()};
 			Vector< 3, precision_t > m_scaling{1, 1, 1};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	template< typename precision_t = float >
+	std::string
+	to_string (const CartesianFrame< precision_t > & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 
 	using CartesianFrameF = CartesianFrame< float >;
 	using CartesianFrameD = CartesianFrame< double >;

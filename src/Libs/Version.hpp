@@ -53,7 +53,8 @@ namespace EmEn::Libs
 			 * @param minor The minor number.
 			 * @param revision The revision number.
 			 */
-			constexpr Version (int major, int minor, int revision) noexcept
+			constexpr
+			Version (int major, int minor, int revision) noexcept
 				: m_major{major},
 				m_minor{minor},
 				m_revision{revision}
@@ -65,11 +66,11 @@ namespace EmEn::Libs
 			 * @brief Constructs a version from a number.
 			 * @param bitmask An unsigned integer of 32 bits.
 			 */
-			explicit
+			constexpr explicit
 			Version (uint32_t bitmask) noexcept
-				: m_major{static_cast<int>((bitmask >> 22) & 0x3FF)}, // 0x3FF = mask 10 bits
-				m_minor{static_cast<int>((bitmask >> 12) & 0x3FF)}, // 0x3FF = mask 10 bits
-				m_revision{static_cast<int>(bitmask & 0xFFF)} // 0xFFF = mask 12 bits
+				: m_major{static_cast< int >((bitmask >> 22) & 0x3FF)}, // 0x3FF = mask 10 bits
+				m_minor{static_cast< int >((bitmask >> 12) & 0x3FF)}, // 0x3FF = mask 10 bits
+				m_revision{static_cast< int >(bitmask & 0xFFF)} // 0xFFF = mask 12 bits
 			{
 
 			}
@@ -187,6 +188,7 @@ namespace EmEn::Libs
 			/**
 			 * @brief Creates a Version from a string, returning an empty optional on failure.
 			 * @param string The string to parse (e.g., "1.2.3").
+			 * @param separator The number separator. Default '.'.
 			 * @return std::optional< Version >
 			 */
 			[[nodiscard]]
@@ -194,9 +196,7 @@ namespace EmEn::Libs
 			std::optional< Version >
 			FromString (const std::string& string, char separator = '.') noexcept
 			{
-				Version version;
-
-				if ( version.parseFromString(string, separator))
+				if ( Version version; version.parseFromString(string, separator))
 				{
 					return version;
 				}
