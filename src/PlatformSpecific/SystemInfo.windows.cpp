@@ -38,10 +38,10 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #define _WIN32_DCOM // NOLINT
+#include <Windows.h>
 #include <comdef.h>
 #include <psapi.h>
 #include <Wbemidl.h>
-#include <Windows.h>
 #pragma comment(lib, "wbemuuid.lib")
 
 /* Local inclusions. */

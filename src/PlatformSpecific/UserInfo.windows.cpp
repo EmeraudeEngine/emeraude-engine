@@ -37,11 +37,11 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#include <Windows.h>
 #include <Lmcons.h>
 #define SECURITY_WIN32
 #include <Security.h>
 #include <Shlobj.h>
-#include <Windows.h>
 
 /* Local inclusions. */
 #include "Helpers.hpp"

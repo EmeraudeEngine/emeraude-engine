@@ -30,8 +30,6 @@
 #include <algorithm>
 
 /* Third-party inclusions. */
-#include <devguid.h>
-#include <SetupAPI.h>
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -39,6 +37,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
+#include <devguid.h>
+#include <SetupAPI.h>
 
 #pragma comment(lib, "SetupAPI.lib")
 
