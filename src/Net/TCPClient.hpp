@@ -29,26 +29,27 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <system_error>
-
-/* Third party inclusions. */
-#include "Libs/Network/asio_throw_exception.hpp"
-#include "asio.hpp"
 
 namespace EmEn::Net
 {
 	class TCPServer;
 
 	/**
-	 * @brief Cross-platform TCP client built on Asio.
-	 * @details Exposes a simple blocking-with-timeout API on top of Asio so
-	 * consumers do not have to deal with the Asio model directly. Suitable
-	 * for printer protocols (MKS, Chitu), RTSP control channels, LAN gaming
-	 * and any application that needs a stateful TCP connection.
-	 * @note Each instance owns its own asio::io_context, which makes it safe
-	 * to use multiple TCPClient instances independently and concurrently from
-	 * different threads.
+	 * @brief Cross-platform TCP client built on raw kernel sockets.
+	 * @details Exposes a simple blocking-with-timeout API on top of native
+	 * sockets. Asio is used only during connect() for DNS resolution and a
+	 * timed async_connect; once the connection is established, the kernel
+	 * handle is detached from Asio and managed directly. This makes the
+	 * client safe for full-duplex use from two threads (one send thread,
+	 * one receive-polling thread) without hitting Asio's non-thread-safe
+	 * userland state on win_iocp_socket_service.
+	 * Suitable for printer protocols (MKS, Chitu), RTSP control channels,
+	 * LAN gaming and any application that needs a stateful TCP connection.
+	 * @note Multiple TCPClient instances are fully independent and safe to
+	 * use concurrently from different threads.
 	 */
 	class TCPClient final
 	{
@@ -58,6 +59,17 @@ namespace EmEn::Net
 
 			/** @brief Default connect timeout in milliseconds. */
 			static constexpr uint32_t DefaultConnectTimeoutMs{5000};
+
+			/** @brief Platform-erased native socket handle.
+			 * @note std::intptr_t fits both POSIX `int` and Windows `SOCKET`
+			 * (which is a `UINT_PTR`). The actual platform-specific cast is
+			 * performed at the syscall boundary inside the implementation. */
+			using native_handle_type = std::intptr_t;
+
+			/** @brief Sentinel for an invalid handle.
+			 * @note `-1` matches POSIX `int -1` and Windows `INVALID_SOCKET`
+			 * (which is `(SOCKET)~0`) once cast through `intptr_t`. */
+			static constexpr native_handle_type InvalidHandle{-1};
 
 			/** @brief Constructs a closed TCP client. */
 			TCPClient () noexcept;
@@ -78,7 +90,8 @@ namespace EmEn::Net
 			 * @note Resolves the host through DNS (supports both IPv4 and IPv6
 			 * endpoints) and tries them in order until one succeeds before the
 			 * deadline. If the client is already connected, the previous
-			 * connection is closed first.
+			 * connection is closed first. On success, the underlying kernel
+			 * handle is detached from Asio and switched to blocking mode.
 			 * @param host The destination IP address or hostname.
 			 * @param port The destination port.
 			 * @param timeoutMs Connect timeout in milliseconds.
@@ -88,6 +101,12 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Closes the socket.
+			 * @note Performs a two-phase close: first a `shutdown(SHUT_RDWR)`
+			 * under a shared lock to wake up any thread blocked in `::recv()`
+			 * or `::send()` on this handle, then an exclusive lock that waits
+			 * for those threads to release the kernel handle before calling
+			 * `::closesocket()`/`::close()`. This eliminates the
+			 * close-during-receive race on Windows.
 			 * @return void
 			 */
 			void close () noexcept;
@@ -104,7 +123,7 @@ namespace EmEn::Net
 			 * @note Performs a complete write — returns only when all bytes
 			 * have been transmitted to the kernel send buffer or an error
 			 * occurs. The kernel-level send timeout (see setSendTimeout())
-			 * applies if set.
+			 * applies if set; partial writes are returned on timeout.
 			 * @param data Pointer to the data buffer.
 			 * @param length Number of bytes to send.
 			 * @return int Number of bytes sent, or -1 on error.
@@ -122,7 +141,8 @@ namespace EmEn::Net
 			 * @brief Receives data from the remote host with a timeout.
 			 * @note A single read of up to @a maxLength bytes. Returns as soon
 			 * as any data is available — TCP is a stream, framing is the
-			 * caller's responsibility.
+			 * caller's responsibility. The per-call timeout is enforced via
+			 * `SO_RCVTIMEO` (save/restore around the call).
 			 * @param buffer The buffer to read into.
 			 * @param maxLength Maximum number of bytes to receive.
 			 * @param timeoutMs Receive timeout in milliseconds (0 = block indefinitely).
@@ -180,9 +200,8 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Sets the kernel-level receive timeout (SO_RCVTIMEO).
-			 * @note This is independent of the per-call @a timeoutMs argument
-			 * passed to receive(). It applies to underlying kernel reads when
-			 * the user-space code performs a synchronous read without timeout.
+			 * @note Independent of the per-call @a timeoutMs argument passed
+			 * to receive() (which save/restores around its own value).
 			 * @param timeoutMs Receive timeout in milliseconds (0 = no timeout).
 			 * @return bool True on success.
 			 */
@@ -197,9 +216,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Returns the last error code recorded by the client.
-			 * @note Useful to map low-level errors (connection refused, reset,
-			 * timeout, host not found) to higher-level Node.js-like error
-			 * codes in wrapping layers.
 			 * @return std::error_code
 			 */
 			[[nodiscard]]
@@ -213,15 +229,19 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Internal constructor used by TCPServer::accept() to wrap
-			 * an accepted socket.
-			 * @param ioContext An io_context that owns the socket. The socket
-			 * has already been transferred to it via release()/assign().
-			 * @param socket The accepted socket attached to @a ioContext.
+			 * a kernel socket handle that has already been detached from Asio
+			 * and switched to blocking mode.
+			 * @param handle The raw socket handle.
 			 */
-			TCPClient (std::unique_ptr< asio::io_context > ioContext, std::unique_ptr< asio::ip::tcp::socket > socket) noexcept;
+			explicit TCPClient (native_handle_type handle) noexcept;
 
-			std::unique_ptr< asio::io_context > m_ioContext;
-			std::unique_ptr< asio::ip::tcp::socket > m_socket;
+			/* Per-instance shared mutex. Held shared by send/receive (which can
+			 * legitimately run concurrently — the kernel handles `recv()` and
+			 * `send()` atomically on the same fd) and held exclusive by close()
+			 * so the handle can be invalidated only after every in-flight op
+			 * has returned from its syscall. */
+			std::unique_ptr< std::shared_mutex > m_handleMutex;
+			native_handle_type m_handle{InvalidHandle};
 			std::error_code m_lastError;
 	};
 }

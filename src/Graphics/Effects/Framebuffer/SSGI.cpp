@@ -52,7 +52,7 @@ namespace
 	 *   binding 1: normals texture
 	 *   binding 2: scene color texture (HDR, for bounce color sampling)
 	 */
-	static constexpr auto SSGITraceFragmentShader = R"GLSL(
+	constexpr auto SSGITraceFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -238,7 +238,7 @@ void main()
 	 * Preserves edges by weighting samples based on depth and normal similarity.
 	 * Identical to the RTGI bilateral blur.
 	 * Binding 0: GI input, Binding 1: depth, Binding 2: normals. */
-	static constexpr auto SSGIBlurFragmentShader = R"GLSL(
+	constexpr auto SSGIBlurFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -320,7 +320,7 @@ void main()
 	 * modulated by the material properties G-buffer (emissive surfaces
 	 * should not receive GI — they emit their own light).
 	 * Identical to the RTGI apply pass. */
-	static constexpr auto SSGIApplyFragmentShader = R"GLSL(
+	constexpr auto SSGIApplyFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -419,27 +419,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(tripleLayout);
 
-			m_traceLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
-			});
+			m_traceLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
+				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				.offset = 0,
+				.size = sizeof(TracePushConstants)
+			}});
 		}
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(tripleLayout);
 
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			});
+			m_blurLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
+				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				.offset = 0,
+				.size = sizeof(BlurPushConstants)
+			}});
 		}
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(tripleLayout);
 
-			m_applyLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
-			});
+			m_applyLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
+				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				.offset = 0,
+				.size = sizeof(ApplyPushConstants)
+			}});
 		}
 
 		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
@@ -491,9 +497,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( auto & ds : m_blurHPerFrame )
+		for ( const auto & descriptorSet : m_blurHPerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(0, m_traceTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_traceTarget) )
 			{
 				return false;
 			}
@@ -507,9 +513,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( auto & ds : m_blurVPerFrame )
+		for ( const auto & descriptorSet : m_blurVPerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(0, m_blurHTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
 			{
 				return false;
 			}
@@ -523,9 +529,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( auto & ds : m_applyPerFrame )
+		for ( const auto & descriptorSet : m_applyPerFrame )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}

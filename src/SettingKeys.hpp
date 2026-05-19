@@ -264,6 +264,8 @@ namespace EmEn
 			constexpr auto DefaultGraphicsRayTracingGISampleCount{2U};
 			constexpr auto GraphicsRayTracingGIPixelDoublingKey{"Core/Graphics/RayTracing/GIPixelDoubling"};
 			constexpr auto DefaultGraphicsRayTracingGIPixelDoubling{true};
+			constexpr auto GraphicsRayTracingEnableContactShadowsKey{"Core/Graphics/RayTracing/EnableContactShadows"};
+			constexpr auto DefaultGraphicsRayTracingEnableContactShadows{true};
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 

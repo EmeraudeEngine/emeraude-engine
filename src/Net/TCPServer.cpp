@@ -227,11 +227,12 @@ namespace EmEn::Net
 			return std::nullopt;
 		}
 
-		/* Detach the accepted socket from the server's io_context and migrate
-		 * it onto a fresh io_context that the returned TCPClient will own.
-		 * This makes the client's lifetime independent from the server's. */
-		const auto protocol = peerSocket.local_endpoint().protocol();
-
+		/* Detach the accepted socket from the server's io_context. From this
+		 * point on the peer is managed by raw kernel calls, completely
+		 * independent of Asio — see TCPClient's design notes for why we
+		 * bypass Asio for the runtime I/O path. The TCPClient's private
+		 * constructor takes care of switching the handle to blocking mode
+		 * and suppressing SIGPIPE where needed. */
 		asio::error_code releaseEc;
 		const auto nativeHandle = peerSocket.release(releaseEc);
 
@@ -242,20 +243,7 @@ namespace EmEn::Net
 			return std::nullopt;
 		}
 
-		auto clientIoContext = std::make_unique< asio::io_context >();
-		auto clientSocket = std::make_unique< asio::ip::tcp::socket >(*clientIoContext);
-
-		asio::error_code assignEc;
-		clientSocket->assign(protocol, nativeHandle, assignEc);
-
-		if ( assignEc )
-		{
-			m_lastError = assignEc;
-
-			return std::nullopt;
-		}
-
-		return TCPClient{std::move(clientIoContext), std::move(clientSocket)};
+		return TCPClient{static_cast< TCPClient::native_handle_type >(nativeHandle)};
 	}
 
 	/* ---- Address query ---- */
