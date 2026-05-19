@@ -30,7 +30,7 @@
 #include <vector>
 
 /* Third-party inclusions. */
-r#ifndef NOMINMAX
+#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #ifndef WIN32_LEAN_AND_MEAN

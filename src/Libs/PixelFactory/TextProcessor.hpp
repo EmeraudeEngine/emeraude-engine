@@ -193,14 +193,14 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( m_pixmap == nullptr || !m_rectangle.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the area is not valid !" "\n";
+					std::cerr << "TextProcessor::write(), the area is not valid !" "\n";
 
 					return false;
 				}
 
 				if ( m_selectedFont == nullptr )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", there is no font selected !" "\n";
+					std::cerr << "TextProcessor::write(), there is no font selected !" "\n";
 
 					return false;
 				}

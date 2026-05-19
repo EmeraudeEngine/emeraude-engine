@@ -126,7 +126,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_constructionMode != ConstructionMode::None )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] You can't set an other Geometry while constructing !" "\n";
+					std::cerr << "[ShapeBuilder::setDestinationShape()] You can't set an other Geometry while constructing !" "\n";
 
 					return;
 				}
@@ -157,14 +157,14 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_constructionMode != ConstructionMode::None )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] A construction is already begun !" "\n";
+					std::cerr << "[ShapeBuilder::beginConstruction()] A construction is already begun !" "\n";
 
 					return;
 				}
 
 				if ( m_destinationShape == nullptr )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] Unable to begin a construction on a null Geometry !" "\n";
+					std::cerr << "[ShapeBuilder::beginConstruction()] Unable to begin a construction on a null Geometry !" "\n";
 
 					return;
 				}
@@ -191,7 +191,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_constructionMode == ConstructionMode::None )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] Builder is not in construction mode !" "\n";
+					std::cerr << "[ShapeBuilder::newGroup()] Builder is not in construction mode !" "\n";
 
 					return;
 				}
@@ -329,7 +329,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_constructionMode == ConstructionMode::None )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] There is no construction !" "\n";
+					std::cerr << "[ShapeBuilder::newVertex()] There is no construction !" "\n";
 
 					return false;
 				}
@@ -337,7 +337,7 @@ namespace EmEn::Libs::VertexFactory
 				/* The vertex position will be never optional. */
 				if ( !m_declaredAttributes[PositionDeclared] )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] The position attribute is not declared for this vertex !" "\n";
+					std::cerr << "[ShapeBuilder::newVertex()] The position attribute is not declared for this vertex !" "\n";
 
 					return false;
 				}
@@ -353,7 +353,7 @@ namespace EmEn::Libs::VertexFactory
 					/* ... Or if the attribute has been declared. */
 					else if ( !m_declaredAttributes[NormalDeclared] )
 					{
-						std::cerr << "[" << __PRETTY_FUNCTION__ << "] The normal attribute is not declared for this vertex !" "\n";
+						std::cerr << "[ShapeBuilder::newVertex()] The normal attribute is not declared for this vertex !" "\n";
 
 						return false;
 					}
@@ -373,7 +373,7 @@ namespace EmEn::Libs::VertexFactory
 					/* ... Or if the attribute has been declared. */
 					else if ( !m_declaredAttributes[TextureCoordinatesDeclared] )
 					{
-						std::cerr << "[" << __PRETTY_FUNCTION__ << "] The texture coordinates attribute is not declared for this vertex !" "\n";
+						std::cerr << "[ShapeBuilder::newVertex()] The texture coordinates attribute is not declared for this vertex !" "\n";
 
 						return false;
 					}
@@ -395,7 +395,7 @@ namespace EmEn::Libs::VertexFactory
 					/* ... Or if the attribute has been declared. */
 					else if ( !m_declaredAttributes[VertexColorDeclared] )
 					{
-						std::cerr << "[" << __PRETTY_FUNCTION__ << "] The vertex color attribute is not declared for this vertex !" "\n";
+						std::cerr << "[ShapeBuilder::newVertex()] The vertex color attribute is not declared for this vertex !" "\n";
 
 						return false;
 					}
@@ -415,7 +415,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_constructionMode == ConstructionMode::None )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] There was no construction to end !" "\n";
+					std::cerr << "[ShapeBuilder::endConstruction()] There was no construction to end !" "\n";
 
 					return;
 				}
@@ -642,7 +642,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						default:
-							std::cerr << __PRETTY_FUNCTION__ << ", invalid usage !" "\n";
+							std::cerr << "ShapeBuilder::newVertexAdded(), invalid usage !" "\n";
 							break;
 					}
 				}

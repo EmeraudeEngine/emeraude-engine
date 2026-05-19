@@ -52,7 +52,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::mixDown(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -100,14 +100,14 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to resample !" "\n";
+			std::cerr << "Processor::resample(), no wave to resample !" "\n";
 
 			return false;
 		}
 
 		if ( m_wave.frequency() == frequency )
 		{
-			std::cout << __PRETTY_FUNCTION__ << ", the frequency is already at " << static_cast< int >(frequency) << " Hz !" "\n";
+			std::cout << "Processor::resample(), the frequency is already at " << static_cast< int >(frequency) << " Hz !" "\n";
 
 			return true;
 		}
@@ -159,7 +159,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::trim(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -234,7 +234,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::crop(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -250,7 +250,7 @@ namespace EmEn::Libs::WaveFactory
 
 		if ( startSample >= endSample )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", invalid crop range !" "\n";
+			std::cerr << "Processor::crop(), invalid crop range !" "\n";
 
 			return false;
 		}
@@ -275,7 +275,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::pad(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -308,21 +308,21 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::concat(), no wave to process !" "\n";
 
 			return false;
 		}
 
 		if ( !other.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", other wave is invalid !" "\n";
+			std::cerr << "Processor::concat(), other wave is invalid !" "\n";
 
 			return false;
 		}
 
 		if ( m_wave.channels() != other.channels() || m_wave.frequency() != other.frequency() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", waves must have same channels and frequency !" "\n";
+			std::cerr << "Processor::concat(), waves must have same channels and frequency !" "\n";
 
 			return false;
 		}
@@ -350,7 +350,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::split(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -360,7 +360,7 @@ namespace EmEn::Libs::WaveFactory
 
 		if ( position >= sampleCount )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", split position out of range !" "\n";
+			std::cerr << "Processor::split(), split position out of range !" "\n";
 
 			return false;
 		}
@@ -387,14 +387,14 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::toStereo(), no wave to process !" "\n";
 
 			return false;
 		}
 
 		if ( m_wave.channels() != Channels::Mono )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", wave is not mono !" "\n";
+			std::cerr << "Processor::toStereo(), wave is not mono !" "\n";
 
 			return false;
 		}
@@ -420,7 +420,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::extractChannel(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -429,7 +429,7 @@ namespace EmEn::Libs::WaveFactory
 
 		if ( channelIndex >= channelCount )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", channel index out of range !" "\n";
+			std::cerr << "Processor::extractChannel(), channel index out of range !" "\n";
 
 			return false;
 		}
@@ -454,14 +454,14 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::swapChannels(), no wave to process !" "\n";
 
 			return false;
 		}
 
 		if ( m_wave.channels() != Channels::Stereo )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", wave is not stereo !" "\n";
+			std::cerr << "Processor::swapChannels(), wave is not stereo !" "\n";
 
 			return false;
 		}
@@ -609,7 +609,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::normalize(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -646,7 +646,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", no wave to process !" "\n";
+			std::cerr << "Processor::convertBitDepth(), no wave to process !" "\n";
 
 			return false;
 		}
@@ -654,7 +654,7 @@ namespace EmEn::Libs::WaveFactory
 		/* Validate bit depth. */
 		if ( bits != 8 && bits != 16 && bits != 24 && bits != 32 )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", invalid bit depth (must be 8, 16, 24, or 32) !" "\n";
+			std::cerr << "Processor::convertBitDepth(), invalid bit depth (must be 8, 16, 24, or 32) !" "\n";
 
 			return false;
 		}

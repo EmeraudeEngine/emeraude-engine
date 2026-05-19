@@ -108,7 +108,7 @@ namespace EmEn::Libs::Time
 
 				if ( !result.second )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to create a timer !" "\n";
+					std::cerr << "EventTrait::createTimer(), unable to create a timer !" "\n";
 
 					return 0;
 				}

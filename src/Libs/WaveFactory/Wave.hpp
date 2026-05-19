@@ -101,7 +101,7 @@ namespace EmEn::Libs::WaveFactory
 
 				if ( bufferSize == 0UL )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", trying to allocate a zero-length audio buffer !" "\n";
+					std::cerr << "Wave::initialize(), trying to allocate a zero-length audio buffer !" "\n";
 
 					return false;
 				}
@@ -120,7 +120,7 @@ namespace EmEn::Libs::WaveFactory
 					/* Shows memory usage */
 					auto memoryAllocated = m_data.size() * sizeof(precision_t);
 
-					std::cout << "[DEBUG] " << __PRETTY_FUNCTION__ << ", " << ( static_cast< float >(memoryAllocated) / 1048576 ) << " Mib" "\n";
+					std::cout << "[DEBUG] Wave::initialize(), " << ( static_cast< float >(memoryAllocated) / 1048576 ) << " Mib" "\n";
 				}
 
 				return true;
@@ -268,7 +268,7 @@ namespace EmEn::Libs::WaveFactory
 				{
 					if ( offset >= m_data.size() )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", buffer overflow !" "\n";
+						std::cerr << "Wave::samplePointer(), buffer overflow !" "\n";
 
 						return nullptr;
 					}
@@ -292,7 +292,7 @@ namespace EmEn::Libs::WaveFactory
 				{
 					if ( offset >= m_data.size() )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", buffer overflow !" "\n";
+						std::cerr << "Wave::samplePointer(), buffer overflow !" "\n";
 
 						return nullptr;
 					}

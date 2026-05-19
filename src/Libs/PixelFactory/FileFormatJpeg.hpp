@@ -86,7 +86,7 @@ namespace EmEn::Libs::PixelFactory
 
 					if ( totalSize == 0 )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", empty stream !" "\n";
+						std::cerr << "FileFormatJpeg::readStream(), empty stream !" "\n";
 
 						return false;
 					}
@@ -95,7 +95,7 @@ namespace EmEn::Libs::PixelFactory
 
 					if ( !stream.read(inputBuffer.data(), totalSize) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", failed to read stream data !" "\n";
+						std::cerr << "FileFormatJpeg::readStream(), failed to read stream data !" "\n";
 
 						return false;
 					}
@@ -177,14 +177,14 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( !pixmap.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", pixmap parameter is invalid !" "\n";
+					std::cerr << "FileFormatJpeg::writeStream(), pixmap parameter is invalid !" "\n";
 
 					return false;
 				}
 
 				if ( pixmap.colorCount() != 3 && pixmap.colorCount() != 1 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", only rgb and grayscale format is supported for now !" "\n";
+					std::cerr << "FileFormatJpeg::writeStream(), only rgb and grayscale format is supported for now !" "\n";
 
 					return false;
 				}
@@ -220,7 +220,7 @@ namespace EmEn::Libs::PixelFactory
 						break;
 
 					default:
-						std::cerr << __PRETTY_FUNCTION__ << ", unhandled format !" "\n";
+						std::cerr << "FileFormatJpeg::writeStream(), unhandled format !" "\n";
 
 						jpeg_destroy_compress(&info);
 						free(outBuffer);

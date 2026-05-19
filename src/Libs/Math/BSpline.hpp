@@ -143,7 +143,7 @@ namespace EmEn::Libs::Math
 			{
 				if ( segments < 1 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", segment should at least be 1 !" "\n";
+					std::cerr << "BSplinePoint::setSegments(), segment should at least be 1 !" "\n";
 				}
 				else
 				{

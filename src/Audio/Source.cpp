@@ -818,7 +818,7 @@ namespace EmEn::Audio
 
 		alSourceUnqueueBuffers(this->identifier(), bufferCount, removedIdentifiers.data());
 
-		if ( alGetErrors(__PRETTY_FUNCTION__, __FILE__, __LINE__) )
+		if ( alGetErrors("Source::clearStream()", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "Something goes wrong with OpenAL when clearing streams !");
 		}

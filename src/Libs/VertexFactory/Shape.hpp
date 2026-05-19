@@ -114,7 +114,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( triangleCount == 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", reserving data with triangle count equals to zero !" "\n";
+					std::cerr << "Shape::reserveData(), reserving data with triangle count equals to zero !" "\n";
 
 					return;
 				}
@@ -168,7 +168,7 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( !somethingReserved )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", trying to reserve data with all parameters set to zero !" "\n";
+					std::cerr << "Shape::reserveData(), trying to reserve data with all parameters set to zero !" "\n";
 				}
 			}
 
@@ -638,7 +638,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry data is empty !" "\n";
+					std::cerr << "Shape::generateTextureCoordinates(), geometry data is empty !" "\n";
 
 					return false;
 				}
@@ -682,7 +682,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry data is empty !" "\n";
+					std::cerr << "Shape::computeTriangleNormal(), geometry data is empty !" "\n";
 
 					return false;
 				}
@@ -723,14 +723,14 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry data is empty !" "\n";
+					std::cerr << "Shape::computeTriangleTangent(), geometry data is empty !" "\n";
 
 					return false;
 				}
 
 				if ( !this->isTextureCoordinatesAvailable() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", there is no texture coordinates !" "\n";
+					std::cerr << "Shape::computeTriangleTangent(), there is no texture coordinates !" "\n";
 
 					return false;
 				}
@@ -777,7 +777,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry data is empty !" "\n";
+					std::cerr << "Shape::computeTriangleTangentFromEdge(), geometry data is empty !" "\n";
 
 					return false;
 				}
@@ -832,14 +832,14 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry data is empty !" "\n";
+					std::cerr << "Shape::computeTriangleTBNSpace(), geometry data is empty !" "\n";
 
 					return false;
 				}
 
 				if ( !this->isTextureCoordinatesAvailable() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", there is no texture coordinates !" "\n";
+					std::cerr << "Shape::computeTriangleTBNSpace(), there is no texture coordinates !" "\n";
 
 					return false;
 				}
@@ -892,7 +892,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry is empty !" "\n";
+					std::cerr << "Shape::computeVertexNormal(), geometry is empty !" "\n";
 
 					return false;
 				}
@@ -928,7 +928,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry is empty !" "\n";
+					std::cerr << "Shape::computeVertexTangent(), geometry is empty !" "\n";
 
 					return false;
 				}
@@ -963,7 +963,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry is empty !" "\n";
+					std::cerr << "Shape::computeVertexTBNSpace(), geometry is empty !" "\n";
 
 					return false;
 				}

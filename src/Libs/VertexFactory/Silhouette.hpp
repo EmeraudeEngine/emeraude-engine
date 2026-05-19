@@ -75,7 +75,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( geometry.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry is invalid !" "\n";
+					std::cerr << "Silhouette::build(), geometry is invalid !" "\n";
 
 					return false;
 				}

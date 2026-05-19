@@ -235,7 +235,7 @@ namespace EmEn::Libs::PixelFactory
 
 						if ( !FileIO::read(filepath, charsMap) )
 						{
-							std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", can't load pixel data from " << filepath << " file !" "\n";
+							std::cerr << "[ERROR] Font::readFile(), can't load pixel data from " << filepath << " file !" "\n";
 
 							return false;
 						}
@@ -247,7 +247,7 @@ namespace EmEn::Libs::PixelFactory
 						return this->readTrueTypeFile(filepath, fontSize, fixedWidth);
 
 					case FontType::None :
-						std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", the font file " << filepath << " is not handled !" "\n";
+						std::cerr << "[ERROR] Font::readFile(), the font file " << filepath << " is not handled !" "\n";
 
 					return false;
 				}
@@ -268,21 +268,21 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( !charsMap.isValid() )
 				{
-					std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", the chars map is empty !" "\n";
+					std::cerr << "[ERROR] Font::parsePixmap(), the chars map is empty !" "\n";
 
 					return false;
 				}
 
 				if ( charsMap.channelMode() != ChannelMode::Grayscale )
 				{
-					std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", the chars map must be a grayscale !" "\n";
+					std::cerr << "[ERROR] Font::parsePixmap(), the chars map must be a grayscale !" "\n";
 
 					return false;
 				}
 
 				if ( charsMap.width() % FontMapDivisor > 0 || charsMap.height() % FontMapDivisor > 0 )
 				{
-					std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", invalid chars map dimensions !" "\n";
+					std::cerr << "[ERROR] Font::parsePixmap(), invalid chars map dimensions !" "\n";
 
 					return false;
 				}
@@ -340,7 +340,7 @@ namespace EmEn::Libs::PixelFactory
 
 					if ( closestSize == 0UL )
 					{
-						std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", the font size " << closestSize << " is not loaded !" "\n";
+						std::cerr << "[ERROR] Font::glyphs(), the font size " << closestSize << " is not loaded !" "\n";
 
 						return nullptr;
 					}
@@ -559,7 +559,7 @@ namespace EmEn::Libs::PixelFactory
 				/* Try to init FreeType 2. */
 				if ( FT_Init_FreeType(&library) > 0 )
 				{
-					std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", FreeType 2 init failed !" "\n";
+					std::cerr << "[ERROR] Font::readTrueTypeFile(), FreeType 2 init failed !" "\n";
 
 					return false;
 				}
@@ -567,7 +567,7 @@ namespace EmEn::Libs::PixelFactory
 				/* Load the font face. Face index 0 (always available). */
 				if ( FT_New_Face(library, filepath.string().data(), 0, &face) > 0 )
 				{
-					std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", Font file " << filepath << " cannot be open !" "\n";
+					std::cerr << "[ERROR] Font::readTrueTypeFile(), Font file " << filepath << " cannot be open !" "\n";
 
 					return false;
 				}
@@ -576,7 +576,7 @@ namespace EmEn::Libs::PixelFactory
 				 * NOTE: 0 means square. */
 				if ( FT_Set_Pixel_Sizes(face, 0, static_cast< FT_UInt >(fontSize)) > 0 )
 				{
-					std::cerr << "[ERROR] " << __PRETTY_FUNCTION__ << ", the size request with this font is not available !" "\n";
+					std::cerr << "[ERROR] Font::readTrueTypeFile(), the size request with this font is not available !" "\n";
 
 					return false;
 				}

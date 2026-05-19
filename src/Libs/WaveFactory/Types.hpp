@@ -132,7 +132,7 @@ namespace EmEn::Libs::WaveFactory
 				return Channels::Stereo;
 
 			default:
-				std::cerr << __PRETTY_FUNCTION__ << ", " << channelsCount << " channels is not handled !" "\n";
+				std::cerr << "toChannels(), " << channelsCount << " channels is not handled !" "\n";
 
 				return Channels::Invalid;
 		}
@@ -181,7 +181,7 @@ namespace EmEn::Libs::WaveFactory
 				return Frequency::PCM192000Hz;
 
 			default:
-				std::cerr << __PRETTY_FUNCTION__ << ", the frequency " << frequency << " is not standard !" "\n";
+				std::cerr << "toFrequency(), the frequency " << frequency << " is not standard !" "\n";
 
 				return Frequency::Invalid;
 		}

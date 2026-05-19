@@ -27,17 +27,15 @@
 #pragma once
 
 /* STL inclusions. */
-#include <atomic>
 #include <cstdint>
+#include <atomic>
 #include <memory>
-#include <mutex>
 #include <span>
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Vulkan

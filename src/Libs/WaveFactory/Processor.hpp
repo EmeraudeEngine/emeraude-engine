@@ -107,7 +107,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", input wave is invalid !" "\n";
+					std::cerr << "Processor::requires(), input wave is invalid !" "\n";
 
 					return false;
 				}
@@ -130,7 +130,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", no processed wave available !" "\n";
+					std::cerr << "Processor::requires(), no processed wave available !" "\n";
 
 					return false;
 				}

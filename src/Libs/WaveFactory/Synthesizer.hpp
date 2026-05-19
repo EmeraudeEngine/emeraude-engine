@@ -581,7 +581,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::whiteNoise(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -627,7 +627,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::pinkNoise(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -687,7 +687,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::brownNoise(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -729,7 +729,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::blueNoise(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -776,7 +776,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() ) [[unlikely]]
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::sineWave(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -816,7 +816,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() ) [[unlikely]]
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::squareWave(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -856,7 +856,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() ) [[unlikely]]
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::triangleWave(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -902,7 +902,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() ) [[unlikely]]
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::sawtoothWave(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -944,7 +944,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyADSR(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1013,7 +1013,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::pitchSweep(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1056,7 +1056,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::noiseBurst(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1108,7 +1108,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyVibrato(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1158,7 +1158,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyTremolo(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1192,7 +1192,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyFadeIn(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1226,7 +1226,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyFadeOut(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1262,7 +1262,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyLowPass(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1303,7 +1303,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyHighPass(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1346,7 +1346,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() || !other.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave(s) not initialized !" "\n";
+					std::cerr << "Synthesizer::mix(), wave(s) not initialized !" "\n";
 
 					return false;
 				}
@@ -1384,7 +1384,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyRingModulation(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1418,7 +1418,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyBitCrush(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1454,7 +1454,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyDistortion(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1505,7 +1505,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyOverdrive(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1562,7 +1562,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyFuzz(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1619,7 +1619,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyChorus(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1689,7 +1689,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyFlanger(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1761,7 +1761,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyPhaser(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1840,7 +1840,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyDelay(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1892,7 +1892,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyReverb(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -1996,7 +1996,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyWahWah(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2060,7 +2060,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyAutoWah(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2135,7 +2135,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyCompressor(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2221,7 +2221,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyNoiseGate(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2292,7 +2292,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applyPitchShift(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2356,7 +2356,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::applySampleRateReduce(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2402,7 +2402,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::reverse(), wave is not initialized !" "\n";
 
 					return false;
 				}
@@ -2430,7 +2430,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				if ( !m_wave.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", wave is not initialized !" "\n";
+					std::cerr << "Synthesizer::normalize(), wave is not initialized !" "\n";
 
 					return false;
 				}

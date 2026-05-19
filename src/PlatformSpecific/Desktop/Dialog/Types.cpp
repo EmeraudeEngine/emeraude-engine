@@ -85,7 +85,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			return ButtonLayout::Quit;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'OK' by default." << "\n";
+		std::cerr << "to_ButtonLayout() : Unknown '" << value << "' type ! Returning 'OK' by default.\n";
 
 		return ButtonLayout::OK;
 	}
@@ -135,7 +135,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			return MessageType::Question;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Info' by default." << "\n";
+		std::cerr << "to_MessageType() : Unknown '" << value << "' type ! Returning 'Info' by default.\n";
 
 		return MessageType::Info;
 	}
@@ -201,7 +201,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			return Answer::DialogFailure;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+		std::cerr << "to_Answer() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
 
 		return Answer::None;
 	}

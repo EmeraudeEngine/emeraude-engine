@@ -313,7 +313,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file.is_open() ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to read " << filepath << " file." "\n";
+			std::cerr << "fileGetContents(), unable to read " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -323,7 +323,7 @@ namespace EmEn::Libs::IO
 
 		if ( bytes < 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to get the size of " << filepath << " file." "\n";
+			std::cerr << "fileGetContents(), unable to get the size of " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -336,7 +336,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", error reading " << filepath << " file." "\n";
+			std::cerr << "fileGetContents(), error reading " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -380,7 +380,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file.is_open() ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to write into " << filepath << " file." "\n";
+			std::cerr << "filePutContents(), unable to write into " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -389,7 +389,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", error writing to " << filepath << " file." "\n";
+			std::cerr << "filePutContents(), error writing to " << filepath << " file." "\n";
 
 			return false;
 		}

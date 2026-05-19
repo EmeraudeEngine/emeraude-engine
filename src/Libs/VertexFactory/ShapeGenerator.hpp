@@ -1085,7 +1085,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		if ( depth > maxDepth )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", depth " << depth << " clamped to " << maxDepth << " to prevent excessive computation." "\n";
+			std::cerr << "requires(), depth " << depth << " clamped to " << maxDepth << " to prevent excessive computation." "\n";
 
 			depth = maxDepth;
 		}

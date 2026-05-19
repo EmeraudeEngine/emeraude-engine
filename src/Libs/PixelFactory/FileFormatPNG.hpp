@@ -83,14 +83,14 @@ namespace EmEn::Libs::PixelFactory
 				/* Read signature and check it. */
 				if ( !stream.read(signature.data(), sizeof(signature)) )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to read the PNG signature !" "\n";
+					std::cerr << "FileFormatPNG::readStream(), unable to read the PNG signature !" "\n";
 
 					return false;
 				}
 
 				if ( !png_check_sig(signature.data(), sizeof(signature)) )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", data is not a PNG stream !" "\n";
+					std::cerr << "FileFormatPNG::readStream(), data is not a PNG stream !" "\n";
 
 					return false;
 				}
@@ -124,7 +124,7 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( errorContext.hasError )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", PNG read failed: " << errorContext.errorMessage << "\n";
+					std::cerr << "FileFormatPNG::readStream(), PNG read failed: " << errorContext.errorMessage << "\n";
 
 					png_destroy_read_struct(&png, &pngInfo, nullptr);
 
@@ -213,7 +213,7 @@ namespace EmEn::Libs::PixelFactory
 						break;
 
 					default:
-						std::cerr << __PRETTY_FUNCTION__ << ", unhandled format !" "\n";
+						std::cerr << "FileFormatPNG::readStream(), unhandled format !" "\n";
 
 						png_destroy_read_struct(&png, &pngInfo, nullptr);
 
@@ -245,7 +245,7 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( errorContext.hasError )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", PNG read failed: " << errorContext.errorMessage << "\n";
+					std::cerr << "FileFormatPNG::readStream(), PNG read failed: " << errorContext.errorMessage << "\n";
 
 					png_destroy_read_struct(&png, &pngInfo, nullptr);
 
@@ -266,7 +266,7 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( !pixmap.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", pixmap parameter is invalid !" "\n";
+					std::cerr << "FileFormatPNG::writeStream(), pixmap parameter is invalid !" "\n";
 
 					return false;
 				}
@@ -293,7 +293,7 @@ namespace EmEn::Libs::PixelFactory
 						break;
 
 					default:
-						std::cerr << __PRETTY_FUNCTION__ << ", invalid color count !" "\n";
+						std::cerr << "FileFormatPNG::writeStream(), invalid color count !" "\n";
 
 						return false;
 				}
@@ -389,7 +389,7 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( errorContext.hasError )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", PNG write failed: " << errorContext.errorMessage << "\n";
+					std::cerr << "FileFormatPNG::writeStream(), PNG write failed: " << errorContext.errorMessage << "\n";
 
 					return false;
 				}

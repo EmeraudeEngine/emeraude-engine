@@ -47,7 +47,7 @@ namespace EmEn::Libs::Compression::ZLIB
 
 		if ( finalPosition <= 0 )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", nothing to compress !" "\n";
+			std::cerr << "compressStream(), nothing to compress !" "\n";
 
 			return 0;
 		}
@@ -103,7 +103,7 @@ namespace EmEn::Libs::Compression::ZLIB
 
 			if ( error > 0 )
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", " << zError(error) << "\n";
+				std::cerr << "compressStream(), " << zError(error) << "\n";
 
 				return 0;
 			}
@@ -179,7 +179,7 @@ namespace EmEn::Libs::Compression::ZLIB
 
 				if ( uncompress(dest, &baseSize, src, compressedSize) > 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to uncompress stream." "\n";
+					std::cerr << "decompressStream(), unable to uncompress stream." "\n";
 
 					return false;
 				}
@@ -191,13 +191,13 @@ namespace EmEn::Libs::Compression::ZLIB
 			}
 			else
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", unable to read compressed stream." "\n";
+				std::cerr << "decompressStream(), unable to read compressed stream." "\n";
 
 				return false;
 			}
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << ", stream seems broken." "\n";
+		std::cerr << "decompressStream(), stream seems broken." "\n";
 
 		return false;
 	}

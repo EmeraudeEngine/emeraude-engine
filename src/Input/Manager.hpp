@@ -93,13 +93,43 @@ namespace EmEn::Input
 			{
 				if ( s_instance != nullptr )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
+					std::cerr << "Input::Manager(), constructor called twice !" "\n";
 
 					std::terminate();
 				}
 
 				s_instance = this;
 			}
+
+			/**
+			 * @brief Copy constructor.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 */
+			Manager (const Manager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 */
+			Manager (Manager && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 * @return Manager &
+			 */
+			Manager & operator= (const Manager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 * @return Manager &
+			 */
+			Manager & operator= (Manager && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the resource manager.

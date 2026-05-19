@@ -91,7 +91,7 @@ namespace EmEn::Libs::PixelFactory
 				{
 					if ( !stream.read(ptr.at(i), size.at(i)) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", unable to read the Targa header !" "\n";
+						std::cerr << "FileFormatTarga::readStream(), unable to read the Targa header !" "\n";
 
 						return false;
 					}
@@ -151,12 +151,12 @@ namespace EmEn::Libs::PixelFactory
 
 					case 32 :
 					case 33 :
-						std::cerr << __PRETTY_FUNCTION__ << ", unhandled type of Targa file !" "\n";
+						std::cerr << "FileFormatTarga::readStream(), unhandled type of Targa file !" "\n";
 						break;
 
 					case 0 :
 					default:
-						std::cerr << __PRETTY_FUNCTION__ << ", no pixel data !" "\n";
+						std::cerr << "FileFormatTarga::readStream(), no pixel data !" "\n";
 
 						return false;
 				}
@@ -174,7 +174,7 @@ namespace EmEn::Libs::PixelFactory
 
 					if ( !stream.read(identification.data(), fileHeader.idCharCount) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", unable to read the Targa identification !" "\n";
+						std::cerr << "FileFormatTarga::readStream(), unable to read the Targa identification !" "\n";
 
 						return false;
 					}
@@ -194,7 +194,7 @@ namespace EmEn::Libs::PixelFactory
 
 						if ( !stream.read(&packetHeader, 1) )
 						{
-							std::cerr << __PRETTY_FUNCTION__ << ", unable to read RLE packet header !" "\n";
+							std::cerr << "FileFormatTarga::readStream(), unable to read RLE packet header !" "\n";
 
 							return false;
 						}
@@ -208,7 +208,7 @@ namespace EmEn::Libs::PixelFactory
 
 							if ( !stream.read(pixel.data(), bytesPerPixel) )
 							{
-								std::cerr << __PRETTY_FUNCTION__ << ", unable to read RLE pixel data !" "\n";
+								std::cerr << "FileFormatTarga::readStream(), unable to read RLE pixel data !" "\n";
 
 								return false;
 							}
@@ -231,7 +231,7 @@ namespace EmEn::Libs::PixelFactory
 
 								if ( !stream.read(pixel.data(), bytesPerPixel) )
 								{
-									std::cerr << __PRETTY_FUNCTION__ << ", unable to read raw pixel data !" "\n";
+									std::cerr << "FileFormatTarga::readStream(), unable to read raw pixel data !" "\n";
 
 									return false;
 								}
@@ -250,7 +250,7 @@ namespace EmEn::Libs::PixelFactory
 				{
 					if ( !stream.read(pixmap.data().data(), pixmap.bytes()) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", unable to read the Targa data !" "\n";
+						std::cerr << "FileFormatTarga::readStream(), unable to read the Targa data !" "\n";
 
 						return false;
 					}
@@ -279,7 +279,7 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( !pixmap.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", pixmap parameter is invalid !" "\n";
+					std::cerr << "FileFormatTarga::writeStream(), pixmap parameter is invalid !" "\n";
 
 					return false;
 				}
@@ -309,7 +309,7 @@ namespace EmEn::Libs::PixelFactory
 
 					case ChannelMode::GrayscaleAlpha :
 					default:
-						std::cerr << __PRETTY_FUNCTION__ << ", unhandled color channel format to write a Targa image." "\n";
+						std::cerr << "FileFormatTarga::writeStream(), unhandled color channel format to write a Targa image." "\n";
 
 						return false;
 				}
@@ -354,7 +354,7 @@ namespace EmEn::Libs::PixelFactory
 				{
 					if ( !stream.write(ptr.at(i), size.at(i)) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", unable to write the Targa header !" "\n";
+						std::cerr << "FileFormatTarga::writeStream(), unable to write the Targa header !" "\n";
 
 						return false;
 					}
@@ -390,7 +390,7 @@ namespace EmEn::Libs::PixelFactory
 				{
 					if ( !writeRLEData(stream, processedPixmap) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", unable to write the Targa RLE data !" "\n";
+						std::cerr << "FileFormatTarga::writeStream(), unable to write the Targa RLE data !" "\n";
 
 						return false;
 					}
@@ -399,7 +399,7 @@ namespace EmEn::Libs::PixelFactory
 				{
 					if ( !stream.write(processedPixmap.data().data(), processedPixmap.bytes()) )
 					{
-						std::cerr << __PRETTY_FUNCTION__ << ", unable to write the Targa data !" "\n";
+						std::cerr << "FileFormatTarga::writeStream(), unable to write the Targa data !" "\n";
 
 						return false;
 					}

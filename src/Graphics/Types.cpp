@@ -206,7 +206,7 @@ namespace EmEn::Graphics
 			return RenderPassType::None;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+		std::cerr << "to_RenderPassType() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
 
 		return RenderPassType::None;
 	}
@@ -247,7 +247,7 @@ namespace EmEn::Graphics
 			return ModelMatrixType::Invalid;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Invalid' by default." << "\n";
+		std::cerr << "to_ModelMatrixType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
 
 		return ModelMatrixType::Invalid;
 	}
@@ -344,7 +344,7 @@ namespace EmEn::Graphics
 			return FillingType::None;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+		std::cerr << "to_FillingType() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
 
 		return FillingType::None;
 	}
@@ -401,7 +401,7 @@ namespace EmEn::Graphics
 			return BlendingMode::None;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+		std::cerr << "to_BlendingMode() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
 
 		return BlendingMode::None;
 	}
@@ -610,7 +610,7 @@ namespace EmEn::Graphics
 			return ComponentType::Invalid;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Invalid' by default." << "\n";
+		std::cerr << "to_ComponentType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
 
 		return ComponentType::Invalid;
 	}
@@ -731,7 +731,7 @@ namespace EmEn::Graphics
 			return Topology::Invalid;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Invalid' by default." << "\n";
+		std::cerr << "to_TopologyType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
 
 		return Topology::Invalid;
 	}
@@ -788,7 +788,7 @@ namespace EmEn::Graphics
 			return PolygonMode::Invalid;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Invalid' by default." << "\n";
+		std::cerr << "to_PolygonMode() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
 
 		return PolygonMode::Invalid;
 	}
@@ -840,7 +840,7 @@ namespace EmEn::Graphics
 			return CullingMode::None;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+		std::cerr << "to_CullingMode() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
 
 		return CullingMode::None;
 	}
@@ -889,7 +889,7 @@ namespace EmEn::Graphics
 			return BufferType::Invalid;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Invalid' by default." << "\n";
+		std::cerr << "to_BufferType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
 
 		return BufferType::Invalid;
 	}
@@ -1021,7 +1021,7 @@ namespace EmEn::Graphics
 			return VertexAttributeType::BoneWeight;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Position' by default." << "\n";
+		std::cerr << "to_VertexAttributeType() : Unknown '" << value << "' type ! Returning 'Position' by default.\n";
 
 		return VertexAttributeType::Position;
 	}
@@ -1086,7 +1086,7 @@ namespace EmEn::Graphics
 			return CubemapFace::NegativeZ;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'PositiveX' by default." << "\n";
+		std::cerr << "to_CubemapFace() : Unknown '" << value << "' type ! Returning 'PositiveX' by default.\n";
 
 		return CubemapFace::PositiveX;
 	}
@@ -1143,7 +1143,7 @@ namespace EmEn::Graphics
 			return FilterQuality::Trilinear;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+		std::cerr << "to_FilterQuality() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
 
 		return FilterQuality::None;
 	}
@@ -1296,7 +1296,7 @@ namespace EmEn::Graphics
 			return ShapeType::Axis;
 		}
 
-		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'Cube' by default." << "\n";
+		std::cerr << "to_ShapeType() : Unknown '" << value << "' type ! Returning 'Cube' by default.\n";
 
 		return ShapeType::Cube;
 	}

@@ -81,7 +81,7 @@ namespace EmEn::Console
 			{
 				if ( s_instance != nullptr )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
+					std::cerr << "Controller::Controller(), constructor called twice !" "\n";
 
 					std::terminate();
 				}

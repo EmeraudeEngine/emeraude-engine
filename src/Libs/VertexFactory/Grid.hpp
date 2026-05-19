@@ -167,14 +167,14 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( cellCount == 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the cell count parameter must be at least 1 !" "\n";
+					std::cerr << "Grid::initializeByCellSize(), the cell count parameter must be at least 1 !" "\n";
 
 					return false;
 				}
 
 				if ( cellSize < 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the cell size parameter must be positive !" "\n";
+					std::cerr << "Grid::initializeByCellSize(), the cell size parameter must be positive !" "\n";
 
 					return false;
 				}
@@ -237,14 +237,14 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( gridSize < 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the grid size parameter must be positive !" "\n";
+					std::cerr << "Grid::initializeByGridSize(), the grid size parameter must be positive !" "\n";
 
 					return false;
 				}
 
 				if ( gridDivision == 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", the grid division parameter must be at least 1 !" "\n";
+					std::cerr << "Grid::initializeByGridSize(), the grid division parameter must be at least 1 !" "\n";
 
 					return false;
 				}
@@ -305,7 +305,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( !map.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", Pixmap is not usable !" "\n";
+					std::cerr << "Grid::applyDisplacementMapping(), Pixmap is not usable !" "\n";
 
 					return;
 				}
@@ -964,7 +964,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				if ( indexOnX >= m_squaredQuadCount || indexOnY >= m_squaredQuadCount )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", quad indexes X:" << indexOnX << ", Y:" << indexOnY << " overflows " << m_squaredQuadCount << " !" "\n";
+					std::cerr << "Grid::quad(), quad indexes X:" << indexOnX << ", Y:" << indexOnY << " overflows " << m_squaredQuadCount << " !" "\n";
 
 					return {};
 				}
