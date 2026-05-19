@@ -77,7 +77,12 @@ namespace
 	inline std::error_code lastNativeCode () noexcept   { return { lastNativeError(), std::system_category() }; }
 #else
 	using native_socket_t = int;
-	using io_size_t       = size_t;
+	/* ssize_t (NOT size_t) — ::send() and ::recv() return a SIGNED ssize_t
+	 * with -1 on error. Aliasing this to size_t silently turns every error
+	 * into SIZE_MAX, defeats the (sent < 0) checks in send()/receive(), and
+	 * produces a SIGSEGV when cursor += SIZE_MAX is computed. Windows is
+	 * unaffected because winsock ::send/::recv return a signed int there. */
+	using io_size_t       = ssize_t;
 	constexpr native_socket_t NativeInvalid{-1};
 	constexpr int             NativeShutdownBoth{SHUT_RDWR};
 
