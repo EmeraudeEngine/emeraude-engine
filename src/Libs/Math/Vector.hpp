@@ -31,6 +31,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <iomanip> // Required on macOS (libc++): std::setw / std::setprecision are not transitively pulled in by <sstream> like on libstdc++ / MSVC STL.
 #include <limits>
 #include <span>
 #include <sstream>

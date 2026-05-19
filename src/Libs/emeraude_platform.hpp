@@ -25,7 +25,7 @@
 #pragma once
 
 /*
- * Pure-preprocessor platform detection. This header is hand-written and
+ * Pure-preprocessor platform detection. This header is handwritten and
  * is NEVER touched by CMake's configure_file step — including it in a .hpp
  * does not trigger a recompile when CMake reconfigures, unlike
  * emeraude_config.hpp which is regenerated from emeraude_config.hpp.in.
