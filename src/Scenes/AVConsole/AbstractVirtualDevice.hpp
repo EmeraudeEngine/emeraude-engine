@@ -27,16 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
-#include <atomic>
-#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_set>
 
 /* Local inclusions for usages. */
-#include "CoreTypes.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
+#include "CoreTypes.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Scenes::AVConsole
@@ -121,7 +119,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			hasInputConnected () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_IOAccess};
+				const std::scoped_lock lock{m_IOAccess};
 
 				return !m_inputDevicesConnected.empty();
 			}
@@ -134,7 +132,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			hasOutputConnected () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_IOAccess};
+				const std::scoped_lock lock{m_IOAccess};
 
 				return !m_outputDevicesConnected.empty();
 			}
@@ -147,13 +145,14 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			template< typename function_t >
 			void
-			forEachInputs (function_t && processInput) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
+			forEachInputs (function_t && processInput) const noexcept
+				requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_IOAccess};
+				const std::scoped_lock lock{m_IOAccess};
 
 				for ( const auto & input : m_inputDevicesConnected )
 				{
-					processInput(input.lock());
+					std::forward< function_t >(processInput)(input.lock());
 				}
 			}
 
@@ -165,13 +164,14 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			template< typename function_t >
 			void
-			forEachOutputs (function_t && processOutput) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
+			forEachOutputs (function_t && processOutput) const noexcept
+				requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_IOAccess};
+				const std::scoped_lock lock{m_IOAccess};
 
 				for ( const auto & output : m_outputDevicesConnected )
 				{
-					processOutput(output.lock());
+					std::forward< function_t >(processOutput)(output.lock());
 				}
 			}
 
@@ -185,7 +185,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			isConnectedWith (const std::shared_ptr< AbstractVirtualDevice > & device, ConnexionType direction) const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_IOAccess};
+				const std::scoped_lock lock{m_IOAccess};
 
 				if ( direction == ConnexionType::Input || direction == ConnexionType::Both )
 				{

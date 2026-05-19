@@ -32,10 +32,6 @@
 /* Local inclusions for inheritances. */
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
-/* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Vector.hpp"
-
 namespace EmEn::Audio
 {
 	/**
@@ -53,9 +49,12 @@ namespace EmEn::Audio
 			 * @brief Constructs a speaker.
 			 * @param name A reference to a name.
 			 */
-			explicit Speaker (const std::string & name) noexcept;
+			explicit
+			Speaker (const std::string & name) noexcept
+				: AbstractVirtualDevice{name, Scenes::AVConsole::DeviceType::Audio, Scenes::AVConsole::ConnexionType::Input}
+			{
 
-		private:
+			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
@@ -66,8 +65,14 @@ namespace EmEn::Audio
 			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
-			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
+			void
+			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > &  /*worldVelocity*/) noexcept override
+			{
+				m_worldCoordinates = worldCoordinates;
+			}
 
-			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
+		private:
+
+			Libs::Math::CartesianFrame< float > m_worldCoordinates;
 	};
 }
