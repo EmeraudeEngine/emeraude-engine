@@ -30,6 +30,8 @@
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Libs;

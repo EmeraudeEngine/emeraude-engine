@@ -26,8 +26,8 @@
 
 #pragma once
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
+/* Platform detection only (__PRETTY_FUNCTION__ MSVC fallback). */
+#include "Libs/emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <cstdint>

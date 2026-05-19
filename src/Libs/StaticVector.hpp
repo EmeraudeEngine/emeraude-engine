@@ -26,8 +26,10 @@
 
 #pragma once
 
+
+/* Platform detection (IS_*, IsLinux, ...). */
+#include "Libs/emeraude_platform.hpp"
 /* Application configuration */
-#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <cstdlib>

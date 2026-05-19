@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
 
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 /* STL inclusions. */
 #include <cstdint>
 

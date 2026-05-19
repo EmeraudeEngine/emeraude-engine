@@ -37,6 +37,8 @@
 #include "Surface.hpp"
 #include "Tracer.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Overlay
 {
 	using namespace Libs;

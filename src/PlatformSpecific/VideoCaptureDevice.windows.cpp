@@ -25,9 +25,6 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
-#if IS_WINDOWS
 
 /* Local inclusions. */
 #include "VideoCaptureDevice.hpp"
@@ -598,5 +595,3 @@ namespace EmEn::PlatformSpecific
 		return true;
 	}
 }
-
-#endif

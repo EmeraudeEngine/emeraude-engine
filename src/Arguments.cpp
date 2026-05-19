@@ -26,6 +26,8 @@
 
 #include "Arguments.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 /* Local inclusions. */
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"

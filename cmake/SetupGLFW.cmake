@@ -13,4 +13,8 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw EXCLUDE_FROM_ALL)
 
 target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw/include)
 
+# Make every TU that pulls <GLFW/glfw3.h> see Vulkan extensions, without forcing
+# the heavy emeraude_config.hpp include just for this define.
+target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PUBLIC GLFW_INCLUDE_VULKAN)
+
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE glfw)

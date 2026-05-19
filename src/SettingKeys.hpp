@@ -26,6 +26,9 @@
 
 #pragma once
 
+
+/* Platform detection (IS_*, IsLinux, ...). */
+#include "Libs/emeraude_platform.hpp"
 namespace EmEn
 {
 	/* Core */

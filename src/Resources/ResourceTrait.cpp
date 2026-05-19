@@ -35,6 +35,8 @@
 #include "Manager.hpp"
 #include "Tracer.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 namespace EmEn::Resources
 {
 	using namespace Libs;

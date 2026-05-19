@@ -51,6 +51,8 @@
 #include "Image.hpp"
 #include "Tracer.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Vulkan
 {
 	using namespace Libs;

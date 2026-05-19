@@ -36,6 +36,8 @@
 #include "Graphics/Material/Helpers.hpp"
 #include "Resources/Manager.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Libs;

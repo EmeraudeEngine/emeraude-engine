@@ -26,6 +26,8 @@
 
 #include "IO.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 
@@ -40,6 +42,7 @@
 	#endif
 
 	#include <Windows.h>
+
 	#pragma comment(lib, "advapi32.lib")
 #endif
 

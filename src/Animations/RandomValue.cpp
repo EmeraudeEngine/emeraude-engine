@@ -29,6 +29,8 @@
 /* Local inclusions. */
 #include "Tracer.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 namespace EmEn::Animations
 {
 	using namespace Libs;

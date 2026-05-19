@@ -26,8 +26,6 @@
 
 #include "Commands.hpp"
 
-#if IS_MACOS
-
 /* STL inclusions. */
 #include <cstdlib>
 #include <sstream>
@@ -180,5 +178,3 @@ namespace EmEn::PlatformSpecific::Desktop
 		}
 	}
 }
-
-#endif

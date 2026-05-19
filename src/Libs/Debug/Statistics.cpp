@@ -24,6 +24,8 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+#include "Libs/emeraude_platform.hpp"
+
 #if IS_LINUX
 
 extern "C"

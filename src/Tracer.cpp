@@ -25,9 +25,12 @@
  */
 
 #include "Tracer.hpp"
+#include "TracerLogger.hpp"
 
 /* STL inclusions. */
 #include <cstring>
+#include <iostream>
+#include <sstream>
 #include <algorithm>
 #include <fstream>
 #include <utility>
@@ -45,6 +48,9 @@
 #include "SettingKeys.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
+
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 #endif
 
 namespace EmEn
@@ -597,4 +603,14 @@ namespace EmEn
 		const std::lock_guard< std::mutex > lock{m_consoleAccess};
 		m_sinks.clear();
 	}
+
+	void
+	Tracer::traceGLFW (int error, const char * description) noexcept
+	{
+		std::stringstream message;
+		message << description << " (errno:" << error << ')';
+
+		Tracer::getInstance().trace(Severity::Error, "GLFW", message.str(), {});
+	}
+
 }

@@ -32,6 +32,8 @@
 #include "Graphics/Material/BasicResource.hpp"
 #include "Resources/Manager.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Libs;

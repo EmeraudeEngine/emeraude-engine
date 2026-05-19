@@ -27,7 +27,6 @@
 #pragma once
 
 /* Emeraude Engine configuration. */
-#include "emeraude_config.hpp"
 
 #ifdef EMERAUDE_ENABLE_RENDERDOC
 

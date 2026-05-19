@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
 
+/* Platform detection (IS_*, IsLinux, ...). */
+#include "Libs/emeraude_platform.hpp"
 /* STL inclusions. */
 #include <concepts>
 #include <filesystem>

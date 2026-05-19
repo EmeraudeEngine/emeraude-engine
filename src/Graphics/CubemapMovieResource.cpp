@@ -44,6 +44,8 @@
 #include "Resources/Manager.hpp"
 #include "CubemapResource.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics
 {
 	using namespace Libs;

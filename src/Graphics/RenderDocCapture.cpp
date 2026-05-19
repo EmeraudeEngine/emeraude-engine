@@ -31,6 +31,8 @@
 /* Local inclusions. */
 #include "Tracer.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 /* Platform-specific inclusions for dynamic library loading. */
 #if IS_LINUX || IS_MACOS
 #include <dlfcn.h>

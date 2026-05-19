@@ -26,6 +26,9 @@
 
 #pragma once
 
+
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"

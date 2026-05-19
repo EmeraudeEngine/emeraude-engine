@@ -25,9 +25,7 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
-#if IS_MACOS
 #include "Window.hpp"
 
 /* Third-party inclusions. */
@@ -122,5 +120,3 @@ namespace EmEn
 		return glfwGetCocoaView(m_handle.get());
 	}
 }
-
-#endif

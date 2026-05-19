@@ -33,6 +33,8 @@
 #include "Scenes/Component/Microphone.hpp"
 #include "NodeCrawler.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Scenes
 {
 	using namespace Libs;

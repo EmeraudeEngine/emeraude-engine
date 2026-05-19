@@ -51,6 +51,9 @@
 #include "Constants.hpp"
 #include "SettingKeys.hpp"
 
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
+
 namespace EmEn
 {
 	using namespace Libs;

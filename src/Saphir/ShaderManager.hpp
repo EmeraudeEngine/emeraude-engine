@@ -27,7 +27,6 @@
 #pragma once
 
 /* Project configuration files. */
-#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <array>

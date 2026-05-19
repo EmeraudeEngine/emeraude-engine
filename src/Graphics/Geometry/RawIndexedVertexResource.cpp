@@ -35,6 +35,8 @@
 #include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/TransferManager.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::Geometry
 {
 	using namespace Libs::Math;

@@ -38,6 +38,8 @@
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 namespace EmEn
 {
 	using namespace Libs;

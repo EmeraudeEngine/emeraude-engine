@@ -26,7 +26,6 @@
 
 #include "Commands.hpp"
 
-#if IS_LINUX
 
 /* STL inclusions. */
 #include <cstdlib>
@@ -103,5 +102,3 @@ namespace EmEn::PlatformSpecific::Desktop
 		 * Standard Linux desktop environments (GNOME, KDE, etc.) do not support taskbar progress. */
 	}
 }
-
-#endif

@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "emeraude_config.hpp"
+#include "Libs/emeraude_platform.hpp"
 
 /* TODO: This file is deprecated now. */
 

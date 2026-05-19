@@ -31,7 +31,6 @@
 #include <cmath>
 #include <array>
 #include <algorithm>
-#include <iomanip>
 #include <sstream>
 #include <type_traits>
 #include <span>

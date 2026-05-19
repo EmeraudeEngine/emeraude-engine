@@ -38,6 +38,8 @@
 #include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Libs;

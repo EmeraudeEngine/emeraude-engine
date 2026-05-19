@@ -25,9 +25,7 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
-#if IS_WINDOWS
 #include "Helpers.hpp"
 
 /* STL inclusions. */
@@ -363,5 +361,3 @@ namespace EmEn::PlatformSpecific
 		return filterPointers;
 	}
 }
-
-#endif

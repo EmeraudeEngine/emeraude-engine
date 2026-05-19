@@ -26,8 +26,10 @@
 
 #pragma once
 
-/* Engine configuration file. */
+
+/* Emeraude-Engine configuration. */
 #include "emeraude_config.hpp"
+/* Engine configuration file. */
 
 /* STL inclusions. */
 #include <cstdint>

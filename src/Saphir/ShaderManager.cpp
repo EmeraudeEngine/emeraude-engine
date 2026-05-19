@@ -45,6 +45,8 @@
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 namespace EmEn::Saphir
 {
 	using namespace Libs;

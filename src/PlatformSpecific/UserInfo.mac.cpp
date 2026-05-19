@@ -25,9 +25,7 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
-#if IS_MACOS
 #include "UserInfo.hpp"
 
 /* STL inclusions. */
@@ -94,5 +92,3 @@ namespace EmEn::PlatformSpecific
 		return true;
 	}
 }
-
-#endif

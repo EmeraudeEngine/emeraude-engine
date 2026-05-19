@@ -29,6 +29,8 @@
 /* Local inclusions. */
 #include "Vulkan/Device.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Vulkan
 {
 	AbstractDeviceDependentObject::AbstractDeviceDependentObject (const std::shared_ptr< Device > & device) noexcept

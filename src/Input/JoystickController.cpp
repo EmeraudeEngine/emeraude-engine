@@ -41,6 +41,8 @@
 #include "Types.hpp"
 #include "Tracer.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Input
 {
 	bool

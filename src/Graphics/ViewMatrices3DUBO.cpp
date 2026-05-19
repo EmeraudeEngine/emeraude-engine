@@ -34,6 +34,9 @@
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics
 {
 	using namespace Libs;

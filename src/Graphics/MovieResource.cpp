@@ -42,6 +42,8 @@
 #include "Resources/Manager.hpp"
 #include "ImageResource.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics
 {
 	using namespace Libs;

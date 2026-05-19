@@ -35,6 +35,8 @@
 #include "PlatformManager.hpp"
 #include "SettingKeys.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn
 {
 	using namespace Libs;

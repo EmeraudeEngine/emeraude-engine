@@ -25,9 +25,7 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
-#if IS_WINDOWS
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
@@ -284,5 +282,3 @@ namespace EmEn::PlatformSpecific
 			realPath.substr(0, position);
 	}
 }
-
-#endif

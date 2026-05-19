@@ -46,6 +46,8 @@
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/RenderPass.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::RenderableInstance
 {
 	using namespace Libs;

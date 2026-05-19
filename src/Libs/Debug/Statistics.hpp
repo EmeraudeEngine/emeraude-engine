@@ -38,9 +38,9 @@ printf("Time elapsed : %ld ns\n", delay);
 
 #pragma once
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
+/* Platform detection (IS_*, IsLinux, ...). */
+#include "Libs/emeraude_platform.hpp"
 #if IS_LINUX
 
 extern "C"

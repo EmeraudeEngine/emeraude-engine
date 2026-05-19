@@ -26,7 +26,6 @@
 
 #include "Commands.hpp"
 
-#if IS_WINDOWS
 
 /* STL inclusions. */
 #include <vector>
@@ -218,5 +217,3 @@ namespace EmEn::PlatformSpecific::Desktop
 		taskbar->Release();
 	}
 }
-
-#endif

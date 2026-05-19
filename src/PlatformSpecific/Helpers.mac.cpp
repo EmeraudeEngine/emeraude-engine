@@ -25,14 +25,10 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
-#if IS_MACOS
 #include "Helpers.hpp"
 
 namespace EmEn::PlatformSpecific
 {
 
 }
-
-#endif

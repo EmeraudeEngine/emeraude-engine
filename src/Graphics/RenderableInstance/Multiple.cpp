@@ -38,6 +38,8 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/TransferManager.hpp"
 
+#include "emeraude_config.hpp"
+
 namespace EmEn::Graphics::RenderableInstance
 {
 	using namespace Libs;

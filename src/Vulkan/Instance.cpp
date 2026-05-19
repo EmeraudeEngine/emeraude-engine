@@ -49,6 +49,8 @@
 #include "Window.hpp"
 #include "SettingKeys.hpp"
 
+#include "Libs/emeraude_platform.hpp"
+
 namespace EmEn::Vulkan
 {
 	using namespace Libs;

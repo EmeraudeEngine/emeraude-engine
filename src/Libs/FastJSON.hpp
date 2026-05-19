@@ -26,8 +26,10 @@
 
 #pragma once
 
-/* Application configuration. */
+
+/* Emeraude-Engine configuration. */
 #include "emeraude_config.hpp"
+/* Application configuration. */
 
 /* STL inclusions. */
 #include <cstddef>

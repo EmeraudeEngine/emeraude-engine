@@ -25,9 +25,7 @@
  */
 
 /* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
-#if IS_WINDOWS
 #include "Window.hpp"
 
 /* Third-party inclusions. */
@@ -195,5 +193,3 @@ namespace EmEn
 		return DefWindowProc(hWnd, uMsg, wParam, lParam);
 	}
 }
-
-#endif
