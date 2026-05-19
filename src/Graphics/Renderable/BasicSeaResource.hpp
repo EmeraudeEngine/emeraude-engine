@@ -34,8 +34,8 @@
 #include "Scenes/SeaLevelInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Resources/Container.hpp"
 #include "Graphics/Geometry/VertexGridResource.hpp"
+#include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

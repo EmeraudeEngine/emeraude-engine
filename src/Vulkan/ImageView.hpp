@@ -31,6 +31,8 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
+
+/* Local inclusions for usages. */
 #include "Image.hpp"
 
 namespace EmEn::Vulkan

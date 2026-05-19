@@ -34,9 +34,9 @@
 #include "Libs/ObservableTrait.hpp"
 #include "Libs/Time/EventTrait.hpp"
 
-/* Local usages */
-#include "Output.hpp"
+/* Local inclusions for usages. */
 #include "ControllableTrait.hpp"
+#include "Output.hpp"
 #include "RemoteListener.hpp"
 
 /* Forward declarations */

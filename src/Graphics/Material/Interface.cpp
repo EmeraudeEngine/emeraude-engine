@@ -28,10 +28,9 @@
 
 /* Local inclusions. */
 #include "GPURTMaterialData.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Saphir/Declaration/UniformBlock.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Helpers.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material

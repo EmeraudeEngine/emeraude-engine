@@ -28,21 +28,21 @@
 
 /* Local inclusions. */
 #include "Graphics/Geometry/Helpers.hpp"
-#include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Renderer.hpp"
+#include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/GizmoRendering.hpp"
 #include "Saphir/Program.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/Framebuffer.hpp"
-#include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Scenes::Editor::Gizmo
 {

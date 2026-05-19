@@ -27,14 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Vector.hpp"
 
 namespace EmEn::Libs::Math

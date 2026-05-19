@@ -28,9 +28,9 @@
 
 /* Local inclusions. */
 #include "Device.hpp"
+#include "Tracer.hpp"
 #include "TransferManager.hpp"
 #include "Utility.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {

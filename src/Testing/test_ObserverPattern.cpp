@@ -24,15 +24,16 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* STL inclusions. */
+#include <any>
+#include <cstddef>
+
+/* Third-party inclusions. */
 #include <gtest/gtest.h>
 
-/* STL inclusions. */
-#include <cstddef>
-#include <any>
-
 /* Local inclusions. */
-#include "Libs/ObserverTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
+#include "Libs/ObserverTrait.hpp"
 
 using namespace EmEn::Libs;
 

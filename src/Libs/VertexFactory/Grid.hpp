@@ -26,9 +26,9 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cstdint>
@@ -39,7 +39,8 @@
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
+#include "GridQuad.hpp"
 #include "Libs/Algorithms/DiamondSquare.hpp"
 #include "Libs/Algorithms/PerlinNoise.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
@@ -47,7 +48,6 @@
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
-#include "GridQuad.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Libs::VertexFactory

@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Types.hpp"
 #include "Wave.hpp"
 

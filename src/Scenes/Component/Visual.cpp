@@ -27,8 +27,8 @@
 #include "Visual.hpp"
 
 /* Local inclusions. */
-#include "Animations/SkeletonResource.hpp"
 #include "Animations/AnimationClipResource.hpp"
+#include "Animations/SkeletonResource.hpp"
 #include "Constants.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderer.hpp"

@@ -32,14 +32,13 @@
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
+#include "Component/Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Resources/Container.hpp"
-#include "Physics/SurfacePhysicalProperties.hpp"
-#include "Component/Interface.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Physics/SurfacePhysicalProperties.hpp"
+#include "Resources/Container.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan

@@ -31,10 +31,10 @@
 #include <sstream>
 #include <string>
 
-/* Local inclusions. */
-#include "Vulkan/Device.hpp"
-#include "Settings.hpp"
+/* Local inclusions for usages. */
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Graphics
 {

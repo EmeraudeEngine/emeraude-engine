@@ -33,7 +33,7 @@
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "FileFormatJpeg.hpp"
 #include "FileFormatPNG.hpp"
 #include "FileFormatTarga.hpp"

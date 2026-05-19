@@ -31,7 +31,7 @@
 #include <memory>
 #include <string>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Saphir/Declaration/Sampler.hpp"
 
 namespace EmEn

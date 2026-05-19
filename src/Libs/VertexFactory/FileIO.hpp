@@ -31,12 +31,12 @@
 #include <type_traits>
 
 /* Local inclusions for usages. */
-#include "Libs/IO/FileStream.hpp"
-#include "Libs/IO/IO.hpp"
+#include "FileFormatMDx.hpp"
 #include "FileFormatNative.hpp"
 #include "FileFormatOBJ.hpp"
 #include "FileFormatSTL.hpp"
-#include "FileFormatMDx.hpp"
+#include "Libs/IO/FileStream.hpp"
+#include "Libs/IO/IO.hpp"
 
 namespace EmEn::Libs::VertexFactory::FileIO
 {

@@ -39,7 +39,6 @@
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "PlatformSpecific/VideoCaptureDevice.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class PrimaryServices;

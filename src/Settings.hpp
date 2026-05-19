@@ -26,26 +26,23 @@
 
 #pragma once
 
-/* Application configuration. */
-
 /* STL inclusions. */
 #include <cstdint>
-#include <map>
-#include <vector>
-#include <string>
-#include <optional>
-#include <variant>
 #include <filesystem>
+#include <map>
+#include <optional>
 #include <shared_mutex>
+#include <string>
+#include <variant>
+#include <vector>
 
-/* Local inclusion for inheritances. */
+/* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Console/ControllableTrait.hpp"
 
-/* Local inclusion for usages. */
+/* Local inclusions for usages. */
 #include "Tracer.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Arguments;

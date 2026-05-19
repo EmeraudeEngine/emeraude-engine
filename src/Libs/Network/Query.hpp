@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <map>
-#include <string>
 #include <sstream>
+#include <string>
 
 namespace EmEn::Libs::Network
 {

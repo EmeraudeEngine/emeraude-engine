@@ -31,8 +31,10 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "Libs/StaticVector.hpp"
 #include "AbstractDeviceDependentObject.hpp"
+
+/* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "RenderPass.hpp"
 
 namespace EmEn::Vulkan

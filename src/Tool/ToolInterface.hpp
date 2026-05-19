@@ -26,7 +26,6 @@
 
 #pragma once
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Arguments;

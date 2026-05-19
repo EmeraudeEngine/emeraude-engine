@@ -26,12 +26,12 @@
 
 #pragma once
 
-/* Local inclusions for inheritance. */
+/* Local inclusions for inheritances. */
 #include "Graphics/DirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Math/Vector.hpp"
+#include "Libs/PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::Effects::Lens
 {

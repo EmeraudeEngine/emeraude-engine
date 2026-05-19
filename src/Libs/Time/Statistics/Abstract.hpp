@@ -29,8 +29,8 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <numeric>
+#include <vector>
 
 namespace EmEn::Libs::Time::Statistics
 {

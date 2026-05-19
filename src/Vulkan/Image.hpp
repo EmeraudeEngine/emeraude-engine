@@ -26,14 +26,14 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
-#include <cstdint>
-#include <cstddef>
-#include <cmath>
 #include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 
@@ -44,8 +44,8 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
 #include "DeviceMemory.hpp"
+#include "Libs/PixelFactory/Pixmap.hpp"
 
 #if IS_WINDOWS
 #undef min

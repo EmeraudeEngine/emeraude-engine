@@ -28,9 +28,9 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {

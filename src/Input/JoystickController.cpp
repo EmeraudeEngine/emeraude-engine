@@ -26,22 +26,23 @@
 
 #include "JoystickController.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
-#include <algorithm>
 #include <iostream>
 #include <sstream>
 
-/* Third-party libraries. */
+/* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
-#include "Types.hpp"
 #include "Tracer.hpp"
-
-#include "emeraude_config.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Input
 {

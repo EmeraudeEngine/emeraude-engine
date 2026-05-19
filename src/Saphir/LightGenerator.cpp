@@ -27,9 +27,9 @@
 #include "LightGenerator.hpp"
 
 /* Local inclusions. */
+#include "Code.hpp"
 #include "Declaration/Function.hpp"
 #include "Generator/Abstract.hpp"
-#include "Code.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir

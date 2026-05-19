@@ -38,13 +38,9 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/ShaderModule.hpp"
 
-/* Defining the resource owner of this translation unit. */
-/* NOLINTBEGIN(cert-err58-cpp) : We need static strings. */
 static constexpr auto TracerTag{"AtmosphericFogEffect"};
 /* NOLINTEND(cert-err58-cpp) */
 

@@ -26,12 +26,13 @@
 
 #include "DeviceMemory.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
 #include "Device.hpp"
-#include "Utility.hpp"
 #include "Tracer.hpp"
-
-#include "emeraude_config.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

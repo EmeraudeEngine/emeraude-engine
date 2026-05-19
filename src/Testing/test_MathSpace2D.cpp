@@ -24,9 +24,12 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Third-party inclusions. */
 #include <gtest/gtest.h>
 
 /* Local inclusions. */
+#include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/Collisions/CircleRectangle.hpp"
 #include "Libs/Math/Space2D/Collisions/PointCircle.hpp"
 #include "Libs/Math/Space2D/Collisions/PointRectangle.hpp"
@@ -42,8 +45,6 @@
 #include "Libs/Math/Space2D/Intersections/SegmentRectangle.hpp"
 #include "Libs/Math/Space2D/Intersections/SegmentSegment.hpp"
 #include "Libs/Math/Space2D/Intersections/SegmentTriangle.hpp"
-#include "Libs/Math/Space2D/AARectangle.hpp"
-#include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/Line.hpp"
 #include "Libs/Math/Space2D/Point.hpp"
 #include "Libs/Math/Space2D/Segment.hpp"

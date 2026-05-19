@@ -26,12 +26,13 @@
 
 #include "IO.hpp"
 
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 
-/* Platform libraries. */
+/* Third-party inclusions. */
 #if IS_LINUX || IS_MACOS
 	#include <unistd.h>
 #endif

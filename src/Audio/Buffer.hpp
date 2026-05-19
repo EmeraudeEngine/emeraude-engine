@@ -29,7 +29,7 @@
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
-/* Local inclusions for usages.*/
+/* Local inclusions for usages. */
 #include "Libs/WaveFactory/Wave.hpp"
 
 namespace EmEn::Audio

@@ -26,16 +26,17 @@
 
 #include "PrimaryServices.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <iostream>
-#include <sstream>
 #include <ranges>
+#include <sstream>
 #include <utility>
 
 /* Local inclusions. */
 #include "Libs/IO/IO.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn
 {

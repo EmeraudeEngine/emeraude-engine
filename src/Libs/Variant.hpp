@@ -30,11 +30,11 @@
 #include <cstdint>
 #include <variant>
 
-/* Local inclusions for usage. */
+/* Local inclusions. */
+#include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
 
 namespace EmEn::Libs
 {

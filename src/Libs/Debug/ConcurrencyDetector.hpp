@@ -28,11 +28,11 @@
 
 /* STL inclusions. */
 #include <iostream>
-#include <thread>
 #include <mutex>
 #include <optional>
-#include <string>
 #include <source_location>
+#include <string>
+#include <thread>
 
 namespace EmEn::Libs::Debug
 {

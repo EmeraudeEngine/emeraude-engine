@@ -24,22 +24,20 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
+#include <cstdio> // FIXME: Remove this
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <cstdio> // FIXME: Remove this
 
 /* Third-party inclusions. */
-#include <unistd.h>
-#include <mach/mach.h>
-#include <mach-o/dyld.h>
-#include <sys/sysctl.h>
 #include <IOKit/IOKitLib.h>
+#include <mach-o/dyld.h>
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
 
 namespace EmEn::PlatformSpecific
 {

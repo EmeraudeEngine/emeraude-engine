@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
 #include <array>
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>

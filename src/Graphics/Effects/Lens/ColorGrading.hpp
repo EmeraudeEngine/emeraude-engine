@@ -29,7 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 
-/* Local inclusions for inheritance. */
+/* Local inclusions for inheritances. */
 #include "Graphics/DirectPostProcessEffect.hpp"
 
 namespace EmEn::Graphics::Effects::Lens

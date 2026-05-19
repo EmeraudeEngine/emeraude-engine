@@ -39,7 +39,7 @@
 #include <unordered_set>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Algorithms/DelaunayTriangulation.hpp"
 #include "Shape.hpp"
 

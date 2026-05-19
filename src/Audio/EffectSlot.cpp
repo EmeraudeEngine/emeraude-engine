@@ -27,10 +27,10 @@
 #include "EffectSlot.hpp"
 
 /* Local inclusions. */
-#include "OpenALExtensions.hpp"
 #include "Manager.hpp"
-#include "Utility.hpp"
+#include "OpenALExtensions.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Audio
 {

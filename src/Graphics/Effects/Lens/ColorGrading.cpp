@@ -26,14 +26,13 @@
 
 #include "ColorGrading.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Graphics/PostProcessor.hpp"
-#include "Saphir/Generator/SceneRendering.hpp"
-#include "Saphir/FragmentShader.hpp"
 #include "Saphir/Code.hpp"
-
-/* C++ inclusions. */
-#include <cmath>
+#include "Saphir/FragmentShader.hpp"
 
 namespace EmEn::Graphics::Effects::Lens
 {

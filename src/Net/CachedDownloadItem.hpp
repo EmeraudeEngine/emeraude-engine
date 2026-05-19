@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <string>
 #include <sstream>
+#include <string>
 
 namespace EmEn::Net
 {

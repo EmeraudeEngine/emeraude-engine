@@ -31,18 +31,18 @@
 #include <cstring>
 
 /* Local inclusions. */
-#include "Vulkan/Device.hpp"
-#include "Vulkan/ComputePipeline.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
-#include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
+#include "Vulkan/ComputePipeline.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Queue.hpp"
-#include "Saphir/ShaderManager.hpp"
-#include "Tracer.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
 
 namespace EmEn::Graphics::Compute
 {

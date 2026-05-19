@@ -27,10 +27,10 @@
 #include "DescriptorPool.hpp"
 
 /* Local inclusions. */
-#include "Device.hpp"
 #include "DescriptorSetLayout.hpp"
-#include "Utility.hpp"
+#include "Device.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

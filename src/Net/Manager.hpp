@@ -27,22 +27,22 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <map>
+#include <numeric>
 #include <string>
 #include <vector>
-#include <numeric>
-#include <algorithm>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Network/URL.hpp"
-#include "Libs/ThreadPool.hpp"
 #include "CachedDownloadItem.hpp"
 #include "DownloadItem.hpp"
+#include "Libs/Network/URL.hpp"
+#include "Libs/ThreadPool.hpp"
 
 /* Forward declarations. */
 namespace EmEn

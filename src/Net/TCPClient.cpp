@@ -33,13 +33,9 @@
 #include <limits>
 #include <utility>
 
-/* Third-party — Asio is used only inside connect() for DNS resolution and a
- * timed async_connect. Once the connection is up, the kernel handle is
- * detached from Asio and the runtime I/O path bypasses Asio entirely. */
-#include "Libs/Network/asio_throw_exception.hpp"
+/* Third-party inclusions. */
 #include "asio.hpp"
-
-/* Platform-specific socket headers. */
+#include "Libs/Network/asio_throw_exception.hpp"
 #ifdef _WIN32
 	#ifndef NOMINMAX
 	#define NOMINMAX

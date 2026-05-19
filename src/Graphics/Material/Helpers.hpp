@@ -27,11 +27,10 @@
 #pragma once
 
 /* Local inclusions for usages. */
+#include "Graphics/Types.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "Graphics/Types.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Saphir

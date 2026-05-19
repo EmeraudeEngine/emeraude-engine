@@ -28,12 +28,10 @@
 
 #ifdef EMERAUDE_ENABLE_RENDERDOC
 
-/* Local inclusions. */
-#include "Tracer.hpp"
-
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
-/* Platform-specific inclusions for dynamic library loading. */
+/* Third-party inclusions. */
 #if IS_LINUX || IS_MACOS
 #include <dlfcn.h>
 #elif IS_WINDOWS
@@ -42,6 +40,9 @@
 #endif
 #include <windows.h>
 #endif
+
+/* Local inclusions. */
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {

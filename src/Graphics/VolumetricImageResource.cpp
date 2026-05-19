@@ -27,7 +27,6 @@
 #include "VolumetricImageResource.hpp"
 
 /* Local inclusions. */
-#include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics

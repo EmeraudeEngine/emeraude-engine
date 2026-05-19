@@ -27,16 +27,16 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
-#include <utility>
-#include <tuple>
 #include <ranges>
+#include <tuple>
+#include <utility>
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
-#include "Libs/Network/Network.hpp"
-#include "Libs/Network/URL.hpp"
-#include "Libs/Network/URI.hpp"
 #include "Libs/IO/IO.hpp"
+#include "Libs/Network/Network.hpp"
+#include "Libs/Network/URI.hpp"
+#include "Libs/Network/URL.hpp"
 #include "PrimaryServices.hpp"
 
 namespace EmEn::Net

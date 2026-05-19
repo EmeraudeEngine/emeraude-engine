@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
+#include <numbers>
 #include <numeric>
 #include <type_traits>
 #include <vector>
-#include <numbers>
 
 #define OPTIMIZED
 

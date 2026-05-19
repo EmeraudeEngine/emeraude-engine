@@ -26,20 +26,20 @@
 
 #include "Notification.hpp"
 
-/* Local inclusions. */
-#include "PlatformSpecific/Helpers.hpp"
-#include "Window.hpp"
-
-/* Windows inclusions. */
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <shellapi.h>
-
 /* STL inclusions. */
 #include <string>
 #include <thread>
+
+/* Third-party inclusions. */
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <shellapi.h>
+#include <windows.h>
+
+/* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
+#include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop
 {

@@ -33,7 +33,7 @@
 #include <random>
 #include <vector>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "CardHand.hpp"
 
 namespace EmEn::Libs::GameTools

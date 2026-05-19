@@ -28,10 +28,10 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {

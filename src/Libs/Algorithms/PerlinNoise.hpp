@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
-#include <cmath>
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
 #include <numeric>
 #include <random>
 #include <type_traits>

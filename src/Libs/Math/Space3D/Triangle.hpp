@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <sstream>
 #include <string>
-#include <algorithm>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Point.hpp"
 
 namespace EmEn::Libs::Math::Space3D

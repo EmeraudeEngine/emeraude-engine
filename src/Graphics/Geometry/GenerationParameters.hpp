@@ -27,19 +27,19 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <string>
 
 /* Local inclusions for inheritances. */
 #include "Libs/FlagTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Types.hpp"
 #include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/VertexFactory/ShapeBuilderOptions.hpp"
-#include "Graphics/Types.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

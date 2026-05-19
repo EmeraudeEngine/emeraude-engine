@@ -26,10 +26,10 @@
 
 #pragma once
 
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
-/* TODO: This file is deprecated now. */
-
+/* STL inclusions. */
 #if IS_WINDOWS
 	#if defined(_MSVC_LANG) && _MSVC_LANG >= 202002L
 		#include <source_location>
@@ -47,6 +47,8 @@
 		#define DECLARE_FAKE_SOURCE_LOCATION
 	#endif
 #endif
+
+/* TODO: This file is deprecated now. */
 
 #ifdef DECLARE_FAKE_SOURCE_LOCATION
 namespace std

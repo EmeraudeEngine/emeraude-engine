@@ -27,10 +27,10 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
+#include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Physics
 {

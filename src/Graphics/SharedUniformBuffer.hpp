@@ -27,18 +27,17 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cmath>
-#include <vector>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
-#include <functional>
+#include <vector>
 
 /* Local inclusions for usages. */
-#include "Vulkan/UniformBufferObject.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class Renderer;

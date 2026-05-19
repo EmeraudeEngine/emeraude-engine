@@ -31,9 +31,9 @@
 #include <cstdint>
 #include <string>
 
-/* Local inclusions for usages. */
-#include "Pixmap.hpp"
+/* Local inclusions. */
 #include "Font.hpp"
+#include "Pixmap.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Libs::PixelFactory

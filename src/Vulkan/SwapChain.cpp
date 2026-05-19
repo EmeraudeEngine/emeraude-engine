@@ -26,7 +26,7 @@
 
 #include "SwapChain.hpp"
 
-/* Application configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
@@ -35,14 +35,14 @@
 #endif
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/Processor.hpp"
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/Utility.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Settings.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/Utility.hpp"
 
 namespace EmEn::Vulkan
 {

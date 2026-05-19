@@ -30,9 +30,9 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <iostream>
-#include <fstream>
 #include <algorithm>
+#include <fstream>
+#include <iostream>
 
 namespace EmEn::Libs::IO
 {

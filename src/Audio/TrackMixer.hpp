@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <atomic>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <condition_variable>
 #include <thread>
-#include <atomic>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"

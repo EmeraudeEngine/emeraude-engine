@@ -31,7 +31,7 @@
 #include <memory>
 #include <mutex>
 
-/* Local inclusions. */
+/* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Forward declarations. */

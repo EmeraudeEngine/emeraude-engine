@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -39,9 +39,9 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
+#include "Shape.hpp"
 #include "ShapeTriangle.hpp"
 #include "ShapeVertex.hpp"
-#include "Shape.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {

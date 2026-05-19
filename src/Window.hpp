@@ -26,13 +26,13 @@
 
 #pragma once
 
-/* Platform detection only (IS_MACOS, IS_WINDOWS). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -47,11 +47,10 @@
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/Surface.hpp"
 #include "Identification.hpp"
 #include "Libs/StaticVector.hpp"
+#include "Vulkan/Surface.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan

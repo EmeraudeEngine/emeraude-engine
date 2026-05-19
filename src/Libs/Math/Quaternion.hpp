@@ -33,9 +33,9 @@
 #include <sstream>
 #include <string>
 
-/* Local inclusions. */
-#include "Vector.hpp"
+/* Local inclusions for usages. */
 #include "Matrix.hpp"
+#include "Vector.hpp"
 
 namespace EmEn::Libs::Math
 {

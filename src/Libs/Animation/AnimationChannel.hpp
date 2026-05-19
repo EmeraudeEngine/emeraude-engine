@@ -32,8 +32,8 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "Libs/Math/Vector.hpp"
 #include "Libs/Math/Quaternion.hpp"
+#include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Libs::Animation
 {

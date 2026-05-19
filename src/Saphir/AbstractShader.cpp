@@ -31,12 +31,12 @@
 #include <functional>
 
 /* Local inclusions. */
-#include "Libs/SourceCodeParser.hpp"
-#include "Libs/IO/IO.hpp"
 #include "Generator/Abstract.hpp"
 #include "Keys.hpp"
-#include "Tracer.hpp"
+#include "Libs/IO/IO.hpp"
+#include "Libs/SourceCodeParser.hpp"
 #include "Libs/TokenFormatter.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Saphir
 {

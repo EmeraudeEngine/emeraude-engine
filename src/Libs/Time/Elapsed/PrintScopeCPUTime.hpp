@@ -28,10 +28,10 @@
 
 /* STL inclusions. */
 #include <ctime>
-#include <string>
 #include <iostream>
+#include <string>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Time/Types.hpp"
 
 namespace EmEn::Libs::Time::Elapsed

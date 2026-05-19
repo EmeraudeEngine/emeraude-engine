@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <string>
 

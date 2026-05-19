@@ -27,8 +27,8 @@
 #include "ExternalInput.hpp"
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/Wave.hpp"
 #include "Libs/WaveFactory/FileIO.hpp"
+#include "Libs/WaveFactory/Wave.hpp"
 #include "Manager.hpp"
 
 namespace EmEn::Audio

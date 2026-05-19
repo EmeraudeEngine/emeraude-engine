@@ -26,16 +26,12 @@
 
 #include "SharedUniformBuffer.hpp"
 
-/* STL inclusions. */
-#include <ranges>
-
 /* Local inclusions. */
 #include "Libs/Math/Base.hpp"
 #include "Renderer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/MemoryRegion.hpp"
-#include "Vulkan/PhysicalDevice.hpp"
 
 namespace EmEn::Graphics
 {

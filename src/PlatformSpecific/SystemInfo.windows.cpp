@@ -24,8 +24,6 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
@@ -36,17 +34,14 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-
-#include <Windows.h>
-#include <psapi.h>
 #define _WIN32_DCOM // NOLINT
 #include <comdef.h>
+#include <psapi.h>
 #include <Wbemidl.h>
-
+#include <Windows.h>
 #pragma comment(lib, "wbemuuid.lib")
 
 /* Local inclusions. */

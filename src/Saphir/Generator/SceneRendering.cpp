@@ -28,18 +28,16 @@
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Material/Interface.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Libs/Hash/FNV1a.hpp"
+#include "Libs/SourceCodeParser.hpp"
+#include "Saphir/Code.hpp"
+#include "Scenes/Scene.hpp"
+#include "SkinningLayoutHelper.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Libs/SourceCodeParser.hpp"
-#include "Scenes/Scene.hpp"
-#include "Saphir/Code.hpp"
-
-/* Local inclusions. */
-#include "SkinningLayoutHelper.hpp"
 
 namespace EmEn::Saphir::Generator
 {

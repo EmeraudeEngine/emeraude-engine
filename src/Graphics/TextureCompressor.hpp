@@ -33,7 +33,6 @@
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Pixmap.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Libs
 {
 	class ThreadPool;

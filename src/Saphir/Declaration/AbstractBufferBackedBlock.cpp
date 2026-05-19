@@ -27,12 +27,10 @@
 #include "AbstractBufferBackedBlock.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */
-#include <ranges>
-
-
 #include "Libs/Utility.hpp"
 #include "Tracer.hpp"
 

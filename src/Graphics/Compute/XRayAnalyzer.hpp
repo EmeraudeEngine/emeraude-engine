@@ -33,12 +33,11 @@
 #include <string>
 #include <vector>
 
-/* Local inclusions. */
-#include "Libs/VertexFactory/Shape.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
+#include "Libs/VertexFactory/Shape.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class Device;

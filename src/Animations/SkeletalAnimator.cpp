@@ -31,10 +31,10 @@
 #include <cmath>
 
 /* Local inclusions. */
-#include "SkeletonResource.hpp"
 #include "AnimationClipResource.hpp"
 #include "Libs/Animation/AnimationChannel.hpp"
 #include "Libs/Math/TransformUtils.hpp"
+#include "SkeletonResource.hpp"
 
 namespace EmEn::Animations
 {

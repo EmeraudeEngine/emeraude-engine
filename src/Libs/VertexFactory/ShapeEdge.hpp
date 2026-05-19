@@ -26,14 +26,14 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
-#include "Libs/emeraude_platform.hpp"
 /* STL inclusions. */
 #include <cstdint>
 #include <limits>
 #include <type_traits>
 
+/* Local inclusions for usages. */
+/* Project configuration. */
+#include "Libs/emeraude_platform.hpp"
 #if IS_WINDOWS
 #undef max
 #endif

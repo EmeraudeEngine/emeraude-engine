@@ -32,16 +32,16 @@
 /* Local inclusions. */
 #include "GPUMeshMetaData.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
-#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/Helpers.hpp"
-#include "Graphics/Material/Interface.hpp"
+#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
-#include "Vulkan/IndexBufferObject.hpp"
-#include "Vulkan/Device.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/IndexBufferObject.hpp"
+#include "Vulkan/VertexBufferObject.hpp"
 
 /* For wall-clock animation time (passed to AnimatedTexture2D::frameIndexAt). */
 #include <chrono>

@@ -26,15 +26,11 @@
 
 #include "Commands.hpp"
 
-
 /* STL inclusions. */
 #include <cstdlib>
-#include <sstream>
-
-/* Third-party inclusions. */
-#include "reproc++/run.hpp"
 
 /* Local inclusions. */
+#include "reproc++/run.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop

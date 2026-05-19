@@ -26,21 +26,21 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Processor.hpp"
-#include "Vulkan/Instance.hpp"
-#include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
+#include "Libs/PixelFactory/Processor.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/Instance.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {

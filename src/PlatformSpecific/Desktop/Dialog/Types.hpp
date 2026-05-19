@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <array>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog

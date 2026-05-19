@@ -26,15 +26,15 @@
 
 #include "CapsuleCollisionModel.hpp"
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
+#include "AABBCollisionModel.hpp"
 #include "Libs/Math/Space3D/Capsule.hpp"
-#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
+#include "Libs/Math/Space3D/Collisions/CapsuleCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/CapsulePoint.hpp"
 #include "Libs/Math/Space3D/Collisions/CapsuleSphere.hpp"
-#include "Libs/Math/Space3D/Collisions/CapsuleCuboid.hpp"
+#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "PointCollisionModel.hpp"
 #include "SphereCollisionModel.hpp"
-#include "AABBCollisionModel.hpp"
 
 namespace EmEn::Physics
 {

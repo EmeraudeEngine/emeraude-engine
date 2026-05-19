@@ -26,28 +26,28 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstdint>
-#include <cstddef>
-#include <cmath>
-#include <cstring>
 #include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <limits>
+#include <span>
 #include <sstream>
 #include <string>
-#include <vector>
-#include <limits>
 #include <type_traits>
-#include <iostream>
-#include <span>
+#include <vector>
 
-/* Local inclusions for usage. */
-#include "Libs/Algorithms/PerlinNoise.hpp"
-#include "Libs/Math/Space2D/AARectangle.hpp"
+/* Local inclusions. */
 #include "Color.hpp"
 #include "Gradient.hpp"
+#include "Libs/Algorithms/PerlinNoise.hpp"
+#include "Libs/Math/Space2D/AARectangle.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Libs::PixelFactory

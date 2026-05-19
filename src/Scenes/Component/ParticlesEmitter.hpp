@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
-#include <functional>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"

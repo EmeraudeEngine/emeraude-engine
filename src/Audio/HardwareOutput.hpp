@@ -33,9 +33,9 @@
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "Audio/Manager.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Vector.hpp"
-#include "Audio/Manager.hpp"
 
 namespace EmEn::Audio
 {

@@ -26,13 +26,16 @@
 
 #include "Instance.hpp"
 
+/* Project configuration. */
+#include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <cstring>
-#include <algorithm>
 #include <ranges>
-#include <utility>
 #include <sstream>
+#include <utility>
 
 /* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
@@ -40,16 +43,14 @@
 #include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
-#include "PhysicalDevice.hpp"
 #include "Device.hpp"
 #include "DeviceRequirements.hpp"
-#include "Utility.hpp"
 #include "Identification.hpp"
+#include "PhysicalDevice.hpp"
 #include "PrimaryServices.hpp"
-#include "Window.hpp"
 #include "SettingKeys.hpp"
-
-#include "Libs/emeraude_platform.hpp"
+#include "Utility.hpp"
+#include "Window.hpp"
 
 namespace EmEn::Vulkan
 {

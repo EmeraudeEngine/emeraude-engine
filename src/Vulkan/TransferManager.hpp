@@ -37,6 +37,8 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+
+/* Local inclusions for usages. */
 #include "BufferTransferOperation.hpp"
 #include "ImageTransferOperation.hpp"
 #include "Tracer.hpp"

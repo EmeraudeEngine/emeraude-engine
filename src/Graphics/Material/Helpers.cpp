@@ -27,16 +27,16 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <algorithm>
 #include <array>
+#include <cstdint>
 
 /* Local inclusions. */
 #include "Graphics/Geometry/Interface.hpp"
-#include "Saphir/Generator/Abstract.hpp"
-#include "Saphir/Code.hpp"
-#include "Saphir/Keys.hpp"
 #include "Interface.hpp"
+#include "Saphir/Code.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Keys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material

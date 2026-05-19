@@ -29,12 +29,12 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <vector>
 #include <memory>
+#include <string>
 #include <type_traits>
+#include <vector>
 
-/* Local inclusions for usage. */
+/* Local inclusions for usages. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"

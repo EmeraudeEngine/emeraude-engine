@@ -39,11 +39,11 @@
 #include <unordered_set>
 #include <vector>
 
-/* Local inclusions. */
-#include "Shape.hpp"
-#include "ShapeProcessor.hpp"
+/* Local inclusions for usages. */
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Libs/ThreadPool.hpp"
+#include "Shape.hpp"
+#include "ShapeProcessor.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {

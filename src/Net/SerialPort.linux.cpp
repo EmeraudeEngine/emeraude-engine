@@ -27,17 +27,15 @@
 #include "SerialPort.hpp"
 
 /* STL inclusions. */
-#include <array>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <algorithm>
 
-/* POSIX inclusions. */
+/* Third-party inclusions. */
 #include <fcntl.h>
-#include <unistd.h>
-#include <termios.h>
-#include <sys/ioctl.h>
 #include <sys/select.h>
+#include <termios.h>
+#include <unistd.h>
 
 namespace EmEn::Net
 {

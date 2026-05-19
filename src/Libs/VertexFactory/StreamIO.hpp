@@ -34,8 +34,8 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/IO/MemoryStream.hpp"
 #include "FileFormatNative.hpp"
+#include "Libs/IO/MemoryStream.hpp"
 #include "ShapeLoadResult.hpp"
 
 namespace EmEn::Libs::VertexFactory::StreamIO

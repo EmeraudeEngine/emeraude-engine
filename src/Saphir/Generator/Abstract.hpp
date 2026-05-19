@@ -29,16 +29,16 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstdint>
-#include <string>
 #include <memory>
+#include <string>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Libs/StaticVector.hpp"
 #include "Saphir/Program.hpp"
 
 namespace EmEn

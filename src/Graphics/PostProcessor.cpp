@@ -32,22 +32,21 @@
 #include <numbers>
 
 /* Local inclusions. */
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Geometry/IndexedVertexResource.hpp"
+#include "GrabPass.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "PostProcessStack.hpp"
+#include "Renderer.hpp"
 #include "Saphir/Generator/PostProcessing.hpp"
-#include "Saphir/Program.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Tracer.hpp"
+#include "ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
-#include "GrabPass.hpp"
-#include "Renderer.hpp"
-#include "Scenes/LightSet.hpp"
-#include "Tracer.hpp"
-#include "ViewMatricesInterface.hpp"
 
 namespace
 {

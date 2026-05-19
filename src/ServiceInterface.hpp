@@ -33,6 +33,8 @@
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
+
+/* Local inclusions for usages. */
 #include "Libs/ObservableTrait.hpp"
 
 namespace EmEn

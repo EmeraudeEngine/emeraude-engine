@@ -31,7 +31,7 @@
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
 #include "ShapeBuilder.hpp"
 

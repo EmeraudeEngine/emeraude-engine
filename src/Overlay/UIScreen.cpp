@@ -26,18 +26,19 @@
 
 #include "UIScreen.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <ranges>
 
 /* Local inclusions. */
-#include "Libs/NameableTrait.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Libs/NameableTrait.hpp"
 #include "Surface.hpp"
 #include "Tracer.hpp"
-
-#include "emeraude_config.hpp"
+#include "Vulkan/CommandBuffer.hpp"
 
 namespace EmEn::Overlay
 {

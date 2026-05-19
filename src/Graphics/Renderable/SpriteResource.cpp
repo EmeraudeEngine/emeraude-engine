@@ -26,17 +26,17 @@
 
 #include "SpriteResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
-#include "Libs/VertexFactory/ShapeBuilder.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Graphics/TextureResource/Texture2D.hpp"
-#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/Helpers.hpp"
-#include "Resources/Manager.hpp"
-
-#include "emeraude_config.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Libs/VertexFactory/ShapeBuilder.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

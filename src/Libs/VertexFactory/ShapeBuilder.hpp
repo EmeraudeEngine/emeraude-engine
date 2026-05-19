@@ -26,16 +26,16 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
-#include <vector>
 #include <iostream>
 #include <type_traits>
+#include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Shape.hpp"
 #include "ShapeBuilderOptions.hpp"
 

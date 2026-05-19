@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Platform detection only (__PRETTY_FUNCTION__ MSVC fallback). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
 /* STL inclusions. */
@@ -34,6 +34,7 @@
 #include <iostream>
 
 /* Forward declarations. */
+
 struct tsf;
 
 namespace EmEn::Libs::WaveFactory

@@ -28,16 +28,13 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/ShaderModule.hpp"
 
 namespace
 {

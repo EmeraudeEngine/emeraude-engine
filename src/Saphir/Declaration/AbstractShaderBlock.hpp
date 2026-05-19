@@ -27,11 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
-#include <map>
 #include <cstdint>
+#include <map>
 
 /* Local inclusions for inheritances. */
 #include "BlockInterface.hpp"
+
+/* Local inclusions for usages. */
 #include "Member/ShaderBlock.hpp"
 
 namespace EmEn::Saphir::Declaration

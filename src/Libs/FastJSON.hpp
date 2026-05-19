@@ -26,24 +26,23 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
-/* Application configuration. */
 
 /* STL inclusions. */
 #include <cstddef>
+#include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <type_traits>
-#include <filesystem>
-#include <optional>
 #include <utility>
 
 /* Third-party inclusions. */
 #ifndef JSON_USE_EXCEPTION
 #define JSON_USE_EXCEPTION 0
 #endif
+
 #include "json/json.h"
 
 /* Local inclusions. */

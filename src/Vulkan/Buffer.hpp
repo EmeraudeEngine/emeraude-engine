@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 
 /* Third-party inclusions. */

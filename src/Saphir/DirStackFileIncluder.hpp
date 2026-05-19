@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
 
-/* Local inclusions for inheritance. */
+/* Third-party inclusions. */
 #include "glslang/Public/ShaderLang.h"
 
 namespace EmEn::Saphir

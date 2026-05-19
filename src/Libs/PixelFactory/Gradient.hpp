@@ -30,8 +30,8 @@
 #include <map>
 
 /* Local inclusions. */
-#include "Libs/Math/Base.hpp"
 #include "Color.hpp"
+#include "Libs/Math/Base.hpp"
 
 namespace EmEn::Libs::PixelFactory
 {

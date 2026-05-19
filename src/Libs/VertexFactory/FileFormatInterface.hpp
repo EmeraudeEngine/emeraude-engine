@@ -26,8 +26,6 @@
 
 #pragma once
 
-/* Engine configuration file. */
-
 /* STL inclusions. */
 #include <cstdint>
 

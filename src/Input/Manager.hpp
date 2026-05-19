@@ -26,29 +26,29 @@
 
 #pragma once
 
-/* Platform detection only (__PRETTY_FUNCTION__ MSVC fallback). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <array>
-#include <vector>
+#include <cstddef>
 #include <set>
+#include <vector>
 
-/* Third-party libraries */
+/* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Console/ControllableTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
+#include "Console/ControllableTrait.hpp"
 
-/* Local inclusions for usage */
-#include "KeyboardListenerInterface.hpp"
-#include "PointerListenerInterface.hpp"
+/* Local inclusions for usages. */
 #include "KeyboardController.hpp"
+#include "KeyboardListenerInterface.hpp"
 #include "PointerController.hpp"
+#include "PointerListenerInterface.hpp"
 
 /* Forward declarations. */
 namespace EmEn

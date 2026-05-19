@@ -24,22 +24,21 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
-/* Local inclusions. */
 #include "VideoCaptureDevice.hpp"
-#include "Tracer.hpp"
 
 /* STL inclusions. */
 #include <cstring>
 
-/* System inclusions. */
+/* Third-party inclusions. */
 #include <fcntl.h>
-#include <unistd.h>
+#include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/select.h>
-#include <linux/videodev2.h>
+#include <unistd.h>
+
+/* Local inclusions. */
+#include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific
 {

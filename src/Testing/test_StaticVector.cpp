@@ -24,10 +24,11 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include <gtest/gtest.h>
-
 /* STL inclusions. */
 #include <algorithm>
+
+/* Third-party inclusions. */
+#include <gtest/gtest.h>
 
 /* Local inclusions. */
 #include "Libs/StaticVector.hpp"

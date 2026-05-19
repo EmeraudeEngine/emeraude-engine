@@ -30,10 +30,10 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
-#include <shared_mutex>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"

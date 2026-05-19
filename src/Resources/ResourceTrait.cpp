@@ -26,6 +26,9 @@
 
 #include "Resources/ResourceTrait.hpp"
 
+/* Project configuration. */
+#include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 
@@ -34,8 +37,6 @@
 #include "Libs/String.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
-
-#include "Libs/emeraude_platform.hpp"
 
 namespace EmEn::Resources
 {

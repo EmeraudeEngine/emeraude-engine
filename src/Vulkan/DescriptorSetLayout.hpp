@@ -29,8 +29,8 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <ostream>
 #include <memory>
+#include <ostream>
 #include <string>
 
 /* Local inclusions for inheritances. */

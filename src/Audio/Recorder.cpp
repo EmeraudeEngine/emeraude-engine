@@ -30,12 +30,12 @@
 #include <chrono>
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/Wave.hpp"
 #include "Libs/WaveFactory/FileIO.hpp"
+#include "Libs/WaveFactory/Wave.hpp"
 #include "Manager.hpp"
-#include "Utility.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Audio
 {

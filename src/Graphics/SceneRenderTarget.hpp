@@ -36,7 +36,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/ViewMatrices2DUBO.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class Image;

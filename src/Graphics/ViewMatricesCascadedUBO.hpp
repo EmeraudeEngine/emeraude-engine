@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
 #include <array>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 
@@ -36,9 +36,9 @@
 #include "ViewMatricesInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/UniformBufferObject.hpp"
 #include "Graphics/Types.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics
 {

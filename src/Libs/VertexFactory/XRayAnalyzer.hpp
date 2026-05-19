@@ -34,12 +34,12 @@
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions. */
-#include "Shape.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Libs/ThreadPool.hpp"
+#include "Shape.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {

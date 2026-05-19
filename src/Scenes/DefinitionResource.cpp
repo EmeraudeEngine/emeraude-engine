@@ -27,17 +27,17 @@
 #include "DefinitionResource.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/BasicGroundResource.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Resources/Manager.hpp"
-#include "Scenes/Scene.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/Microphone.hpp"
 #include "Scenes/Component/Visual.hpp"
-#include "Graphics/Renderable/SkyBoxResource.hpp"
-#include "Graphics/Renderable/BasicGroundResource.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
-#include "Graphics/Material/StandardResource.hpp"
+#include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes

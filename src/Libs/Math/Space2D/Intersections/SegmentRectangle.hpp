@@ -26,11 +26,11 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/Math/Space2D/Segment.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/AARectangle.hpp"
-#include "Libs/Math/Space2D/Point.hpp"
 #include "Libs/Math/Space2D/Collisions/PointRectangle.hpp"
+#include "Libs/Math/Space2D/Point.hpp"
+#include "Libs/Math/Space2D/Segment.hpp"
 #include "Libs/StaticVector.hpp"
 #include "SegmentSegment.hpp"
 

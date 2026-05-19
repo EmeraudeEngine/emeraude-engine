@@ -26,11 +26,13 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
-/* Local inclusions for usages. */
+
+/* Local inclusions for inheritances. */
 #include "HTTPHeaders.hpp"
+
+/* Local inclusions for usages. */
 #include "URI.hpp"
 
 #if IS_WINDOWS

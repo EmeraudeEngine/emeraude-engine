@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <vector>
 #include <cstdint>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "BlockInterface.hpp"

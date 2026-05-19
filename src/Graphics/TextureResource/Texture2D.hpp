@@ -30,8 +30,8 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Resources/Container.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {

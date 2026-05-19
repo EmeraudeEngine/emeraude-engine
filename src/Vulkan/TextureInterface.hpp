@@ -33,7 +33,7 @@
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"

@@ -26,24 +26,22 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <concepts>
 #include <string>
 
-/* Local inclusions for inheritance. */
-#include "Libs/NameableTrait.hpp"
-
 /* Local inclusions for usages. */
-#include "Vulkan/DescriptorSet.hpp"
-#include "Graphics/TextureResource/Abstract.hpp"
 #include "FramebufferProperties.hpp"
+#include "Graphics/TextureResource/Abstract.hpp"
 #include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/NameableTrait.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 namespace EmEn::Vulkan
 {

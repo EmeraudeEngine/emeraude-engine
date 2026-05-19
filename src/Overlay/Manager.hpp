@@ -26,17 +26,23 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstddef>
+#include <any>
 #include <array>
-#include <unordered_map>
-#include <vector>
+#include <cstddef>
 #include <memory>
 #include <string>
-#include <any>
+#include <unordered_map>
+#include <vector>
+
+/* Third-party inclusions. */
+#ifdef IMGUI_ENABLED
+#include "imgui.h"
+#include "ImGUIScreen.hpp"
+#endif
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -46,13 +52,9 @@
 #include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Input/Manager.hpp"
 #include "FramebufferProperties.hpp"
+#include "Input/Manager.hpp"
 #include "UIScreen.hpp"
-#ifdef IMGUI_ENABLED
-#include "imgui.h"
-#include "ImGUIScreen.hpp"
-#endif
 
 /* Forward declarations. */
 namespace EmEn::Graphics::Geometry

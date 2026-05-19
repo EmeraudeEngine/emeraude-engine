@@ -29,18 +29,16 @@
 /* STL inclusions. */
 #include <algorithm>
 
-/* Windows inclusions. */
+/* Third-party inclusions. */
+#include <devguid.h>
+#include <SetupAPI.h>
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-
 #include <Windows.h>
-#include <SetupAPI.h>
-#include <devguid.h>
 
 #pragma comment(lib, "SetupAPI.lib")
 

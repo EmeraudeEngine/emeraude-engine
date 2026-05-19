@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <sstream>
 #include <string>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Hostname.hpp"
 
 namespace EmEn::Libs::Network

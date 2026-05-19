@@ -26,19 +26,19 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
-#include <map>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
-/* Local inclusions for inheritances. */
+/* Local inclusions for usages. */
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan

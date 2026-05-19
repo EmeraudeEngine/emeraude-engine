@@ -29,9 +29,9 @@
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Libs/Hash/FNV1a.hpp"
+#include "Saphir/Code.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Saphir/Code.hpp"
 
 namespace EmEn::Saphir::Generator
 {

@@ -24,8 +24,6 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include <gtest/gtest.h>
-
 /* STL inclusions. */
 #include <array>
 #include <atomic>
@@ -37,12 +35,15 @@
 #include <thread>
 #include <vector>
 
+/* Third-party inclusions. */
+#include <gtest/gtest.h>
+
 /* Local inclusions. */
 #include "Libs/Math/Space2D/AARectangle.hpp"
-#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Libs/PixelFactory/Processor.hpp"
 #include "Libs/ThreadPool.hpp"
+#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 
 using namespace EmEn::Libs;
 using namespace EmEn::Libs::Math;

@@ -31,7 +31,6 @@
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/DefaultFont.hpp"
-#include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics

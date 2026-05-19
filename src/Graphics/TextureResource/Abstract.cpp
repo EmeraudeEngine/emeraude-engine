@@ -28,7 +28,6 @@
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/Processor.hpp"
-#include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::TextureResource

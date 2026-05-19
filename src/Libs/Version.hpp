@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <compare>
 #include <cstdint>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <compare>
-#include <optional>
 
 namespace EmEn::Libs
 {

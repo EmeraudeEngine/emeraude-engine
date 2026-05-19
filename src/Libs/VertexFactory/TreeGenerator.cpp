@@ -26,9 +26,6 @@
 
 #include "TreeGenerator.hpp"
 
-/* Local inclusions. */
-#include "ShapeGenerator.hpp"
-
 namespace EmEn::Libs::VertexFactory
 {
 	using namespace Math;

@@ -27,14 +27,13 @@
 #include "SceneRenderTarget.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
 #include "Libs/PixelFactory/Processor.hpp"
-#include "Vulkan/Device.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {

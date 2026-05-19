@@ -26,7 +26,7 @@
 
 #include "LZMA.hpp"
 
-/* Engine configuration file. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */

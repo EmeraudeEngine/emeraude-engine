@@ -27,13 +27,13 @@
 #include "RenderPass.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 
 /* Local inclusions. */
 #include "Device.hpp"
-#include "Utility.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

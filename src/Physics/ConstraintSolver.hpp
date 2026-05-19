@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <vector>
 #include <algorithm>
+#include <vector>
 
-/* Local inclusions. */
-#include "MovableTrait.hpp"
+/* Local inclusions for usages. */
 #include "ContactManifold.hpp"
+#include "MovableTrait.hpp"
 
 namespace EmEn::Physics
 {

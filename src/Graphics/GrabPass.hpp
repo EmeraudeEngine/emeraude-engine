@@ -33,7 +33,6 @@
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan

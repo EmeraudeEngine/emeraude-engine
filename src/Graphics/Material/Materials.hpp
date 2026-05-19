@@ -26,14 +26,14 @@
 
 #pragma once
 
-/* STL inclusions */
+/* STL inclusions. */
 #include <array>
 #include <string_view>
 
-/* Local inclusions */
+/* Local inclusions for usages. */
 #include "BasicResource.hpp"
-#include "StandardResource.hpp"
 #include "PBRResource.hpp"
+#include "StandardResource.hpp"
 
 namespace EmEn::Graphics::Material
 {

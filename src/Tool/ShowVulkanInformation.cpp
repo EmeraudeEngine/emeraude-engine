@@ -27,9 +27,8 @@
 #include "ShowVulkanInformation.hpp"
 
 /* Local inclusions. */
-#include "Vulkan/Instance.hpp"
-#include "Vulkan/PhysicalDevice.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Instance.hpp"
 
 namespace EmEn::Tool
 {

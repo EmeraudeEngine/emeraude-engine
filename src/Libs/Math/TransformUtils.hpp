@@ -26,10 +26,10 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Vector.hpp"
+/* Local inclusions for usages. */
 #include "Matrix.hpp"
 #include "Quaternion.hpp"
+#include "Vector.hpp"
 
 namespace EmEn::Libs::Math
 {

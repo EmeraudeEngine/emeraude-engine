@@ -26,25 +26,25 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
+#include <functional>
 #include <iostream>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
-#include <functional>
-#include <set>
 
 /* Local inclusions for usages. */
+#include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
-#include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "ShapeEdge.hpp"

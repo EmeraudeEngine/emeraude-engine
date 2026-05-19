@@ -38,7 +38,6 @@
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics

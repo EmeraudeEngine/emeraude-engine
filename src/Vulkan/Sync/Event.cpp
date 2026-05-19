@@ -27,9 +27,9 @@
 #include "Event.hpp"
 
 /* Local inclusions. */
+#include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Utility.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Vulkan::Sync
 {

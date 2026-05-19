@@ -24,8 +24,6 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "Helpers.hpp"
 
 /* STL inclusions. */

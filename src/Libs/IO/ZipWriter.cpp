@@ -29,13 +29,13 @@
 /* Project configuration. */
 #include "emeraude_config.hpp"
 
-/* Local inclusions. */
-#include "IO.hpp"
-
 /* STL inclusions. */
 #include <algorithm>
-#include <iostream>
 #include <fstream>
+#include <iostream>
+
+/* Local inclusions. */
+#include "IO.hpp"
 
 namespace EmEn::Libs::IO
 {

@@ -27,29 +27,30 @@
 #pragma once
 
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstddef>
-#include <array>
-#include <vector>
-#include <unordered_set>
-#include <string>
-#include <memory>
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <limits>
+#include <memory>
+#include <string>
 #include <type_traits>
+#include <unordered_set>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Libs/Math/Space3D/AACuboid.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
+#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "Libs/Math/Space3D/Collisions/SphereCuboid.hpp"
-#include "Physics/CollisionModelInterface.hpp"
 #include "LocatableInterface.hpp"
+#include "Physics/CollisionModelInterface.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes

@@ -27,10 +27,10 @@
 #include "Queue.hpp"
 
 /* Local inclusions. */
-#include "Device.hpp"
 #include "CommandBuffer.hpp"
-#include "Utility.hpp"
+#include "Device.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

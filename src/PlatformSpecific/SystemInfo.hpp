@@ -27,17 +27,17 @@
 #pragma once
 
 /* STL inclusions. */
-#include <string>
+#include <filesystem>
 #include <ostream>
 #include <sstream>
-#include <filesystem>
+#include <string>
 
-/* Local inclusions for inheritance. */
+/* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
 #include "Arguments.hpp"
+#include "Libs/StaticVector.hpp"
 #include "Settings.hpp"
 #include "Types.hpp"
 

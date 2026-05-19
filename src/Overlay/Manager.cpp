@@ -26,7 +26,7 @@
 
 #include "Manager.hpp"
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
@@ -34,7 +34,7 @@
 #include <iterator>
 #include <ranges>
 
-/* Third-party inclusions */
+/* Third-party inclusions. */
 #ifdef IMGUI_ENABLED
 #include "imgui.h"
 #include "backends/imgui_impl_vulkan.h"
@@ -48,16 +48,16 @@
 #endif
 
 /* Local inclusions. */
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Manager.hpp"
 #include "Saphir/Generator/OverlayRendering.hpp"
-#include "Vulkan/SwapChain.hpp"
+#include "UIScreen.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Resources/Manager.hpp"
-#include "UIScreen.hpp"
-#include "PrimaryServices.hpp"
+#include "Vulkan/SwapChain.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Overlay

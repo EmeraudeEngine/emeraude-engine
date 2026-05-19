@@ -27,8 +27,8 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <algorithm>
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>

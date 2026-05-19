@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Argument.hpp"
 #include "Output.hpp"
 

@@ -27,8 +27,8 @@
 #include "UniformBufferObject.hpp"
 
 /* Local inclusions. */
-#include "PhysicalDevice.hpp"
 #include "Device.hpp"
+#include "PhysicalDevice.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan

@@ -29,9 +29,9 @@
 /* STL inclusions. */
 #include <memory>
 
-/* Local inclusions. */
-#include "Source.hpp"
+/* Local inclusions for usages. */
 #include "AmbienceSound.hpp"
+#include "Source.hpp"
 
 namespace EmEn::Audio
 {

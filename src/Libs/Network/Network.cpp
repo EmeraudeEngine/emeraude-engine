@@ -26,20 +26,20 @@
 
 #include "Network.hpp"
 
-/* Application configurations. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <iostream>
 
-/* Third party inclusions. */
+/* Third-party inclusions. */
 #include "Libs/Network/asio_throw_exception.hpp"
 
 /* Local inclusions. */
-#include "Libs/IO/IO.hpp"
-#include "Libs/String.hpp"
 #include "HTTPRequest.hpp"
 #include "HTTPResponse.hpp"
+#include "Libs/IO/IO.hpp"
+#include "Libs/String.hpp"
 
 namespace EmEn::Libs::Network
 {

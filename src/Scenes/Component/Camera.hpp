@@ -28,18 +28,18 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cstdint>
 #include <cstddef>
-#include <string>
+#include <cstdint>
 #include <memory>
+#include <string>
 
 /* Local inclusions for inheritances. */
-#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
-#include "Scenes/AVConsole/Types.hpp"
 #include "Graphics/DirectPostProcessEffect.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Scenes::Component

@@ -26,16 +26,14 @@
 
 #pragma once
 
-/* Emeraude Engine configuration. */
-
 #ifdef EMERAUDE_ENABLE_RENDERDOC
-
-/* Third-party inclusions. */
-#include "renderdoc_app.h"
 
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
+
+/* Third-party inclusions. */
+#include "renderdoc_app.h"
 
 namespace EmEn::Graphics
 {

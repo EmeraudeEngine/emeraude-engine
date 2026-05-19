@@ -32,6 +32,8 @@
 
 /* Local inclusions for inheritances. */
 #include "BlockInterface.hpp"
+
+/* Local inclusions for usages. */
 #include "Member/PushConstant.hpp"
 
 namespace EmEn::Saphir::Declaration

@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/Math/Space2D/Circle.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/Math/Space2D/Circle.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {

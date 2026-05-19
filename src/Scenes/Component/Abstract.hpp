@@ -28,11 +28,8 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <string>
 #include <memory>
-
-/* Third-party inclusions. */
-#include "json/json.h"
+#include <string>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
@@ -41,10 +38,11 @@
 #include "Animations/AnimatableInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "CoreTypes.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
 #include "Physics/MovableTrait.hpp"
-#include "CoreTypes.hpp"
+#include "json/json.h"
 
 /* Forward declarations. */
 namespace EmEn

@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
-#include <map>
 
 /* Third-party inclusions. */
 #include "ft2build.h"
@@ -41,8 +41,8 @@
 #include FT_GLYPH_H
 
 /* Local inclusions. */
-#include "Pixmap.hpp"
 #include "FileIO.hpp"
+#include "Pixmap.hpp"
 #include "Processor.hpp"
 
 namespace EmEn::Libs::PixelFactory

@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/Point.hpp"
 #include "Libs/Math/Space2D/Segment.hpp"
 

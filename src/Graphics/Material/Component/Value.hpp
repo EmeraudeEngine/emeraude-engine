@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <string>
 #include <sstream>
+#include <string>
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"

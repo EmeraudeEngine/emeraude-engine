@@ -24,22 +24,19 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
+#include <filesystem>
 #include <fstream>
 #include <string>
-#include <filesystem>
 
-/* Third-party libraries */
-#include <unistd.h>
+/* Third-party inclusions. */
 #include <sys/resource.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 
 /* Local inclusions. */
-#include "../Tracer.hpp"
 #include "Libs/String.hpp"
 
 namespace EmEn::PlatformSpecific

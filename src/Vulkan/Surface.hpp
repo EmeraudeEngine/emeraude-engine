@@ -33,6 +33,8 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
+
+/* Local inclusions for usages. */
 #include "Instance.hpp"
 
 /* Forward declarations. */

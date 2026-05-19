@@ -43,8 +43,6 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
 
-/* Defining the resource owner of this translation unit. */
-/* NOLINTBEGIN(cert-err58-cpp) : We need static strings. */
 static constexpr auto TracerTag{"IndirectPostProcessEffect"};
 /* NOLINTEND(cert-err58-cpp) */
 

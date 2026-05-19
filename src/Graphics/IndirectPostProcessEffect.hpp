@@ -36,10 +36,9 @@
 #include "PostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/DescriptorSet.hpp"
 #include "PostProcessor.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan

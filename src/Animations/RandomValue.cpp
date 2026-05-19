@@ -26,10 +26,11 @@
 
 #include "RandomValue.hpp"
 
+/* Project configuration. */
+#include "Libs/emeraude_platform.hpp"
+
 /* Local inclusions. */
 #include "Tracer.hpp"
-
-#include "Libs/emeraude_platform.hpp"
 
 namespace EmEn::Animations
 {

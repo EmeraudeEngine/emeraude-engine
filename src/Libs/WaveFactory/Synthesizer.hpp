@@ -27,20 +27,20 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <cmath>
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <numbers>
 #include <random>
 #include <type_traits>
 
-/* Local inclusions for usages. */
-#include "Wave.hpp"
+/* Local inclusions. */
 #include "Types.hpp"
+#include "Wave.hpp"
 
 namespace EmEn::Libs::WaveFactory
 {

@@ -27,8 +27,8 @@
 #include "IndexedVertexResource.hpp"
 
 /* Local inclusions. */
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Libs/VertexFactory/FileIO.hpp"
+#include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry

@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <string>
 #include <sstream>
+#include <string>
 #include <vector>
 
 /* Local inclusions for usages. */

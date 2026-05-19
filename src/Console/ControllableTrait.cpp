@@ -30,9 +30,9 @@
 #include <iostream>
 
 /* Local inclusions. */
+#include "Controller.hpp"
 #include "Libs/BlobTrait.hpp"
 #include "Libs/String.hpp"
-#include "Controller.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Console

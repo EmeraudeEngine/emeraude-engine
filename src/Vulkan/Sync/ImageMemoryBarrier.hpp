@@ -28,6 +28,8 @@
 
 /* Local inclusions for inheritances. */
 #include "Vulkan/AbstractObject.hpp"
+
+/* Local inclusions for usages. */
 #include "Vulkan/Image.hpp"
 
 namespace EmEn::Vulkan::Sync

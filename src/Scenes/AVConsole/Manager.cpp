@@ -26,7 +26,7 @@
 
 #include "Manager.hpp"
 
-/* Local inclusions. */
+/* STL inclusions. */
 #include <ranges>
 #include <sstream>
 

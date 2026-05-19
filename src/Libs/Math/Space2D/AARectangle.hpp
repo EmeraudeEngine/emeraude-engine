@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <ostream>
 #include <sstream>
 #include <string>
-#include <array>
 
 /* Local inclusions for usages. */
 #include "Point.hpp"

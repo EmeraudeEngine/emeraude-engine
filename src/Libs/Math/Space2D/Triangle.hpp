@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <sstream>
-#include <string>
 #include <algorithm>
 #include <limits>
+#include <sstream>
+#include <string>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Point.hpp"
 
 namespace EmEn::Libs::Math::Space2D

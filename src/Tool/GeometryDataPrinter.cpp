@@ -33,11 +33,11 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
-#include "Libs/BlobTrait.hpp"
-#include "Graphics/Types.hpp"
 #include "Arguments.hpp"
 #include "Constants.hpp"
+#include "Graphics/Types.hpp"
+#include "Libs/BlobTrait.hpp"
+#include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Tool

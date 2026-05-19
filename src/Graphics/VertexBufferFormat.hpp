@@ -29,10 +29,10 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <ostream>
 #include <string>
 #include <vector>
-#include <map>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>

@@ -36,9 +36,12 @@
 #include <random>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "tsf.h"
 
 /* Local inclusions for inheritances. */
 #include "FileFormatInterface.hpp"
@@ -49,7 +52,6 @@
 #include "Wave.hpp"
 
 /* TinySoundFont inclusion for SoundFont rendering. */
-#include "tsf.h"
 
 namespace EmEn::Libs::WaveFactory
 {

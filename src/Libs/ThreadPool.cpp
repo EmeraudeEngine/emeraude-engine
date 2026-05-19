@@ -26,7 +26,7 @@
 
 #include "ThreadPool.hpp"
 
-/* Configurations. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */

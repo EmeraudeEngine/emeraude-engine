@@ -26,6 +26,9 @@
 
 #include "Node.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <memory>
@@ -37,8 +40,6 @@
 #include "Scenes/Component/AbstractModifier.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Scenes
 {

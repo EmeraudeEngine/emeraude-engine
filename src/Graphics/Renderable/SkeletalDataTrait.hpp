@@ -33,7 +33,6 @@
 /* Local inclusions for usages. */
 #include "Libs/Animation/Skin.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Animations
 {
 	class SkeletonResource;

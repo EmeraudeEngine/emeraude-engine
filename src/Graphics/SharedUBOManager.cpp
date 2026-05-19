@@ -27,8 +27,8 @@
 #include "SharedUBOManager.hpp"
 
 /* Local inclusions. */
-#include "Vulkan/Device.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Graphics
 {

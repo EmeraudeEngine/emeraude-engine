@@ -40,15 +40,15 @@
 #include <vector>
 
 /* Third-party inclusions. */
-#include <shobjidl.h>
 #include <commdlg.h>
+#include <shobjidl.h>
 
 /* Local inclusions. */
 #include "PlatformSpecific/Helpers.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
-#include "Window.hpp"
 #include "Tracer.hpp"
+#include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {

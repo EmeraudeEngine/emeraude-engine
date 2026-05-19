@@ -28,14 +28,14 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions for usages. */
-#include "Libs/Randomizer.hpp"
+/* Local inclusions. */
 #include "Libs/Math/Base.hpp"
+#include "Libs/Randomizer.hpp"
 
 namespace EmEn::Libs::Algorithms
 {

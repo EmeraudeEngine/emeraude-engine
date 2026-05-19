@@ -27,15 +27,15 @@
 #include "Surface.hpp"
 
 /* Local inclusions. */
-#include "Vulkan/Device.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
-#include "Vulkan/MemoryRegion.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Libs/PixelFactory/Processor.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn::Overlay
 {

@@ -28,10 +28,10 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <string>
-#include <vector>
 #include <set>
+#include <string>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "AbstractShader.hpp"

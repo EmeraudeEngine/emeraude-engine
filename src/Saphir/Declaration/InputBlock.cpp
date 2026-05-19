@@ -28,12 +28,10 @@
 
 /* STL inclusions. */
 #include <limits>
+#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */
-#include <ranges>
-
-
 #include "OutputBlock.hpp"
 
 namespace EmEn::Saphir::Declaration

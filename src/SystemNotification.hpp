@@ -36,7 +36,6 @@
 /* Local inclusions for usages. */
 #include "PlatformSpecific/Desktop/Notification.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Settings;

@@ -26,21 +26,19 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
-/* Engine configuration file. */
 
 /* STL inclusions. */
-#include <map>
-#include <set>
-#include <vector>
-#include <string>
-#include <sstream>
 #include <algorithm>
 #include <filesystem>
-#include <optional>
 #include <functional>
+#include <map>
+#include <optional>
+#include <set>
+#include <sstream>
+#include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"

@@ -26,15 +26,15 @@
 
 #include "ObservableTrait.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <iostream>
 #include <vector>
 
 /* Local inclusions. */
 #include "ObserverTrait.hpp"
-
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
 namespace EmEn::Libs
 {

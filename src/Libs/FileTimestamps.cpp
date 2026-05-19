@@ -26,14 +26,14 @@
 
 #include "FileTimestamps.hpp"
 
-/* Project configuration file. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <chrono>
 #include <system_error> /* For std::error_code */
 
-/* Platform-specific includes. */
+/* Third-party inclusions. */
 #if IS_LINUX
 	#include <sys/stat.h>
 	#include <fcntl.h>
@@ -53,6 +53,9 @@
 
 	#include <windows.h>
 #endif
+
+/* Project configuration file. */
+/* Platform-specific includes. */
 
 namespace EmEn::Libs
 {

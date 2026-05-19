@@ -26,19 +26,14 @@
 
 #include "SystemInfo.hpp"
 
-/* Project configuration files. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
-#include "SettingKeys.hpp"
-
-/* Third-party inclusions. */
 #if IS_ARM_ARCH
 	#include "cpu_features/cpuinfo_aarch64.h"
 #else
 	#include "cpu_features/cpuinfo_x86.h"
 #endif
 #include "hwloc.h"
+#include "SettingKeys.hpp"
 
 namespace EmEn::PlatformSpecific
 {

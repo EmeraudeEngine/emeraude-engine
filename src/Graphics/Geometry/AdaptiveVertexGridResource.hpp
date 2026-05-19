@@ -26,9 +26,9 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <atomic>
@@ -39,9 +39,9 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Resources/Container.hpp"
 #include "Graphics/Frustum.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

@@ -26,12 +26,15 @@
 
 #include "Abstract.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
-#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/Renderer.hpp"
 #include "Graphics/Material/Interface.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
@@ -44,9 +47,6 @@
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
-#include "Vulkan/RenderPass.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {

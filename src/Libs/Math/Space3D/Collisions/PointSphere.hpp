@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Space3D/Sphere.hpp"
 
 namespace EmEn::Libs::Math::Space3D

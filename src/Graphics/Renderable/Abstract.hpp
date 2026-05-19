@@ -35,15 +35,14 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RasterizationOptions.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "ProgramCacheKey.hpp"
 #include "Types.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics

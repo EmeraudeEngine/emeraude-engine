@@ -28,8 +28,8 @@
 
 /* Local inclusions. */
 #include "Buffer.hpp"
-#include "CommandPool.hpp"
 #include "CommandBuffer.hpp"
+#include "CommandPool.hpp"
 #include "Device.hpp"
 #include "Queue.hpp"
 #include "Sync/Fence.hpp"

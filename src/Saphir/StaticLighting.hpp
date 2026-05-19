@@ -28,14 +28,14 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <string>
 #include <sstream>
+#include <string>
 
 /* Local inclusions for usages. */
+#include "Graphics/Types.hpp"
 #include "Libs/Math/Base.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "Graphics/Types.hpp"
 
 namespace EmEn::Saphir
 {

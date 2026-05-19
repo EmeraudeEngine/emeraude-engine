@@ -26,15 +26,15 @@
 
 #include "BasicGroundResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
-#include "Libs/FastJSON.hpp"
-#include "Resources/Manager.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Libs/FastJSON.hpp"
 #include "Scenes/DefinitionResource.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

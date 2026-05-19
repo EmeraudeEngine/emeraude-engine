@@ -35,11 +35,11 @@
 #include <string>
 #include <thread>
 
-/* ASIO inclusions. */
-#include "Libs/Network/asio_throw_exception.hpp"
+/* Third-party inclusions. */
 #include <asio.hpp>
+#include "Libs/Network/asio_throw_exception.hpp"
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "SettingKeys.hpp"
 
 namespace EmEn::Console

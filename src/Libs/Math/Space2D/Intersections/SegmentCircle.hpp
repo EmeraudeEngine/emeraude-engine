@@ -26,10 +26,10 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/Math/Space2D/Segment.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/Point.hpp"
+#include "Libs/Math/Space2D/Segment.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {

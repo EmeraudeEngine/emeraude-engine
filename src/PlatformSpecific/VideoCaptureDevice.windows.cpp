@@ -24,18 +24,17 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
-/* Local inclusions. */
 #include "VideoCaptureDevice.hpp"
-#include "Helpers.hpp"
-#include "Tracer.hpp"
 
-/* System inclusions. */
+/* Third-party inclusions. */
 #include <mfapi.h>
+#include <mferror.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
-#include <mferror.h>
+
+/* Local inclusions. */
+#include "Helpers.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific
 {

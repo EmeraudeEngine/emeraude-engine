@@ -33,7 +33,6 @@
 /* Local inclusions for inheritances. */
 #include "PostProcessEffect.hpp"
 
-/* Forward declarations */
 namespace EmEn::Saphir
 {
 	namespace Generator

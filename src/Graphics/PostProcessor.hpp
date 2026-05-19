@@ -34,11 +34,10 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "RenderTarget/Abstract.hpp"
 #include "DirectPostProcessEffect.hpp"
 #include "PrimaryServices.hpp"
+#include "RenderTarget/Abstract.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Saphir

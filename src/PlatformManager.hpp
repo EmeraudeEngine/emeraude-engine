@@ -29,7 +29,6 @@
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class PrimaryServices;

@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <memory>
@@ -39,28 +39,25 @@
 #include <thread>
 #include <vector>
 
-/* Third-party inclusions. */
-#ifdef _MSC_VER
-	#pragma warning(push)
-	#pragma warning(disable: 4505) /* unreferenced function with internal linkage has been removed */
-#endif
-#include "vpx/vpx_encoder.h"
-#include "vpx/vp8cx.h"
-#ifdef _MSC_VER
-	#pragma warning(pop)
-#endif
-
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "vpx/vp8cx.h"
+#include "vpx/vpx_encoder.h"
 #include "Vulkan/Buffer.hpp"
-#include "Vulkan/CommandPool.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
+#ifdef _MSC_VER
+	#pragma warning(push)
+	#pragma warning(disable: 4505) /* unreferenced function with internal linkage has been removed */
+#endif
+#ifdef _MSC_VER
+	#pragma warning(pop)
+#endif
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics

@@ -29,8 +29,8 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstdint>
-#include <memory>
 #include <map>
+#include <memory>
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderableInstance/Abstract.hpp"

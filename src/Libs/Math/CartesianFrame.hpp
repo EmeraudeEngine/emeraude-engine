@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
 #include <sstream>
 #include <string>
 #include <type_traits>

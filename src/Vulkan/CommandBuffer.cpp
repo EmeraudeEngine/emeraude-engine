@@ -26,32 +26,33 @@
 
 #include "CommandBuffer.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 #include <memory>
 #include <span>
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Interface.hpp"
-#include "Sync/Event.hpp"
-#include "Sync/MemoryBarrier.hpp"
-#include "Sync/ImageMemoryBarrier.hpp"
-#include "Sync/BufferMemoryBarrier.hpp"
-#include "PipelineLayout.hpp"
-#include "DescriptorSet.hpp"
-#include "IndexBufferObject.hpp"
-#include "ComputePipeline.hpp"
-#include "GraphicsPipeline.hpp"
 #include "Buffer.hpp"
+#include "ComputePipeline.hpp"
+#include "DescriptorSet.hpp"
+#include "Framebuffer.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "GraphicsPipeline.hpp"
+#include "Image.hpp"
+#include "IndexBufferObject.hpp"
+#include "PipelineLayout.hpp"
+#include "Sync/BufferMemoryBarrier.hpp"
+#include "Sync/Event.hpp"
+#include "Sync/ImageMemoryBarrier.hpp"
+#include "Sync/MemoryBarrier.hpp"
+#include "Tracer.hpp"
 #include "Utility.hpp"
 #include "VertexBufferObject.hpp"
-#include "Framebuffer.hpp"
-#include "Image.hpp"
-#include "Tracer.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Vulkan
 {

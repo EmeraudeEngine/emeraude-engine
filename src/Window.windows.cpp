@@ -24,21 +24,18 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "Window.hpp"
 
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include "GLFW/glfw3native.h"
-
-#include <vulkan/vulkan_win32.h>
 #include <shobjidl.h>
+#include <vulkan/vulkan_win32.h>
 
 /* Local inclusions. */
-#include "Vulkan/Utility.hpp"
-#include "Vulkan/Instance.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Instance.hpp"
+#include "Vulkan/Utility.hpp"
 
 namespace EmEn
 {

@@ -28,16 +28,16 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <unordered_map>
 #include <typeindex>
+#include <unordered_map>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Console/ControllableTrait.hpp"
-#include "ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Container.hpp"
+#include "ResourceTrait.hpp"
 
 /* Forward declarations. */
 namespace EmEn

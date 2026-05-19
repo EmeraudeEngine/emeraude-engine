@@ -26,9 +26,6 @@
 
 #include "UserInfo.hpp"
 
-/* STL inclusions. */
-#include <sstream>
-
 namespace EmEn::PlatformSpecific
 {
 	bool

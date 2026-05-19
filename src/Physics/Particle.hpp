@@ -26,14 +26,14 @@
 
 #pragma once
 
-/* STL inclusions */
+/* STL inclusions. */
 #include <cstdint>
 #include <memory>
 
 /* Local inclusions for inheritances. */
 #include "Scenes/LocatableInterface.hpp"
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Graphics/Frustum.hpp"
 #include "Scenes/Component/Abstract.hpp"
 #include "Scenes/Component/AbstractModifier.hpp"

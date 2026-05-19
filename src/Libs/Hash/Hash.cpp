@@ -27,17 +27,17 @@
 #include "Hash.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <array>
 #include <string>
 
 /* Local inclusions. */
+#include "CRC32.hpp"
 #include "MD5.hpp"
 #include "SHA256.hpp"
 #include "SHA512.hpp"
-#include "CRC32.hpp"
 
 namespace EmEn::Libs::Hash
 {

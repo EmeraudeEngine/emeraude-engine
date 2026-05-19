@@ -27,8 +27,8 @@
 #include "Compressor.hpp"
 
 /* STL inclusions. */
-#include <iostream>
 #include <array>
+#include <iostream>
 
 namespace EmEn::Libs::Compression::LZMA
 {

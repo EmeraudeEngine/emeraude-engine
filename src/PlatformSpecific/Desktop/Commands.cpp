@@ -28,8 +28,8 @@
 
 /* Local inclusions. */
 #include "Libs/Network/URL.hpp"
-#include "Settings.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop

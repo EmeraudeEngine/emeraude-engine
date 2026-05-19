@@ -32,10 +32,11 @@
 /* STL inclusions. */
 #include <sstream>
 
-/* Conditional std::format support (not available on macOS SDK < 13.3). */
 #if !IS_MACOS
 #include <format>
 #endif
+
+/* Conditional std::format support (not available on macOS SDK < 13.3). */
 
 namespace EmEn::Libs
 {

@@ -27,10 +27,10 @@
 #include "PostProcessing.hpp"
 
 /* Local inclusions. */
-#include "Graphics/PostProcessor.hpp"
 #include "Graphics/DirectPostProcessEffect.hpp"
-#include "Graphics/Renderer.hpp"
+#include "Graphics/PostProcessor.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Libs/Hash/FNV1a.hpp"
 #include "Libs/SourceCodeParser.hpp"
 #include "Saphir/Code.hpp"

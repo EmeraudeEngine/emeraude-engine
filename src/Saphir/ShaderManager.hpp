@@ -26,8 +26,6 @@
 
 #pragma once
 
-/* Project configuration files. */
-
 /* STL inclusions. */
 #include <array>
 #include <cstddef>
@@ -39,16 +37,16 @@
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
-#include "DirStackFileIncluder.hpp"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/Types.hpp"
+#include "DirStackFileIncluder.hpp"
 #include "Saphir/Program.hpp"
 #include "Types.hpp"
+#include "Vulkan/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn

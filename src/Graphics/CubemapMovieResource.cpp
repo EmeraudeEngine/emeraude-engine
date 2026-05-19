@@ -26,25 +26,22 @@
 
 #include "CubemapMovieResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numeric>
 #include <ranges>
 
-/* Third-Party inclusions. */
-#include "json/json.h"
-
 /* Local inclusions. */
+#include "CubemapResource.hpp"
 #include "Libs/Algorithms/PerlinNoise.hpp"
 #include "Libs/Algorithms/VoronoiNoise.hpp"
-#include "Libs/ThreadPool.hpp"
 #include "Libs/FastJSON.hpp"
-#include "Resources/Manager.hpp"
-#include "CubemapResource.hpp"
-
-#include "emeraude_config.hpp"
+#include "Libs/ThreadPool.hpp"
 
 namespace EmEn::Graphics
 {

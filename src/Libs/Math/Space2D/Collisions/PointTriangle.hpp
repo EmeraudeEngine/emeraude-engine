@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/Math/Space2D/Triangle.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/Point.hpp"
+#include "Libs/Math/Space2D/Triangle.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {

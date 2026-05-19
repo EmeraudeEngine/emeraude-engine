@@ -27,12 +27,12 @@
 #include "TransferManager.hpp"
 
 /* Local inclusions. */
-#include "Sync/ImageMemoryBarrier.hpp"
-#include "Sync/Fence.hpp"
+#include "Buffer.hpp"
 #include "CommandBuffer.hpp"
 #include "Device.hpp"
-#include "Buffer.hpp"
 #include "Image.hpp"
+#include "Sync/Fence.hpp"
+#include "Sync/ImageMemoryBarrier.hpp"
 
 namespace EmEn::Vulkan
 {

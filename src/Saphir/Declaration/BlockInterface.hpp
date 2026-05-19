@@ -31,6 +31,8 @@
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
+
+/* Local inclusions for usages. */
 #include "Structure.hpp"
 
 namespace EmEn::Saphir::Declaration

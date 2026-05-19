@@ -29,10 +29,10 @@
 /* Local inclusions. */
 #include "Libs/WaveFactory/FileIO.hpp"
 #include "Libs/WaveFactory/Processor.hpp"
-#include "Libs/WaveFactory/Synthesizer.hpp"
 #include "Libs/WaveFactory/SFXScript.hpp"
-#include "Resources/Manager.hpp"
+#include "Libs/WaveFactory/Synthesizer.hpp"
 #include "Manager.hpp"
+#include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio

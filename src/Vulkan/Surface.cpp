@@ -30,9 +30,9 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include "Device.hpp"
 #include "Instance.hpp"
 #include "PhysicalDevice.hpp"
-#include "Device.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan

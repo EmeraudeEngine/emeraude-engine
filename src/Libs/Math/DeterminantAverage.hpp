@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <type_traits>
 #include <vector>
-#include <algorithm>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Base.hpp"
 
 namespace EmEn::Libs::Math

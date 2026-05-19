@@ -112,17 +112,17 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
+#include <any>
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <array>
-#include <vector>
 #include <string>
-#include <any>
-#include <atomic>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
@@ -139,13 +139,13 @@
 #include "Identification.hpp"
 #include "Input/Manager.hpp"
 #include "Notifier.hpp"
-#include "SystemNotification.hpp"
 #include "Overlay/Manager.hpp"
 #include "Physics/Manager.hpp"
 #include "PlatformManager.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Manager.hpp"
+#include "SystemNotification.hpp"
 #include "User.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Window.hpp"

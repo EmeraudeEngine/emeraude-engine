@@ -28,8 +28,8 @@
 
 /* Local inclusions. */
 #include "CoreTypes.hpp"
-#include "Scenes/Scene.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::Component

@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
+#include <iostream>
 #include <string>
 #include <utility>
-#include <iostream>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Time/Types.hpp"
 
 namespace EmEn::Libs::Time::Elapsed

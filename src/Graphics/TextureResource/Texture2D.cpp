@@ -27,13 +27,12 @@
 #include "Texture2D.hpp"
 
 /* Local inclusions. */
-#include "Resources/Manager.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
+#include "Resources/Manager.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {

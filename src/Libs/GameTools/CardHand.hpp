@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <vector>
 #include <algorithm>
+#include <cstddef>
 #include <random>
+#include <vector>
 
 namespace EmEn::Libs::GameTools
 {

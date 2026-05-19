@@ -24,6 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
 #if IS_LINUX

@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <any>
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <memory>
 #include <mutex>
 #include <string>

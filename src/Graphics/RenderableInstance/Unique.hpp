@@ -32,10 +32,10 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Graphics/Renderable/Abstract.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {

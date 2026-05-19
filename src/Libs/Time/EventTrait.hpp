@@ -28,17 +28,17 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <functional>
 #include <iostream>
-#include <tuple>
-#include <utility>
 #include <map>
 #include <ranges>
-#include <functional>
 #include <ratio>
+#include <tuple>
+#include <utility>
 
-/* Local Inclusions. */
-#include "Types.hpp"
+/* Local inclusions for usages. */
 #include "TimedEvent.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Libs::Time
 {

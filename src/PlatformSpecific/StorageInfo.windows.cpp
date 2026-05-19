@@ -26,15 +26,13 @@
 
 #include "StorageInfo.hpp"
 
-/* Windows inclusions. */
+/* Third-party inclusions. */
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-
 #include <Windows.h>
 
 namespace EmEn::PlatformSpecific::StorageInfo

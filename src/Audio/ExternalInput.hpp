@@ -29,19 +29,19 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <thread>
 #include <vector>
-#include <filesystem>
-
-/* Local inclusions for inheritances. */
-#include "ServiceInterface.hpp"
 
 /* Third-party inclusions. */
 #include "AL/al.h"
 #include "AL/alc.h"
 
-/* Local inclusions. */
+/* Local inclusions for inheritances. */
+#include "ServiceInterface.hpp"
+
+/* Local inclusions for usages. */
 #include "Libs/WaveFactory/Types.hpp"
 
 /* Forward declarations. */

@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <random>
 #include <vector>
-#include <array>
 
 namespace EmEn::Libs
 {

@@ -30,8 +30,6 @@
 #include <algorithm>
 
 /* Local inclusions. */
-#include "Physics/CollisionModelInterface.hpp"
-#include "Physics/AABBCollisionModel.hpp"
 #include "Component/Camera.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
@@ -44,6 +42,8 @@
 #include "Component/SpotLight.hpp"
 #include "Component/Visual.hpp"
 #include "Component/Weight.hpp"
+#include "Physics/AABBCollisionModel.hpp"
+#include "Physics/CollisionModelInterface.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes

@@ -27,46 +27,44 @@
 #pragma once
 
 /* STL inclusions. */
+#include <any>
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 #include <map>
-#include <vector>
-#include <set>
-#include <unordered_set>
-#include <string>
-#include <any>
 #include <memory>
 #include <mutex>
+#include <set>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
-#include "Libs/ObserverTrait.hpp"
 #include "Libs/Time/EventTrait.hpp"
+#include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Audio/Ambience.hpp"
-#include "Libs/Randomizer.hpp"
+#include "Component/Visual.hpp"
 #include "Graphics/PostProcessStack.hpp"
-#include "Graphics/Renderable/AbstractBackground.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
-#include "Physics/ConstraintSolver.hpp"
-#include "Scenes/AVConsole/Manager.hpp"
-#include "Component/Visual.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "GroundLevelInterface.hpp"
-#include "SeaLevelInterface.hpp"
+#include "Libs/Randomizer.hpp"
 #include "LightSet.hpp"
-#include "OctreeSector.hpp"
-#include "StaticEntity.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
+#include "OctreeSector.hpp"
+#include "Physics/ConstraintSolver.hpp"
 #include "RenderBatch.hpp"
-
-/* Local inclusions for usages (scene metadata / ray tracing). */
 #include "SceneMetaData.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "SeaLevelInterface.hpp"
+#include "StaticEntity.hpp"
 
 /* Forward Declarations */
 namespace EmEn

@@ -31,11 +31,11 @@
 #include <iostream>
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/Synthesizer.hpp"
 #include "Libs/Math/Base.hpp"
-#include "SettingKeys.hpp"
-#include "Resources/Manager.hpp"
+#include "Libs/WaveFactory/Synthesizer.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Manager.hpp"
+#include "SettingKeys.hpp"
 #include "SoundResource.hpp"
 #include "Source.hpp"
 #include "Utility.hpp"

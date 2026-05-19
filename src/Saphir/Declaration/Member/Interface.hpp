@@ -31,8 +31,8 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Saphir/Keys.hpp"
 #include "Saphir/Declaration/Types.hpp"
+#include "Saphir/Keys.hpp"
 
 namespace EmEn::Saphir::Declaration::Member
 {

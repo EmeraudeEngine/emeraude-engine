@@ -26,10 +26,10 @@
 
 #pragma once
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/Line.hpp"
-#include "Libs/Math/Space2D/Triangle.hpp"
 #include "Libs/Math/Space2D/Segment.hpp"
+#include "Libs/Math/Space2D/Triangle.hpp"
 #include "Libs/StaticVector.hpp"
 #include "SegmentSegment.hpp"
 

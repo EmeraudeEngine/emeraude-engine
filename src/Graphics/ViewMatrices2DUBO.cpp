@@ -26,6 +26,9 @@
 
 #include "ViewMatrices2DUBO.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
@@ -33,9 +36,6 @@
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
-
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics
 {

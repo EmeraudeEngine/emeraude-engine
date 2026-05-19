@@ -29,7 +29,7 @@
 /* STL inclusions. */
 #include <type_traits>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Libs::VertexFactory

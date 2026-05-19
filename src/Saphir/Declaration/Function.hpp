@@ -33,7 +33,7 @@
 #include "Interface.hpp"
 #include "../CodeGeneratorInterface.hpp"
 
-/* Local inclusions for usage. */
+/* Local inclusions for usages. */
 #include "Libs/BlobTrait.hpp"
 
 namespace EmEn::Saphir::Declaration

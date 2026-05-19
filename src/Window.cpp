@@ -26,16 +26,17 @@
 
 #include "Window.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cmath>
 
 /* Local inclusions. */
-#include "Vulkan/Instance.hpp"
-#include "PrimaryServices.hpp"
 #include "PlatformManager.hpp"
+#include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
-
-#include "emeraude_config.hpp"
+#include "Vulkan/Instance.hpp"
 
 namespace EmEn
 {

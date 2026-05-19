@@ -27,15 +27,16 @@
 #pragma once
 
 /* STL inclusions. */
+#include <any>
 #include <cstddef>
 #include <mutex>
 #include <set>
-#include <any>
 
-/* Local inclusions for usages */
+/* Local inclusions. */
 #include "Libs/Hash/FNV1a.hpp"
 
 /* Forward declarations. */
+
 namespace EmEn::Libs
 {
 	class ObserverTrait;

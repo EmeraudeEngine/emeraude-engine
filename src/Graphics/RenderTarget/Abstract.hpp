@@ -38,12 +38,11 @@
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
-#include "Vulkan/Sync/Semaphore.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Types.hpp"
+#include "Libs/PixelFactory/Pixmap.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics

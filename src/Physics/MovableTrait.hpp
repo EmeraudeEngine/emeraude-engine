@@ -31,8 +31,8 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "EnvironmentPhysicalProperties.hpp"
 #include "BodyPhysicalProperties.hpp"
+#include "EnvironmentPhysicalProperties.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Scenes

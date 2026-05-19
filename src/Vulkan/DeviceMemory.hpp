@@ -30,7 +30,7 @@
 #include <cstddef>
 #include <memory>
 
-/* Local inclusions. */
+/* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 namespace EmEn::Vulkan

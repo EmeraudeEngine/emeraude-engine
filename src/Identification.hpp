@@ -26,17 +26,17 @@
 
 #pragma once
 
-/* Engine configuration file. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 #include <string>
-#include <ranges>
 
 /* Local inclusions for usages. */
-#include "Libs/Version.hpp"
 #include "Libs/String.hpp"
+#include "Libs/Version.hpp"
 
 namespace EmEn
 {

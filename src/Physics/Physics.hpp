@@ -31,8 +31,8 @@
 
 /* Local inclusions for usages. */
 #include "Constants.hpp"
-#include "Libs/Math/Vector.hpp"
 #include "Libs/Math/Matrix.hpp"
+#include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Physics
 {

@@ -29,8 +29,8 @@
 /* Local inclusions. */
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
 #include "PlatformSpecific/Desktop/Notification.hpp"
-#include "Settings.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn

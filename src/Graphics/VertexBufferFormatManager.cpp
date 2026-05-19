@@ -32,8 +32,8 @@
 /* Local inclusions. */
 #include "Graphics/Geometry/Interface.hpp"
 #include "Saphir/VertexShader.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics
 {

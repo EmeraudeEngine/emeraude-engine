@@ -32,13 +32,13 @@
 #include <iostream>
 #include <type_traits>
 
-/* Local inclusions for usages. */
-#include "Libs/IO/IO.hpp"
+/* Local inclusions. */
 #include "FileFormatJpeg.hpp"
 #include "FileFormatPNG.hpp"
 #include "FileFormatTarga.hpp"
-#include "Libs/IO/FileStream.hpp"
 #include "IOCommon.hpp"
+#include "Libs/IO/FileStream.hpp"
+#include "Libs/IO/IO.hpp"
 #include "Pixmap.hpp"
 
 namespace EmEn::Libs::PixelFactory::FileIO

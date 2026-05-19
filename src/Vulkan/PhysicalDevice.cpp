@@ -27,14 +27,14 @@
 #include "PhysicalDevice.hpp"
 
 /* STL inclusions. */
-#include <sstream>
 #include <iomanip>
 #include <iterator>
+#include <sstream>
 
 /* Local inclusions. */
 #include "Libs/String.hpp"
-#include "Utility.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

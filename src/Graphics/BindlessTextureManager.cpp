@@ -31,13 +31,13 @@
 
 /* Local inclusions. */
 #include "Renderer.hpp"
-#include "Vulkan/Device.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TextureInterface.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {

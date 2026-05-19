@@ -30,7 +30,7 @@
 #include <cstdint>
 #include <type_traits>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Libs/IO/ByteStream.hpp"
 #include "Types.hpp"
 #include "Wave.hpp"

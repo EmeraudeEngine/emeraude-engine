@@ -26,26 +26,25 @@
 
 #include "ShaderManager.hpp"
 
+/* Project configuration. */
+#include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
-#include "Libs/TokenFormatter.hpp"
-
-
+#include <algorithm>
 #include <charconv>
 #include <string>
-#include <algorithm>
 
 /* Third-party inclusions. */
 #include <glslang/SPIRV/GlslangToSpv.h>
 
 /* Local inclusions. */
-#include "Libs/SourceCodeParser.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Vulkan/ShaderModule.hpp"
 #include "AbstractShader.hpp"
+#include "Libs/IO/IO.hpp"
+#include "Libs/SourceCodeParser.hpp"
+#include "Libs/TokenFormatter.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
-
-#include "Libs/emeraude_platform.hpp"
+#include "Vulkan/ShaderModule.hpp"
 
 namespace EmEn::Saphir
 {

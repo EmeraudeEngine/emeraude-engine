@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <vector>
 
 /* Local inclusions for inheritances. */

@@ -33,9 +33,9 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Space3D/AACuboid.hpp"
 #include "CartesianFrame.hpp"
 #include "Range.hpp"
+#include "Space3D/AACuboid.hpp"
 
 namespace EmEn::Libs::Math
 {

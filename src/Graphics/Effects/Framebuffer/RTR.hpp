@@ -38,7 +38,6 @@
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
-
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**

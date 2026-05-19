@@ -27,22 +27,22 @@
 #pragma once
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <atomic>
-#include <string>
-#include <vector>
+#include <filesystem>
 #include <memory>
 #include <mutex>
-#include <filesystem>
-#include <typeindex>
+#include <string>
 #include <type_traits>
+#include <typeindex>
+#include <vector>
 
 /* Third-party inclusions. */
+#include "json/json.h"
 #ifndef JSON_USE_EXCEPTION
 #define JSON_USE_EXCEPTION 0
 #endif
-#include "json/json.h"
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"

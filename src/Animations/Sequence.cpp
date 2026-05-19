@@ -33,9 +33,9 @@
 #include <utility>
 
 /* Local inclusions. */
+#include "Constants.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "Constants.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Animations

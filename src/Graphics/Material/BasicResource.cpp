@@ -31,16 +31,15 @@
 
 /* Local inclusions. */
 #include "GPURTMaterialData.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Saphir/LightGenerator.hpp"
-#include "Saphir/Generator/Abstract.hpp"
-#include "Saphir/Code.hpp"
-#include "Saphir/Keys.hpp"
-#include "Vulkan/LayoutManager.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Resources/Manager.hpp"
 #include "Helpers.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Saphir/Code.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/LightGenerator.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/LayoutManager.hpp"
 
 namespace EmEn::Graphics::Material
 {

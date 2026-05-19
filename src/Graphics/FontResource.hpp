@@ -29,7 +29,7 @@
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/PixelFactory/Font.hpp"
 #include "Resources/Container.hpp"
 

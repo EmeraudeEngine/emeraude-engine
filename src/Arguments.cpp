@@ -26,13 +26,14 @@
 
 #include "Arguments.hpp"
 
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 
 /* Local inclusions. */
+#include "Libs/String.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
 #endif
-#include "Libs/String.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn

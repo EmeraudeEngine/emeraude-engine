@@ -33,15 +33,14 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Libs/Time/EventTrait.hpp"
 
-/* Local inclusions for usages */
+/* Local inclusions for usages. */
 #include "Libs/PixelFactory/TextProcessor.hpp"
+#include "Libs/Time/EventTrait.hpp"
 #include "Overlay/Manager.hpp"
 #include "Overlay/Surface.hpp"
 #include "Resources/Manager.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class FontResource;

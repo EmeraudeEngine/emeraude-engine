@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <array>
 #include <string>
 
-/* Local usages. */
+/* Local inclusions for usages. */
 #include "Libs/PixelFactory/Pixmap.hpp"
 
 namespace EmEn::Graphics

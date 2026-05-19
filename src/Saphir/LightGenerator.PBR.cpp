@@ -27,12 +27,12 @@
 #include "LightGenerator.hpp"
 
 /* Local inclusions. */
-#include "Declaration/OutputBlock.hpp"
+#include "Code.hpp"
 #include "Declaration/Function.hpp"
+#include "Declaration/OutputBlock.hpp"
 #include "Declaration/Sampler.hpp"
 #include "Declaration/SpecializationConstant.hpp"
 #include "Generator/Abstract.hpp"
-#include "Code.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 
 namespace EmEn::Saphir

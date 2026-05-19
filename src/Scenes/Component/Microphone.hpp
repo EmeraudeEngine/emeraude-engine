@@ -30,8 +30,8 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 namespace EmEn::Scenes::Component
 {

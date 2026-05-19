@@ -30,8 +30,10 @@
 #include <array>
 #include <cstdint>
 
-/* Local inclusions for inheritances */
+/* Local inclusions for inheritances. */
 #include "Libs/FlagTrait.hpp"
+
+/* Local inclusions for usages. */
 #include "Helpers.hpp"
 
 namespace EmEn::Graphics::Geometry

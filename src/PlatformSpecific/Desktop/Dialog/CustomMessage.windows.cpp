@@ -29,17 +29,14 @@
 /* STL inclusions. */
 #include <vector>
 
+/* Third-party inclusions. */
+#include <CommCtrl.h>
+#pragma comment(lib, "Comctl32.lib")
+#pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
 /* Local inclusions. */
 #include "PlatformSpecific/Helpers.hpp"
 #include "Window.hpp"
-
-/* Windows inclusions. */
-#include <CommCtrl.h>
-#pragma comment(lib, "Comctl32.lib")
-
-/* Manifest dependency for Common Controls v6 (required for TaskDialogIndirect).
- * This pragma injects the dependency into any executable linking with this library. */
-#pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {

@@ -28,7 +28,6 @@
 
 /* Local inclusions. */
 #include "Libs/VertexFactory/ShapeGenerator.hpp"
-#include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

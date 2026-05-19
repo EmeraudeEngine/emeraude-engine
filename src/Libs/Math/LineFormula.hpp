@@ -28,10 +28,10 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <vector>
 #include <type_traits>
+#include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Base.hpp"
 #include "Vector.hpp"
 

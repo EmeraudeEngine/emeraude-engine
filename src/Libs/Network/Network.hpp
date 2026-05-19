@@ -26,13 +26,10 @@
 
 #pragma once
 
-/* Engine configuration file. */
-
 /* STL inclusions. */
-#include <string>
 #include <filesystem>
+#include <string>
 
-/* Third party inclusions. */
 /* NOTE: asio_throw_exception.hpp MUST be included before asio.hpp.
  * It defines ASIO_STANDALONE, ASIO_NO_EXCEPTIONS, and provides
  * the custom throw_exception() function required when exceptions are disabled. */

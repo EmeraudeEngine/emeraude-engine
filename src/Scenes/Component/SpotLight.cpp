@@ -31,8 +31,8 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
-#include "Resources/ResourceTrait.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/LightSet.hpp"

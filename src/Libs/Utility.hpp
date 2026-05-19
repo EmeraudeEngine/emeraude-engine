@@ -27,14 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm> // std::any_of
+#include <chrono>
+#include <cmath> // std::pow, std::round
 #include <cstdint>
 #include <cstdlib> // std::rand
-#include <cmath> // std::pow, std::round
-#include <type_traits>
 #include <functional> // std::function
-#include <algorithm> // std::any_of
+#include <type_traits>
 #include <vector>
-#include <chrono>
 
 namespace EmEn::Libs::Utility
 {

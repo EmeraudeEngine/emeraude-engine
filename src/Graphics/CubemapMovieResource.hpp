@@ -30,13 +30,11 @@
 #include <utility>
 #include <vector>
 
-/* Third-Party inclusions. */
-#include "json/json.h"
-
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
+#include "json/json.h"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"

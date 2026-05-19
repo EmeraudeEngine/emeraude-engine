@@ -29,7 +29,7 @@
 /* STL inclusions. */
 #include <memory>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Buffer.hpp"
 
 namespace EmEn::Audio

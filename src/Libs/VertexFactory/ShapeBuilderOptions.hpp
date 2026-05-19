@@ -26,8 +26,6 @@
 
 #pragma once
 
-/* Engine configuration. */
-
 /* STL inclusions. */
 #include <array>
 #include <ostream>

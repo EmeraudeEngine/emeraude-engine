@@ -26,11 +26,11 @@
 
 #include "BasicSeaResource.hpp"
 
-/* Local inclusions. */
-#include "Resources/Manager.hpp"
-#include "Graphics/Material/BasicResource.hpp"
-
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
+/* Local inclusions. */
+#include "Graphics/Material/BasicResource.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

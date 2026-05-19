@@ -28,13 +28,13 @@
 
 /* STL inclusions. */
 #include <cstddef>
+#include <iostream>
 #include <map>
 #include <memory>
-#include <string>
 #include <stack>
-#include <iostream>
+#include <string>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Math/CartesianFrame.hpp"
 
 namespace EmEn::Libs

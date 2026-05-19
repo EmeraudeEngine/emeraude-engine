@@ -35,7 +35,7 @@
 #include <unordered_map>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Plane.hpp"
 #include "Shape.hpp"
 #include "ShapeProcessor.hpp"

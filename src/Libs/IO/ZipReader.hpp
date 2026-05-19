@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <filesystem>
-#include <vector>
 #include <string>
+#include <vector>
 
 /* Third-party inclusions. */
 #include <zip.h>

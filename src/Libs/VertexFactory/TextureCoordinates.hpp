@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <type_traits>
 #include <numbers>
+#include <type_traits>
 
 /* Local inclusions for usages. */
 #include "Libs/Math/Base.hpp"

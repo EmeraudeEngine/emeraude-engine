@@ -30,7 +30,7 @@
 #include <cstdint>
 #include <type_traits>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
 #include "ShapeBuilder.hpp"
 

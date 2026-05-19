@@ -26,18 +26,16 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
-/* Engine configuration file. */
 
 /* STL inclusions. */
 #include <cstdint>
 #include <iostream>
 #include <type_traits>
 
-#ifdef LIBSNDFILE_ENABLED
 /* Third-party inclusions. */
+#ifdef LIBSNDFILE_ENABLED
 #include "sndfile.h"
 #endif
 

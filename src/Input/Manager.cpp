@@ -26,26 +26,26 @@
 
 #include "Manager.hpp"
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 #include <utility>
 
-/* Third-party libraries */
+/* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
-#include "Libs/Utility.hpp"
-#include "Libs/IO/IO.hpp"
+#include "Console/Command.hpp"
 #include "GamepadController.hpp"
 #include "JoystickController.hpp"
+#include "Libs/IO/IO.hpp"
+#include "Libs/Utility.hpp"
 #include "PrimaryServices.hpp"
-#include "Window.hpp"
 #include "SettingKeys.hpp"
-#include "Console/Command.hpp"
+#include "Window.hpp"
 
 namespace EmEn::Input
 {

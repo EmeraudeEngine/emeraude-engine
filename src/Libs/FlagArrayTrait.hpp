@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
 #include <array>
+#include <cstddef>
 
 namespace EmEn::Libs
 {

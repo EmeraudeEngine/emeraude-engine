@@ -26,17 +26,17 @@
 
 #pragma once
 
-/* STL inclusions */
+/* STL inclusions. */
 #include <array>
 #include <string_view>
 
-/* Local inclusions. */
-#include "VertexResource.hpp"
-#include "IndexedVertexResource.hpp"
-#include "RawVertexResource.hpp"
-#include "RawIndexedVertexResource.hpp"
-#include "VertexGridResource.hpp"
+/* Local inclusions for usages. */
 #include "AdaptiveVertexGridResource.hpp"
+#include "IndexedVertexResource.hpp"
+#include "RawIndexedVertexResource.hpp"
+#include "RawVertexResource.hpp"
+#include "VertexGridResource.hpp"
+#include "VertexResource.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

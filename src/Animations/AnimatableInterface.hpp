@@ -32,8 +32,8 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "Libs/Variant.hpp"
 #include "AnimationInterface.hpp"
+#include "Libs/Variant.hpp"
 
 namespace EmEn::Animations
 {

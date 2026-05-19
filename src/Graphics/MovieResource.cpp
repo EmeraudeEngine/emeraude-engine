@@ -26,23 +26,20 @@
 
 #include "MovieResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <array>
 #include <algorithm>
+#include <array>
 #include <numeric>
 #include <ranges>
 
-/* Third-Party inclusions. */
-#include "json/json.h"
-
 /* Local inclusions. */
-#include "Libs/Algorithms/PerlinNoise.hpp"
-#include "Libs/ThreadPool.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Resources/Manager.hpp"
 #include "ImageResource.hpp"
-
-#include "emeraude_config.hpp"
+#include "Libs/Algorithms/PerlinNoise.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Libs/ThreadPool.hpp"
 
 namespace EmEn::Graphics
 {

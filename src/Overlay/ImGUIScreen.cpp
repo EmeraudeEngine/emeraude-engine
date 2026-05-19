@@ -28,6 +28,9 @@
 
 #ifdef IMGUI_ENABLED
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Third-party inclusions. */
 #include "imgui.h"
 #include "backends/imgui_impl_vulkan.h"
@@ -35,8 +38,6 @@
 
 /* Local inclusions. */
 #include "Vulkan/CommandBuffer.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Overlay
 {

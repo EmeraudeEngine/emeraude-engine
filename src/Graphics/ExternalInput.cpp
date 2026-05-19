@@ -26,13 +26,13 @@
 
 #include "ExternalInput.hpp"
 
+/* STL inclusions. */
+#include <span>
+
 /* Local inclusions. */
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
-
-/* STL inclusions. */
-#include <span>
 
 namespace EmEn::Graphics
 {

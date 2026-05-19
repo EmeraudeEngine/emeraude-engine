@@ -41,8 +41,8 @@
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Physics.hpp"
 #include "Libs/Math/Matrix.hpp"
+#include "Physics.hpp"
 
 namespace EmEn::Physics
 {

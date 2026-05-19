@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cmath>
-#include <string>
+#include <cstdint>
 #include <sstream>
+#include <string>
 
 namespace EmEn::Overlay
 {

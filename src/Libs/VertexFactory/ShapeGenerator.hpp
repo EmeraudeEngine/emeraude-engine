@@ -27,15 +27,15 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
-#include <cmath>
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
 
 /* Local inclusions for usages. */
 #include "CapUVMapping.hpp"
-#include "ShapeBuilder.hpp"
 #include "ShapeAssembler.hpp"
+#include "ShapeBuilder.hpp"
 
 namespace EmEn::Libs::VertexFactory::ShapeGenerator
 {

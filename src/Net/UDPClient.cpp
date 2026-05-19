@@ -33,7 +33,7 @@
 #include <sstream>
 #include <utility>
 
-/* Platform-specific socket inclusions. */
+/* Third-party inclusions. */
 #ifdef _WIN32
 	#ifndef NOMINMAX
 	#define NOMINMAX

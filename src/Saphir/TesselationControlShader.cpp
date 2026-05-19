@@ -30,8 +30,8 @@
 #include <algorithm>
 
 /* Local inclusions. */
-#include "VertexShader.hpp"
 #include "Tracer.hpp"
+#include "VertexShader.hpp"
 
 namespace EmEn::Saphir
 {

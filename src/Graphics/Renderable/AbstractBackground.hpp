@@ -30,10 +30,9 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Libs/PixelFactory/Color.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Graphics::TextureResource
 {
 	class TextureCubemap;

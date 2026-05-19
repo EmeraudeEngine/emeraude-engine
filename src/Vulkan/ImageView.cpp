@@ -29,8 +29,8 @@
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Image.hpp"
-#include "Utility.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

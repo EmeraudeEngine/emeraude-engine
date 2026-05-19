@@ -27,9 +27,9 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Sync/Fence.hpp"
 #include "Buffer.hpp"
 #include "CommandBuffer.hpp"
+#include "Sync/Fence.hpp"
 
 namespace EmEn::Vulkan
 {

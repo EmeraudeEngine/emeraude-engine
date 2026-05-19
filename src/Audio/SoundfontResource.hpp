@@ -34,7 +34,7 @@
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
-/* Local inclusions for usage. */
+/* Local inclusions for usages. */
 #include "Resources/Container.hpp"
 
 /* Forward declaration for TinySoundFont. */

@@ -26,15 +26,15 @@
 
 #include "ImageResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/FileIO.hpp"
 #include "Libs/PixelFactory/Processor.hpp"
 #include "TextureResource/Abstract.hpp"
-#include "Resources/Manager.hpp"
 #include "Tracer.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics
 {

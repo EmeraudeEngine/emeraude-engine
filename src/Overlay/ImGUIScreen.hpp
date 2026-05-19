@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Application configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 #ifdef IMGUI_ENABLED

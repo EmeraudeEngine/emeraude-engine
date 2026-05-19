@@ -32,8 +32,8 @@
 
 /* Local inclusions. */
 #include "Manager.hpp"
-#include "Utility.hpp"
 #include "Tracer.hpp"
+#include "Utility.hpp"
 
 namespace EmEn::Audio
 {

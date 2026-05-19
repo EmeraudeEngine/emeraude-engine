@@ -26,23 +26,20 @@
 
 #pragma once
 
-/* Application configuration. */
-
 /* STL inclusions. */
-#include <vector>
-#include <string>
 #include <filesystem>
 #include <iostream>
+#include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "PlatformSpecific/UserInfo.hpp"
 #include "Identification.hpp"
+#include "PlatformSpecific/UserInfo.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Arguments;

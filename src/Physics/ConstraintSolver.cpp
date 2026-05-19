@@ -27,14 +27,14 @@
 #include "ConstraintSolver.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <vector>
-#include <algorithm>
 
 /* Local inclusions. */
 #include "Constants.hpp"
-#include "Libs/Math/Vector.hpp"
 #include "ContactManifold.hpp"
+#include "Libs/Math/Vector.hpp"
 #include "MovableTrait.hpp"
 
 namespace EmEn::Physics

@@ -26,14 +26,15 @@
 
 #include "BaseInformation.hpp"
 
-/* Local inclusions. */
-#include "Libs/Network/URL.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Libs/String.hpp"
-#include "FileSystem.hpp"
-#include "Tracer.hpp"
-
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
+
+/* Local inclusions. */
+#include "FileSystem.hpp"
+#include "Libs/IO/IO.hpp"
+#include "Libs/Network/URL.hpp"
+#include "Libs/String.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Resources
 {

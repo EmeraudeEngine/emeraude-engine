@@ -30,7 +30,6 @@
 #include <array>
 #include <cstdio>
 #include <sstream>
-#include <algorithm>
 
 namespace EmEn::Net::WiFiScanner
 {

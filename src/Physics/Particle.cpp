@@ -27,7 +27,6 @@
 #include "Particle.hpp"
 
 /* Local inclusions. */
-#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Physics

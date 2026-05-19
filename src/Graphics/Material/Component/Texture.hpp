@@ -26,9 +26,9 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -38,12 +38,11 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/Types.hpp"
+#include "Libs/Math/Vector.hpp"
 #include "Saphir/Keys.hpp"
 
-/* Forward declarations */
 namespace EmEn::Resources
 {
 	class Manager;

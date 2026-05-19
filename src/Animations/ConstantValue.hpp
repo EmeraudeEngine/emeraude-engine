@@ -26,9 +26,11 @@
 
 #pragma once
 
+/* Local inclusions for inheritances. */
+#include "AnimationInterface.hpp"
+
 /* Local inclusions for usages. */
 #include "Libs/Variant.hpp"
-#include "AnimationInterface.hpp"
 
 namespace EmEn::Animations
 {

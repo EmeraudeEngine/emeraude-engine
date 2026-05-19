@@ -24,6 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+
 /* Information
 
 struct timespec timer = begin_timer();
@@ -39,7 +40,7 @@ printf("Time elapsed : %ld ns\n", delay);
 #pragma once
 
 
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
 #if IS_LINUX
 

@@ -27,16 +27,16 @@
 #pragma once
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <mutex>
-#include <unordered_set>
 #include <string>
-#include <atomic>
+#include <unordered_set>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
 #include "CoreTypes.hpp"
+#include "Libs/Math/CartesianFrame.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Scenes::AVConsole

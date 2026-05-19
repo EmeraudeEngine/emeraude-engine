@@ -34,13 +34,13 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "Libs/ObserverTrait.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
+#include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Scenes/AVConsole/Types.hpp"
-#include "Graphics/RenderTarget/ShadowMap.hpp"
 
 /* Forward declarations. */
 namespace EmEn

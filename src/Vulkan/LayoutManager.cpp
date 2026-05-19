@@ -30,9 +30,9 @@
 #include <mutex>
 
 /* Local inclusions. */
+#include "DescriptorSetLayout.hpp"
 #include "Device.hpp"
 #include "PipelineLayout.hpp"
-#include "DescriptorSetLayout.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan

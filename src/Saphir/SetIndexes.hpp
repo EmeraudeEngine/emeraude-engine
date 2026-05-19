@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
-#include <vector>
-#include <string>
-#include <sstream>
 #include <algorithm>
+#include <cstdint>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace EmEn::Saphir
 {

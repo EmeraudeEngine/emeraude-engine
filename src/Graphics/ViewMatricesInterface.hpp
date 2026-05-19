@@ -27,12 +27,11 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Vulkan/DescriptorSet.hpp"
 #include "Frustum.hpp"
+#include "Libs/Math/CartesianFrame.hpp"
+#include "Libs/PixelFactory/Color.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class Renderer;

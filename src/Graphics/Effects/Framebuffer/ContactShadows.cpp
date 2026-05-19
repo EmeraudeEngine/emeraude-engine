@@ -31,20 +31,16 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
-#include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/ShaderModule.hpp"
-#include "Tracer.hpp"
 
-/* Defining the resource owner of this translation unit. */
-/* NOLINTBEGIN(cert-err58-cpp) : We need static strings. */
 static constexpr auto TracerTag{"ContactShadowsEffect"};
 /* NOLINTEND(cert-err58-cpp) */
 

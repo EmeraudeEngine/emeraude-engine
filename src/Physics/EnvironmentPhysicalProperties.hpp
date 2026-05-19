@@ -30,8 +30,8 @@
 #include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions for usages. */
-#include "Physics.hpp"
 #include "Audio/Types.hpp"
+#include "Physics.hpp"
 
 namespace EmEn::Physics
 {

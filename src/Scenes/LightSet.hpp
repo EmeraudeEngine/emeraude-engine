@@ -28,23 +28,21 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <set>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 
 /* Local inclusions for inheritances. */
 #include "Libs/ObservableTrait.hpp"
 
-/* Local inclusions for usage. */
+/* Local inclusions for usages. */
 #include "Component/DirectionalLight.hpp"
 #include "Component/PointLight.hpp"
 #include "Component/SpotLight.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Saphir/StaticLighting.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-
-/* Local inclusions for usage. */
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 
 /* Forward declarations. */

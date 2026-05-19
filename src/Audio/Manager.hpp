@@ -34,20 +34,18 @@
 #include <string>
 #include <vector>
 
-/* Third-party inclusions. */
-#include "OpenALExtensions.hpp"
-
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Libs/ObservableTrait.hpp"
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/WaveFactory/Types.hpp"
-#include "Physics/EnvironmentPhysicalProperties.hpp"
-#include "Audio/TrackMixer.hpp"
 #include "Audio/ExternalInput.hpp"
 #include "Audio/Recorder.hpp"
+#include "Audio/TrackMixer.hpp"
+#include "Libs/WaveFactory/Types.hpp"
+#include "OpenALExtensions.hpp"
+#include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "SettingKeys.hpp"
 #include "SoundResource.hpp"
 #include "Source.hpp"

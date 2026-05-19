@@ -27,12 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <string>
 
-/* Third-party libraries.
- * FIXME: Try to hide GLFW in implementation. */
+/* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
 
@@ -40,8 +39,8 @@
 #include "ControllerInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Types.hpp"
 #include "Tracer.hpp"
+#include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn

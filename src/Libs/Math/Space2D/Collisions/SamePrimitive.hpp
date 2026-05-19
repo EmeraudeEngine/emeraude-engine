@@ -29,11 +29,11 @@
 /* STL inclusions. */
 #include <array>
 
-/* Local inclusions. */
-#include "Libs/Math/Space2D/Triangle.hpp"
-#include "Libs/Math/Space2D/Circle.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/SAT.hpp"
+#include "Libs/Math/Space2D/Triangle.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {

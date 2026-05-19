@@ -26,13 +26,13 @@
 
 #include "SkyBoxResource.hpp"
 
-/* Local inclusions. */
-#include "Libs/FastJSON.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "Graphics/Material/BasicResource.hpp"
-#include "Resources/Manager.hpp"
-
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
+/* Local inclusions. */
+#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Libs/FastJSON.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

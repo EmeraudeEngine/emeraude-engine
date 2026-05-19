@@ -26,20 +26,19 @@
 
 #include "Settings.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <ctime>
-#include <fstream>
 
 /* Local inclusions. */
+#include "Arguments.hpp"
+#include "FileSystem.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Libs/IO/IO.hpp"
 #include "Libs/String.hpp"
-#include "Arguments.hpp"
-#include "FileSystem.hpp"
 #include "Tracer.hpp"
-
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
 namespace EmEn
 {

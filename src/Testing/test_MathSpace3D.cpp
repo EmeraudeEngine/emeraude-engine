@@ -24,9 +24,12 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Third-party inclusions. */
 #include <gtest/gtest.h>
 
 /* Local inclusions. */
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Capsule.hpp"
 #include "Libs/Math/Space3D/Collisions/CapsuleCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/CapsulePoint.hpp"
 #include "Libs/Math/Space3D/Collisions/CapsuleSphere.hpp"
@@ -48,8 +51,6 @@
 #include "Libs/Math/Space3D/Intersections/SegmentSegment.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentSphere.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentTriangle.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Capsule.hpp"
 #include "Libs/Math/Space3D/Line.hpp"
 #include "Libs/Math/Space3D/Point.hpp"
 #include "Libs/Math/Space3D/Segment.hpp"

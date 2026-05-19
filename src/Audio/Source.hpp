@@ -29,20 +29,18 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <ostream>
 #include <string>
-#include <memory>
-
-/* Third-party inclusions. */
-#include "OpenALExtensions.hpp"
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
+#include "EffectSlot.hpp"
 #include "Libs/Math/Base.hpp"
 #include "Libs/Math/Vector.hpp"
-#include "EffectSlot.hpp"
+#include "OpenALExtensions.hpp"
 #include "PlayableInterface.hpp"
 #include "Types.hpp"
 

@@ -26,12 +26,11 @@
 
 #include "CollisionDetection.hpp"
 
-/* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Scenes/AbstractEntity.hpp"
-#include "Physics/MovableTrait.hpp"
-#include "Physics/ContactManifold.hpp"
+/* Local inclusions. */
 #include "Physics/CollisionModelInterface.hpp"
+#include "Physics/ContactManifold.hpp"
+#include "Physics/MovableTrait.hpp"
+#include "Scenes/AbstractEntity.hpp"
 
 namespace EmEn::Physics
 {

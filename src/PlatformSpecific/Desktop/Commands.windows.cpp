@@ -26,7 +26,6 @@
 
 #include "Commands.hpp"
 
-
 /* STL inclusions. */
 #include <vector>
 
@@ -34,14 +33,13 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-
-#include <windows.h>
 #include <shobjidl.h>
-#include "reproc++/run.hpp"
+#include <windows.h>
 
 /* Local inclusions. */
-#include "Window.hpp"
+#include "reproc++/run.hpp"
 #include "Tracer.hpp"
+#include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop
 {

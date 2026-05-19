@@ -33,11 +33,10 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/DescriptorSet.hpp"
 #include "Graphics/Types.hpp" // BlendingMode
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
 
-/* Forward declaration */
 namespace EmEn::Graphics::Material
 {
 	struct GPURTMaterialData;

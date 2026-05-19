@@ -35,11 +35,11 @@
 #include "Input/PointerListenerInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Space3D/Segment.hpp"
 #include "Gizmo/Abstract.hpp"
-#include "Gizmo/Translate.hpp"
 #include "Gizmo/Rotate.hpp"
 #include "Gizmo/Scale.hpp"
+#include "Gizmo/Translate.hpp"
+#include "Libs/Math/Space3D/Segment.hpp"
 
 /* Forward declarations. */
 namespace EmEn

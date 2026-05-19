@@ -30,7 +30,6 @@
 #include <cstdint>
 #include <string>
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics

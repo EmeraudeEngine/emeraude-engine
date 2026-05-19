@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
-#include <ranges>
 #include <array>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <ranges>
 
 /* Third-party inclusions. */
 #include "vk_mem_alloc.h"
@@ -41,7 +41,7 @@
 #include "AbstractObject.hpp"
 #include "Libs/NameableTrait.hpp"
 
-/* Local inclusions for usage. */
+/* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
 #include "PhysicalDevice.hpp"
 #include "Queue.hpp"

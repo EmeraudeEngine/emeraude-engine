@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/StaticVector.hpp"
+/* Local inclusions for usages. */
 #include "ContactPoint.hpp"
+#include "Libs/StaticVector.hpp"
 
 namespace EmEn::Physics
 {

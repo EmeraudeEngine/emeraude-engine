@@ -26,8 +26,8 @@
 
 #include "PlatformManager.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
+/* Project configuration. */
+#include "Libs/emeraude_platform.hpp"
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
@@ -37,8 +37,6 @@
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
-
-#include "Libs/emeraude_platform.hpp"
 
 namespace EmEn
 {

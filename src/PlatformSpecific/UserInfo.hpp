@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <string>
+#include <filesystem>
 #include <ostream>
 #include <sstream>
-#include <filesystem>
+#include <string>
 
-/* Local inclusions for inheritance. */
+/* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 namespace EmEn::PlatformSpecific

@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
+#include <any>
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <map>
 #include <memory>
 #include <string>
-#include <array>
 
 /* Local inclusions for inheritances. */
 #include "AbstractEntity.hpp"

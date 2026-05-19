@@ -30,10 +30,10 @@
 #include <algorithm>
 
 /* Local inclusions. */
-#include "VertexShader.hpp"
-#include "TesselationEvaluationShader.hpp"
 #include "GeometryShader.hpp"
+#include "TesselationEvaluationShader.hpp"
 #include "Tracer.hpp"
+#include "VertexShader.hpp"
 
 namespace EmEn::Saphir
 {

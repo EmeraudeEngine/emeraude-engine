@@ -30,7 +30,7 @@
 #include <chrono>
 #include <ctime>
 
-/* Local inclusions. */
+/* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 namespace EmEn::Libs::Time::Elapsed

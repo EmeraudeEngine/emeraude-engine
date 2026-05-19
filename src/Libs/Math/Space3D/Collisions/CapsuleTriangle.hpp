@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Space3D/Capsule.hpp"
 #include "Libs/Math/Space3D/Triangle.hpp"
 

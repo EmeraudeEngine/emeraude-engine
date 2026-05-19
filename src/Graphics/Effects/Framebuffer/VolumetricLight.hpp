@@ -39,7 +39,6 @@
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 
-
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**

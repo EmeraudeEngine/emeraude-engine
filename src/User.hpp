@@ -29,11 +29,12 @@
 /* STL inclusions. */
 #include <string>
 
-/* Local inclusion for inheritances */
+/* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+
+/* Local inclusions for usages. */
 #include "SettingKeys.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class PrimaryServices;

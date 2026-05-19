@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 
 namespace EmEn::Libs::Hash
 {

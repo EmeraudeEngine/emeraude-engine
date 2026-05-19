@@ -26,13 +26,13 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <vector>
@@ -41,10 +41,10 @@
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
 #include "CommandPool.hpp"
 #include "Device.hpp"
 #include "Framebuffer.hpp"
+#include "Libs/PixelFactory/Color.hpp"
 
 /* Forward declarations. */
 namespace EmEn

@@ -29,13 +29,13 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <memory>
+#include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Utility.hpp"
 #include "AmbienceChannel.hpp"
 #include "AmbienceSound.hpp"
+#include "Libs/Utility.hpp"
 #include "Manager.hpp"
 
 namespace EmEn::Audio

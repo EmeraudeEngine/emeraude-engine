@@ -26,19 +26,20 @@
 
 #include "MeshResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
 #include "AssetLoaders/AssetData.hpp"
 #include "AssetLoaders/GLTFLoader.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Libs/VertexFactory/ShapeDecimator.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Libs/VertexFactory/ShapeDecimator.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

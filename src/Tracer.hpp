@@ -26,28 +26,27 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
-/* Engine configuration file. */
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
+#include <filesystem>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <source_location>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <memory>
-#include <mutex>
-#include <filesystem>
-#include <source_location>
-#include <functional>
+#include <vector>
+
+/* Local inclusions for inheritances. */
+#include "Libs/BlobTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/BlobTrait.hpp"
 #include "CoreTypes.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Arguments;

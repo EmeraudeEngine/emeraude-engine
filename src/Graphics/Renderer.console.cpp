@@ -32,12 +32,11 @@
 #include <sstream>
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/FileIO.hpp"
-#include "Libs/IO/IO.hpp"
 #include "FileSystem.hpp"
-#include "PrimaryServices.hpp"
-#include "Vulkan/SwapChain.hpp"
+#include "Libs/IO/IO.hpp"
+#include "Libs/PixelFactory/FileIO.hpp"
 #include "MDI/BatchBuilder.hpp"
+#include "PrimaryServices.hpp"
 
 namespace EmEn::Graphics
 {

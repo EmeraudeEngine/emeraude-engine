@@ -30,24 +30,24 @@
 #include <cmath>
 
 /* Local inclusions. */
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Input/Manager.hpp"
 #include "Input/Types.hpp"
-#include "Resources/Manager.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
-#include "Scenes/Scene.hpp"
-#include "Scenes/Node.hpp"
-#include "Scenes/StaticEntity.hpp"
-#include "Physics/CollisionModelInterface.hpp"
-#include "Physics/SphereCollisionModel.hpp"
-#include "Physics/AABBCollisionModel.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentSphere.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Notifier.hpp"
+#include "Physics/AABBCollisionModel.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "Physics/SphereCollisionModel.hpp"
+#include "Resources/Manager.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/Scene.hpp"
+#include "Scenes/StaticEntity.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
 
 namespace EmEn::Scenes::Editor
 {

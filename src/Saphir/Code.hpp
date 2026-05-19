@@ -30,9 +30,9 @@
 #include <sstream>
 
 /* Local inclusions for usages. */
+#include "CodeGeneratorInterface.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "CodeGeneratorInterface.hpp"
 
 namespace EmEn::Saphir
 {

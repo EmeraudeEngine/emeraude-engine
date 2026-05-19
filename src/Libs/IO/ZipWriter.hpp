@@ -30,11 +30,11 @@
 #include <filesystem>
 #include <vector>
 
-/* Local inclusions. */
-#include "IO.hpp"
-
 /* Third-party inclusions. */
 #include <zip.h>
+
+/* Local inclusions. */
+#include "IO.hpp"
 
 namespace EmEn::Libs::IO
 {

@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <array>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -40,7 +40,6 @@
 /* Local inclusions for usages. */
 #include "VertexBufferFormat.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics::Geometry

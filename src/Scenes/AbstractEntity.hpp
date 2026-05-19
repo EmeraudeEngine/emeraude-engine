@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
+#include <any>
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <string_view>
-#include <any>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <string_view>
 
 /* Local inclusions for inheritances. */
 #include "Libs/FlagArrayTrait.hpp"
@@ -43,13 +43,13 @@
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Physics/CollisionModelInterface.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
 #include "Component/Abstract.hpp"
+#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/SimpleMeshResource.hpp"
+#include "Libs/Math/CartesianFrame.hpp"
+#include "Libs/StaticVector.hpp"
+#include "Physics/CollisionModelInterface.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Physics

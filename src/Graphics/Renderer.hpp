@@ -27,46 +27,45 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <any>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
-#include <unordered_map>
-#include <vector>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Console/ControllableTrait.hpp"
+#include "ServiceInterface.hpp"
 #include "Libs/ObserverTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
-#include "ServiceInterface.hpp"
+#include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "BindlessTextureManager.hpp"
 #include "ExternalInput.hpp"
-#include "MDI/BatchBuilder.hpp"
-#include "Recorder.hpp"
+#include "GrabPass.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
+#include "MDI/BatchBuilder.hpp"
+#include "PostProcessor.hpp"
+#include "Recorder.hpp"
 #include "RenderTarget/Abstract.hpp"
+#include "Resources/Manager.hpp"
 #include "Saphir/ShaderManager.hpp"
-#include "BindlessTextureManager.hpp"
+#include "SceneRenderTarget.hpp"
 #include "SharedUBOManager.hpp"
+#include "TextureResource/TextureCubemap.hpp"
 #include "VertexBufferFormatManager.hpp"
-#include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/TransferManager.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/Sync/Fence.hpp"
+#include "Vulkan/TransferManager.hpp"
 #include "Window.hpp"
-#include "Resources/Manager.hpp"
-#include "TextureResource/TextureCubemap.hpp"
-#include "GrabPass.hpp"
-#include "PostProcessor.hpp"
-#include "SceneRenderTarget.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan

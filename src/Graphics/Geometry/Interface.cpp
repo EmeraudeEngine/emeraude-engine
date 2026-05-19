@@ -31,10 +31,10 @@
 #include <iterator>
 
 /* Local inclusions. */
-#include "Vulkan/AccelerationStructureBuilder.hpp"
-#include "Vulkan/TransferManager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AccelerationStructureBuilder.hpp"
+#include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

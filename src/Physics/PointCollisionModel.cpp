@@ -26,14 +26,13 @@
 
 #include "PointCollisionModel.hpp"
 
-/* Local inclusions for usages. */
-#include "Libs/Math/Space3D/Point.hpp"
-#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
-#include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
-#include "Libs/Math/Space3D/Collisions/CapsulePoint.hpp"
-#include "SphereCollisionModel.hpp"
+/* Local inclusions. */
 #include "AABBCollisionModel.hpp"
 #include "CapsuleCollisionModel.hpp"
+#include "Libs/Math/Space3D/Collisions/CapsulePoint.hpp"
+#include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
+#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
+#include "SphereCollisionModel.hpp"
 
 namespace EmEn::Physics
 {

@@ -26,20 +26,20 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <cmath>
 #include <limits>
 #include <type_traits>
 
 /* Local inclusions. */
+#include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/Intersections/LineLine.hpp"
 #include "Libs/Math/Space2D/Segment.hpp"
-#include "Libs/Math/Space2D/Circle.hpp"
 #include "Pixmap.hpp"
 
 namespace EmEn::Libs::PixelFactory

@@ -28,10 +28,9 @@
 
 /* STL inclusions. */
 #include <cstdint>
-
-/* Local inclusions for inheritances. */
 #include <limits>
 
+/* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 namespace EmEn::Saphir::Declaration

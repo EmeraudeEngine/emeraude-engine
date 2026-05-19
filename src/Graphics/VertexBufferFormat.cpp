@@ -26,9 +26,6 @@
 
 #include "VertexBufferFormat.hpp"
 
-/* STL inclusions. */
-#include <sstream>
-
 namespace EmEn::Graphics
 {
 	using namespace Libs;

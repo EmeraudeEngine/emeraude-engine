@@ -38,7 +38,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
 
-
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**

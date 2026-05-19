@@ -26,14 +26,15 @@
 
 #include "Scene.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
+#include "NodeCrawler.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/Microphone.hpp"
-#include "NodeCrawler.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Scenes
 {

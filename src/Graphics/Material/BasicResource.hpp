@@ -33,10 +33,10 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Resources/Container.hpp"
+#include "Component/Texture.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
-#include "Component/Texture.hpp"
+#include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Material
 {

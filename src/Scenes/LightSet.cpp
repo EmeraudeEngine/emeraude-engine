@@ -32,12 +32,12 @@
 
 /* Local inclusions. */
 #include "Graphics/DummyShadowTexture.hpp"
-#include "Scenes/AVConsole/Manager.hpp"
 #include "Saphir/LightGenerator.hpp"
+#include "Scene.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
-#include "Scene.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {

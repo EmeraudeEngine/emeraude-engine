@@ -24,28 +24,25 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "Window.hpp"
 
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_X11
 #define GLFW_EXPOSE_NATIVE_WAYLAND
 #include "GLFW/glfw3native.h"
-
+#include <vulkan/vulkan_wayland.h>
+/* NOTE: xcb.h must precede vulkan_xcb.h — vulkan_xcb.h uses xcb_* types. */
 #include <xcb/xcb.h>
 #include <vulkan/vulkan_xcb.h>
-#include <vulkan/vulkan_wayland.h>
-
 /* NOTE: Under linux, including X.h defines the MACRO "Success"
  * and enter in conflicts with Severity enum. */
 #undef Success
 
 /* Local inclusions. */
-#include "Vulkan/Utility.hpp"
+#include "PrimaryServices.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Surface.hpp"
-#include "PrimaryServices.hpp"
+#include "Vulkan/Utility.hpp"
 
 namespace EmEn
 {

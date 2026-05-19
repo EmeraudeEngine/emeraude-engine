@@ -24,29 +24,24 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "UserInfo.hpp"
 
 /* STL inclusions. */
-#include <iostream>
 #include <array>
+#include <iostream>
 
-/* Third-party libraries. */
+/* Third-party inclusions. */
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-
-#include <Windows.h>
 #include <Lmcons.h>
-#include <Shlobj.h>
-
 #define SECURITY_WIN32
 #include <Security.h>
+#include <Shlobj.h>
+#include <Windows.h>
 
 /* Local inclusions. */
 #include "Helpers.hpp"

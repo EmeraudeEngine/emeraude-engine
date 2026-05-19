@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
 #include <type_traits>
+#include <vector>
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"

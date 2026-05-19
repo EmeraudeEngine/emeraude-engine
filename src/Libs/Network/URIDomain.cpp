@@ -27,7 +27,6 @@
 #include "URIDomain.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <iostream>
 #include <sstream>
 

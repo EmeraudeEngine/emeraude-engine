@@ -30,7 +30,7 @@
 #include <cstdint>
 #include <type_traits>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Pixmap.hpp"
 #include "Processor.hpp"
 #include "Types.hpp"

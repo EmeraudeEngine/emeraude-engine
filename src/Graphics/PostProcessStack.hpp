@@ -31,7 +31,6 @@
 #include <memory>
 #include <vector>
 
-/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class IndirectPostProcessEffect;

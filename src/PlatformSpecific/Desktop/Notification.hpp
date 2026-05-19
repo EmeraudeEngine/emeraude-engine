@@ -31,7 +31,6 @@
 #include <optional>
 #include <string>
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Window;

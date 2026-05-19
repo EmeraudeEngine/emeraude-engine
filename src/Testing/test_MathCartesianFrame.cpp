@@ -24,6 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Third-party inclusions. */
 #include <gtest/gtest.h>
 
 /* Local inclusions. */

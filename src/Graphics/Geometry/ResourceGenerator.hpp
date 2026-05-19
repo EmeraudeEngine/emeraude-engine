@@ -28,21 +28,19 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
-#include <memory>
 
 /* Local inclusions for usages. */
+#include "GenerationParameters.hpp"
+#include "IndexedVertexResource.hpp"
 #include "Libs/Math/Vector.hpp"
+#include "Libs/VertexFactory/CapUVMapping.hpp"
 #include "Libs/VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
-#include "VertexResource.hpp"
-#include "IndexedVertexResource.hpp"
 #include "VertexGridResource.hpp"
-#include "GenerationParameters.hpp"
-
-/* Local inclusions for usages. */
-#include "Libs/VertexFactory/CapUVMapping.hpp"
+#include "VertexResource.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

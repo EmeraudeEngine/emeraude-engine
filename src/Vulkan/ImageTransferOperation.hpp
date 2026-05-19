@@ -27,11 +27,11 @@
 #pragma once
 
 /* Local inclusions for usages. */
+#include "Buffer.hpp"
+#include "CommandBuffer.hpp"
+#include "Image.hpp"
 #include "Sync/Fence.hpp"
 #include "Sync/Semaphore.hpp"
-#include "Buffer.hpp"
-#include "Image.hpp"
-#include "CommandBuffer.hpp"
 
 namespace EmEn::Vulkan
 {

@@ -26,33 +26,33 @@
 
 #include "Core.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <chrono>
 #include <fstream>
-#include <sstream>
 #include <iostream>
 #include <ranges>
+#include <sstream>
 #include <thread>
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
+#include "Constants.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
+#include "Input/Types.hpp"
 #include "Libs/IO/IO.hpp"
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/Time/Time.hpp"
 #include "Libs/Version.hpp"
-#include "PlatformSpecific/Desktop/Dialog/Message.hpp"
 #include "PlatformSpecific/Desktop/Commands.hpp"
+#include "PlatformSpecific/Desktop/Dialog/Message.hpp"
+#include "SettingKeys.hpp"
 #include "Tool/GeometryDataPrinter.hpp"
 #include "Tool/ShowVulkanInformation.hpp"
-#include "Input/Types.hpp"
-#include "Constants.hpp"
-#include "SettingKeys.hpp"
-
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
 namespace EmEn
 {

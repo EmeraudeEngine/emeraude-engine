@@ -26,7 +26,7 @@
 
 #include "Utility.hpp"
 
-/* STL inclusions */
+/* STL inclusions. */
 #include <iostream>
 #include <sstream>
 #include <string>

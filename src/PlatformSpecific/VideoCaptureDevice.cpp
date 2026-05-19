@@ -24,7 +24,6 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Local inclusions. */
 #include "VideoCaptureDevice.hpp"
 
 /* STL inclusions. */

@@ -32,24 +32,23 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include "Libs/std_source_location.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Libs/FlagTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Types.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Matrix.hpp"
+#include "Libs/std_source_location.hpp"
 #include "RenderContext.hpp"
 #include "RenderStateTracker.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
-#include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
 
-/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics

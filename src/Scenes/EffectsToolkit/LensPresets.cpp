@@ -28,12 +28,12 @@
 
 /* Local inclusions. */
 #include "Graphics/Effects/Lens/BlackAndWhite.hpp"
+#include "Graphics/Effects/Lens/CRTPhosphor.hpp"
 #include "Graphics/Effects/Lens/ChromaBleeding.hpp"
 #include "Graphics/Effects/Lens/ChromaticAberration.hpp"
-#include "Graphics/Effects/Lens/DustAndHair.hpp"
 #include "Graphics/Effects/Lens/ColorGrading.hpp"
-#include "Graphics/Effects/Lens/CRTPhosphor.hpp"
 #include "Graphics/Effects/Lens/Dithering.hpp"
+#include "Graphics/Effects/Lens/DustAndHair.hpp"
 #include "Graphics/Effects/Lens/FilmGrain.hpp"
 #include "Graphics/Effects/Lens/Flicker.hpp"
 #include "Graphics/Effects/Lens/FrameMasking.hpp"

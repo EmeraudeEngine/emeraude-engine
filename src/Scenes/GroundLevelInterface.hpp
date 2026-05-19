@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Scenes

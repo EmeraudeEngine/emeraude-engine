@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <ostream>
 #include <sstream>
 #include <string>
-#include <algorithm>
 
 /* Local inclusions for usages. */
 #include "Point.hpp"

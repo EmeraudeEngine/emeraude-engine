@@ -27,16 +27,15 @@
 #pragma once
 
 /* STL inclusions. */
+#include <filesystem>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
 #include "CodeGeneratorInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
 #include "Declaration/Function.hpp"
 #include "Declaration/PushConstantBlock.hpp"
 #include "Declaration/Sampler.hpp"
@@ -45,6 +44,7 @@
 #include "Declaration/Structure.hpp"
 #include "Declaration/TexelBuffer.hpp"
 #include "Declaration/UniformBlock.hpp"
+#include "Libs/StaticVector.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */

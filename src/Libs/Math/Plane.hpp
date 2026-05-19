@@ -29,11 +29,11 @@
 /* STL inclusions. */
 #include <cassert>
 #include <cmath>
-#include <type_traits>
 #include <sstream>
 #include <string>
+#include <type_traits>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Vector.hpp"
 
 namespace EmEn::Libs::Math

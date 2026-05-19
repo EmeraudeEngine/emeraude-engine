@@ -29,7 +29,7 @@
 /* STL inclusions. */
 #include <limits>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
 #include "Libs/StaticVector.hpp"
 

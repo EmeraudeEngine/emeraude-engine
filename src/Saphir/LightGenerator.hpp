@@ -27,15 +27,15 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <string>
 
 /* Local inclusions for usages. */
 #include "Declaration/UniformBlock.hpp"
-#include "StaticLighting.hpp"
-#include "Settings.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticLighting.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Saphir

@@ -35,11 +35,11 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
-#include "Libs/PixelFactory/Color.hpp"
 #include "Graphics/Types.hpp"
-#include "RenderPass.hpp"
+#include "Libs/PixelFactory/Color.hpp"
+#include "Libs/StaticVector.hpp"
 #include "PipelineLayout.hpp"
+#include "RenderPass.hpp"
 #include "ShaderModule.hpp"
 
 /* Forward declarations */

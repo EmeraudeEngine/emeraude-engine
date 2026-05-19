@@ -32,6 +32,8 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
+
+/* Local inclusions for usages. */
 #include "PipelineLayout.hpp"
 
 namespace EmEn::Vulkan

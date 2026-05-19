@@ -30,10 +30,10 @@
 #include "PlayableInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
 
-/* Local inclusions for usage. */
+/* Local inclusions for usages. */
+#include "Buffer.hpp"
 #include "Libs/WaveFactory/Wave.hpp"
 #include "Resources/Container.hpp"
-#include "Buffer.hpp"
 
 namespace EmEn::Audio
 {

@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/Math/Space3D/Segment.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Segment.hpp"
 
 namespace EmEn::Libs::Math::Space3D
 {

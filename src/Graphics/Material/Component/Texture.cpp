@@ -30,12 +30,11 @@
 #include <utility>
 
 /* Local inclusions. */
-#include "Resources/Manager.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material::Component

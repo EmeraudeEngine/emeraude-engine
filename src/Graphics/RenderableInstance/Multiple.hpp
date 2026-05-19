@@ -34,11 +34,11 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Matrix.hpp"
-#include "Graphics/Renderable/Abstract.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::RenderableInstance

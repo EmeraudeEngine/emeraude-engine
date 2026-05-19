@@ -28,10 +28,8 @@
 
 /* Local inclusions. */
 #include "Graphics/PostProcessor.hpp"
-#include "Saphir/Generator/SceneRendering.hpp"
-#include "Saphir/FragmentShader.hpp"
 #include "Saphir/Code.hpp"
-#include "Saphir/Keys.hpp"
+#include "Saphir/FragmentShader.hpp"
 
 namespace EmEn::Graphics::Effects::Lens
 {

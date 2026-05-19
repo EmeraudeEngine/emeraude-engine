@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"

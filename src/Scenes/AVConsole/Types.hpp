@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* STL inclusions; */
+/* STL inclusions. */
 #include <cstdint>
 
 /* Forward declarations. */

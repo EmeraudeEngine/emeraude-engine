@@ -27,13 +27,13 @@
 #include "AbstractEntity.hpp"
 
 /* Local inclusions. */
+#include "Component/Visual.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Physics/CollisionModelInterface.hpp"
-#include "Physics/SphereCollisionModel.hpp"
 #include "Physics/AABBCollisionModel.hpp"
 #include "Physics/CapsuleCollisionModel.hpp"
-#include "Component/Visual.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "Physics/SphereCollisionModel.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes

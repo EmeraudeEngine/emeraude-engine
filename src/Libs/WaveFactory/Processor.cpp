@@ -26,13 +26,13 @@
 
 #include "Processor.hpp"
 
-/* Engine configuration file. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <limits>
 #include <random>

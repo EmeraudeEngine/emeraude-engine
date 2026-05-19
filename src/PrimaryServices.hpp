@@ -26,22 +26,22 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
-#include <vector>
 #include <string>
+#include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/ThreadPool.hpp"
-#include "Identification.hpp"
-#include "PlatformSpecific/SystemInfo.hpp"
-#include "PlatformSpecific/UserInfo.hpp"
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
-#include "Settings.hpp"
+#include "Identification.hpp"
+#include "Libs/ThreadPool.hpp"
 #include "Net/Manager.hpp"
+#include "PlatformSpecific/SystemInfo.hpp"
+#include "PlatformSpecific/UserInfo.hpp"
+#include "Settings.hpp"
 
 namespace EmEn
 {

@@ -26,24 +26,24 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
+
 /* STL inclusions. */
-#include <cstdint>
 #include <cstddef>
-#include <string>
-#include <vector>
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "DebugMessenger.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/RenderDocCapture.hpp"
-#include "DebugMessenger.hpp"
 #include "Types.hpp"
 
 /* Forward declarations */

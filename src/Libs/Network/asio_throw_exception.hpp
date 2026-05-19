@@ -31,6 +31,7 @@
 #include <iostream>
 
 /* ASIO configuration - Must be defined before including any ASIO headers. */
+
 #ifndef ASIO_STANDALONE
 #define ASIO_STANDALONE 1
 #endif

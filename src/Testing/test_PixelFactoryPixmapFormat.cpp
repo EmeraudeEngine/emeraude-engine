@@ -24,13 +24,14 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Third-party inclusions. */
 #include <gtest/gtest.h>
 
 /* Local inclusions. */
-#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
-#include "Libs/PixelFactory/FileIO.hpp"
-#include "Libs/PixelFactory/FileFormatTarga.hpp"
 #include "Constants.hpp"
+#include "Libs/PixelFactory/FileFormatTarga.hpp"
+#include "Libs/PixelFactory/FileIO.hpp"
+#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 
 using namespace EmEn::Libs;
 using namespace EmEn::Libs::PixelFactory;

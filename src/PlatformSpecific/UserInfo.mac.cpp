@@ -24,14 +24,12 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* Emeraude-Engine configuration. */
-
 #include "UserInfo.hpp"
 
 /* STL inclusions. */
 #include <iostream>
 
-/* System inclusions. */
+/* Third-party inclusions. */
 #include <pwd.h>
 #include <unistd.h>
 

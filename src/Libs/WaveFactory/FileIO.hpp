@@ -33,11 +33,11 @@
 #include <type_traits>
 
 /* Local inclusions. */
-#include "Libs/IO/FileStream.hpp"
-#include "Libs/IO/IO.hpp"
 #include "FileFormatJSON.hpp"
 #include "FileFormatMIDI.hpp"
 #include "FileFormatSNDFile.hpp"
+#include "Libs/IO/FileStream.hpp"
+#include "Libs/IO/IO.hpp"
 #include "Wave.hpp"
 
 namespace EmEn::Libs::WaveFactory::FileIO

@@ -29,7 +29,7 @@
 /* STL inclusions. */
 #include <cstdint>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Libs/IO/ByteStream.hpp"
 #include "Pixmap.hpp"
 #include "Types.hpp"

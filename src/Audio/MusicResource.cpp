@@ -31,20 +31,20 @@
 #include <mutex>
 
 /* Third-party inclusions. */
-#include "taglib/tag.h"
 #include "taglib/fileref.h"
+#include "taglib/tag.h"
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/FileIO.hpp"
-#include "Libs/WaveFactory/Synthesizer.hpp"
-#include "Libs/WaveFactory/SFXScript.hpp"
-#include "Libs/WaveFactory/Processor.hpp"
-#include "Resources/Manager.hpp"
 #include "Buffer.hpp"
+#include "Libs/WaveFactory/FileIO.hpp"
+#include "Libs/WaveFactory/Processor.hpp"
+#include "Libs/WaveFactory/SFXScript.hpp"
+#include "Libs/WaveFactory/Synthesizer.hpp"
 #include "Manager.hpp"
-#include "SoundfontResource.hpp"
-#include "Settings.hpp"
+#include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "SoundfontResource.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio

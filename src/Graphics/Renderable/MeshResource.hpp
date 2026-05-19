@@ -40,7 +40,6 @@
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Resources/Container.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Resources
 {
 	class Manager;

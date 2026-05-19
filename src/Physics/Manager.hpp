@@ -28,13 +28,15 @@
 
 /* STL inclusions. */
 #include <memory>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Vulkan/TransferManager.hpp"
+
+/* Local inclusions for usages. */
 #include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/TransferManager.hpp"
 
 /* Forward declarations. */
 namespace EmEn

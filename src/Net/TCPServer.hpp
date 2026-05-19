@@ -33,9 +33,9 @@
 #include <string>
 #include <system_error>
 
-/* Third party inclusions. */
-#include "Libs/Network/asio_throw_exception.hpp"
+/* Third-party inclusions. */
 #include "asio.hpp"
+#include "Libs/Network/asio_throw_exception.hpp"
 
 /* Local inclusions for usages. */
 #include "TCPClient.hpp"

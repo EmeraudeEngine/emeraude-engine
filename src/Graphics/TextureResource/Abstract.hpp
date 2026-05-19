@@ -34,7 +34,6 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class Renderer;

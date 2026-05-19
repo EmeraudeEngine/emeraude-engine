@@ -30,12 +30,12 @@
 #include <array>
 #include <iostream>
 
-/* Local inclusions. */
-#include "Libs/Math/Space3D/Triangle.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Capsule.hpp"
 #include "Libs/Math/Space3D/SAT.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
+#include "Libs/Math/Space3D/Triangle.hpp"
 
 namespace EmEn::Libs::Math::Space3D
 {

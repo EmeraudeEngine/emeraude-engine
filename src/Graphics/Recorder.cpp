@@ -26,27 +26,19 @@
 
 #include "Recorder.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <algorithm>
 #include <cstring>
 
 /* Local inclusions. */
 #include "Libs/String.hpp"
+#include "PrimaryServices.hpp"
 #include "Renderer.hpp"
 #include "RenderTarget/Abstract.hpp"
-#include "Libs/IO/IO.hpp"
-#include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
-
-#include "Vulkan/Device.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
-
-/* CPU feature detection and SIMD intrinsics for BGRA-to-I420 dispatch. */
 #if IS_X86_ARCH
 #include "cpu_features/cpuinfo_x86.h"
 #include <immintrin.h>

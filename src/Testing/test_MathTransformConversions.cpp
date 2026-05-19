@@ -24,11 +24,12 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Third-party inclusions. */
 #include <gtest/gtest.h>
 
 /* Local inclusions. */
-#include "Libs/Math/Quaternion.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
+#include "Libs/Math/Quaternion.hpp"
 #include "Libs/Math/TransformUtils.hpp"
 
 using namespace EmEn::Libs::Math;

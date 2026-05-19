@@ -32,7 +32,6 @@
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
-/* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class CommandBuffer;

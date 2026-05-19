@@ -29,11 +29,10 @@
 /* STL inclusions. */
 #include <array>
 #include <limits>
-#include <sstream>
 
 /* Local inclusions. */
-#include "Libs/Math/Base.hpp"
 #include "Constants.hpp"
+#include "Libs/Math/Base.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Physics

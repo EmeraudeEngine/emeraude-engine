@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cmath>
-#include <cassert>
 #include <array>
+#include <cassert>
+#include <cmath>
+#include <cstddef>
 #include <iomanip>
 #include <limits>
 #include <sstream>

@@ -30,9 +30,9 @@
 #include <optional>
 
 /* Local inclusions for usages. */
-#include "Shape.hpp"
 #include "Libs/Animation/Skeleton.hpp"
 #include "Libs/Animation/Skin.hpp"
+#include "Shape.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {

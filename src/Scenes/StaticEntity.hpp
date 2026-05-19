@@ -27,23 +27,24 @@
 #pragma once
 
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <any>
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <string>
-#include <array>
 
 /* Local inclusions for inheritances. */
 #include "AbstractEntity.hpp"
 #include "Animations/AnimatableInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Frustum.hpp"
 #include "Libs/Math/OrientedCuboid.hpp"
 #include "Libs/Variant.hpp"
-#include "Graphics/Frustum.hpp"
 
 namespace EmEn::Scenes
 {

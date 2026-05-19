@@ -26,13 +26,10 @@
 
 #include "FileSystem.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
-/* Local inclusion. */
+/* Local inclusions. */
+#include "Arguments.hpp"
 #include "Libs/IO/IO.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
-#include "Arguments.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn

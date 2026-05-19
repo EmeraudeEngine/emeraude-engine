@@ -29,7 +29,7 @@
 /* STL inclusions. */
 #include <iostream>
 
-/* Local inclusions for usages. */
+/* Local inclusions for inheritances. */
 #include "HTTPHeaders.hpp"
 
 namespace EmEn::Libs::Network

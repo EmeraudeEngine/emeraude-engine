@@ -26,9 +26,6 @@
 
 #include "Abstract.hpp"
 
-/* Local inclusions. */
-#include "Tracer.hpp"
-
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Libs;

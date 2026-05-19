@@ -26,17 +26,17 @@
 
 #include "Ambience.hpp"
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <cmath>
 
 /* Local inclusions. */
-#include "Libs/FastJSON.hpp"
-#include "Resources/Manager.hpp"
 #include "Audio/Manager.hpp"
 #include "Constants.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio

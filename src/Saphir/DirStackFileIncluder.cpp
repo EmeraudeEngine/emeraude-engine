@@ -27,8 +27,8 @@
 #include "DirStackFileIncluder.hpp"
 
 /* STL inclusions. */
-#include <fstream>
 #include <algorithm>
+#include <fstream>
 
 namespace EmEn::Saphir
 {

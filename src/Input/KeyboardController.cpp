@@ -27,15 +27,15 @@
 #include "KeyboardController.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <algorithm>
+#include <cstddef>
 #include <sstream>
 
-/* Third-party libraries */
+/* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
 
-/* Local usage. */
+/* Local inclusions. */
 #include "Window.hpp"
 
 namespace EmEn::Input

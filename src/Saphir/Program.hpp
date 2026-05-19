@@ -37,15 +37,15 @@
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "FragmentShader.hpp"
+#include "GeometryShader.hpp"
 #include "Graphics/VertexBufferFormatManager.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
-#include "VertexShader.hpp"
+#include "SetIndexes.hpp"
 #include "TesselationControlShader.hpp"
 #include "TesselationEvaluationShader.hpp"
-#include "GeometryShader.hpp"
-#include "FragmentShader.hpp"
-#include "SetIndexes.hpp"
 #include "Types.hpp"
+#include "VertexShader.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 
 namespace EmEn::Saphir
 {

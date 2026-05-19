@@ -31,7 +31,7 @@
 #include <sstream>
 #include <string>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Utility.hpp"
 
 namespace EmEn::Libs::Math

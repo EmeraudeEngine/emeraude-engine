@@ -30,16 +30,15 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "CoreTypes.hpp"
+#include "Graphics/Types.hpp"
 #include "Libs/VertexFactory/Grid.hpp"
 #include "Libs/VertexFactory/Shape.hpp"
-#include "Vulkan/AccelerationStructure.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
-#include "Vulkan/IndexBufferObject.hpp"
-#include "Graphics/Types.hpp"
-#include "CoreTypes.hpp"
 #include "SubGeometry.hpp"
+#include "Vulkan/AccelerationStructure.hpp"
+#include "Vulkan/IndexBufferObject.hpp"
+#include "Vulkan/VertexBufferObject.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class AccelerationStructureBuilder;

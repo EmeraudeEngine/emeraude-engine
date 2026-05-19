@@ -26,25 +26,22 @@
 
 #pragma once
 
-#include <fstream>
-
 /* STL inclusions. */
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
 
-/* Third-party inclusions. */
-#include "OpenALExtensions.hpp"
-
-/* Local inclusions. */
+/* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/WaveFactory/Types.hpp"
+#include "OpenALExtensions.hpp"
 
 /* Forward declarations. */
 namespace EmEn

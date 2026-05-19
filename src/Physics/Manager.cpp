@@ -30,14 +30,12 @@
 #include <ranges>
 
 /* Local inclusions. */
-#include "Vulkan/Instance.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/CommandPool.hpp"
-#include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/ComputePipeline.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Vulkan/CommandPool.hpp"
+#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Instance.hpp"
 
 namespace EmEn::Physics
 {

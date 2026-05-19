@@ -30,10 +30,10 @@
 #include "AL/al.h"
 #include "AL/alc.h"
 #include "AL/alext.h"
-#include "AL/efx.h"
 #include "AL/efx-presets.h"
+#include "AL/efx.h"
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Tracer.hpp"
 
 /* NOTE: These types may not be defined in older OpenAL-Soft versions (< 1.24).

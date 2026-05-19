@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <string>
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Arguments;

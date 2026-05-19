@@ -26,7 +26,7 @@
 
 #include "SoundEmitter.hpp"
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */

@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <memory>
 #include <stack>
 #include <type_traits>
-#include <memory>
 
 /* Local inclusions for usages. */
 #include "Node.hpp"

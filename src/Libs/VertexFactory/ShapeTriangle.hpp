@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Libs::VertexFactory

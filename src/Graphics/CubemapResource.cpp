@@ -26,6 +26,9 @@
 
 #include "CubemapResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
@@ -33,11 +36,9 @@
 #include <numbers>
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/FileIO.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
+#include "Libs/PixelFactory/FileIO.hpp"
 #include "Resources/Manager.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics
 {

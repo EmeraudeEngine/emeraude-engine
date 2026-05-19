@@ -30,19 +30,19 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <ranges>
 #include <set>
 #include <sstream>
-#include <vector>
 #include <string>
-#include <ranges>
+#include <vector>
 
 /* Local inclusions. */
-#include "Generator/Abstract.hpp"
+#include "AbstractShader.hpp"
+#include "Declaration/InputAttribute.hpp"
 #include "Declaration/OutputBlock.hpp"
 #include "Declaration/StageOutput.hpp"
+#include "Generator/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Declaration/InputAttribute.hpp"
-#include "AbstractShader.hpp"
 #include "Keys.hpp"
 #include "Tracer.hpp"
 #include "Types.hpp"

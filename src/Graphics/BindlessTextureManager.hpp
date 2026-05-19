@@ -29,8 +29,8 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
-#include <queue>
 #include <mutex>
+#include <queue>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
@@ -38,7 +38,6 @@
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class Device;

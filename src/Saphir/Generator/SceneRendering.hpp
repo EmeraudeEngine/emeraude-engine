@@ -31,10 +31,10 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderTarget/Abstract.hpp"
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/RenderPass.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "SettingKeys.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Scenes

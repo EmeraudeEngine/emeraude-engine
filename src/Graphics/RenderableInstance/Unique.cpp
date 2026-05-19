@@ -27,9 +27,9 @@
 #include "Unique.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <cstring>
-#include <array>
 
 /* Local inclusions. */
 #include "Graphics/ViewMatricesInterface.hpp"

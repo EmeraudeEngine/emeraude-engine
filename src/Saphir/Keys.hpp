@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <string>
 #include <sstream>
+#include <string>
 
 namespace EmEn::Saphir
 {

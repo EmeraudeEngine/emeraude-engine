@@ -26,6 +26,9 @@
 
 #include "Multiple.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstring>
@@ -37,8 +40,6 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/TransferManager.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {

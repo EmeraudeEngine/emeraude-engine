@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -39,11 +39,10 @@
 #include "GLFW/glfw3.h"
 
 /* Local inclusions for usages. */
+#include "CoreTypes.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Window.hpp"
-#include "CoreTypes.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class ImageResource;

@@ -26,19 +26,19 @@
 
 #pragma once
 
-
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <iostream>
-#include <sstream>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -49,9 +49,9 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Math/Vector.hpp"
+#include "Shape.hpp"
 #include "ShapeTriangle.hpp"
 #include "ShapeVertex.hpp"
-#include "Shape.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {

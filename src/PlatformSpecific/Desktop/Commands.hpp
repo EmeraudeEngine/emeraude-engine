@@ -28,10 +28,9 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <string>
 #include <filesystem>
+#include <string>
 
-/* Forward declarations. */
 namespace EmEn
 {
 	class Settings;

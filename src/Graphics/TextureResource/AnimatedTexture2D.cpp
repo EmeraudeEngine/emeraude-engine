@@ -27,11 +27,9 @@
 #include "AnimatedTexture2D.hpp"
 
 /* Local inclusions. */
-#include "Resources/Manager.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
-#include "Graphics/Renderer.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {

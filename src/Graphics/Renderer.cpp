@@ -26,7 +26,7 @@
 
 #include "Renderer.hpp"
 
-/* Emeraude-Engine configuration. */
+/* Project configuration. */
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
@@ -34,24 +34,24 @@
 #include <thread>
 
 /* Local inclusions. */
-#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
-#include "Vulkan/SwapChain.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Scenes/SceneMetaData.hpp"
-#include "Scenes/LightSet.hpp"
-#include "PostProcessStack.hpp"
-#include "Scenes/Scene.hpp"
-#include "Scenes/Component/Camera.hpp"
-#include "Overlay/Manager.hpp"
-#include "Scenes/Editor/Manager.hpp"
-#include "PrimaryServices.hpp"
 #include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"
-#include "SceneRenderTarget.hpp"
+#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
+#include "Overlay/Manager.hpp"
+#include "PostProcessStack.hpp"
+#include "PrimaryServices.hpp"
+#include "SceneRenderTarget.hpp"
+#include "Scenes/Component/Camera.hpp"
+#include "Scenes/Editor/Manager.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/Scene.hpp"
+#include "Scenes/SceneMetaData.hpp"
+#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 namespace
 {

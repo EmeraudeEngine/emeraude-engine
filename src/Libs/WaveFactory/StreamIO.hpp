@@ -33,9 +33,9 @@
 #include <type_traits>
 #include <vector>
 
-/* Local inclusions for usages. */
-#include "Libs/IO/MemoryStream.hpp"
+/* Local inclusions. */
 #include "FileFormatSNDFile.hpp"
+#include "Libs/IO/MemoryStream.hpp"
 #include "Wave.hpp"
 
 namespace EmEn::Libs::WaveFactory::StreamIO

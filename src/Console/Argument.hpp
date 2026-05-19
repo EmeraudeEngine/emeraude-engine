@@ -31,7 +31,7 @@
 #include <variant>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "Types.hpp"
 
 namespace EmEn::Console

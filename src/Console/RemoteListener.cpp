@@ -26,11 +26,11 @@
 
 #include "RemoteListener.hpp"
 
-/* Local inclusions. */
-#include "Tracer.hpp"
-
 /* STL inclusions. */
 #include <istream>
+
+/* Local inclusions. */
+#include "Tracer.hpp"
 
 namespace EmEn::Console
 {

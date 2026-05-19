@@ -40,7 +40,6 @@
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/IndirectBuffer.hpp"
 
-/* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class CommandBuffer;

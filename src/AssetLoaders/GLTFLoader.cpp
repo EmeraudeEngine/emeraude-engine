@@ -31,12 +31,14 @@
 #include <cstring>
 #include <variant>
 
-/* 3rd inclusions. */
+/* Third-party inclusions. */
 #include "fastgltf/core.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 
 /* Local inclusions. */
+#include "Animations/AnimationClipResource.hpp"
+#include "Animations/SkeletonResource.hpp"
 #include "AssetData.hpp"
 #include "Graphics/Geometry/Helpers.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
@@ -44,16 +46,14 @@
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
-#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
-#include "Animations/SkeletonResource.hpp"
-#include "Animations/AnimationClipResource.hpp"
+#include "Libs/Animation/AnimationClip.hpp"
 #include "Libs/Animation/Joint.hpp"
 #include "Libs/Animation/Skeleton.hpp"
 #include "Libs/Animation/Skin.hpp"
-#include "Libs/Animation/AnimationClip.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Quaternion.hpp"
 #include "Libs/Math/TransformUtils.hpp"

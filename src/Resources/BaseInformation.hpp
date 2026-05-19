@@ -27,14 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
-#include <string>
 #include <filesystem>
+#include <string>
 
 /* Third-party inclusions. */
+#include "json/json.h"
 #ifndef JSON_USE_EXCEPTION
 #define JSON_USE_EXCEPTION 0
 #endif
-#include "json/json.h"
 
 /* Local inclusions for usages. */
 #include "Types.hpp"

@@ -30,9 +30,9 @@
 #include "PlayableInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
 
-/* Local inclusions. */
-#include "Resources/Container.hpp"
+/* Local inclusions for usages. */
 #include "Libs/WaveFactory/Wave.hpp"
+#include "Resources/Container.hpp"
 
 /* Forward declarations. */
 struct tsf;

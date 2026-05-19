@@ -32,6 +32,7 @@
 #include <set>
 
 /* Forward declarations. */
+
 namespace EmEn::Libs
 {
 	class ObservableTrait;

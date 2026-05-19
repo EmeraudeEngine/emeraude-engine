@@ -28,10 +28,10 @@
 
 /* STL inclusions. */
 #include <filesystem>
-#include <string>
 #include <iostream>
+#include <string>
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Query.hpp"
 #include "URIDomain.hpp"
 

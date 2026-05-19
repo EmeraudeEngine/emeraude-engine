@@ -28,17 +28,15 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <bc7enc_rdo/bc7enc.h>
 #include <chrono>
 #include <cstring>
-
-/* 3rd party inclusions. */
-#include <bc7enc_rdo/bc7enc.h>
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/Processor.hpp"
 #include "Libs/ThreadPool.hpp"
-#include "Vulkan/Image.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Image.hpp"
 
 namespace EmEn::Graphics
 {

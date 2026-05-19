@@ -27,17 +27,17 @@
 #include "DescriptorSet.hpp"
 
 /* Local inclusions. */
-#include "Graphics/TextureResource/Abstract.hpp"
-#include "Device.hpp"
 #include "DescriptorPool.hpp"
-#include "DescriptorSetLayout.hpp"
 #include "DescriptorSet.hpp"
+#include "DescriptorSetLayout.hpp"
+#include "Device.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/TextureResource/Abstract.hpp"
 #include "Image.hpp"
 #include "ImageView.hpp"
 #include "Sampler.hpp"
-#include "UniformBufferObject.hpp"
 #include "Tracer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
+#include "UniformBufferObject.hpp"
 
 namespace EmEn::Vulkan
 {

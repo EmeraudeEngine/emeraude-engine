@@ -25,33 +25,33 @@
  */
 
 #include "Tracer.hpp"
-#include "TracerLogger.hpp"
+
+/* Project configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <sstream>
-#include <algorithm>
-#include <fstream>
 #include <utility>
 
-/* System inclusions. */
+/* Third-party inclusions. */
 #if IS_LINUX || IS_MACOS
 #include <unistd.h>
 #endif
 
 /* Local inclusions. */
-#include "Libs/String.hpp"
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
-#include "Settings.hpp"
-#include "SettingKeys.hpp"
+#include "Libs/String.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
-
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 #endif
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "TracerLogger.hpp"
 
 namespace EmEn
 {
@@ -600,7 +600,8 @@ namespace EmEn
 	void
 	Tracer::removeAllSinks() noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+		const std::scoped_lock lock{m_consoleAccess};
+
 		m_sinks.clear();
 	}
 

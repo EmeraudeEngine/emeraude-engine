@@ -27,25 +27,25 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cmath>
 #include <cstring>
-#include <array>
-#include <istream>
 #include <iostream>
-#include <vector>
-#include <string>
+#include <istream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "FileFormatInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/VertexFactory/ShapeBuilder.hpp"
 #include "Libs/Animation/Joint.hpp"
 #include "Libs/Animation/Skeleton.hpp"
 #include "Libs/Animation/Skin.hpp"
 #include "Libs/Math/Quaternion.hpp"
 #include "Libs/Math/TransformUtils.hpp"
+#include "Libs/VertexFactory/ShapeBuilder.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {

@@ -26,11 +26,11 @@
 
 #include "DynamicSkyResource.hpp"
 
-/* Local inclusions. */
-#include "Resources/Manager.hpp"
-#include "Tracer.hpp"
-
+/* Project configuration. */
 #include "emeraude_config.hpp"
+
+/* Local inclusions. */
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

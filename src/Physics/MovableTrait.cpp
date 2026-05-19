@@ -27,8 +27,6 @@
 #include "MovableTrait.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Libs/Math/Base.hpp"
 
 namespace EmEn::Physics
 {

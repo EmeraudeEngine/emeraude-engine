@@ -26,23 +26,23 @@
 
 #include "TrackMixer.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <limits>
-#include <random>
 #include <numeric>
+#include <random>
 #include <set>
-
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
 
 /* Local inclusions. */
 #include "Libs/String.hpp"
+#include "Manager.hpp"
 #include "OpenALExtensions.hpp"
 #include "Resources/Manager.hpp"
-#include "Manager.hpp"
-#include "Settings.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio

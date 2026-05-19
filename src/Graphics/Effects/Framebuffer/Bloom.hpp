@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
-#include <array>
 #include <vector>
 
 /* Local inclusions for inheritances. */

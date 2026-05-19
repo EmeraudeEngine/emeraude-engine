@@ -34,11 +34,11 @@
 #include <unordered_set>
 #include <vector>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
 #include "GPUMeshMetaData.hpp"
-#include "RenderBatch.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Libs/Math/Vector.hpp"
+#include "RenderBatch.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"

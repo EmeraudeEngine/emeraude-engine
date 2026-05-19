@@ -34,7 +34,7 @@
 #include <unordered_map>
 #include <vector>
 
-/* 3rd inclusions. */
+/* Third-party inclusions. */
 #include <ufbx/ufbx.h>
 
 /* Local inclusions. */

@@ -26,8 +26,6 @@
 
 #pragma once
 
-/* Engine configuration file. */
-
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
@@ -44,8 +42,8 @@
 
 /* Local inclusions for usages. */
 #include "Libs/IO/ByteStream.hpp"
-#include "Types.hpp"
 #include "Pixmap.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Libs::PixelFactory
 {

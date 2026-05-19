@@ -26,9 +26,9 @@
 
 #pragma once
 
-/* Local inclusions. */
-#include "Libs/Math/Space2D/Line.hpp"
+/* Local inclusions for usages. */
 #include "Libs/Math/Space2D/Circle.hpp"
+#include "Libs/Math/Space2D/Line.hpp"
 #include "Libs/Math/Space2D/Point.hpp"
 
 namespace EmEn::Libs::Math::Space2D

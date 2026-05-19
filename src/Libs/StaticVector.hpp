@@ -26,23 +26,21 @@
 
 #pragma once
 
-
-/* Platform detection (IS_*, IsLinux, ...). */
+/* Project configuration. */
 #include "Libs/emeraude_platform.hpp"
-/* Application configuration */
 
 /* STL inclusions. */
-#include <cstdlib>
-#include <cstddef>
-#include <cassert>
-#include <cstring>
+#include <algorithm>
 #include <array>
+#include <cassert>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <initializer_list>
+#include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <type_traits>
-#include <iterator>
-#include <initializer_list>
-#include <algorithm>
-#include <iostream>
 
 #if IS_WINDOWS
 #undef min

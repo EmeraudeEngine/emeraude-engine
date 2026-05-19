@@ -27,10 +27,10 @@
 #include "Scene.hpp"
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/Color.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Renderable/SimpleMeshResource.hpp"
+#include "Libs/PixelFactory/Color.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Scenes

@@ -26,6 +26,9 @@
 
 #include "RawIndexedVertexResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cmath>
 #include <vector>
@@ -34,8 +37,6 @@
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/TransferManager.hpp"
-
-#include "emeraude_config.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
