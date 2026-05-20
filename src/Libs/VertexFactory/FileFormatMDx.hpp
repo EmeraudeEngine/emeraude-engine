@@ -171,7 +171,7 @@ namespace EmEn::Libs::VertexFactory
 			struct mdl_skin_t
 			{
 				int group = 0;
-				std::vector< unsigned char > data{};
+				std::vector< unsigned char > data;
 			};
 
 			struct mdl_texCoord_t

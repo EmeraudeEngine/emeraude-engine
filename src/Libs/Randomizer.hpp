@@ -209,7 +209,7 @@ namespace EmEn::Libs
 
 		private:
 
-			std::random_device m_device{};
+			std::random_device m_device;
 			generator_t m_generator;
 	};
 }

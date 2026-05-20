@@ -297,6 +297,6 @@ namespace EmEn::Libs::WaveFactory
 
 		private:
 
-			Wave< float > m_wave{};
+			Wave< float > m_wave;
 	};
 }

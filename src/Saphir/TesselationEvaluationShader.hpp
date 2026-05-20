@@ -205,12 +205,12 @@ namespace EmEn::Saphir
 			void onGetDeclarationStats (std::stringstream & output) const noexcept override;
 
 			/* Tesselation evaluation shader inputs. */
-			std::vector< Declaration::StageInput > m_stageInputs{};
-			std::vector< Declaration::InputBlock > m_inputBlocks{};
-			std::vector< Declaration::InputPrimitive > m_inputPrimitives{};
+			std::vector< Declaration::StageInput > m_stageInputs;
+			std::vector< Declaration::InputBlock > m_inputBlocks;
+			std::vector< Declaration::InputPrimitive > m_inputPrimitives;
 			/* Tesselation evaluation shader outputs. */
-			std::vector< Declaration::StageOutput > m_stageOutputs{};
-			std::vector< Declaration::OutputBlock > m_outputBlocks{};
-			std::vector< Declaration::OutputPrimitive > m_outputPrimitives{};
+			std::vector< Declaration::StageOutput > m_stageOutputs;
+			std::vector< Declaration::OutputBlock > m_outputBlocks;
+			std::vector< Declaration::OutputPrimitive > m_outputPrimitives;
 	};
 }

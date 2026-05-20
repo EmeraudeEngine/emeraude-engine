@@ -202,7 +202,7 @@ namespace EmEn::Libs::Animation
 			}
 
 			std::vector< Joint< precision_t > > m_joints{};
-			std::unordered_map< std::string, int32_t > m_nameToIndex{};
+			std::unordered_map< std::string, int32_t > m_nameToIndex;
 	};
 
 	using SkeletonF = Skeleton< float >;

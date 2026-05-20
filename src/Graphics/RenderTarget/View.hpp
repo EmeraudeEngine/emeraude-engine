@@ -646,7 +646,7 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
-			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
+			Libs::Math::CartesianFrame< float > m_worldCoordinates;
 			bool m_isReadyForRendering{false};
 	};
 }

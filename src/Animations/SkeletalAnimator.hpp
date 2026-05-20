@@ -222,8 +222,8 @@ namespace EmEn::Animations
 			 */
 			struct JointPose
 			{
-				Libs::Math::Vector< 3, float > translation{};
-				Libs::Math::Quaternion< float > rotation{};
+				Libs::Math::Vector< 3, float > translation;
+				Libs::Math::Quaternion< float > rotation;
 				Libs::Math::Vector< 3, float > scale{1.0F, 1.0F, 1.0F};
 			};
 

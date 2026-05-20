@@ -54,7 +54,7 @@ namespace EmEn::Libs::PixelFactory
 	struct PNGErrorContext final
 	{
 		bool hasError{false};
-		std::string errorMessage{};
+		std::string errorMessage;
 	};
 
 	/**

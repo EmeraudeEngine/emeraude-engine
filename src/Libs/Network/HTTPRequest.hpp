@@ -213,6 +213,6 @@ namespace EmEn::Libs::Network
 			bool parseFirstLine (const std::string & line) noexcept override;
 
 			Method m_method{Method::NONE};
-			URI m_resource{};
+			URI m_resource;
 	};
 }

@@ -376,7 +376,7 @@ namespace EmEn::Physics
 			float m_angularDragCoefficient{DefaultAngularDragCoefficient};
 			float m_bounciness{DefaultBounciness};
 			float m_stickiness{DefaultStickiness};
-			Libs::Math::Matrix< 3, float > m_inertiaTensor{};
+			Libs::Math::Matrix< 3, float > m_inertiaTensor;
 	};
 
 	inline

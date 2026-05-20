@@ -145,10 +145,10 @@ namespace EmEn::Vulkan
 		bool isHybridNonOptimus{false};
 
 		/** @brief Name of the integrated GPU. */
-		std::string integratedGPUName{};
+		std::string integratedGPUName;
 
 		/** @brief Name of the discrete GPU. */
-		std::string discreteGPUName{};
+		std::string discreteGPUName;
 
 		/** @brief Vendor ID of the integrated GPU. */
 		uint32_t integratedVendorID{0};

@@ -593,6 +593,6 @@ namespace EmEn::Libs
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Variant & variant) noexcept;
 
-			Storage m_data{}; ///< The underlying std::variant storage holding the active value, or std::monostate when null.
+			Storage m_data; ///< The underlying std::variant storage holding the active value, or std::monostate when null.
 	};
 }

@@ -1552,7 +1552,7 @@ namespace EmEn::Graphics
 			uint32_t m_currentFrameIndex{0};
 			uint32_t m_currentReadStateIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
-			std::chrono::high_resolution_clock::time_point m_frameStartTime{};
+			std::chrono::high_resolution_clock::time_point m_frameStartTime;
 			std::chrono::nanoseconds m_frameDuration{0}; // 0 = frame limiter disabled
 			uint32_t m_frameRateLimit{0}; // 0 = disabled, otherwise FPS target
 			uint32_t m_pipelineBuiltCount{0};

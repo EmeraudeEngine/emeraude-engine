@@ -235,7 +235,7 @@ namespace EmEn::Graphics::Renderable
 
 			Libs::StaticVector< std::shared_ptr< Geometry::Interface >, MaxLODLevels > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			RasterizationOptions m_rasterizationOptions{};
+			RasterizationOptions m_rasterizationOptions;
 			mutable std::mutex m_geometryMutex;
 	};
 }

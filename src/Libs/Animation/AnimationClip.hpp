@@ -151,7 +151,7 @@ namespace EmEn::Libs::Animation
 				}
 			}
 
-			std::string m_name{};
+			std::string m_name;
 			std::vector< AnimationChannel< precision_t > > m_channels{};
 			precision_t m_duration{0};
 	};

@@ -301,7 +301,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Framebuffer > m_postProcessFramebuffer;
 			ViewMatricesInterface * m_sourceViewMatrices{nullptr};
 			ViewMatrices2DUBO m_viewMatrices;
-			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
+			Libs::Math::CartesianFrame< float > m_worldCoordinates;
 			bool m_isReadyForRendering{false};
 	};
 }

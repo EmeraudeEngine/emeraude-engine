@@ -271,15 +271,15 @@ namespace EmEn::Graphics
 			 */
 			struct AsyncReadbackSlot
 			{
-				std::unique_ptr< Vulkan::CommandBuffer > commandBuffer{}; ///< Command buffer for image-to-buffer copy.
-				std::unique_ptr< Vulkan::Sync::Fence > fence{}; ///< Fence signaled when GPU copy completes.
-				std::unique_ptr< Vulkan::Buffer > stagingBuffer{}; ///< Host-visible staging buffer for readback.
+				std::unique_ptr< Vulkan::CommandBuffer > commandBuffer; ///< Command buffer for image-to-buffer copy.
+				std::unique_ptr< Vulkan::Sync::Fence > fence; ///< Fence signaled when GPU copy completes.
+				std::unique_ptr< Vulkan::Buffer > stagingBuffer; ///< Host-visible staging buffer for readback.
 				uint8_t * mappedPtr{nullptr}; ///< Persistently mapped pointer to staging buffer (valid from create to destroy).
 				/* Transfer queue path (only used when m_useTransferQueue is true). */
-				std::unique_ptr< Vulkan::CommandBuffer > transferCommandBuffer{}; ///< Transfer queue: buffer-to-buffer DMA copy.
-				std::unique_ptr< Vulkan::Sync::Semaphore > transferSemaphore{}; ///< Signaled after graphics copy, waited by transfer DMA.
-				std::unique_ptr< Vulkan::Buffer > deviceLocalBuffer{}; ///< Device-local intermediate buffer for two-step readback.
-				std::chrono::steady_clock::time_point captureTime{}; ///< Wall-clock time when GPU copy was submitted.
+				std::unique_ptr< Vulkan::CommandBuffer > transferCommandBuffer; ///< Transfer queue: buffer-to-buffer DMA copy.
+				std::unique_ptr< Vulkan::Sync::Semaphore > transferSemaphore; ///< Signaled after graphics copy, waited by transfer DMA.
+				std::unique_ptr< Vulkan::Buffer > deviceLocalBuffer; ///< Device-local intermediate buffer for two-step readback.
+				std::chrono::steady_clock::time_point captureTime; ///< Wall-clock time when GPU copy was submitted.
 				bool pending{false}; ///< True if GPU copy is in flight.
 			};
 
@@ -289,7 +289,7 @@ namespace EmEn::Graphics
 			 */
 			struct FrameSlot
 			{
-				std::vector< uint8_t > data{}; ///< BGRA pixel data (width * height * 4 bytes).
+				std::vector< uint8_t > data; ///< BGRA pixel data (width * height * 4 bytes).
 				vpx_codec_pts_t pts{0}; ///< Wall-clock presentation timestamp in timebase units.
 			};
 
@@ -310,16 +310,16 @@ namespace EmEn::Graphics
 
 				/* IVF output. */
 				std::FILE * outputFile{nullptr};
-				std::filesystem::path outputPath{};
+				std::filesystem::path outputPath;
 
 				/* Frame queue (producer-consumer). */
-				std::deque< FrameSlot > frameQueue{};
-				std::deque< FrameSlot > freeFrames{};
-				std::mutex queueMutex{};
-				std::condition_variable queueCV{};
+				std::deque< FrameSlot > frameQueue;
+				std::deque< FrameSlot > freeFrames;
+				std::mutex queueMutex;
+				std::condition_variable queueCV;
 
 				/* Thread control. */
-				std::thread encodingThread{};
+				std::thread encodingThread;
 				std::atomic< bool > threadRunning{false};
 				std::atomic< bool > finished{false};
 
@@ -366,24 +366,24 @@ namespace EmEn::Graphics
 			Renderer & m_renderer; ///< Graphics renderer for swap-chain access.
 
 			/* Async GPU readback resources. */
-			std::shared_ptr< Vulkan::CommandPool > m_asyncCommandPool{}; ///< Transient command pool for async readback.
-			std::shared_ptr< Vulkan::CommandPool > m_transferCommandPool{}; ///< Command pool for transfer queue operations.
+			std::shared_ptr< Vulkan::CommandPool > m_asyncCommandPool; ///< Transient command pool for async readback.
+			std::shared_ptr< Vulkan::CommandPool > m_transferCommandPool; ///< Command pool for transfer queue operations.
 			std::array< AsyncReadbackSlot, AsyncBufferCount > m_asyncSlots{}; ///< Double-buffered async readback slots.
 			size_t m_currentAsyncSlot{0}; ///< Currently selected async slot index (round-robin).
 			uint32_t m_graphicsFamilyIndex{0}; ///< Graphics queue family index for ownership transfers.
 			uint32_t m_transferFamilyIndex{0}; ///< Transfer queue family index for ownership transfers.
 
 			/* Detachable encoding sessions. */
-			std::unique_ptr< EncodingSession > m_currentSession{}; ///< Active encoding session (null when not recording).
-			std::vector< std::unique_ptr< EncodingSession > > m_finishingSessions{}; ///< Sessions still encoding in background.
+			std::unique_ptr< EncodingSession > m_currentSession; ///< Active encoding session (null when not recording).
+			std::vector< std::unique_ptr< EncodingSession > > m_finishingSessions; ///< Sessions still encoding in background.
 
 			/* Recording state (main thread only). */
 			std::atomic< bool > m_isRecording{false}; ///< True when capture is active on the main thread.
 
 			/* Timing and frame pacing. */
 			uint32_t m_targetFramerate{30}; ///< Target recording framerate (default 30 FPS).
-			std::chrono::steady_clock::time_point m_lastCaptureTime{}; ///< Last frame capture timestamp for pacing.
-			std::chrono::steady_clock::time_point m_recordStartTime{}; ///< Wall-clock time when recording started (PTS origin).
+			std::chrono::steady_clock::time_point m_lastCaptureTime; ///< Last frame capture timestamp for pacing.
+			std::chrono::steady_clock::time_point m_recordStartTime; ///< Wall-clock time when recording started (PTS origin).
 			std::chrono::nanoseconds m_frameDuration{0}; ///< Duration between frames based on target FPS.
 
 			/* Recording parameters (locked at start). */

@@ -119,8 +119,8 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static std::string getDirectory (const std::string & path) noexcept;
 
-			std::vector< std::string > m_directoryStack{};
-			std::set< std::string > m_includedFiles{};
+			std::vector< std::string > m_directoryStack;
+			std::set< std::string > m_includedFiles;
 			int m_externalLocalDirectoryCount = 0;
 	};
 }

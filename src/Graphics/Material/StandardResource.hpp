@@ -897,8 +897,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto MaxPBRShininess{128.0F};
 			static constexpr auto DielectricF0{0.04F};
 
-			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
-			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
+			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
+			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
 			BlendingMode m_blendingMode{BlendingMode::None};
 			std::array< float, 28 > m_materialProperties{
 				/* Ambient color (4), */

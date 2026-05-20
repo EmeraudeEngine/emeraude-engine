@@ -168,8 +168,8 @@ namespace EmEn::Audio
 			/* Memory mode. */
 			std::vector< ALshort > m_samples;
 			/* Streaming mode. */
-			std::filesystem::path m_outputPath{};
-			std::ofstream m_outputFileStream{};
+			std::filesystem::path m_outputPath;
+			std::ofstream m_outputFileStream;
 			uint32_t m_streamByteCount{0};
 			/* Common. */
 			std::thread m_process;

@@ -2305,9 +2305,9 @@ namespace EmEn::Scenes
 			/** @brief Render lists indexed by render category (Opaque, Translucent, TranslucentGB, etc.). */
 			std::array< RenderBatch::List, 7 > m_renderLists{};
 			/** @brief RT opaque render list (all scene geometry, no frustum culling). */
-			RenderBatch::List m_rtOpaqueList{};
+			RenderBatch::List m_rtOpaqueList;
 			/** @brief RT opaque lighted render list (all scene geometry, no frustum culling). */
-			RenderBatch::List m_rtOpaqueLightedList{};
+			RenderBatch::List m_rtOpaqueLightedList;
 			/** @brief Cached TLAS distance setting (read once at scene init, not per-frame). */
 			float m_TLASDistance{DefaultGraphicsRayTracingTLASDistance};
 			/** @brief Current main camera view distance for LOD computation. Updated per prepareRendering(). */

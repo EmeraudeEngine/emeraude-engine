@@ -320,7 +320,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::VertexGridResource > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			RasterizationOptions m_rasterizationOptions{};
+			RasterizationOptions m_rasterizationOptions;
 	};
 }
 

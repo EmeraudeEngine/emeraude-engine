@@ -53,7 +53,7 @@ namespace EmEn::Libs::Animation
 	struct Joint final
 	{
 		/** @brief Human-readable joint name (e.g., "LeftShoulder", "Spine1"). Used for lookup. */
-		std::string name{};
+		std::string name;
 
 		/** @brief Index of the parent joint in the Skeleton's joint array. NoParent (-1) for root joints. */
 		int32_t parentIndex{NoParent};

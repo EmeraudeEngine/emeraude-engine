@@ -222,15 +222,15 @@ namespace EmEn::Audio
 			ALCcontext * m_gameContext{nullptr}; ///< Game audio context on the loopback device (set as global current).
 			ALCcontext * m_playbackContext{nullptr}; ///< Playback context on the real output device (thread-local on render thread).
 			ALCcontext * m_previousGlobalContext{nullptr}; ///< Saved previous global context to restore on terminate.
-			std::thread m_renderThread{}; ///< Dedicated render thread that pulls loopback samples and forwards to speakers.
+			std::thread m_renderThread; ///< Dedicated render thread that pulls loopback samples and forwards to speakers.
 			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz}; ///< Playback frequency (typically 48kHz).
 			uint16_t m_channelCount{2}; ///< Number of audio channels (2 = stereo, 6 = 5.1 surround).
 			std::atomic< bool > m_recording{false}; ///< True when actively recording audio to WAV.
 			std::atomic< bool > m_renderRunning{false}; ///< True when render thread should continue running.
-			std::filesystem::path m_outputPath{}; ///< Output path for the WAV file set in startRecording().
+			std::filesystem::path m_outputPath; ///< Output path for the WAV file set in startRecording().
 
-			std::ofstream m_outputFileStream{}; ///< Output file stream for writing WAV data.
-			std::streampos m_dataSizePos{}; ///< Position in the file where the data chunk size is written.
+			std::ofstream m_outputFileStream; ///< Output file stream for writing WAV data.
+			std::streampos m_dataSizePos; ///< Position in the file where the data chunk size is written.
 			uint32_t m_streamByteCount{0}; ///< Total bytes written to the data chunk.
 	};
 }

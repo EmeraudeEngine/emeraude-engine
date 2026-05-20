@@ -76,6 +76,6 @@ namespace EmEn::Audio
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
 			Manager * m_audioManager{nullptr};
-			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
+			Libs::Math::CartesianFrame< float > m_worldCoordinates;
 	};
 }

@@ -147,7 +147,7 @@ namespace EmEn::Libs::Animation
 		private:
 
 			/** @brief Maps skin-local index → skeleton-global joint index. */
-			std::vector< int32_t > m_jointIndices{};
+			std::vector< int32_t > m_jointIndices;
 
 			/** @brief Per-joint inverse bind matrices, indexed by skin-local index. */
 			std::vector< Matrix< 4, precision_t > > m_inverseBindMatrices{};

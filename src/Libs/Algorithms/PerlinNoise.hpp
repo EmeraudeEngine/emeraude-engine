@@ -234,6 +234,6 @@ namespace EmEn::Libs::Algorithms
 				{1, 1, 0}, {-1, 1, 0}, {1, -1, 0}, {-1, -1, 0}  // Indices 12-15 (Répétition first 4)
 			}};
 
-			std::vector< uint32_t > m_permutations{};
+			std::vector< uint32_t > m_permutations;
 	};
 }

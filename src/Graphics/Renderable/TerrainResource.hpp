@@ -339,9 +339,9 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			Libs::VertexFactory::Grid< float > m_localData{};
-			Libs::Math::Vector< 2, float > m_lastAdaptiveGridPositionUpdated{};
-			RasterizationOptions m_rasterizationOptions{};
+			Libs::VertexFactory::Grid< float > m_localData;
+			Libs::Math::Vector< 2, float > m_lastAdaptiveGridPositionUpdated;
+			RasterizationOptions m_rasterizationOptions;
 			float m_visibleSize{DefaultVisibleSize};
 	};
 }

@@ -133,8 +133,8 @@ namespace EmEn::Saphir
 		private:
 
 			/* main() code. */
-			std::vector< std::string > m_topInstructions{};
-			std::vector< std::string > m_instructions{};
-			std::vector< std::string > m_outputInstructions{};
+			std::vector< std::string > m_topInstructions;
+			std::vector< std::string > m_instructions;
+			std::vector< std::string > m_outputInstructions;
 	};
 }

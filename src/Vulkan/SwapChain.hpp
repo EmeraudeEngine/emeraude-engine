@@ -545,7 +545,7 @@ namespace EmEn::Vulkan
 			uint32_t m_acquiredImageIndex{0};
 			Libs::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
-			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
+			Libs::Math::CartesianFrame< float > m_worldCoordinates;
 			float m_fovOrNear{0.0F};
 			float m_distanceOrFar{0.0F};
 			bool m_showInformation{false};

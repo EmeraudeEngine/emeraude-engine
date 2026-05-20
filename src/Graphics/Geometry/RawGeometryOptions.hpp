@@ -46,9 +46,9 @@ namespace EmEn::Graphics::Geometry
 		Topology topology{Topology::TriangleList};
 
 		/** @brief Optional explicit bounding box minimum point. */
-		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMin{};
+		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMin;
 
 		/** @brief Optional explicit bounding box maximum point. */
-		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMax{};
+		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMax;
 	};
 }

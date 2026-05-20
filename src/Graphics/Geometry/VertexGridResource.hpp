@@ -362,7 +362,7 @@ namespace EmEn::Graphics::Geometry
 			/* VBO generation options. */
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
 			Libs::PixelFactory::Color< float > m_globalVertexColor;
-			std::shared_ptr< ImageResource > m_vertexColorMap{};
+			std::shared_ptr< ImageResource > m_vertexColorMap;
 	};
 }
 

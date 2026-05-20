@@ -1286,8 +1286,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultEmissiveStrength{1.0F}; /* KHR_materials_emissive_strength: HDR multiplier (1.0 = pass-through). */
 			static constexpr auto DefaultClearCoatNormalScale{1.0F}; /* Clear coat normal map scale (1.0 = full effect). */
 
-			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
-			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
+			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
+			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
 			BlendingMode m_blendingMode{BlendingMode::None};
 			std::array< float, 52 > m_materialProperties{
 				/* Albedo color (4) */

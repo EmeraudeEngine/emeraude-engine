@@ -75,7 +75,7 @@ namespace EmEn::Graphics::Geometry
 	{
 		uint32_t sectorX{0};
 		uint32_t sectorY{0};
-		Libs::Math::Space3D::AACuboid< float > bounds{};
+		Libs::Math::Space3D::AACuboid< float > bounds;
 		std::array< SectorDrawCall, MaxLODLevels > lodDrawCalls{};
 		/**
 		 * @brief Stitching draw calls for edge transitions to neighbor with +1 LOD.
@@ -539,11 +539,11 @@ namespace EmEn::Graphics::Geometry
 			/* Sector and LOD configuration. */
 			uint32_t m_sectorCountPerAxis{4};
 			uint32_t m_lodLevelCount{0};
-			std::vector< SectorLODData > m_sectorsData{};
+			std::vector< SectorLODData > m_sectorsData;
 			/* VBO generation options. */
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
 			Libs::PixelFactory::Color< float > m_globalVertexColor;
-			std::shared_ptr< ImageResource > m_vertexColorMap{};
+			std::shared_ptr< ImageResource > m_vertexColorMap;
 			/* Debug options. */
 			uint32_t m_forcedLODLevel{NoForcedLOD};
 			/* LOD distance configuration. */
@@ -554,8 +554,8 @@ namespace EmEn::Graphics::Geometry
 			/* Deferred VBO destruction (to avoid Vulkan use-after-free). */
 			std::unique_ptr< Vulkan::VertexBufferObject > m_pendingDestructionVBO;
 			/* Cached stitching data (updated by prepareAdaptiveRendering()). */
-			mutable std::vector< uint32_t > m_cachedSectorLODs{};
-			mutable std::vector< std::array< uint32_t, 2 > > m_cachedStitchingDrawCalls{};
+			mutable std::vector< uint32_t > m_cachedSectorLODs;
+			mutable std::vector< std::array< uint32_t, 2 > > m_cachedStitchingDrawCalls;
 	};
 }
 

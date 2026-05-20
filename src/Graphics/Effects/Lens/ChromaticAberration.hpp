@@ -154,8 +154,8 @@ namespace EmEn::Graphics::Effects::Lens
 			bool m_radial{false};
 			bool m_barrelEnabled{false};
 			float m_barrelStrength{0.1F};
-			Libs::Math::Vector< 2, float > m_redOffset{};
-			Libs::Math::Vector< 2, float > m_greenOffset{};
-			Libs::Math::Vector< 2, float > m_blueOffset{};
+			Libs::Math::Vector< 2, float > m_redOffset;
+			Libs::Math::Vector< 2, float > m_greenOffset;
+			Libs::Math::Vector< 2, float > m_blueOffset;
 	};
 }

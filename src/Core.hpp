@@ -1368,7 +1368,7 @@ namespace EmEn
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
 			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
-			std::filesystem::path m_rushVoiceOverPath{};
+			std::filesystem::path m_rushVoiceOverPath;
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).

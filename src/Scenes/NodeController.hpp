@@ -172,9 +172,9 @@ namespace EmEn::Scenes
 			static constexpr auto DefaultMoveStep{6.0F};
 			static constexpr auto DefaultRotationAngleStep{1.0F};
 
-			std::shared_ptr< Node > m_controlledNode{};
+			std::shared_ptr< Node > m_controlledNode;
 			Libs::Math::TransformSpace m_transformSpace{Libs::Math::TransformSpace::Parent};
-			Input::GamepadController m_controller{};
+			Input::GamepadController m_controller;
 			float m_moveStep{DefaultMoveStep};
 			float m_rotationAngleStep{DefaultRotationAngleStep};
 			bool m_nodeRotationMode{false};

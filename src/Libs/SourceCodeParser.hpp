@@ -193,7 +193,7 @@ namespace EmEn::Libs
 		private:
 
 			std::vector< std::string > m_lines;
-			std::map< size_t, std::multimap< size_t, std::string > > m_annotations{};
+			std::map< size_t, std::multimap< size_t, std::string > > m_annotations;
 			std::vector< std::string > m_footAnnotations;
 			const uint32_t m_showLineNumbers;
 			const bool m_removeComments;

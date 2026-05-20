@@ -51,9 +51,9 @@ namespace EmEn::Physics
 	 */
 	struct CollisionDetectionResults
 	{
-		Libs::Math::Vector< 3, float > m_MTV{};		  /**< Minimum Translation Vector to separate shapes. */
-		Libs::Math::Vector< 3, float > m_contact{};	  /**< Absolute contact point in world space. */
-		Libs::Math::Vector< 3, float > m_impactNormal{}; /**< Normal of the impact surface. */
+		Libs::Math::Vector< 3, float > m_MTV;		  /**< Minimum Translation Vector to separate shapes. */
+		Libs::Math::Vector< 3, float > m_contact;	  /**< Absolute contact point in world space. */
+		Libs::Math::Vector< 3, float > m_impactNormal; /**< Normal of the impact surface. */
 		float m_depth{0.0F};							 /**< Penetration depth. */
 		bool m_collisionDetected{false};				 /**< Whether a collision was detected. */
 	};
