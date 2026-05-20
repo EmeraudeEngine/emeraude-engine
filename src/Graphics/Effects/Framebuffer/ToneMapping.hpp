@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Available tone mapping operators.
 			 */
-			enum class Operator : uint32_t
+			enum class Operator : std::uint8_t
 			{
 				ACESFilmic = 0,
 				Reinhard = 1,

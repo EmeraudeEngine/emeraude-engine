@@ -36,7 +36,7 @@
 namespace EmEn::Saphir::Declaration
 {
 	/** @brief GLSL input primitive type enumerations. */
-	enum class InputPrimitiveType
+	enum class InputPrimitiveType : std::uint8_t
 	{
 		Points,
 		Lines,
@@ -46,7 +46,7 @@ namespace EmEn::Saphir::Declaration
 	};
 
 	/** @brief GLSL output primitive type enumerations. */
-	enum class OutputPrimitiveType
+	enum class OutputPrimitiveType : std::uint8_t
 	{
 		Points,
 		LineStrip,
@@ -57,7 +57,7 @@ namespace EmEn::Saphir::Declaration
 	 * @brief The GLSL variable type enumerations.
 	 * @note The enumeration is used to compute size in bytes for declarations.
 	 */
-	enum class VariableType
+	enum class VariableType : std::uint8_t
 	{
 		Void,
 		Float,
@@ -266,7 +266,7 @@ namespace EmEn::Saphir::Declaration
 	 *  - std430: This layout works like std140, except with a few optimizations in the alignment and strides for arrays and structs of scalars and vector elements (except for vec3 elements, which remain unchanged from std140). Specifically, they are no longer rounded up to a multiple of 16 bytes. So an array of `float`s will match with a C++ array of `float`s.
 	 * 		Note that this layout can only be used with shader storage blocks, not uniform blocks.
 	 */
-	enum class MemoryLayout
+	enum class MemoryLayout : std::uint8_t
 	{
 		Shared,
 		Packed,
@@ -278,7 +278,7 @@ namespace EmEn::Saphir::Declaration
 	 * @brief The GLSL memory access qualifier for buffer blocks.
 	 * @note Maps to GLSL memory qualifiers: readonly, writeonly.
 	 */
-	enum class AccessQualifier
+	enum class AccessQualifier : std::uint8_t
 	{
 		None, /* No qualifier — read/write access. */
 		ReadOnly, /* Maps to GLSL 'readonly'. */
@@ -288,7 +288,7 @@ namespace EmEn::Saphir::Declaration
 	/**
 	 * @brief The GLSL matrix storage order enumeration.
 	 */
-	enum class MatrixStorageOrder
+	enum class MatrixStorageOrder : std::uint8_t
 	{
 		Default, /* This won't add any code. */
 		ColumnMajor, /* This is the real GLSL default. */

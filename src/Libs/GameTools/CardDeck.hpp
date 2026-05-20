@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <algorithm>
 #include <cstddef>
 #include <memory>
@@ -46,7 +47,7 @@ namespace EmEn::Libs::GameTools
 		public:
 
 			/** Type of card picking. */
-			enum class Where
+			enum class Where : std::uint8_t
 			{
 				Top,
 				Bottom,

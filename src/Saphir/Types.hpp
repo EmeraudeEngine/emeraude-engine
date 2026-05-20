@@ -36,7 +36,7 @@ namespace EmEn::Saphir
 	/**
 	 * @brief The shader type enumerations.
 	 */
-	enum class ShaderType : uint32_t
+	enum class ShaderType : std::uint8_t
 	{
 		Undefined,
 		VertexShader,

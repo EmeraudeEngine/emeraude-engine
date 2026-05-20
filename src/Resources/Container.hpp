@@ -596,7 +596,7 @@ namespace EmEn::Resources
 			 *
 			 * @version 0.8.35
 			 */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				Unknown,				   ///< Unknown or unspecified notification.
 				LoadingProcessStarted,	 ///< Emitted when a resource begins loading.

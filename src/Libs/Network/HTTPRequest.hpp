@@ -52,7 +52,7 @@ namespace EmEn::Libs::Network
 			/**
 			 * @brief The HTTP method enumeration.
 			 */
-			enum class Method
+			enum class Method : std::uint8_t
 			{
 				GET,
 				HEAD,

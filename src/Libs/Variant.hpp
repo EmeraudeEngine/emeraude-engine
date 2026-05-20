@@ -117,7 +117,7 @@ namespace EmEn::Libs
 			 *
 			 * @version 0.8.61
 			 */
-			enum class Type
+			enum class Type : std::uint8_t
 			{
 				/* Null variable. */
 				Null,              ///< No value is held; the variant is in its default empty state.

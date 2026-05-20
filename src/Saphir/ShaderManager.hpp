@@ -90,7 +90,7 @@ namespace EmEn::Saphir
 			static constexpr auto ClassId{"ShaderManagerService"};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				ShaderCompilationSucceed,
 				ShaderCompilationFailed,

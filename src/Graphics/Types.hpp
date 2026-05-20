@@ -640,7 +640,7 @@ namespace EmEn::Graphics
 	constexpr auto VectorAlignment{4UL};
 
 	/** @brief Defines vertex attribute types. */
-	enum class VertexAttributeType : uint32_t
+	enum class VertexAttributeType : std::uint8_t
 	{
 		Position = 0U,
 		Tangent = 1U,
@@ -755,7 +755,7 @@ namespace EmEn::Graphics
 	}
 
 	/** @brief Defines cubemap faces. */
-	enum class CubemapFace : size_t
+	enum class CubemapFace : std::uint8_t
 	{
 		PositiveX = 0,
 		NegativeX = 1,

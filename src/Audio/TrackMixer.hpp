@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -89,7 +90,7 @@ namespace EmEn::Audio
 			};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				MusicPlaying,
 				MusicSwitching,

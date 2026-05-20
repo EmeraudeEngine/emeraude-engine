@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -82,7 +83,7 @@ namespace EmEn::Scenes::Component
 		public:
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				ComponentContentModified,
 				MaxEnum

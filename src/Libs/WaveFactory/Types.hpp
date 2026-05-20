@@ -42,7 +42,7 @@ namespace EmEn::Libs::WaveFactory
 	/**
 	 * @brief The channel mode enumeration.
 	 */
-	enum class Channels : size_t
+	enum class Channels : std::uint8_t
 	{
 		Invalid = 0,
 		Mono = 1,
@@ -52,7 +52,7 @@ namespace EmEn::Libs::WaveFactory
 	/**
 	 * @brief The channel index enumeration.
 	 */
-	enum class Channel : size_t
+	enum class Channel : std::uint8_t
 	{
 		Mono = 0,
 		Left = 0,

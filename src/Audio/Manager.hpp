@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <filesystem>
 #include <memory>
@@ -84,7 +85,7 @@ namespace EmEn::Audio
 			static constexpr auto ClassId{"AudioManagerService"};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				SpeakerCreated,
 				SpeakerDestroyed,

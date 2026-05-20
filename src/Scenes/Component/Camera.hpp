@@ -56,7 +56,7 @@ namespace EmEn::Scenes::Component
 		public:
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				LensEffectsChanged,
 				/* Enumeration boundary. */

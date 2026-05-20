@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 
@@ -42,7 +43,7 @@ namespace EmEn::Libs::Network
 			/**
 			 * @brief The HTTP protocol version enumeration.
 			 */
-			enum class Version
+			enum class Version : std::uint8_t
 			{
 				HTTP09,
 				HTTP10,

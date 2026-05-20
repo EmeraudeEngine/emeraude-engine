@@ -439,7 +439,7 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Tells what kind of attributes are predominant in the OBJ file.
 			 */
-			enum PredominantAttributes
+			enum PredominantAttributes : std::uint8_t
 			{
 				V,
 				VN,

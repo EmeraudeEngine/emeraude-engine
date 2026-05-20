@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -155,7 +156,7 @@ namespace EmEn::Scenes
 			static constexpr auto DefaultSceneBoundary{1000.0F};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				/** @brief This event is fired when a new empty scene has been created. The scene smart pointer will be passed. */
 				SceneCreated,

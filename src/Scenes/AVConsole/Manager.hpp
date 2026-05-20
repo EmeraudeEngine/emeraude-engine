@@ -66,7 +66,7 @@ namespace EmEn::Scenes::AVConsole
 		public:
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				VideoDeviceAdded,
 				VideoDeviceRemoved,

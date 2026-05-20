@@ -204,7 +204,7 @@ namespace EmEn
 			 * }
 			 * @endcode
 			 */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				EnteringMainLoop, ///< Engine main loop has started.
 				ExitingMainLoop, ///< Engine main loop is stopped.

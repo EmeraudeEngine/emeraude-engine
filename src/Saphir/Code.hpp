@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <sstream>
 
 /* Local inclusions for usages. */
@@ -37,7 +38,7 @@
 namespace EmEn::Saphir
 {
 	/** @brief Code location type. */
-	enum class Location
+	enum class Location : std::uint8_t
 	{
 		Top,
 		Main,
@@ -45,7 +46,7 @@ namespace EmEn::Saphir
 	};
 
 	/** @brief Line ending enumeration. */
-	enum class Line
+	enum class Line : std::uint8_t
 	{
 		End,
 		Blank

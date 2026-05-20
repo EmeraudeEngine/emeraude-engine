@@ -360,7 +360,7 @@ namespace EmEn::Graphics
 			static constexpr auto ClassId{"RendererService"};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				WindowContentRefreshed,
 				/* Enumeration boundary. */

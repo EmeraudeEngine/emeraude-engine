@@ -144,7 +144,7 @@ namespace EmEn
 			};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				Created,
 				Destroyed,

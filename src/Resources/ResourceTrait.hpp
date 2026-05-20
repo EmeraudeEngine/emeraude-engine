@@ -398,7 +398,7 @@ namespace EmEn::Resources
 			 *
 			 * @see ObservableTrait::notify(), ObservableTrait::subscribe()
 			 */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				LoadFinished, ///< Resource and all dependencies successfully loaded and ready for use
 				LoadFailed,   ///< Loading failed at any stage (check logs for detailed error messages)

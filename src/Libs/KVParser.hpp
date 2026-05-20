@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
 #include <iosfwd>
 #include <map>
@@ -457,7 +458,7 @@ namespace EmEn::Libs
 			 * @brief Categorizes different line types encountered during file parsing.
 			 * @version 0.8.38
 			 */
-			enum class LineType
+			enum class LineType : std::uint8_t
 			{
 				None = 0,		 ///< Empty or unrecognized line
 				Headers = 1,	  ///< Header line starting with '@'

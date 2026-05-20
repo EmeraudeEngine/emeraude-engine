@@ -30,6 +30,7 @@
 #include "Libs/emeraude_platform.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <cstddef>
 #include <set>
@@ -73,7 +74,7 @@ namespace EmEn::Input
 			static constexpr auto ClassId{"InputManagerService"};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				DroppedFiles,
 				/* Enumeration boundary. */

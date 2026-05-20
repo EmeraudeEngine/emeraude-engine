@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -95,7 +96,7 @@ namespace EmEn::Scenes
 			static constexpr auto DefaultAmbientLightIntensity{0.1F};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				DirectionalLightAdded,
 				PointLightAdded,

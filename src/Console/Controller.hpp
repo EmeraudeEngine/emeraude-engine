@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 
 /* Local inclusions for inheritances. */
@@ -62,7 +63,7 @@ namespace EmEn::Console
 			static constexpr auto ClassId{"ConsoleControllerService"};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				Exit,
 				HardExit,

@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <iostream>
 #include <type_traits>
@@ -44,7 +45,7 @@ namespace EmEn::Libs::VertexFactory
 	/**
 	 * @brief The triangle construction mode enumeration.
 	 */
-	enum class ConstructionMode
+	enum class ConstructionMode : std::uint8_t
 	{
 		None,
 		Triangles,

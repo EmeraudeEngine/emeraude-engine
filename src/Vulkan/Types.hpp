@@ -52,7 +52,7 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief Known GPU vendor IDs. */
-	enum class Vendor : uint32_t
+	enum class Vendor : std::uint16_t
 	{
 		Unknown = 0,
 		AMD = 0x1002,

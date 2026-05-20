@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <cmath>
 #include <sstream>
@@ -316,7 +317,7 @@ namespace EmEn::Libs::Math
 
 		private:
 
-			enum VertexIndex
+			enum VertexIndex : std::uint8_t
 			{
 				PositiveXPositiveYPositiveZ = 0,
 				PositiveXPositiveYNegativeZ = 1,
@@ -328,7 +329,7 @@ namespace EmEn::Libs::Math
 				NegativeXNegativeYNegativeZ = 7
 			};
 
-			enum NormalIndex
+			enum NormalIndex : std::uint8_t
 			{
 				PositiveX = 0,
 				NegativeX = 1,

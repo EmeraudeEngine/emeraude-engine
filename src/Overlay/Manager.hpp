@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <any>
 #include <array>
 #include <cstddef>
@@ -80,7 +81,7 @@ namespace EmEn::Overlay
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"OverlayManagerService"};
 
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				UIScreenCreated,
 				UIScreenDestroying,

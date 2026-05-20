@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <cstddef>
 #include <ostream>
 #include <string>
@@ -76,7 +77,7 @@ namespace EmEn::Physics
 			static constexpr auto DefaultStickiness{0.5F};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				MassChanged,
 				SurfaceChanged,

@@ -36,7 +36,7 @@
 namespace EmEn::Saphir
 {
 	/** @brief The set type. */
-	enum class SetType
+	enum class SetType : std::uint8_t
 	{
 		/* Everything used by the whole frame. */
 		PerView,

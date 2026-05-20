@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <algorithm>
 #include <cstddef>
 #include <map>
@@ -66,7 +67,7 @@ namespace EmEn::Net
 			static constexpr auto ClassId{"Net::ManagerService"};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				Unknown,
 				DownloadingStarted,

@@ -54,7 +54,7 @@ namespace EmEn::Saphir
 	/**
 	 * @brief PCF (Percentage-Closer Filtering) method for shadow mapping.
 	 */
-	enum class PCFMethod : uint32_t
+	enum class PCFMethod : std::uint8_t
 	{
 		/** @brief Uniform grid sampling (legacy method, can produce banding artifacts). */
 		Grid = 0,

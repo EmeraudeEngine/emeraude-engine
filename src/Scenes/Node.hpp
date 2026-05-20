@@ -99,7 +99,7 @@ namespace EmEn::Scenes
 			 * Extends AbstractEntity notification codes. Observers can subscribe to these
 			 * notifications to react to scene graph changes.
 			 */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				SubNodeCreating = AbstractEntity::MaxEnum, ///< Emitted before a child node is created. Data: parent shared_ptr.
 				SubNodeCreated,							 ///< Emitted after a child node is created. Data: child shared_ptr.

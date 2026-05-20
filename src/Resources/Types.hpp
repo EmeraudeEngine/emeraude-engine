@@ -94,7 +94,7 @@ namespace EmEn::Resources
 	 * @see to_SourceType(std::string_view)
 	 * @version 0.8.35
 	 */
-	enum class SourceType
+	enum class SourceType : std::uint8_t
 	{
 		Undefined,	 ///< Uninitialized or unknown source type. Default state for new resources.
 		LocalData,	 ///< Data key holds the path to a local file on the filesystem.

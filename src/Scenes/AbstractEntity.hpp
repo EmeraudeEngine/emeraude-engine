@@ -60,7 +60,7 @@ namespace EmEn::Physics
 namespace EmEn::Scenes
 {
 	/** @brief Types of visual debug overlays that can be enabled on entities. */
-	enum class VisualDebugType
+	enum class VisualDebugType : std::uint8_t
 	{
 		Axis,			///< Local coordinate system axes (RGB = XYZ).
 		Velocity,		///< Velocity vector visualization for moving entities.
@@ -213,7 +213,7 @@ namespace EmEn::Scenes
 			 * @note Generic codes (ComponentCreated, ComponentDestroyed) carry
 			 *	   std::shared_ptr< Component::Abstract >.
 			 */
-			enum NotificationCode
+			enum NotificationCode : std::uint8_t
 			{
 				/* Main notifications */
 				EntityContentModified,		///< Entity's content has changed (bounding primitives, properties).
