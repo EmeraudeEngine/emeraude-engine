@@ -83,6 +83,7 @@ namespace EmEn::Libs::Math
 			 * @param callback A function that receives the point and the interval on the line.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			synthesize (size_t segments, const Callback & callback) const noexcept
 			{

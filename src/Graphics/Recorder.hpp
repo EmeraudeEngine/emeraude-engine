@@ -340,12 +340,15 @@ namespace EmEn::Graphics
 				void encodingThreadFunc () noexcept;
 
 				/** @brief Writes the 32-byte IVF file header. */
+				[[nodiscard]] 
 				bool writeIVFFileHeader () const noexcept;
 
 				/** @brief Writes a 12-byte IVF frame header. */
+				[[nodiscard]] 
 				bool writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept;
 
 				/** @brief Patches the frame count at byte offset 24 in the IVF header. */
+				[[nodiscard]] 
 				bool patchIVFFrameCount () const noexcept;
 
 				/** @brief Flushes codec, patches IVF, closes file, destroys resources. */

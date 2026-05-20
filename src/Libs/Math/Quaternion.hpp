@@ -1125,6 +1125,7 @@ namespace EmEn::Libs::Math
 			 * It returns the matrix, which will not be a rotation if the quaternion is non-unit.
 			 * @return Matrix< 3, precision_t >
 			 */
+			[[nodiscard]] 
 			constexpr Matrix< 3, precision_t >
 			rotationMatrix () const noexcept
 			{
@@ -1231,6 +1232,7 @@ namespace EmEn::Libs::Math
 			 * @param vector A reference to a vector.
 			 * @return Vector< 3, precision_t >
 			 */
+			[[nodiscard]] 
 			constexpr Vector< 3, precision_t >
 			rotatedVector (const Vector< 3, precision_t > & vector) const noexcept
 			{

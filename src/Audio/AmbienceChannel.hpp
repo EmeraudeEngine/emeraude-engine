@@ -143,6 +143,7 @@ namespace EmEn::Audio
 			}
 
 			/** @copydoc EmEn::Audio::Source::enableDirectFilter() */
+			[[nodiscard]] 
 			bool
 			enableDirectFilter (const std::shared_ptr< Filters::Abstract > & filter) const noexcept
 			{

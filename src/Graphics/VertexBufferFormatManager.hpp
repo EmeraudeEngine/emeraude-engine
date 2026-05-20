@@ -160,6 +160,7 @@ namespace EmEn::Graphics
 			 * @param bufferFlags The vertex buffer object flags.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool endBinding (Topology topology, uint32_t bufferFlags) const noexcept;
 
 			/**

@@ -603,6 +603,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param destinationClip A reference to a rectangle on the target pixmap.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			blit (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & sourceClip, const Math::Space2D::AARectangle< dimension_t > & destinationClip) const noexcept
 			{
@@ -637,6 +638,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @brief Copies the source pixmap to the target pixmap.
 			 * @param source A reference to a source pixmap.
 			 */
+			[[nodiscard]] 
 			bool
 			blit (const Pixmap< pixel_data_t, dimension_t > & source) const noexcept
 			{
@@ -652,6 +654,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param destinationClip A reference to a rectangle on the target pixmap.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			blit (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & destinationClip) const noexcept
 			{
@@ -666,6 +669,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param destinationClip A reference to a rectangle on the target pixmap.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			blit (const RawPixmapData< pixel_data_t > & rawData, const Math::Space2D::AARectangle< dimension_t > & sourceClip, const Math::Space2D::AARectangle< dimension_t > & destinationClip) const noexcept
 			{
@@ -713,6 +717,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param clip A reference to a rectangle on the target pixmap. This will be used as the source clip and the destination clip.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			blit (const RawPixmapData< pixel_data_t > & rawData, const Math::Space2D::AARectangle< dimension_t > & clip) const noexcept
 			{
@@ -728,6 +733,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param opacity A global opacity. Default 1.0.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			copy (const Pixmap< pixel_data_t, dimension_t > & source, Math::Space2D::AARectangle< dimension_t > sourceClip, Math::Space2D::AARectangle< dimension_t > destinationClip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
@@ -774,6 +780,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param opacity A global opacity. Default 1.0.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			copy (const Pixmap< pixel_data_t, dimension_t > & source, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
@@ -791,6 +798,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param opacity A global opacity. Default 1.0.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			copy (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & destinationClip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
@@ -807,6 +815,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param opacity A global opacity. Default 1.0.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			copy (const Pixmap< pixel_data_t, dimension_t > & source, int32_t xPosition, int32_t yPosition, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
@@ -883,6 +892,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param opacity A global opacity. Default 1.0.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			copy (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Vector< 2, int32_t > & position, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
@@ -935,6 +945,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param mode Set the copy technic. Default: Replace.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			stencil (const Pixmap< pixel_data_t, dimension_t > & source, Math::Space2D::AARectangle< dimension_t > sourceClip, Math::Space2D::AARectangle< dimension_t > destinationClip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace) const noexcept
 			{
@@ -973,6 +984,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param opacity A global opacity. Default 1.0.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			stencil (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & clip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{

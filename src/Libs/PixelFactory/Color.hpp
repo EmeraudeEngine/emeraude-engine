@@ -1554,6 +1554,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return integer_t
 			 */
 			template< typename integer_t >
+			[[nodiscard]] 
 			integer_t
 			convertFloatToInteger (data_t value) const noexcept
 			{

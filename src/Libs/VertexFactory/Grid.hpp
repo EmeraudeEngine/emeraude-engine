@@ -1539,6 +1539,7 @@ namespace EmEn::Libs::VertexFactory
 			 *
 			 * @see getHeightAt()
 			 */
+			[[nodiscard]] 
 			const std::vector< vertex_data_t > &
 			heights () const noexcept
 			{

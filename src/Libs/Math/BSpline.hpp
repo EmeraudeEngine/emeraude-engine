@@ -330,6 +330,7 @@ namespace EmEn::Libs::Math
 			 * @param constant Default false.
 			 * @return bool
 			 */
+			[[nodiscard]] 
 			bool
 			synthesize (const Callback & callback, bool constant = false) const noexcept
 			{

@@ -593,7 +593,10 @@ namespace EmEn::Graphics
 			{
 				if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
 				{
-					this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts);
+					if ( !this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts) )
+					{
+						std::cerr << "[" << ClassId << "] Warning: Failed to write IVF frame header in '" << outputPath << "'!" "\n";
+					}
 					std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, outputFile);
 					statsEncodedBytes += pkt->data.frame.sz;
 				}
@@ -667,7 +670,10 @@ namespace EmEn::Graphics
 			{
 				if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
 				{
-					this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts);
+					if ( !this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts) )
+					{
+						std::cerr << "[" << ClassId << "] Warning: Failed to write IVF frame header during flush in '" << outputPath << "'!" "\n";
+					}
 					std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, outputFile);
 				}
 			}

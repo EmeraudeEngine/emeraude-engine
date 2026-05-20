@@ -1545,6 +1545,7 @@ namespace EmEn::Libs::Math
 			 * @brief Returns the matrix without the translation transformation.
 			 * @return Matrix
 			 */
+			[[nodiscard]] 
 			Matrix
 			noTranslation () const noexcept
 				requires (dim_t == 4)
