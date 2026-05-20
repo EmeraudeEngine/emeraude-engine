@@ -320,7 +320,7 @@ namespace EmEn::Libs::Math::Space3D
 			{
 				/* NOTE: General non-degenerate case. */
 				const precision_t b = Vector< 3, precision_t >::dotProduct(d1, d2);
-				const precision_t denom = a * e - b * b;
+				const precision_t denom = ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a * e)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((b * b))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 
 				/* NOTE: If segments are not parallel, compute closest points. */
 				if ( denom != 0 )

@@ -1416,7 +1416,7 @@ namespace EmEn::Libs::VertexFactory
 					const vertex_data_t Mim[3] = {(s2 - s1) * scale, -s2 * scale, s1 * scale};
 
 					const auto rowReal = t * 2;
-					const auto rowImag = t * 2 + 1;
+					const auto rowImag = (t * 2) + 1;
 
 					for ( int k = 0; k < 3; ++k )
 					{
@@ -1783,8 +1783,8 @@ namespace EmEn::Libs::VertexFactory
 			vertex_data_t
 			cross2D (const Math::Vector< 2, vertex_data_t > & a, const Math::Vector< 2, vertex_data_t > & b, const Math::Vector< 2, vertex_data_t > & c) noexcept
 			{
-				return (b[Math::X] - a[Math::X]) * (c[Math::Y] - a[Math::Y])
-					 - (b[Math::Y] - a[Math::Y]) * (c[Math::X] - a[Math::X]);
+				return ((b[Math::X] - a[Math::X]) * (c[Math::Y] - a[Math::Y]))
+					 - ((b[Math::Y] - a[Math::Y]) * (c[Math::X] - a[Math::X]));
 			}
 
 			/**

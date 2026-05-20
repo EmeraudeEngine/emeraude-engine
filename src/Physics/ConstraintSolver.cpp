@@ -213,7 +213,7 @@ namespace EmEn::Physics
 			 *
 			 * When objects are approaching (Vn < 0), we need to apply a separating impulse.
 			 * The restitution coefficient determines how much the objects "bounce back". */
-			const float targetVelocity = -(1.0F + restitution) * normalVelocity + contact.velocityBias();
+			const float targetVelocity = (-(1.0F + restitution) * normalVelocity) + contact.velocityBias();
 			float lambda = targetVelocity * contact.effectiveMass();
 
 			/* Accumulate and clamp impulse (non-penetration constraint: impulse >= 0). */

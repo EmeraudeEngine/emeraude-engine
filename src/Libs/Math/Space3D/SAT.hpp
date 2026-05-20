@@ -147,7 +147,7 @@ namespace EmEn::Libs::Math::Space3D::SAT
 		}
 
 		/* Check if triangles are coplanar. */
-		const bool coplanar = std::abs(Vector< 3, precision_t >::dotProduct(normalA, normalB)) > (1.0 - std::numeric_limits< precision_t >::epsilon() * 10);
+		const bool coplanar = std::abs(Vector< 3, precision_t >::dotProduct(normalA, normalB)) > (1.0 - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((std::numeric_limits< precision_t >::epsilon() * 10)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 
 		/* Compute edge cross products (3 edges from A × 3 edges from B = 9 axes). */
 		for ( size_t index = 0; index < 3; ++index )
@@ -307,7 +307,7 @@ namespace EmEn::Libs::Math::Space3D::SAT
 			Vector< 3, precision_t > toPoint = p - edgeStart;
 			precision_t t = Vector< 3, precision_t >::dotProduct(toPoint, edge) / Vector< 3, precision_t >::dotProduct(edge, edge);
 			t = std::max(static_cast<precision_t>(0), std::min(static_cast<precision_t>(1), t));
-			Vector< 3, precision_t > closest = edgeStart + edge * t;
+			Vector< 3, precision_t > closest = edgeStart + ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((edge * t))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 
 			return Vector< 3, precision_t >::distance(p, closest);
 		};
@@ -324,7 +324,7 @@ namespace EmEn::Libs::Math::Space3D::SAT
 			Vector< 3, precision_t > edge = B - A;
 			Vector< 3, precision_t > toPoint = point - A;
 			precision_t t = Vector< 3, precision_t >::dotProduct(toPoint, edge) / Vector< 3, precision_t >::dotProduct(edge, edge);
-			Vector< 3, precision_t > closest = A + edge * t;
+			Vector< 3, precision_t > closest = A + ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((edge * t))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 			MTV = point - closest;
 		}
 		else if ( minDist == distBC )
@@ -332,7 +332,7 @@ namespace EmEn::Libs::Math::Space3D::SAT
 			Vector< 3, precision_t > edge = C - B;
 			Vector< 3, precision_t > toPoint = point - B;
 			precision_t t = Vector< 3, precision_t >::dotProduct(toPoint, edge) / Vector< 3, precision_t >::dotProduct(edge, edge);
-			Vector< 3, precision_t > closest = B + edge * t;
+			Vector< 3, precision_t > closest = B + ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((edge * t))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 			MTV = point - closest;
 		}
 		else
@@ -340,7 +340,7 @@ namespace EmEn::Libs::Math::Space3D::SAT
 			Vector< 3, precision_t > edge = A - C;
 			Vector< 3, precision_t > toPoint = point - C;
 			precision_t t = Vector< 3, precision_t >::dotProduct(toPoint, edge) / Vector< 3, precision_t >::dotProduct(edge, edge);
-			Vector< 3, precision_t > closest = C + edge * t;
+			Vector< 3, precision_t > closest = C + ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((edge * t))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 			MTV = point - closest;
 		}
 

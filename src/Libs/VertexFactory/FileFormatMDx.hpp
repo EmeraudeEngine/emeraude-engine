@@ -318,7 +318,7 @@ namespace EmEn::Libs::VertexFactory
 						/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 						builder.setPosition(
 							(header.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + header.translate[1]) * IDTechUnitScale,
-							-(header.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + header.translate[2]) * IDTechUnitScale,
+							-(((header.scale[2] * static_cast< vertex_data_t >(vertex.v[2]))) + header.translate[2]) * IDTechUnitScale,
 							(header.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + header.translate[0]) * IDTechUnitScale
 						);
 						builder.setNormal(
@@ -436,7 +436,7 @@ namespace EmEn::Libs::VertexFactory
 						/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 						builder.setPosition(
 							(frame.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + frame.translate[1]) * IDTechUnitScale,
-							-(frame.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + frame.translate[2]) * IDTechUnitScale,
+							-(((frame.scale[2] * static_cast< vertex_data_t >(vertex.v[2]))) + frame.translate[2]) * IDTechUnitScale,
 							(frame.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + frame.translate[0]) * IDTechUnitScale
 						);
 						builder.setNormal(
@@ -667,10 +667,10 @@ namespace EmEn::Libs::VertexFactory
 				// Quaternion rotation P_out = Q * P_in * Q^-1
 				// Optimized:
 				float x = q[0], y = q[1], z = q[2], w = q[3];
-				float ix = w * in[0] + y * in[2] - z * in[1];
-				float iy = w * in[1] + z * in[0] - x * in[2];
-				float iz = w * in[2] + x * in[1] - y * in[0];
-				float iw = -x * in[0] - y * in[1] - z * in[2];
+				float ix = ((w * in[0])) + ((y * in[2])) - ((z * in[1]));
+				float iy = ((w * in[1])) + ((z * in[0])) - ((x * in[2]));
+				float iz = ((w * in[2])) + ((x * in[1])) - ((y * in[0]));
+				float iw = ((-x * in[0])) - ((y * in[1])) - ((z * in[2]));
 
 				out[0] = ix * w + iw * -x + iy * -z - iz * -y;
 				out[1] = iy * w + iw * -y + iz * -x - ix * -z;

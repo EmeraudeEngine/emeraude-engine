@@ -650,9 +650,9 @@ namespace EmEn::Libs::VertexFactory
 				const auto y = v[Math::Y];
 				const auto z = v[Math::Z];
 
-				return Q.q[0] * x * x + static_cast< vertex_data_t >(2) * Q.q[1] * x * y + static_cast< vertex_data_t >(2) * Q.q[2] * x * z + static_cast< vertex_data_t >(2) * Q.q[3] * x
-					 + Q.q[4] * y * y + static_cast< vertex_data_t >(2) * Q.q[5] * y * z + static_cast< vertex_data_t >(2) * Q.q[6] * y
-					 + Q.q[7] * z * z + static_cast< vertex_data_t >(2) * Q.q[8] * z
+				return (Q.q[0] * x * x) + (static_cast< vertex_data_t >(2) * Q.q[1] * x * y) + (static_cast< vertex_data_t >(2) * Q.q[2] * x * z) + (static_cast< vertex_data_t >(2) * Q.q[3] * x)
+					 + (Q.q[4] * y * y) + (static_cast< vertex_data_t >(2) * Q.q[5] * y * z) + (static_cast< vertex_data_t >(2) * Q.q[6] * y)
+					 + (Q.q[7] * z * z) + (static_cast< vertex_data_t >(2) * Q.q[8] * z)
 					 + Q.q[9];
 			}
 
@@ -672,7 +672,7 @@ namespace EmEn::Libs::VertexFactory
 				const auto e = Q.q[4], f = Q.q[5], g = Q.q[6];
 				const auto h = Q.q[7], i = Q.q[8];
 
-				const auto det = a * (e * h - f * f) - b * (b * h - f * c) + c * (b * f - e * c);
+				const auto det = (a * (e * h - f * f)) - (b * (b * h - f * c)) + (c * (b * f - e * c));
 
 				if ( std::abs(det) > static_cast< vertex_data_t >(1e-6) )
 				{
@@ -1122,7 +1122,7 @@ namespace EmEn::Libs::VertexFactory
 					auto cy = static_cast< size_t >(std::clamp((pos[Math::Y] - bboxMin[Math::Y]) / cellSize[Math::Y], static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(GridRes - 1)));
 					auto cz = static_cast< size_t >(std::clamp((pos[Math::Z] - bboxMin[Math::Z]) / cellSize[Math::Z], static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(GridRes - 1)));
 
-					return cx + cy * GridRes + cz * GridRes * GridRes;
+					return cx + (cy * GridRes) + (cz * GridRes * GridRes);
 				};
 
 				for ( size_t t = 0; t < highTris.size(); ++t )
@@ -1153,7 +1153,7 @@ namespace EmEn::Libs::VertexFactory
 						{
 							for ( size_t x = minCx; x <= maxCx; ++x )
 							{
-								grid[x + y * GridRes + z * GridRes * GridRes].push_back(t);
+								grid[x + (y * GridRes) + (z * GridRes * GridRes)].push_back(t);
 							}
 						}
 					}
@@ -1225,7 +1225,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						for ( size_t cu = cellMinU; cu <= cellMaxU; ++cu )
 						{
-							uvGrid[cv * UVGridRes + cu].push_back(t);
+							uvGrid[(cv * UVGridRes) + cu].push_back(t);
 						}
 					}
 				}
@@ -1251,7 +1251,7 @@ namespace EmEn::Libs::VertexFactory
 						const auto cellU = static_cast< size_t >(std::clamp(u * static_cast< vertex_data_t >(UVGridRes), static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(UVGridRes - 1)));
 						const auto cellV = static_cast< size_t >(std::clamp(v * static_cast< vertex_data_t >(UVGridRes), static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(UVGridRes - 1)));
 
-						for ( const auto t : uvGrid[cellV * UVGridRes + cellU] )
+						for ( const auto t : uvGrid[(cellV * UVGridRes) + cellU] )
 						{
 							if ( found )
 							{
@@ -1263,13 +1263,13 @@ namespace EmEn::Libs::VertexFactory
 							const auto & tc2 = lowVerts[tri.vertexIndex(2)].textureCoordinates();
 
 							/* Barycentric coordinates in UV space. */
-							const auto d00 = (tc1[Math::X] - tc0[Math::X]) * (tc1[Math::X] - tc0[Math::X]) + (tc1[Math::Y] - tc0[Math::Y]) * (tc1[Math::Y] - tc0[Math::Y]);
-							const auto d01 = (tc1[Math::X] - tc0[Math::X]) * (tc2[Math::X] - tc0[Math::X]) + (tc1[Math::Y] - tc0[Math::Y]) * (tc2[Math::Y] - tc0[Math::Y]);
-							const auto d11 = (tc2[Math::X] - tc0[Math::X]) * (tc2[Math::X] - tc0[Math::X]) + (tc2[Math::Y] - tc0[Math::Y]) * (tc2[Math::Y] - tc0[Math::Y]);
-							const auto d20 = (u - tc0[Math::X]) * (tc1[Math::X] - tc0[Math::X]) + (v - tc0[Math::Y]) * (tc1[Math::Y] - tc0[Math::Y]);
-							const auto d21 = (u - tc0[Math::X]) * (tc2[Math::X] - tc0[Math::X]) + (v - tc0[Math::Y]) * (tc2[Math::Y] - tc0[Math::Y]);
+							const auto d00 = ((tc1[Math::X] - tc0[Math::X]) * (tc1[Math::X] - tc0[Math::X])) + ((tc1[Math::Y] - tc0[Math::Y]) * (tc1[Math::Y] - tc0[Math::Y]));
+							const auto d01 = ((tc1[Math::X] - tc0[Math::X]) * (tc2[Math::X] - tc0[Math::X])) + ((tc1[Math::Y] - tc0[Math::Y]) * (tc2[Math::Y] - tc0[Math::Y]));
+							const auto d11 = ((tc2[Math::X] - tc0[Math::X]) * (tc2[Math::X] - tc0[Math::X])) + ((tc2[Math::Y] - tc0[Math::Y]) * (tc2[Math::Y] - tc0[Math::Y]));
+							const auto d20 = ((u - tc0[Math::X]) * (tc1[Math::X] - tc0[Math::X])) + ((v - tc0[Math::Y]) * (tc1[Math::Y] - tc0[Math::Y]));
+							const auto d21 = ((u - tc0[Math::X]) * (tc2[Math::X] - tc0[Math::X])) + ((v - tc0[Math::Y]) * (tc2[Math::Y] - tc0[Math::Y]));
 
-							const auto denom = d00 * d11 - d01 * d01;
+							const auto denom = (d00 * d11) - (d01 * d01);
 
 							if ( std::abs(denom) < static_cast< vertex_data_t >(1e-10) )
 							{
@@ -1296,13 +1296,13 @@ namespace EmEn::Libs::VertexFactory
 							const auto & n1 = lowVerts[tri.vertexIndex(1)].normal();
 							const auto & n2 = lowVerts[tri.vertexIndex(2)].normal();
 
-							lowNormal = (n0 * baryU + n1 * baryV + n2 * baryW).normalized();
+							lowNormal = ((n0 * baryU) + (n1 * baryV) + (n2 * baryW)).normalized();
 
 							const auto & t0 = lowVerts[tri.vertexIndex(0)].tangent();
 							const auto & t1 = lowVerts[tri.vertexIndex(1)].tangent();
 							const auto & t2 = lowVerts[tri.vertexIndex(2)].tangent();
 
-							lowTangent = (t0 * baryU + t1 * baryV + t2 * baryW).normalized();
+							lowTangent = ((t0 * baryU) + (t1 * baryV) + (t2 * baryW)).normalized();
 							lowBitangent = Math::Vector< 3, vertex_data_t >::crossProduct(lowNormal, lowTangent).normalized();
 
 							found = true;
@@ -1338,7 +1338,7 @@ namespace EmEn::Libs::VertexFactory
 							{
 								for ( size_t sx = sMinX; sx <= sMaxX; ++sx )
 								{
-									for ( const auto highTriIdx : grid[sx + sy * GridRes + sz * GridRes * GridRes] )
+									for ( const auto highTriIdx : grid[sx + (sy * GridRes) + (sz * GridRes * GridRes)] )
 									{
 										const auto & highTri = highTris[highTriIdx];
 										vertex_data_t tHit, uHit, vHit;
@@ -1352,7 +1352,7 @@ namespace EmEn::Libs::VertexFactory
 											const auto & hn1 = highVerts[highTri.vertexIndex(1)].normal();
 											const auto & hn2 = highVerts[highTri.vertexIndex(2)].normal();
 
-											highNormal = (hn0 * (static_cast< vertex_data_t >(1) - uHit - vHit) + hn1 * uHit + hn2 * vHit).normalized();
+											highNormal = ((hn0 * (static_cast< vertex_data_t >(1) - uHit - vHit)) + (hn1 * uHit) + (hn2 * vHit)).normalized();
 											hit = true;
 										}
 
@@ -1366,7 +1366,7 @@ namespace EmEn::Libs::VertexFactory
 											const auto & hn1 = highVerts[highTri.vertexIndex(1)].normal();
 											const auto & hn2 = highVerts[highTri.vertexIndex(2)].normal();
 
-											highNormal = (hn0 * (static_cast< vertex_data_t >(1) - uHit - vHit) + hn1 * uHit + hn2 * vHit).normalized();
+											highNormal = ((hn0 * (static_cast< vertex_data_t >(1) - uHit - vHit)) + (hn1 * uHit) + (hn2 * vHit)).normalized();
 											hit = true;
 										}
 									}
@@ -1394,9 +1394,9 @@ namespace EmEn::Libs::VertexFactory
 
 						/* Encode to [0,255]: tangent-space normal [-1,1] → [0,1] → [0,255]. */
 						const Color< float > normalColor{
-							tsNormal[Math::X] * 0.5F + 0.5F,
-							tsNormal[Math::Y] * 0.5F + 0.5F,
-							tsNormal[Math::Z] * 0.5F + 0.5F,
+							(tsNormal[Math::X] * 0.5F) + 0.5F,
+							(tsNormal[Math::Y] * 0.5F) + 0.5F,
+							(tsNormal[Math::Z] * 0.5F) + 0.5F,
 							1.0F
 						};
 
@@ -1450,7 +1450,7 @@ namespace EmEn::Libs::VertexFactory
 						const auto b = data[offset + 2];
 
 						/* A pixel is "filled" if it differs from the default (128, 128, 255). */
-						filled[static_cast< size_t >(y) * width + x] = !(r == 128 && g == 128 && b == 255);
+						filled[(static_cast< size_t >(y) * width) + x] = !(r == 128 && g == 128 && b == 255);
 					}
 				}
 
@@ -1467,7 +1467,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						for ( uint32_t x = 0; x < width; ++x )
 						{
-							const auto idx = static_cast< size_t >(y) * width + x;
+							const auto idx = (static_cast< size_t >(y) * width) + x;
 
 							if ( filled[idx] )
 							{
@@ -1485,7 +1485,7 @@ namespace EmEn::Libs::VertexFactory
 									continue;
 								}
 
-								const auto nIdx = static_cast< size_t >(ny) * width + static_cast< size_t >(nx);
+								const auto nIdx = (static_cast< size_t >(ny) * width) + static_cast< size_t >(nx);
 
 								if ( filled[nIdx] )
 								{

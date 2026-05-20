@@ -447,7 +447,7 @@ namespace EmEn::Scenes::Editor
 		const float ca = Vector< 3, float >::dotProduct(c, axisDirection);
 		const float cb = Vector< 3, float >::dotProduct(c, rayDir);
 
-		const float denom = aa * bb - ab * ab;
+		const float denom = (aa * bb) - (ab * ab);
 
 		if ( std::abs(denom) < 0.0001F )
 		{
@@ -571,7 +571,7 @@ namespace EmEn::Scenes::Editor
 				/* NOTE: Absolute scale from horizontal mouse delta.
 				 * Right = bigger, Left = smaller. ~300px = double size. */
 				const float pixelDelta = (positionX - m_dragInitialMouseX) - (positionY - m_dragInitialT);
-				const float factor = std::max(0.01F, 1.0F + pixelDelta * 0.003F * m_moveRatio);
+				const float factor = std::max(0.01F, 1.0F + (pixelDelta * 0.003F * m_moveRatio));
 
 				auto newScaling = m_dragInitialScaling;
 

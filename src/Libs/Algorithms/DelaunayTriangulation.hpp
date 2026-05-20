@@ -103,9 +103,9 @@ namespace EmEn::Libs::Algorithms
 
 				/* Super-triangle vertices (indices: pointCount, pointCount+1, pointCount+2). */
 				std::vector< Point > allPoints = boundaryPoints;
-				allPoints.push_back({midX - static_cast< data_t >(20) * dmax, midY - dmax});
-				allPoints.push_back({midX + static_cast< data_t >(20) * dmax, midY - dmax});
-				allPoints.push_back({midX, midY + static_cast< data_t >(20) * dmax});
+				allPoints.push_back({midX - (static_cast< data_t >(20) * dmax), midY - dmax});
+				allPoints.push_back({midX + (static_cast< data_t >(20) * dmax), midY - dmax});
+				allPoints.push_back({midX, midY + (static_cast< data_t >(20) * dmax)});
 
 				const auto superA = pointCount;
 				const auto superB = pointCount + 1;
@@ -258,12 +258,12 @@ namespace EmEn::Libs::Algorithms
 				const auto cx = c.x - p.x;
 				const auto cy = c.y - p.y;
 
-				const auto det = ax * (by * (cx * cx + cy * cy) - cy * (bx * bx + by * by))
-					- ay * (bx * (cx * cx + cy * cy) - cx * (bx * bx + by * by))
-					+ (ax * ax + ay * ay) * (bx * cy - by * cx);
+				const auto det = (ax * (by * (cx * cx + cy * cy) - cy * (bx * bx + by * by)))
+					- (ay * (bx * (cx * cx + cy * cy) - cx * (bx * bx + by * by)))
+					+ ((ax * ax + ay * ay) * (bx * cy - by * cx));
 
 				/* If points are CCW, det > 0 means inside. Handle both windings. */
-				const auto cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+				const auto cross = ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
 
 				return (cross > 0) ? (det > 0) : (det < 0);
 			}
@@ -309,7 +309,7 @@ namespace EmEn::Libs::Algorithms
 					const auto & pj = polygon[j];
 
 					if ( ((pi.y > point.y) != (pj.y > point.y)) &&
-						(point.x < (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x) )
+						(point.x < ((pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y)) + pi.x) )
 					{
 						inside = !inside;
 					}

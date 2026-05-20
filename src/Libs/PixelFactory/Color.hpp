@@ -1168,7 +1168,7 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( premultipliedAlpha )
 				{
-					return colorA.alpha() + colorB.alpha() - colorA.alpha() * colorB.alpha();
+					return colorA.alpha() + colorB.alpha() - (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((colorA.alpha() * colorB.alpha())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 				}
 
 				return colorA.alpha() * colorB.alpha();
@@ -1188,9 +1188,9 @@ namespace EmEn::Libs::PixelFactory
 			screenBlending (const Color & colorA, const Color & colorB, bool premultipliedAlpha = false)
 			{
 				return {
-					static_cast< data_t >(1) - (static_cast< data_t >(1) - colorA.red()) * (static_cast< data_t >(1) - colorB.red()),
-					static_cast< data_t >(1) - (static_cast< data_t >(1) - colorA.green()) * (static_cast< data_t >(1) - colorB.green()),
-					static_cast< data_t >(1) - (static_cast< data_t >(1) - colorA.blue()) * (static_cast< data_t >(1) - colorB.blue()),
+					static_cast< data_t >(1) - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(1) - colorA.red()) * (static_cast< data_t >(1) - colorB.red())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
+					static_cast< data_t >(1) - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(1) - colorA.green()) * (static_cast< data_t >(1) - colorB.green())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
+					static_cast< data_t >(1) - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(1) - colorA.blue()) * (static_cast< data_t >(1) - colorB.blue())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
 					Color::alphaBlending(colorA, colorB, premultipliedAlpha)
 				};
 			}
@@ -1211,13 +1211,13 @@ namespace EmEn::Libs::PixelFactory
 				return {
 					colorA.red() < static_cast< data_t >(0.5) ?
 						static_cast< data_t >(2) * colorA.red() * colorB.red() :
-						static_cast< data_t >(1) - static_cast< data_t >(2) * (static_cast< data_t >(1) - colorA.red()) * (static_cast< data_t >(1) - colorB.red()),
+						static_cast< data_t >(1) - (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(2) * (static_cast< data_t >(1) - colorA.red()) * (static_cast< data_t >(1) - colorB.red())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
 					colorA.green() < static_cast< data_t >(0.5) ?
 						static_cast< data_t >(2) * colorA.green() * colorB.green() :
-						static_cast< data_t >(1) - static_cast< data_t >(2) * (static_cast< data_t >(1) - colorA.green()) * (static_cast< data_t >(1) - colorB.green()),
+						static_cast< data_t >(1) - (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(2) * (static_cast< data_t >(1) - colorA.green()) * (static_cast< data_t >(1) - colorB.green())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
 					colorA.blue() < static_cast< data_t >(0.5) ?
 						static_cast< data_t >(2) * colorA.blue() * colorB.blue() :
-						static_cast< data_t >(1) - static_cast< data_t >(2) * (static_cast< data_t >(1) - colorA.blue()) * (static_cast< data_t >(1) - colorB.blue()),
+						static_cast< data_t >(1) - (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(2) * (static_cast< data_t >(1) - colorA.blue()) * (static_cast< data_t >(1) - colorB.blue())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
 					Color::alphaBlending(colorA, colorB, premultipliedAlpha)
 				};
 			}
@@ -1560,7 +1560,7 @@ namespace EmEn::Libs::PixelFactory
 				value = std::max(data_t{0}, std::min(data_t{1}, value));
 
 				return static_cast< integer_t >(
-					static_cast< data_t >(value) * std::numeric_limits< integer_t >::max() + static_cast< data_t >(0.5)
+					(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< data_t >(value) * std::numeric_limits< integer_t >::max()))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) + static_cast< data_t >(0.5)
 				);
 			}
 

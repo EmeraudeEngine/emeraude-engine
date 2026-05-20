@@ -863,7 +863,7 @@ namespace EmEn::Libs
 							break;
 						}
 
-						const auto chunkStart = static_cast< index_t >(start + chunkIndex * effectiveGrain);
+						const auto chunkStart = static_cast< index_t >(start + ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((chunkIndex * effectiveGrain)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 						const auto chunkEnd = static_cast< index_t >(std::min(static_cast< size_t >(chunkStart) + effectiveGrain, static_cast< size_t >(end)));
 
 						for ( index_t index = chunkStart; index < chunkEnd; ++index )

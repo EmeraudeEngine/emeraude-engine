@@ -330,7 +330,7 @@ namespace EmEn::Libs::IO
 
 		file.seekg(0, std::ifstream::beg);
 
-		content.resize(static_cast< size_t >(bytes) / sizeof(data_t) + (static_cast< size_t >(bytes) % sizeof(data_t) ? 1U : 0U));
+		content.resize(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((static_cast< size_t >(bytes) / sizeof(data_t))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) + (static_cast< size_t >(bytes) % sizeof(data_t) ? 1U : 0U));
 
 		file.read(reinterpret_cast< char * >(content.data()), bytes);
 

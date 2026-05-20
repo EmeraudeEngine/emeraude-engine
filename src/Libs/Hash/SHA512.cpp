@@ -29,11 +29,11 @@
 /* STL inclusions. */
 #include <cstring>
 
-#define SHA2_SHFR(x, n)	(x >> n)
-#define SHA2_ROTR(x, n)   ((x >> n) | (x << ((sizeof(x) << 3) - n)))
-#define SHA2_ROTL(x, n)   ((x << n) | (x >> ((sizeof(x) << 3) - n)))
-#define SHA2_CH(x, y, z)  ((x & y) ^ (~x & z))
-#define SHA2_MAJ(x, y, z) ((x & y) ^ (x & z) ^ (y & z))
+#define SHA2_SHFR(x, n)	((x) >> (n))
+#define SHA2_ROTR(x, n)   (((x) >> (n)) | ((x) << ((sizeof(x) << 3) - (n))))
+#define SHA2_ROTL(x, n)   (((x) << (n)) | ((x) >> ((sizeof(x) << 3) - (n))))
+#define SHA2_CH(x, y, z)  (((x) & (y)) ^ (~(x) & (z)))
+#define SHA2_MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
 #define SHA512_F1(x) (SHA2_ROTR(x, 28) ^ SHA2_ROTR(x, 34) ^ SHA2_ROTR(x, 39))
 #define SHA512_F2(x) (SHA2_ROTR(x, 14) ^ SHA2_ROTR(x, 18) ^ SHA2_ROTR(x, 41))
 #define SHA512_F3(x) (SHA2_ROTR(x,  1) ^ SHA2_ROTR(x,  8) ^ SHA2_SHFR(x,  7))

@@ -798,7 +798,7 @@ namespace EmEn::Libs::VertexFactory
 					const auto & normal = triangle.surfaceNormal();
 
 					/* Project the edge onto the plane defined by the surface normal (Gram-Schmidt). */
-					const auto projected = edge - normal * Math::Vector< 3, vertex_data_t >::dotProduct(edge, normal);
+					const auto projected = edge - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((normal * Math::Vector< 3, vertex_data_t >::dotProduct(edge, normal)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));
 					const auto length = projected.length();
 
 					if ( length > static_cast< vertex_data_t >(1e-6) )

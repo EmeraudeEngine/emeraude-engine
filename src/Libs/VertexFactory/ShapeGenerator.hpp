@@ -661,7 +661,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				 * (normalized to 1.0) and V spans the beam length (ratio of
 				 * length to width).  The texture coordinates multiplier then
 				 * controls the final tiling density uniformly. */
-				const auto beamLength = static_cast< vertex_data_t >(2) * size - static_cast< vertex_data_t >(2) * borderSize;
+				const auto beamLength = (static_cast< vertex_data_t >(2) * size) - (static_cast< vertex_data_t >(2) * borderSize);
 				const auto vInner = beamLength / borderSize;
 				const auto vOuter = (static_cast< vertex_data_t >(2) * size) / borderSize;
 				constexpr auto vBorder = static_cast< vertex_data_t >(1);
@@ -980,7 +980,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			constexpr auto poleThreshold = static_cast< vertex_data_t >(0.999);
 
 			const auto sphericalUV = [twoPi, zero, one](const Math::Vector< 3, vertex_data_t > & v) {
-				const auto latitude = one - std::acos(std::clamp(v[Math::Y], -one, one)) / std::numbers::pi_v< vertex_data_t >;
+				const auto latitude = one - (std::acos(std::clamp(v[Math::Y], -one, one)) / std::numbers::pi_v< vertex_data_t >);
 				const auto longitude = (std::atan2(-v[Math::X], v[Math::Z]) + std::numbers::pi_v< vertex_data_t >) / twoPi;
 
 				return Math::Vector< 3, vertex_data_t >{latitude, longitude, zero};
@@ -1177,7 +1177,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		const auto topHasCap = capped && !Utility::isZero(topRadius);
 		const auto capTriangles = (baseHasCap ? slices * 2 : 0) + (topHasCap ? slices * 2 : 0);
 
-		Shape< vertex_data_t, index_data_t > shape{slices * stacks * 2 + capTriangles};
+		Shape< vertex_data_t, index_data_t > shape{(slices * stacks * 2) + capTriangles};
 
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
@@ -1395,7 +1395,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				{
 					/* Surface vertex: circumferential tangent for UV seam fix. */
 					const auto & pos = vertex.position();
-					const auto r = std::sqrt(pos[Math::X] * pos[Math::X] + pos[Math::Z] * pos[Math::Z]);
+					const auto r = std::sqrt((pos[Math::X] * pos[Math::X]) + (pos[Math::Z] * pos[Math::Z]));
 
 					if ( r > epsilon )
 					{
@@ -1476,8 +1476,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			for ( index_data_t sliceIndex = 0; sliceIndex < slices; ++sliceIndex )
 			{
-				const auto inner = innerRadius + stackIndex * stepSizeRadial;
-				const auto outer = innerRadius + (stackIndex + 1) * stepSizeRadial;
+				const auto inner = innerRadius + (stackIndex * stepSizeRadial);
+				const auto outer = innerRadius + ((stackIndex + 1) * stepSizeRadial);
 
 				const auto theta = stepSizeSlice * sliceIndex;
 				const auto thetaNext = sliceIndex == slices - 1 ? zero : stepSizeSlice * (sliceIndex + 1);
@@ -1606,12 +1606,12 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 				const auto stepB = sliceIndexF * minorStep;
 				const auto norm = std::cos(stepB);
-				const auto radius = minorRadius * norm + majorRadius;
+				const auto radius = (minorRadius * norm) + majorRadius;
 				const auto positionY = minorRadius * std::sin(stepB);
 
 				const auto nextStepB = (sliceIndexF + one) * minorStep;
 				const auto nextNorm = std::cos(nextStepB);
-				const auto nextRadius = minorRadius * nextNorm + majorRadius;
+				const auto nextRadius = (minorRadius * nextNorm) + majorRadius;
 				const auto nextPositionY = minorRadius * std::sin(nextStepB);
 
 				/* Texture coordinates V.
@@ -2130,7 +2130,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		 * scaled by radius so all vertices lie on the circumscribed sphere.
 		 * Edge length: a = radius · 2/√(1+φ²) ≈ radius · 1.0515 */
 		const auto phi = (one + std::sqrt(static_cast< vertex_data_t >(5))) * half;
-		const auto s = radius / std::sqrt(one + phi * phi);
+		const auto s = radius / std::sqrt(one + (phi * phi));
 
 		const auto p = phi * s; /* long half-axis of golden rectangle */
 
@@ -2278,8 +2278,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		for ( index_data_t zIdx = 0; zIdx < subdivisionsZ; ++zIdx )
 		{
-			const auto z0 = -halfDepth + static_cast< vertex_data_t >(zIdx) * stepZ;
-			const auto z1 = -halfDepth + static_cast< vertex_data_t >(zIdx + 1) * stepZ;
+			const auto z0 = -halfDepth + (static_cast< vertex_data_t >(zIdx) * stepZ);
+			const auto z1 = -halfDepth + (static_cast< vertex_data_t >(zIdx + 1) * stepZ);
 			const auto texV0 = static_cast< vertex_data_t >(zIdx) * invSubZ;
 			const auto texV1 = static_cast< vertex_data_t >(zIdx + 1) * invSubZ;
 
@@ -2289,8 +2289,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 			for ( index_data_t xIdx = 0; xIdx < subdivisionsX; ++xIdx )
 			{
-				const auto x0 = -halfWidth + static_cast< vertex_data_t >(xIdx) * stepX;
-				const auto x1 = -halfWidth + static_cast< vertex_data_t >(xIdx + 1) * stepX;
+				const auto x0 = -halfWidth + (static_cast< vertex_data_t >(xIdx) * stepX);
+				const auto x1 = -halfWidth + (static_cast< vertex_data_t >(xIdx + 1) * stepX);
 				const auto texU0 = static_cast< vertex_data_t >(xIdx) * invSubX;
 				const auto texU1 = static_cast< vertex_data_t >(xIdx + 1) * invSubX;
 
@@ -2349,7 +2349,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		const auto halfLen = length * half;
 		const auto hasCylinder = length > 0;
-		const auto totalRows = static_cast< index_data_t >(2) * stacks + (hasCylinder ? 1 : 0);
+		const auto totalRows = (static_cast< index_data_t >(2) * stacks) + (hasCylinder ? 1 : 0);
 
 		Shape< vertex_data_t, index_data_t > shape{totalRows * slices * 2};
 
@@ -2361,7 +2361,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		const auto dPhi = (static_cast< vertex_data_t >(2) * pi) / static_cast< vertex_data_t >(slices);
 
 		/* UV V mapping based on arc length. */
-		const auto totalArc = pi * radius + length;
+		const auto totalArc = (pi * radius) + length;
 		const auto invTotalArc = one / totalArc;
 		const auto topHemiArc = halfPi * radius;
 
@@ -2429,16 +2429,16 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		for ( index_data_t stack = 0; stack < stacks; ++stack )
 		{
 			/* beta goes from PI/2 (pole) down to 0 (equator). */
-			const auto betaA = halfPi - static_cast< vertex_data_t >(stack) * dAngle;
-			const auto betaB = halfPi - static_cast< vertex_data_t >(stack + 1) * dAngle;
+			const auto betaA = halfPi - (static_cast< vertex_data_t >(stack) * dAngle);
+			const auto betaB = halfPi - (static_cast< vertex_data_t >(stack + 1) * dAngle);
 
 			const auto cosBetaA = std::cos(betaA);
 			const auto sinBetaA = std::sin(betaA);
 			const auto cosBetaB = std::cos(betaB);
 			const auto sinBetaB = std::sin(betaB);
 
-			const auto yA = -halfLen - radius * sinBetaA;
-			const auto yB = -halfLen - radius * sinBetaB;
+			const auto yA = -halfLen - (radius * sinBetaA);
+			const auto yB = -halfLen - (radius * sinBetaB);
 			const auto rA = radius * cosBetaA;
 			const auto rB = radius * cosBetaB;
 
@@ -2508,14 +2508,14 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto cosAlphaB = std::cos(alphaB);
 			const auto sinAlphaB = std::sin(alphaB);
 
-			const auto yA = halfLen + radius * sinAlphaA;
-			const auto yB = halfLen + radius * sinAlphaB;
+			const auto yA = halfLen + (radius * sinAlphaA);
+			const auto yB = halfLen + (radius * sinAlphaB);
 			const auto rA = radius * cosAlphaA;
 			const auto rB = radius * cosAlphaB;
 
 			/* Arc-length UV V. */
-			const auto arcA = topHemiArc + length + alphaA * radius;
-			const auto arcB = topHemiArc + length + alphaB * radius;
+			const auto arcA = topHemiArc + length + (alphaA * radius);
+			const auto arcB = topHemiArc + length + (alphaB * radius);
 			const auto texVA = arcA * invTotalArc;
 			const auto texVB = arcB * invTotalArc;
 
@@ -2554,7 +2554,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			for ( auto & vertex : shape.vertices() )
 			{
 				const auto & pos = vertex.position();
-				const auto r = std::sqrt(pos[Math::X] * pos[Math::X] + pos[Math::Z] * pos[Math::Z]);
+				const auto r = std::sqrt((pos[Math::X] * pos[Math::X]) + (pos[Math::Z] * pos[Math::Z]));
 
 				if ( r > epsilon )
 				{
@@ -2614,8 +2614,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		for ( index_data_t stack = 0; stack < stacks; ++stack )
 		{
 			/* beta goes from PI/2 (pole, Y = -radius) to 0 (equator, Y = 0). */
-			const auto betaA = halfPi - static_cast< vertex_data_t >(stack) * dAngle;
-			const auto betaB = halfPi - static_cast< vertex_data_t >(stack + 1) * dAngle;
+			const auto betaA = halfPi - (static_cast< vertex_data_t >(stack) * dAngle);
+			const auto betaB = halfPi - (static_cast< vertex_data_t >(stack + 1) * dAngle);
 
 			const auto cosBetaA = std::cos(betaA);
 			const auto sinBetaA = std::sin(betaA);
@@ -2680,8 +2680,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				const Math::Vector< 3, vertex_data_t > pEdgeB{cosPhiN * radius, 0, sinPhiN * radius};
 
 				/* Planar UV projection: map XZ position [-r, +r] to [0, 1]. */
-				const Math::Vector< 3, vertex_data_t > texA{cosPhi * half + half, sinPhi * half + half, 0};
-				const Math::Vector< 3, vertex_data_t > texB{cosPhiN * half + half, sinPhiN * half + half, 0};
+				const Math::Vector< 3, vertex_data_t > texA{(cosPhi * half) + half, (sinPhi * half) + half, 0};
+				const Math::Vector< 3, vertex_data_t > texB{(cosPhiN * half) + half, (sinPhiN * half) + half, 0};
 
 				builder.setPosition(pEdgeA); builder.setNormal(capNormal); builder.setTextureCoordinates(texA); builder.setVertexColor(volumetricColor(pEdgeA)); builder.newVertex();
 				builder.setPosition(pEdgeB); builder.setNormal(capNormal); builder.setTextureCoordinates(texB); builder.setVertexColor(volumetricColor(pEdgeB)); builder.newVertex();
@@ -2713,7 +2713,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				{
 					/* Dome vertex: circumferential tangent. */
 					const auto & pos = vertex.position();
-					const auto r = std::sqrt(pos[Math::X] * pos[Math::X] + pos[Math::Z] * pos[Math::Z]);
+					const auto r = std::sqrt((pos[Math::X] * pos[Math::X]) + (pos[Math::Z] * pos[Math::Z]));
 
 					if ( r > epsilon )
 					{
@@ -2780,7 +2780,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		/* Cone surface normal Y component: derived from generatrix slope.
 		 * The cone surface normal has components (headRadius·cos, headLength, headRadius·sin)
 		 * after normalization. */
-		const auto coneSlant = std::sqrt(headRadius * headRadius + headLength * headLength);
+		const auto coneSlant = std::sqrt((headRadius * headRadius) + (headLength * headLength));
 		const auto coneNY = -headRadius / coneSlant;
 		const auto coneNR = headLength / coneSlant;
 
@@ -2805,8 +2805,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				builder.setNormal(normal);
 
 				builder.setPosition(center); builder.setTextureCoordinates(half, half); builder.setVertexColor(volumetricColor(center)); builder.newVertex();
-				builder.setPosition(edgeA); builder.setTextureCoordinates(cosPhi * half + half, sinPhi * half + half); builder.setVertexColor(volumetricColor(edgeA)); builder.newVertex();
-				builder.setPosition(edgeB); builder.setTextureCoordinates(cosPhiN * half + half, sinPhiN * half + half); builder.setVertexColor(volumetricColor(edgeB)); builder.newVertex();
+				builder.setPosition(edgeA); builder.setTextureCoordinates((cosPhi * half) + half, (sinPhi * half) + half); builder.setVertexColor(volumetricColor(edgeA)); builder.newVertex();
+				builder.setPosition(edgeB); builder.setTextureCoordinates((cosPhiN * half) + half, (sinPhiN * half) + half); builder.setVertexColor(volumetricColor(edgeB)); builder.newVertex();
 			}
 
 			/* --- 2. Shaft body (cylinder from Y=0 to Y=-shaftLength) --- */
@@ -2898,7 +2898,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		/* Outer surface + inner surface + (optional) top cap + bottom cap.
 		 * Each surface: slices * stacks * 2 triangles (caps have 1 stack). */
 		const auto capTriangles = capped ? slices * 4 : 0;
-		Shape< vertex_data_t, index_data_t > shape{slices * stacks * 4 + capTriangles};
+		Shape< vertex_data_t, index_data_t > shape{(slices * stacks * 4) + capTriangles};
 
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
@@ -2929,8 +2929,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		const auto emitSurface = [&](vertex_data_t radius, bool outward) {
 			for ( index_data_t stack = 0; stack < stacks; ++stack )
 			{
-				const auto yA = -halfLen + length * static_cast< vertex_data_t >(stack) / static_cast< vertex_data_t >(stacks);
-				const auto yB = -halfLen + length * static_cast< vertex_data_t >(stack + 1) / static_cast< vertex_data_t >(stacks);
+				const auto yA = -halfLen + (length * static_cast< vertex_data_t >(stack) / static_cast< vertex_data_t >(stacks));
+				const auto yB = -halfLen + (length * static_cast< vertex_data_t >(stack + 1) / static_cast< vertex_data_t >(stacks));
 				const auto texVA = static_cast< vertex_data_t >(stack) * deltaV;
 				const auto texVB = static_cast< vertex_data_t >(stack + 1) * deltaV;
 
@@ -3077,7 +3077,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				{
 					/* Surface vertex: circumferential tangent for UV seam fix. */
 					const auto & pos = vertex.position();
-					const auto r = std::sqrt(pos[Math::X] * pos[Math::X] + pos[Math::Z] * pos[Math::Z]);
+					const auto r = std::sqrt((pos[Math::X] * pos[Math::X]) + (pos[Math::Z] * pos[Math::Z]));
 
 					if ( r > epsilon )
 					{
@@ -3124,7 +3124,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
 		const auto n = facets;
-		const auto triangleCount = 4 * n - 2;
+		const auto triangleCount = (4 * n) - 2;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -3215,7 +3215,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			/* Build local tangent frame on the face plane. */
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -3362,7 +3362,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto one = static_cast< vertex_data_t >(1);
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
-		const auto triangleCount = 12 + 32 * steps;
+		const auto triangleCount = 12 + (32 * steps);
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -3444,7 +3444,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -3517,10 +3517,10 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto innerScale = tableRatio + t0 * (one - tableRatio);
-			const auto outerScale = tableRatio + t1 * (one - tableRatio);
-			const auto innerY = -crownHeight + t0 * crownHeight;
-			const auto outerY = -crownHeight + t1 * crownHeight;
+			const auto innerScale = tableRatio + (t0 * (one - tableRatio));
+			const auto outerScale = tableRatio + (t1 * (one - tableRatio));
+			const auto innerY = -crownHeight + (t0 * crownHeight);
+			const auto outerY = -crownHeight + (t1 * crownHeight);
 
 			const auto inner = makeOctagonRing(innerScale, innerY);
 			const auto outer = makeOctagonRing(outerScale, outerY);
@@ -3547,8 +3547,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto outerScale = one + t0 * (culetRatio - one);
-			const auto innerScale = one + t1 * (culetRatio - one);
+			const auto outerScale = one + (t0 * (culetRatio - one));
+			const auto innerScale = one + (t1 * (culetRatio - one));
 			const auto outerY = t0 * pavilionDepth;
 			const auto innerY = t1 * pavilionDepth;
 
@@ -3668,7 +3668,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto one = static_cast< vertex_data_t >(1);
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
-		const auto triangleCount = 4 + 16 * steps;
+		const auto triangleCount = 4 + (16 * steps);
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -3739,7 +3739,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -3806,10 +3806,10 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto innerScale = tableRatio + t0 * (one - tableRatio);
-			const auto outerScale = tableRatio + t1 * (one - tableRatio);
-			const auto innerY = -crownHeight + t0 * crownHeight;
-			const auto outerY = -crownHeight + t1 * crownHeight;
+			const auto innerScale = tableRatio + (t0 * (one - tableRatio));
+			const auto outerScale = tableRatio + (t1 * (one - tableRatio));
+			const auto innerY = -crownHeight + (t0 * crownHeight);
+			const auto outerY = -crownHeight + (t1 * crownHeight);
 
 			const auto inner = makeRectRing(innerScale, innerY);
 			const auto outer = makeRectRing(outerScale, outerY);
@@ -3836,8 +3836,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto outerScale = one + t0 * (culetRatio - one);
-			const auto innerScale = one + t1 * (culetRatio - one);
+			const auto outerScale = one + (t0 * (culetRatio - one));
+			const auto innerScale = one + (t1 * (culetRatio - one));
 			const auto outerY = t0 * pavilionDepth;
 			const auto innerY = t1 * pavilionDepth;
 
@@ -3925,7 +3925,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		/* 8-vertex rings: 4 edge midpoints + 4 corners.
 		 * Crown: uniform scaling (step cut).
 		 * Pavilion: midpoints contract slower, corners faster → chevron V-grooves. */
-		const auto triangleCount = 12 + 32 * steps;
+		const auto triangleCount = 12 + (32 * steps);
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -3990,7 +3990,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -4056,10 +4056,10 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto innerS = tableRatio + t0 * (one - tableRatio);
-			const auto outerS = tableRatio + t1 * (one - tableRatio);
-			const auto innerY = -crownHeight + t0 * crownHeight;
-			const auto outerY = -crownHeight + t1 * crownHeight;
+			const auto innerS = tableRatio + (t0 * (one - tableRatio));
+			const auto outerS = tableRatio + (t1 * (one - tableRatio));
+			const auto innerY = -crownHeight + (t0 * crownHeight);
+			const auto outerY = -crownHeight + (t1 * crownHeight);
 
 			const auto inner = makePrincessRing(innerS, innerS, innerY);
 			const auto outer = makePrincessRing(outerS, outerS, outerY);
@@ -4085,13 +4085,13 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
 			/* Midpoint scale: normal contraction. */
-			const auto outerMs = one + t0 * (culetRatio - one);
-			const auto innerMs = one + t1 * (culetRatio - one);
+			const auto outerMs = one + (t0 * (culetRatio - one));
+			const auto innerMs = one + (t1 * (culetRatio - one));
 
 			/* Corner scale: faster contraction via chevronDepth. */
 			const auto cornerCulet = culetRatio * (one - chevronDepth);
-			const auto outerCs = one + t0 * (cornerCulet - one);
-			const auto innerCs = one + t1 * (cornerCulet - one);
+			const auto outerCs = one + (t0 * (cornerCulet - one));
+			const auto innerCs = one + (t1 * (cornerCulet - one));
 
 			const auto outerY = t0 * pavilionDepth;
 			const auto innerY = t1 * pavilionDepth;
@@ -4178,7 +4178,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* 6 vertices per ring: 3 corners beveled into 2 vertices each. */
 		constexpr size_t RingVerts = 6;
-		const auto triangleCount = 2 * (RingVerts - 2) + 4 * RingVerts * steps;
+		const auto triangleCount = (2 * (RingVerts - 2)) + (4 * RingVerts * steps);
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -4191,10 +4191,10 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		/* Equilateral triangle corners at 90°, 210°, 330° (pointing +X). */
 		const std::array< Vec3, 3 > cornerDirs = {{
 			Vec3(std::cos(pi * half), zero, std::sin(pi * half)),
-			Vec3(std::cos(pi * half + pi * static_cast< vertex_data_t >(2) / static_cast< vertex_data_t >(3)), zero,
-				 std::sin(pi * half + pi * static_cast< vertex_data_t >(2) / static_cast< vertex_data_t >(3))),
-			Vec3(std::cos(pi * half + pi * static_cast< vertex_data_t >(4) / static_cast< vertex_data_t >(3)), zero,
-				 std::sin(pi * half + pi * static_cast< vertex_data_t >(4) / static_cast< vertex_data_t >(3)))
+			Vec3(std::cos((pi * half) + (pi * static_cast< vertex_data_t >(2) / static_cast< vertex_data_t >(3))), zero,
+				 std::sin((pi * half) + (pi * static_cast< vertex_data_t >(2) / static_cast< vertex_data_t >(3)))),
+			Vec3(std::cos((pi * half) + (pi * static_cast< vertex_data_t >(4) / static_cast< vertex_data_t >(3))), zero,
+				 std::sin((pi * half) + (pi * static_cast< vertex_data_t >(4) / static_cast< vertex_data_t >(3))))
 		}};
 
 		/* Build a beveled triangle ring at scale s and height y. */
@@ -4208,15 +4208,15 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				const auto & next = cornerDirs[(c + 1) % 3];
 
 				const auto cornerPos = curr * size * s;
-				const auto toPrev = (prev * size * s - cornerPos).normalized();
-				const auto toNext = (next * size * s - cornerPos).normalized();
+				const auto toPrev = ((prev * size * s) - cornerPos).normalized();
+				const auto toNext = ((next * size * s) - cornerPos).normalized();
 
 				const auto bevelDist = cornerBevel * size * s;
 
-				ring[c * 2]     = Vec3(cornerPos[Math::X] + toPrev[Math::X] * bevelDist, y,
-									   cornerPos[Math::Z] + toPrev[Math::Z] * bevelDist);
-				ring[c * 2 + 1] = Vec3(cornerPos[Math::X] + toNext[Math::X] * bevelDist, y,
-									   cornerPos[Math::Z] + toNext[Math::Z] * bevelDist);
+				ring[c * 2]     = Vec3(cornerPos[Math::X] + (toPrev[Math::X] * bevelDist), y,
+									   cornerPos[Math::Z] + (toPrev[Math::Z] * bevelDist));
+				ring[(c * 2) + 1] = Vec3(cornerPos[Math::X] + (toNext[Math::X] * bevelDist), y,
+									   cornerPos[Math::Z] + (toNext[Math::Z] * bevelDist));
 			}
 
 			return ring;
@@ -4262,7 +4262,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -4328,10 +4328,10 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto innerScale = tableRatio + t0 * (one - tableRatio);
-			const auto outerScale = tableRatio + t1 * (one - tableRatio);
-			const auto innerY = -crownHeight + t0 * crownHeight;
-			const auto outerY = -crownHeight + t1 * crownHeight;
+			const auto innerScale = tableRatio + (t0 * (one - tableRatio));
+			const auto outerScale = tableRatio + (t1 * (one - tableRatio));
+			const auto innerY = -crownHeight + (t0 * crownHeight);
+			const auto outerY = -crownHeight + (t1 * crownHeight);
 
 			const auto inner = makeTriRing(innerScale, innerY);
 			const auto outer = makeTriRing(outerScale, outerY);
@@ -4356,8 +4356,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto t0 = static_cast< vertex_data_t >(step) / static_cast< vertex_data_t >(steps);
 			const auto t1 = static_cast< vertex_data_t >(step + 1) / static_cast< vertex_data_t >(steps);
 
-			const auto outerScale = one + t0 * (culetRatio - one);
-			const auto innerScale = one + t1 * (culetRatio - one);
+			const auto outerScale = one + (t0 * (culetRatio - one));
+			const auto innerScale = one + (t1 * (culetRatio - one));
 			const auto outerY = t0 * pavilionDepth;
 			const auto innerY = t1 * pavilionDepth;
 
@@ -4443,7 +4443,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
 		const auto n = facets;
-		const auto triangleCount = 4 * n - 2;
+		const auto triangleCount = (4 * n) - 2;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -4516,7 +4516,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -4652,7 +4652,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
 		const auto n = facets;
-		const auto triangleCount = 4 * n - 2;
+		const auto triangleCount = (4 * n) - 2;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -4740,7 +4740,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -4876,7 +4876,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
 		const auto n = facets;
-		const auto triangleCount = 4 * n - 2;
+		const auto triangleCount = (4 * n) - 2;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -4961,7 +4961,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -5097,7 +5097,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
 		const auto n = facets;
-		const auto triangleCount = 4 * n - 2;
+		const auto triangleCount = (4 * n) - 2;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -5121,7 +5121,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto cosT = std::cos(theta);
 			const auto sinT = std::sin(theta);
 			const auto blendFactor = (one + cosT) * half;
-			const auto localSharpness = one + (sharpness - one) * blendFactor;
+			const auto localSharpness = one + ((sharpness - one) * blendFactor);
 			const auto signSin = sinT < zero ? static_cast< vertex_data_t >(-1) : one;
 
 			return {
@@ -5171,7 +5171,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -5282,7 +5282,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		constexpr auto zero = static_cast< vertex_data_t >(0);
 
 		const auto n = facets;
-		const auto triangleCount = 4 * n - 2;
+		const auto triangleCount = (4 * n) - 2;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -5361,7 +5361,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));
@@ -5472,7 +5472,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		const auto n = facets;
 		/* Flat base: n-2 triangles.
 		 * Dome rings: (rings-1) bands of n quads (2n tris each) + top cap of n triangles. */
-		const auto triangleCount = (n - 2) + 2 * n * (rings - 1) + n;
+		const auto triangleCount = (n - 2) + (2 * n * (rings - 1)) + n;
 
 		Shape< vertex_data_t, index_data_t > shape{static_cast< uint32_t >(triangleCount)};
 		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
@@ -5507,7 +5507,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		{
 			/* Project world-Y onto face plane for consistent texture orientation. */
 			const Vec3 upDir(static_cast< vertex_data_t >(0), -one, static_cast< vertex_data_t >(0));
-			auto rawT = upDir - normal * Vec3::dotProduct(upDir, normal);
+			auto rawT = upDir - (normal * Vec3::dotProduct(upDir, normal));
 			if ( Vec3::dotProduct(rawT, rawT) < static_cast< vertex_data_t >(0.0001) )
 			{
 				const Vec3 rightDir(one, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(0));

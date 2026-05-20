@@ -93,7 +93,7 @@ namespace EmEn::Libs::VertexFactory::TextureCoordinates
 			/* S angle (longitude). */
 			std::atan2(position[Math::X], position[Math::Z]) + std::numbers::pi_v< number_t >,
 			/* T angle (latitude). */
-			static_cast< number_t >(1.0) - std::acos(position[Math::Y] / radius) / std::numbers::pi_v< number_t >,
+			static_cast< number_t >(1.0) - ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((std::acos(position[Math::Y] / radius) / std::numbers::pi_v< number_t >)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))),
 			static_cast< number_t >(0)
 		};
 	}

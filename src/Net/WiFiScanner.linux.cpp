@@ -78,7 +78,7 @@ namespace EmEn::Net::WiFiScanner
 				return 14;
 			}
 
-			return static_cast< int32_t >((frequency - 2412) / 5 + 1);
+			return static_cast< int32_t >(((frequency - 2412) / 5) + 1);
 		}
 
 		/* 5 GHz band. */

@@ -423,7 +423,7 @@ namespace EmEn::Scenes::Component
 		/* Compute near plane consistently with ViewMatrices2DUBO (1:1 aspect ratio). */
 		const auto fov = this->getFovOrNear();
 		const auto tanHalfFov = std::tan(Radian(fov) * 0.5F);
-		const auto nearPlane = 0.1F / std::sqrt(1.0F + tanHalfFov * tanHalfFov * 2.0F);
+		const auto nearPlane = 0.1F / std::sqrt(1.0F + (tanHalfFov * tanHalfFov * 2.0F));
 
 		const auto projMatrix = Matrix< 4, float >::perspectiveProjection(fov, 1.0F, nearPlane, this->getDistanceOrFar());
 

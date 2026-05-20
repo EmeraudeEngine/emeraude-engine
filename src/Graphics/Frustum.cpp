@@ -47,7 +47,7 @@ namespace EmEn::Graphics
 			const auto b = viewProjectionMatrix[7] + viewProjectionMatrix[4];
 			const auto c = viewProjectionMatrix[11] + viewProjectionMatrix[8];
 			const auto d = viewProjectionMatrix[15] + viewProjectionMatrix[12];
-			const auto length = std::sqrt(a * a + b * b + c * c);
+			const auto length = std::sqrt((a * a) + (b * b) + (c * c));
 			m_planes[Left] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics
 			const auto b = viewProjectionMatrix[7] - viewProjectionMatrix[4];
 			const auto c = viewProjectionMatrix[11] - viewProjectionMatrix[8];
 			const auto d = viewProjectionMatrix[15] - viewProjectionMatrix[12];
-			const auto length = std::sqrt(a * a + b * b + c * c);
+			const auto length = std::sqrt((a * a) + (b * b) + (c * c));
 			m_planes[Right] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 
@@ -67,7 +67,7 @@ namespace EmEn::Graphics
 			const auto b = viewProjectionMatrix[7] + viewProjectionMatrix[5];
 			const auto c = viewProjectionMatrix[11] + viewProjectionMatrix[9];
 			const auto d = viewProjectionMatrix[15] + viewProjectionMatrix[13];
-			const auto length = std::sqrt(a * a + b * b + c * c);
+			const auto length = std::sqrt((a * a) + (b * b) + (c * c));
 			m_planes[Bottom] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 
@@ -77,7 +77,7 @@ namespace EmEn::Graphics
 			const auto b = viewProjectionMatrix[7] - viewProjectionMatrix[5];
 			const auto c = viewProjectionMatrix[11] - viewProjectionMatrix[9];
 			const auto d = viewProjectionMatrix[15] - viewProjectionMatrix[13];
-			const auto length = std::sqrt(a * a + b * b + c * c);
+			const auto length = std::sqrt((a * a) + (b * b) + (c * c));
 			m_planes[Top] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 
@@ -87,7 +87,7 @@ namespace EmEn::Graphics
 			const auto b = viewProjectionMatrix[7] + viewProjectionMatrix[6];
 			const auto c = viewProjectionMatrix[11] + viewProjectionMatrix[10];
 			const auto d = viewProjectionMatrix[15] + viewProjectionMatrix[14];
-			const auto length = std::sqrt(a * a + b * b + c * c);
+			const auto length = std::sqrt((a * a) + (b * b) + (c * c));
 			m_planes[Near] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 
@@ -97,7 +97,7 @@ namespace EmEn::Graphics
 			const auto b = viewProjectionMatrix[7] - viewProjectionMatrix[6];
 			const auto c = viewProjectionMatrix[11] - viewProjectionMatrix[10];
 			const auto d = viewProjectionMatrix[15] - viewProjectionMatrix[14];
-			const auto length = std::sqrt(a * a + b * b + c * c);
+			const auto length = std::sqrt((a * a) + (b * b) + (c * c));
 			m_planes[Far] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 	}

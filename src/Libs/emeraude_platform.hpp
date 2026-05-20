@@ -36,6 +36,18 @@
  * build-time debug flags are required.
  */
 
+/* NOTE (clang-tidy): the macros below are flagged by cppcoreguidelines-macro-usage,
+ * cppcoreguidelines-macro-to-enum, and modernize-macro-to-enum, which propose to
+ * replace them with constexpr variables. That conversion IS done at the bottom of
+ * this file (see the EmEn namespace: IsLinux, IsX86Arch, OSName, ...).
+ *
+ * The macros themselves MUST remain because they are consumed by preprocessor #if
+ * directives elsewhere in the engine (HelperProcess, Application, Core, ...) for
+ * platform-specific code branches that reference APIs which do not exist on other
+ * platforms (WinAPI on Linux, NSWorkspace on Linux, etc.) — and the C++ preprocessor
+ * #if cannot evaluate constexpr variables, only macros. This is a structural
+ * language constraint, not a stylistic choice. */
+// NOLINTBEGIN(cppcoreguidelines-macro-usage,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum)
 #if defined(__i386__) || defined(_M_IX86) // Major detection of x86 32bit architecture.
 	#define IS_X86_ARCH 1
 	#define IS_ARM_ARCH 0
@@ -97,6 +109,7 @@
 #ifdef _MSC_VER
 	#define __PRETTY_FUNCTION__ __FUNCSIG__
 #endif
+// NOLINTEND(cppcoreguidelines-macro-usage,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum)
 
 namespace EmEn
 {

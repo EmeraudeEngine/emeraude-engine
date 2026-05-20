@@ -106,10 +106,10 @@ namespace EmEn::Libs::Math::Space3D
 
 		const precision_t a = Point< precision_t >::dotProduct(segmentDirection, segmentDirection);
 		const precision_t b = static_cast< precision_t >(2) * Point< precision_t >::dotProduct(segmentDirection, oc);
-		const precision_t c = Point< precision_t >::dotProduct(oc, oc) - radius * radius;
+		const precision_t c = Point< precision_t >::dotProduct(oc, oc) - (radius * radius);
 
 		/* NOTE: Calculation of the discriminant of the quadratic equation. */
-		const precision_t discriminant = b * b - 4 * a * c;
+		const precision_t discriminant = (b * b) - (4 * a * c);
 
 		/* NOTE: If the discriminant is negative, the line never intersects the sphere. */
 		if ( discriminant < 0 )

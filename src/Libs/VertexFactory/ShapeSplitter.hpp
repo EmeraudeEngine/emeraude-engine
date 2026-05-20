@@ -482,8 +482,8 @@ namespace EmEn::Libs::VertexFactory
 
 				result.position = vertA.position() + (vertB.position() - vertA.position()) * t;
 				result.textureCoordinates = vertA.textureCoordinates() + (vertB.textureCoordinates() - vertA.textureCoordinates()) * t;
-				result.normal = (vertA.normal() + (vertB.normal() - vertA.normal()) * t).normalized();
-				result.tangent = (vertA.tangent() + (vertB.tangent() - vertA.tangent()) * t).normalized();
+				result.normal = (vertA.normal() + ((vertB.normal() - vertA.normal()) * t)).normalized();
+				result.tangent = (vertA.tangent() + ((vertB.tangent() - vertA.tangent()) * t)).normalized();
 				result.weights = vertA.weights() + (vertB.weights() - vertA.weights()) * t;
 				result.influences = (t < static_cast< vertex_data_t >(0.5)) ? vertA.influences() : vertB.influences();
 
@@ -849,7 +849,7 @@ namespace EmEn::Libs::VertexFactory
 
 					auto current = startVertex;
 					index_data_t prev = std::numeric_limits< index_data_t >::max();
-					const size_t maxSteps = canonicalEdges.size() * 2 + 1;
+					const size_t maxSteps = (canonicalEdges.size() * 2) + 1;
 					size_t steps = 0;
 
 					do

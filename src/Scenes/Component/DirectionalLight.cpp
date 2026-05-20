@@ -422,7 +422,7 @@ namespace EmEn::Scenes::Component
 			scaledCorners[corner + 4] = scaledCorners[corner] + (cameraFrustumCorners[corner + 4] - cameraFrustumCorners[corner]) * CSMCoverageRatio;
 		}
 
-		const float CSMFarPlane = nearPlane + (farPlane - nearPlane) * CSMCoverageRatio;
+		const float CSMFarPlane = nearPlane + ((farPlane - nearPlane) * CSMCoverageRatio);
 
 		/* Update the cascade matrices in the cascaded view matrices UBO. */
 		auto & viewMatrices = static_cast< ViewMatricesCascadedUBO & >(m_shadowMap->viewMatrices());
@@ -434,7 +434,7 @@ namespace EmEn::Scenes::Component
 		{
 			const auto & matrix = viewMatrices.cascadeViewProjectionMatrix(cascadeIndex);
 
-			std::memcpy(&m_CSMBuffer[CSM_CascadeMatricesOffset + cascadeIndex * 16], matrix.data(), 16 * sizeof(float));
+			std::memcpy(&m_CSMBuffer[CSM_CascadeMatricesOffset + (cascadeIndex * 16)], matrix.data(), 16 * sizeof(float));
 		}
 
 		/* Copy split distances. */

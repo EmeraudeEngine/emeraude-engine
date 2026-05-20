@@ -36,19 +36,36 @@
 /* Local inclusions for usages. */
 #include "Tracer.hpp"
 
-/* NOTE: These types may not be defined in older OpenAL-Soft versions (< 1.24).
- * Define them manually for compatibility with OpenAL-Soft 1.23.x and earlier. */
+/* NOTE: These symbols may not be defined in older OpenAL-Soft versions (< 1.24).
+ * Define them manually for compatibility with OpenAL-Soft 1.23.x and earlier.
+ * Only the umbrella macro ALC_SOFT_system_events must be a #define (it is tested
+ * by #ifndef); the actual constants are exposed as inline constexpr so they don't
+ * pollute the preprocessor space. */
 #ifndef ALC_SOFT_system_events
-#define ALC_SOFT_system_events 1
-#define ALC_EVENT_SUPPORTED_SOFT 0x19A5
-#define ALC_EVENT_NOT_SUPPORTED_SOFT 0x0000
-#define ALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT 0x19A6
-#define ALC_EVENT_TYPE_DEVICE_ADDED_SOFT 0x19A7
-#define ALC_EVENT_TYPE_DEVICE_REMOVED_SOFT 0x19A8
-typedef ALCboolean (ALC_APIENTRY *LPALCEVENTISSUPPORTEDSOFT)(ALCenum eventType);
-typedef ALCboolean (ALC_APIENTRY *LPALCEVENTCONTROLSOFT)(ALCsizei count, const ALCenum *types, ALCboolean enable);
-typedef void (ALC_APIENTRY *LPALCEVENTCALLBACKSOFT)(void (ALC_APIENTRY *callback)(ALCenum eventType, ALCenum deviceType, ALCdevice *device, ALCsizei length, const ALCchar *message, void *userParam), void *userParam);
+	// NOLINTNEXTLINE(cppcoreguidelines-macro-usage,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum): umbrella guard probed by #ifndef above; cannot be replaced by constexpr.
+	#define ALC_SOFT_system_events 1
+	inline constexpr ALCenum ALC_EVENT_SUPPORTED_SOFT{0x19A5};
+	inline constexpr ALCenum ALC_EVENT_NOT_SUPPORTED_SOFT{0x0000};
+	inline constexpr ALCenum ALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT{0x19A6};
+	inline constexpr ALCenum ALC_EVENT_TYPE_DEVICE_ADDED_SOFT{0x19A7};
+	inline constexpr ALCenum ALC_EVENT_TYPE_DEVICE_REMOVED_SOFT{0x19A8};
+	using LPALCEVENTISSUPPORTEDSOFT = ALCboolean (ALC_APIENTRY *)(ALCenum eventType);
+	using LPALCEVENTCONTROLSOFT = ALCboolean (ALC_APIENTRY *)(ALCsizei count, const ALCenum *types, ALCboolean enable);
+	using LPALCEVENTCALLBACKSOFT = void (ALC_APIENTRY *)(void (ALC_APIENTRY *callback)(ALCenum eventType, ALCenum deviceType, ALCdevice *device, ALCsizei length, const ALCchar *message, void *userParam), void *userParam);
 #endif
+
+/* NOTE (clang-tidy): the namespace below is the OpenAL extension-loading layer.
+ * The two diagnostic patterns suppressed are *structurally required* by the OpenAL
+ * C API and cannot be replaced with safer C++ idioms without losing functionality:
+ *   - cppcoreguidelines-avoid-non-const-global-variables: function pointers MUST be
+ *     mutable globals — they are populated at runtime by alcGetProcAddress() and
+ *     must be callable from any TU after installation. The g_isXxxAvailable flags
+ *     follow the same lifecycle (set once at install, read many times).
+ *   - cppcoreguidelines-pro-type-reinterpret-cast: alcGetProcAddress() returns
+ *     void* by C-API contract; the typed function-pointer cast is the only legal
+ *     conversion path standard C++ offers (std::bit_cast does not sanction
+ *     function-pointer ↔ void* conversion). */
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-pro-type-reinterpret-cast)
 
 namespace EmEn::Audio::OpenAL
 {
@@ -101,7 +118,7 @@ namespace EmEn::Audio::OpenAL
 	bool
 	installExtensionEFX (ALCdevice * device) noexcept
 	{
-		if ( !alcIsExtensionPresent(device, "ALC_EXT_EFX") )
+		if ( alcIsExtensionPresent(device, "ALC_EXT_EFX") == ALC_FALSE )
 		{
 			Tracer::warning(TracerTag, "The device doesn't support the 'ALC_EXT_EFX' extension !");
 
@@ -182,7 +199,7 @@ namespace EmEn::Audio::OpenAL
 	bool
 	installExtensionSystemEvents (ALCdevice * device) noexcept
 	{
-		if ( !alcIsExtensionPresent(device, "ALC_SOFT_system_events") )
+		if ( alcIsExtensionPresent(device, "ALC_SOFT_system_events") == ALC_FALSE )
 		{
 			Tracer::warning(TracerTag, "The device doesn't support the 'ALC_SOFT_system_events' extension !");
 
@@ -228,7 +245,7 @@ namespace EmEn::Audio::OpenAL
 	bool
 	installExtensionEvents () noexcept
 	{
-		if ( !alIsExtensionPresent("AL_SOFT_events") )
+		if ( alIsExtensionPresent("AL_SOFT_events") == AL_FALSE )
 		{
 			Tracer::warning(TracerTag, "The device doesn't support the 'AL_SOFT_events' extension !");
 
@@ -274,7 +291,7 @@ namespace EmEn::Audio::OpenAL
 	bool
 	installExtensionLoopback () noexcept
 	{
-		if ( !alcIsExtensionPresent(nullptr, "ALC_SOFT_loopback") )
+		if ( alcIsExtensionPresent(nullptr, "ALC_SOFT_loopback") == ALC_FALSE )
 		{
 			Tracer::warning(TracerTag, "The 'ALC_SOFT_loopback' extension is not available !");
 
@@ -325,7 +342,7 @@ namespace EmEn::Audio::OpenAL
 	bool
 	installExtensionThreadLocalContext () noexcept
 	{
-		if ( !alcIsExtensionPresent(nullptr, "ALC_EXT_thread_local_context") )
+		if ( alcIsExtensionPresent(nullptr, "ALC_EXT_thread_local_context") == ALC_FALSE )
 		{
 			Tracer::warning(TracerTag, "The 'ALC_EXT_thread_local_context' extension is not available !");
 
@@ -361,3 +378,4 @@ namespace EmEn::Audio::OpenAL
 		return g_isThreadLocalContextAvailable;
 	}
 }
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-pro-type-reinterpret-cast)

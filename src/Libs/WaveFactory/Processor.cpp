@@ -178,7 +178,7 @@ namespace EmEn::Libs::WaveFactory
 
 			for ( size_t channel = 0; channel < channelCount; ++channel )
 			{
-				if ( std::abs(waveData[sample * channelCount + channel]) > thresholdLinear )
+				if ( std::abs(waveData[(sample * channelCount) + channel]) > thresholdLinear )
 				{
 					isSilent = false;
 
@@ -203,7 +203,7 @@ namespace EmEn::Libs::WaveFactory
 
 			for ( size_t channel = 0; channel < channelCount; ++channel )
 			{
-				if ( std::abs(waveData[(sample - 1) * channelCount + channel]) > thresholdLinear )
+				if ( std::abs(waveData[((sample - 1) * channelCount) + channel]) > thresholdLinear )
 				{
 					isSilent = false;
 
@@ -287,7 +287,7 @@ namespace EmEn::Libs::WaveFactory
 
 		const auto channelCount = static_cast< size_t >(m_wave.channels());
 		const auto currentSize = m_wave.m_data.size();
-		const auto newSize = currentSize + (samplesBefore + samplesAfter) * channelCount;
+		const auto newSize = currentSize + ((samplesBefore + samplesAfter) * channelCount);
 
 		std::vector< float > temporaryBuffer(newSize, 0.0F);
 
@@ -406,7 +406,7 @@ namespace EmEn::Libs::WaveFactory
 		for ( size_t sample = 0; sample < sampleCount; ++sample )
 		{
 			temporaryBuffer[sample * 2] = m_wave.m_data[sample];
-			temporaryBuffer[sample * 2 + 1] = m_wave.m_data[sample];
+			temporaryBuffer[(sample * 2) + 1] = m_wave.m_data[sample];
 		}
 
 		m_wave.m_data.swap(temporaryBuffer);
@@ -440,7 +440,7 @@ namespace EmEn::Libs::WaveFactory
 
 		for ( size_t sample = 0; sample < sampleCount; ++sample )
 		{
-			temporaryBuffer[sample] = m_wave.m_data[sample * channelCount + channelIndex];
+			temporaryBuffer[sample] = m_wave.m_data[(sample * channelCount) + channelIndex];
 		}
 
 		m_wave.m_data.swap(temporaryBuffer);
@@ -470,7 +470,7 @@ namespace EmEn::Libs::WaveFactory
 
 		for ( size_t sample = 0; sample < sampleCount; ++sample )
 		{
-			std::swap(m_wave.m_data[sample * 2], m_wave.m_data[sample * 2 + 1]);
+			std::swap(m_wave.m_data[sample * 2], m_wave.m_data[(sample * 2) + 1]);
 		}
 
 		return true;
@@ -565,7 +565,7 @@ namespace EmEn::Libs::WaveFactory
 
 			for ( size_t channel = 0; channel < channelCount; ++channel )
 			{
-				if ( std::abs(m_wave.m_data[sample * channelCount + channel]) > thresholdLinear )
+				if ( std::abs(m_wave.m_data[(sample * channelCount) + channel]) > thresholdLinear )
 				{
 					isSilent = false;
 

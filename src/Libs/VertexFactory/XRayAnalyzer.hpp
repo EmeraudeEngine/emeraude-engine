@@ -201,7 +201,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						for ( size_t cx = cellMinX; cx <= cellMaxX; ++cx )
 						{
-							m_sliceGrid[cy * SliceGridRes + cx].push_back(t);
+							m_sliceGrid[(cy * SliceGridRes) + cx].push_back(t);
 						}
 					}
 				}
@@ -231,16 +231,16 @@ namespace EmEn::Libs::VertexFactory
 
 				Pixmap< uint8_t > output(resX, resY, ChannelMode::Grayscale, Color< float >{0.0F, 0.0F, 0.0F, 1.0F});
 
-				const auto depthPos = m_boundsMin[2] + depth * m_sliceDepth;
+				const auto depthPos = m_boundsMin[2] + (depth * m_sliceDepth);
 
 				auto processRow = [&] (uint32_t py)
 				{
 					for ( uint32_t px = 0; px < resX; ++px )
 					{
-						const auto viewX = m_squareMinX + (static_cast< vertex_data_t >(px) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resX) * m_squareSize;
-						const auto viewY = m_squareMinY + (static_cast< vertex_data_t >(py) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resY) * m_squareSize;
+						const auto viewX = m_squareMinX + ((static_cast< vertex_data_t >(px) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resX) * m_squareSize);
+						const auto viewY = m_squareMinY + ((static_cast< vertex_data_t >(py) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resY) * m_squareSize);
 
-						const auto worldPoint = m_viewpoint.position() + m_right * viewX + m_up * viewY + m_forward * depthPos;
+						const auto worldPoint = m_viewpoint.position() + (m_right * viewX) + (m_up * viewY) + (m_forward * depthPos);
 
 						size_t intersections = 0;
 
@@ -248,7 +248,7 @@ namespace EmEn::Libs::VertexFactory
 						const auto cellX = static_cast< size_t >(std::clamp((viewX - m_squareMinX) / m_squareSize * gridScale, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(SliceGridRes - 1)));
 						const auto cellY = static_cast< size_t >(std::clamp((viewY - m_squareMinY) / m_squareSize * gridScale, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(SliceGridRes - 1)));
 
-						for ( const auto triIdx : m_sliceGrid[cellY * SliceGridRes + cellX] )
+						for ( const auto triIdx : m_sliceGrid[(cellY * SliceGridRes) + cellX] )
 						{
 							const auto & tt = m_allTriangles[triIdx];
 
@@ -314,18 +314,18 @@ namespace EmEn::Libs::VertexFactory
 				{
 					for ( uint32_t px = 0; px < resX; ++px )
 					{
-						const auto viewX = m_squareMinX + (static_cast< vertex_data_t >(px) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resX) * m_squareSize;
-						const auto viewY = m_squareMinY + (static_cast< vertex_data_t >(py) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resY) * m_squareSize;
+						const auto viewX = m_squareMinX + ((static_cast< vertex_data_t >(px) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resX) * m_squareSize);
+						const auto viewY = m_squareMinY + ((static_cast< vertex_data_t >(py) + static_cast< vertex_data_t >(0.5)) / static_cast< vertex_data_t >(resY) * m_squareSize);
 
-						const auto rayOrigin = m_viewpoint.position() + m_right * viewX + m_up * viewY + m_forward * m_boundsMin[2];
+						const auto rayOrigin = m_viewpoint.position() + (m_right * viewX) + (m_up * viewY) + (m_forward * m_boundsMin[2]);
 
-						auto & pixel = pixelData[static_cast< size_t >(py) * resX + px];
+						auto & pixel = pixelData[(static_cast< size_t >(py) * resX) + px];
 
 						const auto gridScale = static_cast< vertex_data_t >(SliceGridRes);
 						const auto cellX = static_cast< size_t >(std::clamp((viewX - m_squareMinX) / m_squareSize * gridScale, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(SliceGridRes - 1)));
 						const auto cellY = static_cast< size_t >(std::clamp((viewY - m_squareMinY) / m_squareSize * gridScale, static_cast< vertex_data_t >(0), static_cast< vertex_data_t >(SliceGridRes - 1)));
 
-						for ( const auto triIdx : m_sliceGrid[cellY * SliceGridRes + cellX] )
+						for ( const auto triIdx : m_sliceGrid[(cellY * SliceGridRes) + cellX] )
 						{
 							const auto & tt = m_allTriangles[triIdx];
 							vertex_data_t hitT;
@@ -367,7 +367,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						for ( uint32_t px = 0; px < resX; ++px )
 						{
-							const auto & pixel = pixelData[static_cast< size_t >(py) * resX + px];
+							const auto & pixel = pixelData[(static_cast< size_t >(py) * resX) + px];
 
 							if ( pixel.depths.empty() )
 							{
@@ -426,7 +426,7 @@ namespace EmEn::Libs::VertexFactory
 				const auto up = Math::Vector< 3, vertex_data_t >::crossProduct(frame.forwardVector(), frame.rightVector()).normalized();
 				const auto forward = frame.forwardVector();
 
-				return frame.position() + right * point[Math::X] + up * point[Math::Y] + forward * point[Math::Z];
+				return frame.position() + (right * point[Math::X]) + (up * point[Math::Y]) + (forward * point[Math::Z]);
 			}
 
 			/**
