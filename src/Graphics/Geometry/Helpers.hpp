@@ -33,6 +33,7 @@
 namespace EmEn::Graphics::Geometry
 {
 	/** @brief Geometry interface flag bits. */
+	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum GeometryFlagBits : uint32_t
 	{
 		None = 0U,
@@ -67,6 +68,7 @@ namespace EmEn::Graphics::Geometry
 	};
 
 	/** @brief SubGeometry flag bits. */
+	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum SubGeometryFlagBits : uint32_t
 	{
 		Regular = 0U,

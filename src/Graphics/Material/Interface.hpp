@@ -88,6 +88,7 @@ namespace EmEn
 namespace EmEn::Graphics::Material
 {
 	/** @brief Material interface flag bits. */
+	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum MaterialFlagBits : uint32_t
 	{
 		None = 0U,

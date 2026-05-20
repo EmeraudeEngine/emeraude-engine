@@ -65,6 +65,7 @@ namespace EmEn
 namespace EmEn::Saphir::Generator
 {
 	/** @brief Generator flag bits. */
+	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum GeneratorFlagBits : uint32_t
 	{
 		None = 0U,

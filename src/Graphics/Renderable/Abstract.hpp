@@ -69,6 +69,7 @@ namespace EmEn
 namespace EmEn::Graphics::Renderable
 {
 	/** @brief Renderable interface flag bits. */
+	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum RenderableFlagBits : uint32_t
 	{
 		None = 0U,

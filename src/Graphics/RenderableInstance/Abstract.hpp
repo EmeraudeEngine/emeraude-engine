@@ -91,6 +91,7 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr bool MergePushConstants{true};
 
 	/** @brief Renderable instance flag bits. */
+	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum RenderableInstanceFlagBits : uint32_t
 	{
 		None = 0U,
