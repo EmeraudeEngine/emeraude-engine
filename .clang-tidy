@@ -37,3 +37,9 @@ HeaderFilterRegex: 'src/.*'
 FormatStyle: file
 ExtraArgs:
   - '-Wno-unknown-warning-option'
+CheckOptions:
+  # Skip true data-holder types (struct/class where every member is public).
+  # The check still fires on classes that mix public/protected/private members,
+  # which is the real code smell to catch (encapsulation leak).
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true
+  cppcoreguidelines-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true

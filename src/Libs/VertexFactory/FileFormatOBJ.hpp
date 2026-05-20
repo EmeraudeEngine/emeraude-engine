@@ -68,29 +68,52 @@ namespace EmEn::Libs::VertexFactory
 
 			explicit
 			OBJVertex (index_data_t vIndex) noexcept
-				: vIndex{vIndex}
+				: m_vIndex{vIndex}
 			{
 
 			}
 
 			OBJVertex (index_data_t vIndex, index_data_t vtIndex) noexcept
-				: vIndex{vIndex},
-				vtIndex{vtIndex}
+				: m_vIndex{vIndex},
+				m_vtIndex{vtIndex}
 			{
 
 			}
 
 			OBJVertex (index_data_t vIndex, index_data_t vtIndex, index_data_t vnIndex) noexcept
-				: vIndex{vIndex},
-				vtIndex{vtIndex},
-				vnIndex{vnIndex}
+				: m_vIndex{vIndex},
+				m_vtIndex{vtIndex},
+				m_vnIndex{vnIndex}
 			{
 
 			}
-				
-			index_data_t vIndex{0};
-			index_data_t vtIndex{0};
-			index_data_t vnIndex{0};
+
+			[[nodiscard]]
+			index_data_t
+			vIndex () const noexcept
+			{
+				return m_vIndex;
+			}
+
+			[[nodiscard]]
+			index_data_t
+			vtIndex () const noexcept
+			{
+				return m_vtIndex;
+			}
+
+			[[nodiscard]]
+			index_data_t
+			vnIndex () const noexcept
+			{
+				return m_vnIndex;
+			}
+
+		private:
+
+			index_data_t m_vIndex{0};
+			index_data_t m_vtIndex{0};
+			index_data_t m_vnIndex{0};
 	};
 
 	/**
@@ -642,7 +665,7 @@ namespace EmEn::Libs::VertexFactory
 								const auto realFaceVertexIndex = faceVertexIndex == 0 ? faceVertexIndex : faceVertexIndex + triangleOffset;
 
 								/* NOTE: Convert OBJ index to vector index. */
-								const auto vIndex = faceIndices.at(realFaceVertexIndex).vIndex - 1;
+								const auto vIndex = faceIndices.at(realFaceVertexIndex).vIndex() - 1;
 
 								/* NOTE: Copy the OBJ extracts values to the final shape vertex. */
 								vertices.at(vIndex).setPosition(m_v.at(vIndex));
@@ -739,9 +762,9 @@ namespace EmEn::Libs::VertexFactory
 
 								/* NOTE: Convert OBJ index (1-based) to vector index (0-based).
 								 * Index 0 means "not defined" in our system. */
-								const auto vIndex = OBJVertex.vIndex - 1;
-								const bool hasNormal = OBJVertex.vnIndex > 0;
-								const auto vnIndex = hasNormal ? OBJVertex.vnIndex - 1 : 0;
+								const auto vIndex = OBJVertex.vIndex() - 1;
+								const bool hasNormal = OBJVertex.vnIndex() > 0;
+								const auto vnIndex = hasNormal ? OBJVertex.vnIndex() - 1 : 0;
 
 								/* NOTE: Get the real shape vertex index in the final shape. */
 								index_data_t geometryVertexIndex = 0;
@@ -882,9 +905,9 @@ namespace EmEn::Libs::VertexFactory
 
 								/* NOTE: Convert OBJ index (1-based) to vector index (0-based).
 								 * Index 0 means "not defined" in our system. */
-								const auto vIndex = OBJVertex.vIndex - 1;
-								const bool hasTexCoord = OBJVertex.vtIndex > 0;
-								const auto vtIndex = hasTexCoord ? OBJVertex.vtIndex - 1 : 0;
+								const auto vIndex = OBJVertex.vIndex() - 1;
+								const bool hasTexCoord = OBJVertex.vtIndex() > 0;
+								const auto vtIndex = hasTexCoord ? OBJVertex.vtIndex() - 1 : 0;
 
 								/* NOTE: Get the real shape vertex index in the final shape. */
 								index_data_t geometryVertexIndex = 0;
@@ -1030,11 +1053,11 @@ namespace EmEn::Libs::VertexFactory
 
 								/* NOTE: Convert OBJ index (1-based) to vector index (0-based).
 								 * Index 0 means "not defined" in our system. */
-								const auto vIndex = OBJVertex.vIndex - 1;
-								const bool hasNormal = OBJVertex.vnIndex > 0;
-								const bool hasTexCoord = OBJVertex.vtIndex > 0;
-								const auto vnIndex = hasNormal ? OBJVertex.vnIndex - 1 : 0;
-								const auto vtIndex = hasTexCoord ? OBJVertex.vtIndex - 1 : 0;
+								const auto vIndex = OBJVertex.vIndex() - 1;
+								const bool hasNormal = OBJVertex.vnIndex() > 0;
+								const bool hasTexCoord = OBJVertex.vtIndex() > 0;
+								const auto vnIndex = hasNormal ? OBJVertex.vnIndex() - 1 : 0;
+								const auto vtIndex = hasTexCoord ? OBJVertex.vtIndex() - 1 : 0;
 
 								/* NOTE: Get the real shape vertex index in the final shape. */
 								index_data_t geometryVertexIndex = 0;
