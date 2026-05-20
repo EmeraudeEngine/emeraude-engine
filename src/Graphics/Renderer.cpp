@@ -554,11 +554,20 @@ namespace EmEn::Graphics
 			// TODO: Sizes management is maybe in the wrong place !
 			auto sizes = std::vector< VkDescriptorPoolSize >{
 				/* NOTE: Texture filtering alone. */
-				{VK_DESCRIPTOR_TYPE_SAMPLER, 16},
+				{
+					.type = VK_DESCRIPTOR_TYPE_SAMPLER,
+					.descriptorCount = 16
+				},
 				/* NOTE: Texture (that can be sampled). */
-				{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 64},
+				{
+					.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+					.descriptorCount = 64
+				},
 				/* NOTE: Texture associated with a filter (VK_DESCRIPTOR_TYPE_SAMPLER+VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE). */
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64},
+				{
+					.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.descriptorCount = 64
+				},
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0},
 				/* NOTE:  */
@@ -566,15 +575,30 @@ namespace EmEn::Graphics
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 0},
 				/* NOTE: UBO (Uniform Buffer Object) */
-				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 512},
+				{
+					.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+					.descriptorCount = 512
+				},
 				/* NOTE: SSBO (Shader Storage Buffer Object) */
-				{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 64},
+				{
+					.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+					.descriptorCount = 64
+				},
 				/* NOTE: Dynamic UBO (Uniform Buffer Object) */
-				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 512},
+				{
+					.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+					.descriptorCount = 512
+				},
 				/* NOTE: Dynamic SSBO (Shader Storage Buffer Object) */
-				{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 64},
+				{
+					.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
+					.descriptorCount = 64
+				},
 				/* NOTE:  */
-				{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 32},
+				{
+					.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+					.descriptorCount = 32
+				},
 				/* NOTE: Special UBO (Uniform Buffer Object). */
 				// TODO: Check to enable this for re-usable UBO between render calls.
 				//{VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK, 512},

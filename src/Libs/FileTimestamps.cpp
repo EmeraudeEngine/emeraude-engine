@@ -136,22 +136,34 @@ namespace EmEn::Libs
 			/* Check which fields are valid. */
 			if ( stx.stx_mask & STATX_ATIME )
 			{
-				m_atimeNS = timespecToNanoseconds({stx.stx_atime.tv_sec, stx.stx_atime.tv_nsec});
+				m_atimeNS = timespecToNanoseconds({
+					.tv_sec = stx.stx_atime.tv_sec,
+					.tv_nsec = stx.stx_atime.tv_nsec
+				});
 			}
 
 			if ( stx.stx_mask & STATX_MTIME )
 			{
-				m_mtimeNS = timespecToNanoseconds({stx.stx_mtime.tv_sec, stx.stx_mtime.tv_nsec});
+				m_mtimeNS = timespecToNanoseconds({
+					.tv_sec = stx.stx_mtime.tv_sec,
+					.tv_nsec = stx.stx_mtime.tv_nsec
+				});
 			}
 
 			if ( stx.stx_mask & STATX_CTIME )
 			{
-				m_ctimeNS = timespecToNanoseconds({stx.stx_ctime.tv_sec, stx.stx_ctime.tv_nsec});
+				m_ctimeNS = timespecToNanoseconds({
+					.tv_sec = stx.stx_ctime.tv_sec,
+					.tv_nsec = stx.stx_ctime.tv_nsec
+				});
 			}
 
 			if ( stx.stx_mask & STATX_BTIME )
 			{
-				m_birthTimeNS = timespecToNanoseconds({stx.stx_btime.tv_sec, stx.stx_btime.tv_nsec});
+				m_birthTimeNS = timespecToNanoseconds({
+					.tv_sec = stx.stx_btime.tv_sec,
+					.tv_nsec = stx.stx_btime.tv_nsec
+				});
 			}
 		}
 		else
