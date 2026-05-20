@@ -65,7 +65,7 @@ namespace EmEn::PlatformSpecific::Desktop
 
 			if ( desktop != nullptr )
 			{
-				std::string desktopStr{desktop};
+				const std::string desktopStr{desktop};
 
 				return desktopStr.find("KDE") != std::string::npos;
 			}

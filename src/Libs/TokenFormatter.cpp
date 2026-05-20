@@ -564,7 +564,7 @@ namespace EmEn::Libs
 		bool hasSpace = false;
 		bool hasUppercase = false;
 		bool hasLowercase = false;
-		bool startsWithUpper = std::isupper(static_cast< unsigned char >(token[0])) != 0;
+		const bool startsWithUpper = std::isupper(static_cast< unsigned char >(token[0])) != 0;
 
 		for ( const char chr : token )
 		{

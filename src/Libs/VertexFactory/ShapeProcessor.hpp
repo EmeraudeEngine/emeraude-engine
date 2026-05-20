@@ -1115,7 +1115,7 @@ namespace EmEn::Libs::VertexFactory
 				const auto triCount = triangles.size();
 
 				/* Build edge → triangle adjacency. */
-				std::unordered_map< uint64_t, std::vector< size_t > > edgeToTris;
+				const std::unordered_map< uint64_t, std::vector< size_t > > edgeToTris;
 
 				for ( size_t t = 0; t < triCount; ++t )
 				{
@@ -1268,7 +1268,7 @@ namespace EmEn::Libs::VertexFactory
 			selectPinnedVertices (const ChartData & chart) const noexcept
 			{
 				/* Find boundary vertices of this chart. */
-				std::unordered_map< uint64_t, size_t > edgeCounts;
+				const std::unordered_map< uint64_t, size_t > edgeCounts;
 
 				for ( const auto triIdx : chart.triangleIndices )
 				{

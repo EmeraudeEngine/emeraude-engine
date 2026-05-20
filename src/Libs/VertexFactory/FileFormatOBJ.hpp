@@ -1185,7 +1185,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			extractPositionAttribute (const std::string & vLine, index_data_t offset) noexcept
 			{
-				std::string_view line{vLine};
+				const std::string_view line{vLine};
 
 				/* Skip "v " prefix. */
 				size_t pos = skipWhitespace(line, 2);
@@ -1224,7 +1224,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			extractTextureCoordinatesAttribute (const std::string & vtLine, index_data_t offset) noexcept
 			{
-				std::string_view line{vtLine};
+				const std::string_view line{vtLine};
 
 				/* Skip "vt " prefix. */
 				size_t pos = skipWhitespace(line, 3);
@@ -1252,7 +1252,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			extractNormalAttribute (const std::string & vnLine, index_data_t offset) noexcept
 			{
-				std::string_view line{vnLine};
+				const std::string_view line{vnLine};
 
 				/* Skip "vn " prefix. */
 				size_t pos = skipWhitespace(line, 3);

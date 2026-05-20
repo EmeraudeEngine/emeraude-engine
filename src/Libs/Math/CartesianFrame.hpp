@@ -1194,7 +1194,7 @@ namespace EmEn::Libs::Math
 				const auto positionY = -Vector< 3, precision_t >::dotProduct(m_downward, m_position);
 				const auto positionZ = -Vector< 3, precision_t >::dotProduct(m_backward, m_position);
 
-				std::array< precision_t, 16 > rawData{
+				const std::array< precision_t, 16 > rawData{
 					right[X], m_downward[X], m_backward[X], 0,
 					right[Y], m_downward[Y], m_backward[Y], 0,
 					right[Z], m_downward[Z], m_backward[Z], 0,
@@ -1220,7 +1220,7 @@ namespace EmEn::Libs::Math
 			{
 				const auto right = this->rightVector();
 
-				std::array< precision_t, 16 > rawData{
+				const std::array< precision_t, 16 > rawData{
 					right[X], m_downward[X], m_backward[X], 0,
 					right[Y], m_downward[Y], m_backward[Y], 0,
 					right[Z], m_downward[Z], m_backward[Z], 0,

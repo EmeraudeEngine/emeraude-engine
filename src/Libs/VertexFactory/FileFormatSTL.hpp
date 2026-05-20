@@ -133,7 +133,7 @@ namespace EmEn::Libs::VertexFactory
 					for ( index_data_t v = 0; v < 3; ++v )
 					{
 						const auto & vertex = geometry.vertex(triangle.vertexIndex(v));
-						Math::Vector< 3, float > pos = vertex.position(); /* Assuming float position */
+						const Math::Vector< 3, float > pos = vertex.position(); /* Assuming float position */
 
 						/* Convert to float explicitly if vertex_data_t is double */
 						auto x = static_cast< float >(pos.x());
@@ -218,8 +218,8 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			readAscii (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry) noexcept
 			{
-				std::string line;
-				std::string dummy;
+				const std::string line;
+				const std::string dummy;
 
 				std::vector< ShapeVertex< vertex_data_t > > vertices;
 				std::vector< ShapeTriangle< vertex_data_t, index_data_t > > triangles;
@@ -356,7 +356,7 @@ namespace EmEn::Libs::VertexFactory
 
 						auto baseIndex = static_cast< index_data_t >(vertices.size());
 
-						Math::Vector< 3, vertex_data_t > normal = {
+						const Math::Vector< 3, vertex_data_t > normal = {
 							static_cast< vertex_data_t >(n[0]),
 							static_cast< vertex_data_t >(n[1]),
 							static_cast< vertex_data_t >(n[2])

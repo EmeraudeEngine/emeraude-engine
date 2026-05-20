@@ -146,21 +146,21 @@ namespace EmEn::Libs::PixelFactory::FileIO
 
 		if ( extension == "jpg" || extension == "jpeg" )
 		{
-			FileFormatJpeg< pixel_data_t, dimension_t > fileFormat;
+			const FileFormatJpeg< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.writeStream(stream, pixmap, options);
 		}
 
 		if ( extension == "png" )
 		{
-			FileFormatPNG< pixel_data_t, dimension_t > fileFormat;
+			const FileFormatPNG< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.writeStream(stream, pixmap, options);
 		}
 
 		if ( extension == "tga" )
 		{
-			FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
+			const FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.writeStream(stream, pixmap, options);
 		}

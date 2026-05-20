@@ -296,7 +296,7 @@ namespace EmEn::Libs::VertexFactory
 				ShapeBuilder builder{geometry, options};
 				builder.beginConstruction(ConstructionMode::Triangles);
 
-				int frameIndex = 0; // Default to first frame
+				const int frameIndex = 0; // Default to first frame
 
 				for ( uint32_t triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++ )
 				{
@@ -421,7 +421,7 @@ namespace EmEn::Libs::VertexFactory
 				ShapeBuilder builder{geometry, options};
 				builder.beginConstruction(ConstructionMode::Triangles);
 
-				int frameIndex = 0;
+				const int frameIndex = 0;
 
 				for ( uint32_t triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++ )
 				{
@@ -552,7 +552,7 @@ namespace EmEn::Libs::VertexFactory
 
 				for ( int surfaceIndex = 0; surfaceIndex < header.num_surfaces; ++surfaceIndex )
 				{
-					md3_surface_t surf = surfaces[surfaceIndex];
+					const md3_surface_t surf = surfaces[surfaceIndex];
 
 					// Read data for this surface
 					std::vector< md3_triangle_t > tris(surf.num_triangles);
@@ -579,16 +579,16 @@ namespace EmEn::Libs::VertexFactory
 						/* Reverse vertex order (2,1,0) to fix winding. */
 						for ( int k = 2; k >= 0; --k )
 						{
-							int idx = tri.indexes[k];
+							const int idx = tri.indexes[k];
 							const auto & v = verts[idx];
 							const auto & uv = uvs[idx];
 
 							/* Decode Normal from lat/lng encoding. */
-							float lat = (v.normal[0] * (2 * 3.14159265f) / 255.0f);
-							float lng = (v.normal[1] * (2 * 3.14159265f) / 255.0f);
-							float nx = std::cos(lat) * std::sin(lng);
-							float ny = std::sin(lat) * std::sin(lng);
-							float nz = std::cos(lng);
+							const float lat = (v.normal[0] * (2 * 3.14159265f) / 255.0f);
+							const float lng = (v.normal[1] * (2 * 3.14159265f) / 255.0f);
+							const float nx = std::cos(lat) * std::sin(lng);
+							const float ny = std::sin(lat) * std::sin(lng);
+							const float nz = std::cos(lng);
 
 							/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 							builder.setPosition(
@@ -655,7 +655,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			computeW (std::array< float, 4 > & q)
 			{
-				float t = 1.0f - (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]);
+				const float t = 1.0f - (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]);
 
 				q[3] = (t < 0.0f) ? 0.0f : -std::sqrt(t);
 			}
@@ -667,10 +667,10 @@ namespace EmEn::Libs::VertexFactory
 				// Quaternion rotation P_out = Q * P_in * Q^-1
 				// Optimized:
 				float x = q[0], y = q[1], z = q[2], w = q[3];
-				float ix = ((w * in[0])) + ((y * in[2])) - ((z * in[1]));
-				float iy = ((w * in[1])) + ((z * in[0])) - ((x * in[2]));
-				float iz = ((w * in[2])) + ((x * in[1])) - ((y * in[0]));
-				float iw = ((-x * in[0])) - ((y * in[1])) - ((z * in[2]));
+				const float ix = ((w * in[0])) + ((y * in[2])) - ((z * in[1]));
+				const float iy = ((w * in[1])) + ((z * in[0])) - ((x * in[2]));
+				const float iz = ((w * in[2])) + ((x * in[1])) - ((y * in[0]));
+				const float iw = ((-x * in[0])) - ((y * in[1])) - ((z * in[2]));
 
 				out[0] = ix * w + iw * -x + iy * -z - iz * -y;
 				out[1] = iy * w + iw * -y + iz * -x - ix * -z;
@@ -774,8 +774,8 @@ namespace EmEn::Libs::VertexFactory
 						{
 							std::getline(file, line);
 
-							size_t startQuote = line.find('"');
-							size_t endQuote = line.find('"', startQuote + 1);
+							const size_t startQuote = line.find('"');
+							const size_t endQuote = line.find('"', startQuote + 1);
 							joints[i].name = line.substr(startQuote + 1, endQuote - startQuote - 1);
 
 							std::stringstream ss(line.substr(endQuote + 1));
@@ -797,8 +797,8 @@ namespace EmEn::Libs::VertexFactory
 						{
 							if ( line.find("shader") != std::string::npos )
 							{
-								size_t start = line.find('"');
-								size_t end = line.find('"', start + 1);
+								const size_t start = line.find('"');
+								const size_t end = line.find('"', start + 1);
 								mesh.shader = line.substr(start + 1, end - start - 1);
 							}
 							else if ( line.find("numverts") != std::string::npos )

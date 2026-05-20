@@ -283,7 +283,7 @@ namespace EmEn::Resources
 
 					case SourceType::ExternalData :
 					{
-						Network::URL resourceUrl{m_baseInformation.data().asString()};
+						const Network::URL resourceUrl{m_baseInformation.data().asString()};
 
 						if ( resourceUrl.isValid() )
 						{

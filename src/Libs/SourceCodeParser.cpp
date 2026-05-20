@@ -142,7 +142,7 @@ namespace EmEn::Libs
 					/* Check if line was only whitespace/comments. */
 					bool wasOnlyWhitespace = true;
 
-					for ( char c : line )
+					for ( const char c : line )
 					{
 						if ( c != ' ' && c != '\t' )
 						{

@@ -655,7 +655,7 @@ namespace EmEn::Libs
 				size_t count = 0;
 
 				{
-					std::lock_guard< std::mutex > lock{m_mutex};
+					const std::lock_guard< std::mutex > lock{m_mutex};
 
 					for ( auto it = begin; it != end; ++it )
 					{

@@ -67,7 +67,7 @@ namespace EmEn::Libs
 
 		/* Signal all workers to stop. */
 		{
-			std::lock_guard< std::mutex > lock{m_mutex};
+			const std::lock_guard< std::mutex > lock{m_mutex};
 			m_stop.store(true, std::memory_order_release);
 		}
 
@@ -97,7 +97,7 @@ namespace EmEn::Libs
 	ThreadPool::enqueueTask (Task && task)
 	{
 		{
-			std::lock_guard< std::mutex > lock{m_mutex};
+			const std::lock_guard< std::mutex > lock{m_mutex};
 
 			if ( m_stop.load(std::memory_order_acquire) )
 			{
@@ -189,7 +189,7 @@ namespace EmEn::Libs
 					"(" << m_busyWorkers.load(std::memory_order_relaxed) << " busy, " << m_pendingTasks.load(std::memory_order_relaxed) << " pending)" "\n";
 
 				{
-					Time::Elapsed::PrintScopeRealTime stat{"[ThreadPool-debug] Task finished"};
+					const Time::Elapsed::PrintScopeRealTime stat{"[ThreadPool-debug] Task finished"};
 
 					task();
 				}
@@ -203,7 +203,7 @@ namespace EmEn::Libs
 
 			/* Decrement busy count and signal completion. */
 			{
-				std::lock_guard< std::mutex > lock{m_mutex};
+				const std::lock_guard< std::mutex > lock{m_mutex};
 
 				m_busyWorkers.fetch_sub(1, std::memory_order_release);
 

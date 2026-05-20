@@ -93,7 +93,7 @@ namespace EmEn::Libs::Math
 		}
 
 		/* Build a pure rotation 4x4 matrix in column-major layout and extract quaternion. */
-		std::array< precision_t, 16 > rotData{
+		const std::array< precision_t, 16 > rotData{
 			col0[X], col0[Y], col0[Z], Zero,
 			col1[X], col1[Y], col1[Z], Zero,
 			col2[X], col2[Y], col2[Z], Zero,

@@ -107,7 +107,7 @@ namespace EmEn::Saphir
 	std::string
 	DirStackFileIncluder::getDirectory (const std::string & path) noexcept
 	{
-		size_t last = path.find_last_of("/\\");
+		const size_t last = path.find_last_of("/\\");
 
 		return last == std::string::npos ? "." : path.substr(0, last);
 	}

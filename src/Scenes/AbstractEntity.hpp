@@ -394,7 +394,7 @@ namespace EmEn::Scenes
 			bool
 			hasComponent () const noexcept
 			{
-				std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::lock_guard< std::mutex > lock(m_componentsMutex);
 
 				return !m_components.empty();
 			}
@@ -443,7 +443,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< component_t >
 			getComponent (std::string_view name) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
-				std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::lock_guard< std::mutex > lock(m_componentsMutex);
 				for ( const auto & component : m_components )
 				{
 					if ( component->name() == name )
@@ -471,7 +471,7 @@ namespace EmEn::Scenes
 			Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
 			getComponentsOfType () noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
-				std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::lock_guard< std::mutex > lock(m_componentsMutex);
 				Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
 
 				for ( const auto & component : m_components )
@@ -501,7 +501,7 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) noexcept requires (std::is_invocable_v< function_t, Component::Abstract & >)
 			{
-				std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::lock_guard< std::mutex > lock(m_componentsMutex);
 				for ( const auto & component : m_components )
 				{
 					processComponent(*component.get());
@@ -522,7 +522,7 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) const noexcept requires (std::is_invocable_v< function_t, const Component::Abstract & >)
 			{
-				std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::lock_guard< std::mutex > lock(m_componentsMutex);
 				for ( const auto & component : m_components )
 				{
 					processComponent(*component.get());

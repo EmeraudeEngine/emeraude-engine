@@ -768,7 +768,7 @@ namespace EmEn::Libs
 			void
 			swap (StaticVector & other) noexcept(std::is_nothrow_move_constructible_v< data_t > && std::is_nothrow_swappable_v< data_t >)
 			{
-				size_type commonSize = std::min(m_size, other.m_size);
+				const size_type commonSize = std::min(m_size, other.m_size);
 
 				for ( size_type index = 0; index < commonSize; ++index )
 				{
@@ -860,7 +860,7 @@ namespace EmEn::Libs
 				}
 				else
 				{
-					size_type oldSize = m_size;
+					const size_type oldSize = m_size;
 					m_size = newSize;
 
 					for ( size_type index = newSize; index < oldSize; ++index )
