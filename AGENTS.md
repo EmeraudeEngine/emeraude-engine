@@ -9,24 +9,21 @@
 
 ## 1b. Vision
 
-### Unreal Engine 5 Runtime Killer
+### Production-Grade Real-Time Runtime
 
-Emeraude Engine targets **surpassing Unreal Engine 5 runtime visual quality**. This is not
+Emeraude Engine targets **production-grade real-time visual quality**. This is not
 about the ecosystem (no editor, no blueprint system, no marketplace). The target is the
 **runtime** — the core that runs on every end-user machine.
 
-UE5's runtime consists of: renderer (Nanite, Lumen, virtual shadow maps, TSR), post-process
-stack, material system, audio engine, physics. That is our battleground. If the developer
-using emeraude-engine has to work harder on tooling — that is an acceptable trade-off. The
-runtime output quality is the non-negotiable imperative.
+Scope: modern PBR renderer, ray-traced effects, virtual shadow maps, temporal upscaling,
+full post-process stack, material system, audio engine, physics. If the developer
+using emeraude-engine has to work harder on tooling — that is an acceptable trade-off.
+The runtime output quality is the non-negotiable imperative.
 
-### Strategic Positioning
+### Positioning
 
-"UE5 Runtime Killer" is a **direction**, not a frontal war. The real goal: give indie
-developers a **genuine choice**. Today, a dev who wants AAA-quality rendering is locked
-into UE5's licensing (5% royalties, Epic controls the terms) or Unity's unpredictable
-pricing. Emeraude Engine offers a third option: **professional-grade runtime, LGPLv3,
-zero royalties, zero contractual dependency.**
+Emeraude Engine offers developers a real path to production-quality real-time rendering with
+**full source access, LGPLv3, zero royalties, zero contractual dependency.**
 
 The trade-off is honest: less tooling, more code. The target audience is developers who
 **want** to write C++ and understand their engine — not drag-and-drop users. Those who
@@ -279,7 +276,7 @@ how to add new commands.
 > These rules are **NON-NEGOTIABLE** for any AI-generated code in this engine.
 
 ### Professional Standard
-This engine targets **surpassing Unreal Engine 5 runtime visual quality** as its benchmark.
+This engine targets **production-grade real-time visual quality** as its benchmark.
 Every generated implementation must meet professional-grade quality. No shortcuts,
 no "good enough" approximations, no deferred-quality patterns. The AI is the primary
 implementor — the human architect directs, the AI executes and measures.

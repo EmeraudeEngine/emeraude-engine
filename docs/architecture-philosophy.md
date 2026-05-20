@@ -2,9 +2,9 @@
 
 Emeraude Engine follows fundamental design principles that guide all architectural and implementation decisions.
 
-## 0. The Mission: Unreal Engine 5 Runtime Killer
+## 0. The Mission: Production-Grade Real-Time Runtime
 
-Emeraude Engine exists to **surpass Unreal Engine 5 runtime visual quality**.
+Emeraude Engine exists to deliver **production-grade real-time visual quality**.
 
 **"Runtime" means the core that runs on every end-user machine** — the renderer, the
 post-process stack, the material system, the audio engine, the physics. Not the editor,
