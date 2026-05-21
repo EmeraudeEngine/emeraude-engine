@@ -900,10 +900,6 @@ namespace EmEn
 		{
 			m_stopVetoCount++;
 
-			TraceInfo{ClassId}
-				<< "The user-application prevents a direct stop! "
-				<< "(veto " << m_stopVetoCount << "/" << MaxStopVetoCount << ")";
-
 			/* Below the threshold: just defer. */
 			if ( m_stopVetoCount < MaxStopVetoCount )
 			{
@@ -911,13 +907,9 @@ namespace EmEn
 			}
 
 			/* Threshold reached: ask the user whether to force-quit. */
-			TraceWarning{ClassId}
-				<< "Threshold reached (" << MaxStopVetoCount
-				<< " vetoes), prompting the user for a force-quit.";
-
 			CustomMessage dialog{
 				"Application not responding",
-				"The application is not responding to the close request.\n\n"
+				"The application is not responding to the close request." "\n\n"
 				"Do you want to force quit, or keep waiting?",
 				ButtonLabels{"Force Quit", "Wait More"},
 				MessageType::Question
@@ -928,9 +920,6 @@ namespace EmEn
 			/* Index 0 = "Force Quit". Anything else (1 = "Wait More", -1 = dismissed) keeps waiting. */
 			if ( dialog.getClickedButtonIndex() != 0 )
 			{
-				/* Reset the counter so the next batch of vetoes triggers the dialog again. */
-				m_stopVetoCount = 0;
-
 				return;
 			}
 
@@ -955,8 +944,6 @@ namespace EmEn
 		{
 			this->stopAudioVideoRecording();
 		}
-
-		Tracer::debug(ClassId, "User-application stopped !");
 
 		/* Stopping the logics and rendering threads. */
 		m_isRenderingLoopRunning = false;
@@ -1128,11 +1115,7 @@ namespace EmEn
 			switch ( key )
 			{
 				case KeyEscape :
-				{
-					Tracer::info(ClassId, "Force quit !");
-
 					this->stop();
-				}
 					return true;
 
 				/* Direct keys reserved by core. */
