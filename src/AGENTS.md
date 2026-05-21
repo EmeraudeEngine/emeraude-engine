@@ -43,7 +43,7 @@ private:
 ```
 
 **Shutdown**:
-- `stop(int32_t userExitCode = 0)` — Stops the engine with an optional user exit code (displayed in console output). Broadcasts `ExecutionStopping`/`ExecutionStopped` notifications, calls `onBeforeCoreStop()`, stops all loops.
+- `stop(int userExitCode = 0)` — Initiates engine shutdown. Calls `onBeforeCoreStop()` first; if the override returns `false`, the stop is deferred without disturbing engine state (loops still running, services still initialized). On accepted shutdown: broadcasts `ExecutionStopping`/`ExecutionStopped`, stops the recorder if running, terminates all loops. See § Core - Shutdown Policy for the veto contract and safety net.
 
 **Mandatory callbacks** (pure virtual):
 - `onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings)` - Scene initialization, return true to continue
@@ -52,12 +52,36 @@ private:
 **Optional callbacks** (default implementation):
 - `onBeforeCoreSecondaryServicesInitialization()` - Pre-init (e.g., --help)
 - `onCorePaused()` / `onCoreResumed()` - Pause handling
-- `onBeforeCoreStop()` - Cleanup before shutdown
+- `onBeforeCoreStop()` - Veto-able cleanup hook before shutdown — return `false` to defer, `true` to accept. `[[nodiscard]]`. See § Core - Shutdown Policy.
 - `onCoreKeyPress()` / `onCoreKeyRelease()` - Keyboard input
 - `onCoreCharacterType()` - Unicode text input
 - `onCoreNotification()` - Observer pattern
 - `onCoreOpenFiles()` - File drag & drop
 - `onCoreSurfaceRefreshed()` - Window resize
+
+### Core - Shutdown Policy
+
+Shutdown is veto-able. `stop()` calls `onBeforeCoreStop()` first; returning `false` defers the shutdown without disturbing engine state — loops still running, services still initialized. The application is responsible for calling `stop()` again when ready. Typical use: notify a frontend (e.g. a JS layer over IPC), wait for a cleanup ack, then call `stop()` again.
+
+**Safety net — consecutive veto counter**. To prevent the engine from being locked by a buggy or unresponsive application policy, Core counts consecutive vetoes. After `MaxStopVetoCount` (= 3), a synchronous modal `Dialog::CustomMessage` ("Force Quit" / "Wait More") prompts the user:
+- **Force Quit** (button index 0, primary/default) → bypass the veto and proceed to shutdown
+- **Wait More** (any other index, including dismissal) → reset the counter to 0 and return without stopping
+
+The counter resets to 0 whenever the user chooses "Wait More", so each fresh batch of vetoes gets the full tolerance.
+
+**Final cleanup chance on force-quit**. When the user confirms "Force Quit", Core does NOT immediately tear down. It first calls `setAppReadyToQuit(ForceQuitExitCode)` (sets `m_userApplicationReadyToQuit = true` and overrides the exit code with the `ForceQuitExitCode` sentinel `= 99` so the OS can distinguish a force-quit from a clean shutdown), then invokes `onBeforeCoreStop()` one last time with the return value discarded. This gives the application a final opportunity to release resources and save critical state before shutdown — even if its normal policy would still want to veto.
+
+**`onBeforeCoreStop()` two-mode contract**. The override is expected to inspect `isAppSafeToQuit()` to know which mode it's in:
+| `isAppSafeToQuit()` | Mode | Expected behavior |
+|---|---|---|
+| `false` | Normal veto opportunity | Trigger frontend cleanup (e.g. notify JS), return `false` to defer; return `true` once cleanup is complete |
+| `true` | Final cleanup chance (force-quit confirmed) | Do best-effort cleanup; return value is ignored |
+
+**Exit code chain**. `stop(int code)` stores the code in `m_userExitCode`. `terminate()` returns `errors > 0 ? EXIT_FAILURE : m_userExitCode`, propagated unchanged by `run()` to the Boot's `main()` return value. Type uniform `int` across the chain — no narrowing, no implicit conversion. Service termination failures or (in debug builds) leaked Vulkan objects force `EXIT_FAILURE` regardless of the user code.
+
+**Exit code convention**. On POSIX, only `code & 0xFF` reaches the shell — stay in `0–255`. Engine convention: `0` = success (stdout), anything else = error (stderr). The Boot logs the message accordingly. Negative `int` values wrap through truncation and will appear as errors after `& 0xFF`.
+
+**Threading**. `Core::stop()` is expected to be called from the main thread. The "Force Quit / Wait More" dialog is synchronous and modal on `m_window`, so cross-thread calls to `stop()` may misbehave on Windows in particular.
 
 ### Core - Recording Coordination (RushMaker)
 

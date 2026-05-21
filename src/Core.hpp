@@ -179,6 +179,17 @@ namespace EmEn
 			static constexpr auto ResetSettingsArg{"--reset-settings"}; ///< Argument to backup and reset settings file.
 			/** @} */
 
+			/** @brief Number of consecutive `onBeforeCoreStop()` vetoes after which Core prompts the user for a force-quit.
+			 * @see stop()
+			 */
+			static constexpr int MaxStopVetoCount{3};
+
+			/** @brief Sentinel exit code assigned by Core when the user confirms a force-quit via the safety dialog.
+			 * @details Overrides the original user exit code so the OS can distinguish a force-quit from a clean shutdown.
+			 * @see stop()
+			 */
+			static constexpr int ForceQuitExitCode{99};
+
 			/** @name Available Tool Names
 			 * @brief Names of built-in tools accessible via tools mode.
 			 * @details Use with `-t <tool_name>` or `--tools-mode <tool_name>`.
@@ -272,12 +283,12 @@ namespace EmEn
 			 *
 			 * The main loop continues until stop() is called or a fatal error occurs.
 			 *
-			 * @return true if the engine executed and shut down successfully, false on error.
+			 * @return int Exit code (0 for success).
 			 * @see stop()
 			 * @see onCoreStarted()
 			 */
 			[[nodiscard]]
-			bool run () noexcept;
+			int run () noexcept;
 
 			/**
 			 * @brief Pauses the engine main loop.
@@ -312,7 +323,7 @@ namespace EmEn
 			 * @see onBeforeCoreStop()
 			 * @see NotificationCode::ExecutionStopped
 			 */
-			void stop (int32_t userExitCode = 0) noexcept;
+			void stop (int userExitCode = 0) noexcept;
 
 			/**
 			 * @brief Handles files dropped onto the application window.
@@ -1021,6 +1032,39 @@ namespace EmEn
 			[[nodiscard]]
 			bool enableUserService (ServiceInterface * userService) noexcept;
 
+			/**
+			 * @brief Declares the user application ready to quit.
+			 * @return void
+			 */
+			void
+			setAppReadyToQuit () noexcept
+			{
+				m_userApplicationReadyToQuit = true;
+			}
+
+			/**
+			 * @brief Declares the user application ready to quit.
+			 * @param userExitCode The user application exit code.
+			 * @return void
+			 */
+			void
+			setAppReadyToQuit (int userExitCode) noexcept
+			{
+				m_userExitCode = userExitCode;
+				m_userApplicationReadyToQuit = true;
+			}
+
+			/**
+			 * @brief Returns if the user application is safe to quit.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAppSafeToQuit () const noexcept
+			{
+				return m_userApplicationReadyToQuit;
+			}
+
 		private:
 
 			/** @name Interface Implementations
@@ -1098,17 +1142,17 @@ namespace EmEn
 			/**
 			 * @brief Performs engine shutdown sequence.
 			 * @details Terminates all services in reverse initialization order.
-			 * @return Exit code (0 for success).
+			 * @return int Exit code (0 for success).
 			 */
-			unsigned int terminate () noexcept;
+			int terminate () noexcept;
 
 			/**
 			 * @brief Executes command-line tools without full engine initialization.
 			 * @details Handles tools like vulkanInfo and geometry conversion.
-			 * @return true if tools mode executed successfully.
+			 * @return int Exit code (0 for success).
 			 * @see StartupMode::ToolsMode
 			 */
-			bool executeToolsMode () noexcept;
+			int executeToolsMode () noexcept;
 
 			/**
 			 * @brief Wipes local data directories (cache and user data) and exits.
@@ -1227,16 +1271,20 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Called when the engine is stopping.
+			 * @brief Called when the engine is stopping. This function can prevent the exit by returning 'false'.
 			 * @details Clean up game state, save progress, and release
 			 * application-specific resources here. Services are still available.
+			 * @return bool
 			 * @see stop()
 			 */
+			[[nodiscard]]
 			virtual
-			void
+			bool
 			onBeforeCoreStop () noexcept
 			{
-				/* Nothing by default. */
+				/* Nothing to do by default.
+				 * Return 'true' to let the application stops. */
+				return true;
 			}
 
 			/**
@@ -1369,6 +1417,8 @@ namespace EmEn
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
 			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
 			std::filesystem::path m_rushVoiceOverPath;
+			int m_userExitCode{0};
+			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).
@@ -1381,6 +1431,7 @@ namespace EmEn
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
 			bool m_windowChanged{false};
+			bool m_userApplicationReadyToQuit{false};
 			/** @} */ // End of Member Variables group
 	};
 }

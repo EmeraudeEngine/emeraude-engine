@@ -49,6 +49,7 @@
 #include "Libs/Time/Time.hpp"
 #include "Libs/Version.hpp"
 #include "PlatformSpecific/Desktop/Commands.hpp"
+#include "PlatformSpecific/Desktop/Dialog/CustomMessage.hpp"
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
 #include "SettingKeys.hpp"
 #include "Tool/GeometryDataPrinter.hpp"
@@ -259,7 +260,7 @@ namespace EmEn
 		this->notify(SurfaceRefreshed);
 	}
 
-	bool
+	int
 	Core::run () noexcept
 	{
 		switch ( m_startupMode )
@@ -267,7 +268,7 @@ namespace EmEn
 			case StartupMode::Error :
 				Tracer::fatal(ClassId, "Engine startup has been aborted by the core constructor !");
 
-				return false;
+				return EXIT_FAILURE;
 
 			case StartupMode::ToolsMode :
 				return this->executeToolsMode();
@@ -276,13 +277,13 @@ namespace EmEn
 				/* NOTE: Let the application stop the run. */
 				if ( this->onBeforeCoreSecondaryServicesInitialization() )
 				{
-					return this->terminate() == 0;
+					return this->terminate();
 				}
 
 				/* NOTE: Finish the core initialization with secondary services. */
 				if ( !this->initializeCoreLevel() )
 				{
-					return false;
+					return EXIT_FAILURE;
 				}
 
 				Tracer::success(ClassId, "Engine at application level initialized !");
@@ -427,7 +428,7 @@ namespace EmEn
 			logicsThread.join();
 		}
 
-		return this->terminate() == 0;
+		return this->terminate();
 	}
 
 	void
@@ -887,8 +888,59 @@ namespace EmEn
 	}
 
 	void
-	Core::stop (int32_t userExitCode) noexcept
+	Core::stop (int userExitCode) noexcept
 	{
+		using namespace PlatformSpecific::Desktop::Dialog;
+
+		/* Save the user exit code. */
+		m_userExitCode = userExitCode;
+
+		/* Ask the user-application if it agrees to stop. */
+		if ( !this->onBeforeCoreStop() )
+		{
+			m_stopVetoCount++;
+
+			TraceInfo{ClassId}
+				<< "The user-application prevents a direct stop! "
+				<< "(veto " << m_stopVetoCount << "/" << MaxStopVetoCount << ")";
+
+			/* Below the threshold: just defer. */
+			if ( m_stopVetoCount < MaxStopVetoCount )
+			{
+				return;
+			}
+
+			/* Threshold reached: ask the user whether to force-quit. */
+			TraceWarning{ClassId}
+				<< "Threshold reached (" << MaxStopVetoCount
+				<< " vetoes), prompting the user for a force-quit.";
+
+			CustomMessage dialog{
+				"Application not responding",
+				"The application is not responding to the close request.\n\n"
+				"Do you want to force quit, or keep waiting?",
+				ButtonLabels{"Force Quit", "Wait More"},
+				MessageType::Question
+			};
+
+			dialog.execute(m_window, false);
+
+			/* Index 0 = "Force Quit". Anything else (1 = "Wait More", -1 = dismissed) keeps waiting. */
+			if ( dialog.getClickedButtonIndex() != 0 )
+			{
+				/* Reset the counter so the next batch of vetoes triggers the dialog again. */
+				m_stopVetoCount = 0;
+
+				return;
+			}
+
+			/* NOTE: Go for a force quit! */
+			this->setAppReadyToQuit(ForceQuitExitCode);
+
+			/* NOTE: Don't care of the return here, we proceed to full termination. */
+			(void) this->onBeforeCoreStop();
+		}
+
 		std::cout << "\n"
 			"**************************************************************" "\n"
 			"   Engine is about to stop (User exit code: " << userExitCode << ") !   " "\n"
@@ -898,8 +950,6 @@ namespace EmEn
 		 * first by sending the event,
 		 * then directly to the sub application. */
 		this->notify(ExecutionStopping);
-
-		this->onBeforeCoreStop();
 
 		if ( m_graphicsRenderer.recorder().isRecording() )
 		{
@@ -921,10 +971,10 @@ namespace EmEn
 		this->notify(ExecutionStopped);
 	}
 
-	unsigned int
+	int
 	Core::terminate () noexcept
 	{
-		unsigned int error = 0;
+		uint32_t errors = 0;
 
 		/* Terminate user services. */
 		for ( auto * userService : std::ranges::reverse_view(m_userServiceEnabled) )
@@ -935,7 +985,7 @@ namespace EmEn
 			}
 			else
 			{
-				error++;
+				errors++;
 
 				TraceError{ClassId} << userService->name() << " user service failed to terminate properly!";
 			}
@@ -955,7 +1005,7 @@ namespace EmEn
 			}
 			else
 			{
-				error++;
+				errors++;
 
 				TraceError{ClassId} << service->name() << " secondary service failed to terminate properly!";
 			}
@@ -977,6 +1027,8 @@ namespace EmEn
 				for ( auto & [address, identifier] : AbstractObject::s_tracking )
 				{
 					std::cerr << "[DEBUG:VK_TRACKING] The Vulkan object @" << address << " '" << identifier << "' still alive !" << "\n";
+
+					errors++;
 				}
 			}
 			else
@@ -985,7 +1037,7 @@ namespace EmEn
 			}
 		}
 
-		return error;
+		return errors > 0 ? EXIT_FAILURE : m_userExitCode;
 	}
 
 	void
@@ -1734,7 +1786,7 @@ namespace EmEn
 		return this->onCoreNotification(observable, notificationCode, data);
 	}
 
-	bool
+	int
 	Core::executeToolsMode () noexcept
 	{
 		Tracer::info(ClassId, "Executing in tools mode ...");
@@ -1745,26 +1797,26 @@ namespace EmEn
 		{
 			Tool::ShowVulkanInformation tool{m_primaryServices.arguments(), m_vulkanInstance};
 
-			return tool.execute();
+			return tool.execute() ? EXIT_SUCCESS : EXIT_FAILURE;
 		}
 
 		if ( tools == PrintGeometryToolName )
 		{
 			Tool::GeometryDataPrinter tool{m_primaryServices.arguments()};
 
-			return tool.execute();
+			return tool.execute() ? EXIT_SUCCESS : EXIT_FAILURE;
 		}
 
 		if ( tools == ConvertGeometryToolName )
 		{
 			TraceDebug{ClassId} << "FIXME: ...";
 
-			return true;
+			return EXIT_SUCCESS;
 		}
 
 		TraceWarning{ClassId} << "Unrecognized tools '" << tools << "' !";
 
-		return false;
+		return EXIT_FAILURE;
 	}
 
 	void
