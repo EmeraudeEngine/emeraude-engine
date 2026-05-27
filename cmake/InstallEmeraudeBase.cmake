@@ -1,3 +1,8 @@
+if ( TARGET emeraude::base )
+	message("[EmeraudeEngine] emeraude-base is already provided by a parent project, reusing it !")
+	return()
+endif ()
+
 message("[EmeraudeEngine] Installing emeraude-base library ...")
 
 set(EMERAUDE_BASE_GIT "https://github.com/EmeraudeEngine/emeraude-base.git")
