@@ -27,7 +27,7 @@
 #include "AbstractShaderBlock.hpp"
 
 /* Local inclusions. */
-#include "Utility.hpp"
+#include "BaseUtility.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir::Declaration

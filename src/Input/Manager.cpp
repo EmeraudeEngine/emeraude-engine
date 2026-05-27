@@ -42,7 +42,7 @@
 #include "GamepadController.hpp"
 #include "JoystickController.hpp"
 #include "IO/IO.hpp"
-#include "Utility.hpp"
+#include "BaseUtility.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Window.hpp"
