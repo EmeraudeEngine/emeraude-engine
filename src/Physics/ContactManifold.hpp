@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,7 +28,7 @@
 
 /* Local inclusions for usages. */
 #include "ContactPoint.hpp"
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn::Physics
 {
@@ -90,7 +90,7 @@ namespace EmEn::Physics
 			 * @return bool True if added successfully, false if manifold is full.
 			 */
 			bool
-			addContact (const Libs::Math::Vector< 3, float > & worldPosition, const Libs::Math::Vector< 3, float > & worldNormal, float depth) noexcept
+			addContact (const Base::Math::Vector< 3, float > & worldPosition, const Base::Math::Vector< 3, float > & worldNormal, float depth) noexcept
 			{
 				if ( m_contacts.size() >= MaxContactPoints )
 				{
@@ -141,10 +141,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the contact points.
-			 * @return Libs::StaticVector< ContactPoint, MaxContactPoints > &
+			 * @return Base::StaticVector< ContactPoint, MaxContactPoints > &
 			 */
 			[[nodiscard]]
-			Libs::StaticVector< ContactPoint, MaxContactPoints > &
+			Base::StaticVector< ContactPoint, MaxContactPoints > &
 			contacts () noexcept
 			{
 				return m_contacts;
@@ -152,10 +152,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the contact points (const).
-			 * @return const Libs::StaticVector< ContactPoint, MaxContactPoints > &
+			 * @return const Base::StaticVector< ContactPoint, MaxContactPoints > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< ContactPoint, MaxContactPoints > &
+			const Base::StaticVector< ContactPoint, MaxContactPoints > &
 			contacts () const noexcept
 			{
 				return m_contacts;
@@ -195,7 +195,7 @@ namespace EmEn::Physics
 
 			MovableTrait * m_bodyA{nullptr};
 			MovableTrait * m_bodyB{nullptr};
-			Libs::StaticVector< ContactPoint, MaxContactPoints > m_contacts;
+			Base::StaticVector< ContactPoint, MaxContactPoints > m_contacts;
 	};
 
 	inline

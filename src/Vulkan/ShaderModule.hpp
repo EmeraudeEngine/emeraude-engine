@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -220,7 +220,7 @@ namespace EmEn::Vulkan
 			VkShaderModuleCreateInfo m_createInfo{};
 			VkShaderStageFlagBits m_shaderType{};
 			std::vector< uint32_t > m_binaryCode;
-			Libs::StaticVector< VkSpecializationMapEntry, 8 > m_mapEntries;
+			Base::StaticVector< VkSpecializationMapEntry, 8 > m_mapEntries;
 			std::vector< uint8_t > m_specializationData;
 			VkSpecializationInfo m_specializationInfo{};
 			VkPipelineShaderStageCreateInfo m_pipelineShaderStageCreateInfo{};

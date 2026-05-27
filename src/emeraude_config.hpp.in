@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,8 +34,9 @@
 #error "DEBUG and NDEBUG flags are set together ! Check the project configuration."
 #endif
 
-/* Stable platform / arch / OS detection (preprocessor only, never regenerated). */
-#include "Libs/emeraude_platform.hpp"
+/* Foundation config: platform detection + shared base constants (IsDebug, factory
+ * debug flags, ThreadPool, InternetCheckDomain, DefaultUserAgent, LIBSNDFILE_ENABLED). */
+#include "emeraude_base_config.hpp"
 
 #define EMERAUDE_ENGINE 1
 #define ENGINE_NAME "@PROJECT_NAME@"
@@ -45,10 +46,6 @@
 #define ENGINE_VERSION_STRING "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"
 
 #ifdef DEBUG
-	#cmakedefine EMERAUDE_DEBUG_OBSERVER_PATTERN
-	#cmakedefine EMERAUDE_DEBUG_PIXEL_FACTORY
-	#cmakedefine EMERAUDE_DEBUG_VERTEX_FACTORY
-	#cmakedefine EMERAUDE_DEBUG_WAVE_FACTORY
 	#cmakedefine EMERAUDE_DEBUG_KEYBOARD_INPUT
 	#cmakedefine EMERAUDE_DEBUG_POINTER_INPUT
 	#cmakedefine EMERAUDE_DEBUG_POINTER_MOVE_INPUT
@@ -56,13 +53,9 @@
 	#cmakedefine EMERAUDE_DEBUG_VULKAN_TRACKING
 #endif
 
-#cmakedefine EMERAUDE_DEBUG_THREAD_POOL
-#cmakedefine EMERAUDE_DISABLE_PARALLEL_COLLISION
-
-/* Third-party libraries enabled at compile-time. */
+/* Third-party libraries enabled at compile-time (engine-only). */
 #cmakedefine EMERAUDE_USE_SYSTEM_LIBS
 #cmakedefine IMGUI_ENABLED
-#cmakedefine LIBSNDFILE_ENABLED
 #cmakedefine RENDERDOC_ENABLED
 
 /* ===== Modern C++ macro like constants ===== */
@@ -79,40 +72,20 @@ namespace EmEn
 	constexpr unsigned int VersionMinor{@PROJECT_VERSION_MINOR@};
 	constexpr unsigned int VersionPatch{@PROJECT_VERSION_PATCH@};
 	constexpr auto VersionString{"@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"};
-	constexpr auto InternetCheckDomain{"@EMERAUDE_INTERNET_CHECK_DOMAIN@"};
-	constexpr auto DefaultUserAgent{"@PROJECT_NAME@/@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@ (" PLATFORM_TARGETED ")"};
 
 	#ifdef DEBUG
-		constexpr bool IsDebug{true};
-		constexpr bool IsRelease{false};
-
-		constexpr bool ObserverDebugEnabled{@EMERAUDE_DEBUG_OBSERVER_PATTERN@};
-		constexpr bool PixelFactoryDebugEnabled{@EMERAUDE_DEBUG_PIXEL_FACTORY@};
-		constexpr bool VertexFactoryDebugEnabled{@EMERAUDE_DEBUG_VERTEX_FACTORY@};
-		constexpr bool WaveFactoryDebugEnabled{@EMERAUDE_DEBUG_WAVE_FACTORY@};
 		constexpr bool KeyboardInputDebugEnabled{@EMERAUDE_DEBUG_KEYBOARD_INPUT@};
 		constexpr bool PointerInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_INPUT@};
 		constexpr bool PointerHeavyInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_HEAVY_INPUT@};
 		constexpr bool WindowEventsDebugEnabled{@EMERAUDE_DEBUG_WINDOW_EVENTS@};
 		constexpr bool VulkanTrackingDebugEnabled{@EMERAUDE_DEBUG_VULKAN_TRACKING@};
 	#else
-		constexpr bool IsDebug{false};
-		constexpr bool IsRelease{true};
-
-		constexpr bool ObserverDebugEnabled{false};
-		constexpr bool PixelFactoryDebugEnabled{false};
-		constexpr bool VertexFactoryDebugEnabled{false};
-		constexpr bool WaveFactoryDebugEnabled{false};
 		constexpr bool KeyboardInputDebugEnabled{false};
 		constexpr bool PointerInputDebugEnabled{false};
 		constexpr bool PointerHeavyInputDebugEnabled{false};
 		constexpr bool WindowEventsDebugEnabled{false};
 		constexpr bool VulkanTrackingDebugEnabled{false};
 	#endif
-
-	constexpr bool ThreadPoolDebugEnabled{@EMERAUDE_DEBUG_THREAD_POOL@};
-	constexpr unsigned int ThreadPoolDebugEnabledNumThreads{@EMERAUDE_DEBUG_THREAD_POOL_N@};
-	constexpr bool ParallelCollisionDisabled{@EMERAUDE_DISABLE_PARALLEL_COLLISION@};
 
 #ifdef EMERAUDE_ENABLE_RENDERDOC
 	constexpr bool RenderDocEnabled{true};

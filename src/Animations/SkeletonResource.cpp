@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@ namespace EmEn::Animations
 		}
 
 		/* Default: an empty skeleton (no joints). */
-		m_skeleton = Libs::Animation::Skeleton< float >{{}};
+		m_skeleton = Base::Animation::Skeleton< float >{{}};
 
 		return this->setLoadSuccess(true);
 	}
@@ -72,7 +72,7 @@ namespace EmEn::Animations
 	}
 
 	bool
-	SkeletonResource::load (Libs::Animation::Skeleton< float > skeleton) noexcept
+	SkeletonResource::load (Base::Animation::Skeleton< float > skeleton) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

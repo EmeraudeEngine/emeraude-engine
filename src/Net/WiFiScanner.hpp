@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,12 +40,12 @@ namespace EmEn::Net::WiFiScanner
 	{
 		std::string ssid;
 		std::string bssid;
-		int32_t signalLevel{0};     /* Signal strength in dBm (e.g., -50). */
-		int32_t quality{0};         /* Signal quality as percentage (0-100). */
-		uint32_t frequency{0};      /* Frequency in MHz (e.g., 2437, 5180). */
-		int32_t channel{0};         /* Channel number. */
-		std::string security;       /* Security type (e.g., "WPA2", "WPA3", "Open"). */
-		std::string mode;           /* Network mode (e.g., "Infra", "Ad-Hoc"). */
+		int32_t signalLevel{0};	 /* Signal strength in dBm (e.g., -50). */
+		int32_t quality{0};		 /* Signal quality as percentage (0-100). */
+		uint32_t frequency{0};	  /* Frequency in MHz (e.g., 2437, 5180). */
+		int32_t channel{0};		 /* Channel number. */
+		std::string security;	   /* Security type (e.g., "WPA2", "WPA3", "Open"). */
+		std::string mode;		   /* Network mode (e.g., "Infra", "Ad-Hoc"). */
 	};
 
 	/**

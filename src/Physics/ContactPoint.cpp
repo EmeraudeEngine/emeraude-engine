@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -47,21 +47,21 @@ namespace EmEn::Physics
 
 		/* Compute tangent basis using Gram-Schmidt orthonormalization.
 		 * We need two vectors perpendicular to the normal for friction. */
-		if ( std::abs(m_normal[Libs::Math::X]) < 0.9F )
+		if ( std::abs(m_normal[Base::Math::X]) < 0.9F )
 		{
 			/* Normal is not aligned with X axis, use X as reference. */
-			m_tangent1 = Libs::Math::Vector< 3, float >::crossProduct(m_normal, {1.0F, 0.0F, 0.0F});
+			m_tangent1 = Base::Math::Vector< 3, float >::crossProduct(m_normal, {1.0F, 0.0F, 0.0F});
 		}
 		else
 		{
 			/* Normal is mostly aligned with X axis, use Y as reference. */
-			m_tangent1 = Libs::Math::Vector< 3, float >::crossProduct(m_normal, {0.0F, 1.0F, 0.0F});
+			m_tangent1 = Base::Math::Vector< 3, float >::crossProduct(m_normal, {0.0F, 1.0F, 0.0F});
 		}
 
 		m_tangent1.normalize();
 
 		/* Second tangent is perpendicular to both normal and first tangent. */
-		m_tangent2 = Libs::Math::Vector< 3, float >::crossProduct(m_normal, m_tangent1);
+		m_tangent2 = Base::Math::Vector< 3, float >::crossProduct(m_normal, m_tangent1);
 	}
 
 	void

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -64,7 +64,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float heightFalloff{0.2F};
 				float baseHeight{0.0F};
 				float maxDistance{10000.0F};
-				Libs::PixelFactory::Color<> fogColor{0.5F, 0.6F, 0.7F};
+				Base::PixelFactory::Color<> fogColor{0.5F, 0.6F, 0.7F};
 				float inscatterExponent{8.0F};
 				float inscatterIntensity{1.0F};
 				bool skyFogEnabled{false};
@@ -183,7 +183,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * @return void
 			 */
 			void
-			setInscatterColorOverride (const Libs::PixelFactory::Color<> & color) noexcept
+			setInscatterColorOverride (const Base::PixelFactory::Color<> & color) noexcept
 			{
 				m_inscatterColorOverride = color;
 			}
@@ -227,6 +227,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_fogPipeline;
 			std::shared_ptr< Vulkan::PipelineLayout > m_fogLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_fogPerFrame;
-			std::optional< Libs::PixelFactory::Color<> > m_inscatterColorOverride;
+			std::optional< Base::PixelFactory::Color<> > m_inscatterColorOverride;
 	};
 }

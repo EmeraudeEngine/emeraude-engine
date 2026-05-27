@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -43,8 +43,8 @@
 
 namespace EmEn::Graphics::RenderableInstance
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 	using namespace Vulkan;
 
 	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept

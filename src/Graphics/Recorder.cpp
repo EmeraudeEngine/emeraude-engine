@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 #include <cstring>
 
 /* Local inclusions. */
-#include "Libs/String.hpp"
+#include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "Renderer.hpp"
 #include "RenderTarget/Abstract.hpp"
@@ -46,7 +46,7 @@
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
+	using namespace Base;
 
 	/* Helper to write a little-endian value to a byte buffer. */
 	static void
@@ -355,7 +355,7 @@ namespace EmEn::Graphics
 
 			switch ( m_qualityPreset )
 			{
-				case QualityPreset::Low:    bitrate = 1000; cpuUsed = 8; break;
+				case QualityPreset::Low:	bitrate = 1000; cpuUsed = 8; break;
 				case QualityPreset::Medium: bitrate = 2500; cpuUsed = 7; break;
 				case QualityPreset::High:   bitrate = 5000; cpuUsed = 6; break;
 				case QualityPreset::Ultra:  bitrate = 10000; cpuUsed = 5; break;
@@ -373,7 +373,7 @@ namespace EmEn::Graphics
 
 			switch ( m_qualityPreset )
 			{
-				case QualityPreset::Low:    bitrate = 2000; cpuUsed = 4; break;
+				case QualityPreset::Low:	bitrate = 2000; cpuUsed = 4; break;
 				case QualityPreset::Medium: bitrate = 5000; cpuUsed = 3; break;
 				case QualityPreset::High:   bitrate = 12000; cpuUsed = 2; break;
 				case QualityPreset::Ultra:  bitrate = 25000; cpuUsed = 1; break;
@@ -780,7 +780,7 @@ namespace EmEn::Graphics
 		writeLE16(header + 12, static_cast< uint16_t >(recordWidth));
 		writeLE16(header + 14, static_cast< uint16_t >(recordHeight));
 		writeLE32(header + 16, static_cast< uint32_t >(targetFramerate)); /* Time base denominator (ffmpeg reads as den). */
-		writeLE32(header + 20, 1);                                    /* Time base numerator (ffmpeg reads as num). */
+		writeLE32(header + 20, 1);									/* Time base numerator (ffmpeg reads as num). */
 		writeLE32(header + 24, 0);			 /* Frame count (patched on stop). */
 		writeLE32(header + 28, 0);			 /* Unused. */
 
@@ -1351,9 +1351,9 @@ namespace EmEn::Graphics
 				const int B10 = p10[0], G10 = p10[1], R10 = p10[2];
 				const int B11 = p11[0], G11 = p11[1], R11 = p11[2];
 
-				yRow0[col]     = static_cast< uint8_t >(std::clamp(((66 * R00 + 129 * G00 + 25 * B00 + 128) >> 8) + 16, 0, 255));
+				yRow0[col]	 = static_cast< uint8_t >(std::clamp(((66 * R00 + 129 * G00 + 25 * B00 + 128) >> 8) + 16, 0, 255));
 				yRow0[col + 1] = static_cast< uint8_t >(std::clamp(((66 * R01 + 129 * G01 + 25 * B01 + 128) >> 8) + 16, 0, 255));
-				yRow1[col]     = static_cast< uint8_t >(std::clamp(((66 * R10 + 129 * G10 + 25 * B10 + 128) >> 8) + 16, 0, 255));
+				yRow1[col]	 = static_cast< uint8_t >(std::clamp(((66 * R10 + 129 * G10 + 25 * B10 + 128) >> 8) + 16, 0, 255));
 				yRow1[col + 1] = static_cast< uint8_t >(std::clamp(((66 * R11 + 129 * G11 + 25 * B11 + 128) >> 8) + 16, 0, 255));
 
 				const auto avgR = (R00 + R01 + R10 + R11) >> 2;
@@ -1415,7 +1415,7 @@ namespace EmEn::Graphics
 			for ( ; col + 8 <= w; col += 8 )
 			{
 				/* Load 8 BGRA pixels = 32 bytes = 2 x 128-bit loads. */
-				const __m128i px0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + col * 4));      /* pixels 0-3 */
+				const __m128i px0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + col * 4));	  /* pixels 0-3 */
 				const __m128i px1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + col * 4 + 16)); /* pixels 4-7 */
 
 				/* Unpack BGRA bytes to 16-bit for _mm_madd_epi16. */
@@ -1639,7 +1639,7 @@ namespace EmEn::Graphics
 			for ( ; col + 16 <= w; col += 16 )
 			{
 				/* Load 16 BGRA pixels = 64 bytes = 2 x 256-bit loads. */
-				const __m256i px0 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + col * 4));      /* pixels 0-7 */
+				const __m256i px0 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + col * 4));	  /* pixels 0-7 */
 				const __m256i px1 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + col * 4 + 32)); /* pixels 8-15 */
 
 				/* Unpack BGRA bytes to 16-bit within each 128-bit lane. */
@@ -1666,9 +1666,9 @@ namespace EmEn::Graphics
 				/* Extract 128-bit lanes and use SSE packing to avoid AVX2 lane-crossing issues.
 				 * AVX2 packs_epi32/packus_epi16 are lane-wise — packing with zero256 leaves
 				 * gaps of zeros (= black bands) instead of contiguous pixel data. */
-				const __m128i s0_lo = _mm256_castsi256_si128(shifted0);      /* [Y0, Y1, Y2, Y3] */
+				const __m128i s0_lo = _mm256_castsi256_si128(shifted0);	  /* [Y0, Y1, Y2, Y3] */
 				const __m128i s0_hi = _mm256_extracti128_si256(shifted0, 1); /* [Y4, Y5, Y6, Y7] */
-				const __m128i s1_lo = _mm256_castsi256_si128(shifted1);      /* [Y8, Y9, Y10, Y11] */
+				const __m128i s1_lo = _mm256_castsi256_si128(shifted1);	  /* [Y8, Y9, Y10, Y11] */
 				const __m128i s1_hi = _mm256_extracti128_si256(shifted1, 1); /* [Y12, Y13, Y14, Y15] */
 
 				const __m128i pk16_a = _mm_packs_epi32(s0_lo, s0_hi); /* [Y0...Y7] as int16 */

@@ -11,11 +11,8 @@ Thumbs.db
 *.~
 
 # Project structure and auto-generated files
-Documentations/Doxygen/Output
 dependencies/*
-src/emeraude_config.hpp
 cmake-build-*
-CMakeLists.txt.user
 
 # Claude Code build directories
 .claude/settings.local.json

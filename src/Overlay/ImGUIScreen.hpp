@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 #include <functional>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -49,9 +49,9 @@ namespace EmEn::Overlay
 {
 	/**
 	 * @brief The ImGUI screen specific class.
-	 * @exception EmEn::Libs::NameableTrait A UI screen have a name.
+	 * @exception EmEn::Base::NameableTrait A UI screen have a name.
 	 */
-	class ImGUIScreen final : public Libs::NameableTrait
+	class ImGUIScreen final : public Base::NameableTrait
 	{
 		public:
 

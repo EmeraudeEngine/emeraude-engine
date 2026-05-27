@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -47,10 +47,10 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/PointerListenerInterface.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "FramebufferProperties.hpp"
@@ -69,12 +69,12 @@ namespace EmEn::Overlay
 	 * @brief The overlay manager service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObservableTrait This service is observable.
+	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Input::KeyboardListenerInterface The manager needs to listen to the keyboard.
 	 * @extends EmEn::Input::PointerListenerInterface The manager needs to listen to the pointer.
-	 * @extends EmEn::Libs::ObservableTrait This service observer.
+	 * @extends EmEn::Base::ObservableTrait This service observer.
 	 */
-	class Manager final : public ServiceInterface, public Libs::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface, public Libs::ObserverTrait
+	class Manager final : public ServiceInterface, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface, public Base::ObserverTrait
 	{
 		public:
 
@@ -113,10 +113,10 @@ namespace EmEn::Overlay
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -124,7 +124,7 @@ namespace EmEn::Overlay
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -410,7 +410,7 @@ namespace EmEn::Overlay
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 

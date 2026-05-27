@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,8 +30,8 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
-#include "Libs/Utility.hpp"
+#include "Math/Vector.hpp"
+#include "Utility.hpp"
 #include "SoundResource.hpp"
 
 namespace EmEn::Audio
@@ -94,8 +94,8 @@ namespace EmEn::Audio
 			void
 			setRandomPitchRange (float pitchA, float pitchB) noexcept
 			{
-				m_minimumPitch = Libs::Utility::ifZero(std::min(pitchA, pitchB), 1.0F);
-				m_maximumPitch = Libs::Utility::ifZero(std::max(pitchA, pitchB), 1.0F);
+				m_minimumPitch = Base::Utility::ifZero(std::min(pitchA, pitchB), 1.0F);
+				m_maximumPitch = Base::Utility::ifZero(std::max(pitchA, pitchB), 1.0F);
 			}
 
 			/**
@@ -133,7 +133,7 @@ namespace EmEn::Audio
 					return m_minimumPitch;
 				}
 
-				return Libs::Utility::quickRandom(m_minimumPitch, m_maximumPitch);
+				return Base::Utility::quickRandom(m_minimumPitch, m_maximumPitch);
 			}
 
 			/**
@@ -163,7 +163,7 @@ namespace EmEn::Audio
 			 * @return float
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			getRandomVelocity () const noexcept
 			{
 				if ( !this->useVelocityRandomization() )
@@ -171,7 +171,7 @@ namespace EmEn::Audio
 					return {};
 				}
 
-				return Libs::Math::Vector< 3, float >::quickRandom(-m_radialVelocity, -m_radialVelocity);
+				return Base::Math::Vector< 3, float >::quickRandom(-m_radialVelocity, -m_radialVelocity);
 			}
 
 			/**

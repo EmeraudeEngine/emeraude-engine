@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -80,7 +80,7 @@ layout(set = 0, binding = 1) readonly buffer MeshMetaData
 	/* Each entry = 2 uvec4 (32 bytes):
 	 *   uvec4[0]: vertexBufferAddress(lo,hi) + indexBufferAddress(lo,hi)
 	 *   uvec4[1]: vertexStride(u32) + primaryUVByteOffset(u32)
-	 *             + normalByteOffset(u32) + materialIndex(u32) */
+	 *			 + normalByteOffset(u32) + materialIndex(u32) */
 	uvec4 meshEntries[];
 } meshSSBO;
 
@@ -122,7 +122,7 @@ layout(push_constant) uniform PushConstants
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture   = 1u << 0;
 const uint HasOpacityTexture  = 1u << 7;
-const uint IsAlphaTest        = 1u << 8;
+const uint IsAlphaTest		= 1u << 8;
 
 /* Light type constants. */
 const float LIGHT_DIRECTIONAL = 0.0;
@@ -133,7 +133,7 @@ const float LIGHT_SPOT = 2.0;
 float screenEdgeFade (vec2 uv)
 {
 	vec2 fade = smoothstep(vec2(0.0), vec2(fadeScreenEdge), uv)
-	          * smoothstep(vec2(0.0), vec2(fadeScreenEdge), vec2(1.0) - uv);
+			  * smoothstep(vec2(0.0), vec2(fadeScreenEdge), vec2(1.0) - uv);
 	return fade.x * fade.y;
 }
 
@@ -166,7 +166,7 @@ struct MeshAccessor
  *   [0] = (vbAddrLo, vbAddrHi, ibAddrLo, ibAddrHi)
  *   [1] = (strideBytes, uvOffsetBytes, normalOffsetBytes, subGeometryCount)
  *   [2] = materialIndices[4]   — one per sub-geometry in the BLAS, looked up via
- *                                 rayQueryGetIntersectionGeometryIndexEXT */
+ *								 rayQueryGetIntersectionGeometryIndexEXT */
 MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 {
 	MeshAccessor m;
@@ -362,10 +362,10 @@ void main()
 		}
 
 		uint candidateInstanceIndex  = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, false);
-		uint candidateGeomIdx        = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, false);
+		uint candidateGeomIdx		= rayQueryGetIntersectionGeometryIndexEXT(rayQuery, false);
 		uint candidateMaterialIndex  = getHitMaterialIndex(candidateInstanceIndex, candidateGeomIdx);
-		uint candidateMatBase        = candidateMaterialIndex * 7u;
-		uint candidateFlags          = floatBitsToUint(materialSSBO.materials[candidateMatBase + 4u].w);
+		uint candidateMatBase		= candidateMaterialIndex * 7u;
+		uint candidateFlags		  = floatBitsToUint(materialSSBO.materials[candidateMatBase + 4u].w);
 
 		/* Non-alpha-test materials: confirm immediately (BLAS-default behaviour). */
 		if ((candidateFlags & IsAlphaTest) == 0u)
@@ -376,10 +376,10 @@ void main()
 
 		/* Alpha-test path: sample the opacity (or albedo alpha) at the hit UV. */
 		uint candidatePrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, false);
-		vec2 candidateBary           = rayQueryGetIntersectionBarycentricsEXT(rayQuery, false);
+		vec2 candidateBary		   = rayQueryGetIntersectionBarycentricsEXT(rayQuery, false);
 		MeshAccessor candidateMesh   = getMeshAccessor(candidateInstanceIndex, candidatePrimitiveIndex);
-		vec2 candidateUV             = getHitUV(candidateMesh, candidateBary);
-		float candidateAlpha         = 1.0;
+		vec2 candidateUV			 = getHitUV(candidateMesh, candidateBary);
+		float candidateAlpha		 = 1.0;
 
 		if ((candidateFlags & HasOpacityTexture) != 0u)
 		{
@@ -605,7 +605,7 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 	using namespace Saphir;
 

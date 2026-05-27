@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,13 +32,13 @@
 
 /* Local inclusions. */
 #include "Constants.hpp"
-#include "Libs/Math/Base.hpp"
+#include "Math/Base.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Physics
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 
 	bool
 	BodyPhysicalProperties::setMass (float value, bool fireEvents) noexcept
@@ -333,7 +333,7 @@ namespace EmEn::Physics
 	}
 
 	bool
-	BodyPhysicalProperties::setInertiaTensor (const Libs::Math::Matrix< 3, float > & inertiaTensor, bool fireEvents) noexcept
+	BodyPhysicalProperties::setInertiaTensor (const Base::Math::Matrix< 3, float > & inertiaTensor, bool fireEvents) noexcept
 	{
 		/* Check if all diagonal values are non-negative (physical constraint). */
 		if ( inertiaTensor[M3x3Col0Row0] < 0.0F || inertiaTensor[M3x3Col1Row1] < 0.0F || inertiaTensor[M3x3Col2Row2] < 0.0F )

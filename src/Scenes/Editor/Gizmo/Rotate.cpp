@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
-#include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
+#include "Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/GizmoRendering.hpp"
 #include "Saphir/Program.hpp"
@@ -46,8 +46,8 @@
 
 namespace EmEn::Scenes::Editor::Gizmo
 {
-	using namespace Libs::Math;
-	using namespace Libs::Math::Space3D;
+	using namespace Base::Math;
+	using namespace Base::Math::Space3D;
 	using namespace Graphics;
 
 	bool

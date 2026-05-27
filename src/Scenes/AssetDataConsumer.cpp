@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,7 +32,7 @@
 /* Local inclusions. */
 #include "AssetLoaders/AssetData.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 #include "Node.hpp"
 #include "Scene.hpp"
 #include "Scenes/Component/Visual.hpp"
@@ -40,7 +40,7 @@
 
 namespace EmEn::Scenes
 {
-	using namespace Libs::Math;
+	using namespace Base::Math;
 
 	bool
 	AssetDataConsumer::build (const AssetLoaders::AssetData & assetData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept

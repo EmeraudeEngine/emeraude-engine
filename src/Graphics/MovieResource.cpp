@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,13 +37,13 @@
 
 /* Local inclusions. */
 #include "ImageResource.hpp"
-#include "Libs/Algorithms/PerlinNoise.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Libs/ThreadPool.hpp"
+#include "Algorithms/PerlinNoise.hpp"
+#include "FastJSON.hpp"
+#include "ThreadPool.hpp"
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
+	using namespace Base;
 
 	/* JSON key. */
 	constexpr auto JKBaseFrameName{"BaseFrameName"};
@@ -498,9 +498,9 @@ namespace EmEn::Graphics
 						const auto sx = u * s + offsetX;
 						const auto sy = v * s + offsetY;
 
-						const auto n00 = perlin.generate(sx,     sy,     z);
-						const auto n10 = perlin.generate(sx - s, sy,     z);
-						const auto n01 = perlin.generate(sx,     sy - s, z);
+						const auto n00 = perlin.generate(sx,	 sy,	 z);
+						const auto n10 = perlin.generate(sx - s, sy,	 z);
+						const auto n01 = perlin.generate(sx,	 sy - s, z);
 						const auto n11 = perlin.generate(sx - s, sy - s, z);
 
 						const auto nx0 = n00 + su * (n10 - n00);

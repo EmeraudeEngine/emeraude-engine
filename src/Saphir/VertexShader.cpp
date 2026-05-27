@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -49,7 +49,7 @@
 
 namespace EmEn::Saphir
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Saphir::Declaration;
 	using namespace Saphir::Keys;
 	using namespace Graphics;
@@ -1463,9 +1463,9 @@ namespace EmEn::Saphir
 				"\t" "/* Skeletal skinning. */" "\n"
 				"\t" "ivec4 boneIdx = ivec4(" + std::string{Keys::Attribute::BoneInfluence} + ");" "\n"
 				"\t" "mat4 skinMatrix = " + std::string{Keys::Attribute::BoneWeight} + ".x * ubSkinningMatrices.bones[boneIdx.x]" "\n"
-				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".y * ubSkinningMatrices.bones[boneIdx.y]" "\n"
-				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".z * ubSkinningMatrices.bones[boneIdx.z]" "\n"
-				"\t" "               + " + std::string{Keys::Attribute::BoneWeight} + ".w * ubSkinningMatrices.bones[boneIdx.w];" "\n"
+				"\t" "			   + " + std::string{Keys::Attribute::BoneWeight} + ".y * ubSkinningMatrices.bones[boneIdx.y]" "\n"
+				"\t" "			   + " + std::string{Keys::Attribute::BoneWeight} + ".z * ubSkinningMatrices.bones[boneIdx.z]" "\n"
+				"\t" "			   + " + std::string{Keys::Attribute::BoneWeight} + ".w * ubSkinningMatrices.bones[boneIdx.w];" "\n"
 				"\t" "vec3 skinnedPosition = (skinMatrix * vec4(" + std::string{Keys::Attribute::Position} + ", 1.0)).xyz;" "\n";
 
 			if ( needsSkinMatrix3 )

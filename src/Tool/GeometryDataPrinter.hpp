@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,7 +36,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "VertexFactory/Shape.hpp"
 
 namespace EmEn::Tool
 {
@@ -71,7 +71,7 @@ namespace EmEn::Tool
 			std::string printData () const noexcept;
 
 			std::string m_outputFile;
-			Libs::VertexFactory::Shape< float, uint32_t > m_shape;
+			Base::VertexFactory::Shape< float, uint32_t > m_shape;
 			Graphics::ShapeType m_shapeType{Graphics::ShapeType::Cube};
 			float m_baseSize{1.0F};
 			float m_baseLength{4.0F};

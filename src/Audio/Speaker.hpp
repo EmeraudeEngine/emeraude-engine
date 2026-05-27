@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -58,7 +58,7 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float >
+			Base::Math::CartesianFrame< float >
 			getWorldCoordinates () const noexcept override
 			{
 				return m_worldCoordinates;
@@ -66,13 +66,13 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
-			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > &  /*worldVelocity*/) noexcept override
+			updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > &  /*worldVelocity*/) noexcept override
 			{
 				m_worldCoordinates = worldCoordinates;
 			}
 
 		private:
 
-			Libs::Math::CartesianFrame< float > m_worldCoordinates;
+			Base::Math::CartesianFrame< float > m_worldCoordinates;
 	};
 }

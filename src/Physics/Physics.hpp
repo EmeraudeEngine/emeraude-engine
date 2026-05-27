@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,8 +31,8 @@
 
 /* Local inclusions for usages. */
 #include "Constants.hpp"
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 
 namespace EmEn::Physics
 {
@@ -1927,7 +1927,7 @@ namespace EmEn::Physics
 	 */
 	template< typename precision_t = float >
 	precision_t
-	force (precision_t mass, const Libs::Math::Vector< 3, precision_t > & acceleration) noexcept requires (std::is_floating_point_v< precision_t >)
+	force (precision_t mass, const Base::Math::Vector< 3, precision_t > & acceleration) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
 		return mass * acceleration;
 	}
@@ -1990,20 +1990,20 @@ namespace EmEn::Physics
 		 * @param width The width (X axis) in meters.
 		 * @param height The height (Y axis) in meters.
 		 * @param depth The depth (Z axis) in meters.
-		 * @return Libs::Math::Matrix< 3, precision_t >
+		 * @return Base::Math::Matrix< 3, precision_t >
 		 */
 		template< typename precision_t = float >
-		Libs::Math::Matrix< 3, precision_t >
+		Base::Math::Matrix< 3, precision_t >
 		computeCuboid (precision_t mass, precision_t width, precision_t height, precision_t depth) noexcept requires (std::is_floating_point_v< precision_t >)
 		{
 			const precision_t sqWidth = width * width;
 			const precision_t sqHeight = height * height;
 			const precision_t sqDepth = depth * depth;
 
-			Libs::Math::Matrix< 3, precision_t > inertia{};
-			inertia[Libs::Math::M3x3Col0Row0] = (mass * (sqHeight + sqDepth)) / static_cast< precision_t >(12);  // Ixx
-			inertia[Libs::Math::M3x3Col1Row1] = (mass * (sqWidth + sqDepth)) / static_cast< precision_t >(12);   // Iyy
-			inertia[Libs::Math::M3x3Col2Row2] = (mass * (sqWidth + sqHeight)) / static_cast< precision_t >(12);  // Izz
+			Base::Math::Matrix< 3, precision_t > inertia{};
+			inertia[Base::Math::M3x3Col0Row0] = (mass * (sqHeight + sqDepth)) / static_cast< precision_t >(12);  // Ixx
+			inertia[Base::Math::M3x3Col1Row1] = (mass * (sqWidth + sqDepth)) / static_cast< precision_t >(12);   // Iyy
+			inertia[Base::Math::M3x3Col2Row2] = (mass * (sqWidth + sqHeight)) / static_cast< precision_t >(12);  // Izz
 
 			return inertia;
 		}
@@ -2014,18 +2014,18 @@ namespace EmEn::Physics
 		 * @tparam precision_t The precision of floating point numbers. Default float.
 		 * @param mass The mass of the object in kg.
 		 * @param radius The radius in meters.
-		 * @return Libs::Math::Matrix< 3, precision_t >
+		 * @return Base::Math::Matrix< 3, precision_t >
 		 */
 		template< typename precision_t = float >
-		Libs::Math::Matrix< 3, precision_t >
+		Base::Math::Matrix< 3, precision_t >
 		computeSphere (precision_t mass, precision_t radius) noexcept requires (std::is_floating_point_v< precision_t >)
 		{
 			const precision_t inertiaValue = (static_cast< precision_t >(2) * mass * radius * radius) / static_cast< precision_t >(5);
 
-			Libs::Math::Matrix< 3, precision_t > inertia{};
-			inertia[Libs::Math::M3x3Col0Row0] = inertiaValue;
-			inertia[Libs::Math::M3x3Col1Row1] = inertiaValue;
-			inertia[Libs::Math::M3x3Col2Row2] = inertiaValue;
+			Base::Math::Matrix< 3, precision_t > inertia{};
+			inertia[Base::Math::M3x3Col0Row0] = inertiaValue;
+			inertia[Base::Math::M3x3Col1Row1] = inertiaValue;
+			inertia[Base::Math::M3x3Col2Row2] = inertiaValue;
 
 			return inertia;
 		}
@@ -2037,19 +2037,19 @@ namespace EmEn::Physics
 		 * @param mass The mass of the object in kg.
 		 * @param radius The radius in meters.
 		 * @param height The height (Y axis) in meters.
-		 * @return Libs::Math::Matrix< 3, precision_t >
+		 * @return Base::Math::Matrix< 3, precision_t >
 		 */
 		template< typename precision_t = float >
-		Libs::Math::Matrix< 3, precision_t >
+		Base::Math::Matrix< 3, precision_t >
 		computeCylinder (precision_t mass, precision_t radius, precision_t height) noexcept requires (std::is_floating_point_v< precision_t >)
 		{
 			const precision_t sqRadius = radius * radius;
 			const precision_t sqHeight = height * height;
 
-			Libs::Math::Matrix< 3, precision_t > inertia{};
-			inertia[Libs::Math::M3x3Col0Row0] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);  // Ixx
-			inertia[Libs::Math::M3x3Col1Row1] = (mass * sqRadius) / static_cast< precision_t >(2);												 // Iyy
-			inertia[Libs::Math::M3x3Col2Row2] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);  // Izz
+			Base::Math::Matrix< 3, precision_t > inertia{};
+			inertia[Base::Math::M3x3Col0Row0] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);  // Ixx
+			inertia[Base::Math::M3x3Col1Row1] = (mass * sqRadius) / static_cast< precision_t >(2);												 // Iyy
+			inertia[Base::Math::M3x3Col2Row2] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);  // Izz
 
 			return inertia;
 		}
@@ -2060,18 +2060,18 @@ namespace EmEn::Physics
 		 * @tparam precision_t The precision of floating point numbers. Default float.
 		 * @param mass The mass of the object in kg.
 		 * @param radius The radius in meters.
-		 * @return Libs::Math::Matrix< 3, precision_t >
+		 * @return Base::Math::Matrix< 3, precision_t >
 		 */
 		template< typename precision_t = float >
-		Libs::Math::Matrix< 3, precision_t >
+		Base::Math::Matrix< 3, precision_t >
 		computeHollowSphere (precision_t mass, precision_t radius) noexcept requires (std::is_floating_point_v< precision_t >)
 		{
 			const precision_t inertiaValue = (static_cast< precision_t >(2) * mass * radius * radius) / static_cast< precision_t >(3);
 
-			Libs::Math::Matrix< 3, precision_t > inertia{};
-			inertia[Libs::Math::M3x3Col0Row0] = inertiaValue;
-			inertia[Libs::Math::M3x3Col1Row1] = inertiaValue;
-			inertia[Libs::Math::M3x3Col2Row2] = inertiaValue;
+			Base::Math::Matrix< 3, precision_t > inertia{};
+			inertia[Base::Math::M3x3Col0Row0] = inertiaValue;
+			inertia[Base::Math::M3x3Col1Row1] = inertiaValue;
+			inertia[Base::Math::M3x3Col2Row2] = inertiaValue;
 
 			return inertia;
 		}
@@ -2083,10 +2083,10 @@ namespace EmEn::Physics
 		 * @param mass The mass of the object in kg.
 		 * @param radius The radius in meters.
 		 * @param cylinderHeight The height of the cylindrical portion (Y axis) in meters.
-		 * @return Libs::Math::Matrix< 3, precision_t >
+		 * @return Base::Math::Matrix< 3, precision_t >
 		 */
 		template< typename precision_t = float >
-		Libs::Math::Matrix< 3, precision_t >
+		Base::Math::Matrix< 3, precision_t >
 		computeCapsule (precision_t mass, precision_t radius, precision_t cylinderHeight) noexcept requires (std::is_floating_point_v< precision_t >)
 		{
 			/* Approximate the capsule as a cylinder plus two hemisphere caps.
@@ -2095,10 +2095,10 @@ namespace EmEn::Physics
 			const precision_t sqRadius = radius * radius;
 			const precision_t sqHeight = totalHeight * totalHeight;
 
-			Libs::Math::Matrix< 3, precision_t > inertia{};
-			inertia[Libs::Math::M3x3Col0Row0] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);
-			inertia[Libs::Math::M3x3Col1Row1] = (mass * sqRadius) / static_cast< precision_t >(2);
-			inertia[Libs::Math::M3x3Col2Row2] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);
+			Base::Math::Matrix< 3, precision_t > inertia{};
+			inertia[Base::Math::M3x3Col0Row0] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);
+			inertia[Base::Math::M3x3Col1Row1] = (mass * sqRadius) / static_cast< precision_t >(2);
+			inertia[Base::Math::M3x3Col2Row2] = (mass * ((static_cast< precision_t >(3) * sqRadius) + sqHeight)) / static_cast< precision_t >(12);
 
 			return inertia;
 		}

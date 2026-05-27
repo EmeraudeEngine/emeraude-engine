@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,8 +36,8 @@
 #include <thread>
 
 /* Third-party inclusions. */
-#include <asio.hpp>
-#include "Libs/Network/asio_throw_exception.hpp"
+#include "asio.hpp"
+#include "Network/asio_throw_exception.hpp"
 
 /* Local inclusions for usages. */
 #include "SettingKeys.hpp"

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -44,7 +44,7 @@
 #include "CommandPool.hpp"
 #include "Device.hpp"
 #include "Framebuffer.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -368,7 +368,7 @@ namespace EmEn::Vulkan
 			 * @param color A reference to a color. Default black.
 			 * @return void
 			 */
-			void clearColor (const Image & image, VkImageLayout imageLayout, const Libs::PixelFactory::Color< float > & color = {}) const noexcept;
+			void clearColor (const Image & image, VkImageLayout imageLayout, const Base::PixelFactory::Color< float > & color = {}) const noexcept;
 
 			/**
 			 * @brief Clears the depth/stencil part of the image.

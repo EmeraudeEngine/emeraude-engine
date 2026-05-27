@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,9 +27,9 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
 
 namespace EmEn::Scenes
 {
@@ -79,7 +79,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
+			virtual bool isUnderInfluence (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
 
 			/**
 			 * @brief Returns the strength of influence to a scene entity from this area.
@@ -88,7 +88,7 @@ namespace EmEn::Scenes
 			 * @return float
 			 */
 			[[nodiscard]]
-			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
+			virtual float influenceStrength (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
 
 			/**
 			 * @brief Returns whether a scene entity is under the influence of this area.
@@ -97,7 +97,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
+			virtual bool isUnderInfluence (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
 
 			/**
 			 * @brief Returns the strength of influence to a scene entity from this area.
@@ -106,7 +106,7 @@ namespace EmEn::Scenes
 			 * @return float
 			 */
 			[[nodiscard]]
-			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
+			virtual float influenceStrength (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
 
 			/**
 			 * @brief Returns whether a point is under the influence of this area.
@@ -114,7 +114,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isUnderInfluence (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+			virtual bool isUnderInfluence (const Base::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
 
 			/**
 			 * @brief Returns the strength of influence at a point.
@@ -122,7 +122,7 @@ namespace EmEn::Scenes
 			 * @return float
 			 */
 			[[nodiscard]]
-			virtual float influenceStrength (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+			virtual float influenceStrength (const Base::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
 
 		protected:
 

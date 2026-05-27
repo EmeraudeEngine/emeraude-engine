@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "Graphics/DirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 
 namespace EmEn::Graphics::Effects::Lens
 {
@@ -154,8 +154,8 @@ namespace EmEn::Graphics::Effects::Lens
 			bool m_radial{false};
 			bool m_barrelEnabled{false};
 			float m_barrelStrength{0.1F};
-			Libs::Math::Vector< 2, float > m_redOffset;
-			Libs::Math::Vector< 2, float > m_greenOffset;
-			Libs::Math::Vector< 2, float > m_blueOffset;
+			Base::Math::Vector< 2, float > m_redOffset;
+			Base::Math::Vector< 2, float > m_greenOffset;
+			Base::Math::Vector< 2, float > m_blueOffset;
 	};
 }

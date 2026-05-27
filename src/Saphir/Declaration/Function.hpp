@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include "../CodeGeneratorInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/BlobTrait.hpp"
+#include "BlobTrait.hpp"
 
 namespace EmEn::Saphir::Declaration
 {
@@ -162,7 +162,7 @@ namespace EmEn::Saphir::Declaration
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string callCode (const Libs::BlobTrait & parameters) const noexcept;
+			std::string callCode (const Base::BlobTrait & parameters) const noexcept;
 
 		private:
 

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include <cstdint>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Matrix.hpp"
+#include "Math/Matrix.hpp"
 
 namespace EmEn::Graphics::MDI
 {
@@ -43,13 +43,13 @@ namespace EmEn::Graphics::MDI
 	 * Memory layout (std430):
 	 * - modelMatrix: 64 bytes (mat4)
 	 * - frameIndex:   4 bytes (uint)
-	 * - padding:     12 bytes (alignment to 16 bytes)
+	 * - padding:	 12 bytes (alignment to 16 bytes)
 	 * Total: 80 bytes per draw
 	 */
 	struct PerDrawData final
 	{
 		/** @brief Model matrix for this draw (world transform). */
-		Libs::Math::Matrix< 4, float > modelMatrix;
+		Base::Math::Matrix< 4, float > modelMatrix;
 		/** @brief Animation frame index for materials with animated textures. */
 		uint32_t frameIndex{0};
 		/** @brief Padding to maintain 16-byte alignment (std430). */

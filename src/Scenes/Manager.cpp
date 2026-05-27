@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,13 +39,13 @@
 #include "DefinitionResource.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Libs/FastJSON.hpp"
+#include "FastJSON.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Scenes
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Graphics;
 
 	bool

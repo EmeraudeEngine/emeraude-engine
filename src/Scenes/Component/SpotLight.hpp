@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -126,7 +126,7 @@ namespace EmEn::Scenes::Component
 			void processLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
 			[[nodiscard]]
@@ -138,7 +138,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch() */
 			[[nodiscard]]
-			bool touch (const Libs::Math::Vector< 3, float > & position) const noexcept override;
+			bool touch (const Base::Math::Vector< 3, float > & position) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]
@@ -243,7 +243,7 @@ namespace EmEn::Scenes::Component
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
 			bool createShadowDescriptorSet (Scene & scene) noexcept override;
@@ -260,7 +260,7 @@ namespace EmEn::Scenes::Component
 			getFovOrNear () const noexcept override
 			{
 				/* NOTE: A spotlight returns the field of view in degrees. */
-				return Libs::Math::Degree(2.0F * Libs::Math::Radian(m_outerAngle));
+				return Base::Math::Degree(2.0F * Base::Math::Radian(m_outerAngle));
 			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getDistanceOrFar() */
@@ -288,7 +288,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
 			void
-			onColorChange (const Libs::PixelFactory::Color< float > & color) noexcept override
+			onColorChange (const Base::PixelFactory::Color< float > & color) noexcept override
 			{
 				m_buffer[ColorOffset+0] = color.red();
 				m_buffer[ColorOffset+1] = color.green();
@@ -354,7 +354,7 @@ namespace EmEn::Scenes::Component
 				/* Light direction (Spot). */
 				0.0F, 1.0F, 0.0F, 0.0F,
 				/* Light properties. */
-				this->intensity(), m_radius, std::cos(Libs::Math::Radian(m_innerAngle)), std::cos(Libs::Math::Radian(m_outerAngle)),
+				this->intensity(), m_radius, std::cos(Base::Math::Radian(m_innerAngle)), std::cos(Base::Math::Radian(m_outerAngle)),
 				/* Light matrix. */
 				1.0F, 0.0F, 0.0F, 0.0F,
 				0.0F, 1.0F, 0.0F, 0.0F,

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,20 +27,20 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 
 /* Local inclusions. */
-#include "Libs/FastJSON.hpp"
-#include "Libs/String.hpp"
+#include "FastJSON.hpp"
+#include "String.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Resources
 {
-	using namespace Libs;
+	using namespace Base;
 
 	constexpr auto TracerTag{"ResourceChain"};
 

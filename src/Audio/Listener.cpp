@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,8 +28,8 @@
 
 namespace EmEn::Audio
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 
 	void
 	Listener::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & /*worldVelocity*/) noexcept

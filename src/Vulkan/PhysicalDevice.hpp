@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,8 +37,8 @@
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
-#include "Libs/Version.hpp"
+#include "StaticVector.hpp"
+#include "Version.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Vulkan
@@ -261,10 +261,10 @@ namespace EmEn::Vulkan
 			 * @return Libraries::Version
 			 */
 			[[nodiscard]]
-			Libs::Version
+			Base::Version
 			APIDriver () const noexcept
 			{
-				return Libs::Version{m_properties.properties.apiVersion};
+				return Base::Version{m_properties.properties.apiVersion};
 			}
 
 			/**
@@ -285,10 +285,10 @@ namespace EmEn::Vulkan
 			 * @return Libraries::Version
 			 */
 			[[nodiscard]]
-			Libs::Version
+			Base::Version
 			DriverVersion () const noexcept
 			{
-				return Libs::Version{m_properties.properties.driverVersion};
+				return Base::Version{m_properties.properties.driverVersion};
 			}
 
 			/**
@@ -382,10 +382,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns prefetched physical device queue family properties from Vulkan 1.1.
-			 * @return const Libs::StaticVector< VkQueueFamilyProperties2, 8 > &
+			 * @return const Base::StaticVector< VkQueueFamilyProperties2, 8 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< VkQueueFamilyProperties2, 8 > &
+			const Base::StaticVector< VkQueueFamilyProperties2, 8 > &
 			queueFamilyPropertiesVK11 () const noexcept
 			{
 				return m_queueFamilyProperties;
@@ -652,7 +652,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};
 			VkPhysicalDeviceVulkan13Properties m_propertiesVK13{};
 			VkPhysicalDeviceMemoryProperties2 m_memoryProperties{};
-			Libs::StaticVector< VkQueueFamilyProperties2, 8 > m_queueFamilyProperties;
+			Base::StaticVector< VkQueueFamilyProperties2, 8 > m_queueFamilyProperties;
 			std::vector< VkPhysicalDeviceToolProperties > m_toolProperties;
 			std::vector< VkDisplayPropertiesKHR > m_displayProperties;
 			std::vector< VkDisplayPlanePropertiesKHR > m_displayPlaneProperties;

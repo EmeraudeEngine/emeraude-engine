@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include "CollisionModelInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Space3D/Capsule.hpp"
+#include "Math/Space3D/Capsule.hpp"
 
 namespace EmEn::Physics
 {
@@ -81,8 +81,8 @@ namespace EmEn::Physics
 			 */
 			CapsuleCollisionModel (float radius, float height, bool parametersOverridden = false) noexcept
 				: m_localCapsule{
-					Libs::Math::Space3D::Point< float >{0.0F, height * 0.5F, 0.0F},
-					Libs::Math::Space3D::Point< float >{0.0F, -height * 0.5F, 0.0F},
+					Base::Math::Space3D::Point< float >{0.0F, height * 0.5F, 0.0F},
+					Base::Math::Space3D::Point< float >{0.0F, -height * 0.5F, 0.0F},
 					radius
 				},
 				m_parametersOverridden{parametersOverridden}
@@ -97,7 +97,7 @@ namespace EmEn::Physics
 			 * @param radius The capsule radius.
 			 * @param parametersOverridden Set the parameters overridden. Default false.
 			 */
-			CapsuleCollisionModel (const Libs::Math::Space3D::Point< float > & startPoint, const Libs::Math::Space3D::Point< float > & endPoint, float radius, bool parametersOverridden = false) noexcept
+			CapsuleCollisionModel (const Base::Math::Space3D::Point< float > & startPoint, const Base::Math::Space3D::Point< float > & endPoint, float radius, bool parametersOverridden = false) noexcept
 				: m_localCapsule{startPoint, endPoint, radius},
 				m_parametersOverridden{parametersOverridden}
 			{
@@ -110,7 +110,7 @@ namespace EmEn::Physics
 			 * @param parametersOverridden Set the parameters overridden. Default false.
 			 */
 			explicit
-			CapsuleCollisionModel (const Libs::Math::Space3D::Capsule< float > & localCapsule, bool parametersOverridden = false) noexcept
+			CapsuleCollisionModel (const Base::Math::Space3D::Capsule< float > & localCapsule, bool parametersOverridden = false) noexcept
 				: m_localCapsule{localCapsule},
 				m_parametersOverridden{parametersOverridden}
 			{
@@ -127,11 +127,11 @@ namespace EmEn::Physics
 
 			/** @copydoc CollisionModelInterface::isCollidingWith() */
 			[[nodiscard]]
-			CollisionDetectionResults isCollidingWith (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept override;
+			CollisionDetectionResults isCollidingWith (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept override;
 
 			/** @copydoc CollisionModelInterface::getAABB() */
 			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float >
+			Base::Math::Space3D::AACuboid< float >
 			getAABB () const noexcept override
 			{
 				const auto & start = m_localCapsule.startPoint();
@@ -145,16 +145,16 @@ namespace EmEn::Physics
 				const auto minZ = std::min(start[2], end[2]) - r;
 				const auto maxZ = std::max(start[2], end[2]) + r;
 
-				return Libs::Math::Space3D::AACuboid< float >{
-					Libs::Math::Space3D::Point< float >{maxX, maxY, maxZ},
-					Libs::Math::Space3D::Point< float >{minX, minY, minZ}
+				return Base::Math::Space3D::AACuboid< float >{
+					Base::Math::Space3D::Point< float >{maxX, maxY, maxZ},
+					Base::Math::Space3D::Point< float >{minX, minY, minZ}
 				};
 			}
 
-			/** @copydoc CollisionModelInterface::getAABB(const Libs::Math::CartesianFrame< float > &) */
+			/** @copydoc CollisionModelInterface::getAABB(const Base::Math::CartesianFrame< float > &) */
 			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float >
-			getAABB (const Libs::Math::CartesianFrame< float > & worldFrame) const noexcept override
+			Base::Math::Space3D::AACuboid< float >
+			getAABB (const Base::Math::CartesianFrame< float > & worldFrame) const noexcept override
 			{
 				/* Transform capsule endpoints to world space. */
 				const auto rotMatrix = worldFrame.getRotationMatrix3();
@@ -170,9 +170,9 @@ namespace EmEn::Physics
 				const auto minZ = std::min(worldStart[2], worldEnd[2]) - r;
 				const auto maxZ = std::max(worldStart[2], worldEnd[2]) + r;
 
-				return Libs::Math::Space3D::AACuboid< float >{
-					Libs::Math::Space3D::Point< float >{maxX, maxY, maxZ},
-					Libs::Math::Space3D::Point< float >{minX, minY, minZ}
+				return Base::Math::Space3D::AACuboid< float >{
+					Base::Math::Space3D::Point< float >{maxX, maxY, maxZ},
+					Base::Math::Space3D::Point< float >{minX, minY, minZ}
 				};
 			}
 
@@ -193,10 +193,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the local-space capsule.
-			 * @return const Libs::Math::Space3D::Capsule< float > &
+			 * @return const Base::Math::Space3D::Capsule< float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Capsule< float > &
+			const Base::Math::Space3D::Capsule< float > &
 			localCapsule () const noexcept
 			{
 				return m_localCapsule;
@@ -216,16 +216,16 @@ namespace EmEn::Physics
 			/**
 			 * @brief Creates a world-space capsule from the given frame.
 			 * @param worldFrame The world frame providing position and orientation.
-			 * @return Libs::Math::Space3D::Capsule< float >
+			 * @return Base::Math::Space3D::Capsule< float >
 			 */
 			[[nodiscard]]
-			Libs::Math::Space3D::Capsule< float >
-			toWorldCapsule (const Libs::Math::CartesianFrame< float > & worldFrame) const noexcept
+			Base::Math::Space3D::Capsule< float >
+			toWorldCapsule (const Base::Math::CartesianFrame< float > & worldFrame) const noexcept
 			{
 				const auto rotMatrix = worldFrame.getRotationMatrix3();
 				const auto & pos = worldFrame.position();
 
-				return Libs::Math::Space3D::Capsule< float >{
+				return Base::Math::Space3D::Capsule< float >{
 					pos + rotMatrix * m_localCapsule.startPoint(),
 					pos + rotMatrix * m_localCapsule.endPoint(),
 					m_localCapsule.radius()
@@ -240,7 +240,7 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithPoint (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithPoint (const Base::Math::CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/**
 			 * @brief Collision test: Capsule vs Sphere.
@@ -250,7 +250,7 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithSphere (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const SphereCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithSphere (const Base::Math::CartesianFrame< float > & thisWorldFrame, const SphereCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/**
 			 * @brief Collision test: Capsule vs AABB.
@@ -260,7 +260,7 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithAABB (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const AABBCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithAABB (const Base::Math::CartesianFrame< float > & thisWorldFrame, const AABBCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/**
 			 * @brief Collision test: Capsule vs Capsule.
@@ -270,11 +270,11 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithCapsule (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const CapsuleCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithCapsule (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CapsuleCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/** @copydoc CollisionModelInterface::overrideShapeParameters() */
 			void
-			overrideShapeParameters (const Libs::Math::Vector< 3, float > & dimensions, const Libs::Math::Vector< 3, float > & centerOffset) noexcept override
+			overrideShapeParameters (const Base::Math::Vector< 3, float > & dimensions, const Base::Math::Vector< 3, float > & centerOffset) noexcept override
 			{
 				/* Capsule radius from horizontal dimensions (width, depth). */
 				const auto radius = std::max(dimensions[0], dimensions[2]) * 0.5F;
@@ -283,9 +283,9 @@ namespace EmEn::Physics
 				const auto halfAxisLength = std::max(0.0F, (dimensions[1] - 2.0F * radius) * 0.5F);
 
 				/* Build vertical capsule (along Y axis) centered at offset. */
-				m_localCapsule = Libs::Math::Space3D::Capsule< float >{
-					Libs::Math::Space3D::Point< float >{centerOffset[0], centerOffset[1] - halfAxisLength, centerOffset[2]},
-					Libs::Math::Space3D::Point< float >{centerOffset[0], centerOffset[1] + halfAxisLength, centerOffset[2]},
+				m_localCapsule = Base::Math::Space3D::Capsule< float >{
+					Base::Math::Space3D::Point< float >{centerOffset[0], centerOffset[1] - halfAxisLength, centerOffset[2]},
+					Base::Math::Space3D::Point< float >{centerOffset[0], centerOffset[1] + halfAxisLength, centerOffset[2]},
 					radius
 				};
 
@@ -302,7 +302,7 @@ namespace EmEn::Physics
 
 			/** @copydoc CollisionModelInterface::mergeShapeParameters() */
 			void
-			mergeShapeParameters (const Libs::Math::Vector< 3, float > & dimensions, const Libs::Math::Vector< 3, float > & centerOffset) noexcept override
+			mergeShapeParameters (const Base::Math::Vector< 3, float > & dimensions, const Base::Math::Vector< 3, float > & centerOffset) noexcept override
 			{
 				/* Calculate new potential radius from horizontal dimensions. */
 				const auto newRadius = std::max(dimensions[0], dimensions[2]) * 0.5F;
@@ -325,31 +325,31 @@ namespace EmEn::Physics
 				const auto mergedCenterY = (currentCenter[1] + centerOffset[1]) * 0.5F;
 
 				/* Rebuild capsule with merged parameters. */
-				m_localCapsule = Libs::Math::Space3D::Capsule< float >{
-					Libs::Math::Space3D::Point< float >{centerOffset[0], mergedCenterY - mergedHalfAxisLength, centerOffset[2]},
-					Libs::Math::Space3D::Point< float >{centerOffset[0], mergedCenterY + mergedHalfAxisLength, centerOffset[2]},
+				m_localCapsule = Base::Math::Space3D::Capsule< float >{
+					Base::Math::Space3D::Point< float >{centerOffset[0], mergedCenterY - mergedHalfAxisLength, centerOffset[2]},
+					Base::Math::Space3D::Point< float >{centerOffset[0], mergedCenterY + mergedHalfAxisLength, centerOffset[2]},
 					mergedRadius
 				};
 			}
 
-			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Libs::Math::Space3D::AACuboid< float > &) */
+			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Base::Math::Space3D::AACuboid< float > &) */
 			void
-			mergeShapeParameters (const Libs::Math::Space3D::AACuboid< float > & aabb) noexcept override
+			mergeShapeParameters (const Base::Math::Space3D::AACuboid< float > & aabb) noexcept override
 			{
 				if ( aabb.isValid() )
 				{
-					const Libs::Math::Vector< 3, float > dimensions{aabb.width(), aabb.height(), aabb.depth()};
+					const Base::Math::Vector< 3, float > dimensions{aabb.width(), aabb.height(), aabb.depth()};
 					this->mergeShapeParameters(dimensions, aabb.centroid());
 				}
 			}
 
-			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Libs::Math::Space3D::Sphere< float > &) */
+			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Base::Math::Space3D::Sphere< float > &) */
 			void
-			mergeShapeParameters (const Libs::Math::Space3D::Sphere< float > & sphere) noexcept override
+			mergeShapeParameters (const Base::Math::Space3D::Sphere< float > & sphere) noexcept override
 			{
 				/* For sphere, use diameter as all dimensions. */
 				const auto diameter = sphere.radius() * 2.0F;
-				const Libs::Math::Vector< 3, float > dimensions{diameter, diameter, diameter};
+				const Base::Math::Vector< 3, float > dimensions{diameter, diameter, diameter};
 				this->mergeShapeParameters(dimensions, sphere.position());
 			}
 
@@ -357,12 +357,12 @@ namespace EmEn::Physics
 			void
 			resetShapeParameters () noexcept override
 			{
-				m_localCapsule = Libs::Math::Space3D::Capsule< float >{};
+				m_localCapsule = Base::Math::Space3D::Capsule< float >{};
 			}
 
 		private:
 
-			Libs::Math::Space3D::Capsule< float > m_localCapsule;
+			Base::Math::Space3D::Capsule< float > m_localCapsule;
 			bool m_parametersOverridden{false};
 	};
 }

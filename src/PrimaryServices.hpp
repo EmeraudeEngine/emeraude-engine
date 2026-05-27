@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #pragma once
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <string>
@@ -37,7 +37,7 @@
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
 #include "Identification.hpp"
-#include "Libs/ThreadPool.hpp"
+#include "ThreadPool.hpp"
 #include "Net/Manager.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
@@ -150,10 +150,10 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the reference to the primary service thread pool.
-			 * @return std::shared_ptr< Libs::ThreadPool >
+			 * @return std::shared_ptr< Base::ThreadPool >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Libs::ThreadPool >
+			std::shared_ptr< Base::ThreadPool >
 			threadPool () const noexcept
 			{
 				return m_threadPool;
@@ -284,7 +284,7 @@ namespace EmEn
 			FileSystem m_fileSystem;
 			Settings m_settings;
 			PlatformSpecific::SystemInfo m_systemInfo{m_arguments, m_settings};
-			std::shared_ptr< Libs::ThreadPool > m_threadPool;
+			std::shared_ptr< Base::ThreadPool > m_threadPool;
 			Net::Manager m_networkManager{m_fileSystem, m_threadPool};
 			std::vector< ServiceInterface * > m_servicesEnabled;
 			bool m_childProcess{false};

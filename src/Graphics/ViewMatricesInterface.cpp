@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,7 +28,7 @@
 
 namespace EmEn::Graphics
 {
-	using namespace Libs::Math;
+	using namespace Base::Math;
 
 	std::array< Vector< 3, float >, 8 >
 	ViewMatricesInterface::computeFrustumCornersWorld (const Matrix< 4, float > & inverseViewProjection) noexcept
@@ -36,7 +36,7 @@ namespace EmEn::Graphics
 		/* NDC cube corners (Vulkan clip space: x,y in [-1,1], z in [0,1]).
 		 * Near plane (z=0): 4 corners, Far plane (z=1): 4 corners.
 		 * Order: near-bottom-left, near-bottom-right, near-top-right, near-top-left,
-		 *        far-bottom-left, far-bottom-right, far-top-right, far-top-left */
+		 *		far-bottom-left, far-bottom-right, far-top-right, far-top-left */
 		static constexpr std::array< Vector< 4, float >, 8 > ndcCorners = {{
 			/* Near plane (z=0) */
 			Vector< 4, float >{-1.0F, -1.0F, 0.0F, 1.0F}, /* near-bottom-left */

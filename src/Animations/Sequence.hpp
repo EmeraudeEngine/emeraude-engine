@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -65,7 +65,7 @@ namespace EmEn::Animations
 			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::getNextValue() */
-			Libs::Variant getNextValue () noexcept override;
+			Base::Variant getNextValue () noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimationInterface::isPlaying() */
 			[[nodiscard]]
@@ -116,7 +116,7 @@ namespace EmEn::Animations
 			* @param interpolation The type of interpolation. Default linear.
 			* @return void
 			*/
-			void addKeyFrame (uint32_t timeCode, const Libs::Variant & value, Libs::Math::InterpolationType interpolation = Libs::Math::InterpolationType::Linear) noexcept;
+			void addKeyFrame (uint32_t timeCode, const Base::Variant & value, Base::Math::InterpolationType interpolation = Base::Math::InterpolationType::Linear) noexcept;
 
 			/**
 			 * @brief Adds a key frame with a position relative to the sequence.
@@ -125,7 +125,7 @@ namespace EmEn::Animations
 			 * @param interpolation The type of interpolation. Default linear.
 			 * @return void
 			 */
-			void addKeyFrame (float position, const Libs::Variant & value, Libs::Math::InterpolationType interpolation = Libs::Math::InterpolationType::Linear) noexcept;
+			void addKeyFrame (float position, const Base::Variant & value, Base::Math::InterpolationType interpolation = Base::Math::InterpolationType::Linear) noexcept;
 
 			/**
 			 * @brief Sets the current animation range time.
@@ -157,7 +157,7 @@ namespace EmEn::Animations
 			 * @param factor The interpolation factor between the two frames.
 			 * @return Libraries::Variant
 			 */
-			static Libs::Variant getLinearInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
+			static Base::Variant getLinearInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
 
 			/**
 			 * @brief Performs a cosine interpolation.
@@ -166,7 +166,7 @@ namespace EmEn::Animations
 			 * @param factor The interpolation factor between the two frames.
 			 * @return Libraries::Variant
 			 */
-			static Libs::Variant getCosineInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
+			static Base::Variant getCosineInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
 
 			/**
 			 * @brief Performs a cubic interpolation.
@@ -175,7 +175,7 @@ namespace EmEn::Animations
 			 * @param factor The interpolation factor between the two frames.
 			 * @return Libraries::Variant
 			 */
-			static Libs::Variant getCubicInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
+			static Base::Variant getCubicInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
 
 			/**
 			 * @brief STL streams printable object.

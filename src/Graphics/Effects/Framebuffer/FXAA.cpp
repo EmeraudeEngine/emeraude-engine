@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -129,12 +129,12 @@ void main()
 
 	/* ---- Step 4: Edge orientation (horizontal vs vertical) ---- */
 	float edgeH = abs(lumaNW + lumaNE - 2.0 * lumaN)
-	            + abs(lumaW  + lumaE  - 2.0 * lumaM) * 2.0
-	            + abs(lumaSW + lumaSE - 2.0 * lumaS);
+				+ abs(lumaW  + lumaE  - 2.0 * lumaM) * 2.0
+				+ abs(lumaSW + lumaSE - 2.0 * lumaS);
 
 	float edgeV = abs(lumaNW + lumaSW - 2.0 * lumaW)
-	            + abs(lumaN  + lumaS  - 2.0 * lumaM) * 2.0
-	            + abs(lumaNE + lumaSE - 2.0 * lumaE);
+				+ abs(lumaN  + lumaS  - 2.0 * lumaM) * 2.0
+				+ abs(lumaNE + lumaSE - 2.0 * lumaE);
 
 	bool isHorizontal = (edgeH >= edgeV);
 
@@ -244,7 +244,7 @@ void main()
 
 	/* ---- Step 9: Subpixel aliasing blend factor ---- */
 	float lumaAverage = (lumaN + lumaS + lumaE + lumaW) * (1.0 / 6.0)
-	                  + (lumaNW + lumaNE + lumaSW + lumaSE) * (1.0 / 12.0);
+					  + (lumaNW + lumaNE + lumaSW + lumaSE) * (1.0 / 12.0);
 
 	float subpixelOffset = clamp(abs(lumaAverage - lumaM) / lumaRange, 0.0, 1.0);
 	float subpixelBlend = (-2.0 * subpixelOffset + 3.0) * subpixelOffset * subpixelOffset;
@@ -272,7 +272,7 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 	using namespace Saphir;
 

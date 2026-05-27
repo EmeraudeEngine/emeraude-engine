@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #pragma once
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <array>
@@ -44,11 +44,11 @@
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Console/ControllableTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Identification.hpp"
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "Vulkan/Surface.hpp"
 
 namespace EmEn
@@ -83,9 +83,9 @@ namespace EmEn
 	 * @brief The handle service class is responsible for the physical screen.
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObservableTrait This service is observable.
+	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 */
-	class Window final : public ServiceInterface, public Console::ControllableTrait, public Libs::ObservableTrait
+	class Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -196,10 +196,10 @@ namespace EmEn
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -207,7 +207,7 @@ namespace EmEn
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -720,10 +720,10 @@ namespace EmEn
 			/**
 			 * @brief Returns the cached list of connected monitors.
 			 * @note The list is populated on initialization and updated on hot-plug events.
-			 * @return const Libs::StaticVector< MonitorDevice, 16 > &
+			 * @return const Base::StaticVector< MonitorDevice, 16 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< MonitorDevice, 16 > &
+			const Base::StaticVector< MonitorDevice, 16 > &
 			monitorDevices () const noexcept
 			{
 				return m_monitorDevices;
@@ -964,7 +964,7 @@ namespace EmEn
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_isUserResizing{false};
-			Libs::StaticVector< MonitorDevice, 16 > m_monitorDevices;
+			Base::StaticVector< MonitorDevice, 16 > m_monitorDevices;
 
 			/** @brief Static instance pointer for the GLFW monitor callback (no user pointer available on monitor callbacks). */
 			static Window * s_instance;

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #include "ShaderManager.hpp"
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -39,16 +39,16 @@
 
 /* Local inclusions. */
 #include "AbstractShader.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Libs/SourceCodeParser.hpp"
-#include "Libs/TokenFormatter.hpp"
+#include "IO/IO.hpp"
+#include "SourceCodeParser.hpp"
+#include "TokenFormatter.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Vulkan/ShaderModule.hpp"
 
 namespace EmEn::Saphir
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 
 	bool

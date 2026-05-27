@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
+#include "Math/CartesianFrame.hpp"
 
 namespace EmEn::Graphics
 {
@@ -88,7 +88,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void setPosition (const Libs::Math::Vector< 3, float > & position, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void setPosition (const Base::Math::Vector< 3, float > & position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Sets an absolute X position in meters.
@@ -96,7 +96,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void setXPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void setXPosition (float position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Sets an absolute Y position in meters.
@@ -104,7 +104,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void setYPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void setYPosition (float position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Sets an absolute Z position in meters.
@@ -112,7 +112,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void setZPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void setZPosition (float position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Shifts the position in meters.
@@ -120,7 +120,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void move (const Libs::Math::Vector< 3, float > & distance, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void move (const Base::Math::Vector< 3, float > & distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Shifts the X position in meters.
@@ -128,7 +128,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void moveX (float distance, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void moveX (float distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Shifts the Y position in meters.
@@ -136,7 +136,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void moveY (float distance, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void moveY (float distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Shifts the Z position in meters.
@@ -144,7 +144,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the move.
 			 * @return void
 			 */
-			virtual void moveZ (float distance, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void moveZ (float distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Performs a rotation around an arbitrary axis.
@@ -153,7 +153,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the rotation.
 			 * @return void
 			 */
-			virtual void rotate (float radian, const Libs::Math::Vector< 3, float > & axis, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void rotate (float radian, const Base::Math::Vector< 3, float > & axis, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Performs a rotation around the X axis.
@@ -161,7 +161,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the rotation.
 			 * @return void
 			 */
-			virtual void pitch (float radian, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void pitch (float radian, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Performs a rotation around the Y axis.
@@ -169,7 +169,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the rotation.
 			 * @return void
 			 */
-			virtual void yaw (float radian, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void yaw (float radian, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Performs a rotation around the Z axis.
@@ -177,7 +177,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the rotation.
 			 * @return void
 			 */
-			virtual void roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void roll (float radian, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Applies a scale factor on the coordinates.
@@ -190,17 +190,9 @@ namespace EmEn::Scenes
 			 * @param factor A reference to a scale vector.
 			 * @return void
 			 */
-			virtual void setScalingFactor (const Libs::Math::Vector< 3, float > & /*factor*/) noexcept { }
+			virtual void setScalingFactor (const Base::Math::Vector< 3, float > & /*factor*/) noexcept { }
 
-			virtual void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
-
-			/**
-			 * @brief Applies a scale factor on the coordinates.
-			 * @param factor an unidirectional factor value.
-			 * @param transformSpace The space where occurs the scale.
-			 * @return void
-			 */
-			virtual void scale (float factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void scale (const Base::Math::Vector< 3, float > & factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Applies a scale factor on the coordinates.
@@ -208,7 +200,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the scale.
 			 * @return void
 			 */
-			virtual void scaleX (float factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void scale (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Applies a scale factor on the coordinates.
@@ -216,7 +208,7 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the scale.
 			 * @return void
 			 */
-			virtual void scaleY (float factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void scaleX (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Applies a scale factor on the coordinates.
@@ -224,7 +216,15 @@ namespace EmEn::Scenes
 			 * @param transformSpace The space where occurs the scale.
 			 * @return void
 			 */
-			virtual void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
+			virtual void scaleY (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
+
+			/**
+			 * @brief Applies a scale factor on the coordinates.
+			 * @param factor an unidirectional factor value.
+			 * @param transformSpace The space where occurs the scale.
+			 * @return void
+			 */
+			virtual void scaleZ (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Points the backward (Negative Z axis) of the coordinates system toward the target.
@@ -232,34 +232,34 @@ namespace EmEn::Scenes
 			 * @param flipZAxis Flip the final Z axis. Normal behavior is false.
 			 * @return void
 			 */
-			virtual void lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept = 0;
+			virtual void lookAt (const Base::Math::Vector< 3, float > & target, bool flipZAxis) noexcept = 0;
 
 			/**
 			 * @brief Sets the local coordinates of this entity.
-			 * @return Libs::Math::Coordinates< float > &
+			 * @return Base::Math::Coordinates< float > &
 			 */
-			virtual void setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept = 0;
+			virtual void setLocalCoordinates (const Base::Math::CartesianFrame< float > & coordinates) noexcept = 0;
 
 			/**
 			 * @brief Returns the local coordinates of a 3D world entity.
-			 * @return const Libs::Math::Coordinates< float > &
+			 * @return const Base::Math::Coordinates< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::CartesianFrame< float > & localCoordinates () const noexcept = 0;
+			virtual const Base::Math::CartesianFrame< float > & localCoordinates () const noexcept = 0;
 
 			/**
 			 * @brief Returns the internal local coordinates of a 3D world entity.
-			 * @return const Libs::Math::Coordinates< float > &
+			 * @return const Base::Math::Coordinates< float > &
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::CartesianFrame< float > & localCoordinates () noexcept = 0;
+			virtual Base::Math::CartesianFrame< float > & localCoordinates () noexcept = 0;
 
 			/**
 			 * @brief Returns the world coordinates of a 3D world entity.
-			 * @return Libs::Math::Coordinates< float >
+			 * @return Base::Math::Coordinates< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept = 0;
+			virtual Base::Math::CartesianFrame< float > getWorldCoordinates () const noexcept = 0;
 
 			/**
 			 * @brief Sets the collision model for narrow-phase collision detection [PHYSICS].

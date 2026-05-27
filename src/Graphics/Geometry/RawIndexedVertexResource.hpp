@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -103,10 +103,10 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -114,7 +114,7 @@ namespace EmEn::Graphics::Geometry
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -171,7 +171,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_boundingBox;
@@ -179,7 +179,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_boundingSphere;
@@ -287,15 +287,15 @@ namespace EmEn::Graphics::Geometry
 			bool uploadToGPU (const float * vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const uint32_t * indices, uint32_t indexCount, const RawGeometryOptions & options) noexcept;
 
 			/** @brief Computes bounding volumes from explicit min/max points. */
-			static void computeBoundingVolumes (Libs::Math::Space3D::AACuboid< float > & boundingBox, Libs::Math::Space3D::Sphere< float > & boundingSphere, const Libs::Math::Space3D::Point< float > & minimum, const Libs::Math::Space3D::Point< float > & maximum) noexcept;
+			static void computeBoundingVolumes (Base::Math::Space3D::AACuboid< float > & boundingBox, Base::Math::Space3D::Sphere< float > & boundingSphere, const Base::Math::Space3D::Point< float > & minimum, const Base::Math::Space3D::Point< float > & maximum) noexcept;
 
 			/** @brief Auto-computes bounding volumes from position data with given stride. */
-			static void computeBoundingVolumes (Libs::Math::Space3D::AACuboid< float > & boundingBox, Libs::Math::Space3D::Sphere< float > & boundingSphere, const float * positions, uint32_t vertexCount, uint32_t stride) noexcept;
+			static void computeBoundingVolumes (Base::Math::Space3D::AACuboid< float > & boundingBox, Base::Math::Space3D::Sphere< float > & boundingSphere, const float * positions, uint32_t vertexCount, uint32_t stride) noexcept;
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_indexBufferObject;
-			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
-			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
+			Base::Math::Space3D::AACuboid< float > m_boundingBox;
+			Base::Math::Space3D::Sphere< float > m_boundingSphere;
 			Topology m_topology{Topology::TriangleList};
 	};
 }

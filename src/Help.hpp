@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,7 +32,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Input/Types.hpp"
@@ -240,7 +240,7 @@ namespace EmEn
 	/**
 	 * @brief This class holds help for an application.
 	 */
-	class Help final : public Libs::NameableTrait
+	class Help final : public Base::NameableTrait
 	{
 		public:
 

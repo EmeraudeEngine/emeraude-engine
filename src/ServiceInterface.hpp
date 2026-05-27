@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,19 +32,19 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 
 namespace EmEn
 {
 	/**
 	 * @brief The service interface.
 	 * @note A service cannot be duplicated and should act like a singleton.
-	 * @extends EmEn::Libs::NameableTrait Each service has a name.
+	 * @extends EmEn::Base::NameableTrait Each service has a name.
 	 */
-	class ServiceInterface : public Libs::NameableTrait
+	class ServiceInterface : public Base::NameableTrait
 	{
 		public:
 

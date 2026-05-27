@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,7 +32,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 #include "CodeGeneratorInterface.hpp"
 
 /* Local inclusions for usages. */
@@ -44,7 +44,7 @@
 #include "Declaration/Structure.hpp"
 #include "Declaration/TexelBuffer.hpp"
 #include "Declaration/UniformBlock.hpp"
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -57,9 +57,9 @@ namespace EmEn::Saphir
 {
 	/**
 	 * @brief Defines a shader that can be filled with source code and compiled. Or directly filled with binary code.
-	 * @extends EmEn::Libs::NameableTrait
+	 * @extends EmEn::Base::NameableTrait
 	 */
-	class AbstractShader : public Libs::NameableTrait, public CodeGeneratorInterface
+	class AbstractShader : public Base::NameableTrait, public CodeGeneratorInterface
 	{
 		public:
 
@@ -237,10 +237,10 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the list of push constant block declarations.
-			 * @return const Libs::StaticVector< Declaration::PushConstantBlock, 4 > &
+			 * @return const Base::StaticVector< Declaration::PushConstantBlock, 4 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< Declaration::PushConstantBlock, 4 > &
+			const Base::StaticVector< Declaration::PushConstantBlock, 4 > &
 			pushConstantBlockDeclarations () const noexcept
 			{
 				return m_pushConstantBlocks;
@@ -400,7 +400,7 @@ namespace EmEn::Saphir
 			template< typename declaration_t >
 			static
 			void
-			generateDeclarations (std::stringstream & code, const Libs::StaticVector< declaration_t, 4 > & declarations, const char * comment = nullptr) noexcept requires (std::is_base_of_v< Declaration::Interface, declaration_t >)
+			generateDeclarations (std::stringstream & code, const Base::StaticVector< declaration_t, 4 > & declarations, const char * comment = nullptr) noexcept requires (std::is_base_of_v< Declaration::Interface, declaration_t >)
 			{
 				if ( declarations.empty() )
 				{
@@ -458,6 +458,6 @@ namespace EmEn::Saphir
 			std::vector< Declaration::ShaderStorageBlock > m_shaderStorageBlocks; /* SSBO */
 			std::vector< Declaration::Sampler > m_samplers;
 			std::vector< Declaration::TexelBuffer > m_texelBuffers; /* (Vulkan only) */
-			Libs::StaticVector< Declaration::PushConstantBlock, 4 > m_pushConstantBlocks; /* (Vulkan only) FIXME: Only one is authorized ! */
+			Base::StaticVector< Declaration::PushConstantBlock, 4 > m_pushConstantBlocks; /* (Vulkan only) FIXME: Only one is authorized ! */
 	};
 }

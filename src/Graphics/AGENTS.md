@@ -762,7 +762,7 @@ bool loadCaustics(
 ) noexcept;
 ```
 
-**Algorithm:** Inverted Voronoi F2-F1 distance (bright at cell edges = caustic lines, dark at cell centers). Temporal animation uses a circular sin/cos path through noise space for seamless looping. See: `Libs/Algorithms/VoronoiNoise.hpp` for the underlying noise.
+**Algorithm:** Inverted Voronoi F2-F1 distance (bright at cell edges = caustic lines, dark at cell centers). Temporal animation uses a circular sin/cos path through noise space for seamless looping. See: `Base/Algorithms/VoronoiNoise.hpp` for the underlying noise.
 
 **Usage pattern:** See `projet-alpha/src/Builtin/PoolRooms.cpp:onSetupLighting()`.
 
@@ -770,7 +770,7 @@ bool loadCaustics(
 
 - `Graphics/CubemapMovieResource.hpp/cpp` — CPU frame storage, JSON loading, procedural caustics
 - `Graphics/TextureResource/AnimatedTextureCubemap.hpp/cpp` — Vulkan cube array texture resource
-- `Libs/Algorithms/VoronoiNoise.hpp` — Voronoi noise: `evaluate()`, `caustic()` (F2-F1 clamped)
+- `Base/Algorithms/VoronoiNoise.hpp` — Voronoi noise: `evaluate()`, `caustic()` (F2-F1 clamped)
 - `Resources/Manager.cpp` — Container registration (lines 531-533)
 - `projet-alpha/src/Actor/Fire.cpp:77` — Usage: fire point light color projection
 - `projet-alpha/src/Builtin/LightAndShadowDebug.cpp:113` — Usage: debug scene color projection
@@ -900,15 +900,15 @@ RTR → SSR → ContactShadows → SSAO → AtmosphericFog → VolumetricLight �
 
 **Use engine types for semantic data, raw floats for GPU push constants.**
 
-The engine provides rich types in `Libs/` that should be used for all user-facing parameters, member variables, and API signatures. Push constant structs are the only exception — they must remain raw `float` fields for GPU memory layout compliance.
+The engine provides rich types in `Base/` that should be used for all user-facing parameters, member variables, and API signatures. Push constant structs are the only exception — they must remain raw `float` fields for GPU memory layout compliance.
 
 | Semantic | Engine type | Header |
 |----------|------------|--------|
-| Direction (3D) | `Libs::Math::Vector< 3, float >` | `Libs/Math/Vector.hpp` |
-| Position (3D) | `Libs::Math::Vector< 3, float >` | `Libs/Math/Vector.hpp` |
-| Color (RGB/RGBA) | `Libs::PixelFactory::Color<>` | `Libs/PixelFactory/Color.hpp` |
-| Rotation | `Libs::Math::Quaternion< float >` | `Libs/Math/Quaternion.hpp` |
-| Transform | `Libs::Math::Matrix< 4, float >` | `Libs/Math/Matrix.hpp` |
+| Direction (3D) | `Base::Math::Vector< 3, float >` | `Base/Math/Vector.hpp` |
+| Position (3D) | `Base::Math::Vector< 3, float >` | `Base/Math/Vector.hpp` |
+| Color (RGB/RGBA) | `Base::PixelFactory::Color<>` | `Base/PixelFactory/Color.hpp` |
+| Rotation | `Base::Math::Quaternion< float >` | `Base/Math/Quaternion.hpp` |
+| Transform | `Base::Math::Matrix< 4, float >` | `Base/Math/Matrix.hpp` |
 
 **Aliases**: `Vector3F` = `Vector< 3, float >`, `ColorF` = `Color< float >`.
 
@@ -926,15 +926,15 @@ The engine provides rich types in `Libs/` that should be used for all user-facin
 // Parameters struct — engine types
 struct Parameters {
     float density{0.02F};
-    Libs::PixelFactory::Color<> fogColor{0.5F, 0.6F, 0.7F};
+    Base::PixelFactory::Color<> fogColor{0.5F, 0.6F, 0.7F};
     // ...
 };
 
 // Member — engine type
-Libs::Math::Vector< 3, float > m_lightDirection{0.0F, -1.0F, 0.0F};
+Base::Math::Vector< 3, float > m_lightDirection{0.0F, -1.0F, 0.0F};
 
 // Setter — engine type
-void setLightDirection(const Libs::Math::Vector< 3, float > & direction) noexcept;
+void setLightDirection(const Base::Math::Vector< 3, float > & direction) noexcept;
 
 // Push constants — raw floats (GPU layout)
 struct FogPushConstants {

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -117,7 +117,7 @@ vec3 hemispherePoint (uint i, vec2 noise)
 float screenEdgeFade (vec2 uv)
 {
 	vec2 fade = smoothstep(vec2(0.0), vec2(0.05), uv)
-	          * smoothstep(vec2(0.0), vec2(0.05), vec2(1.0) - uv);
+			  * smoothstep(vec2(0.0), vec2(0.05), vec2(1.0) - uv);
 	return fade.x * fade.y;
 }
 
@@ -359,7 +359,7 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 	using namespace Saphir;
 

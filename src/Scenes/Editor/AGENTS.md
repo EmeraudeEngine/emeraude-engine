@@ -49,7 +49,7 @@ Scene (opaque → translucent) → Post-process → Editor Gizmos → Overlay (I
 
 - **Method**: CPU raycasting via `screenToWorldRay()` (inverse VP matrix, perspective divide)
 - **Targets**: Both `Node` and `StaticEntity` with collision models (AABB or Sphere)
-- **Intersection**: `Segment-Sphere` and `Segment-AABB` from `Libs/Math/Space3D/Intersections/`
+- **Intersection**: `Segment-Sphere` and `Segment-AABB` from `Base/Math/Space3D/Intersections/`
 - **Selection**: Closest hit by distance to camera
 - **Priority**: Active gizmo hit-test checked BEFORE scene picking
 

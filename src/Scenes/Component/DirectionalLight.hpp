@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -74,8 +74,8 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Constructs a directional light with Cascaded Shadow Mapping (CSM).
 			 * @note CSM automatically derives coverage from the main camera frustum.
-			 *       Each cascade covers a portion of the view frustum, providing higher
-			 *       shadow resolution near the camera and lower resolution far away.
+			 *	   Each cascade covers a portion of the view frustum, providing higher
+			 *	   shadow resolution near the camera and lower resolution far away.
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution The shadow map resolution in pixels (per cascade).
@@ -144,7 +144,7 @@ namespace EmEn::Scenes::Component
 			void processLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
 			[[nodiscard]]
@@ -157,7 +157,7 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch() */
 			[[nodiscard]]
 			bool
-			touch (const Libs::Math::Vector< 3, float > & /*position*/) const noexcept override
+			touch (const Base::Math::Vector< 3, float > & /*position*/) const noexcept override
 			{
 				return true;
 			}
@@ -240,10 +240,10 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the current light emission direction in world space.
-			 * @return Libs::Math::Vector< 3, float >
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			direction () const noexcept
 			{
 				return {m_buffer[DirectionOffset], m_buffer[DirectionOffset + 1], m_buffer[DirectionOffset + 2]};
@@ -335,12 +335,12 @@ namespace EmEn::Scenes::Component
 			 * @param farPlane The camera far plane distance.
 			 * @return void
 			 */
-			void updateCascades (const std::array< Libs::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
+			void updateCascades (const std::array< Base::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
 
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
 			bool createShadowDescriptorSet (Scene & scene) noexcept override;
@@ -388,7 +388,7 @@ namespace EmEn::Scenes::Component
 			bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
-			void onColorChange (const Libs::PixelFactory::Color< float > & color) noexcept override;
+			void onColorChange (const Base::PixelFactory::Color< float > & color) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
 			void onIntensityChange (float intensity) noexcept override;
@@ -398,7 +398,7 @@ namespace EmEn::Scenes::Component
 			 * @brief A reference to a cartesian frame for the light location.
 			 * @return void
 			 */
-			void setDirection (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
+			void setDirection (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/**
 			 * @brief STL streams printable object.

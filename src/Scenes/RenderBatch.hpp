@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -54,7 +54,7 @@ namespace EmEn::Scenes
 			 * @param LODLevel The geometry LOD level for this batch.
 			 */
 			explicit
-			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
+			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
 				: m_renderableInstance{renderableInstance},
 				m_worldCoordinates{worldCoordinates},
 				m_subGeometryIndex{subGeometryIndex},
@@ -78,10 +78,10 @@ namespace EmEn::Scenes
 			 * @brief Returns the world coordinates of the renderable instance.
 			 * @note If nullptr, this means at the origin.
 			 * @warning Do not store this pointer!
-			 * @return const Libs::Math::CartesianFrame< float > *
+			 * @return const Base::Math::CartesianFrame< float > *
 			 */
 			[[nodiscard]]
-			const Libs::Math::CartesianFrame< float > *
+			const Base::Math::CartesianFrame< float > *
 			worldCoordinates () const noexcept
 			{
 				return m_worldCoordinates;
@@ -121,7 +121,7 @@ namespace EmEn::Scenes
 			 */
 			static
 			void
-			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
+			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
 			{
 				renderList.emplace(
 					std::piecewise_construct,
@@ -151,7 +151,7 @@ namespace EmEn::Scenes
 		 */
 		static
 		void
-		createStateSorted (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
+		createStateSorted (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex, uint32_t LODLevel = 0) noexcept
 		{
 			const auto * renderable = renderableInstance->renderable();
 
@@ -209,7 +209,7 @@ namespace EmEn::Scenes
 		static constexpr auto DistanceMultiplier{1000.0F};
 
 			const std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
-			const Libs::Math::CartesianFrame< float > * m_worldCoordinates{nullptr};
+			const Base::Math::CartesianFrame< float > * m_worldCoordinates{nullptr};
 			const uint32_t m_subGeometryIndex;
 			const uint32_t m_LODLevel{0};
 	};

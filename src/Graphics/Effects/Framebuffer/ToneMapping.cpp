@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -114,7 +114,7 @@ void main()
 	/* Work in log-space for better HDR averaging. */
 	const float epsilon = 0.0001;
 	float logLum = (log(max(l0, epsilon)) + log(max(l1, epsilon))
-	             +  log(max(l2, epsilon)) + log(max(l3, epsilon))) * 0.25;
+				 +  log(max(l2, epsilon)) + log(max(l3, epsilon))) * 0.25;
 
 	outColor = vec4(logLum, 0.0, 0.0, 1.0);
 }
@@ -371,7 +371,7 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 	using namespace Saphir;
 

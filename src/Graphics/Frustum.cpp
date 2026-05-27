@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,12 +27,12 @@
 #include "Frustum.hpp"
 
 /* Local inclusions. */
-#include "Libs/Math/Matrix.hpp"
+#include "Math/Matrix.hpp"
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 
 	void
 	Frustum::update (const Matrix< 4, float > & viewProjectionMatrix) noexcept

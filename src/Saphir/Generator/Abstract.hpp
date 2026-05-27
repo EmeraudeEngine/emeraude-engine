@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,12 +33,12 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "Saphir/Program.hpp"
 
 namespace EmEn
@@ -83,10 +83,10 @@ namespace EmEn::Saphir::Generator
 
 	/**
 	 * @brief The base class for every shader program generator.
-	 * @extends EmEn::Libs::NameableTrait This will hold the name of the program generated.
-	 * @extends EmEn::Libs::FlagTrait Enables flag ability for parameters.
+	 * @extends EmEn::Base::NameableTrait This will hold the name of the program generated.
+	 * @extends EmEn::Base::FlagTrait Enables flag ability for parameters.
 	 */
-	class Abstract : public Libs::NameableTrait, public Libs::FlagTrait< uint32_t >
+	class Abstract : public Base::NameableTrait, public Base::FlagTrait< uint32_t >
 	{
 		public:
 
@@ -598,7 +598,7 @@ namespace EmEn::Saphir::Generator
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Libs::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 5 > & descriptorSetLayouts, Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept = 0;
+			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 5 > & descriptorSetLayouts, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept = 0;
 
 			/**
 			 * @brief Configures the graphics pipeline from child shader generators.
@@ -617,7 +617,7 @@ namespace EmEn::Saphir::Generator
 			 * @param stageFlags
 			 * @return void
 			 */
-			static void generatePushConstantRanges (const Libs::StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept;
+			static void generatePushConstantRanges (const Base::StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept;
 
 		private:
 

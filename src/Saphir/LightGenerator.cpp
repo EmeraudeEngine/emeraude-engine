@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,9 +34,9 @@
 
 namespace EmEn::Saphir
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::PixelFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::PixelFactory;
 	using namespace Graphics;
 	using namespace Saphir::Keys;
 	using namespace Vulkan;
@@ -161,9 +161,9 @@ namespace EmEn::Saphir
 
 		/* Encode nibble-packed vec4:
 		 * R = (reflectivity << 4 | reserved) / 255
-		 * G = (aoResponse << 4 | shadowResponse) / 255    — shadowResponse=15 (full)
-		 * B = (bloomContrib << 4 | emissiveMask) / 255     — bloomContrib=15 (full)
-		 * A = (fogResponse << 4 | dofMask) / 255           — both 15 (full) */
+		 * G = (aoResponse << 4 | shadowResponse) / 255	— shadowResponse=15 (full)
+		 * B = (bloomContrib << 4 | emissiveMask) / 255	 — bloomContrib=15 (full)
+		 * A = (fogResponse << 4 | dofMask) / 255		   — both 15 (full) */
 		return "vec4("
 			"float(uint(" + reflectivity + " * 15.0) << 4u) / 255.0, "
 			"float((uint(" + aoResponse + " * 15.0) << 4u) | 15u) / 255.0, "

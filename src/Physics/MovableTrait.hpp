@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -97,7 +97,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			setLinearVelocity (const Libs::Math::Vector< 3, float > & velocity) noexcept
+			setLinearVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept
 			{
 				m_linearVelocity = velocity;
 				m_linearSpeed = m_linearVelocity.length();
@@ -111,7 +111,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			setAngularVelocity (const Libs::Math::Vector< 3, float > & velocity) noexcept
+			setAngularVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept
 			{
 				m_angularVelocity = velocity;
 				m_angularSpeed = m_angularVelocity.length();
@@ -124,7 +124,7 @@ namespace EmEn::Physics
 			 * @param velocity A reference to a vector.
 			 * @return void
 			 */
-			void setMinimalVelocity (const Libs::Math::Vector< 3, float > & velocity) noexcept;
+			void setMinimalVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept;
 
 			/**
 			 * @brief Adds an acceleration to the velocity to the current velocity without any checking.
@@ -132,7 +132,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			addAcceleration (const Libs::Math::Vector< 3, float > & acceleration) noexcept
+			addAcceleration (const Base::Math::Vector< 3, float > & acceleration) noexcept
 			{
 				m_linearVelocity += acceleration * EngineUpdateCycleDurationS< float >;
 				m_linearSpeed = m_linearVelocity.length();
@@ -146,7 +146,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			addAngularAcceleration (const Libs::Math::Vector< 3, float > & acceleration) noexcept
+			addAngularAcceleration (const Base::Math::Vector< 3, float > & acceleration) noexcept
 			{
 				m_angularVelocity += acceleration;
 				m_angularSpeed = m_angularVelocity.length();
@@ -167,10 +167,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the linear velocity vector.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			linearVelocity () const noexcept
 			{
 				return m_linearVelocity;
@@ -200,10 +200,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the angular velocity vector.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			angularVelocity () const noexcept
 			{
 				return m_angularVelocity;
@@ -227,7 +227,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			applyLinearImpulse (const Libs::Math::Vector< 3, float > & impulse) noexcept
+			applyLinearImpulse (const Base::Math::Vector< 3, float > & impulse) noexcept
 			{
 				if ( !m_isMovable )
 				{
@@ -247,7 +247,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			applyAngularImpulse (const Libs::Math::Vector< 3, float > & angularImpulse) noexcept
+			applyAngularImpulse (const Base::Math::Vector< 3, float > & angularImpulse) noexcept
 			{
 				if ( !m_isMovable || !m_rotationEnabled )
 				{
@@ -267,7 +267,7 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			updateInverseWorldInertia (const Libs::Math::Matrix< 3, float > & rotationMatrix) noexcept
+			updateInverseWorldInertia (const Base::Math::Matrix< 3, float > & rotationMatrix) noexcept
 			{
 				const auto & localInertia = this->getBodyPhysicalProperties().inertiaTensor();
 
@@ -283,10 +283,10 @@ namespace EmEn::Physics
 			/**
 			 * @brief [PHYSICS-NEW-SYSTEM] Returns the inverse world inertia tensor.
 			 * @note This is the cached transformed and inverted inertia tensor.
-			 * @return const Libs::Math::Matrix< 3, float > &
+			 * @return const Base::Math::Matrix< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 3, float > &
+			const Base::Math::Matrix< 3, float > &
 			inverseWorldInertia () const noexcept
 			{
 				return m_inverseWorldInertia;
@@ -298,17 +298,17 @@ namespace EmEn::Physics
 			 * @return void
 			 */
 			void
-			setCenterOfMass (const Libs::Math::Vector< 3, float > & centerOfMass) noexcept
+			setCenterOfMass (const Base::Math::Vector< 3, float > & centerOfMass) noexcept
 			{
 				m_centerOfMass = centerOfMass;
 			}
 
 			/**
 			 * @brief Returns the center of mass from the scene node position.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			centerOfMass () const noexcept
 			{
 				return m_centerOfMass;
@@ -320,7 +320,7 @@ namespace EmEn::Physics
 			 * @param force A reference to a vector representing the force. The magnitude (length) will represent the acceleration in m/s².
 			 * @return void
 			 */
-			void addForce (const Libs::Math::Vector< 3, float > & force) noexcept;
+			void addForce (const Base::Math::Vector< 3, float > & force) noexcept;
 
 			/**
 			 * @brief Sets the object into inertia.
@@ -429,10 +429,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the world position (public accessor for physics engine).
-			 * @return Libs::Math::Vector< 3, float >
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			worldPosition () const noexcept
 			{
 				return this->getWorldPosition();
@@ -441,18 +441,18 @@ namespace EmEn::Physics
 			/**
 			 * @brief Returns the world velocity of the entity.
 			 * @note If not override, velocity is null.
-			 * @return Libs::Math::Vector< float >
+			 * @return Base::Math::Vector< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getWorldVelocity () const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getWorldVelocity () const noexcept = 0;
 
 			/**
 			 * @brief Returns the world center of mass of the entity.
 			 * @note If not override, velocity is null.
-			 * @return Libs::Math::Vector< float >
+			 * @return Base::Math::Vector< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept = 0;
 
 			/**
 			 * @brief Returns the object physical properties for the physics simulation.
@@ -486,16 +486,16 @@ namespace EmEn::Physics
 			 * @param positionDelta A reference to a delta vector to add to current position.
 			 * @return void
 			 */
-			virtual void moveFromPhysics (const Libs::Math::Vector< 3, float > & positionDelta) noexcept = 0;
+			virtual void moveFromPhysics (const Base::Math::Vector< 3, float > & positionDelta) noexcept = 0;
 
 			/**
 			 * @brief Rotates the entity int the scene from physics simulation.
 			 * @note This should make a call to LocatableInterface::rotate() final object method.
 			 * @param radianAngle An angle in radian.
 			 * @param worldDirection A reference to a vector.
-			 * @return Libs::Math::Vector< 3, float >
+			 * @return Base::Math::Vector< 3, float >
 			 */
-			virtual void rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept = 0;
+			virtual void rotateFromPhysics (float radianAngle, const Base::Math::Vector< 3, float > & worldDirection) noexcept = 0;
 
 			/**
 			 * @brief Marks that this entity is grounded on a specific source.
@@ -570,10 +570,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the world position for the physics simulation.
-			 * @return Libs::Math::Vector< 3, float >
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getWorldPosition () const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getWorldPosition () const noexcept = 0;
 
 		private:
 
@@ -582,10 +582,10 @@ namespace EmEn::Physics
 			/** @brief Grace period before losing grounded state (in frames). ~250ms at 60 FPS. */
 			static constexpr uint8_t GroundedGracePeriod{15};
 
-			Libs::Math::Vector< 3, float > m_linearVelocity;
-			Libs::Math::Vector< 3, float > m_angularVelocity; // Omega
-			Libs::Math::Vector< 3, float > m_centerOfMass;
-			Libs::Math::Matrix< 3, float > m_inverseWorldInertia; // Cached I^-1 in world space
+			Base::Math::Vector< 3, float > m_linearVelocity;
+			Base::Math::Vector< 3, float > m_angularVelocity; // Omega
+			Base::Math::Vector< 3, float > m_centerOfMass;
+			Base::Math::Matrix< 3, float > m_inverseWorldInertia; // Cached I^-1 in world space
 			const MovableTrait * m_groundedOn{nullptr}; ///< Entity we're grounded on (if source is Entity).
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};

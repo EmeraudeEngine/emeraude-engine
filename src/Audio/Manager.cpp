@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,8 +31,8 @@
 #include <iostream>
 
 /* Local inclusions. */
-#include "Libs/Math/Base.hpp"
-#include "Libs/WaveFactory/Synthesizer.hpp"
+#include "Math/Base.hpp"
+#include "WaveFactory/Synthesizer.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
@@ -42,8 +42,8 @@
 
 namespace EmEn::Audio
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 
 	bool
 	Manager::selectedOutputDevice (bool useExtendedAPI) noexcept

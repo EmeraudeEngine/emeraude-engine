@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,8 +32,8 @@
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
 #include "Graphics/Types.hpp"
-#include "Libs/VertexFactory/Grid.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "VertexFactory/Grid.hpp"
+#include "VertexFactory/Shape.hpp"
 #include "SubGeometry.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
@@ -245,17 +245,17 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Returns the bounding box surrounding the renderable.
-			 * @return const Libs::Math::Space3D::AACuboid< float > &
+			 * @return const Base::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::AACuboid< float > & boundingBox () const noexcept = 0;
+			virtual const Base::Math::Space3D::AACuboid< float > & boundingBox () const noexcept = 0;
 
 			/**
 			 * @brief Returns the bounding sphere surrounding the renderable.
-			 * @return const Libs::Math::Space3D::Sphere< float > &
+			 * @return const Base::Math::Space3D::Sphere< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
+			virtual const Base::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
 
 			/**
 			 * @brief Returns the vertex buffer object.
@@ -341,7 +341,7 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			virtual
 			uint32_t
-			getAdaptiveDrawCallCount ([[maybe_unused]] const Libs::Math::Vector< 3, float > & viewPosition) const noexcept
+			getAdaptiveDrawCallCount ([[maybe_unused]] const Base::Math::Vector< 3, float > & viewPosition) const noexcept
 			{
 				return 1;
 			}
@@ -355,7 +355,7 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			virtual
 			std::array< uint32_t, 2 >
-			getAdaptiveDrawCallRange ([[maybe_unused]] uint32_t drawCallIndex, [[maybe_unused]] const Libs::Math::Vector< 3, float > & viewPosition) const noexcept
+			getAdaptiveDrawCallRange ([[maybe_unused]] uint32_t drawCallIndex, [[maybe_unused]] const Base::Math::Vector< 3, float > & viewPosition) const noexcept
 			{
 				return this->subGeometryRange(0);
 			}
@@ -368,7 +368,7 @@ namespace EmEn::Graphics::Geometry
 			 */
 			virtual
 			void
-			prepareAdaptiveRendering ([[maybe_unused]] const Libs::Math::Vector< 3, float > & viewPosition) const noexcept
+			prepareAdaptiveRendering ([[maybe_unused]] const Base::Math::Vector< 3, float > & viewPosition) const noexcept
 			{
 
 			}
@@ -448,10 +448,10 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Returns the normal format.
 			 * @return Libraries::VertexFactory::NormalType
 			 */
-			Libs::VertexFactory::NormalType
+			Base::VertexFactory::NormalType
 			getNormalsFormat () const noexcept
 			{
-				using namespace Libs::VertexFactory;
+				using namespace Base::VertexFactory;
 
 				if ( this->isFlagEnabled(EnableTangentSpace) )
 				{
@@ -470,10 +470,10 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Returns the primary texture coordinates format.
 			 * @return Libraries::VertexFactory::TextureCoordinatesType
 			 */
-			Libs::VertexFactory::TextureCoordinatesType
+			Base::VertexFactory::TextureCoordinatesType
 			getPrimaryTextureCoordinatesFormat () const noexcept
 			{
-				using namespace Libs::VertexFactory;
+				using namespace Base::VertexFactory;
 
 				if ( !this->isFlagEnabled(EnablePrimaryTextureCoordinates) )
 				{
@@ -487,10 +487,10 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Returns the secondary texture coordinates format.
 			 * @return Libraries::VertexFactory::TextureCoordinatesType
 			 */
-			Libs::VertexFactory::TextureCoordinatesType
+			Base::VertexFactory::TextureCoordinatesType
 			getSecondaryTextureCoordinatesFormat () const noexcept
 			{
-				using namespace Libs::VertexFactory;
+				using namespace Base::VertexFactory;
 
 				if ( !this->isFlagEnabled(EnableSecondaryTextureCoordinates) )
 				{
@@ -514,7 +514,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param subGeometries A reference to a sub geometry list.
 			 * @return bool
 			 */
-			static bool buildSubGeometries (std::vector< SubGeometry > & subGeometries, const Libs::VertexFactory::Shape< float > & shape) noexcept;
+			static bool buildSubGeometries (std::vector< SubGeometry > & subGeometries, const Base::VertexFactory::Shape< float > & shape) noexcept;
 
 			/**
 			 * @brief Builds geometry batches from grid.
@@ -522,7 +522,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param subGeometries A reference to a sub geometry list.
 			 * @return bool
 			 */
-			static bool buildSubGeometries (std::vector< SubGeometry > & subGeometries, const Libs::VertexFactory::Grid< float > & grid) noexcept;
+			static bool buildSubGeometries (std::vector< SubGeometry > & subGeometries, const Base::VertexFactory::Grid< float > & grid) noexcept;
 
 			/**
 			 * @brief Generates triangle-list indices for BLAS building when the native topology is not TriangleList.

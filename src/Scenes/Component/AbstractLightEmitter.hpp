@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,11 +35,11 @@
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderTarget/ShadowMap.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Scenes/AVConsole/Types.hpp"
 
 /* Forward declarations. */
@@ -74,9 +74,9 @@ namespace EmEn::Scenes::Component
 	 * @brief Base class of light emitters.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This can act as a virtual video device.
-	 * @extends EmEn::Libs::ObserverTrait Observes color projection textures for async loading completion.
+	 * @extends EmEn::Base::ObserverTrait Observes color projection textures for async loading completion.
 	 */
-	class AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice, public Libs::ObserverTrait
+	class AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice, public Base::ObserverTrait
 	{
 		public:
 
@@ -97,7 +97,7 @@ namespace EmEn::Scenes::Component
 			};
 
 			/* Default variables. */
-			static constexpr auto DefaultColor{Libs::PixelFactory::White};
+			static constexpr auto DefaultColor{Base::PixelFactory::White};
 			static constexpr auto DefaultIntensity{1.0F};
 			static constexpr auto DefaultRadius{0.0F};
 			static constexpr auto DefaultInnerAngle{30.0F};
@@ -171,7 +171,7 @@ namespace EmEn::Scenes::Component
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets the intensity of the light.
@@ -185,7 +185,7 @@ namespace EmEn::Scenes::Component
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			color () const noexcept
 			{
 				return m_color;
@@ -318,7 +318,7 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool touch (const Libs::Math::Vector< 3, float > & position) const noexcept = 0;
+			virtual bool touch (const Base::Math::Vector< 3, float > & position) const noexcept = 0;
 
 			/**
 			 * @brief Creates the light on the GPU with the shadow map if requested.
@@ -435,8 +435,8 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the color projection boost factor.
 			 * @note When boost > 0, the projection formula becomes (1.0 + projectionColor * boost),
-			 *       making bright areas of the texture amplify light intensity. When boost == 0 (default),
-			 *       the original multiplicative behavior is preserved.
+			 *	   making bright areas of the texture amplify light intensity. When boost == 0 (default),
+			 *	   the original multiplicative behavior is preserved.
 			 * @param boost The boost factor.
 			 * @return void
 			 */
@@ -474,11 +474,11 @@ namespace EmEn::Scenes::Component
 			 * @brief Returns an intensified color by a value.
 			 * @param color A reference to a color.
 			 * @param intensity The intensity value.
-			 * @return Libs::Math::Vector< 4, float >
+			 * @return Base::Math::Vector< 4, float >
 			 */
 			static
-			Libs::Math::Vector< 4, float >
-			intensifiedColor (const Libs::PixelFactory::Color< float > & color, float intensity) noexcept
+			Base::Math::Vector< 4, float >
+			intensifiedColor (const Base::PixelFactory::Color< float > & color, float intensity) noexcept
 			{
 				return {color.red() * intensity, color.green() * intensity, color.blue() * intensity, 1.0F};
 			}
@@ -501,7 +501,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float >
+			Base::Math::CartesianFrame< float >
 			getWorldCoordinates () const noexcept override
 			{
 				/* FIXME: function name shadowing here !
@@ -510,7 +510,7 @@ namespace EmEn::Scenes::Component
 			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
-			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept final;
+			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept final;
 
 			/**
 			 * @brief Adds the light to the shared uniform buffer.
@@ -553,9 +553,9 @@ namespace EmEn::Scenes::Component
 
 		private:
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
 			void
@@ -616,7 +616,7 @@ namespace EmEn::Scenes::Component
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			virtual void onColorChange (const Libs::PixelFactory::Color< float > & color) noexcept = 0;
+			virtual void onColorChange (const Base::PixelFactory::Color< float > & color) noexcept = 0;
 
 			/**
 			 * @brief Event when the color intensity changes.
@@ -630,7 +630,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto VideoMemoryUpdateRequested{UnusedFlag + 1UL};
 			static constexpr auto ShadowMapEnabled{UnusedFlag + 2UL};
 
-			Libs::PixelFactory::Color< float > m_color{DefaultColor};
+			Base::PixelFactory::Color< float > m_color{DefaultColor};
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;

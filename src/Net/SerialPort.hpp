@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -38,13 +38,13 @@ namespace EmEn::Net
 	 */
 	struct SerialPortInfo
 	{
-		std::string path;            /* Device path (e.g., "/dev/ttyUSB0", "COM3"). */
-		std::string manufacturer;    /* Manufacturer name (if available). */
-		std::string serialNumber;    /* Serial number (if available). */
-		std::string pnpId;           /* Plug-and-Play ID (if available). */
-		std::string locationId;      /* Location identifier (if available). */
-		uint16_t vendorId{0};        /* USB Vendor ID. */
-		uint16_t productId{0};       /* USB Product ID. */
+		std::string path;			/* Device path (e.g., "/dev/ttyUSB0", "COM3"). */
+		std::string manufacturer;	/* Manufacturer name (if available). */
+		std::string serialNumber;	/* Serial number (if available). */
+		std::string pnpId;		   /* Plug-and-Play ID (if available). */
+		std::string locationId;	  /* Location identifier (if available). */
+		uint16_t vendorId{0};		/* USB Vendor ID. */
+		uint16_t productId{0};	   /* USB Product ID. */
 	};
 
 	/**
@@ -53,12 +53,12 @@ namespace EmEn::Net
 	struct SerialPortConfig
 	{
 		uint32_t baudRate{9600};
-		uint8_t dataBits{8};         /* 5, 6, 7, or 8. */
-		uint8_t stopBits{1};         /* 1 or 2. */
-		char parity{'N'};            /* 'N' (none), 'E' (even), 'O' (odd). */
-		bool rtscts{false};          /* Hardware flow control. */
-		bool xon{false};             /* Software flow control (XON). */
-		bool xoff{false};            /* Software flow control (XOFF). */
+		uint8_t dataBits{8};		 /* 5, 6, 7, or 8. */
+		uint8_t stopBits{1};		 /* 1 or 2. */
+		char parity{'N'};			/* 'N' (none), 'E' (even), 'O' (odd). */
+		bool rtscts{false};		  /* Hardware flow control. */
+		bool xon{false};			 /* Software flow control (XON). */
+		bool xoff{false};			/* Software flow control (XOFF). */
 	};
 
 	/**

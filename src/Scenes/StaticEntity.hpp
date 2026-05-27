@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -43,8 +43,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Frustum.hpp"
-#include "Libs/Math/OrientedCuboid.hpp"
-#include "Libs/Variant.hpp"
+#include "Math/OrientedCuboid.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Scenes
 {
@@ -137,7 +137,7 @@ namespace EmEn::Scenes
 			 * @param sceneTimeMS The scene current time in milliseconds.
 			 * @param coordinates The initial local coordinate frame of the static entity. Defaults to origin.
 			 */
-			StaticEntity (const Scene & scene, const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
+			StaticEntity (const Scene & scene, const std::string & name, uint32_t sceneTimeMS, const Base::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{scene, name, sceneTimeMS},
 				m_logicStateCoordinates{coordinates}
 			{
@@ -193,11 +193,11 @@ namespace EmEn::Scenes
 			 */
 			~StaticEntity () override = default;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace) */
 			void
-			setPosition (const Libs::Math::Vector< 3, float > & position, Libs::Math::TransformSpace transformSpace) noexcept override
+			setPosition (const Base::Math::Vector< 3, float > & position, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				if ( transformSpace == Libs::Math::TransformSpace::Local )
+				if ( transformSpace == Base::Math::TransformSpace::Local )
 				{
 					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.getRotationMatrix3() * position);
 				}
@@ -209,11 +209,11 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Base::Math::TransformSpace) */
 			void
-			setXPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override
+			setXPosition (float position, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				if ( transformSpace == Libs::Math::TransformSpace::Local )
+				if ( transformSpace == Base::Math::TransformSpace::Local )
 				{
 					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.rightVector() * position);
 				}
@@ -225,11 +225,11 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Base::Math::TransformSpace) */
 			void
-			setYPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override
+			setYPosition (float position, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				if ( transformSpace == Libs::Math::TransformSpace::Local )
+				if ( transformSpace == Base::Math::TransformSpace::Local )
 				{
 					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.downwardVector() * position);
 				}
@@ -241,11 +241,11 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Base::Math::TransformSpace) */
 			void
-			setZPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override
+			setZPosition (float position, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				if ( transformSpace == Libs::Math::TransformSpace::Local )
+				if ( transformSpace == Base::Math::TransformSpace::Local )
 				{
 					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.backwardVector() * position);
 				}
@@ -257,145 +257,145 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::move(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::move(const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace) */
 			void
-			move (const Libs::Math::Vector< 3, float > & distance, Libs::Math::TransformSpace transformSpace) noexcept override
+			move (const Base::Math::Vector< 3, float > & distance, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.translate(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translate(distance, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Base::Math::TransformSpace) */
 			void
-			moveX (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
+			moveX (float distance, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.translateX(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translateX(distance, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Base::Math::TransformSpace) */
 			void
-			moveY (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
+			moveY (float distance, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.translateY(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translateY(distance, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Base::Math::TransformSpace) */
 			void
-			moveZ (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
+			moveZ (float distance, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.translateZ(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translateZ(distance, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace) */
 			void
-			rotate (float radian, const Libs::Math::Vector< 3, float > & axis, Libs::Math::TransformSpace transformSpace) noexcept override
+			rotate (float radian, const Base::Math::Vector< 3, float > & axis, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.rotate(radian, axis, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.rotate(radian, axis, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Base::Math::TransformSpace) */
 			void
-			pitch (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
+			pitch (float radian, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.pitch(radian, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.pitch(radian, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Base::Math::TransformSpace) */
 			void
-			yaw (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
+			yaw (float radian, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.yaw(radian, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.yaw(radian, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::roll(float, Base::Math::TransformSpace) */
 			void
-			roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
+			roll (float radian, Base::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_logicStateCoordinates.roll(radian, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.roll(radian, transformSpace == Base::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::setScalingFactor() */
-			void setScalingFactor (const Libs::Math::Vector< 3, float > & factor) noexcept override;
+			void setScalingFactor (const Base::Math::Vector< 3, float > & factor) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
 			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
-			void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scale (const Base::Math::Vector< 3, float > & factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scale(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scale(float, Base::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
 			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
-			void scale (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scale (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Base::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
 			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
-			void scaleX (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scaleX (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Base::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
 			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
-			void scaleY (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scaleY (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Base::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
 			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
-			void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scaleZ (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Libs::Math::Vector< 3, float > &, bool) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Base::Math::Vector< 3, float > &, bool) */
 			void
-			lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
+			lookAt (const Base::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
 			{
 				m_logicStateCoordinates.lookAt(target, flipZAxis);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Libs::Math::CartesianFrame< float > &) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Base::Math::CartesianFrame< float > &) */
 			void
-			setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept override
+			setLocalCoordinates (const Base::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
 				m_logicStateCoordinates = coordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */
 			[[nodiscard]]
-			const Libs::Math::CartesianFrame< float > &
+			const Base::Math::CartesianFrame< float > &
 			localCoordinates () const noexcept override
 			{
 				return m_logicStateCoordinates;
@@ -403,7 +403,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float > &
+			Base::Math::CartesianFrame< float > &
 			localCoordinates () noexcept override
 			{
 				return m_logicStateCoordinates;
@@ -414,7 +414,7 @@ namespace EmEn::Scenes
 			 * @note For StaticEntity, world coordinates are the same as local coordinates since static entities have no parent hierarchy.
 			 */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float >
+			Base::Math::CartesianFrame< float >
 			getWorldCoordinates () const noexcept override
 			{
 				return m_logicStateCoordinates;
@@ -451,10 +451,10 @@ namespace EmEn::Scenes
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -462,7 +462,7 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -517,7 +517,7 @@ namespace EmEn::Scenes
 			 * @note Retrieves the coordinates from the specified render state buffer for rendering.
 			 */
 			[[nodiscard]]
-			const Libs::Math::CartesianFrame< float > &
+			const Base::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
 			{
 				return m_renderStateCoordinates[readStateIndex];
@@ -551,12 +551,12 @@ namespace EmEn::Scenes
 			 * Computes the 4x4 model matrix that transforms from local object space to world space.
 			 * This matrix includes position, rotation, and scaling transformations.
 			 *
-			 * @return Libs::Math::Matrix< 4, float > The 4x4 model transformation matrix.
+			 * @return Base::Math::Matrix< 4, float > The 4x4 model transformation matrix.
 			 *
-			 * @see Libs::Math::CartesianFrame::getModelMatrix()
+			 * @see Base::Math::CartesianFrame::getModelMatrix()
 			 */
 			[[nodiscard]]
-			Libs::Math::Matrix< 4, float >
+			Base::Math::Matrix< 4, float >
 			getModelMatrix () const noexcept
 			{
 				return m_logicStateCoordinates.getModelMatrix();
@@ -569,12 +569,12 @@ namespace EmEn::Scenes
 			 * For StaticEntity, this is derived directly from the local coordinates since there
 			 * is no parent hierarchy.
 			 *
-			 * @return Libs::Math::Matrix< 4, float > The 4x4 view transformation matrix.
+			 * @return Base::Math::Matrix< 4, float > The 4x4 view transformation matrix.
 			 *
-			 * @see Libs::Math::CartesianFrame::getViewMatrix()
+			 * @see Base::Math::CartesianFrame::getViewMatrix()
 			 */
 			[[nodiscard]]
-			Libs::Math::Matrix< 4, float >
+			Base::Math::Matrix< 4, float >
 			getViewMatrix () const noexcept
 			{
 				return m_logicStateCoordinates.getViewMatrix();
@@ -587,12 +587,12 @@ namespace EmEn::Scenes
 			 * and other objects that should appear infinitely far away. The rotation is preserved
 			 * while the position component is zeroed.
 			 *
-			 * @return Libs::Math::Matrix< 4, float > The 4x4 infinity view transformation matrix.
+			 * @return Base::Math::Matrix< 4, float > The 4x4 infinity view transformation matrix.
 			 *
-			 * @see Libs::Math::CartesianFrame::getInfinityViewMatrix()
+			 * @see Base::Math::CartesianFrame::getInfinityViewMatrix()
 			 */
 			[[nodiscard]]
-			Libs::Math::Matrix< 4, float >
+			Base::Math::Matrix< 4, float >
 			getInfinityViewMatrix () const noexcept
 			{
 				return m_logicStateCoordinates.getInfinityViewMatrix();
@@ -615,7 +615,7 @@ namespace EmEn::Scenes
 			}
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
 			/** @copydoc EmEn::Scenes::AbstractEntity::onProcessLogics() */
 			bool onProcessLogics (const Scene & scene) noexcept override;
@@ -630,7 +630,7 @@ namespace EmEn::Scenes
 			 * This is the authoritative state modified by transformation methods and used
 			 * during logic updates.
 			 */
-			Libs::Math::CartesianFrame< float > m_logicStateCoordinates;
+			Base::Math::CartesianFrame< float > m_logicStateCoordinates;
 
 			/**
 			 * @brief Double-buffered coordinate frames for thread-safe rendering.
@@ -639,6 +639,6 @@ namespace EmEn::Scenes
 			 * rendering system to operate independently without locking. The logic system
 			 * publishes its state to one buffer while the renderer reads from the other.
 			 */
-			std::array< Libs::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
+			std::array< Base::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
 	};
 }

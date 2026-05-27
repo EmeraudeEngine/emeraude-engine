@@ -131,7 +131,7 @@ ctest -R Physics
 > - `CollisionDetection.cpp:detectCollisionMovableToMovable()` - Negates normal
 > - `CollisionDetection.cpp:detectCollisionMovableToStatic()` - Negates normal
 > - `Scene.physics.cpp:accumulateStaticEntityCorrections()` - Negates for bounce
-> - `Libs/Math/Space3D/Collisions/SamePrimitive.hpp:isColliding(AACuboid, AACuboid)` - MTV pushes A out of B
+> - `Base/Math/Space3D/Collisions/SamePrimitive.hpp:isColliding(AACuboid, AACuboid)` - MTV pushes A out of B
 
 ## Critical: AABB World Transform with OrientedCuboid
 
@@ -144,7 +144,7 @@ ctest -R Physics
 >
 > **Code references:**
 > - `AABBCollisionModel.hpp:getAABB()` - Uses `OrientedCuboid` for full transform
-> - `Libs/Math/OrientedCuboid.hpp:getAxisAlignedBox()` - Rebuilds AABB from transformed corners
+> - `Base/Math/OrientedCuboid.hpp:getAxisAlignedBox()` - Rebuilds AABB from transformed corners
 > - `Scenes/AbstractEntity.debug.cpp` - Visual debug uses inverse entity matrix to show world AABB
 
 ## Development Patterns
@@ -307,7 +307,7 @@ See: `AbstractEntity.hpp:IsCollisionDisabled`, `AbstractEntity.hpp:IsSimulationP
 
 ## Available Collision Primitives
 
-The physics system uses collision primitives from `Libs/Math/Space3D`:
+The physics system uses collision primitives from `Base/Math/Space3D`:
 
 | Primitive | Description | Use Case |
 |-----------|-------------|----------|

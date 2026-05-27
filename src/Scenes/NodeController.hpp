@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 
 /* Local inclusions for usages. */
 #include "Input/GamepadController.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
+#include "Math/CartesianFrame.hpp"
 #include "Node.hpp"
 
 namespace EmEn::Scenes
@@ -173,7 +173,7 @@ namespace EmEn::Scenes
 			static constexpr auto DefaultRotationAngleStep{1.0F};
 
 			std::shared_ptr< Node > m_controlledNode;
-			Libs::Math::TransformSpace m_transformSpace{Libs::Math::TransformSpace::Parent};
+			Base::Math::TransformSpace m_transformSpace{Base::Math::TransformSpace::Parent};
 			Input::GamepadController m_controller;
 			float m_moveStep{DefaultMoveStep};
 			float m_rotationAngleStep{DefaultRotationAngleStep};

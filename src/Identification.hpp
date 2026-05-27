@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,8 +35,8 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Libs/String.hpp"
-#include "Libs/Version.hpp"
+#include "String.hpp"
+#include "Version.hpp"
 
 namespace EmEn
 {
@@ -52,7 +52,7 @@ namespace EmEn
 
 			static constexpr auto LibraryAuthorName{"\"LondNoir\" <londnoir@gmail.com>"};
 			static constexpr auto LibraryName{EngineName};
-			static constexpr auto LibraryVersion{Libs::Version(VersionMajor, VersionMinor, VersionPatch)};
+			static constexpr auto LibraryVersion{Base::Version(VersionMajor, VersionMinor, VersionPatch)};
 			static constexpr auto LibraryPlatform{PlatformTargeted};
 			static constexpr auto LibraryCompilationDate{__DATE__};
 
@@ -63,7 +63,7 @@ namespace EmEn
 			 * @param organization The name of the application organization.
 			 * @param domain The domain of the application.
 			 */
-			Identification (const char * name, const Libs::Version & version, const char * organization, const char * domain) noexcept
+			Identification (const char * name, const Base::Version & version, const char * organization, const char * domain) noexcept
 				: m_applicationName{name},
 				m_applicationVersion{version},
 				m_applicationOrganization{organization},
@@ -91,14 +91,14 @@ namespace EmEn
 				{
 					std::stringstream stream;
 
-					for ( const auto & chunk : std::ranges::reverse_view(Libs::String::explode(m_applicationDomain, '.')) )
+					for ( const auto & chunk : std::ranges::reverse_view(Base::String::explode(m_applicationDomain, '.')) )
 					{
 						stream << chunk << '.';
 					}
 
 					stream << m_applicationName;
 
-					m_applicationReverseId = Libs::String::toLower(stream.str());
+					m_applicationReverseId = Base::String::toLower(stream.str());
 				}
 			}
 
@@ -115,10 +115,10 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the application version.
-			 * @return const Libs::Version &
+			 * @return const Base::Version &
 			 */
 			[[nodiscard]]
-			const Libs::Version &
+			const Base::Version &
 			applicationVersion () const noexcept
 			{
 				return m_applicationVersion;
@@ -182,7 +182,7 @@ namespace EmEn
 		private:
 
 			const std::string m_applicationName;
-			const Libs::Version m_applicationVersion;
+			const Base::Version m_applicationVersion;
 			const std::string m_applicationOrganization;
 			const std::string m_applicationDomain;
 			std::string m_engineId;

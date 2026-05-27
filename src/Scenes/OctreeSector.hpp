@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -42,13 +42,13 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/AACuboid.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
-#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
-#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
-#include "Libs/Math/Space3D/Collisions/SphereCuboid.hpp"
+#include "Math/Space3D/Collisions/PointCuboid.hpp"
+#include "Math/Space3D/Collisions/PointSphere.hpp"
+#include "Math/Space3D/Collisions/SamePrimitive.hpp"
+#include "Math/Space3D/Collisions/SphereCuboid.hpp"
 #include "LocatableInterface.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 #include "Tracer.hpp"
@@ -83,7 +83,7 @@ namespace EmEn::Scenes
 	 *
 	 * @tparam element_t The type of elements stored in the octree. Must inherit from both
 	 *				   EmEn::Scenes::LocatableInterface (provides position/volume) and
-	 *				   EmEn::Libs::NameableTrait (provides name for debugging).
+	 *				   EmEn::Base::NameableTrait (provides name for debugging).
 	 * @tparam enable_volume When true, uses element's bounding volume (AABB/Sphere) for
 	 *					   insertion, allowing elements to span multiple sectors (physics mode).
 	 *					   When false, uses only the element's position point (rendering mode).
@@ -133,13 +133,13 @@ namespace EmEn::Scenes
 	 *	   Volume-based case complexity makes this optimization questionable for physics octree.
 	 *
 	 * @see EmEn::Scenes::LocatableInterface
-	 * @see EmEn::Libs::NameableTrait
-	 * @see EmEn::Libs::Math::Space3D::AACuboid
+	 * @see EmEn::Base::NameableTrait
+	 * @see EmEn::Base::Math::Space3D::AACuboid
 	 * @version 0.8.38
 	 */
 	template< typename element_t, bool enable_volume >
-	requires (std::is_base_of_v< Libs::NameableTrait, element_t >, std::is_base_of_v< LocatableInterface, element_t >)
-	class OctreeSector final : public std::enable_shared_from_this< OctreeSector< element_t, enable_volume > >, public Libs::Math::Space3D::AACuboid< float >
+	requires (std::is_base_of_v< Base::NameableTrait, element_t >, std::is_base_of_v< LocatableInterface, element_t >)
+	class OctreeSector final : public std::enable_shared_from_this< OctreeSector< element_t, enable_volume > >, public Base::Math::Space3D::AACuboid< float >
 	{
 		public:
 
@@ -199,7 +199,7 @@ namespace EmEn::Scenes
 			 * @note Auto-collapse is incompatible with reserve() - pre-allocated sectors would be
 			 *	   immediately removed if they're empty.
 			 */
-			OctreeSector (const Libs::Math::Vector< 3, float > & maximum, const Libs::Math::Vector< 3, float > & minimum, size_t maxElementPerSector = DefaultSectorElementLimit, bool enableAutoCollapse = false) noexcept
+			OctreeSector (const Base::Math::Vector< 3, float > & maximum, const Base::Math::Vector< 3, float > & minimum, size_t maxElementPerSector = DefaultSectorElementLimit, bool enableAutoCollapse = false) noexcept
 				: AACuboid{maximum, minimum},
 				m_maxElementPerSector{std::max< size_t >(DefaultSectorElementLimit, maxElementPerSector)},
 				m_autoCollapseEnabled{enableAutoCollapse}
@@ -223,7 +223,7 @@ namespace EmEn::Scenes
 			 * @note This constructor is typically called internally by expand().
 			 * @see expand()
 			 */
-			OctreeSector (const Libs::Math::Vector< 3, float > & maximum, const Libs::Math::Vector< 3, float > & minimum, const std::shared_ptr< OctreeSector > & parentSector, size_t slot) noexcept
+			OctreeSector (const Base::Math::Vector< 3, float > & maximum, const Base::Math::Vector< 3, float > & minimum, const std::shared_ptr< OctreeSector > & parentSector, size_t slot) noexcept
 				: AACuboid{maximum, minimum},
 				m_parentSector{parentSector},
 				m_slot{slot},
@@ -728,16 +728,16 @@ namespace EmEn::Scenes
 			 * @return True if the primitive intersects this sector's bounds, false otherwise.
 			 *
 			 * @note This method delegates to the collision detection functions in
-			 *	   EmEn::Libs::Math::Space3D::isColliding().
+			 *	   EmEn::Base::Math::Space3D::isColliding().
 			 *
-			 * @see EmEn::Libs::Math::Space3D::isColliding()
+			 * @see EmEn::Base::Math::Space3D::isColliding()
 			 */
 			template< typename primitive_t >
 			[[nodiscard]]
 			bool
 			isCollidingWith (const primitive_t & primitive) const noexcept
 			{
-				return Libs::Math::Space3D::isColliding(*this, primitive);
+				return Base::Math::Space3D::isColliding(*this, primitive);
 			}
 
 			/**
@@ -917,7 +917,7 @@ namespace EmEn::Scenes
 					/* NOTE: Does the element moved out the last registered subsector boundaries? */
 					const auto * lastSubSector = this->getDeepestSubSector(element);
 
-					if ( Libs::Math::Space3D::isColliding(*lastSubSector, position) )
+					if ( Base::Math::Space3D::isColliding(*lastSubSector, position) )
 					{
 						return true;
 					}
@@ -1336,7 +1336,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			const OctreeSector *
-			getDeepestSubSectorForPosition (const Libs::Math::Vector< 3, float > & position) const noexcept
+			getDeepestSubSectorForPosition (const Base::Math::Vector< 3, float > & position) const noexcept
 			{
 				/* NOTE: If there is no subsector below this one. */
 				if ( !m_isExpanded )
@@ -1694,7 +1694,7 @@ namespace EmEn::Scenes
 			void
 			expand () noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				const auto size = this->width() * 0.5F;
 				const auto max = this->maximum();
@@ -1830,9 +1830,9 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			static size_t
-			computeSlotForPosition (const Libs::Math::Vector< 3, float > & position, const Libs::Math::Vector< 3, float > & center) noexcept
+			computeSlotForPosition (const Base::Math::Vector< 3, float > & position, const Base::Math::Vector< 3, float > & center) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				size_t slot = 0;
 

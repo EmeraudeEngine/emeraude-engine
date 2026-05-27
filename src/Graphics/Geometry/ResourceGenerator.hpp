@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,9 +35,9 @@
 /* Local inclusions for usages. */
 #include "GenerationParameters.hpp"
 #include "IndexedVertexResource.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Libs/VertexFactory/CapUVMapping.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "Math/Vector.hpp"
+#include "VertexFactory/CapUVMapping.hpp"
+#include "VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
 #include "VertexGridResource.hpp"
 #include "VertexResource.hpp"
@@ -97,7 +97,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > shape (const Libs::VertexFactory::Shape< float > & shape, const std::string & resourceName) const noexcept;
+			std::shared_ptr< IndexedVertexResource > shape (const Base::VertexFactory::Shape< float > & shape, const std::string & resourceName) const noexcept;
 
 			/**
 			 * @brief Generates a triangle geometry.
@@ -150,9 +150,9 @@ namespace EmEn::Graphics::Geometry
 			 */
 			[[nodiscard]]
 			std::shared_ptr< IndexedVertexResource >
-			cuboid (const Libs::Math::Vector< 3, float > & size, const std::string & resourceName = {}) const noexcept
+			cuboid (const Base::Math::Vector< 3, float > & size, const std::string & resourceName = {}) const noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				return this->cuboid(size[X], size[Y], size[Z], resourceName);
 			}
@@ -165,7 +165,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > cuboid (const Libs::Math::Vector< 3, float > & max, const Libs::Math::Vector< 3, float > & min, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > cuboid (const Base::Math::Vector< 3, float > & max, const Base::Math::Vector< 3, float > & min, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a hollowed cuboid geometry.
@@ -176,7 +176,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > hollowedCube (float size, float borderSize, Libs::VertexFactory::CapUVMapping uvMapping = Libs::VertexFactory::CapUVMapping::PerSegment, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > hollowedCube (float size, float borderSize, Base::VertexFactory::CapUVMapping uvMapping = Base::VertexFactory::CapUVMapping::PerSegment, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a cube geometry.
@@ -223,7 +223,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > cylinder (float baseRadius, float topRadius, float length, uint32_t slices = 8, uint32_t stacks = 1, Libs::VertexFactory::CapUVMapping capMapping = {}, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > cylinder (float baseRadius, float topRadius, float length, uint32_t slices = 8, uint32_t stacks = 1, Base::VertexFactory::CapUVMapping capMapping = {}, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a cone geometry.
@@ -237,7 +237,7 @@ namespace EmEn::Graphics::Geometry
 			 */
 			[[nodiscard]]
 			std::shared_ptr< IndexedVertexResource >
-			cone (float radius, float length, uint32_t slices = 8, uint32_t stacks = 1, Libs::VertexFactory::CapUVMapping capMapping = {}, const std::string & resourceName = {}) const noexcept
+			cone (float radius, float length, uint32_t slices = 8, uint32_t stacks = 1, Base::VertexFactory::CapUVMapping capMapping = {}, const std::string & resourceName = {}) const noexcept
 			{
 				return this->cylinder(radius, 0, length, slices, stacks, capMapping, resourceName);
 			}
@@ -253,7 +253,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > disk (float outerRadius, float innerRadius, uint32_t slices = 8, uint32_t stacks = 1, Libs::VertexFactory::CapUVMapping uvMapping = Libs::VertexFactory::CapUVMapping::Planar, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > disk (float outerRadius, float innerRadius, uint32_t slices = 8, uint32_t stacks = 1, Base::VertexFactory::CapUVMapping uvMapping = Base::VertexFactory::CapUVMapping::Planar, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a torus geometry.
@@ -359,7 +359,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > tube (float outerRadius, float innerRadius, float length, uint32_t slices = 16, uint32_t stacks = 1, Libs::VertexFactory::CapUVMapping capMapping = {}, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > tube (float outerRadius, float innerRadius, float length, uint32_t slices = 16, uint32_t stacks = 1, Base::VertexFactory::CapUVMapping capMapping = {}, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a brilliant-cut gem geometry (diamond approximation).

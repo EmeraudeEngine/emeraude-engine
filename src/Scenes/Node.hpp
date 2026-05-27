@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -41,7 +41,7 @@
 #include "Animations/AnimatableInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Variant.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Scenes
 {
@@ -203,7 +203,7 @@ namespace EmEn::Scenes
 			 * @post The node is added to the parent's observer list.
 			 * @see createChild()
 			 */
-			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
+			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Base::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{parent->parentScene(), std::move(name), sceneTimeMS},
 				m_parent{parent},
 				m_logicStateCoordinates{coordinates}
@@ -257,145 +257,145 @@ namespace EmEn::Scenes
 			~Node () noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void setPosition (const Libs::Math::Vector< 3, float > & position, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void setPosition (const Base::Math::Vector< 3, float > & position, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void setXPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void setXPosition (float position, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void setYPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void setYPosition (float position, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void setZPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void setZPosition (float position, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::move(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::move(const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void move (const Libs::Math::Vector< 3, float > & distance, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void move (const Base::Math::Vector< 3, float > & distance, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void moveX (float distance, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void moveX (float distance, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void moveY (float distance, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void moveY (float distance, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
 			 */
-			void moveZ (float distance, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void moveZ (float distance, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 */
-			void rotate (float radian, const Libs::Math::Vector< 3, float > & axis, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void rotate (float radian, const Base::Math::Vector< 3, float > & axis, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 */
-			void pitch (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void pitch (float radian, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 */
-			void yaw (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void yaw (float radian, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::roll(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 */
-			void roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void roll (float radian, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::setScalingFactor() */
-			void setScalingFactor (const Libs::Math::Vector< 3, float > & factor) noexcept override;
+			void setScalingFactor (const Base::Math::Vector< 3, float > & factor) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Base::Math::Vector< 3, float > &, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
 			 */
-			void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scale (const Base::Math::Vector< 3, float > & factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scale(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scale(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
 			 */
-			void scale (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scale (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
 			 */
-			void scaleX (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scaleX (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
 			 */
-			void scaleY (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scaleY (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Libs::Math::TransformSpace)
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Base::Math::TransformSpace)
 			 * @note Does nothing if called on root node.
 			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
 			 */
-			void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
+			void scaleZ (float factor, Base::Math::TransformSpace transformSpace) noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Libs::Math::Vector< 3, float > &, bool)
+			 * @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Base::Math::Vector< 3, float > &, bool)
 			 * @post Calls onLocationDataUpdate() to propagate changes to children and components.
 			 */
 			void
-			lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
+			lookAt (const Base::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
 			{
 				m_logicStateCoordinates.lookAt(target, flipZAxis);
 
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Libs::Math::CartesianFrame< float > &) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Base::Math::CartesianFrame< float > &) */
 			void
-			setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept override
+			setLocalCoordinates (const Base::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
 				m_logicStateCoordinates = coordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */
 			[[nodiscard]]
-			const Libs::Math::CartesianFrame< float > &
+			const Base::Math::CartesianFrame< float > &
 			localCoordinates () const noexcept override
 			{
 				return m_logicStateCoordinates;
@@ -403,7 +403,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float > &
+			Base::Math::CartesianFrame< float > &
 			localCoordinates () noexcept override
 			{
 				return m_logicStateCoordinates;
@@ -415,7 +415,7 @@ namespace EmEn::Scenes
 			 * @note For root node or direct children of root, returns local coordinates directly.
 			 */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept override;
+			Base::Math::CartesianFrame< float > getWorldCoordinates () const noexcept override;
 
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const
@@ -438,10 +438,10 @@ namespace EmEn::Scenes
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const noexcept */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const noexcept */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -449,7 +449,7 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const noexcept */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const noexcept */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -487,7 +487,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const noexcept */
 			[[nodiscard]]
-			const Libs::Math::CartesianFrame< float > &
+			const Base::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
 			{
 				return m_renderStateCoordinates[readStateIndex];
@@ -520,14 +520,14 @@ namespace EmEn::Scenes
 			 * @note Accumulates velocities from this node and all parent nodes up to root.
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getWorldVelocity () const noexcept override;
+			Base::Math::Vector< 3, float > getWorldVelocity () const noexcept override;
 
 			/**
 			 * @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const noexcept
 			 * @return World origin if called on root node.
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept override;
+			Base::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept override;
 
 			/**
 			 * @copydoc EmEn::Physics::MovableTrait::getBodyPhysicalProperties() const noexcept
@@ -687,7 +687,7 @@ namespace EmEn::Scenes
 			 * @see destroyChild(), findChild()
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Node > createChild (const std::string & name, const Libs::Math::CartesianFrame< float > & coordinates, uint32_t sceneTimeMS = 0) noexcept;
+			std::shared_ptr< Node > createChild (const std::string & name, const Base::Math::CartesianFrame< float > & coordinates, uint32_t sceneTimeMS = 0) noexcept;
 
 			/**
 			 * @brief Creates a child node at the origin with default timestamp.
@@ -697,13 +697,13 @@ namespace EmEn::Scenes
 			 *
 			 * @param name Unique name for the child.
 			 * @return Shared pointer to created node, or nullptr if name is invalid or already exists.
-			 * @see createChild(const std::string&, const Libs::Math::CartesianFrame<float>&, uint32_t)
+			 * @see createChild(const std::string&, const Base::Math::CartesianFrame<float>&, uint32_t)
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node >
 			createChild (const std::string & name) noexcept
 			{
-				return this->createChild(name, Libs::Math::CartesianFrame(), 0);
+				return this->createChild(name, Base::Math::CartesianFrame(), 0);
 			}
 
 			/**
@@ -834,14 +834,14 @@ namespace EmEn::Scenes
 					return 0.0F;
 				}
 
-				return Libs::Math::Vector< 3, float >::distance(nodeA.getWorldCoordinates().position(), nodeB.getWorldCoordinates().position());
+				return Base::Math::Vector< 3, float >::distance(nodeA.getWorldCoordinates().position(), nodeB.getWorldCoordinates().position());
 			}
 
 		private:
 
 			/** @copydoc EmEn::Physics::MovableTrait::getWorldPosition() */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			getWorldPosition () const noexcept override
 			{
 				return this->getWorldCoordinates().position();
@@ -853,11 +853,11 @@ namespace EmEn::Scenes
 			 * @note If simulation was paused and movement is below threshold, stays paused.
 			 */
 			void
-			moveFromPhysics (const Libs::Math::Vector< 3, float > & positionDelta) noexcept override
+			moveFromPhysics (const Base::Math::Vector< 3, float > & positionDelta) noexcept override
 			{
 				const bool wasSimulationPaused = this->isSimulationPaused();
 
-				this->move(positionDelta, Libs::Math::TransformSpace::World);
+				this->move(positionDelta, Base::Math::TransformSpace::World);
 
 				/* If simulation was paused and movement is not significant
 				 * and the entity is not spinning, stay paused. */
@@ -873,9 +873,9 @@ namespace EmEn::Scenes
 			 * @note Converts angle from degrees to radians and uses local space.
 			 */
 			void
-			rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept override
+			rotateFromPhysics (float radianAngle, const Base::Math::Vector< 3, float > & worldDirection) noexcept override
 			{
-				this->rotate(radianAngle, worldDirection, Libs::Math::TransformSpace::Local);
+				this->rotate(radianAngle, worldDirection, Base::Math::TransformSpace::Local);
 			}
 
 			/**
@@ -888,7 +888,7 @@ namespace EmEn::Scenes
 			 * @copydoc EmEn::Animations::AnimatableInterface::playAnimation()
 			 * @note Supports all AnimationID values for transforming node coordinates.
 			 */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::onLocationDataUpdate()
@@ -913,8 +913,8 @@ namespace EmEn::Scenes
 
 			std::weak_ptr< Node > m_parent;
 			std::map< std::string, std::shared_ptr< Node >, std::less<> > m_children;
-			Libs::Math::CartesianFrame< float > m_logicStateCoordinates;
-			std::array< Libs::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
+			Base::Math::CartesianFrame< float > m_logicStateCoordinates;
+			std::array< Base::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
 			uint64_t m_lifetime{0};
 	};
 }

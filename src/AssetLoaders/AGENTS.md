@@ -10,7 +10,7 @@ Format-agnostic namespace for loading multi-resource asset files (glTF, FBX, etc
 
 ### Design Philosophy
 
-AssetLoaders sits between `Libs/` (raw data) and `Scenes/` (scene graph). Each loader:
+AssetLoaders sits between `Base/` (raw data) and `Scenes/` (scene graph). Each loader:
 1. Parses a composite file format (glTF, FBX, USDZ...)
 2. Creates engine resources in containers (images, textures, materials, geometry, meshes, skeletons, clips)
 3. Attaches skeletal data to renderables automatically via `SkeletalDataTrait`
@@ -18,7 +18,7 @@ AssetLoaders sits between `Libs/` (raw data) and `Scenes/` (scene graph). Each l
 
 ### Layer Rules
 
-- **CAN depend on:** `Resources/`, `Graphics/`, `Animations/`, `Libs/`
+- **CAN depend on:** `Resources/`, `Graphics/`, `Animations/`, `Base/`
 - **CANNOT depend on:** `Scenes/`, `Physics/`, `Audio/`, `Input/`
 - **No Scene types:** `AssetData` uses `NodeDescriptor` (pure data), never `Node`, `StaticEntity`, or `Component::Visual`
 

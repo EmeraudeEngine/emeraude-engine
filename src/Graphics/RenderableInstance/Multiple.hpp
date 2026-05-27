@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,8 +37,8 @@
 #include "Graphics/Renderable/Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Matrix.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
@@ -62,7 +62,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param instanceLocations A reference to a vector of coordinates. The max location count will be extracted from size().
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
-			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< Libs::Math::CartesianFrame< float > > & instanceLocations, uint32_t flagBits = 0) noexcept;
+			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< Base::Math::CartesianFrame< float > > & instanceLocations, uint32_t flagBits = 0) noexcept;
 
 			/**
 			 * @brief Constructs a renderable instance.
@@ -120,7 +120,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateLocalData (const Libs::Math::CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept;
+			bool updateLocalData (const Base::Math::CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept;
 
 			/**
 			 * @brief Updates instance locations from a batch.
@@ -129,7 +129,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateLocalData (const std::vector< Libs::Math::CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset = 0) noexcept;
+			bool updateLocalData (const std::vector< Base::Math::CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset = 0) noexcept;
 
 			/**
 			 * @brief Copies local data to video memory.
@@ -169,7 +169,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * Sprites need both V (for orientation) and VP (for final transform).
 			 * The VBO contains position + scale, not full matrices.
 			 */
-			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/**
 			 * @brief Push constant strategy for Multiple (scene rendering).
@@ -192,7 +192,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * - **Billboard**: V needed to compute camera-facing orientation
 			 * - **Simple**: Just VP, shader computes final position as VP * M * vertex
 			 */
-			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]
@@ -226,7 +226,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param strict Ensure the two vectors are the same size. Default no.
 			 * @return bool
 			 */
-			static bool coordinatesToModelMatrices (const std::vector< Libs::Math::CartesianFrame< float > > & coordinates, std::vector< Libs::Math::Matrix< 4, float > > & modelMatrices, bool strict = false) noexcept;
+			static bool coordinatesToModelMatrices (const std::vector< Base::Math::CartesianFrame< float > > & coordinates, std::vector< Base::Math::Matrix< 4, float > > & modelMatrices, bool strict = false) noexcept;
 
 			/* Position vector (vec3 aligned to a vec4) + scale vector (vec3 aligned to a vec4) */
 			//static constexpr uint32_t SpriteVBOElementCount = 4UL + 4UL;

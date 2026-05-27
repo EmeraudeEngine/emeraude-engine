@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -115,10 +115,10 @@ namespace EmEn::Graphics::Material
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -126,7 +126,7 @@ namespace EmEn::Graphics::Material
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -157,7 +157,7 @@ namespace EmEn::Graphics::Material
 			 * @param blendingMode The blending mode. Default None.
 			 * @return bool
 			 */
-			bool load (const Libs::PixelFactory::Color< float > & color, const Libs::PixelFactory::Color< float > & specularColor, float shininess = 32.0F, float opacity = 1.0F, BlendingMode blendingMode = BlendingMode::None) noexcept;
+			bool load (const Base::PixelFactory::Color< float > & color, const Base::PixelFactory::Color< float > & specularColor, float shininess = 32.0F, float opacity = 1.0F, BlendingMode blendingMode = BlendingMode::None) noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -301,7 +301,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets a texture resource as material appearance.
@@ -325,7 +325,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setSpecularComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setSpecularComponent (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets a color for the specular component.
@@ -334,7 +334,7 @@ namespace EmEn::Graphics::Material
 			 * @param shininess The shininess value.
 			 * @return bool
 			 */
-			bool setSpecularComponent (const Libs::PixelFactory::Color< float > & color, float shininess) noexcept;
+			bool setSpecularComponent (const Base::PixelFactory::Color< float > & color, float shininess) noexcept;
 
 			/**
 			 * @brief Sets the global material opacity value.
@@ -366,7 +366,7 @@ namespace EmEn::Graphics::Material
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float >
+			Base::PixelFactory::Color< float >
 			diffuseColor () noexcept
 			{
 				return {
@@ -383,7 +383,7 @@ namespace EmEn::Graphics::Material
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float >
+			Base::PixelFactory::Color< float >
 			specularColor () noexcept
 			{
 				return {
@@ -486,8 +486,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto AutoIlluminationOffset{10UL};
 
 			/* Default values. */
-			static constexpr auto DefaultDiffuseColor{Libs::PixelFactory::Grey};
-			static constexpr auto DefaultSpecularColor{Libs::PixelFactory::White};
+			static constexpr auto DefaultDiffuseColor{Base::PixelFactory::Grey};
+			static constexpr auto DefaultSpecularColor{Base::PixelFactory::White};
 			static constexpr auto DefaultShininess{200.0F};
 			static constexpr auto DefaultOpacity{1.0F};
 			static constexpr auto DefaultAutoIllumination{0.0F};

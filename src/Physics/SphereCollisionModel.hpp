@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 #include "CollisionModelInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Space3D/Sphere.hpp"
+#include "Math/Space3D/Sphere.hpp"
 
 namespace EmEn::Physics
 {
@@ -82,26 +82,26 @@ namespace EmEn::Physics
 
 			/** @copydoc CollisionModelInterface::isCollidingWith() */
 			[[nodiscard]]
-			CollisionDetectionResults isCollidingWith (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept override;
+			CollisionDetectionResults isCollidingWith (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept override;
 
 			/** @copydoc CollisionModelInterface::getAABB() */
 			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float >
+			Base::Math::Space3D::AACuboid< float >
 			getAABB () const noexcept override
 			{
-				return Libs::Math::Space3D::AACuboid< float >{m_radius};
+				return Base::Math::Space3D::AACuboid< float >{m_radius};
 			}
 
-			/** @copydoc CollisionModelInterface::getAABB(const Libs::Math::CartesianFrame< float > &) */
+			/** @copydoc CollisionModelInterface::getAABB(const Base::Math::CartesianFrame< float > &) */
 			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float >
-			getAABB (const Libs::Math::CartesianFrame< float > & worldFrame) const noexcept override
+			Base::Math::Space3D::AACuboid< float >
+			getAABB (const Base::Math::CartesianFrame< float > & worldFrame) const noexcept override
 			{
 				const auto & pos = worldFrame.position();
 
-				return Libs::Math::Space3D::AACuboid< float >{
-					Libs::Math::Space3D::Point< float >{pos[0] + m_radius, pos[1] + m_radius, pos[2] + m_radius},
-					Libs::Math::Space3D::Point< float >{pos[0] - m_radius, pos[1] - m_radius, pos[2] - m_radius}
+				return Base::Math::Space3D::AACuboid< float >{
+					Base::Math::Space3D::Point< float >{pos[0] + m_radius, pos[1] + m_radius, pos[2] + m_radius},
+					Base::Math::Space3D::Point< float >{pos[0] - m_radius, pos[1] - m_radius, pos[2] - m_radius}
 				};
 			}
 
@@ -127,13 +127,13 @@ namespace EmEn::Physics
 			/**
 			 * @brief Creates a world-space sphere from the given frame.
 			 * @param worldFrame The world frame providing position.
-			 * @return Libs::Math::Space3D::Sphere< float >
+			 * @return Base::Math::Space3D::Sphere< float >
 			 */
 			[[nodiscard]]
-			Libs::Math::Space3D::Sphere< float >
-			toWorldSphere (const Libs::Math::CartesianFrame< float > & worldFrame) const noexcept
+			Base::Math::Space3D::Sphere< float >
+			toWorldSphere (const Base::Math::CartesianFrame< float > & worldFrame) const noexcept
 			{
-				return Libs::Math::Space3D::Sphere< float >{m_radius, worldFrame.position()};
+				return Base::Math::Space3D::Sphere< float >{m_radius, worldFrame.position()};
 			}
 
 			/**
@@ -144,7 +144,7 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithPoint (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithPoint (const Base::Math::CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/**
 			 * @brief Collision test: Sphere vs Sphere.
@@ -154,7 +154,7 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithSphere (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const SphereCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithSphere (const Base::Math::CartesianFrame< float > & thisWorldFrame, const SphereCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/**
 			 * @brief Collision test: Sphere vs AABB.
@@ -164,7 +164,7 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithAABB (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const AABBCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithAABB (const Base::Math::CartesianFrame< float > & thisWorldFrame, const AABBCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/**
 			 * @brief Collision test: Sphere vs Capsule.
@@ -174,11 +174,11 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults
 			 */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithCapsule (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const CapsuleCollisionModel & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			CollisionDetectionResults collideWithCapsule (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CapsuleCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
 
 			/** @copydoc CollisionModelInterface::overrideShapeParameters() */
 			void
-			overrideShapeParameters (const Libs::Math::Vector< 3, float > & dimensions, const Libs::Math::Vector< 3, float > & /*centerOffset*/) noexcept override
+			overrideShapeParameters (const Base::Math::Vector< 3, float > & dimensions, const Base::Math::Vector< 3, float > & /*centerOffset*/) noexcept override
 			{
 				m_radius = std::max({dimensions[0], dimensions[1], dimensions[2]}) * 0.5F;
 				m_parametersOverridden = true;
@@ -194,15 +194,15 @@ namespace EmEn::Physics
 
 			/** @copydoc CollisionModelInterface::mergeShapeParameters() */
 			void
-			mergeShapeParameters (const Libs::Math::Vector< 3, float > & dimensions, const Libs::Math::Vector< 3, float > & /*centerOffset*/) noexcept override
+			mergeShapeParameters (const Base::Math::Vector< 3, float > & dimensions, const Base::Math::Vector< 3, float > & /*centerOffset*/) noexcept override
 			{
 				const auto newRadius = std::max({dimensions[0], dimensions[1], dimensions[2]}) * 0.5F;
 				m_radius = std::max(m_radius, newRadius);
 			}
 
-			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Libs::Math::Space3D::AACuboid< float > &) */
+			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Base::Math::Space3D::AACuboid< float > &) */
 			void
-			mergeShapeParameters (const Libs::Math::Space3D::AACuboid< float > & aabb) noexcept override
+			mergeShapeParameters (const Base::Math::Space3D::AACuboid< float > & aabb) noexcept override
 			{
 				if ( aabb.isValid() )
 				{
@@ -211,9 +211,9 @@ namespace EmEn::Physics
 				}
 			}
 
-			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Libs::Math::Space3D::Sphere< float > &) */
+			/** @copydoc CollisionModelInterface::mergeShapeParameters(const Base::Math::Space3D::Sphere< float > &) */
 			void
-			mergeShapeParameters (const Libs::Math::Space3D::Sphere< float > & sphere) noexcept override
+			mergeShapeParameters (const Base::Math::Space3D::Sphere< float > & sphere) noexcept override
 			{
 				m_radius = std::max(m_radius, sphere.radius());
 			}

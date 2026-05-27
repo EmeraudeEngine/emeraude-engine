@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,12 +34,12 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderableInstance/Multiple.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Libs/Time/TimedEvent.hpp"
+#include "Time/TimedEvent.hpp"
 #include "Physics/Particle.hpp"
 
 namespace EmEn::Scenes::Component
@@ -48,9 +48,9 @@ namespace EmEn::Scenes::Component
 	 * @brief A class that build a particle generator with a mesh or sprite instance.
 	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
+	 * @extends EmEn::Base::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
-	class ParticlesEmitter final : public Abstract, public Libs::ObserverTrait
+	class ParticlesEmitter final : public Abstract, public Base::ObserverTrait
 	{
 		public:
 
@@ -115,7 +115,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void
-			move (const Libs::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
+			move (const Base::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
 			{
 				// FIXME: Check the particle coordinates
 			}
@@ -391,7 +391,7 @@ namespace EmEn::Scenes::Component
 			 * @return void
 			 */
 			void
-			setCustomPhysicsSimulationFunction (const std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Libs::Math::CartesianFrame< float > &, Physics::Particle &) > & function) noexcept
+			setCustomPhysicsSimulationFunction (const std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Base::Math::CartesianFrame< float > &, Physics::Particle &) > & function) noexcept
 			{
 				m_customPhysicsSimulationFullFunction = function;
 
@@ -431,9 +431,9 @@ namespace EmEn::Scenes::Component
 			void onWakeup () noexcept override { }
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
@@ -450,7 +450,7 @@ namespace EmEn::Scenes::Component
 					return m_minimumParticleLifetime;
 				}
 
-				return Libs::Utility::quickRandom(m_minimumParticleLifetime, m_maximumParticleLifetime);
+				return Base::Utility::quickRandom(m_minimumParticleLifetime, m_maximumParticleLifetime);
 			}
 
 			/**
@@ -466,7 +466,7 @@ namespace EmEn::Scenes::Component
 					return m_minimumParticleSize;
 				}
 
-				return Libs::Utility::quickRandom(m_minimumParticleSize, m_maximumParticleSize);
+				return Base::Utility::quickRandom(m_minimumParticleSize, m_maximumParticleSize);
 			}
 
 			/**
@@ -496,9 +496,9 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
 			Physics::BodyPhysicalProperties m_particlePhysicalProperties;
 			std::vector< Physics::Particle > m_particles;
-			std::unique_ptr< Libs::Time::TimedEvent< uint64_t, std::micro > > m_timedEvent;
+			std::unique_ptr< Base::Time::TimedEvent< uint64_t, std::micro > > m_timedEvent;
 			std::function< bool (Physics::Particle &) > m_customPhysicsSimulationSimpleFunction;
-			std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Libs::Math::CartesianFrame< float > &, Physics::Particle & particle) > m_customPhysicsSimulationFullFunction;
+			std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Base::Math::CartesianFrame< float > &, Physics::Particle & particle) > m_customPhysicsSimulationFullFunction;
 			uint32_t m_particleLimit;
 			uint32_t m_particleGeneratedPerCycle{1};
 			uint32_t m_minimumParticleLifetime{1};

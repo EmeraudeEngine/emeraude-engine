@@ -7,6 +7,29 @@
 **Platform**: Windows 11, Linux (Debian/Ubuntu), macOS.
 **Graphics API**: **Vulkan-only** — no D3D11, no D3D12, no Metal, no OpenGL. Single backend, mastered in full.
 
+## 1a. Foundation: emeraude-base
+
+The engine's foundation layer (math, image/audio/mesh factories, hashing, compression,
+threading, traits, I/O — formerly `src/Libs/`, `EmEn::Libs`) now lives in the **standalone
+[emeraude-base](https://github.com/EmeraudeEngine/emeraude-base) library** (`EmEn::Base`),
+pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirectory`).
+
+> [!IMPORTANT]
+> **This is a real split with independent lifecycles.** emeraude-base evolves on its own
+> (its own versioning and roadmap, new formats/capabilities); the engine **builds on a
+> pinned emeraude-base package** and consumes it — it does not drive its evolution.
+>
+> emeraude-base is also the **single source of truth for external dependencies**: it owns
+> every `Setup*.cmake` (even libs only the engine uses: ufbx, fastgltf, taglib, bc7enc,
+> cpu_features, hwloc, libvpx), the `ext-deps-generator` resolution (`EMERAUDE_EXT_LIBS_*`),
+> and the **project-wide compile policy** (`EMERAUDE_COMPILE_*`, `EMERAUDE_CXX_VERSION`,
+> `EMERAUDE_C_VERSION`). The engine inherits all of it via `emeraude::base` and adds
+> `EMERAUDE_BASE_CMAKE_DIR` to its module path.
+>
+> **Rule:** a bug or a missing feature in the foundation layer (math, factories, I/O,
+> threading, …) is fixed **in emeraude-base**, never worked around in the engine — the same
+> co-development discipline the engine applies to itself vs projet-alpha.
+
 ## 1b. Vision
 
 ### Production-Grade Real-Time Runtime
@@ -143,10 +166,9 @@ and the AI executes, measures, and iterates at industrial speed.
 | Category | System | Path | Context |
 |---|---|---|---|
 | **Framework** | Core / Tracer | [`src/AGENTS.md`](src/AGENTS.md) | App lifecycle, Logging. |
-| | Libs (Math/Utils) | [`src/Libs/AGENTS.md`](src/Libs/AGENTS.md) | Foundational types. |
-| | Libs/Animation | [`src/Libs/AGENTS.md`](src/Libs/AGENTS.md) | Skeletal data types (Joint, Skeleton, AnimationClip, Skin). |
+| | **Foundation** (`EmEn::Base`) | [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) | **Extracted to the standalone [emeraude-base](https://github.com/EmeraudeEngine/emeraude-base) library** — math, factories (Pixel/Wave/Vertex), traits, I/O, hashing, threading, skeletal-animation data types. Formerly `src/Libs/` (`EmEn::Libs`). |
 | | Platform | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) | OS implementations. |
-| | Testing | [`src/Testing/AGENTS.md`](src/Testing/AGENTS.md) | Unit tests. |
+| | Testing | [`dependencies/emeraude-base/src/Testing/AGENTS.md`](dependencies/emeraude-base/src/Testing/AGENTS.md) | Unit tests live in emeraude-base (`EmeraudeBaseUnitTests`). |
 | **Graphics** | **Graphics Layer** | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) | **Start Here**. High-level. |
 | | Vulkan Layer | [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) | Low-level abstraction. |
 | | Saphir (Shader) | [`src/Saphir/AGENTS.md`](src/Saphir/AGENTS.md) | Shader generation. |
@@ -156,7 +178,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | **Data** | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) | Async loading. |
 | | AssetLoaders | [`src/AssetLoaders/AGENTS.md`](src/AssetLoaders/AGENTS.md) | Composite format loaders (glTF, FBX stub). |
 | | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) | Scene graph. |
-| | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. Data types in `Libs/Animation/`, runtime eval here. |
+| | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. Skeletal data types in emeraude-base (`Base::Animation`), runtime eval here. |
 | **Tools/UI** | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) | UI & Debug. |
 | | Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) | Runtime control (TCP + in-game). |
 | | AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) | Virtual devices. |
@@ -359,9 +381,9 @@ All outbound references from this file, grouped by type.
 | System | Path |
 |--------|------|
 | Core / Tracer | [`src/AGENTS.md`](src/AGENTS.md) |
-| Libs (Math/Utils) | [`src/Libs/AGENTS.md`](src/Libs/AGENTS.md) |
+| Foundation (`EmEn::Base`, ex-Libs) | [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) |
 | Platform | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) |
-| Testing | [`src/Testing/AGENTS.md`](src/Testing/AGENTS.md) |
+| Testing | [`dependencies/emeraude-base/src/Testing/AGENTS.md`](dependencies/emeraude-base/src/Testing/AGENTS.md) |
 | Graphics Layer | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) |
 | Vulkan Layer | [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) |
 | Saphir (Shader) | [`src/Saphir/AGENTS.md`](src/Saphir/AGENTS.md) |

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "RenderPass.hpp"
 
 namespace EmEn::Vulkan
@@ -183,6 +183,6 @@ namespace EmEn::Vulkan
 			VkFramebuffer m_handle{VK_NULL_HANDLE};
 			VkFramebufferCreateInfo m_createInfo{};
 			std::shared_ptr< const RenderPass > m_renderPass;
-			Libs::StaticVector< VkImageView, 8 > m_attachments;
+			Base::StaticVector< VkImageView, 8 > m_attachments;
 	};
 }

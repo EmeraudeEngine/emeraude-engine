@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,11 +31,11 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Plane.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Plane.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
 
 namespace EmEn::Graphics
 {
@@ -60,7 +60,7 @@ namespace EmEn::Graphics
 			 * @brief Updates the frustum geometry when the camera moves.
 			 * @param viewProjectionMatrix
 			 */
-			void update (const Libs::Math::Matrix< 4, float > & viewProjectionMatrix) noexcept;
+			void update (const Base::Math::Matrix< 4, float > & viewProjectionMatrix) noexcept;
 
 			/**
 			 * @brief Checks a point against the Frustum.
@@ -68,7 +68,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isSeeing (const Libs::Math::Vector< 3, float > & point) const noexcept;
+			bool isSeeing (const Base::Math::Vector< 3, float > & point) const noexcept;
 
 			/**
 			 * @brief Checks a sphere against the Frustum.
@@ -76,7 +76,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isSeeing (const Libs::Math::Space3D::Sphere< float > & sphere) const noexcept;
+			bool isSeeing (const Base::Math::Space3D::Sphere< float > & sphere) const noexcept;
 
 			/**
 			 * @brief Checks an axis aligned bounding box against the Frustum.
@@ -84,7 +84,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isSeeing (const Libs::Math::Space3D::AACuboid< float > & aabb) const noexcept;
+			bool isSeeing (const Base::Math::Space3D::AACuboid< float > & aabb) const noexcept;
 
 		private:
 
@@ -96,7 +96,7 @@ namespace EmEn::Graphics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Frustum & obj);
 
-			std::array< Libs::Math::Plane< float >, 6 > m_planes{};
+			std::array< Base::Math::Plane< float >, 6 > m_planes{};
 	};
 
 	inline

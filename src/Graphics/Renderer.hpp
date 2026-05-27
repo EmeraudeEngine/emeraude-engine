@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,16 +39,16 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Libs/ObserverTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObserverTrait.hpp"
+#include "ObservableTrait.hpp"
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "BindlessTextureManager.hpp"
 #include "ExternalInput.hpp"
 #include "GrabPass.hpp"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/Time/Statistics/RealTime.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Time/Statistics/RealTime.hpp"
 #include "MDI/BatchBuilder.hpp"
 #include "PostProcessor.hpp"
 #include "Recorder.hpp"
@@ -212,10 +212,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns primary semaphores ready to use with vkQueueSubmit().
-			 * @return Libs::Storage< VkSemaphore, 16 > &
+			 * @return Base::Storage< VkSemaphore, 16 > &
 			 */
 			[[nodiscard]]
-			Libs::StaticVector< VkSemaphore, 16 > &
+			Base::StaticVector< VkSemaphore, 16 > &
 			primarySemaphores () noexcept
 			{
 				return m_primarySemaphores;
@@ -223,10 +223,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns secondary semaphores ready to use with vkQueueSubmit().
-			 * @return Libs::Storage< VkSemaphore, 16 > &
+			 * @return Base::Storage< VkSemaphore, 16 > &
 			 */
 			[[nodiscard]]
-			Libs::StaticVector< VkSemaphore, 16 > &
+			Base::StaticVector< VkSemaphore, 16 > &
 			secondarySemaphores () noexcept
 			{
 				return m_secondarySemaphores;
@@ -312,8 +312,8 @@ namespace EmEn::Graphics
 
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::unordered_map< const RenderTarget::Abstract *, std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
-			Libs::StaticVector< VkSemaphore, 16 > m_primarySemaphores;
-			Libs::StaticVector< VkSemaphore, 16 > m_secondarySemaphores;
+			Base::StaticVector< VkSemaphore, 16 > m_primarySemaphores;
+			Base::StaticVector< VkSemaphore, 16 > m_secondarySemaphores;
 			/* Synchronization. */
 			std::unique_ptr< Vulkan::Sync::Fence > m_inFlightFence;
 			std::unique_ptr< Vulkan::Sync::Semaphore > m_imageAvailableSemaphore;
@@ -325,8 +325,8 @@ namespace EmEn::Graphics
 	 * @brief The graphics renderer service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface The renderer is a service.
-	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes, for instance.
-	 * @extends EmEn::Libs::ObservableTrait The renderer can notify surface changes.
+	 * @extends EmEn::Base::ObserverTrait The renderer needs to observe handle changes, for instance.
+	 * @extends EmEn::Base::ObservableTrait The renderer can notify surface changes.
 	 * @extends EmEn::Console::ControllableTrait The console can control the renderer.
 	 * 
 	 * # Performance Optimizations (Cache Lookups)
@@ -352,7 +352,7 @@ namespace EmEn::Graphics
 	 * **Future consideration:** If dynamic pipeline creation is needed during runtime,
 	 * protect cache modifications with std::shared_mutex (read-write lock).
 	 */
-	class Renderer final : public ServiceInterface, public Libs::ObserverTrait, public Libs::ObservableTrait, public Console::ControllableTrait
+	class Renderer final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 
@@ -389,10 +389,10 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -400,7 +400,7 @@ namespace EmEn::Graphics
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -828,10 +828,10 @@ namespace EmEn::Graphics
 			void
 			setClearColor (data_t red, data_t green, data_t blue, data_t alpha = 1) noexcept requires (std::is_floating_point_v< data_t >)
 			{
-				m_clearColors[0].color.float32[0] = Libs::Math::clampToUnit(static_cast< float >(red));
-				m_clearColors[0].color.float32[1] = Libs::Math::clampToUnit(static_cast< float >(green));
-				m_clearColors[0].color.float32[2] = Libs::Math::clampToUnit(static_cast< float >(blue));
-				m_clearColors[0].color.float32[3] = Libs::Math::clampToUnit(static_cast< float >(alpha));
+				m_clearColors[0].color.float32[0] = Base::Math::clampToUnit(static_cast< float >(red));
+				m_clearColors[0].color.float32[1] = Base::Math::clampToUnit(static_cast< float >(green));
+				m_clearColors[0].color.float32[2] = Base::Math::clampToUnit(static_cast< float >(blue));
+				m_clearColors[0].color.float32[3] = Base::Math::clampToUnit(static_cast< float >(alpha));
 				m_swapChainClearColors[0] = m_clearColors[0];
 			}
 
@@ -841,7 +841,7 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void
-			setClearColor (const Libs::PixelFactory::Color< float > & clearColor) noexcept
+			setClearColor (const Base::PixelFactory::Color< float > & clearColor) noexcept
 			{
 				m_clearColors[0].color.float32[0] = clearColor.red();
 				m_clearColors[0].color.float32[1] = clearColor.green();
@@ -870,7 +870,7 @@ namespace EmEn::Graphics
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float >
+			Base::PixelFactory::Color< float >
 			getClearColor () const noexcept
 			{
 				return {
@@ -1001,8 +1001,8 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the double-buffer read state index for the current frame.
 			 * @note Set from Scene::preparedReadStateIndex() before post-processing.
-			 *       Use this in post-process effects (e.g. RTR) to read view matrices
-			 *       consistent with the depth buffer.
+			 *	   Use this in post-process effects (e.g. RTR) to read view matrices
+			 *	   consistent with the depth buffer.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -1049,8 +1049,8 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the RT descriptor set for ray query shaders.
 			 * @note Contains TLAS (binding 0), mesh metadata SSBO (binding 1),
-			 *       material data SSBO (binding 2), and light array SSBO (binding 3).
-			 *       Updated per-frame by updateRTDescriptorSet().
+			 *	   material data SSBO (binding 2), and light array SSBO (binding 3).
+			 *	   Updated per-frame by updateRTDescriptorSet().
 			 * @return const Vulkan::DescriptorSet *
 			 */
 			[[nodiscard]]
@@ -1118,7 +1118,7 @@ namespace EmEn::Graphics
 			 * @return const Libraries::Time::Statistics::RealTime< std::chrono::high_resolution_clock > &
 			 */
 			[[nodiscard]]
-			const Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > &
+			const Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > &
 			statistics () const noexcept
 			{
 				return m_statistics;
@@ -1289,7 +1289,7 @@ namespace EmEn::Graphics
 			 * @param postProcess Enable to swap channels from BGRA to RGBA. Default true.
 			 * @return bool
 			 */
-			bool captureFramebuffer (std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result, bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false, bool postProcess = true) noexcept;
+			bool captureFramebuffer (std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > & result, bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false, bool postProcess = true) noexcept;
 
 			/**
 			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
@@ -1379,9 +1379,9 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
@@ -1521,7 +1521,7 @@ namespace EmEn::Graphics
 			std::vector< std::shared_ptr< SceneRenderTarget > > m_retiredSceneTargets;
 			uint32_t m_retiredFrameCountdown{0};
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
-			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
+			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/** @brief Transparent hash for heterogeneous string_view lookup in unordered_map. */
@@ -1536,7 +1536,7 @@ namespace EmEn::Graphics
 				}
 			};
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler >, TransparentStringHash, std::equal_to<> > m_samplers;
-			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
+			Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 4 > m_clearColors{
 				VkClearValue{},
 				VkClearValue{},

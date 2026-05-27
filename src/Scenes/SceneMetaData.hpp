@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 /* Local inclusions for usages. */
 #include "GPUMeshMetaData.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 #include "RenderBatch.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
@@ -65,8 +65,8 @@ namespace EmEn::Scenes
 	/**
 	 * @brief Manages scene-level ray tracing metadata: TLAS, mesh metadata, and material data.
 	 * @note When RT is not available on the device, this class is inert (rebuild() is a no-op,
-	 *       TLAS() returns nullptr). This centralizes all RT resource management that was
-	 *       previously scattered in Scene.
+	 *	   TLAS() returns nullptr). This centralizes all RT resource management that was
+	 *	   previously scattered in Scene.
 	 */
 	class SceneMetaData final
 	{
@@ -87,8 +87,8 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Constructs the scene metadata manager.
 			 * @note Initializes the acceleration structure builder if the device supports ray tracing
-			 *       AND the user setting enables it. Registers the builder with Geometry::Interface
-			 *       for BLAS creation.
+			 *	   AND the user setting enables it. Registers the builder with Geometry::Interface
+			 *	   for BLAS creation.
 			 * @param device A reference to the Vulkan device smart pointer.
 			 * @param enableRayTracing Whether the user setting allows ray tracing.
 			 */
@@ -137,15 +137,15 @@ namespace EmEn::Scenes
 			 * @param bindlessTextureManager A pointer to the bindless texture manager for RT texture registration.
 			 * @param frameIndex The current frame-in-flight index for SSBO double-buffering.
 			 * @param sceneTimeMS The current scene time in milliseconds (Scene::lifetimeMS) —
-			 *        used to compute the current frame index for animated textures so the
-			 *        RT bindless slot stays in sync with the rasterizer's animation state.
+			 *		used to compute the current frame index for animated textures so the
+			 *		RT bindless slot stays in sync with the rasterizer's animation state.
 			 * @param cameraPosition The current camera world-space position. Used to compute
-			 *        face-camera billboard rotation for sprite renderables — the BLAS quad
-			 *        is a flat XY in object space, the rasterizer billboards it via vertex
-			 *        shader, and the RT side needs the equivalent rotation baked into the
-			 *        TLAS instance transform so reflection rays hit the correct quad face.
+			 *		face-camera billboard rotation for sprite renderables — the BLAS quad
+			 *		is a flat XY in object space, the rasterizer billboards it via vertex
+			 *		shader, and the RT side needs the equivalent rotation baked into the
+			 *		TLAS instance transform so reflection rays hit the correct quad face.
 			 */
-			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Libs::Math::Vector< 3, float > & cameraPosition) noexcept;
+			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
 
 			/**
 			 * @brief Records the pending TLAS build into an external command buffer.

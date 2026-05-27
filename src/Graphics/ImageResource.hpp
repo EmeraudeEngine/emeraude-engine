@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 
 namespace EmEn::Graphics
@@ -56,7 +56,7 @@ namespace EmEn::Graphics
 	 * optimization and analysis.
 	 *
 	 * @note All image data is stored in RGBA format with 8-bit unsigned integer components.
-	 * @see Libs::PixelFactory::Pixmap
+	 * @see Base::PixelFactory::Pixmap
 	 * @see Resources::Images Type alias for the resource container
 	 * @see Graphics::Texture1D
 	 * @see Graphics::Texture2D
@@ -106,11 +106,11 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
 			/**
-			 * @copydoc EmEn::Libs::ObservableTrait::classUID() const
+			 * @copydoc EmEn::Base::ObservableTrait::classUID() const
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
@@ -121,7 +121,7 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @copydoc EmEn::Libs::ObservableTrait::is() const
+			 * @copydoc EmEn::Base::ObservableTrait::is() const
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
@@ -218,7 +218,7 @@ namespace EmEn::Graphics
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Pixmap< uint8_t > &
+			const Base::PixelFactory::Pixmap< uint8_t > &
 			data () const noexcept
 			{
 				return m_pixmap;
@@ -233,7 +233,7 @@ namespace EmEn::Graphics
 			 * @return Mutable reference to the pixmap.
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Pixmap< uint8_t > &
+			Base::PixelFactory::Pixmap< uint8_t > &
 			mutableData () noexcept
 			{
 				return m_pixmap;
@@ -295,7 +295,7 @@ namespace EmEn::Graphics
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float >
+			Base::PixelFactory::Color< float >
 			averageColor () const noexcept
 			{
 				return m_pixmap.averageColor();
@@ -315,7 +315,7 @@ namespace EmEn::Graphics
 			 * @version 0.8.51
 			 */
 			bool
-			load (Libs::PixelFactory::Pixmap< uint8_t > && pixmap) noexcept
+			load (Base::PixelFactory::Pixmap< uint8_t > && pixmap) noexcept
 			{
 				if ( !pixmap.isValid() || !this->enableManualLoading() )
 				{
@@ -329,7 +329,7 @@ namespace EmEn::Graphics
 
 		private:
 
-			Libs::PixelFactory::Pixmap< uint8_t > m_pixmap;
+			Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
 	};
 }
 

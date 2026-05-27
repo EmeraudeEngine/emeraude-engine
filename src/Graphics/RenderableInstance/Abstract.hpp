@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,15 +34,15 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Libs/FlagTrait.hpp"
+#include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/std_source_location.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "std_source_location.hpp"
 #include "RenderContext.hpp"
 #include "RenderStateTracker.hpp"
 #include "Vulkan/DescriptorPool.hpp"
@@ -159,7 +159,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * - Provides TBN space visualization for debugging
 	 *
 	 * @extends std::enable_shared_from_this Allows safe shared_ptr creation from this pointer.
-	 * @extends EmEn::Libs::FlagTrait Provides flag-based state management (see RenderableInstanceFlagBits).
+	 * @extends EmEn::Base::FlagTrait Provides flag-based state management (see RenderableInstanceFlagBits).
 	 *
 	 * @note Thread safety: This class uses internal mutex locking for GPU memory access.
 	 * @note Clarification needed: The necessity of mutex locks (m_GPUMemoryAccess) is unclear
@@ -173,7 +173,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @see Multiple For GPU-instanced rendering with multiple instances.
 	 * @version 0.8.35
 	 */
-	class Abstract : public std::enable_shared_from_this< Abstract >, public Libs::FlagTrait< uint32_t >
+	class Abstract : public std::enable_shared_from_this< Abstract >, public Base::FlagTrait< uint32_t >
 	{
 		public:
 
@@ -509,7 +509,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param matrices The skinning matrices to upload.
 			 * @return bool
 			 */
-			bool updateSkinningMatrices (const std::vector< Libs::Math::Matrix< 4, float > > & matrices) noexcept;
+			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept;
 
 			/**
 			 * @brief Returns whether skinning GPU resources are available.
@@ -575,7 +575,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			bool getReadyForRender (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Libs::StaticVector< RenderPassType, MaxPassCount > & renderPassTypes, Renderer & renderer) noexcept;
+			bool getReadyForRender (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Base::StaticVector< RenderPassType, MaxPassCount > & renderPassTypes, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Ensures TBN space debug programs are generated and cached for this instance.
@@ -615,7 +615,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return void
 			 */
 			void
-			setTransformationMatrix (const Libs::Math::Matrix< 4, float > & transformationMatrix) noexcept
+			setTransformationMatrix (const Base::Math::Matrix< 4, float > & transformationMatrix) noexcept
 			{
 				m_transformationMatrix = transformationMatrix;
 
@@ -624,10 +624,10 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Returns the local transformation matrix.
-			 * @return const Libs::Math::Matrix< 4, float > &
+			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
+			const Base::Math::Matrix< 4, float > &
 			transformationMatrix () const noexcept
 			{
 				return m_transformationMatrix;
@@ -654,7 +654,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see pushMatricesForShadowCasting() For push constant strategy.
 			 * @version 0.8.35
 			 */
-			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.
@@ -680,7 +680,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see renderTBNSpace() For debug visualization.
 			 * @version 0.8.35
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target with state tracking to skip redundant binds.
@@ -705,7 +705,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @see render() For the non-tracked version.
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
 
 			/**
 			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.
@@ -727,7 +727,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see enableDisplayTBNSpace() To enable this visualization.
 			 * @version 0.8.35
 			 */
-			void renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Prepares MDI shader program variants for this instance.
@@ -816,7 +816,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @see RenderPassContext::isCubemap For cubemap vs classic rendering detection.
 			 */
-			virtual void pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+			virtual void pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
 			 * @brief Configures push constants for scene rendering.
@@ -832,7 +832,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see PushConstantContext::useAdvancedMatrices For lighting mode.
 			 * @see PushConstantContext::useBillboarding For sprite mode.
 			 */
-			virtual void pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+			virtual void pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
 			 * @brief Returns the number of instances to draw.
@@ -915,9 +915,9 @@ namespace EmEn::Graphics::RenderableInstance
 			static constexpr size_t MaxResolvedPrograms{16};
 
 			const std::shared_ptr< Renderable::Abstract > m_renderable;
-			Libs::Math::Matrix< 4, float > m_transformationMatrix;
+			Base::Math::Matrix< 4, float > m_transformationMatrix;
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
-			mutable Libs::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
+			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_frameIndex{0};
 			/* Skeletal skinning GPU resources (per-instance). */
 			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;

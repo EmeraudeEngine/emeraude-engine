@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 #include "Types.hpp"
 
@@ -72,10 +72,10 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -83,7 +83,7 @@ namespace EmEn::Graphics
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -128,7 +128,7 @@ namespace EmEn::Graphics
 			 * @param pixmap A reference to the pixmap.
 			 * @return bool
 			 */
-			bool load (const Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+			bool load (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
 			 * @brief Loads a cubemap from an equirectangular (panoramic 2:1) pixmap.
@@ -136,7 +136,7 @@ namespace EmEn::Graphics
 			 * @param faceSize The desired size (width and height) of each cube face in pixels.
 			 * @return bool
 			 */
-			bool loadEquirectangular (const Libs::PixelFactory::Pixmap< uint8_t > & equirectangular, uint32_t faceSize) noexcept;
+			bool loadEquirectangular (const Base::PixelFactory::Pixmap< uint8_t > & equirectangular, uint32_t faceSize) noexcept;
 
 			/**
 			 * @brief Loads a cubemap from a packed pixmap.
@@ -151,7 +151,7 @@ namespace EmEn::Graphics
 			 * @param size The size of each face (width and height in pixels).
 			 * @return bool
 			 */
-			bool load (const Libs::PixelFactory::Color< float > & color, uint32_t size) noexcept;
+			bool load (const Base::PixelFactory::Color< float > & color, uint32_t size) noexcept;
 
 			/**
 			 * @brief Returns the pixmap.
@@ -159,7 +159,7 @@ namespace EmEn::Graphics
 			 * @return const Libraries::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Pixmap< uint8_t > & data (size_t faceIndex) const noexcept;
+			const Base::PixelFactory::Pixmap< uint8_t > & data (size_t faceIndex) const noexcept;
 
 			/**
 			 * @brief Returns faces of the cubemap.
@@ -196,7 +196,7 @@ namespace EmEn::Graphics
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float > averageColor () const noexcept;
+			Base::PixelFactory::Color< float > averageColor () const noexcept;
 
 		private:
 

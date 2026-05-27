@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,10 +35,10 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Animation/Skin.hpp"
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Quaternion.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Animation/Skin.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Quaternion.hpp"
+#include "Math/Vector.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Animations
@@ -54,8 +54,8 @@ namespace EmEn::Animations
 	 */
 	enum class PlaybackWrap : uint8_t
 	{
-		Once,    /**< Play once and stop at the last frame. */
-		Loop,    /**< Loop back to the beginning. */
+		Once,	/**< Play once and stop at the last frame. */
+		Loop,	/**< Loop back to the beginning. */
 		PingPong /**< Alternate forward/backward. */
 	};
 
@@ -91,7 +91,7 @@ namespace EmEn::Animations
 			 * @brief Sets the skin binding (per-mesh, value).
 			 * @param skin The mesh-to-skeleton binding.
 			 */
-			void setSkin (Libs::Animation::Skin< float > skin) noexcept;
+			void setSkin (Base::Animation::Skin< float > skin) noexcept;
 
 			/**
 			 * @brief Adds an animation clip (shared, from resource system).
@@ -195,10 +195,10 @@ namespace EmEn::Animations
 			/**
 			 * @brief Returns the computed skinning matrices (one per skin joint).
 			 * @note These matrices are in model space, ready for GPU upload via SSBO.
-			 * @return const std::vector< Libs::Math::Matrix< 4, float > > &
+			 * @return const std::vector< Base::Math::Matrix< 4, float > > &
 			 */
 			[[nodiscard]]
-			const std::vector< Libs::Math::Matrix< 4, float > > &
+			const std::vector< Base::Math::Matrix< 4, float > > &
 			skinningMatrices () const noexcept
 			{
 				return m_skinningMatrices;
@@ -222,9 +222,9 @@ namespace EmEn::Animations
 			 */
 			struct JointPose
 			{
-				Libs::Math::Vector< 3, float > translation;
-				Libs::Math::Quaternion< float > rotation;
-				Libs::Math::Vector< 3, float > scale{1.0F, 1.0F, 1.0F};
+				Base::Math::Vector< 3, float > translation;
+				Base::Math::Quaternion< float > rotation;
+				Base::Math::Vector< 3, float > scale{1.0F, 1.0F, 1.0F};
 			};
 
 			/**
@@ -261,7 +261,7 @@ namespace EmEn::Animations
 
 			/* ---- Shared data (from resources) ---- */
 			std::shared_ptr< SkeletonResource > m_skeleton;
-			Libs::Animation::Skin< float > m_skin;
+			Base::Animation::Skin< float > m_skin;
 			std::unordered_map< std::string, std::shared_ptr< AnimationClipResource > > m_clips;
 
 			/* ---- Per-instance playback state ---- */
@@ -274,7 +274,7 @@ namespace EmEn::Animations
 
 			/* ---- Evaluated pose buffers ---- */
 			std::vector< JointPose > m_localPoses;
-			std::vector< Libs::Math::Matrix< 4, float > > m_worldMatrices;
-			std::vector< Libs::Math::Matrix< 4, float > > m_skinningMatrices;
+			std::vector< Base::Math::Matrix< 4, float > > m_worldMatrices;
+			std::vector< Base::Math::Matrix< 4, float > > m_skinningMatrices;
 	};
 }

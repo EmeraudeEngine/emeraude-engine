@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,9 +34,9 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "VertexFactory/Shape.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -83,13 +83,13 @@ namespace EmEn::Graphics::Compute
 			 * @param shape The shape to add (must remain valid).
 			 * @param frame The spatial position/orientation. Default identity.
 			 */
-			void addShape (const Libs::VertexFactory::Shape< float > & shape, const Libs::Math::CartesianFrame< float > & frame = {}) noexcept;
+			void addShape (const Base::VertexFactory::Shape< float > & shape, const Base::Math::CartesianFrame< float > & frame = {}) noexcept;
 
 			/**
 			 * @brief Sets the viewpoint.
 			 * @param viewpoint The scan direction and position.
 			 */
-			void setViewpoint (const Libs::Math::CartesianFrame< float > & viewpoint) noexcept;
+			void setViewpoint (const Base::Math::CartesianFrame< float > & viewpoint) noexcept;
 
 			/**
 			 * @brief Prepares the GPU resources (uploads triangles, builds pipeline).
@@ -102,20 +102,20 @@ namespace EmEn::Graphics::Compute
 			/**
 			 * @brief Scans a single slice at the given depth.
 			 * @param depth Normalized depth [0.0 = front, 1.0 = back].
-			 * @return Libs::PixelFactory::Pixmap< uint8_t > The cross-section image.
+			 * @return Base::PixelFactory::Pixmap< uint8_t > The cross-section image.
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Pixmap< uint8_t > scan (float depth) noexcept;
+			Base::PixelFactory::Pixmap< uint8_t > scan (float depth) noexcept;
 
 			/**
 			 * @brief Scans all slices using single-pass ray casting on GPU.
 			 * @param sliceCount Number of slices.
 			 * @param callback Called for each completed slice.
 			 * @param unpackPixels When true, unpacks packed 1-bit GPU output into a Grayscale pixmap
-			 *        passed to the callback. When false (default), the callback receives an empty
-			 *        pixmap (benchmark/timing mode only).
+			 *		passed to the callback. When false (default), the callback receives an empty
+			 *		pixmap (benchmark/timing mode only).
 			 */
-			void scanAll (uint32_t sliceCount, const std::function< void (uint32_t, const Libs::PixelFactory::Pixmap< uint8_t > &) > & callback, bool unpackPixels = false) noexcept;
+			void scanAll (uint32_t sliceCount, const std::function< void (uint32_t, const Base::PixelFactory::Pixmap< uint8_t > &) > & callback, bool unpackPixels = false) noexcept;
 
 		private:
 

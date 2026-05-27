@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -92,7 +92,7 @@ vec2 projectToUV (vec3 viewPos)
 float screenEdgeFade (vec2 uv)
 {
 	vec2 fade = smoothstep(vec2(0.0), vec2(fadeScreenEdge), uv)
-	          * smoothstep(vec2(0.0), vec2(fadeScreenEdge), vec2(1.0) - uv);
+			  * smoothstep(vec2(0.0), vec2(fadeScreenEdge), vec2(1.0) - uv);
 	return fade.x * fade.y;
 }
 
@@ -342,7 +342,7 @@ void main()
 		vec2 ndc = vUV * 2.0 - 1.0;
 		float t = abs(tanHalfFovY);
 		vec3 viewPos = vec3(ndc.x * t * aspectRatio * linearZ,
-		                    ndc.y * t * linearZ, -linearZ);
+							ndc.y * t * linearZ, -linearZ);
 
 		/* Read view-space normal from MRT. */
 		vec3 rawN = texture(normalTex, vUV).rgb;
@@ -418,7 +418,7 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 	using namespace Saphir;
 

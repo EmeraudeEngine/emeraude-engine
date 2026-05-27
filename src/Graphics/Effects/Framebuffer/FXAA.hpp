@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -59,8 +59,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			struct Parameters
 			{
-				float subpixelQuality{0.75F};    /**< 0=off, 0.75=default, 1=max subpixel AA */
-				float edgeThreshold{0.166F};     /**< Lower = more edges detected (0.125-0.333) */
+				float subpixelQuality{0.75F};	/**< 0=off, 0.75=default, 1=max subpixel AA */
+				float edgeThreshold{0.166F};	 /**< Lower = more edges detected (0.125-0.333) */
 				float edgeThresholdMin{0.0833F}; /**< Dark area minimum threshold (0.0312-0.0833) */
 			};
 

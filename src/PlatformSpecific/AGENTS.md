@@ -476,5 +476,5 @@ uint32_t performanceCores{0};  // P-cores (via hwloc cpukinds API)
 ## Related Documentation
 
 - `Desktop/Dialog/Types.hpp` - `MessageType`, `ButtonLayout`, `ButtonLabels` definitions
-- `Libs/StaticVector.hpp` - Fixed-capacity vector used for `ButtonLabels`
+- `Base/StaticVector.hpp` - Fixed-capacity vector used for `ButtonLabels`
 - CMakeLists.txt - Cross-platform build configuration

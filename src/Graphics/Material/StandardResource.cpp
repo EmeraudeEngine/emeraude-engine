@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -43,9 +43,9 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Libs/Math/Base.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "FastJSON.hpp"
+#include "Math/Base.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Declaration/Sampler.hpp"
 #include "Saphir/Declaration/StageOutput.hpp"
@@ -64,8 +64,8 @@
 
 namespace EmEn::Graphics::Material
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 	using namespace Graphics::Material::Component;
@@ -1320,8 +1320,8 @@ namespace EmEn::Graphics::Material
 			 * We use the view direction dot normal for the Fresnel factor. */
 			std::stringstream subCode;
 			subCode << "mix(" << m_components.at(ComponentType::Refraction)->variableName() << ", "
-			        << m_components.at(ComponentType::Reflection)->variableName() << ", "
-			        << "fresnelFactor)";
+					<< m_components.at(ComponentType::Reflection)->variableName() << ", "
+					<< "fresnelFactor)";
 
 			base = "mix(" + base + ", " + subCode.str() + ", " + MaterialUB(UniformBlock::Component::RefractionAmount) + ")";
 		}
@@ -1672,10 +1672,10 @@ namespace EmEn::Graphics::Material
 					"  vec2 currentTexCoords = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
 					"  float currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
 					"  for (int i = 0; i < " << std::to_string(maxPOMIterations) << "; i++) {" << Line::End <<
-					"    if (currentLayerDepth >= currentDepthMapValue) break;" << Line::End <<
-					"    currentTexCoords -= deltaTexCoords;" << Line::End <<
-					"    currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
-					"    currentLayerDepth += layerDepth;" << Line::End <<
+					"	if (currentLayerDepth >= currentDepthMapValue) break;" << Line::End <<
+					"	currentTexCoords -= deltaTexCoords;" << Line::End <<
+					"	currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
+					"	currentLayerDepth += layerDepth;" << Line::End <<
 					"  }" << Line::End <<
 					"  vec2 prevTexCoords = currentTexCoords + deltaTexCoords;" << Line::End <<
 					"  float afterDepth = currentDepthMapValue - currentLayerDepth;" << Line::End <<

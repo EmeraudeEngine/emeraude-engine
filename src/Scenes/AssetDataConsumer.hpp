@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
+#include "Math/CartesianFrame.hpp"
 
 /* Forward declarations. */
 namespace EmEn::AssetLoaders
@@ -71,7 +71,7 @@ namespace EmEn::Scenes
 			 * @param assetData The loaded asset data (resources + node descriptors).
 			 * @param scene Reference to the scene.
 			 * @param parentNode If nullptr, mesh nodes become StaticEntity (world coordinates).
-			 *                   Otherwise, the hierarchy is built under the given node.
+			 *				   Otherwise, the hierarchy is built under the given node.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -79,7 +79,7 @@ namespace EmEn::Scenes
 
 		private:
 
-			void processNodeAsStatic (const AssetLoaders::AssetData & assetData, size_t nodeIndex, Scene & scene, const Libs::Math::CartesianFrame< float > & parentWorldFrame) noexcept;
+			void processNodeAsStatic (const AssetLoaders::AssetData & assetData, size_t nodeIndex, Scene & scene, const Base::Math::CartesianFrame< float > & parentWorldFrame) noexcept;
 
 			void processNodeAsNode (const AssetLoaders::AssetData & assetData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept;
 

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -120,7 +120,7 @@ namespace EmEn::PlatformSpecific
 
 			/* Detect hybrid CPU core types (P-cores / E-cores) using cpukinds API (hwloc >= 2.4).
 			 * hwloc ranks kinds by ascending performance:
-			 *   kind 0     = lowest performance, highest energy-efficiency (E-cores)
+			 *   kind 0	 = lowest performance, highest energy-efficiency (E-cores)
 			 *   kind N-1   = highest performance, lowest energy-efficiency (P-cores)
 			 * On non-hybrid CPUs, numKinds is 0 or 1, and we leave both fields at 0. */
 			{

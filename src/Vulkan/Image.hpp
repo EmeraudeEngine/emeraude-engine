@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #pragma once
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <array>
@@ -45,7 +45,7 @@
 
 /* Local inclusions for usages. */
 #include "DeviceMemory.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 
 #if IS_WINDOWS
 #undef min
@@ -384,7 +384,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (TransferManager & transferManager, const Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+			bool create (TransferManager & transferManager, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
 			 * @brief Creates, allocates and returns a usable image.

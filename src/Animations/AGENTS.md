@@ -4,7 +4,7 @@ Context for developing the Emeraude Engine animations system.
 
 ## Module Overview
 
-**Status: GPU SKINNING IMPLEMENTED** — Full CPU→GPU skeletal animation pipeline in place. Data types stabilized in `Libs/Animation/`, managed resources in `src/Animations/`, GPU skinning via vertex shader with SSBO bone matrices.
+**Status: GPU SKINNING IMPLEMENTED** — Full CPU→GPU skeletal animation pipeline in place. Data types stabilized in `Base/Animation/`, managed resources in `src/Animations/`, GPU skinning via vertex shader with SSBO bone matrices.
 
 ## Animations-Specific Rules
 
@@ -17,14 +17,14 @@ Context for developing the Emeraude Engine animations system.
 
 The animation system is split into three layers:
 
-**Data layer (`Libs/Animation/`)** — Stabilized, header-only:
+**Data layer (`Base/Animation/`)** — Stabilized, header-only:
 | Type | File | Purpose |
 |------|------|---------|
-| `Joint` | `Libs/Animation/Joint.hpp` | Joint struct: name, parentIndex, local T/R/S, inverseBindMatrix |
-| `Skeleton` | `Libs/Animation/Skeleton.hpp` | Ordered joint collection, name lookup, hierarchy validation |
-| `AnimationChannel` | `Libs/Animation/AnimationChannel.hpp` | Per-joint keyframes (VectorKeyFrame for T/S, QuaternionKeyFrame for R), 3 interpolation modes (Step, Linear, CubicSpline) |
-| `AnimationClip` | `Libs/Animation/AnimationClip.hpp` | Named channel collection, duration auto-computed, skeleton-independent |
-| `Skin` | `Libs/Animation/Skin.hpp` | Mesh-to-skeleton binding: joint index remapping, inverse bind matrices, GLTF JOINTS_0 indirection |
+| `Joint` | `Base/Animation/Joint.hpp` | Joint struct: name, parentIndex, local T/R/S, inverseBindMatrix |
+| `Skeleton` | `Base/Animation/Skeleton.hpp` | Ordered joint collection, name lookup, hierarchy validation |
+| `AnimationChannel` | `Base/Animation/AnimationChannel.hpp` | Per-joint keyframes (VectorKeyFrame for T/S, QuaternionKeyFrame for R), 3 interpolation modes (Step, Linear, CubicSpline) |
+| `AnimationClip` | `Base/Animation/AnimationClip.hpp` | Named channel collection, duration auto-computed, skeleton-independent |
+| `Skin` | `Base/Animation/Skin.hpp` | Mesh-to-skeleton binding: joint index remapping, inverse bind matrices, GLTF JOINTS_0 indirection |
 
 **Resource layer (`src/Animations/`)** — Managed engine resources:
 | Type | File | Purpose |
@@ -166,15 +166,15 @@ ctest -R MathTransformConversions
 - `SkeletalAnimator.hpp/.cpp` — Per-instance evaluator (sampling, FK, skinning matrices)
 
 ### Data Types (Libs/Animation/)
-- `Libs/Animation/Joint.hpp` — Joint struct
-- `Libs/Animation/Skeleton.hpp` — Joint collection with validation
-- `Libs/Animation/AnimationChannel.hpp` — Keyframe channels
-- `Libs/Animation/AnimationClip.hpp` — Named clip (collection of channels)
-- `Libs/Animation/Skin.hpp` — Mesh-to-skeleton binding
+- `Base/Animation/Joint.hpp` — Joint struct
+- `Base/Animation/Skeleton.hpp` — Joint collection with validation
+- `Base/Animation/AnimationChannel.hpp` — Keyframe channels
+- `Base/Animation/AnimationClip.hpp` — Named clip (collection of channels)
+- `Base/Animation/Skin.hpp` — Mesh-to-skeleton binding
 
 ### Vertex Factory Integration
-- `Libs/VertexFactory/ShapeLoadResult.hpp` — Bundles Shape + optional Skeleton + optional Skin
-- `Libs/VertexFactory/FileFormatInterface.hpp` — `readStream()` uses `ShapeLoadResult`
+- `Base/VertexFactory/ShapeLoadResult.hpp` — Bundles Shape + optional Skeleton + optional Skin
+- `Base/VertexFactory/FileFormatInterface.hpp` — `readStream()` uses `ShapeLoadResult`
 
 ### Renderable Integration
 - `Graphics/Renderable/SkeletalDataTrait.hpp` — Trait on MeshResource/SimpleMeshResource
@@ -201,15 +201,15 @@ ctest -R MathTransformConversions
 - `Scenes/GLTFLoader.hpp/.cpp` — Creates SkeletonResource/AnimationClipResource, populates SkeletalDataTrait
 
 ### Math Support
-- `Libs/Math/TransformUtils.hpp` — `composeTRS()` / `decomposeTRS()` for joint transforms
-- `Libs/Math/Quaternion.hpp` — `slerp()` for rotation interpolation, `toRotationMatrix4()` for skeleton matrix computation
+- `Base/Math/TransformUtils.hpp` — `composeTRS()` / `decomposeTRS()` for joint transforms
+- `Base/Math/Quaternion.hpp` — `slerp()` for rotation interpolation, `toRotationMatrix4()` for skeleton matrix computation
 
 ### Tests
 - `Testing/test_MathTransformConversions.cpp` — 52 tests: Quat↔Mat4, compose/decompose roundtrips
 
 ## Critical Points
 
-- **Rotation matrix convention**: Use `Quaternion::toRotationMatrix4()` (standard column-major), NOT `rotationMatrix()` (row-major data in column-major storage). See `Libs/AGENTS.md` for details.
+- **Rotation matrix convention**: Use `Quaternion::toRotationMatrix4()` (standard column-major), NOT `rotationMatrix()` (row-major data in column-major storage). See `Base/AGENTS.md` for details.
 - **Descriptor set ordering**: PerModel (skinning SSBO) MUST be between PerLight and PerModelLayer in BOTH `prepareUniformSets()` and render-time binding. Mismatch causes Vulkan validation errors.
 - **StaticVector capacity**: Descriptor set layout vectors are `StaticVector<5>` (was 4 before PerModel). Changed across entire codebase including Vulkan layer.
 - **Bone indices as floats**: VBO stores int32→float. Shader does `ivec4(vaBoneInfluence)` to recover indices.
@@ -237,8 +237,8 @@ Code references: `Animations/SkeletalAnimator.hpp/.cpp`
 
 ## Detailed Documentation
 
-- **Libs/Animation data types**: See [`src/Libs/AGENTS.md`](../Libs/AGENTS.md)
-- **Math/TransformUtils**: See [`src/Libs/AGENTS.md`](../Libs/AGENTS.md) (Math section)
+- **Libs/Animation data types**: See [`emeraude-base/AGENTS.md`](../../dependencies/emeraude-base/AGENTS.md)
+- **Math/TransformUtils**: See [`emeraude-base/AGENTS.md`](../../dependencies/emeraude-base/AGENTS.md) (Math section)
 - **GLTF loading pipeline**: See [`src/Scenes/AGENTS.md`](../Scenes/AGENTS.md)
 - **Graphics pipeline**: See [`src/Graphics/AGENTS.md`](../Graphics/AGENTS.md)
 - **Shader generation**: See [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md)

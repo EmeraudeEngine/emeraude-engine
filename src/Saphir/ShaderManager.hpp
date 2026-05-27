@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "DirStackFileIncluder.hpp"
@@ -80,9 +80,9 @@ namespace EmEn::Saphir
 	 * @brief The shader manager service class.
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObservableTrait This service is observable.
+	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 */
-	class ShaderManager final : public ServiceInterface, public Libs::ObservableTrait
+	class ShaderManager final : public ServiceInterface, public Base::ObservableTrait
 	{
 		public:
 
@@ -118,10 +118,10 @@ namespace EmEn::Saphir
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -129,7 +129,7 @@ namespace EmEn::Saphir
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -172,10 +172,10 @@ namespace EmEn::Saphir
 			 * @brief Returns shader modules corresponding to a program.
 			 * @param device A reference to a device smart pointer.
 			 * @param program A reference to a program smart pointer.
-			 * @return Libs::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 >
+			 * @return Base::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 >
 			 */
 			[[nodiscard]]
-			Libs::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program) noexcept;
+			Base::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program) noexcept;
 
 		private:
 

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 
 /* Third-party inclusions. */
 #include "asio.hpp"
-#include "Libs/Network/asio_throw_exception.hpp"
+#include "Network/asio_throw_exception.hpp"
 #ifdef _WIN32
 	#ifndef NOMINMAX
 	#define NOMINMAX
@@ -64,12 +64,12 @@ namespace
 {
 #ifdef _WIN32
 	using native_socket_t = SOCKET;
-	using io_size_t       = int;
+	using io_size_t	   = int;
 	constexpr native_socket_t NativeInvalid{INVALID_SOCKET};
-	constexpr int             NativeShutdownBoth{SD_BOTH};
+	constexpr int			 NativeShutdownBoth{SD_BOTH};
 
 	inline int closeNative (native_socket_t s) noexcept { return ::closesocket(s); }
-	inline int lastNativeError () noexcept              { return ::WSAGetLastError(); }
+	inline int lastNativeError () noexcept			  { return ::WSAGetLastError(); }
 	inline std::error_code lastNativeCode () noexcept   { return { lastNativeError(), std::system_category() }; }
 #else
 	using native_socket_t = int;
@@ -78,12 +78,12 @@ namespace
 	 * into SIZE_MAX, defeats the (sent < 0) checks in send()/receive(), and
 	 * produces a SIGSEGV when cursor += SIZE_MAX is computed. Windows is
 	 * unaffected because winsock ::send/::recv return a signed int there. */
-	using io_size_t       = ssize_t;
+	using io_size_t	   = ssize_t;
 	constexpr native_socket_t NativeInvalid{-1};
-	constexpr int             NativeShutdownBoth{SHUT_RDWR};
+	constexpr int			 NativeShutdownBoth{SHUT_RDWR};
 
 	inline int closeNative (native_socket_t s) noexcept { return ::close(s); }
-	inline int lastNativeError () noexcept              { return errno; }
+	inline int lastNativeError () noexcept			  { return errno; }
 	inline std::error_code lastNativeCode () noexcept   { return { errno, std::generic_category() }; }
 #endif
 
@@ -272,7 +272,7 @@ namespace EmEn::Net
 		 * on every exit path. We only use it for resolve() and the timed
 		 * async_connect; the connected handle is detached at the end. */
 		auto ioContext = std::make_unique< asio::io_context >();
-		auto socket    = std::make_unique< asio::ip::tcp::socket >(*ioContext);
+		auto socket	= std::make_unique< asio::ip::tcp::socket >(*ioContext);
 
 		asio::ip::tcp::resolver resolver{*ioContext};
 		asio::error_code resolveEc;
@@ -469,7 +469,7 @@ namespace EmEn::Net
 				break;
 			}
 
-			cursor    += static_cast< size_t >(sent);
+			cursor	+= static_cast< size_t >(sent);
 			remaining -= static_cast< size_t >(sent);
 		}
 
@@ -512,7 +512,7 @@ namespace EmEn::Net
 		bool restoreTimeout = false;
 #ifdef _WIN32
 		DWORD savedTimeoutWin = 0;
-		int   savedLenWin     = sizeof(savedTimeoutWin);
+		int   savedLenWin	 = sizeof(savedTimeoutWin);
 
 		if ( ::getsockopt(handle, SOL_SOCKET, SO_RCVTIMEO,
 				reinterpret_cast< char * >(&savedTimeoutWin), &savedLenWin) == 0 )
@@ -521,7 +521,7 @@ namespace EmEn::Net
 		}
 #else
 		struct timeval savedTv{};
-		socklen_t      savedLen = sizeof(savedTv);
+		socklen_t	  savedLen = sizeof(savedTv);
 
 		if ( ::getsockopt(handle, SOL_SOCKET, SO_RCVTIMEO, &savedTv, &savedLen) == 0 )
 		{
@@ -610,7 +610,7 @@ namespace EmEn::Net
 				}
 
 				address = buffer.data();
-				port    = ntohs(v4->sin_port);
+				port	= ntohs(v4->sin_port);
 
 				return true;
 			}
@@ -625,7 +625,7 @@ namespace EmEn::Net
 				}
 
 				address = buffer.data();
-				port    = ntohs(v6->sin6_port);
+				port	= ntohs(v6->sin6_port);
 
 				return true;
 			}
@@ -756,8 +756,8 @@ namespace EmEn::Net
 
 		struct tcp_keepalive ka
 		{
-			.onoff             = 1,
-			.keepalivetime     = static_cast< ULONG >(initialDelaySeconds) * 1000,
+			.onoff			 = 1,
+			.keepalivetime	 = static_cast< ULONG >(initialDelaySeconds) * 1000,
 			.keepaliveinterval = 1000
 		};
 		DWORD bytesReturned = 0;

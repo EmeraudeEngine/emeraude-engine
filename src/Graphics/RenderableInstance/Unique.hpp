@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 #include "Graphics/Renderable/Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
+#include "Math/CartesianFrame.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -105,7 +105,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * For classic 2D shadow maps, we compute and push the combined MVP matrix
 			 * to minimize push constant size.
 			 */
-			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/**
 			 * @brief Push constant strategy for Unique (scene rendering).
@@ -127,7 +127,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * When MergePushConstants is true, V and M are copied to a contiguous buffer
 			 * and pushed in a single vkCmdPushConstants call instead of two separate calls.
 			 */
-			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -44,10 +44,10 @@
 #include "Constants.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
-#include "Libs/Time/Time.hpp"
-#include "Libs/Version.hpp"
+#include "IO/IO.hpp"
+#include "Time/Elapsed/PrintScopeRealTime.hpp"
+#include "Time/Time.hpp"
+#include "Version.hpp"
 #include "PlatformSpecific/Desktop/Commands.hpp"
 #include "PlatformSpecific/Desktop/Dialog/CustomMessage.hpp"
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
@@ -57,7 +57,7 @@
 
 namespace EmEn
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Vulkan;
 	using namespace Graphics;
 	using namespace Scenes;
@@ -1850,14 +1850,14 @@ namespace EmEn
 				{
 					const auto fileSize = entry.file_size(errorCode);
 
-					trace << "    " << entry.path().string() << " (" << fileSize << " bytes)" "\n";
+					trace << "	" << entry.path().string() << " (" << fileSize << " bytes)" "\n";
 
 					fileCount++;
 					totalSize += fileSize;
 				}
 				else if ( entry.is_directory(errorCode) )
 				{
-					trace << "    " << entry.path().string() << "/" "\n";
+					trace << "	" << entry.path().string() << "/" "\n";
 				}
 			}
 

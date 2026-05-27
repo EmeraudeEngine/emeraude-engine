@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,8 +35,8 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/TextProcessor.hpp"
-#include "Libs/Time/EventTrait.hpp"
+#include "PixelFactory/TextProcessor.hpp"
+#include "Time/EventTrait.hpp"
 #include "Overlay/Manager.hpp"
 #include "Overlay/Surface.hpp"
 #include "Resources/Manager.hpp"
@@ -52,10 +52,10 @@ namespace EmEn
 	 * @brief The on-screen notifier service.
 	 * @note [OBS][STATIC-OBSERVER]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObserverTrait The notifier wants to listen to overlay manager changes.
-	 * @extends EmEn::Libs::Time::EventTrait The notifier uses a timer to hide a message.
+	 * @extends EmEn::Base::ObserverTrait The notifier wants to listen to overlay manager changes.
+	 * @extends EmEn::Base::Time::EventTrait The notifier uses a timer to hide a message.
 	 */
-	class Notifier final : public ServiceInterface, public Libs::ObserverTrait, public Libs::Time::EventTrait< uint32_t, std::milli >
+	class Notifier final : public ServiceInterface, public Base::ObserverTrait, public Base::Time::EventTrait< uint32_t, std::milli >
 	{
 		public:
 
@@ -83,17 +83,17 @@ namespace EmEn
 			 * @return void
 			 */
 			void
-			setClearColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setClearColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_clearColor = color;
 			}
 
 			/**
 			 * @brief Returns the background color of the notifier display.
-			 * @return const Libs::PixelFactory::Color< float > &
+			 * @return const Base::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			clearColor () const noexcept
 			{
 				return m_clearColor;
@@ -123,7 +123,7 @@ namespace EmEn
 			 * @return void
 			 */
 			void
-			push (const Libs::BlobTrait & message, uint32_t duration = DefaultDuration) noexcept
+			push (const Base::BlobTrait & message, uint32_t duration = DefaultDuration) noexcept
 			{
 				if ( !this->usable() )
 				{
@@ -147,9 +147,9 @@ namespace EmEn
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
 			 * @brief Renders the notification on the pixmap.
@@ -162,15 +162,15 @@ namespace EmEn
 			 * @param bgColor A reference to a background color.
 			 * @return void
 			 */
-			void clearDisplay (const Libs::PixelFactory::Color< float > & bgColor) const noexcept;
+			void clearDisplay (const Base::PixelFactory::Color< float > & bgColor) const noexcept;
 
 			Overlay::Manager & m_overlayManager;
 			std::shared_ptr< Overlay::UIScreen > m_screen;
 			std::shared_ptr< Overlay::Surface > m_surface;
 			std::shared_ptr< Graphics::FontResource > m_font;
-			Libs::PixelFactory::TextProcessor< uint8_t > m_processor;
-			Libs::PixelFactory::Color< float > m_clearColor{Libs::PixelFactory::TranslucentDarkGrey};
-			Libs::Time::TimerID m_timerID{0};
+			Base::PixelFactory::TextProcessor< uint8_t > m_processor;
+			Base::PixelFactory::Color< float > m_clearColor{Base::PixelFactory::TranslucentDarkGrey};
+			Base::Time::TimerID m_timerID{0};
 			std::vector< std::pair< std::string, int32_t > > m_notifications;
 			mutable std::mutex m_notificationAccess;
 	};

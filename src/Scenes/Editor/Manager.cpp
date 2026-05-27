@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,9 +35,9 @@
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Input/Manager.hpp"
 #include "Input/Types.hpp"
-#include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
-#include "Libs/Math/Space3D/Intersections/SegmentSphere.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
+#include "Math/Space3D/Intersections/SegmentCuboid.hpp"
+#include "Math/Space3D/Intersections/SegmentSphere.hpp"
+#include "Math/Space3D/Sphere.hpp"
 #include "Notifier.hpp"
 #include "Physics/AABBCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
@@ -51,8 +51,8 @@
 
 namespace EmEn::Scenes::Editor
 {
-	using namespace Libs::Math;
-	using namespace Libs::Math::Space3D;
+	using namespace Base::Math;
+	using namespace Base::Math::Space3D;
 	using namespace Input;
 	using namespace Physics;
 
@@ -523,7 +523,7 @@ namespace EmEn::Scenes::Editor
 
 				const auto newPosition = m_dragInitialEntityPos + m_dragAxisDirection * delta;
 
-				m_selectedEntity->setPosition(newPosition, Libs::Math::TransformSpace::World);
+				m_selectedEntity->setPosition(newPosition, Base::Math::TransformSpace::World);
 			}
 			else if ( m_gizmoMode == GizmoMode::Rotate )
 			{
@@ -552,15 +552,15 @@ namespace EmEn::Scenes::Editor
 						default : break;
 					}
 
-					m_selectedEntity->rotate(deltaAngle, localAxis, Libs::Math::TransformSpace::Local);
+					m_selectedEntity->rotate(deltaAngle, localAxis, Base::Math::TransformSpace::Local);
 				}
 				else
 				{
 					/* NOTE: World mode: save/restore position to rotate in-place. */
 					const auto savedPos = m_selectedEntity->getWorldCoordinates().position();
 
-					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Libs::Math::TransformSpace::World);
-					m_selectedEntity->setPosition(savedPos, Libs::Math::TransformSpace::World);
+					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Base::Math::TransformSpace::World);
+					m_selectedEntity->setPosition(savedPos, Base::Math::TransformSpace::World);
 				}
 
 				/* NOTE: Update initial angle for next delta. */

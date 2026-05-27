@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "FramebufferProperties.hpp"
@@ -51,9 +51,9 @@ namespace EmEn::Overlay
 	/**
 	 * @brief Defines an overlaying screen object.
 	 * @details There are no physical properties. This is just a group of surfaces and dispatch input event to it.
-	 * @exception EmEn::Libs::NameableTrait A UI screen has a name.
+	 * @exception EmEn::Base::NameableTrait A UI screen has a name.
 	 */
-	class UIScreen final : public Libs::NameableTrait
+	class UIScreen final : public Base::NameableTrait
 	{
 		public:
 

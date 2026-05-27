@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,15 +33,15 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
-#include "Libs/FlagArrayTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "NameableTrait.hpp"
+#include "FlagArrayTrait.hpp"
+#include "ObservableTrait.hpp"
 #include "Animations/AnimatableInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
 #include "Physics/MovableTrait.hpp"
 #include "json/json.h"
 
@@ -73,12 +73,12 @@ namespace EmEn::Scenes::Component
 	/**
 	 * @brief Class that hold the base of every component that can be attached to an entity.
 	 * @note [OBS][SHARED-OBSERVABLE]
-	 * @extends EmEn::Libs::NameableTrait Each component is named.
-	 * @extends EmEn::Libs::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
-	 * @extends EmEn::Libs::ObservableTrait To transfer physical properties changes. FIXME: Observable is kept for future features.
+	 * @extends EmEn::Base::NameableTrait Each component is named.
+	 * @extends EmEn::Base::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
+	 * @extends EmEn::Base::ObservableTrait To transfer physical properties changes. FIXME: Observable is kept for future features.
 	 * @extends Animations::AnimatableInterface Component are animatable.
 	 */
-	class Abstract : public Libs::NameableTrait, public Libs::FlagArrayTrait< 8 >, public Libs::ObservableTrait, public Animations::AnimatableInterface
+	class Abstract : public Base::NameableTrait, public Base::FlagArrayTrait< 8 >, public Base::ObservableTrait, public Animations::AnimatableInterface
 	{
 		public:
 
@@ -89,8 +89,8 @@ namespace EmEn::Scenes::Component
 				MaxEnum
 			};
 
-			static constexpr Libs::Math::Space3D::AACuboid< float > NullBoundingBox{};
-			static constexpr Libs::Math::Space3D::Sphere< float > NullBoundingSphere{};
+			static constexpr Base::Math::Space3D::AACuboid< float > NullBoundingBox{};
+			static constexpr Base::Math::Space3D::Sphere< float > NullBoundingSphere{};
 
 			/**
 			 * @brief Copy constructor.
@@ -131,10 +131,10 @@ namespace EmEn::Scenes::Component
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a("Component");
+				return Base::Hash::FNV1a("Component");
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -142,7 +142,7 @@ namespace EmEn::Scenes::Component
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -218,17 +218,17 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the absolute coordinates of this component using the parent node.
-			 * @return Libs::Math::Coordinates< float >
+			 * @return Base::Math::Coordinates< float >
 			 */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept;
+			Base::Math::CartesianFrame< float > getWorldCoordinates () const noexcept;
 
 			/**
 			 * @brief Returns the absolute velocity of this component using the parent node.
-			 * @return Libs::Math::Vector< 3, float >
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getWorldVelocity () const noexcept;
+			Base::Math::Vector< 3, float > getWorldVelocity () const noexcept;
 
 			/**
 			 * @brief Initializes that entity from JSON rules.
@@ -253,11 +253,11 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Returns the local bounding box of this component.
 			 * @note Can be invalid. On a non-overridden method, this will return a null bounding box.
-			 * @return const Libs::Math::Space3D::AACuboid< float > &
+			 * @return const Base::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
 			virtual
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept
 			{
 				return NullBoundingBox;
@@ -266,11 +266,11 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Returns the local bounding sphere of this component.
 			 * @note Can be invalid. On non-overridden method, this will return a null bounding sphere.
-			 * @return const Libs::Math::Space3D::Sphere< float > &
+			 * @return const Base::Math::Space3D::Sphere< float > &
 			 */
 			[[nodiscard]]
 			virtual
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept
 			{
 				return NullBoundingSphere;
@@ -304,7 +304,7 @@ namespace EmEn::Scenes::Component
 			 * @param worldCoordinates A reference to the world coordinates.
 			 * @return void
 			 */
-			virtual void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept = 0;
+			virtual void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept = 0;
 
 			/**
 			 * @brief Tells the entity to remove this component.

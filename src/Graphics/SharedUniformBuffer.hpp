@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -171,7 +171,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the byte offset for an element within its UBO.
 			 * @note This is the LOCAL offset within the specific UBO that holds the element.
-			 *       Use this for descriptor set binding or direct buffer access.
+			 *	   Use this for descriptor set binding or direct buffer access.
 			 * @param elementIndex The global element index.
 			 * @return VkDeviceSize The byte offset within the UBO.
 			 */
@@ -188,7 +188,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns a fully configured VkDescriptorBufferInfo for an element.
 			 * @note This is the preferred method for getting descriptor info as it ensures
-			 *       the correct byte offset calculation is always used.
+			 *	   the correct byte offset calculation is always used.
 			 * @param elementIndex The global element index.
 			 * @return VkDescriptorBufferInfo Ready to use in vkUpdateDescriptorSets.
 			 */

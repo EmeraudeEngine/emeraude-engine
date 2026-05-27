@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -127,7 +127,7 @@ namespace EmEn::Vulkan
 			 * @return std::shared_ptr< PipelineLayout >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< PipelineLayout > getPipelineLayout (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
+			std::shared_ptr< PipelineLayout > getPipelineLayout (const Base::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
 
 		private:
 

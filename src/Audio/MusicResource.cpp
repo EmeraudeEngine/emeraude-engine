@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,10 +36,10 @@
 
 /* Local inclusions. */
 #include "Buffer.hpp"
-#include "Libs/WaveFactory/FileIO.hpp"
-#include "Libs/WaveFactory/Processor.hpp"
-#include "Libs/WaveFactory/SFXScript.hpp"
-#include "Libs/WaveFactory/Synthesizer.hpp"
+#include "WaveFactory/FileIO.hpp"
+#include "WaveFactory/Processor.hpp"
+#include "WaveFactory/SFXScript.hpp"
+#include "WaveFactory/Synthesizer.hpp"
 #include "Manager.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
@@ -49,7 +49,7 @@
 
 namespace EmEn::Audio
 {
-	using namespace Libs;
+	using namespace Base;
 
 	/* NOTE: TSF (TinySoundFont) is not thread-safe for concurrent rendering operations.
 	 * This mutex protects SF2-based MIDI loading when multiple MusicResources load in parallel. */

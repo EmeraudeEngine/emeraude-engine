@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::Material::Component
 {
@@ -55,7 +55,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @param color A reference to a color. Default black.
 			 */
 			explicit
-			Color (std::string variableName, const Libs::PixelFactory::Color< float > & color = {}) noexcept
+			Color (std::string variableName, const Base::PixelFactory::Color< float > & color = {}) noexcept
 				: m_variableName{std::move(variableName)},
 				m_color{color}
 			{
@@ -125,7 +125,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @return void
 			 */
 			void
-			setColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_color = color;
 			}
@@ -135,7 +135,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			color () const noexcept
 			{
 				return m_color;
@@ -146,7 +146,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float > &
+			Base::PixelFactory::Color< float > &
 			color () noexcept
 			{
 				return m_color;
@@ -185,7 +185,7 @@ namespace EmEn::Graphics::Material::Component
 			friend std::ostream & operator<< (std::ostream & out, const Color & obj);
 
 			std::string m_variableName;
-			Libs::PixelFactory::Color< float > m_color;
+			Base::PixelFactory::Color< float > m_color;
 	};
 
 	inline

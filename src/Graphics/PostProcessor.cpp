@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
 #include "IndirectPostProcessEffect.hpp"
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
 #include "PostProcessStack.hpp"
 #include "Renderer.hpp"
 #include "Saphir/Generator/PostProcessing.hpp"
@@ -281,7 +281,7 @@ namespace
 
 namespace EmEn::Graphics
 {
-	using namespace Libs::VertexFactory;
+	using namespace Base::VertexFactory;
 
 	/* Construction & lifecycle. */
 

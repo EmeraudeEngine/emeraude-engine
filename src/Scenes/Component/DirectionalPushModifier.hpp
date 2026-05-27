@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -48,7 +48,7 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param direction A reference to a vector.
 			 */
-			DirectionalPushModifier (const std::string & componentName, const AbstractEntity & parentEntity, const Libs::Math::Vector< 3, float > & direction) noexcept
+			DirectionalPushModifier (const std::string & componentName, const AbstractEntity & parentEntity, const Base::Math::Vector< 3, float > & direction) noexcept
 				: AbstractModifier{componentName, parentEntity},
 				m_direction{direction}
 			{
@@ -75,7 +75,7 @@ namespace EmEn::Scenes::Component
 			void processLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
 			[[nodiscard]]
@@ -87,11 +87,11 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedTo(const LocatableInterface &) */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getForceAppliedTo (const LocatableInterface & entity) const noexcept override;
+			Base::Math::Vector< 3, float > getForceAppliedTo (const LocatableInterface & entity) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedTo(const Libs::Math::CartesianFrame< float > &, float) */
+			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedTo(const Base::Math::CartesianFrame< float > &, float) */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getForceAppliedTo (const Libs::Math::CartesianFrame< float > & worldPosition, float radius = 0.0F) const noexcept override;
+			Base::Math::Vector< 3, float > getForceAppliedTo (const Base::Math::CartesianFrame< float > & worldPosition, float radius = 0.0F) const noexcept override;
 
 			/**
 			 * @brief Sets the push magnitude.
@@ -120,7 +120,7 @@ namespace EmEn::Scenes::Component
 			 * @param direction A reference to a vector.
 			 * @return void
 			 */
-			void setCustomDirection (const Libs::Math::Vector< 3, float > & direction) noexcept;
+			void setCustomDirection (const Base::Math::Vector< 3, float > & direction) noexcept;
 
 			/**
 			 * @brief Disables the custom push direction.
@@ -130,10 +130,10 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the push direction.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			direction () const noexcept
 			{
 				return m_direction;
@@ -142,12 +142,12 @@ namespace EmEn::Scenes::Component
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
 			/* Flag names */
 			static constexpr auto UseCoordinatesDirection{UnusedFlag + 0UL};
 
 			float m_magnitude{1.0F};
-			Libs::Math::Vector< 3, float > m_direction;
+			Base::Math::Vector< 3, float > m_direction;
 	};
 }

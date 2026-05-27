@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -38,8 +38,8 @@
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RasterizationOptions.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
 #include "ProgramCacheKey.hpp"
 #include "Types.hpp"
 
@@ -91,8 +91,8 @@ namespace EmEn::Graphics::Renderable
 	{
 		public:
 
-			static constexpr Libs::Math::Space3D::AACuboid< float > NullBoundingBox{};
-			static constexpr Libs::Math::Space3D::Sphere< float > NullBoundingSphere{};
+			static constexpr Base::Math::Space3D::AACuboid< float > NullBoundingBox{};
+			static constexpr Base::Math::Space3D::Sphere< float > NullBoundingSphere{};
 
 			/**
 			 * @brief Copy constructor.
@@ -296,17 +296,17 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Returns the bounding box surrounding the renderable.
-			 * @return const Libs::Math::Space3D::AACuboid< float > &
+			 * @return const Base::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::AACuboid< float > & boundingBox () const noexcept = 0;
+			virtual const Base::Math::Space3D::AACuboid< float > & boundingBox () const noexcept = 0;
 
 			/**
 			 * @brief Returns the bounding sphere surrounding the renderable.
-			 * @return const Libs::Math::Space3D::Sphere< float > &
+			 * @return const Base::Math::Space3D::Sphere< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
+			virtual const Base::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
 
 		protected:
 

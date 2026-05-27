@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,8 +36,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/StaticVector.hpp"
+#include "PixelFactory/Color.hpp"
+#include "StaticVector.hpp"
 #include "PipelineLayout.hpp"
 #include "RenderPass.hpp"
 #include "ShaderModule.hpp"
@@ -165,7 +165,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureShaderStages (const Libs::StaticVector< std::shared_ptr< ShaderModule >, 5 > & shaderModules) noexcept;
+			bool configureShaderStages (const Base::StaticVector< std::shared_ptr< ShaderModule >, 5 > & shaderModules) noexcept;
 
 			/**
 			 * @brief Generates vertex input state into the graphics pipeline createInfo.
@@ -296,7 +296,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureColorBlendState (Graphics::RenderPassType renderPassType, const Graphics::Material::Interface & material, const Libs::PixelFactory::Color< float > & blendColor = Libs::PixelFactory::Black, VkPipelineColorBlendStateCreateFlags flags = 0) noexcept;
+			bool configureColorBlendState (Graphics::RenderPassType renderPassType, const Graphics::Material::Interface & material, const Base::PixelFactory::Color< float > & blendColor = Base::PixelFactory::Black, VkPipelineColorBlendStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Sets a custom color blend state;
@@ -305,7 +305,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureColorBlendState (const Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept;
+			bool configureColorBlendState (const Base::StaticVector< VkPipelineColorBlendAttachmentState, 8 > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept;
 
 			/**
 			 * @brief Generates dynamic state into the graphics pipeline createInfo.
@@ -314,7 +314,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureDynamicStates (const Libs::StaticVector< VkDynamicState, 16 > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
+			bool configureDynamicStates (const Base::StaticVector< VkDynamicState, 16 > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Finalizes the configuration of the graphics pipeline.
@@ -360,10 +360,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the list of color blend attachments.
-			 * @return const Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > &
+			 * @return const Base::StaticVector< VkPipelineColorBlendAttachmentState, 8 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > &
+			const Base::StaticVector< VkPipelineColorBlendAttachmentState, 8 > &
 			colorBlendAttachments () const noexcept
 			{
 				return m_colorBlendAttachments;
@@ -411,19 +411,19 @@ namespace EmEn::Vulkan
 
 			VkPipeline m_handle{VK_NULL_HANDLE};
 			VkGraphicsPipelineCreateInfo m_createInfo{};
-			Libs::StaticVector< VkPipelineShaderStageCreateInfo, 5 > m_shaderStages;
+			Base::StaticVector< VkPipelineShaderStageCreateInfo, 5 > m_shaderStages;
 			VkPipelineVertexInputStateCreateInfo m_vertexInputState{};
 			VkPipelineInputAssemblyStateCreateInfo m_inputAssemblyState{};
 			VkPipelineTessellationStateCreateInfo m_tessellationState{};
-			Libs::StaticVector< VkViewport, 4 > m_viewports;
-			Libs::StaticVector< VkRect2D, 4 > m_scissors;
+			Base::StaticVector< VkViewport, 4 > m_viewports;
+			Base::StaticVector< VkRect2D, 4 > m_scissors;
 			VkPipelineViewportStateCreateInfo m_viewportState{};
 			VkPipelineRasterizationStateCreateInfo m_rasterizationState{};
 			VkPipelineMultisampleStateCreateInfo m_multisampleState{};
 			VkPipelineDepthStencilStateCreateInfo m_depthStencilState{};
-			Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > m_colorBlendAttachments;
+			Base::StaticVector< VkPipelineColorBlendAttachmentState, 8 > m_colorBlendAttachments;
 			VkPipelineColorBlendStateCreateInfo m_colorBlendState{};
-			Libs::StaticVector< VkDynamicState, 16 > m_dynamicStates;
+			Base::StaticVector< VkDynamicState, 16 > m_dynamicStates;
 			VkPipelineDynamicStateCreateInfo m_dynamicState{};
 	};
 }

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,17 +36,17 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "Libs/Math/OrientedCuboid.hpp"
+#include "Math/OrientedCuboid.hpp"
 #include "Scenes/Component/AbstractModifier.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::PixelFactory;
-	using namespace Libs::VertexFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::PixelFactory;
+	using namespace Base::VertexFactory;
 	using namespace Graphics;
 	using namespace Physics;
 

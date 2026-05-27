@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,12 +35,12 @@
 
 /* Local inclusions for usages. */
 #include "json/json.h"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 #include "Types.hpp"
 
-namespace EmEn::Libs { class ThreadPool; }
+namespace EmEn::Base { class ThreadPool; }
 
 namespace EmEn::Graphics
 {
@@ -86,10 +86,10 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -97,7 +97,7 @@ namespace EmEn::Graphics
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -147,7 +147,7 @@ namespace EmEn::Graphics
 			 * @return const Libraries::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Pixmap< uint8_t > & data (size_t frameIndex, size_t faceIndex) const noexcept;
+			const Base::PixelFactory::Pixmap< uint8_t > & data (size_t frameIndex, size_t faceIndex) const noexcept;
 
 			/**
 			 * @brief Returns the frames from the cubemap movie.
@@ -191,13 +191,13 @@ namespace EmEn::Graphics
 			 * @param threadPool A pointer to a thread pool. Default sequential loading.
 			 * @return bool
 			 */
-			bool loadCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale = 4.0F, uint32_t seed = 0, float baseIntensity = 0.7F, float causticIntensity = 1.0F, Libs::ThreadPool * threadPool = nullptr) noexcept;
+			bool loadCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale = 4.0F, uint32_t seed = 0, float baseIntensity = 0.7F, float causticIntensity = 1.0F, Base::ThreadPool * threadPool = nullptr) noexcept;
 
 			/**
 			 * @brief Generates procedural refractive caustic animation frames for cubemap projection.
 			 * @note Uses multi-octave Perlin noise with sinusoidal domain warping to simulate
-			 *       light concentration through a wavy water surface. Produces soft, organic
-			 *       patterns unlike the sharp cell-edge patterns of Voronoi caustics.
+			 *	   light concentration through a wavy water surface. Produces soft, organic
+			 *	   patterns unlike the sharp cell-edge patterns of Voronoi caustics.
 			 * @param faceSize The resolution of each cubemap face in pixels (e.g. 256).
 			 * @param frameCount The number of animation frames to generate.
 			 * @param frameDuration The duration of each frame in milliseconds.
@@ -209,14 +209,14 @@ namespace EmEn::Graphics
 			 * @param threadPool A pointer to a thread pool. Default sequential loading.
 			 * @return bool
 			 */
-			bool loadRefractiveCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale = 3.0F, uint32_t seed = 0, uint32_t octaves = 3, float baseIntensity = 0.15F, float peakIntensity = 1.4F, Libs::ThreadPool * threadPool = nullptr) noexcept;
+			bool loadRefractiveCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale = 3.0F, uint32_t seed = 0, uint32_t octaves = 3, float baseIntensity = 0.15F, float peakIntensity = 1.4F, Base::ThreadPool * threadPool = nullptr) noexcept;
 
 			/**
 			 * @brief Returns the average color of the cubemap movie.
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float > averageColor () const noexcept;
+			Base::PixelFactory::Color< float > averageColor () const noexcept;
 
 			/**
 			 * @brief Returns the duration in milliseconds.

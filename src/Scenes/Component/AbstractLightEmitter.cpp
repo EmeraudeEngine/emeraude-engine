@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,8 +36,8 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 	using namespace Graphics;
 	
 	void
@@ -140,7 +140,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	AbstractLightEmitter::setColor (const Libs::PixelFactory::Color< float > & color) noexcept
+	AbstractLightEmitter::setColor (const Base::PixelFactory::Color< float > & color) noexcept
 	{
 		m_color = color;
 
@@ -301,7 +301,7 @@ namespace EmEn::Scenes::Component
 		}
 	}
 	bool
-	AbstractLightEmitter::onNotification (const Libs::ObservableTrait * /*observable*/, int notificationCode, const std::any & /*data*/) noexcept
+	AbstractLightEmitter::onNotification (const Base::ObservableTrait * /*observable*/, int notificationCode, const std::any & /*data*/) noexcept
 	{
 		if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 		{

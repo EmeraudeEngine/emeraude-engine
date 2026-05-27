@@ -384,7 +384,7 @@ std::string name = sf2->presetName(0);
 - **RPN support**: Pitch Bend Range (CC#100/101 + CC#6/38)
 - **Aftertouch**: Channel Pressure (0xD0) simulated via expression
 - **Voice allocation**: Pre-allocated 256 TSF voices for complex MIDI files
-- See: [`Libs/WaveFactory/AGENTS.md`](../Libs/WaveFactory/AGENTS.md) for full MIDI feature list
+- See: [`Base/WaveFactory/AGENTS.md`](../../dependencies/emeraude-base/src/WaveFactory/AGENTS.md) for full MIDI feature list
 
 ## Recorder (Loopback Audio Capture)
 

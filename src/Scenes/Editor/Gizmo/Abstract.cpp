@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	}
 
 	void
-	Abstract::updateScreenScale (const Libs::Math::Vector< 3, float > & cameraPosition, float fieldOfView, float screenRatio) noexcept
+	Abstract::updateScreenScale (const Base::Math::Vector< 3, float > & cameraPosition, float fieldOfView, float screenRatio) noexcept
 	{
 		const float distance = (m_worldFrame.position() - cameraPosition).length();
 

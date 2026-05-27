@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 
 /* Local inclusions for usages. */
 #include "AnimationInterface.hpp"
-#include "Libs/Variant.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Animations
 {
@@ -127,7 +127,7 @@ namespace EmEn::Animations
 			 * @param cycle The current engine cycle.
 			 * @return bool
 			 */
-			virtual bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept = 0;
+			virtual bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept = 0;
 
 			std::map< uint8_t, std::shared_ptr< AnimationInterface > > m_animations;
 	};

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -121,7 +121,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Libs::Math::Vector< 3, float > & cameraPosition) noexcept
+	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Base::Math::Vector< 3, float > & cameraPosition) noexcept
 	{
 		if ( m_accelerationStructureBuilder == nullptr )
 		{
@@ -363,9 +363,9 @@ namespace EmEn::Scenes
 					/* RHS basis: col 1 (local +Y) preserved as world up axis,
 					 * col 2 (local +Z, the sprite's normal) = forward_horiz,
 					 * col 0 (local +X) = col 1 × col 2 = (fz, 0, -fx). */
-					rm[0][0] = scale * fz;   rm[0][1] = 0.0F;    rm[0][2] = scale * fx;
-					rm[1][0] = 0.0F;          rm[1][1] = scale;    rm[1][2] = 0.0F;
-					rm[2][0] = -scale * fx;  rm[2][1] = 0.0F;    rm[2][2] = scale * fz;
+					rm[0][0] = scale * fz;   rm[0][1] = 0.0F;	rm[0][2] = scale * fx;
+					rm[1][0] = 0.0F;		  rm[1][1] = scale;	rm[1][2] = 0.0F;
+					rm[2][0] = -scale * fx;  rm[2][1] = 0.0F;	rm[2][2] = scale * fz;
 					/* Translation (column 3) intentionally preserved. */
 				}
 

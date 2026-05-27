@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 
 namespace EmEn::Graphics
 {
@@ -780,7 +780,7 @@ namespace EmEn::Graphics
 		PositiveZString, NegativeZString
 	};
 
-	using CubemapPixmaps = std::array< Libs::PixelFactory::Pixmap< uint8_t >, CubemapFaceCount >;
+	using CubemapPixmaps = std::array< Base::PixelFactory::Pixmap< uint8_t >, CubemapFaceCount >;
 
 	/**
 	 * @brief Converts a cubemap face enumeration value to the corresponding string.

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -374,7 +374,7 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Enables PBR (Physically Based Rendering) mode.
 			 * @note When PBR mode is enabled, the light generator uses Cook-Torrance BRDF
-			 *       instead of Phong-Blinn shading.
+			 *	   instead of Phong-Blinn shading.
 			 * @return void
 			 */
 			void

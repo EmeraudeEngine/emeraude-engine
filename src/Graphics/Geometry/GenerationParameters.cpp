@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,10 +34,10 @@
 
 namespace EmEn::Graphics::Geometry
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::PixelFactory;
-	using namespace Libs::VertexFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::PixelFactory;
+	using namespace Base::VertexFactory;
 
 	std::string
 	GenerationParameters::uniqueIdentifier () const noexcept

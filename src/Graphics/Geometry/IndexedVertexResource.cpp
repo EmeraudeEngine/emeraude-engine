@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,17 +27,17 @@
 #include "IndexedVertexResource.hpp"
 
 /* Local inclusions. */
-#include "Libs/VertexFactory/FileIO.hpp"
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "VertexFactory/FileIO.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::VertexFactory;
-	using namespace Libs::PixelFactory;
-	using namespace Libs::VertexFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::VertexFactory;
+	using namespace Base::PixelFactory;
+	using namespace Base::VertexFactory;
 	using namespace Vulkan;
 
 	bool

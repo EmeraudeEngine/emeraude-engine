@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "FragmentShader.hpp"
@@ -52,9 +52,9 @@ namespace EmEn::Saphir
 	/**
 	 * @brief The program class.
 	 * @note This will contain all the necessary shaders to build a program like OpenGL.
-	 * @extends EmEn::Libs::NameableTrait This is a nameable class.
+	 * @extends EmEn::Base::NameableTrait This is a nameable class.
 	 */
-	class Program final : public Libs::NameableTrait
+	class Program final : public Base::NameableTrait
 	{
 		public:
 

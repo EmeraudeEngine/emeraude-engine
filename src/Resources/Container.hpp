@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,15 +39,15 @@
 #include <utility>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "NameableTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "BaseInformation.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Libs/Network/URL.hpp"
-#include "Libs/ObserverTrait.hpp"
-#include "Libs/String.hpp"
+#include "IO/IO.hpp"
+#include "Network/URL.hpp"
+#include "ObserverTrait.hpp"
+#include "String.hpp"
 #include "Net/Manager.hpp"
 #include "PrimaryServices.hpp"
 #include "ResourceTrait.hpp"
@@ -68,11 +68,11 @@ namespace EmEn::Resources
 	 * for event-based notification patterns, allowing observers to monitor resource lifecycle events.
 	 *
 	 * @see Container Template implementation of this interface
-	 * @see EmEn::Libs::NameableTrait Base class providing naming functionality
-	 * @see EmEn::Libs::ObservableTrait Base class providing observer pattern functionality
+	 * @see EmEn::Base::NameableTrait Base class providing naming functionality
+	 * @see EmEn::Base::ObservableTrait Base class providing observer pattern functionality
 	 * @version 0.8.35
 	 */
-	class ContainerInterface : public Libs::NameableTrait, public Libs::ObservableTrait
+	class ContainerInterface : public Base::NameableTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -270,7 +270,7 @@ namespace EmEn::Resources
 				: m_baseInformation{std::move(baseInformation)},
 				m_resource{resource}
 			{
-				using namespace Libs;
+				using namespace Base;
 
 				switch ( m_baseInformation.sourceType() )
 				{
@@ -322,7 +322,7 @@ namespace EmEn::Resources
 				std::filesystem::path filepath{fileSystem.cacheDirectory()};
 				filepath.append("data");
 				filepath.append(resource_t::ClassId);
-				filepath.append(Libs::String::extractFilename(m_baseInformation.data().asString()));
+				filepath.append(Base::String::extractFilename(m_baseInformation.data().asString()));
 
 				return filepath;
 			}
@@ -408,7 +408,7 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			Libs::Network::URL
+			Base::Network::URL
 			url () const noexcept
 			{
 				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
@@ -416,7 +416,7 @@ namespace EmEn::Resources
 					return {};
 				}
 
-				return Libs::Network::URL{m_baseInformation.data().asString()};
+				return Base::Network::URL{m_baseInformation.data().asString()};
 			}
 
 			/**
@@ -583,7 +583,7 @@ namespace EmEn::Resources
 	 * @version 0.8.35
 	 */
 	template< typename resource_t >
-	class Container final : public ContainerInterface, public Libs::ObserverTrait
+	class Container final : public ContainerInterface, public Base::ObserverTrait
 	{
 		public:
 
@@ -646,10 +646,10 @@ namespace EmEn::Resources
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(resource_t::ClassId);
+				return Base::Hash::FNV1a(resource_t::ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -657,7 +657,7 @@ namespace EmEn::Resources
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -1359,7 +1359,7 @@ namespace EmEn::Resources
 
 				/* NOTE: O(n) iteration through unordered_map is unavoidable without maintaining a separate key vector.
 				 * The random index is in range [0, size-1] to avoid off-by-one errors. */
-				const auto randomIndex = Libs::Utility::quickRandom< size_t >(0, m_localStore->size() - 1);
+				const auto randomIndex = Base::Utility::quickRandom< size_t >(0, m_localStore->size() - 1);
 
 				auto it = m_localStore->begin();
 				std::advance(it, static_cast< std::ptrdiff_t >(randomIndex));
@@ -1410,7 +1410,7 @@ namespace EmEn::Resources
 				return true;
 			}
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			bool
 			onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
 			{
@@ -1700,7 +1700,7 @@ namespace EmEn::Resources
 						/* NOTE: Check the cache system before downloading. */
 						const auto cacheFile = request.cacheFilepath(m_primaryServices.fileSystem());
 
-						if ( Libs::IO::fileExists(cacheFile) )
+						if ( Base::IO::fileExists(cacheFile) )
 						{
 							request.setDownloadProcessed(m_primaryServices.fileSystem(), true);
 						}

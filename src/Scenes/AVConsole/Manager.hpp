@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,10 +37,10 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 #include "Console/ControllableTrait.hpp"
-#include "Libs/ObserverTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObserverTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "AbstractVirtualDevice.hpp"
@@ -56,12 +56,12 @@ namespace EmEn::Scenes::AVConsole
 	/**
 	 * @brief The audio/video manager links every virtual audio/video input/output from a scene.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
-	 * @extends EmEn::Libs::NameableTrait The audio/video manager can have a name according to a scene.
+	 * @extends EmEn::Base::NameableTrait The audio/video manager can have a name according to a scene.
 	 * @extends EmEn::Console::ControllableTrait The audio/video manager is usable from the console.
-	 * @extends EmEn::Libs::ObserverTrait The audio/video manager wants to get notifications from devices.
-	 * @extends EmEn::Libs::ObserverTrait The audio/video manager dispatches device configuration changes.
+	 * @extends EmEn::Base::ObserverTrait The audio/video manager wants to get notifications from devices.
+	 * @extends EmEn::Base::ObserverTrait The audio/video manager dispatches device configuration changes.
 	 */
-	class Manager final : public Libs::NameableTrait, public Console::ControllableTrait, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class Manager final : public Base::NameableTrait, public Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -103,10 +103,10 @@ namespace EmEn::Scenes::AVConsole
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -114,7 +114,7 @@ namespace EmEn::Scenes::AVConsole
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -403,7 +403,7 @@ namespace EmEn::Scenes::AVConsole
 
 		private:
 
-			/** @copydoc EmEn::Libs:ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base:ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 

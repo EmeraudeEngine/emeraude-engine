@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "AnimationInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Variant.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Animations
 {
@@ -56,13 +56,13 @@ namespace EmEn::Animations
 			 * @param minimum A reference to a minimum value.
 			 * @param maximum A reference to a maximum value.
 			 */
-			RandomValue (const Libs::Variant & minimum, const Libs::Variant & maximum) noexcept
+			RandomValue (const Base::Variant & minimum, const Base::Variant & maximum) noexcept
 			{
 				this->setValue(minimum, maximum);
 			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::getNextValue() */
-			Libs::Variant getNextValue () noexcept override;
+			Base::Variant getNextValue () noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimationInterface::isPlaying() */
 			[[nodiscard]]
@@ -107,11 +107,11 @@ namespace EmEn::Animations
 			 * @param minimum A reference to a minimum value.
 			 * @param maximum A reference to a maximum value.
 			 */
-			void setValue (const Libs::Variant & minimum, const Libs::Variant & maximum) noexcept;
+			void setValue (const Base::Variant & minimum, const Base::Variant & maximum) noexcept;
 
 		private:
 
-			Libs::Variant m_minimumValue{};
-			Libs::Variant m_maximumValue{};
+			Base::Variant m_minimumValue{};
+			Base::Variant m_maximumValue{};
 	};
 }

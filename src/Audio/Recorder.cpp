@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,8 +30,8 @@
 #include <chrono>
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/FileIO.hpp"
-#include "Libs/WaveFactory/Wave.hpp"
+#include "WaveFactory/FileIO.hpp"
+#include "WaveFactory/Wave.hpp"
 #include "Manager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
@@ -39,7 +39,7 @@
 
 namespace EmEn::Audio
 {
-	using namespace Libs;
+	using namespace Base;
 
 	Recorder::Recorder (PrimaryServices & primaryServices, Manager & audioManager) noexcept
 		: ServiceInterface{ClassId},

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,9 +40,9 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
-#include "Libs/Time/EventTrait.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "NameableTrait.hpp"
+#include "Time/EventTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Audio/Ambience.hpp"
@@ -54,7 +54,7 @@
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "GroundLevelInterface.hpp"
-#include "Libs/Randomizer.hpp"
+#include "Randomizer.hpp"
 #include "LightSet.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
@@ -207,9 +207,9 @@ namespace EmEn::Scenes
 	 * @note Uses the Observer pattern to react to Node/StaticEntity/Component changes.
 	 * @note [OBS][SHARED-OBSERVER] - Scene observes AVConsoleManager and root Node.
 	 *
-	 * @extends EmEn::Libs::NameableTrait A scene is a named object in the engine.
-	 * @extends EmEn::Libs::Time::EventTrait A scene can have timed events.
-	 * @extends EmEn::Libs::ObserverTrait The scene will observe the scene node tree and static entity list.
+	 * @extends EmEn::Base::NameableTrait A scene is a named object in the engine.
+	 * @extends EmEn::Base::Time::EventTrait A scene can have timed events.
+	 * @extends EmEn::Base::ObserverTrait The scene will observe the scene node tree and static entity list.
 	 *
 	 * @see Node For dynamic hierarchical entities with physics.
 	 * @see StaticEntity For optimized static geometry.
@@ -217,7 +217,7 @@ namespace EmEn::Scenes
 	 * @see OctreeSector For spatial partitioning.
 	 * @version 0.8.35
 	 */
-	class Scene final : public Libs::NameableTrait, public Libs::Time::EventTrait< uint32_t, std::milli >, public Libs::ObserverTrait
+	class Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
 	{
 		public:
 
@@ -453,7 +453,7 @@ namespace EmEn::Scenes
 			 * @see boundary() For boundary value.
 			 */
 			[[nodiscard]]
-			bool contains (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept;
+			bool contains (const Base::Math::Vector< 3, float > & worldPosition) const noexcept;
 
 			/**
 			 * @brief Generates a random position within the scene boundary.
@@ -466,13 +466,13 @@ namespace EmEn::Scenes
 			 * @see boundary() For scene extent.
 			 * @see randomizer() For deterministic random.
 			 */
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			getRandomPosition () const noexcept
 			{
 				return {
-					Libs::Utility::quickRandom(-m_boundary, m_boundary),
-					Libs::Utility::quickRandom(-m_boundary, m_boundary),
-					Libs::Utility::quickRandom(-m_boundary, m_boundary)
+					Base::Utility::quickRandom(-m_boundary, m_boundary),
+					Base::Utility::quickRandom(-m_boundary, m_boundary),
+					Base::Utility::quickRandom(-m_boundary, m_boundary)
 				};
 			}
 
@@ -485,7 +485,7 @@ namespace EmEn::Scenes
 			 * @return Reference to the scene's float randomizer.
 			 */
 			[[nodiscard]]
-			Libs::Randomizer< float > &
+			Base::Randomizer< float > &
 			floatRandomizer () noexcept
 			{
 				return m_floatRandomizer;
@@ -500,7 +500,7 @@ namespace EmEn::Scenes
 			 * @return Reference to the scene's integer randomizer.
 			 */
 			[[nodiscard]]
-			Libs::Randomizer< int > &
+			Base::Randomizer< int > &
 			integerRandomizer () noexcept
 			{
 				return m_integerRandomizer;
@@ -909,7 +909,7 @@ namespace EmEn::Scenes
 			 * @see removeStaticEntity() To remove a static entity.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< StaticEntity > createStaticEntity (const std::string & name, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept;
+			std::shared_ptr< StaticEntity > createStaticEntity (const std::string & name, const Base::Math::CartesianFrame< float > & coordinates = {}) noexcept;
 
 			/**
 			 * @brief Creates a static entity at a specific position with default orientation.
@@ -924,9 +924,9 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			std::shared_ptr< StaticEntity >
-			createStaticEntity (const std::string & name, const Libs::Math::Vector< 3, float > & position) noexcept
+			createStaticEntity (const std::string & name, const Base::Math::Vector< 3, float > & position) noexcept
 			{
-				return this->createStaticEntity(name, Libs::Math::CartesianFrame< float >{position});
+				return this->createStaticEntity(name, Base::Math::CartesianFrame< float >{position});
 			}
 
 			/**
@@ -1868,9 +1868,9 @@ namespace EmEn::Scenes
 			 * Observer pattern implementation.
 			 * ============================================================ */
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
 			 * @brief Checks a notification from the audio video console manager.
@@ -2007,7 +2007,7 @@ namespace EmEn::Scenes
 			 * @param distance The distance from the camera.
 			 * @return void
 			 */
-			void insertIntoShadowCastingRenderList (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoShadowCastingRenderList (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
 			/**
 			 * @brief Check if a renderable instance is ready for rendering.
@@ -2033,7 +2033,7 @@ namespace EmEn::Scenes
 			 * @param distance The distance from the camera.
 			 * @return void
 			 */
-			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
 			/**
 			 * @brief Renders a list of objects Z-sorted that uses lighting.
@@ -2066,7 +2066,7 @@ namespace EmEn::Scenes
 			 * @return Vector of applicable render pass types.
 			 */
 			[[nodiscard]]
-			Libs::StaticVector< Graphics::RenderPassType, Graphics::MaxPassCount > prepareRenderPassTypes (const Graphics::RenderableInstance::Abstract & renderableInstance) const noexcept;
+			Base::StaticVector< Graphics::RenderPassType, Graphics::MaxPassCount > prepareRenderPassTypes (const Graphics::RenderableInstance::Abstract & renderableInstance) const noexcept;
 
 			/**
 			 * @brief Prepares a renderable instance for shadow map rendering.
@@ -2204,7 +2204,7 @@ namespace EmEn::Scenes
 			 * @param maxPenetration [out] Deepest penetration depth found.
 			 * @version 0.8.39
 			 */
-			void accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
+			void accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
 
 			/**
 			 * @brief Accumulates position correction from ground collision.
@@ -2220,7 +2220,7 @@ namespace EmEn::Scenes
 			 * @param groundPenetration [out] Penetration depth of ground collision.
 			 * @version 0.8.41
 			 */
-			void accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, Libs::Math::Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept;
+			void accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, Base::Math::Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept;
 
 			/**
 			 * @brief Accumulates position corrections from static entity collisions.
@@ -2236,7 +2236,7 @@ namespace EmEn::Scenes
 			 * @param collidedEntity [out] Pointer to the static entity with the deepest penetration.
 			 * @version 0.8.40
 			 */
-			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
+			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]
@@ -2352,9 +2352,9 @@ namespace EmEn::Scenes
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */
 			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
 			/** @brief Scene-local random float generator. */
-			Libs::Randomizer< float > m_floatRandomizer;
+			Base::Randomizer< float > m_floatRandomizer;
 			/** @brief Scene-local random integer generator. */
-			Libs::Randomizer< int > m_integerRandomizer;
+			Base::Randomizer< int > m_integerRandomizer;
 			/** @brief Half-size of cubic scene boundary in meters. */
 			float m_boundary{0};
 			/** @brief Accumulated scene runtime in microseconds. */

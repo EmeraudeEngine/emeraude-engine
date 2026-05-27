@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Arguments.hpp"
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "Settings.hpp"
 #include "Types.hpp"
 
@@ -85,7 +85,7 @@ namespace EmEn::PlatformSpecific
 			 * @return void
 			 */
 			void
-			setGPUDevices (const Libs::StaticVector< GPUDevice, 8 > & devices) noexcept
+			setGPUDevices (const Base::StaticVector< GPUDevice, 8 > & devices) noexcept
 			{
 				m_GPUDevices = devices;
 			}
@@ -125,10 +125,10 @@ namespace EmEn::PlatformSpecific
 
 			/**
 			 * @brief Returns a list of available GPU devices.
-			 * @return const Libs::StaticVector< GPUDevice, 8 > &
+			 * @return const Base::StaticVector< GPUDevice, 8 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< GPUDevice, 8 > &
+			const Base::StaticVector< GPUDevice, 8 > &
 			getGPUDeviceInformation () const noexcept
 			{
 				return m_GPUDevices;
@@ -208,7 +208,7 @@ namespace EmEn::PlatformSpecific
 			Settings & m_settings;
 			OperatingSystem m_OSInformation{};
 			CPU m_CPUInformation{};
-			Libs::StaticVector< GPUDevice, 8 > m_GPUDevices;
+			Base::StaticVector< GPUDevice, 8 > m_GPUDevices;
 			bool m_informationFound{false};
 	};
 

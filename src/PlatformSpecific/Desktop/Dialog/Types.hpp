@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 #include <string_view>
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
@@ -41,7 +41,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	static constexpr size_t MaxCustomButtons{6};
 
 	/** @brief Container for custom button labels. */
-	using ButtonLabels = Libs::StaticVector< std::string, MaxCustomButtons >;
+	using ButtonLabels = Base::StaticVector< std::string, MaxCustomButtons >;
 
 	/**
 	 * @brief The button layout enumeration.

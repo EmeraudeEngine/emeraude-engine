@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,13 +27,13 @@
 #include "Controller.hpp"
 
 /* Local inclusions. */
-#include "Libs/String.hpp"
+#include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Console
 {
-	using namespace Libs;
+	using namespace Base;
 
 	Controller * Controller::s_instance{nullptr};
 
@@ -297,7 +297,7 @@ namespace EmEn::Console
 			for ( const auto & [name, command] : commands )
 			{
 				out << "  " << path << "." << name << "()\n"
-					<< "      " << command.help() << "\n";
+					<< "	  " << command.help() << "\n";
 			}
 		}
 
@@ -322,14 +322,14 @@ namespace EmEn::Console
 				"\n"
 				"Top-level built-ins:\n"
 				"  help, help(), lsfunc()  Show this recursive command reference\n"
-				"  listObjects, lsobj()    List top-level controllable objects\n"
-				"  exit, quit, shutdown    Graceful shutdown (saves settings)\n"
-				"  hardExit                Immediate shutdown (no save)\n"
+				"  listObjects, lsobj()	List top-level controllable objects\n"
+				"  exit, quit, shutdown	Graceful shutdown (saves settings)\n"
+				"  hardExit				Immediate shutdown (no save)\n"
 				"\n"
 				"Per-object built-ins (any depth):\n"
-				"  <path>.lsfunc()         List commands bound at that level\n"
-				"  <path>.lsobj()          List sub-objects at that level\n"
-				"  <path>.help()           Recursive dump from that level\n"
+				"  <path>.lsfunc()		 List commands bound at that level\n"
+				"  <path>.lsobj()		  List sub-objects at that level\n"
+				"  <path>.help()		   Recursive dump from that level\n"
 				"\n"
 				"Registered objects and commands:\n";
 

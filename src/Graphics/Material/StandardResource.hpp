@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -148,10 +148,10 @@ namespace EmEn::Graphics::Material
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -159,7 +159,7 @@ namespace EmEn::Graphics::Material
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -272,7 +272,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setAmbientComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setAmbientComponent (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets the ambient component as a texture.
@@ -291,7 +291,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setAlbedoComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setAlbedoComponent (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Alias of setDiffuseComponent for cross-material compatibility (PBR convention).
@@ -372,7 +372,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool Always true.
 			 */
 			bool
-			setSheenComponent (const Libs::PixelFactory::Color< float > & /*color*/, float /*roughness*/) noexcept
+			setSheenComponent (const Base::PixelFactory::Color< float > & /*color*/, float /*roughness*/) noexcept
 			{
 				return true;
 			}
@@ -403,7 +403,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setDiffuseComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setDiffuseComponent (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets the diffuse component as a texture.
@@ -420,7 +420,7 @@ namespace EmEn::Graphics::Material
 			 * @param shininess A positive value.
 			 * @return bool
 			 */
-			bool setSpecularComponent (const Libs::PixelFactory::Color< float > & color, float shininess = DefaultShininess) noexcept;
+			bool setSpecularComponent (const Base::PixelFactory::Color< float > & color, float shininess = DefaultShininess) noexcept;
 
 			/**
 			 * @brief Sets the specular component as a texture.
@@ -465,7 +465,7 @@ namespace EmEn::Graphics::Material
 			 * @param amount The control amount. Default 100%.
 			 * @return bool
 			 */
-			bool setAutoIlluminationComponent (const Libs::PixelFactory::Color< float > & color, float amount = DefaultAutoIlluminationAmount) noexcept;
+			bool setAutoIlluminationComponent (const Base::PixelFactory::Color< float > & color, float amount = DefaultAutoIlluminationAmount) noexcept;
 
 			/**
 			 * @brief Sets the auto-illumination component as a texture.
@@ -592,7 +592,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setAmbientColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setAmbientColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the diffuse color.
@@ -600,7 +600,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setDiffuseColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setDiffuseColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the specular color.
@@ -608,7 +608,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setSpecularColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the auto-illumination color.
@@ -616,7 +616,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setAutoIlluminationColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setAutoIlluminationColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the specular shininess amount.
@@ -877,10 +877,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto EmissiveStrengthOffset{24UL};
 
 			/* Default values. */
-			static constexpr auto DefaultAmbientColor{Libs::PixelFactory::DarkGrey};
-			static constexpr auto DefaultDiffuseColor{Libs::PixelFactory::Grey};
-			static constexpr auto DefaultSpecularColor{Libs::PixelFactory::White};
-			static constexpr auto DefaultAutoIlluminationColor{Libs::PixelFactory::White};
+			static constexpr auto DefaultAmbientColor{Base::PixelFactory::DarkGrey};
+			static constexpr auto DefaultDiffuseColor{Base::PixelFactory::Grey};
+			static constexpr auto DefaultSpecularColor{Base::PixelFactory::White};
+			static constexpr auto DefaultAutoIlluminationColor{Base::PixelFactory::White};
 			static constexpr auto DefaultShininess{32.0F};
 			static constexpr auto DefaultOpacity{1.0F};
 			static constexpr auto DefaultAutoIlluminationAmount{1.0F};
@@ -923,7 +923,7 @@ namespace EmEn::Graphics::Material
 			uint32_t m_sharedUBOIndex{0};
 			/* TODO: Unify video memory update mechanism between all materials. */
 			/* PBR-to-Phong tracking (used by setAlbedo/setRoughness/setMetalness aliases). */
-			Libs::PixelFactory::Color< float > m_pbrAlbedoColor{DefaultDiffuseColor};
+			Base::PixelFactory::Color< float > m_pbrAlbedoColor{DefaultDiffuseColor};
 			float m_pbrRoughness{DefaultPBRRoughness};
 			float m_pbrMetalness{DefaultPBRMetalness};
 			bool m_videoMemoryUpdated{false};

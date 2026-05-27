@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -76,7 +76,7 @@ namespace EmEn::Graphics
 		auto pipeline = std::make_shared< GraphicsPipeline >(m_renderer.device());
 		pipeline->setIdentifier(tracerTag, name, "GraphicsPipeline");
 
-		Libs::StaticVector< std::shared_ptr< ShaderModule >, 5 > shaderModules;
+		Base::StaticVector< std::shared_ptr< ShaderModule >, 5 > shaderModules;
 		shaderModules.emplace_back(vertexModule);
 		shaderModules.emplace_back(fragmentModule);
 
@@ -95,7 +95,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		Libs::StaticVector< VkDynamicState, 16 > dynamicStates;
+		Base::StaticVector< VkDynamicState, 16 > dynamicStates;
 		dynamicStates.emplace_back(VK_DYNAMIC_STATE_VIEWPORT);
 		dynamicStates.emplace_back(VK_DYNAMIC_STATE_SCISSOR);
 
@@ -139,7 +139,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > attachments;
+		Base::StaticVector< VkPipelineColorBlendAttachmentState, 8 > attachments;
 		attachments.emplace_back(VkPipelineColorBlendAttachmentState{
 			.blendEnable = VK_FALSE,
 			.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
@@ -149,7 +149,7 @@ namespace EmEn::Graphics
 			.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
 			.alphaBlendOp = VK_BLEND_OP_ADD,
 			.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-			                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+							  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 		});
 
 		VkPipelineColorBlendStateCreateInfo colorBlend{};

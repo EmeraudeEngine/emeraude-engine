@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,7 +36,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace Libs;
+	using namespace Base;
 
 	bool
 	DescriptorSetLayout::createOnHardware () noexcept
@@ -161,7 +161,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	DescriptorSetLayout::computeHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
+	DescriptorSetLayout::computeHash (const Base::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
 	{
 		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
 			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);

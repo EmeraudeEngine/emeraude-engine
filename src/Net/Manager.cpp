@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,16 +32,16 @@
 #include <utility>
 
 /* Local inclusions. */
-#include "Libs/FastJSON.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Libs/Network/Network.hpp"
-#include "Libs/Network/URI.hpp"
-#include "Libs/Network/URL.hpp"
+#include "FastJSON.hpp"
+#include "IO/IO.hpp"
+#include "Network/Network.hpp"
+#include "Network/URI.hpp"
+#include "Network/URL.hpp"
 #include "PrimaryServices.hpp"
 
 namespace EmEn::Net
 {
-	using namespace Libs;
+	using namespace Base;
 
 	bool
 	Manager::onInitialize () noexcept

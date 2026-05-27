@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -58,13 +58,13 @@
  * The two diagnostic patterns suppressed are *structurally required* by the OpenAL
  * C API and cannot be replaced with safer C++ idioms without losing functionality:
  *   - cppcoreguidelines-avoid-non-const-global-variables: function pointers MUST be
- *     mutable globals — they are populated at runtime by alcGetProcAddress() and
- *     must be callable from any TU after installation. The g_isXxxAvailable flags
- *     follow the same lifecycle (set once at install, read many times).
+ *	 mutable globals — they are populated at runtime by alcGetProcAddress() and
+ *	 must be callable from any TU after installation. The g_isXxxAvailable flags
+ *	 follow the same lifecycle (set once at install, read many times).
  *   - cppcoreguidelines-pro-type-reinterpret-cast: alcGetProcAddress() returns
- *     void* by C-API contract; the typed function-pointer cast is the only legal
- *     conversion path standard C++ offers (std::bit_cast does not sanction
- *     function-pointer ↔ void* conversion). */
+ *	 void* by C-API contract; the typed function-pointer cast is the only legal
+ *	 conversion path standard C++ offers (std::bit_cast does not sanction
+ *	 function-pointer ↔ void* conversion). */
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-pro-type-reinterpret-cast)
 
 namespace EmEn::Audio::OpenAL

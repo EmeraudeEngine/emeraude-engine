@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,8 +30,8 @@
 #include <map>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Base.hpp"
-#include "Libs/Variant.hpp"
+#include "Math/Base.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Animations
 {
@@ -47,7 +47,7 @@ namespace EmEn::Animations
 			 * @param value The value at this keyframe [std::move].
 			 * @param interpolation The type of interpolation.
 			 */
-			KeyFrame (Libs::Variant value, Libs::Math::InterpolationType interpolation) noexcept
+			KeyFrame (Base::Variant value, Base::Math::InterpolationType interpolation) noexcept
 				: m_value{std::move(value)},
 				m_interpolation{interpolation}
 			{
@@ -59,7 +59,7 @@ namespace EmEn::Animations
 			 * @return const Libraries::Variant &
 			 */
 			[[nodiscard]]
-			const Libs::Variant &
+			const Base::Variant &
 			value () const noexcept
 			{
 				return m_value;
@@ -67,10 +67,10 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Returns the interpolation type.
-			 * @return const Libs::Math::InterpolationType &
+			 * @return const Base::Math::InterpolationType &
 			 */
 			[[nodiscard]]
-			const Libs::Math::InterpolationType &
+			const Base::Math::InterpolationType &
 			interpolation () const noexcept
 			{
 				return m_interpolation;
@@ -78,8 +78,8 @@ namespace EmEn::Animations
 
 		private:
 
-			Libs::Variant m_value;
-			Libs::Math::InterpolationType m_interpolation;
+			Base::Variant m_value;
+			Base::Math::InterpolationType m_interpolation;
 	};
 
 	/**

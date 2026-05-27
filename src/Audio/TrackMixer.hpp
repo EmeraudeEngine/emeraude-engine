@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Console/ControllableTrait.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "MusicResource.hpp"
@@ -68,10 +68,10 @@ namespace EmEn::Audio
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Console::ControllableTrait The console can control the track mixer.
-	 * @extends EmEn::Libs::ObservableTrait This service is observable.
-	 * @extends EmEn::Libs::ObserverTrait This service can observe resource loading.
+	 * @extends EmEn::Base::ObservableTrait This service is observable.
+	 * @extends EmEn::Base::ObserverTrait This service can observe resource loading.
 	 */
-	class TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Libs::ObservableTrait, public Libs::ObserverTrait
+	class TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait, public Base::ObserverTrait
 	{
 		public:
 
@@ -127,10 +127,10 @@ namespace EmEn::Audio
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -138,7 +138,7 @@ namespace EmEn::Audio
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -204,8 +204,8 @@ namespace EmEn::Audio
 			/**
 			 * @brief Adds a soundtrack to the playlist.
 			 * @note Ad-hoc addition severs the link to any previously loaded playlist manifest
-			 *       (loadedPlaylist() will return nullptr after this call). Use loadPlaylist() to
-			 *       rebuild a playlist that is still backed by a named manifest.
+			 *	   (loadedPlaylist() will return nullptr after this call). Use loadPlaylist() to
+			 *	   rebuild a playlist that is still backed by a named manifest.
 			 * @param track A reference to a music resource.
 			 * @return void
 			 */
@@ -219,12 +219,12 @@ namespace EmEn::Audio
 			/**
 			 * @brief Replaces the current playlist with the content of a PlaylistResource manifest.
 			 * @note Semantics:
-			 *       - Captures whether playback was active before any mutation.
-			 *       - Resolves every track name via the MusicResource container; unknown entries are skipped with a warning.
-			 *       - If the manifest is null or resolves to zero valid tracks, the previous playlist is left intact and the call returns false.
-			 *       - Otherwise: stops current playback, clears the playlist, refills it from the resolved tracks, and if playback was active
-			 *         AND the new playlist is non-empty, starts from index 0 via playIndex(0).
-			 *       - Shuffle ordering (if enabled) is regenerated automatically by the next playback start.
+			 *	   - Captures whether playback was active before any mutation.
+			 *	   - Resolves every track name via the MusicResource container; unknown entries are skipped with a warning.
+			 *	   - If the manifest is null or resolves to zero valid tracks, the previous playlist is left intact and the call returns false.
+			 *	   - Otherwise: stops current playback, clears the playlist, refills it from the resolved tracks, and if playback was active
+			 *		 AND the new playlist is non-empty, starts from index 0 via playIndex(0).
+			 *	   - Shuffle ordering (if enabled) is regenerated automatically by the next playback start.
 			 * @param playlist A shared pointer to the playlist manifest.
 			 * @return bool True on successful swap, false on null pointer or empty resolution (no mutation performed).
 			 */
@@ -245,8 +245,8 @@ namespace EmEn::Audio
 			/**
 			 * @brief Returns the sorted, deduplicated list of all PlaylistResource names the application can reach.
 			 * @note Union of store-backed manifests (`data-stores/MusicPlaylists/` JSON files) and any PlaylistResource
-			 *       created at runtime via `Resources::Container::createResource()`. Useful for populating UI
-			 *       dropdowns without having to touch the Resources system directly.
+			 *	   created at runtime via `Resources::Container::createResource()`. Useful for populating UI
+			 *	   dropdowns without having to touch the Resources system directly.
 			 * @return std::vector< std::string > Sorted playlist names. Empty if the container is unreachable.
 			 */
 			[[nodiscard]]
@@ -255,8 +255,8 @@ namespace EmEn::Audio
 			/**
 			 * @brief Returns the manifest currently backing the playlist, if any.
 			 * @note Returns nullptr when: no manifest was ever loaded, the playlist was cleared, or the current
-			 *       content was built ad-hoc via addToPlaylist() (any manual mutation severs the manifest link).
-			 *       Callers can query loadedPlaylist()->name() / trackCount() for display purposes.
+			 *	   content was built ad-hoc via addToPlaylist() (any manual mutation severs the manifest link).
+			 *	   Callers can query loadedPlaylist()->name() / trackCount() for display purposes.
 			 * @return const std::shared_ptr< PlaylistResource > &
 			 */
 			[[nodiscard]]
@@ -302,8 +302,8 @@ namespace EmEn::Audio
 			/**
 			 * @brief Finds the first playlist entry whose resource name contains the given substring (case-insensitive).
 			 * @note Intended for remote-console and AI-driven workflows where the caller provides an approximate
-			 *       title, e.g. "Volcanian" resolves to "Kyrandia2/Volcanian Salesperson". Matching is restricted
-			 *       to the currently loaded playlist — not the full MusicResource container.
+			 *	   title, e.g. "Volcanian" resolves to "Kyrandia2/Volcanian Salesperson". Matching is restricted
+			 *	   to the currently loaded playlist — not the full MusicResource container.
 			 * @param partialName A partial or full track resource name. Empty input yields a nullptr result.
 			 * @return std::shared_ptr< MusicResource > The first matching track, or nullptr if no entry matches.
 			 */
@@ -433,7 +433,7 @@ namespace EmEn::Audio
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -60,7 +60,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
+			const Base::Math::Matrix< 4, float > &
 			projectionMatrix () const noexcept override
 			{
 				return m_logicState.projection;
@@ -68,19 +68,19 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix(uint32_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept override;
+			const Base::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(bool, size_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept override;
+			const Base::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(uint32_t, bool, size_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept override;
+			const Base::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position() const */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			position () const noexcept override
 			{
 				return m_logicState.position;
@@ -88,7 +88,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position(uint32_t) const */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept override;
+			const Base::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frustum(size_t) const */
 			[[nodiscard]]
@@ -141,10 +141,10 @@ namespace EmEn::Graphics
 			void updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateViewCoordinates() */
-			void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept override;
+			void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateAmbientLightProperties() */
-			void updateAmbientLightProperties (const Libs::PixelFactory::Color< float > & color, float intensity) noexcept override;
+			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
 			bool create (Renderer & renderer, const std::string & instanceID) noexcept override;
@@ -199,10 +199,10 @@ namespace EmEn::Graphics
 			 */
 			struct DataState
 			{
-				Libs::Math::Matrix< 4, float > projection; /**< Projection matrix for 2D view. */
-				Libs::Math::Matrix< 4, float > view; /**< View matrix. */
-				Libs::Math::Matrix< 4, float > infinityView; /**< View matrix for infinite distance (skybox). */
-				Libs::Math::Vector< 3, float > position; /**< Camera position in world space. */
+				Base::Math::Matrix< 4, float > projection; /**< Projection matrix for 2D view. */
+				Base::Math::Matrix< 4, float > view; /**< View matrix. */
+				Base::Math::Matrix< 4, float > infinityView; /**< View matrix for infinite distance (skybox). */
+				Base::Math::Vector< 3, float > position; /**< Camera position in world space. */
 				Frustum frustum; /**< Frustum for culling. */
 				std::array< float, ViewUBOElementCount > bufferData{
 					/* Projection matrix. */

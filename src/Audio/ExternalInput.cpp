@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,13 +27,13 @@
 #include "ExternalInput.hpp"
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/FileIO.hpp"
-#include "Libs/WaveFactory/Wave.hpp"
+#include "WaveFactory/FileIO.hpp"
+#include "WaveFactory/Wave.hpp"
 #include "Manager.hpp"
 
 namespace EmEn::Audio
 {
-	using namespace Libs;
+	using namespace Base;
 
 	ExternalInput::ExternalInput (PrimaryServices & primaryServices, Manager & audioManager) noexcept
 		: ServiceInterface{ClassId},

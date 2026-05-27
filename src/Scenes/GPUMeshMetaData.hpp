@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -44,11 +44,11 @@ namespace EmEn::Scenes
 	/**
 	 * @brief GPU-side per-instance mesh metadata for ray tracing shaders (std430 layout).
 	 * @note Indexed by TLAS instanceCustomIndex. Provides the RT shader with device
-	 *       addresses for vertex/index data, byte offsets for attribute fetch, and one
-	 *       material index per sub-geometry of the BLAS. The shader looks up the right
-	 *       material via materialIndices[geometryIndex] where geometryIndex comes from
-	 *       rayQueryGetIntersectionGeometryIndexEXT.
-	 *       Total size: 48 bytes (3 uvec4) for std430 alignment.
+	 *	   addresses for vertex/index data, byte offsets for attribute fetch, and one
+	 *	   material index per sub-geometry of the BLAS. The shader looks up the right
+	 *	   material via materialIndices[geometryIndex] where geometryIndex comes from
+	 *	   rayQueryGetIntersectionGeometryIndexEXT.
+	 *	   Total size: 48 bytes (3 uvec4) for std430 alignment.
 	 */
 	struct GPUMeshMetaData
 	{

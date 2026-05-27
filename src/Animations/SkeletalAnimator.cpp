@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,14 +32,14 @@
 
 /* Local inclusions. */
 #include "AnimationClipResource.hpp"
-#include "Libs/Animation/AnimationChannel.hpp"
-#include "Libs/Math/TransformUtils.hpp"
+#include "Animation/AnimationChannel.hpp"
+#include "Math/TransformUtils.hpp"
 #include "SkeletonResource.hpp"
 
 namespace EmEn::Animations
 {
-	using namespace Libs::Animation;
-	using namespace Libs::Math;
+	using namespace Base::Animation;
+	using namespace Base::Math;
 
 	/* ---- Keyframe sampling helpers ---- */
 

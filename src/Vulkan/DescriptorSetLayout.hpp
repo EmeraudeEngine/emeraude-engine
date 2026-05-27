@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -452,7 +452,7 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t computeHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept;
+			static size_t computeHash (const Base::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept;
 
 		private:
 
@@ -467,8 +467,8 @@ namespace EmEn::Vulkan
 			VkDescriptorSetLayout m_handle{VK_NULL_HANDLE};
 			VkDescriptorSetLayoutCreateInfo m_createInfo{};
 			std::string m_UUID;
-			Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > m_setLayoutBindings;
-			Libs::StaticVector< VkDescriptorBindingFlags, 16 > m_bindingFlags;
+			Base::StaticVector< VkDescriptorSetLayoutBinding, 16 > m_setLayoutBindings;
+			Base::StaticVector< VkDescriptorBindingFlags, 16 > m_bindingFlags;
 	};
 
 	inline

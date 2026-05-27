@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 
 namespace EmEn::Scenes
 {
@@ -49,7 +49,7 @@ namespace EmEn::Scenes
 			 * @return float
 			 */
 			[[nodiscard]]
-			virtual float getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+			virtual float getLevelAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
 
 			/**
 			 * @brief Returns a position where Y is completed by the level at X,Z position.
@@ -59,7 +59,7 @@ namespace EmEn::Scenes
 			 * @return Vector< 3, float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY) const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY) const noexcept = 0;
 
 			/**
 			 * @brief Returns the normal vector under the given position.
@@ -67,13 +67,13 @@ namespace EmEn::Scenes
 			 * @return Vector< 3, float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getNormalAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
 
 			/**
 			 * @brief Updates the ground visibility from the camera position.
 			 * @note This is not frustum-culling, but help the ground to know where the point of view is located.
 			 */
-			virtual void updateVisibility (const Libs::Math::Vector< 3, float > & worldPosition) noexcept = 0;
+			virtual void updateVisibility (const Base::Math::Vector< 3, float > & worldPosition) noexcept = 0;
 
 		protected:
 

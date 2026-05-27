@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -41,7 +41,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Types.hpp"
@@ -186,7 +186,7 @@ namespace EmEn::Vulkan
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
-			bool capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept override;
+			bool capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept override;
 
 			/**
 			 * @brief Returns the current frame's color image.
@@ -337,14 +337,14 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
-			Libs::Math::CartesianFrame< float >
+			Base::Math::CartesianFrame< float >
 			getWorldCoordinates () const noexcept override
 			{
 				return m_worldCoordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
-			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
+			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & sourceDevice) noexcept override;
@@ -543,9 +543,9 @@ namespace EmEn::Vulkan
 			std::atomic<Status> m_status{Status::Uninitialized};
 			uint32_t m_imageCount{0};
 			uint32_t m_acquiredImageIndex{0};
-			Libs::StaticVector< Frame, 5 > m_frames;
+			Base::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
-			Libs::Math::CartesianFrame< float > m_worldCoordinates;
+			Base::Math::CartesianFrame< float > m_worldCoordinates;
 			float m_fovOrNear{0.0F};
 			float m_distanceOrFar{0.0F};
 			bool m_showInformation{false};

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -51,8 +51,8 @@ namespace EmEn::Graphics
 	 * @brief Specialization of view matrices for cascaded shadow map rendering.
 	 * @extends EmEn::Graphics::ViewMatricesInterface
 	 * @note This class manages multiple view-projection matrices for Cascaded Shadow Maps (CSM).
-	 *       Each cascade covers a different depth range of the camera frustum, providing
-	 *       higher shadow resolution near the camera and lower resolution far away.
+	 *	   Each cascade covers a different depth range of the camera frustum, providing
+	 *	   higher shadow resolution near the camera and lower resolution far away.
 	 */
 	class ViewMatricesCascadedUBO final : public ViewMatricesInterface
 	{
@@ -70,7 +70,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
+			const Base::Math::Matrix< 4, float > &
 			projectionMatrix () const noexcept override
 			{
 				return m_logicState.projection;
@@ -78,19 +78,19 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix(uint32_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept override;
+			const Base::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(bool, size_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept override;
+			const Base::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(uint32_t, bool, size_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept override;
+			const Base::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position() const */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			position () const noexcept override
 			{
 				return m_logicState.position;
@@ -98,7 +98,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position(uint32_t) const */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept override;
+			const Base::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept override;
 
 			/**
 			 * @brief Returns the frustum for a specific cascade.
@@ -156,10 +156,10 @@ namespace EmEn::Graphics
 			void updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateViewCoordinates() */
-			void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept override;
+			void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateAmbientLightProperties() */
-			void updateAmbientLightProperties (const Libs::PixelFactory::Color< float > & color, float intensity) noexcept override;
+			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
 			bool create (Renderer & renderer, const std::string & instanceID) noexcept override;
@@ -235,23 +235,23 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the view-projection matrix for a specific cascade.
 			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
-			 * @return const Libs::Math::Matrix< 4, float > &
+			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > & cascadeViewProjectionMatrix (size_t cascadeIndex) const noexcept;
+			const Base::Math::Matrix< 4, float > & cascadeViewProjectionMatrix (size_t cascadeIndex) const noexcept;
 
 			/**
 			 * @brief Updates the view matrices from the main camera frustum.
 			 * @note This is used for Cascaded Shadow Maps (CSM) to compute tight-fit projections
-			 *       for each cascade based on the main camera's view frustum.
-			 *       Default implementation does nothing (for 2D and cubemap shadow maps).
+			 *	   for each cascade based on the main camera's view frustum.
+			 *	   Default implementation does nothing (for 2D and cubemap shadow maps).
 			 * @param lightDirection The normalized light direction vector.
 			 * @param cameraFrustumCorners Array of 8 corners of the camera frustum in world space.
 			 * @param nearPlane The camera near plane distance.
 			 * @param farPlane The camera far plane distance.
 			 * @return void
 			 */
-			void updateFromMainCameraFrustum (const Libs::Math::Vector< 3, float > & lightDirection, const std::array< Libs::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
+			void updateFromMainCameraFrustum (const Base::Math::Vector< 3, float > & lightDirection, const std::array< Base::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
 
 			/**
 			 * @brief Computes the split distances using the practical split scheme.
@@ -277,22 +277,22 @@ namespace EmEn::Graphics
 			 * @param cascadeIndex The cascade index.
 			 * @param lightDirection The light direction.
 			 * @param cascadeCorners The 8 corners of the cascade frustum portion.
-			 * @return Libs::Math::Matrix< 4, float >
+			 * @return Base::Math::Matrix< 4, float >
 			 */
 			[[nodiscard]]
-			static Libs::Math::Matrix< 4, float > computeCascadeProjection (size_t cascadeIndex, const Libs::Math::Vector< 3, float > & lightDirection, const std::array< Libs::Math::Vector< 3, float >, 8 > & cascadeCorners) noexcept;
+			static Base::Math::Matrix< 4, float > computeCascadeProjection (size_t cascadeIndex, const Base::Math::Vector< 3, float > & lightDirection, const std::array< Base::Math::Vector< 3, float >, 8 > & cascadeCorners) noexcept;
 
 			/*
 			 * UBO Layout (std140):
-			 * Offset  Size    Content
-			 * 0       256     mat4[4] cascadeViewProjectionMatrices
-			 * 256     16      vec4 cascadeSplitDistances
-			 * 272     16      vec4 (cascadeCount, shadowBias, reserved, reserved)
-			 * 288     16      vec4 worldPosition
-			 * 304     16      vec4 velocity
-			 * 320     16      vec4 viewProperties (width, height, near, far)
-			 * 336     16      vec4 ambientLightColor
-			 * 352     16      vec4 (ambientLightIntensity, padding...)
+			 * Offset  Size	Content
+			 * 0	   256	 mat4[4] cascadeViewProjectionMatrices
+			 * 256	 16	  vec4 cascadeSplitDistances
+			 * 272	 16	  vec4 (cascadeCount, shadowBias, reserved, reserved)
+			 * 288	 16	  vec4 worldPosition
+			 * 304	 16	  vec4 velocity
+			 * 320	 16	  vec4 viewProperties (width, height, near, far)
+			 * 336	 16	  vec4 ambientLightColor
+			 * 352	 16	  vec4 (ambientLightIntensity, padding...)
 			 * Total: 368 bytes (std140 aligned)
 			 */
 
@@ -334,11 +334,11 @@ namespace EmEn::Graphics
 			 */
 			struct DataState
 			{
-				Libs::Math::Matrix< 4, float > projection; /**< Main projection matrix. */
-				Libs::Math::Matrix< 4, float > view; /**< Main view matrix. */
-				Libs::Math::Matrix< 4, float > infinityView; /**< View matrix for infinite distance. */
-				std::array< Libs::Math::Matrix< 4, float >, MaxCascadeCount > cascadeViewProjections{}; /**< View-projection matrices per cascade. */
-				Libs::Math::Vector< 3, float > position; /**< Camera/light position in world space. */
+				Base::Math::Matrix< 4, float > projection; /**< Main projection matrix. */
+				Base::Math::Matrix< 4, float > view; /**< Main view matrix. */
+				Base::Math::Matrix< 4, float > infinityView; /**< View matrix for infinite distance. */
+				std::array< Base::Math::Matrix< 4, float >, MaxCascadeCount > cascadeViewProjections{}; /**< View-projection matrices per cascade. */
+				Base::Math::Vector< 3, float > position; /**< Camera/light position in world space. */
 				Frustum mainFrustum; /**< Main frustum for culling. */
 				std::array< Frustum, MaxCascadeCount > cascadeFrustums{}; /**< Per-cascade frustums for culling. */
 				std::array< float, ViewUBOElementCount > bufferData{

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -61,10 +61,10 @@ namespace EmEn::Graphics::Material
 	/**
 	 * @brief GPU-side material data for ray tracing shaders (std430 layout).
 	 * @note This is NOT a renderable material. It is a flat data struct used exclusively
-	 *       as an element in the RT Material SSBO. All material types (BasicResource,
-	 *       StandardResource, PBRResource) convert to this normalized PBR representation
-	 *       via Material::Interface::exportRTMaterialData().
-	 *       Only properties visible/useful in reflections are included.
+	 *	   as an element in the RT Material SSBO. All material types (BasicResource,
+	 *	   StandardResource, PBRResource) convert to this normalized PBR representation
+	 *	   via Material::Interface::exportRTMaterialData().
+	 *	   Only properties visible/useful in reflections are included.
 	 */
 	struct GPURTMaterialData
 	{
@@ -106,15 +106,15 @@ namespace EmEn::Graphics::Material
 		int32_t _padding{0};
 
 		/* Flag bits for the 'flags' field. */
-		static constexpr uint32_t HasAlbedoTexture       = 1U << 0;
-		static constexpr uint32_t HasNormalTexture        = 1U << 1;
-		static constexpr uint32_t HasRoughnessTexture     = 1U << 2;
-		static constexpr uint32_t HasMetalnessTexture     = 1U << 3;
-		static constexpr uint32_t HasEmissionTexture      = 1U << 4;
-		static constexpr uint32_t HasClearCoat            = 1U << 5;
-		static constexpr uint32_t IsEmissive              = 1U << 6;
-		static constexpr uint32_t HasOpacityTexture       = 1U << 7;
-		static constexpr uint32_t IsAlphaTest             = 1U << 8;
+		static constexpr uint32_t HasAlbedoTexture	   = 1U << 0;
+		static constexpr uint32_t HasNormalTexture		= 1U << 1;
+		static constexpr uint32_t HasRoughnessTexture	 = 1U << 2;
+		static constexpr uint32_t HasMetalnessTexture	 = 1U << 3;
+		static constexpr uint32_t HasEmissionTexture	  = 1U << 4;
+		static constexpr uint32_t HasClearCoat			= 1U << 5;
+		static constexpr uint32_t IsEmissive			  = 1U << 6;
+		static constexpr uint32_t HasOpacityTexture	   = 1U << 7;
+		static constexpr uint32_t IsAlphaTest			 = 1U << 8;
 	};
 
 	/* Verify struct size is a multiple of 16 bytes for std430 alignment. */

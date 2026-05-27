@@ -19,7 +19,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
 #pragma once
@@ -52,7 +54,7 @@ namespace EmEn
 	 *
 	 * @note Member variables are ordered for optimal memory alignment (largest to smallest).
 	 * @note This class is engine-internal: only Tracer and TracerLogger reach for it. External
-	 *       code uses the public Tracer API (see Tracer.hpp).
+	 *	   code uses the public Tracer API (see Tracer.hpp).
 	 * @see TracerLogger, Tracer
 	 * @version 0.8.39
 	 */
@@ -184,7 +186,7 @@ namespace EmEn
 	 *
 	 * @note All public methods are thread-safe.
 	 * @note This class is engine-internal. Public consumers should use Tracer's
-	 *       enableLogger/disableLogger API rather than instantiating it directly.
+	 *	   enableLogger/disableLogger API rather than instantiating it directly.
 	 * @see TracerEntry, Tracer
 	 * @version 0.8.39
 	 */

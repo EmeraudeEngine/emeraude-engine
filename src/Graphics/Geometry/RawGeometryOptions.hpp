@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
-#include "Libs/Math/Space3D/Point.hpp"
+#include "Math/Space3D/Point.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
@@ -46,9 +46,9 @@ namespace EmEn::Graphics::Geometry
 		Topology topology{Topology::TriangleList};
 
 		/** @brief Optional explicit bounding box minimum point. */
-		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMin;
+		std::optional< Base::Math::Space3D::Point< float > > boundingBoxMin;
 
 		/** @brief Optional explicit bounding box maximum point. */
-		std::optional< Libs::Math::Space3D::Point< float > > boundingBoxMax;
+		std::optional< Base::Math::Space3D::Point< float > > boundingBoxMax;
 	};
 }

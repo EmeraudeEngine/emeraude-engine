@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,14 +37,14 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Audio/ExternalInput.hpp"
 #include "Audio/Recorder.hpp"
 #include "Audio/TrackMixer.hpp"
-#include "Libs/WaveFactory/Types.hpp"
+#include "WaveFactory/Types.hpp"
 #include "OpenALExtensions.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "SettingKeys.hpp"
@@ -74,10 +74,10 @@ namespace EmEn::Audio
 	 * @brief The audio manager service class.
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObservableTrait This service is observable.
+	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Console::ControllableTrait The console can control the audio manager.
 	 */
-	class Manager final : public ServiceInterface, public Libs::ObservableTrait, public Console::ControllableTrait
+	class Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 
@@ -120,10 +120,10 @@ namespace EmEn::Audio
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -131,7 +131,7 @@ namespace EmEn::Audio
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -345,7 +345,7 @@ namespace EmEn::Audio
 			 * @return Frequency
 			 */
 			[[nodiscard]]
-			Libs::WaveFactory::Frequency
+			Base::WaveFactory::Frequency
 			frequencyPlayback () const noexcept
 			{
 				return m_playbackFrequency;
@@ -486,7 +486,7 @@ namespace EmEn::Audio
 			ALCdevice * m_device{nullptr};
 			ALCcontext * m_context{nullptr};
 			std::map< ALCint, ALCint > m_contextAttributes;
-			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			size_t m_musicChunkSize{DefaultAudioMusicChunkSize};
 			std::shared_ptr< Source > m_defaultSource;
 			std::vector< std::shared_ptr< Source > > m_allSources;

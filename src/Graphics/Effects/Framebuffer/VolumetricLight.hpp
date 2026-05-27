@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -164,7 +164,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * @return void
 			 */
 			void
-			setLightColorOverride (const Libs::PixelFactory::Color<> & color) noexcept
+			setLightColorOverride (const Base::PixelFactory::Color<> & color) noexcept
 			{
 				m_lightColorOverride = color;
 			}
@@ -242,7 +242,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::unique_ptr< Vulkan::DescriptorSet > m_radialDescSet;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
 			/* Optional overrides (nullopt = read from LightSet at execute time). */
-			std::optional< Libs::PixelFactory::Color<> > m_lightColorOverride;
+			std::optional< Base::PixelFactory::Color<> > m_lightColorOverride;
 			std::optional< float > m_lightIntensityOverride;
 	};
 }

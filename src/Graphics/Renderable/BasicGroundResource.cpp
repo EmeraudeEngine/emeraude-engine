@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,14 +33,14 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Libs/FastJSON.hpp"
+#include "FastJSON.hpp"
 #include "Scenes/DefinitionResource.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::VertexFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::VertexFactory;
 	using namespace Scenes;
 
 	float

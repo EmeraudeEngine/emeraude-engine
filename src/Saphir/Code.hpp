@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,8 +32,8 @@
 
 /* Local inclusions for usages. */
 #include "CodeGeneratorInterface.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Saphir
 {
@@ -154,7 +154,7 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			Code &
-			operator<< (const Libs::Math::Vector< 2, float > & value) noexcept
+			operator<< (const Base::Math::Vector< 2, float > & value) noexcept
 			{
 				m_code << "vec2(" << value.x() << ", " << value.y() << ")";
 
@@ -167,7 +167,7 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			Code &
-			operator<< (const Libs::Math::Vector< 3, float > & value) noexcept
+			operator<< (const Base::Math::Vector< 3, float > & value) noexcept
 			{
 				m_code << "vec3(" << value.x() << ", " << value.y() << ", " << value.z() << ")";
 
@@ -180,7 +180,7 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			Code &
-			operator<< (const Libs::Math::Vector< 4, float > & value) noexcept
+			operator<< (const Base::Math::Vector< 4, float > & value) noexcept
 			{
 				m_code << "vec4(" << value.x() << ", " << value.y() << ", " << value.z() << ", " << value.w() << ")";
 
@@ -193,7 +193,7 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			Code &
-			operator<< (const Libs::PixelFactory::Color< float > & value) noexcept
+			operator<< (const Base::PixelFactory::Color< float > & value) noexcept
 			{
 				m_code << "vec4(" << value.red() << ", " << value.green() << ", " << value.blue() << ", " << value.alpha() << ")";
 

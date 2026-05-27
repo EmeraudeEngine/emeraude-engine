@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,14 +36,14 @@
 #include "Arguments.hpp"
 #include "Constants.hpp"
 #include "Graphics/Types.hpp"
-#include "Libs/BlobTrait.hpp"
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "BlobTrait.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Tool
 {
-	using namespace Libs;
-	using namespace Libs::VertexFactory;
+	using namespace Base;
+	using namespace Base::VertexFactory;
 	using namespace Graphics;
 
 	GeometryDataPrinter::GeometryDataPrinter (const Arguments & arguments) noexcept

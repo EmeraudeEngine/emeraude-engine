@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,14 +27,14 @@
 #include "RandomValue.hpp"
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* Local inclusions. */
 #include "Tracer.hpp"
 
 namespace EmEn::Animations
 {
-	using namespace Libs;
+	using namespace Base;
 
 	void
 	RandomValue::setValue (const Variant & minimum, const Variant & maximum) noexcept

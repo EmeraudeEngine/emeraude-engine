@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Animation/Skeleton.hpp"
+#include "Animation/Skeleton.hpp"
 #include "Resources/Container.hpp"
 
 namespace EmEn::Animations
@@ -71,10 +71,10 @@ namespace EmEn::Animations
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -82,7 +82,7 @@ namespace EmEn::Animations
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -112,7 +112,7 @@ namespace EmEn::Animations
 			 * @param skeleton The skeleton data to take ownership of.
 			 * @return bool
 			 */
-			bool load (Libs::Animation::Skeleton< float > skeleton) noexcept;
+			bool load (Base::Animation::Skeleton< float > skeleton) noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -124,10 +124,10 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Returns the skeleton data.
-			 * @return const Libs::Animation::Skeleton< float > &
+			 * @return const Base::Animation::Skeleton< float > &
 			 */
 			[[nodiscard]]
-			const Libs::Animation::Skeleton< float > &
+			const Base::Animation::Skeleton< float > &
 			skeleton () const noexcept
 			{
 				return m_skeleton;
@@ -143,7 +143,7 @@ namespace EmEn::Animations
 				return true;
 			}
 
-			Libs::Animation::Skeleton< float > m_skeleton;
+			Base::Animation::Skeleton< float > m_skeleton;
 	};
 }
 

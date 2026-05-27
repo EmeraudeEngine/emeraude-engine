@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Animations/SkeletalAnimator.hpp"
@@ -45,9 +45,9 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a component for the visual part of an entity.
 	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
+	 * @extends EmEn::Base::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
-	class Visual final : public Abstract, public Libs::ObserverTrait
+	class Visual final : public Abstract, public Base::ObserverTrait
 	{
 		public:
 
@@ -105,7 +105,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept override
 			{
 				return m_renderableInstance->renderable()->boundingBox();
@@ -113,7 +113,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept override
 			{
 				return m_renderableInstance->renderable()->boundingSphere();
@@ -121,7 +121,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void
-			move (const Libs::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
+			move (const Base::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
 			{
 
 			}
@@ -146,9 +146,9 @@ namespace EmEn::Scenes::Component
 			void onWakeup () noexcept override { }
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 

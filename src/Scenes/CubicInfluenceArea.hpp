@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "InfluenceAreaInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Scenes
@@ -79,29 +79,29 @@ namespace EmEn::Scenes
 
 			}
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::Sphere< float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Base::Math::CartesianFrame< float > &, const Base::Math::Space3D::Sphere< float > &) */
 			[[nodiscard]]
-			bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
+			bool isUnderInfluence (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::Sphere< float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Base::Math::CartesianFrame< float > &, const Base::Math::Space3D::Sphere< float > &) */
 			[[nodiscard]]
-			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
+			float influenceStrength (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::AACuboid< float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Base::Math::CartesianFrame< float > &, const Base::Math::Space3D::AACuboid< float > &) */
 			[[nodiscard]]
-			bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
+			bool isUnderInfluence (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::AACuboid< float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Base::Math::CartesianFrame< float > &, const Base::Math::Space3D::AACuboid< float > &) */
 			[[nodiscard]]
-			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
+			float influenceStrength (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::Vector< 3, float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Base::Math::Vector< 3, float > &) */
 			[[nodiscard]]
-			bool isUnderInfluence (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override;
+			bool isUnderInfluence (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::Vector< 3, float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Base::Math::Vector< 3, float > &) */
 			[[nodiscard]]
-			float influenceStrength (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override;
+			float influenceStrength (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override;
 
 			/**
 			 * @brief Sets the size of the area.
@@ -145,10 +145,10 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Gets position in the modifier space.
 			 * @param position A reference to a vector.
-			 * @return Libs::Math::Vector< 4, float >
+			 * @return Base::Math::Vector< 4, float >
 			 */
 			[[nodiscard]]
-			Libs::Math::Vector< 4, float > getPositionInModifierSpace (const Libs::Math::Vector< 3, float > & position) const noexcept;
+			Base::Math::Vector< 4, float > getPositionInModifierSpace (const Base::Math::Vector< 3, float > & position) const noexcept;
 
 			const AbstractEntity * m_parentEntity{nullptr};
 			float m_xSize;

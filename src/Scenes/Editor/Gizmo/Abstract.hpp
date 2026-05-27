@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,8 +31,8 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Space3D/Segment.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/Segment.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -125,7 +125,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			 * @return AxisID The axis that was hit, or AxisID::None.
 			 */
 			[[nodiscard]]
-			virtual AxisID hitTest (const Libs::Math::Space3D::Segment< float > & ray) const noexcept = 0;
+			virtual AxisID hitTest (const Base::Math::Space3D::Segment< float > & ray) const noexcept = 0;
 
 			/**
 			 * @brief Records the gizmo draw commands into the command buffer.
@@ -141,7 +141,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			 * @param fieldOfView The camera vertical field of view in radians.
 			 * @return void
 			 */
-			void updateScreenScale (const Libs::Math::Vector< 3, float > & cameraPosition, float fieldOfView, float screenRatio = DefaultScreenRatio) noexcept;
+			void updateScreenScale (const Base::Math::Vector< 3, float > & cameraPosition, float fieldOfView, float screenRatio = DefaultScreenRatio) noexcept;
 
 			/**
 			 * @brief Sets the world position and orientation of the gizmo.
@@ -149,17 +149,17 @@ namespace EmEn::Scenes::Editor::Gizmo
 			 * @return void
 			 */
 			void
-			setWorldFrame (const Libs::Math::CartesianFrame< float > & frame) noexcept
+			setWorldFrame (const Base::Math::CartesianFrame< float > & frame) noexcept
 			{
 				m_worldFrame = frame;
 			}
 
 			/**
 			 * @brief Returns the current world frame of the gizmo.
-			 * @return const Libs::Math::CartesianFrame< float > &
+			 * @return const Base::Math::CartesianFrame< float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::CartesianFrame< float > &
+			const Base::Math::CartesianFrame< float > &
 			worldFrame () const noexcept
 			{
 				return m_worldFrame;
@@ -226,7 +226,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			std::shared_ptr< Graphics::Geometry::Interface > m_geometry;
 
 			/** @brief The gizmo world-space position and orientation. */
-			Libs::Math::CartesianFrame< float > m_worldFrame;
+			Base::Math::CartesianFrame< float > m_worldFrame;
 
 			/** @brief Current scale factor for constant screen size. */
 			float m_screenScale{1.0F};

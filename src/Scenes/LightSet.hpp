@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 #include <set>
 
 /* Local inclusions for inheritances. */
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Component/DirectionalLight.hpp"
@@ -66,9 +66,9 @@ namespace EmEn::Scenes
 	/**
 	 * @brief This class hold lights from a whole scene.
 	 * @note [OBS][STATIC-OBSERVABLE]
-	 * @extends EmEn::Libs::ObservableTrait The light set can be observed for light addition or removal.
+	 * @extends EmEn::Base::ObservableTrait The light set can be observed for light addition or removal.
 	 */
-	class LightSet final : public Libs::ObservableTrait
+	class LightSet final : public Base::ObservableTrait
 	{
 		public:
 
@@ -153,10 +153,10 @@ namespace EmEn::Scenes
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -164,7 +164,7 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -299,7 +299,7 @@ namespace EmEn::Scenes
 			 * @return void
 			 */
 			void
-			setAmbientLightColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setAmbientLightColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_ambientLightColor = color;
 
@@ -316,7 +316,7 @@ namespace EmEn::Scenes
 			void
 			setAmbientLightColor (const std::shared_ptr< Graphics::TextureResource::TextureCubemap > & cubemap, float percent = 0.2F) noexcept
 			{
-				m_ambientLightColor = cubemap->averageColor() * Libs::Math::clampToUnit(percent);
+				m_ambientLightColor = cubemap->averageColor() * Base::Math::clampToUnit(percent);
 
 				this->notify(AmbientLightChanged);
 			}
@@ -339,7 +339,7 @@ namespace EmEn::Scenes
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			ambientLightColor () const noexcept
 			{
 				return m_ambientLightColor;
@@ -368,7 +368,7 @@ namespace EmEn::Scenes
 			enableAmbientGenerationFromLights (bool state, float factor = DefaultLightPercentToAmbient) noexcept
 			{
 				m_createAmbientFromLights = state;
-				m_lightPercentToAmbient = Libs::Math::clampToUnit(factor);
+				m_lightPercentToAmbient = Base::Math::clampToUnit(factor);
 			}
 
 			/**
@@ -512,10 +512,10 @@ namespace EmEn::Scenes
 			 * @brief Computes the ambient light fraction to add to global ambient light.
 			 * @tparam vectorData_t The data type to use for Vector. Default float.
 			 * @param light The targeted light.
-			 * @return Libs::Math::Vector< 4, vectorData_t >
+			 * @return Base::Math::Vector< 4, vectorData_t >
 			 */
 			template< typename vectorData_t = float >
-			Libs::Math::Vector< 4, vectorData_t >
+			Base::Math::Vector< 4, vectorData_t >
 			getLightColorFraction (const std::shared_ptr< Component::AbstractLightEmitter > & light) const noexcept
 			{
 				return light->color().toVector4<vectorData_t>() * this->lightPercentToAmbient();
@@ -626,7 +626,7 @@ namespace EmEn::Scenes
 			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTLightSSBO;
 			mutable uint32_t m_RTLightCount{0};
 			mutable std::mutex m_lightsAccess;
-			Libs::PixelFactory::Color< float > m_ambientLightColor{Libs::PixelFactory::Black};
+			Base::PixelFactory::Color< float > m_ambientLightColor{Base::PixelFactory::Black};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
 			bool m_initialized{false};

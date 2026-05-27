@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 #include "Saphir/Keys.hpp"
 
 namespace EmEn::Resources
@@ -69,7 +69,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @param UVWScale A reference to a vector to scale the texture coordinates. Default 1.0 in all directions.
 			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4-channel texture. Default false.
 			 */
-			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel = 0, const Libs::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
+			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel = 0, const Base::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
 				: m_samplerName{samplerName},
 				m_variableName{std::move(variableName)},
 				m_texture{texture},
@@ -96,7 +96,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @param UVWScale A reference to a vector to scale the texture coordinates. Default 1.0 in all directions.
 			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4-channel texture. Default false.
 			 */
-			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< Vulkan::TextureInterface > & texture, uint32_t UVWChannel = 0, const Libs::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
+			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< Vulkan::TextureInterface > & texture, uint32_t UVWChannel = 0, const Base::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
 				: m_samplerName{samplerName},
 				m_variableName{std::move(variableName)},
 				m_texture{texture},
@@ -212,7 +212,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @return void
 			 */
 			void
-			setUVWScale (const Libs::Math::Vector< 3, float > & UVWScale) noexcept
+			setUVWScale (const Base::Math::Vector< 3, float > & UVWScale) noexcept
 			{
 				m_UVWScale = UVWScale;
 			}
@@ -230,10 +230,10 @@ namespace EmEn::Graphics::Material::Component
 
 			/**
 			 * @brief Returns the texture coordinates scale.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			UVWScale () const noexcept
 			{
 				return m_UVWScale;
@@ -331,7 +331,7 @@ namespace EmEn::Graphics::Material::Component
 			std::string m_variableName;
 			std::shared_ptr< Vulkan::TextureInterface > m_texture;
 			std::shared_ptr< TextureResource::Abstract > m_textureResource;
-			Libs::Math::Vector< 3, float > m_UVWScale{1.0F, 1.0F, 1.0F};
+			Base::Math::Vector< 3, float > m_UVWScale{1.0F, 1.0F, 1.0F};
 			uint32_t m_UVWChannel{0};
 			uint32_t m_binding{0};
 			bool m_alphaEnabled{false};

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -185,8 +185,8 @@ namespace EmEn::Graphics::Material
 			 * @note The engine expresses opacity in two ways depending on the material type:
 			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`.
 			 *  - PBR/Standard set `BlendingEnabled` and source opacity from the albedo
-			 *    texture alpha channel (or a dedicated opacity component) — without
-			 *    setting `OpacityEnabled`.
+			 *	texture alpha channel (or a dedicated opacity component) — without
+			 *	setting `OpacityEnabled`.
 			 * Materials needing a grab pass (true refraction/transparency like water) are
 			 * excluded — they're handled by a different post-process path, not by RT
 			 * alpha-test.
@@ -204,7 +204,7 @@ namespace EmEn::Graphics::Material
 				/* Two conventions express alpha cutouts in this engine:
 				 *  - BasicResource sets OpacityEnabled via setOpacity().
 				 *  - PBR/Standard rely on BlendingEnabled with the alpha sourced from
-				 *    the albedo texture (no separate flag set today).
+				 *	the albedo texture (no separate flag set today).
 				 * Both must enter the RT alpha-test path so the trace shader samples
 				 * the opacity (or albedo .a fallback) at hit time. The earlier tie-dye
 				 * artefact with this broader check was caused by multi-instance/same-BLAS
@@ -409,8 +409,8 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Exports this material as a normalized PBR representation for ray tracing shaders.
 			 * @note Each material type overrides this to convert its properties to the unified
-			 *       GPURTMaterialData format. Only properties visible in reflections are exported.
-			 *       The default implementation fills sensible defaults (grey dielectric).
+			 *	   GPURTMaterialData format. Only properties visible in reflections are exported.
+			 *	   The default implementation fills sensible defaults (grey dielectric).
 			 * @param outData A reference to the RT material data to fill.
 			 * @return void
 			 */
@@ -419,8 +419,8 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Collects the textures relevant for ray tracing reflections.
 			 * @note Each material type overrides this to report its 2D textures that should
-			 *       be registered in the bindless texture array for RT shader access.
-			 *       The default implementation returns an empty list (no textures).
+			 *	   be registered in the bindless texture array for RT shader access.
+			 *	   The default implementation returns an empty list (no textures).
 			 * @param outSlots A reference to a vector to fill with texture slots.
 			 * @return void
 			 */

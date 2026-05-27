@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,16 +35,16 @@
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Libs/VertexFactory/ShapeDecimator.hpp"
+#include "FastJSON.hpp"
+#include "VertexFactory/ShapeDecimator.hpp"
 #include "MeshResource.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 	using namespace Graphics::Geometry;
 	using namespace Graphics::Material;
 
@@ -212,7 +212,7 @@ namespace EmEn::Graphics::Renderable
 		/* Parse material definition.
 		 * Two formats are supported:
 		 * 1. Multi-layer format (MeshResource compatible): "Layers": [ { "MaterialType": "...", ... } ]
-		 *    -> Only the first layer is used.
+		 *	-> Only the first layer is used.
 		 * 2. Simplified format: "MaterialType": "...", "MaterialName": "..." at root level.
 		 */
 		const Json::Value * layerData = nullptr;

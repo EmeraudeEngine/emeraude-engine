@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,8 +30,8 @@
 #include "Graphics/DirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::Effects::Lens
 {
@@ -110,17 +110,17 @@ namespace EmEn::Graphics::Effects::Lens
 			 * @return void
 			 */
 			void
-			setChannelWeights (const Libs::Math::Vector< 3, float > & weights) noexcept
+			setChannelWeights (const Base::Math::Vector< 3, float > & weights) noexcept
 			{
 				m_channelWeights = weights;
 			}
 
 			/**
 			 * @brief Returns the custom RGB channel weights.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > & 
+			const Base::Math::Vector< 3, float > &
 			channelWeights () const noexcept
 			{
 				return m_channelWeights;
@@ -190,17 +190,17 @@ namespace EmEn::Graphics::Effects::Lens
 			 * @return void
 			 */
 			void 
-			setTint (const Libs::PixelFactory::Color< float > & color) noexcept
+			setTint (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_tint = color;
 			}
 
 			/**
 			 * @brief Returns the tint color.
-			 * @return const Libs::PixelFactory::Color< float > &
+			 * @return const Base::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > & 
+			const Base::PixelFactory::Color< float > &
 			tint () const noexcept
 			{
 				return m_tint;
@@ -231,11 +231,11 @@ namespace EmEn::Graphics::Effects::Lens
 		private:
 
 			Mode m_mode{Mode::LumaRec709};
-			Libs::Math::Vector< 3, float > m_channelWeights{0.2126F, 0.7152F, 0.0722F};
+			Base::Math::Vector< 3, float > m_channelWeights{0.2126F, 0.7152F, 0.0722F};
 			float m_brightness{0.0F};
 			float m_contrast{1.0F};
 			float m_gamma{1.0F};
-			Libs::PixelFactory::Color< float > m_tint{Libs::PixelFactory::White};
+			Base::PixelFactory::Color< float > m_tint{Base::PixelFactory::White};
 			uint32_t m_levels{0};
 	};
 }

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,14 +37,14 @@
 
 /* Local inclusions. */
 #include "Graphics/TextureResource/Abstract.hpp"
-#include "Libs/PixelFactory/FileIO.hpp"
+#include "PixelFactory/FileIO.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::PixelFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::PixelFactory;
 
 	bool
 	CubemapResource::load () noexcept
@@ -128,12 +128,12 @@ namespace EmEn::Graphics
 
 						switch ( faceIndex )
 						{
-							case 0: /* PositiveX */ dx =  1.0F; dy = -t;    dz = -s;    break;
-							case 1: /* NegativeX */ dx = -1.0F; dy = -t;    dz =  s;    break;
-							case 2: /* PositiveY */ dx =  s;    dy =  1.0F; dz =  t;    break;
-							case 3: /* NegativeY */ dx =  s;    dy = -1.0F; dz = -t;    break;
-							case 4: /* PositiveZ */ dx =  s;    dy = -t;    dz =  1.0F; break;
-							default: /* NegativeZ */ dx = -s;   dy = -t;    dz = -1.0F; break;
+							case 0: /* PositiveX */ dx =  1.0F; dy = -t;	dz = -s;	break;
+							case 1: /* NegativeX */ dx = -1.0F; dy = -t;	dz =  s;	break;
+							case 2: /* PositiveY */ dx =  s;	dy =  1.0F; dz =  t;	break;
+							case 3: /* NegativeY */ dx =  s;	dy = -1.0F; dz = -t;	break;
+							case 4: /* PositiveZ */ dx =  s;	dy = -t;	dz =  1.0F; break;
+							default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
 						}
 
 						/* Normalize and extract the elevation (Y component).
@@ -327,12 +327,12 @@ namespace EmEn::Graphics
 
 					switch ( faceIndex )
 					{
-						case 0: /* PositiveX */ dx =  1.0F; dy = -t;    dz = -s;    break;
-						case 1: /* NegativeX */ dx = -1.0F; dy = -t;    dz =  s;    break;
-						case 2: /* PositiveY */ dx =  s;    dy =  1.0F; dz =  t;    break;
-						case 3: /* NegativeY */ dx =  s;    dy = -1.0F; dz = -t;    break;
-						case 4: /* PositiveZ */ dx =  s;    dy = -t;    dz =  1.0F; break;
-						default: /* NegativeZ */ dx = -s;   dy = -t;    dz = -1.0F; break;
+						case 0: /* PositiveX */ dx =  1.0F; dy = -t;	dz = -s;	break;
+						case 1: /* NegativeX */ dx = -1.0F; dy = -t;	dz =  s;	break;
+						case 2: /* PositiveY */ dx =  s;	dy =  1.0F; dz =  t;	break;
+						case 3: /* NegativeY */ dx =  s;	dy = -1.0F; dz = -t;	break;
+						case 4: /* PositiveZ */ dx =  s;	dy = -t;	dz =  1.0F; break;
+						default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
 					}
 
 					/* Normalize direction vector. */

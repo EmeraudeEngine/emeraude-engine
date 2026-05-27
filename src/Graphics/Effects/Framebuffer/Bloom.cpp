@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -212,7 +212,7 @@ vec4 upsampleTent (sampler2D tex, vec2 uv, vec2 ts, float sampleScale)
 	result += texture(tex, uv + vec2( 0.0, -s.y)) * 2.0;
 	result += texture(tex, uv + vec2( s.x, -s.y));
 	result += texture(tex, uv + vec2(-s.x,  0.0)) * 2.0;
-	result += texture(tex, uv)                      * 4.0;
+	result += texture(tex, uv)					  * 4.0;
 	result += texture(tex, uv + vec2( s.x,  0.0)) * 2.0;
 	result += texture(tex, uv + vec2(-s.x,  s.y));
 	result += texture(tex, uv + vec2( 0.0,  s.y)) * 2.0;
@@ -262,7 +262,7 @@ void main()
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Saphir;
 	using namespace Vulkan;
 

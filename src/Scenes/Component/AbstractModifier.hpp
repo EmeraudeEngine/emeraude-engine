@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -201,19 +201,19 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Returns the force applied to a locatable entity (Node, StaticEntity).
 			 * @param entity A reference to a locatable entity.
-			 * @return Libs::Math::Vector< 3, float > The force to apply.
+			 * @return Base::Math::Vector< 3, float > The force to apply.
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getForceAppliedTo (const LocatableInterface & entity) const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getForceAppliedTo (const LocatableInterface & entity) const noexcept = 0;
 
 			/**
 			 * @brief Returns the force applied to a point or small object.
 			 * @param worldPosition A reference to a cartesian frame.
 			 * @param radius The bounding radius (0 for point-based calculation).
-			 * @return Libs::Math::Vector< 3, float > The force to apply.
+			 * @return Base::Math::Vector< 3, float > The force to apply.
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getForceAppliedTo (const Libs::Math::CartesianFrame< float > & worldPosition, float radius = 0.0F) const noexcept = 0;
+			virtual Base::Math::Vector< 3, float > getForceAppliedTo (const Base::Math::CartesianFrame< float > & worldPosition, float radius = 0.0F) const noexcept = 0;
 
 		protected:
 

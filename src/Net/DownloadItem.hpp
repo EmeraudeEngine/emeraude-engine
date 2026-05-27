@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Libs/Network/URL.hpp"
+#include "Network/URL.hpp"
 #include "Tracer.hpp"
 #include "Types.hpp"
 
@@ -53,7 +53,7 @@ namespace EmEn::Net
 			 * @param output A reference to a filesystem path [std::move].
 			 * @param replaceExistingFile Erase the file on exists if true.
 			 */
-			DownloadItem (Libs::Network::URL url, std::filesystem::path output, bool replaceExistingFile = true) noexcept
+			DownloadItem (Base::Network::URL url, std::filesystem::path output, bool replaceExistingFile = true) noexcept
 				: m_url{std::move(url)},
 				m_output{std::move(output)},
 				m_replaceExistingFile{replaceExistingFile}
@@ -108,7 +108,7 @@ namespace EmEn::Net
 			 * @return const Libraries::Network::URL &
 			 */
 			[[nodiscard]]
-			const Libs::Network::URL &
+			const Base::Network::URL &
 			url () const noexcept
 			{
 				return m_url;
@@ -181,7 +181,7 @@ namespace EmEn::Net
 
 		private:
 
-			Libs::Network::URL m_url;
+			Base::Network::URL m_url;
 			std::filesystem::path m_output;
 			std::string m_header;
 			uint64_t m_bytesTotal{0};

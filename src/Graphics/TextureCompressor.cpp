@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,14 +33,14 @@
 #include <cstring>
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/Processor.hpp"
-#include "Libs/ThreadPool.hpp"
+#include "PixelFactory/Processor.hpp"
+#include "ThreadPool.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 
 namespace EmEn::Graphics
 {
-	using namespace Libs::PixelFactory;
+	using namespace Base::PixelFactory;
 
 	bool TextureCompressor::s_initialized = false;
 
@@ -63,7 +63,7 @@ namespace EmEn::Graphics
 	TextureCompressor::compress (
 		const Pixmap< uint8_t > & pixmap,
 		uint32_t maxMipLevels,
-		Libs::ThreadPool & threadPool
+		Base::ThreadPool & threadPool
 	) noexcept
 	{
 		if ( !s_initialized )
@@ -140,7 +140,7 @@ namespace EmEn::Graphics
 	CompressedMipLevel
 	TextureCompressor::compressSingle (
 		const Pixmap< uint8_t > & pixmap,
-		Libs::ThreadPool & threadPool
+		Base::ThreadPool & threadPool
 	) noexcept
 	{
 		if ( !s_initialized )
@@ -172,7 +172,7 @@ namespace EmEn::Graphics
 	CompressedMipLevel
 	TextureCompressor::compressLevel (
 		const Pixmap< uint8_t > & pixmap,
-		Libs::ThreadPool & threadPool
+		Base::ThreadPool & threadPool
 	) noexcept
 	{
 		const auto startTime = std::chrono::steady_clock::now();

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 /* Local inclusions for usages. */
 #include "AmbienceChannel.hpp"
 #include "AmbienceSound.hpp"
-#include "Libs/Utility.hpp"
+#include "Utility.hpp"
 #include "Manager.hpp"
 
 namespace EmEn::Audio
@@ -43,9 +43,9 @@ namespace EmEn::Audio
 	/**
 	 * @brief The ambience class.
 	 * @note [OBS][STATIC-OBSERVER]
-	 * @extends EmEn::Libs::ObserverTrait This component observes sound loading events.
+	 * @extends EmEn::Base::ObserverTrait This component observes sound loading events.
 	 */
-	class Ambience final : public Libs::ObserverTrait
+	class Ambience final : public Base::ObserverTrait
 	{
 		public:
 
@@ -353,9 +353,9 @@ namespace EmEn::Audio
 
 		private:
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
 			 * @brief Returns a random delay.
@@ -365,7 +365,7 @@ namespace EmEn::Audio
 			uint32_t
 			getRandomDelay () const noexcept
 			{
-				return Libs::Utility::quickRandom(m_minDelay, m_maxDelay);
+				return Base::Utility::quickRandom(m_minDelay, m_maxDelay);
 			}
 
 			/**
@@ -410,7 +410,7 @@ namespace EmEn::Audio
 			AmbienceSound &
 			getRandomSound () noexcept
 			{
-				return m_soundEffects[Libs::Utility::quickRandom(static_cast< size_t >(0), m_soundEffects.size() - 1)];
+				return m_soundEffects[Base::Utility::quickRandom(static_cast< size_t >(0), m_soundEffects.size() - 1)];
 			}
 
 			/* JSON key. */

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,8 +28,8 @@
 
 /* Local inclusions for usages. */
 #include "Frustum.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 namespace EmEn::Graphics
@@ -82,7 +82,7 @@ namespace EmEn::Graphics
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Matrix< 4, float > & projectionMatrix () const noexcept = 0;
+			virtual const Base::Math::Matrix< 4, float > & projectionMatrix () const noexcept = 0;
 
 			/**
 			 * @brief Returns the projection matrix.
@@ -90,7 +90,7 @@ namespace EmEn::Graphics
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept = 0;
+			virtual const Base::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the view matrix.
@@ -99,7 +99,7 @@ namespace EmEn::Graphics
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t viewIndex) const noexcept = 0;
+			virtual const Base::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t viewIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the view matrix.
@@ -109,22 +109,22 @@ namespace EmEn::Graphics
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t viewIndex) const noexcept = 0;
+			virtual const Base::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t viewIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the position of the point of view.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Vector< 3, float > & position () const noexcept = 0;
+			virtual const Base::Math::Vector< 3, float > & position () const noexcept = 0;
 
 			/**
 			 * @brief Returns the position of the point of view.
 			 * @param readStateIndex The render state-valid index to read data.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept = 0;
+			virtual const Base::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the const access to the frustum for object clipping.
@@ -206,7 +206,7 @@ namespace EmEn::Graphics
 			 * @param velocity A vector representing a velocity applied to the camera for special effect.
 			 * @return void
 			 */
-			virtual void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept = 0;
+			virtual void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept = 0;
 
 			/**
 			 * @brief Updates optional ambient color and intensity.
@@ -214,7 +214,7 @@ namespace EmEn::Graphics
 			 * @param intensity The light intensity.
 			 * @return void
 			 */
-			virtual void updateAmbientLightProperties (const Libs::PixelFactory::Color< float > & color, float intensity) noexcept = 0;
+			virtual void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity) noexcept = 0;
 
 			/**
 			 * @brief Creates a buffer in the video memory.
@@ -251,18 +251,18 @@ namespace EmEn::Graphics
 			 * @brief Computes the 8 corners of a frustum in world space.
 			 * @note The corners are computed by transforming NDC cube corners through the inverse view-projection matrix.
 			 * @param inverseViewProjection The inverse of the view-projection matrix.
-			 * @return std::array< Libs::Math::Vector< 3, float >, 8 > The frustum corners in world space.
+			 * @return std::array< Base::Math::Vector< 3, float >, 8 > The frustum corners in world space.
 			 */
 			[[nodiscard]]
-			static std::array< Libs::Math::Vector< 3, float >, 8 > computeFrustumCornersWorld (const Libs::Math::Matrix< 4, float > & inverseViewProjection) noexcept;
+			static std::array< Base::Math::Vector< 3, float >, 8 > computeFrustumCornersWorld (const Base::Math::Matrix< 4, float > & inverseViewProjection) noexcept;
 
 			/**
 			 * @brief Computes the 8 corners of this view's frustum in world space.
 			 * @note Uses the current projection and view matrices to compute frustum corners.
-			 * @return std::array< Libs::Math::Vector< 3, float >, 8 > The frustum corners in world space.
+			 * @return std::array< Base::Math::Vector< 3, float >, 8 > The frustum corners in world space.
 			 */
 			[[nodiscard]]
-			std::array< Libs::Math::Vector< 3, float >, 8 >
+			std::array< Base::Math::Vector< 3, float >, 8 >
 			getFrustumCornersWorld () const noexcept
 			{
 				const auto viewProjection = this->projectionMatrix() * this->viewMatrix(false, 0);

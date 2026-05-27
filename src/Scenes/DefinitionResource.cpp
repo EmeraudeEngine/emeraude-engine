@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,7 +32,7 @@
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
-#include "Libs/FastJSON.hpp"
+#include "FastJSON.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/Microphone.hpp"
@@ -42,7 +42,7 @@
 
 namespace EmEn::Scenes
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Graphics;
 
 	bool
@@ -262,7 +262,7 @@ namespace EmEn::Scenes
 		}
 		else if ( type == "PerlinNoise" )
 		{
-			Libs::VertexFactory::PerlinNoiseParams< float > noise;
+			Base::VertexFactory::PerlinNoiseParams< float > noise;
 
 			if ( gnd.isMember(NoiseKey) && gnd[NoiseKey].isObject() )
 			{
@@ -275,7 +275,7 @@ namespace EmEn::Scenes
 		}
 		else if ( type == "DiamondSquare" )
 		{
-			Libs::VertexFactory::DiamondSquareParams< float > noise;
+			Base::VertexFactory::DiamondSquareParams< float > noise;
 
 			if ( gnd.isMember(NoiseKey) && gnd[NoiseKey].isObject() )
 			{

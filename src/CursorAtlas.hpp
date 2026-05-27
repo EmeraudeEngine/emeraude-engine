@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Graphics
@@ -193,10 +193,10 @@ namespace EmEn
 			 *
 			 * @warning If the pixmap does not have 4 channels, an error is logged and the operation fails.
 			 *
-			 * @see Libs::PixelFactory::Pixmap, Window
+			 * @see Base::PixelFactory::Pixmap, Window
 			 * @version 0.8.35
 			 */
-			void setCursor (Window & window, std::string_view label, Libs::PixelFactory::Pixmap< uint8_t > pixmap, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept;
+			void setCursor (Window & window, std::string_view label, Base::PixelFactory::Pixmap< uint8_t > pixmap, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept;
 
 			/**
 			 * @brief Sets the cursor to a custom cursor from raw pixel data.

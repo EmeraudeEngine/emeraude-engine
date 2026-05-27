@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 #include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"
-#include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
+#include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
 #include "Overlay/Manager.hpp"
 #include "PostProcessStack.hpp"
@@ -61,9 +61,9 @@ namespace
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::PixelFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::PixelFactory;
 	using namespace Vulkan;
 	using namespace Saphir;
 
@@ -2023,7 +2023,7 @@ namespace EmEn::Graphics
 	Renderer::createRTDescriptorSet () noexcept
 	{
 		/* Layout: binding 0 = TLAS, binding 1 = mesh metadata SSBO,
-		 *         binding 2 = material data SSBO, binding 3 = light array SSBO. */
+		 *		 binding 2 = material data SSBO, binding 3 = light array SSBO. */
 		m_rtDescriptorSetLayout = std::make_shared< DescriptorSetLayout >(m_device, "RTDescriptorSet");
 
 		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, VK_SHADER_STAGE_FRAGMENT_BIT) ||

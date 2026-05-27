@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,7 +36,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PlatformSpecific/VideoCaptureDevice.hpp"
 
 namespace EmEn
@@ -107,17 +107,17 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns a const reference to all captured frames.
-			 * @return const std::vector< Libs::PixelFactory::Pixmap< uint8_t > > &
+			 * @return const std::vector< Base::PixelFactory::Pixmap< uint8_t > > &
 			 */
 			[[nodiscard]]
-			const std::vector< Libs::PixelFactory::Pixmap< uint8_t > > & capturedFrames () const noexcept;
+			const std::vector< Base::PixelFactory::Pixmap< uint8_t > > & capturedFrames () const noexcept;
 
 			/**
 			 * @brief Returns a pointer to the last captured frame, or nullptr if none.
-			 * @return const Libs::PixelFactory::Pixmap< uint8_t > *
+			 * @return const Base::PixelFactory::Pixmap< uint8_t > *
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Pixmap< uint8_t > * lastFrame () const noexcept;
+			const Base::PixelFactory::Pixmap< uint8_t > * lastFrame () const noexcept;
 
 			/**
 			 * @brief Clears all captured frames from memory.
@@ -166,6 +166,6 @@ namespace EmEn::Graphics
 			uint32_t m_captureHeight{480};
 			PlatformSpecific::VideoCaptureDevice m_captureDevice;
 			std::vector< uint8_t > m_rgbaBuffer;
-			std::vector< Libs::PixelFactory::Pixmap< uint8_t > > m_capturedFrames;
+			std::vector< Base::PixelFactory::Pixmap< uint8_t > > m_capturedFrames;
 	};
 }

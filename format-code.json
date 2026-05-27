@@ -1,6 +1,6 @@
 {
 	"project_name": "Emeraude-Engine",
-	"project_url": "https://github.com/londnoir/emeraude-engine",
+	"project_url": "https://github.com/EmeraudeEngine/emeraude-engine",
 	"author": "Sébastien Léon Claude Christian Bémelmans \"LondNoir\" <londnoir@gmail.com>",
 	"license": "lgpl3",
 	"paths": ["./src"],

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,7 +32,7 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Libs/FlagTrait.hpp"
+#include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Types.hpp"
@@ -52,9 +52,9 @@ namespace EmEn::Graphics
 
 	/**
 	 * @brief Describes the data inside a vertex attribute binding. How many elements and the used primitive.
-	 * @extends EmEn::Libs::FlagTrait
+	 * @extends EmEn::Base::FlagTrait
 	 */
-	class VertexBufferBinding final : public Libs::FlagTrait< uint32_t >
+	class VertexBufferBinding final : public Base::FlagTrait< uint32_t >
 	{
 		public:
 

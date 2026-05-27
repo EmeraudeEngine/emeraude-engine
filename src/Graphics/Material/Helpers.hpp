@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,8 +28,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "FastJSON.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn
 {
@@ -151,7 +151,7 @@ namespace EmEn::Graphics::Material
 	 * @return Libraries::PixelFactory::Color< float >
 	 */
 	[[nodiscard]]
-	Libs::PixelFactory::Color< float > parseColorComponent (const Json::Value & data) noexcept;
+	Base::PixelFactory::Color< float > parseColorComponent (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Parses from an identified color component JSON data.

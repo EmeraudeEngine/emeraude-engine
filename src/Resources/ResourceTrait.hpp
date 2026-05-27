@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -45,9 +45,9 @@
 #endif
 
 /* Local inclusions for inheritances. */
-#include "Libs/NameableTrait.hpp"
-#include "Libs/FlagTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "NameableTrait.hpp"
+#include "FlagTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Types.hpp"
@@ -379,13 +379,13 @@ namespace EmEn::Resources
 	 *
 	 * @note [OBS][SHARED-OBSERVABLE] - This class uses the observer pattern and requires shared_ptr.
 	 * @extends std::enable_shared_from_this A resource must be managed by shared_ptr for dependency tracking.
-	 * @extends EmEn::Libs::NameableTrait A resource is always named for identification and logging.
-	 * @extends EmEn::Libs::FlagTrait<uint32_t> Construction flags control loading behavior.
-	 * @extends EmEn::Libs::ObservableTrait Observable pattern for loading state tracking.
+	 * @extends EmEn::Base::NameableTrait A resource is always named for identification and logging.
+	 * @extends EmEn::Base::FlagTrait<uint32_t> Construction flags control loading behavior.
+	 * @extends EmEn::Base::ObservableTrait Observable pattern for loading state tracking.
 	 * @see AbstractServiceProvider, Container, Manager.
 	 * @version 0.8.45
 	 */
-	class ResourceTrait : public std::enable_shared_from_this< ResourceTrait >, public Libs::NameableTrait, public Libs::FlagTrait< uint32_t >, public Libs::ObservableTrait
+	class ResourceTrait : public std::enable_shared_from_this< ResourceTrait >, public Base::NameableTrait, public Base::FlagTrait< uint32_t >, public Base::ObservableTrait
 	{
 		public:
 

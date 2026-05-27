@@ -1,5 +1,5 @@
 #######################################################################
-# CMake configuration
+## CMake configuration
 cmake_minimum_required(VERSION 3.25.1)
 cmake_policy(SET CMP0042 NEW) # MACOSX_RPATH is enabled by default.
 cmake_policy(SET CMP0091 NEW) # MSVC runtime library flags are selected by an abstraction.
@@ -11,7 +11,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 message("[EmeraudeEngine] Using CMake ${CMAKE_VERSION}")
 
 #######################################################################
-# Configure the parallel job count.
+## Configure the parallel job count.
 cmake_host_system_information(RESULT DETECTED_JOB_COUNT QUERY NUMBER_OF_PHYSICAL_CORES)
 
 set(JOB_COUNT ${DETECTED_JOB_COUNT} CACHE STRING "The number of job used for compilation. Default auto.")
@@ -19,10 +19,8 @@ set(CMAKE_BUILD_PARALLEL_LEVEL ${JOB_COUNT})
 
 message("[EmeraudeEngine] Job processes used : ${CMAKE_BUILD_PARALLEL_LEVEL}")
 
-
-
 #######################################################################
-# Declare project and options.
+## Declare project and options.
 option(EMERAUDE_BUILD_SERVICES_ONLY "Build only the Emeraude-Engine services (Default Off)" Off)
 
 if ( EMERAUDE_BUILD_SERVICES_ONLY )
@@ -33,12 +31,11 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.9.3
+	VERSION 0.9.4
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
 )
-
 
 set_property(GLOBAL PROPERTY USE_FOLDERS On)
 
@@ -66,15 +63,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
 # Emeraude libraries project variables and options.
-set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to check internet connexion (Default google.com).")
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
-option(EMERAUDE_DL_DEPENDENCIES "Enable the Emeraude-Engine to automatically download external dependencies archives (Default On)." On)
 option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
-option(EMERAUDE_DISABLE_PARANOID_COMPILATION "Disable warnings as errors for compilation (Default Off)." Off)
-option(EMERAUDE_DISABLE_EXCEPTIONS "Disable 'c++ exceptions' feature (Default On)." On)
-option(EMERAUDE_DISABLE_RTTI "Disable 'Run-Time Type Information' feature (Broken feature, Default Off)." Off) # TODO: Make changes for std::any usage (Should be ON by default).
-option(EMERAUDE_ENABLE_FP_OPTIMIZATION "Enable floating-point optimization (Broken feature, Default Off)." Off) # TODO: fastgltf fails to compile (Should be ON by default).
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
@@ -83,24 +74,15 @@ option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool t
 option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
-option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." On)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 option(EMERAUDE_ENABLE_LIBSNDFILE "Enable 'libsndfile' library. Adds a GUI to the engine [LOCAL] (Default On)." On)
 # Debug preprocessor macros control (Ignored in Release).
-option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
-option(EMERAUDE_DEBUG_PIXEL_FACTORY "Enable the debug output of pixel factory library (Default Off)." Off)
-option(EMERAUDE_DEBUG_VERTEX_FACTORY "Enable the debug output of vertex factory library (Default Off)." Off)
-option(EMERAUDE_DEBUG_WAVE_FACTORY "Enable the debug output of wave factory library (Default Off)." Off)
 option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_HEAVY_INPUT "Enable printing of events to the console from pointer heavy (move/wheel) inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
-option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
-set(EMERAUDE_DEBUG_THREAD_POOL_N "1" CACHE STRING "When debugging ThreadPool, force the number of threads (Default 1).")
-option(EMERAUDE_DISABLE_PARALLEL_COLLISION "Disable parallel collision detection for performance comparison (Default Off)." Off)
 option(EMERAUDE_ENABLE_RENDERDOC "Enable RenderDoc in-application API for GPU frame capture [FETCHED] (Default Off)." Off)
-
 
 # Force the compilation directory for testing (Only if empty)
 if ( EMERAUDE_ENABLE_TESTS AND "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
@@ -126,8 +108,6 @@ if ( UNIX AND NOT APPLE )
 	endif ()
 
 	message("[EmeraudeEngine] Linux platform targets arch ${APP_ARCH}")
-
-	set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/linux.${APP_ARCH}-${CMAKE_BUILD_TYPE}" CACHE STRING "Final directory for local libraries for Linux.")
 elseif ( APPLE )
 	message("[EmeraudeEngine] Apple platform detected ! macOS architecture : ${CMAKE_OSX_ARCHITECTURES}, default target SDK : ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
@@ -146,8 +126,6 @@ elseif ( APPLE )
 	set(CMAKE_OSX_DEPLOYMENT_TARGET ${APP_OSX_DEPLOYMENT_TARGET})
 
 	message("[EmeraudeEngine] Apple platform targets arch ${APP_ARCH} with SDK ${APP_OSX_DEPLOYMENT_TARGET}")
-
-	set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mac.${APP_ARCH}-${CMAKE_BUILD_TYPE}" CACHE STRING "Final directory for local libraries for macOS.")
 elseif ( MSVC )
 	message("[EmeraudeEngine] Windows platform detected !")
 
@@ -167,7 +145,6 @@ elseif ( MSVC )
 			message("[EmeraudeEngine] CMAKE_MSVC_RUNTIME_LIBRARY variable already setup from top project. Skipping ...")
 		endif ()
 
-		set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MT" CACHE STRING "Final directory for local libraries for Windows.")
 	else ()
 		message("[EmeraudeEngine] Using dynamic MSVC Runtime library!")
 
@@ -178,7 +155,6 @@ elseif ( MSVC )
 			message("[EmeraudeEngine] CMAKE_MSVC_RUNTIME_LIBRARY variable already setup from top project. Skipping ...")
 		endif ()
 
-		set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MD" CACHE STRING "Final directory for local libraries for Windows.")
 	endif ()
 
 	# Remove default MSVC flags added by CMake to avoid D9025 warnings
@@ -192,20 +168,32 @@ endif ()
 # Print out project paths
 message("[EmeraudeEngine] Project directory: ${CMAKE_SOURCE_DIR}, current : ${CMAKE_CURRENT_SOURCE_DIR}")
 message("[EmeraudeEngine] Binary directory: ${CMAKE_BINARY_DIR}, current : ${CMAKE_CURRENT_BINARY_DIR}")
-message("[EmeraudeEngine] Local external dependencies: ${LOCAL_LIB_DIR}")
-
-
 
 #######################################################################
-# Pre sources assembly operations.
+## Foundation library (emeraude-base)
+# Provides Base/*, platform/config headers, and the external dependencies. Cloned if
+# absent, then add_subdirectory'd. Pulled in BEFORE the engine target so its targets
+# (emeraude::base*) and exported variables (EMERAUDE_EXT_LIBS_* …) are available.
+include(InstallEmeraudeBase)
+
+# emeraude-base owns the Setup*.cmake for every ext-deps-generator library (incl. ones only
+# the engine uses: ufbx, fastgltf, taglib, bc7enc, cpu_features, hwloc, libvpx). Add its
+# cmake/ dir so the engine can include(Setup<Lib>) from there.
+list(APPEND CMAKE_MODULE_PATH ${EMERAUDE_BASE_CMAKE_DIR})
+
+# The engine's own Setup*.cmake (Vulkan/glslang, GLFW, OpenAL, …) and the base-provided ones
+# resolve their libraries through LOCAL_LIB_DIR. emeraude-base is the single provider of the
+# external deps, so alias LOCAL_LIB_DIR onto the path it exposes.
+set(LOCAL_LIB_DIR ${EMERAUDE_EXT_LIBS_PATH})
+
+#######################################################################
+## Pre sources assembly operations.
 if ( EMERAUDE_ENABLE_IMGUI )
 	include(SetupPreSourcesImGui)
 endif ()
 
-
-
 #######################################################################
-# Project header and source files.
+## Project header and source files.
 include(PrepareEngineSourceFiles)
 
 # ImGui library source files
@@ -213,15 +201,10 @@ if ( EMERAUDE_ENABLE_IMGUI )
 	list(APPEND EMERAUDE_SOURCE_FILES ${IMGUI_SOURCE_FILES})
 endif ()
 
-if ( EMERAUDE_DL_DEPENDENCIES )
-	include(InstallDependencies)
-endif ()
-
-
+# External dependencies are downloaded/provided by emeraude-base (see InstallEmeraudeBase).
 
 #######################################################################
-# Declare the library target and configure it per platform.
-
+## Declare the library target and configure it per platform.
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
 add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
@@ -235,51 +218,23 @@ if ( EMERAUDE_ENABLE_PCH )
 	target_precompile_headers(${PROJECT_NAME} PUBLIC ${EMERAUDE_HEADER_FILES})
 endif ()
 
-target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
+target_link_directories(${PROJECT_NAME} PUBLIC ${EMERAUDE_EXT_LIBS_LIB_DIR})
+
+# Link the emeraude-base foundation library. PUBLIC so its headers and external
+# dependencies propagate to the engine sources and downstream consumers (projet-alpha).
+target_link_libraries(${PROJECT_NAME} PUBLIC emeraude::base)
 
 # Platform-specific target properties.
 if ( MSVC )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= MSVC 2022) for Windows ...")
 
-	set(EMERAUDE_COMPILE_DEFINITIONS
-		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
-		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
-		_WIN32_WINNT=0x0A00							# Target Windows 10/11 (0x0601=Win7, 0x0602=Win8, 0x0603=Win8.1)
-		CACHE STRING "Emeraude-Engine compile definitions for Windows."
-	)
-
-	set(EMERAUDE_COMPILE_OPTIONS
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,/GR-,/GR>				# Run-time type information (conditional)
-		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHs->				# Disable sync exceptions (conditional)
-		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHc->				# Disable extern C nothrow (conditional)
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>>:/EHsc>		# Enable C++ exceptions (conditional)
-		$<$<CONFIG:Debug>:/RTC1>					# Enable basic run-time checks
-		$<$<CONFIG:Debug>:/Od>						# Disable optimizations
-		$<$<CONFIG:Debug>:/Zi>						# Generate debug information (PDB)
-		$<$<CONFIG:Release>:/O2>					# Optimize for maximum speed
-		$<$<CONFIG:Release>:$<IF:$<BOOL:${EMERAUDE_ENABLE_FP_OPTIMIZATION}>,/fp:fast,/fp:precise>>	# Floating-point mode (conditional)
-		$<$<CONFIG:Release>:/Ob3>					# Inline any suitable function
-		$<$<CONFIG:Release>:/GF>					# Enable string pooling
-		/MP${CMAKE_BUILD_PARALLEL_LEVEL}			# Multi-processor compilation
-		/Gy											# Enable function-level linking
-		/W4											# Warning level 4 (high)
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:/WX>	# Treat warnings as errors (conditional)
-		/wd4100										# Ignore "unreferenced formal parameter"
-		/wd4127										# Ignore "conditional expression is constant"
-		/wd4324										# Ignore "structure was padded due to alignment specifier"
-		/wd4481										# Ignore "nonstandard extension used: override"
-		/wd4512										# Ignore "assignment operator could not be generated"
-		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/wd4530>	# Ignore "C++ exception handler used, but unwind semantics are not enabled" when exceptions are disabled
-		/wd4702										# Ignore "unreachable code"
-		/wd4996										# Ignore "function or variable may be unsafe"
-		CACHE STRING "Emeraude-Engine compile options for Windows."
-	)
+	# Compile definitions/options come from emeraude-base (EMERAUDE_COMPILE_*).
 
 	set_target_properties(${PROJECT_NAME} PROPERTIES
-		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD ${EMERAUDE_C_VERSION}
 		C_STANDARD_REQUIRED On
 		C_EXTENSIONS Off
-		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD ${EMERAUDE_CXX_VERSION}
 		CXX_STANDARD_REQUIRED On
 		CXX_EXTENSIONS Off
 		VERSION ${PROJECT_VERSION}
@@ -291,43 +246,12 @@ if ( MSVC )
 elseif ( APPLE )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
 
-	set(EMERAUDE_COMPILE_DEFINITIONS
-		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
-		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
-		CACHE STRING "Emeraude-Engine compile definitions for macOS."
-	)
-
-	set(EMERAUDE_COMPILE_OPTIONS
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
-		$<$<CONFIG:Debug>:-O0>						# No optimization
-		$<$<CONFIG:Debug>:-g>						# Generate debug information
-		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
-		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
-		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
-		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
-		$<$<CONFIG:Release>:-O2>					# Optimize for speed
-		$<$<CONFIG:Release>:$<IF:$<BOOL:${EMERAUDE_ENABLE_FP_OPTIMIZATION}>,-ffast-math,-fno-fast-math>> # Floating-point mode (conditional)
-		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
-		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
-		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
-		-Wformat									# Check format string arguments
-		-Wformat-security							# Warn about format string vulnerabilities
-		-Wno-unknown-pragmas						# Ignore unknown pragma directives
-		-Wno-unused-parameter						# Ignore unused function parameters
-		-Wno-unused-private-field					# Ignore unused private fields
-		-Wno-nullability-extension					# Ignore nullability extension warnings
-		-Wno-nullability-completeness				# Ignore incomplete nullability annotations
-		-Wno-gnu-zero-variadic-macro-arguments		# Ignore GNU variadic macro extension
-		CACHE STRING "Emeraude-Engine compile options for macOS."
-	)
-
+	# Compile definitions/options come from emeraude-base (EMERAUDE_COMPILE_*).
 	set_target_properties(${PROJECT_NAME} PROPERTIES
-		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD ${EMERAUDE_C_VERSION}
 		C_STANDARD_REQUIRED On
 		C_EXTENSIONS Off
-		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD ${EMERAUDE_CXX_VERSION}
 		CXX_STANDARD_REQUIRED On
 		CXX_EXTENSIONS Off
 		VERSION ${PROJECT_VERSION}
@@ -350,40 +274,12 @@ elseif ( APPLE )
 elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 
-	set(EMERAUDE_COMPILE_DEFINITIONS
-		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
-		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
-		$<$<CONFIG:Release>:_FORTIFY_SOURCE=2>		# Runtime buffer overflow detection
-		CACHE STRING "Emeraude-Engine compile definitions for Linux."
-	)
-
-	set(EMERAUDE_COMPILE_OPTIONS
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
-		$<$<CONFIG:Debug>:-O0>						# No optimization
-		$<$<CONFIG:Debug>:-g>						# Generate debug information
-		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
-		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
-		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
-		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
-		$<$<CONFIG:Release>:-O2>					# Optimize for speed
-		$<$<CONFIG:Release>:$<IF:$<BOOL:${EMERAUDE_ENABLE_FP_OPTIMIZATION}>,-ffast-math,-fno-fast-math>> # Floating-point mode (conditional)
-		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
-		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
-		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
-		-Wformat									# Check format string arguments
-		-Wformat-security							# Warn about format string vulnerabilities
-		-Wno-unknown-pragmas						# Ignore unknown pragma directives
-		-Wno-unused-parameter						# Ignore unused function parameters
-		CACHE STRING "Emeraude-Engine compile options for Linux."
-	)
-
+	# Compile definitions/options come from emeraude-base (EMERAUDE_COMPILE_*).
 	set_target_properties(${PROJECT_NAME} PROPERTIES
-		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD ${EMERAUDE_C_VERSION}
 		C_STANDARD_REQUIRED On
 		C_EXTENSIONS Off
-		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD ${EMERAUDE_CXX_VERSION}
 		CXX_STANDARD_REQUIRED On
 		CXX_EXTENSIONS Off
 		VERSION ${PROJECT_VERSION}
@@ -439,75 +335,32 @@ message("[EmeraudeEngine] '${PROJECT_NAME}' will be compiled with flags: ${EMERA
 
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
     ${CMAKE_BINARY_DIR}/include
-    ${LOCAL_LIB_DIR}/include
+    ${EMERAUDE_EXT_LIBS_INCLUDE_DIR}
 )
 
-# NOTE: portable-file-dialogs dependency has been removed.
-# All dialog implementations now use native platform APIs directly.
-
-
-
-###### Dependencies ######
-
+#######################################################################
+## Dependencies
 # Common cmake switch to turn to OFF for ever below dependencies.
 set(BUILD_SHARED_LIBS Off CACHE BOOL "" FORCE)
 
 # Set to what binary the dependencies will be linked.
 set(TARGET_BINARY_FOR_SETUP ${PROJECT_NAME})
 
-# Base dependencies
-include(SetupJsonCpp)
-
-# Magic Enum
+# Magic Enum (engine-only)
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
 
-# TinySoundFont (SF2 SoundFont support for MIDI rendering)
-target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinysoundfont)
-
-# Request : brotli, bzip2, harbuzz, png, zlib
-include(SetupFreetype)
-
-# Request : zlib bzip2 xz zstd
-include(SetupZIP)
-
-# Request : zlib
-include(SetupPNG)
-
-# Request : zlib
+# TagLib (engine-only audio metadata)
 if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupTagLib)
 endif ()
-
-if ( NOT EMERAUDE_USE_SYSTEM_LIBS )
-	include(SetupBrotli)
-
-	include(SetupHarfbuzz)
-endif ()
-
-include(SetupJPEG)
-
-include(SetupZLIB)
-
-include(SetupBZIP2)
-
-include(SetupLZMA)
-
-include(SetupZSTD)
-
-include(SetupASIO)
-
-if ( EMERAUDE_ENABLE_LIBSNDFILE )
-	include(SetupSndFile)
-endif ()
-
-include(SetupSampleRate)
 
 include(SetupCPUFeatures)
 
 include(SetupHWLOC)
 
 if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
-	include(SetupThreads)
+	# Threads + OpenMP are provided by emeraude::base (used by its ThreadPool / VertexFactory)
+	# and inherited transitively.
 
 	include(SetupVulkan) # Using add_subdirectory()
 
@@ -520,10 +373,6 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupUFBX) # FBX parsing library
 
 	include(SetupBC7EncRDO) # BC7 texture compression
-
-	if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )
-		include(SetupOpenMP)
-	endif ()
 
 	include(SetupOpenAL)
 
@@ -547,63 +396,19 @@ endif ()
 
 unset(TARGET_BINARY_FOR_SETUP)
 
-
-###### Testing ######
-
+#######################################################################
+## Testing
 if ( EMERAUDE_ENABLE_TESTS )
-	message("[EmeraudeEngine] Enabling GoogleTest")
-
-	set(GTEST_EXECUTABLE_NAME EmeraudeUnitTests)
-
-	# Fetch GoogleTest
-	include(FetchContent)
-	include(GoogleTest)
-
-	FetchContent_Declare(googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.17.0)
-
-	if ( NOT EMERAUDE_USE_STATIC_RUNTIME )
-		set(gtest_force_shared_crt On CACHE BOOL "" FORCE)
-	endif ()
-
-	FetchContent_MakeAvailable(googletest)
-
-	# Create the executable
-	file(GLOB_RECURSE TEST_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Testing/*.cpp)
-
-	add_executable(${GTEST_EXECUTABLE_NAME} ${TEST_SOURCE_FILES})
-
-	# Configure the compilation
-	set_target_properties(${GTEST_EXECUTABLE_NAME} PROPERTIES
-		C_STANDARD 17 # Next standard will be C23
-		C_STANDARD_REQUIRED On
-		C_EXTENSIONS Off
-		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
-		CXX_STANDARD_REQUIRED On
-		CXX_EXTENSIONS Off
-	)
-
-	target_compile_definitions(${GTEST_EXECUTABLE_NAME} PRIVATE ${EMERAUDE_COMPILE_DEFINITIONS})
-	target_compile_options(${GTEST_EXECUTABLE_NAME} PRIVATE ${EMERAUDE_COMPILE_OPTIONS})
-	target_include_directories(${GTEST_EXECUTABLE_NAME} PRIVATE ${EMERAUDE_SOURCE_DIR})
-	target_link_libraries(${GTEST_EXECUTABLE_NAME} PRIVATE ${PROJECT_NAME} gtest_main)
-
-	# Link the dependencies used inside the unit testing executable.
-	set(TARGET_BINARY_FOR_SETUP ${GTEST_EXECUTABLE_NAME})
-
-	include(SetupJPEG)
-	include(SetupPNG)
-	include(SetupZLIB)
-
-	# Enable the testing
-	enable_testing()
-
-	gtest_discover_tests(${GTEST_EXECUTABLE_NAME} WORKING_DIRECTORY ${EMERAUDE_COMPILATION_DIR})
+	# The foundation test suite (EmeraudeBaseUnitTests) is built and registered with ctest
+	# by emeraude-base. Engine-specific tests (Graphics, Scenes, Vulkan, …) would be added
+	# here, reusing the gtest targets fetched by emeraude-base and registered via
+	# gtest_discover_tests, so a single `ctest` run aggregates both suites.
+	# No engine-specific tests exist yet — all current tests cover the base library.
+	message(STATUS "[EmeraudeEngine] Tests enabled — foundation suite provided by emeraude-base.")
 endif ()
 
-
-
-###### Write the project C++ config file ######
-
+#######################################################################
+## Write the project C++ config file
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/emeraude_config.hpp.in ${CMAKE_BINARY_DIR}/include/emeraude_config.hpp)
 
 if ( EMERAUDE_ENABLE_TSAN )
@@ -639,13 +444,8 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 		)
 	endif ()
 
-	# Copy test files
-	if ( EMERAUDE_ENABLE_TESTS )
-		file(
-			COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/test-assets
-			DESTINATION ${EMERAUDE_COMPILATION_DIR}
-		)
-	endif ()
+	# Test fixtures live in emeraude-base (emeraude-base/resources/assets); the base test
+	# suite runs from there. Nothing to copy here.
 else ()
 	message(STATUS "[EmeraudeEngine] EMERAUDE_COMPILATION_DIR is not set, the compilation directory won't have all files for development ! This is a sub-project warning !")
 endif ()

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,18 +27,18 @@
 #include "BaseInformation.hpp"
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* Local inclusions. */
 #include "FileSystem.hpp"
-#include "Libs/IO/IO.hpp"
-#include "Libs/Network/URL.hpp"
-#include "Libs/String.hpp"
+#include "IO/IO.hpp"
+#include "Network/URL.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Resources
 {
-	using namespace Libs;
+	using namespace Base;
 
 	bool
 	BaseInformation::parseName (const Json::Value & resourceDefinition) noexcept

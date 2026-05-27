@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,14 +34,14 @@
 
 /* Local inclusions. */
 #include "Constants.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Animations
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 
 	Variant
 	Sequence::getLinearInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept

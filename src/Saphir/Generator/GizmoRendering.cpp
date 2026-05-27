@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,14 +28,14 @@
 
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
-#include "Libs/Hash/FNV1a.hpp"
+#include "Hash/FNV1a.hpp"
 #include "Saphir/Code.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Saphir::Generator
 {
-	using namespace Libs;
+	using namespace Base;
 	using namespace Graphics;
 	using namespace Vulkan;
 	using namespace Saphir::Keys;

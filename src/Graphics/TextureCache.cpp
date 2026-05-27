@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 #include <sstream>
 
 /* Local inclusions. */
-#include "Libs/Hash/SHA256.hpp"
+#include "Hash/SHA256.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -209,7 +209,7 @@ namespace EmEn::Graphics
 		const auto keyStr = key.str();
 
 		/* Hash the key with SHA256. */
-		Libs::Hash::SHA256 sha;
+		Base::Hash::SHA256 sha;
 		sha.update(reinterpret_cast< const uint8_t * >(keyStr.data()), keyStr.size());
 
 		std::array< uint8_t, 32 > digest{};

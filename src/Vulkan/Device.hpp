@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,10 +39,10 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
-#include "Libs/NameableTrait.hpp"
+#include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 #include "PhysicalDevice.hpp"
 #include "Queue.hpp"
 #include "Types.hpp"
@@ -105,10 +105,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns queue priority structure.
-			 * @return const Libs::StaticVector< Queue *, 16 > &
+			 * @return const Base::StaticVector< Queue *, 16 > &
 			 */
 			[[nodiscard]]
-			const Libs::StaticVector< Queue *, 16 > &
+			const Base::StaticVector< Queue *, 16 > &
 			queues (QueuePriority priority) const noexcept
 			{
 				return m_queueByPriorities[static_cast< uint32_t >(priority)].second;
@@ -153,15 +153,15 @@ namespace EmEn::Vulkan
 		private:
 
 			uint32_t m_queueFamilyIndex{0};
-			mutable std::array< std::pair< std::atomic< uint32_t >, Libs::StaticVector< Queue *, 16 > >, 3 > m_queueByPriorities;
+			mutable std::array< std::pair< std::atomic< uint32_t >, Base::StaticVector< Queue *, 16 > >, 3 > m_queueByPriorities;
 	};
 
 	/**
 	 * @brief Defines a logical device from a physical device.
 	 * @extends EmEn::Vulkan::AbstractObject This is the device, so a simple object is ok.
-	 * @extends EmEn::Libs::NameableTrait To set a name on a device.
+	 * @extends EmEn::Base::NameableTrait To set a name on a device.
 	 */
-	class Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Libs::NameableTrait
+	class Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Base::NameableTrait
 	{
 		public:
 
@@ -585,7 +585,7 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			static
-			uint32_t addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const Libs::StaticVector<VkQueueFamilyProperties2, 8>& queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			uint32_t addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const Base::StaticVector<VkQueueFamilyProperties2, 8>& queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares queues for a graphics and compute device.
@@ -596,7 +596,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares queues for a graphics device.
@@ -607,7 +607,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares queues for a compute device.
@@ -617,7 +617,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchComputeQueueConfiguration (const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchComputeQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares transfer-only queues for the device (optional).
@@ -627,7 +627,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchTransferOnlyQueueConfiguration (const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchTransferOnlyQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Creates the device with the defined and verified queues.
@@ -637,7 +637,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDevice (const DeviceRequirements & requirements, const Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
+			bool createDevice (const DeviceRequirements & requirements, const Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
 
 			/**
 			 * @brief Installs queues generated from the device.
@@ -646,13 +646,13 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool installQueues (const std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept;
+			bool installQueues (const std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept;
 
 			const Instance & m_instance;
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
 			VkDevice m_deviceHandle{VK_NULL_HANDLE};
 			VmaAllocator m_memoryAllocatorHandle{VK_NULL_HANDLE};
-			Libs::StaticVector< std::unique_ptr< Queue >, 32 > m_queues;
+			Base::StaticVector< std::unique_ptr< Queue >, 32 > m_queues;
 			DeviceQueueConfiguration m_graphicsQueueConfiguration;
 			DeviceQueueConfiguration m_computeQueueConfiguration;
 			DeviceQueueConfiguration m_transferQueueConfiguration;

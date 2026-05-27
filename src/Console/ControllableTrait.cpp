@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,13 +31,13 @@
 
 /* Local inclusions. */
 #include "Controller.hpp"
-#include "Libs/BlobTrait.hpp"
-#include "Libs/String.hpp"
+#include "BlobTrait.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Console
 {
-	using namespace Libs;
+	using namespace Base;
 
 	constexpr auto TracerTag{"ControllableTrait"};
 

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,7 +39,7 @@
 #include "Gizmo/Rotate.hpp"
 #include "Gizmo/Scale.hpp"
 #include "Gizmo/Translate.hpp"
-#include "Libs/Math/Space3D/Segment.hpp"
+#include "Math/Space3D/Segment.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -287,10 +287,10 @@ namespace EmEn::Scenes::Editor
 			 * @brief Builds a world-space ray segment from screen coordinates.
 			 * @param screenX The X position in screen pixels.
 			 * @param screenY The Y position in screen pixels.
-			 * @return Libs::Math::Space3D::Segment< float > The ray from near to far plane.
+			 * @return Base::Math::Space3D::Segment< float > The ray from near to far plane.
 			 */
 			[[nodiscard]]
-			Libs::Math::Space3D::Segment< float > screenToWorldRay (float screenX, float screenY) const noexcept;
+			Base::Math::Space3D::Segment< float > screenToWorldRay (float screenX, float screenY) const noexcept;
 
 			/**
 			 * @brief Performs picking against all scene entities under the given screen position.
@@ -344,7 +344,7 @@ namespace EmEn::Scenes::Editor
 			 * @return float The t parameter along the axis (distance from origin).
 			 */
 			[[nodiscard]]
-			float projectMouseOnAxis (float screenX, float screenY, const Libs::Math::Vector< 3, float > & axisOrigin, const Libs::Math::Vector< 3, float > & axisDirection) const noexcept;
+			float projectMouseOnAxis (float screenX, float screenY, const Base::Math::Vector< 3, float > & axisOrigin, const Base::Math::Vector< 3, float > & axisDirection) const noexcept;
 
 			/**
 			 * @brief Computes the angle of the mouse position projected onto a rotation plane.
@@ -355,7 +355,7 @@ namespace EmEn::Scenes::Editor
 			 * @return float The angle in radians.
 			 */
 			[[nodiscard]]
-			float projectMouseAngleOnPlane (float screenX, float screenY, const Libs::Math::Vector< 3, float > & planeOrigin, const Libs::Math::Vector< 3, float > & planeNormal) const noexcept;
+			float projectMouseAngleOnPlane (float screenX, float screenY, const Base::Math::Vector< 3, float > & planeOrigin, const Base::Math::Vector< 3, float > & planeNormal) const noexcept;
 
 			/* References. */
 			Input::Manager & m_inputManager;
@@ -382,8 +382,8 @@ namespace EmEn::Scenes::Editor
 			float m_gizmoScreenRatio{Gizmo::Abstract::DefaultScreenRatio};
 
 			/* Drag state (shared). */
-			Libs::Math::Vector< 3, float > m_dragAxisDirection;
-			Libs::Math::Vector< 3, float > m_dragInitialEntityPos;
+			Base::Math::Vector< 3, float > m_dragAxisDirection;
+			Base::Math::Vector< 3, float > m_dragInitialEntityPos;
 			Gizmo::AxisID m_dragAxis{Gizmo::AxisID::None};
 
 			/* Drag state (translation). */
@@ -394,7 +394,7 @@ namespace EmEn::Scenes::Editor
 
 			/* Drag state (scale). */
 			float m_dragInitialMouseX{0.0F};
-			Libs::Math::Vector< 3, float > m_dragInitialScaling{1.0F, 1.0F, 1.0F};
+			Base::Math::Vector< 3, float > m_dragInitialScaling{1.0F, 1.0F, 1.0F};
 
 			/* Movement options. */
 			float m_moveRatio{1.0F};

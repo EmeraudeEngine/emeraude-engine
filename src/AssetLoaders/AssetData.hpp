@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -35,7 +35,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
+#include "Math/CartesianFrame.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Animations
@@ -71,7 +71,7 @@ namespace EmEn::AssetLoaders
 	struct NodeDescriptor
 	{
 		std::string name;
-		Libs::Math::CartesianFrame< float > localFrame;
+		Base::Math::CartesianFrame< float > localFrame;
 		std::optional< size_t > meshIndex;
 		std::vector< size_t > childIndices;
 	};

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -36,19 +36,19 @@
 #include <string_view>
 
 /* Local inclusions for inheritances. */
-#include "Libs/FlagArrayTrait.hpp"
-#include "Libs/NameableTrait.hpp"
+#include "FlagArrayTrait.hpp"
+#include "NameableTrait.hpp"
 #include "LocatableInterface.hpp"
-#include "Libs/ObserverTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObserverTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Component/Abstract.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/StaticVector.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "StaticVector.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 
 /* Forward declarations. */
@@ -187,17 +187,17 @@ namespace EmEn::Scenes
 	 *	   of content changes (ObservableTrait). This enables automatic registration with Scene subsystems
 	 *	   (Graphics, Audio, Physics) when components are added/removed.
 	 *
-	 * @extends EmEn::Libs::FlagArrayTrait< 8 > Provides 8 boolean flags, with 6 used by this base class.
-	 * @extends EmEn::Libs::NameableTrait An entity has a unique name for identification and debugging.
+	 * @extends EmEn::Base::FlagArrayTrait< 8 > Provides 8 boolean flags, with 6 used by this base class.
+	 * @extends EmEn::Base::NameableTrait An entity has a unique name for identification and debugging.
 	 * @extends EmEn::Scenes::LocatableInterface An entity is insertable to octree spatial partitioning systems.
-	 * @extends EmEn::Libs::ObserverTrait An entity observes its components for ComponentContentModified notifications.
-	 * @extends EmEn::Libs::ObservableTrait An entity notifies observers (Scene) of component creation/destruction and content changes.
+	 * @extends EmEn::Base::ObserverTrait An entity observes its components for ComponentContentModified notifications.
+	 * @extends EmEn::Base::ObservableTrait An entity notifies observers (Scene) of component creation/destruction and content changes.
 	 *
 	 * @see Node, StaticEntity, ComponentBuilder
 	 * @see @docs/scene-graph-architecture.md
 	 * @version 0.8.39
 	 */
-	class AbstractEntity : public Libs::FlagArrayTrait< 8 >, public Libs::NameableTrait, public LocatableInterface, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -462,17 +462,17 @@ namespace EmEn::Scenes
 			 * iterating over all lights, visuals, etc. without knowing their names.
 			 *
 			 * @tparam component_t The type of components to retrieve (must inherit Component::Abstract).
-			 * @return Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > Vector of all components matching the type (may be empty).
+			 * @return Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > Vector of all components matching the type (may be empty).
 			 *
 			 * @note This method is thread-safe (protected by m_componentsMutex).
 			 * @note Uses dynamic_pointer_cast, so only returns components that are exactly component_t or derived from it.
 			 */
 			template< typename component_t >
-			Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
+			Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
 			getComponentsOfType () noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
 				const std::lock_guard< std::mutex > lock(m_componentsMutex);
-				Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
+				Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
 
 				for ( const auto & component : m_components )
 				{
@@ -848,13 +848,13 @@ namespace EmEn::Scenes
 			 * logic thread. Reads from the buffer NOT currently being written to.
 			 *
 			 * @param readStateIndex The buffer index to read from (0 or 1, opposite of write index).
-			 * @return const Libs::Math::CartesianFrame< float > & Reference to stable world coordinates.
+			 * @return const Base::Math::CartesianFrame< float > & Reference to stable world coordinates.
 			 *
 			 * @note This implements the double-buffering mechanism for thread-safe rendering.
 			 * @see publishStateForRendering()
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::CartesianFrame< float > & getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept = 0;
+			virtual const Base::Math::CartesianFrame< float > & getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept = 0;
 
 		protected:
 
@@ -949,7 +949,7 @@ namespace EmEn::Scenes
 			 *
 			 * @note This is thread-safe (protected by m_componentsMutex).
 			 */
-			void onContainerMove (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
+			void onContainerMove (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/**
 			 * @brief Derived class logic update hook.
@@ -980,7 +980,7 @@ namespace EmEn::Scenes
 		private:
 
 			/**
-			 * @copydoc EmEn::Libs::ObserverTrait::onNotification()
+			 * @copydoc EmEn::Base::ObserverTrait::onNotification()
 			 *
 			 * Observes Component::Abstract (ComponentContentModified) and
 			 * Physics::BodyPhysicalProperties (PropertiesChanged) to trigger
@@ -1151,7 +1151,7 @@ namespace EmEn::Scenes
 			virtual void onLocationDataUpdate () noexcept = 0;
 
 			const Scene & m_scene;						  ///< Reference to parent scene (immutable, valid for lifetime).
-			Libs::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components; ///< Fixed-size component storage.
+			Base::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components; ///< Fixed-size component storage.
 			mutable std::mutex m_componentsMutex;		   ///< Protects m_components for thread-safe access.
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.

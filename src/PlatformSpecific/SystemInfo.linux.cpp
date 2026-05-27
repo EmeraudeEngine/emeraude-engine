@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,7 +37,7 @@
 #include <unistd.h>
 
 /* Local inclusions. */
-#include "Libs/String.hpp"
+#include "String.hpp"
 
 namespace EmEn::PlatformSpecific
 {
@@ -56,7 +56,7 @@ namespace EmEn::PlatformSpecific
 					if ( line.starts_with("PRETTY_NAME") )
 					{
 						auto & name = m_OSInformation.systemName;
-						name = Libs::String::right(line, "=");
+						name = Base::String::right(line, "=");
 						std::erase(name, '"');
 					}
 				}

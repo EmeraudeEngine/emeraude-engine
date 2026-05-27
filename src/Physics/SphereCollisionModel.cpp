@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -29,16 +29,16 @@
 /* Local inclusions. */
 #include "AABBCollisionModel.hpp"
 #include "CapsuleCollisionModel.hpp"
-#include "Libs/Math/Space3D/Collisions/CapsuleSphere.hpp"
-#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
-#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
-#include "Libs/Math/Space3D/Collisions/SphereCuboid.hpp"
+#include "Math/Space3D/Collisions/CapsuleSphere.hpp"
+#include "Math/Space3D/Collisions/PointSphere.hpp"
+#include "Math/Space3D/Collisions/SamePrimitive.hpp"
+#include "Math/Space3D/Collisions/SphereCuboid.hpp"
 #include "PointCollisionModel.hpp"
 
 namespace EmEn::Physics
 {
-	using namespace Libs::Math;
-	using namespace Libs::Math::Space3D;
+	using namespace Base::Math;
+	using namespace Base::Math::Space3D;
 
 	CollisionDetectionResults
 	SphereCollisionModel::isCollidingWith (const CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const CartesianFrame< float > & otherWorldFrame) const noexcept

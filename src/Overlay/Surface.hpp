@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -37,9 +37,9 @@
 /* Local inclusions for usages. */
 #include "FramebufferProperties.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Space2D/AARectangle.hpp"
-#include "Libs/NameableTrait.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Space2D/AARectangle.hpp"
+#include "NameableTrait.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
@@ -213,7 +213,7 @@ namespace EmEn::Overlay
 		}
 
 		/** @brief Local pixmap data (CPU-side). Only used when memory mapping is disabled. */
-		Libs::PixelFactory::Pixmap< uint8_t > pixmap;
+		Base::PixelFactory::Pixmap< uint8_t > pixmap;
 		/** @brief Vulkan image on GPU. */
 		std::shared_ptr< Vulkan::Image > image;
 		/** @brief Vulkan image view for the image. */
@@ -224,9 +224,9 @@ namespace EmEn::Overlay
 
 	/**
 	 * @brief The base class for overlay UIScreen surfaces.
-	 * @extends Libs::NameableTrait A surface has a name.
+	 * @extends Base::NameableTrait A surface has a name.
 	 */
-	class Surface : public Libs::NameableTrait
+	class Surface : public Base::NameableTrait
 	{
 		public:
 
@@ -245,7 +245,7 @@ namespace EmEn::Overlay
 			 * @param rectangle A reference to a rectangle for the surface geometry on screen. Default the whole screen.
 			 * @param visible Set visibility state on startup. Default true.
 			 */
-			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Libs::Math::Space2D::AARectangle< float > & rectangle = {}, bool visible = true) noexcept
+			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Base::Math::Space2D::AARectangle< float > & rectangle = {}, bool visible = true) noexcept
 				: NameableTrait{std::move(name)},
 				m_framebufferProperties{framebufferProperties},
 				m_rectangle{rectangle}
@@ -328,10 +328,10 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Returns the surface geometry.
-			 * @return const Libs::Math::Space2D::AARectangle< float > &
+			 * @return const Base::Math::Space2D::AARectangle< float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Space2D::AARectangle< float > &
+			const Base::Math::Space2D::AARectangle< float > &
 			geometry () const noexcept
 			{
 				return m_rectangle;
@@ -339,10 +339,10 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Returns the model matrix to place the surface on screen.
-			 * @return const Libs::Math::Matrix< 4, float > &
+			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
+			const Base::Math::Matrix< 4, float > &
 			modelMatrix () const noexcept
 			{
 				return m_modelMatrix;
@@ -351,10 +351,10 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Returns the pixmap from the active buffer.
 			 * @warning Use the active buffer mutex before writing into the pixmap with Surface::activeBufferMutex().
-			 * @return Libs::PixelFactory::Pixmap< uint8_t > &
+			 * @return Base::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Pixmap< uint8_t > &
+			Base::PixelFactory::Pixmap< uint8_t > &
 			activePixmap () noexcept
 			{
 				return m_activeBuffer.pixmap;
@@ -364,10 +364,10 @@ namespace EmEn::Overlay
 			 * @brief Returns the pixmap from the transition buffer.
 			 * @note Only meaningful when resize transition is enabled. Used during resize
 			 * to prepare content at the new size while the active buffer continues rendering.
-			 * @return Libs::PixelFactory::Pixmap< uint8_t > &
+			 * @return Base::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Pixmap< uint8_t > &
+			Base::PixelFactory::Pixmap< uint8_t > &
 			transitionPixmap () noexcept
 			{
 				return m_transitionBuffer.pixmap;
@@ -390,7 +390,7 @@ namespace EmEn::Overlay
 			 * @return void
 			 */
 			void
-			setGeometry (const Libs::Math::Space2D::AARectangle< float > & rectangle) noexcept
+			setGeometry (const Base::Math::Space2D::AARectangle< float > & rectangle) noexcept
 			{
 				m_rectangle = rectangle;
 
@@ -1256,8 +1256,8 @@ namespace EmEn::Overlay
 			friend std::ostream & operator<< (std::ostream & out, const Surface & obj);
 
 			const FramebufferProperties & m_framebufferProperties;
-			Libs::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
-			Libs::Math::Matrix< 4, float > m_modelMatrix;
+			Base::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
+			Base::Math::Matrix< 4, float > m_modelMatrix;
 			Framebuffer m_activeBuffer;
 			Framebuffer m_transitionBuffer;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;

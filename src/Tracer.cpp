@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -45,7 +45,7 @@
 /* Local inclusions. */
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
-#include "Libs/String.hpp"
+#include "String.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
 #endif
@@ -55,7 +55,7 @@
 
 namespace EmEn
 {
-	using namespace Libs;
+	using namespace Base;
 
 	Tracer &
 	Tracer::getInstance () noexcept

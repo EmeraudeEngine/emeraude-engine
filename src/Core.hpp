@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -113,7 +113,7 @@
 #pragma once
 
 /* Project configuration. */
-#include "Libs/emeraude_platform.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <any>
@@ -127,8 +127,8 @@
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Console/ControllableTrait.hpp"
-#include "Libs/ObserverTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
+#include "ObserverTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Audio/Manager.hpp"
@@ -157,11 +157,11 @@ namespace EmEn
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::Input::KeyboardListenerInterface The core needs to get events from the keyboard for low-level interaction.
 	 * @extends EmEn::Console::ControllableTrait The core can be controlled by the console.
-	 * @extends EmEn::Libs::ObserverTrait The core is an observer.
-	 * @extends EmEn::Libs::ObservableTrait The core is observable.
+	 * @extends EmEn::Base::ObserverTrait The core is an observer.
+	 * @extends EmEn::Base::ObservableTrait The core is observable.
 	 * @version 0.8.35
 	 */
-	class Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -365,15 +365,15 @@ namespace EmEn
 			 * @brief Displays an on-screen notification message from a BlobTrait.
 			 * @details Overload accepting a BlobTrait for building messages with stream syntax.
 			 * @code
-			 * notifyUser(Libs::BlobTrait{} << "Score: " << score);
+			 * notifyUser(Base::BlobTrait{} << "Score: " << score);
 			 * @endcode
 			 * @param message A BlobTrait containing the message text.
 			 * @param duration Display duration in milliseconds. Default is Notifier::DefaultDuration (3000ms).
 			 * @see Notifier
-			 * @see Libs::BlobTrait
+			 * @see Base::BlobTrait
 			 */
 			void
-			notifyUser (const Libs::BlobTrait & message, uint32_t duration = Notifier::DefaultDuration) noexcept
+			notifyUser (const Base::BlobTrait & message, uint32_t duration = Notifier::DefaultDuration) noexcept
 			{
 				// TODO: On no duration expressed, use the length of the string to compute an optimal duration for the user to read.
 				this->notifier().push(message.get(), duration);
@@ -884,7 +884,7 @@ namespace EmEn
 			 * @param applicationDomain Domain for network identification. Default "localhost".
 			 * @see Identification
 			 */
-			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost") noexcept;
+			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost") noexcept;
 
 #if IS_WINDOWS
 			/**
@@ -898,7 +898,7 @@ namespace EmEn
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "unknown.org".
 			 */
-			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org") noexcept;
+			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org") noexcept;
 #endif
 
 			/**
@@ -973,10 +973,10 @@ namespace EmEn
 			 * @param label Unique identifier for caching this cursor.
 			 * @param pixmap The cursor image data.
 			 * @param hotSpot Click point offset from top-left corner. Default {0, 0}.
-			 * @see Libs::PixelFactory::Pixmap
+			 * @see Base::PixelFactory::Pixmap
 			 */
 			void
-			setCursor (const std::string & label, const Libs::PixelFactory::Pixmap< uint8_t > & pixmap, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept
+			setCursor (const std::string & label, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept
 			{
 				m_cursorAtlas.setCursor(m_window, label, pixmap, hotSpot);
 			}
@@ -1081,7 +1081,7 @@ namespace EmEn
 			/** @copydoc EmEn::Input::KeyboardListenerInterface::onCharacterType() */
 			bool onCharacterType (uint32_t unicode) noexcept final;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept final;
 
@@ -1195,7 +1195,7 @@ namespace EmEn
 			void
 			onCoreShaderCompilationFailed (const std::string & shaderIdentifier, const std::string & sourceCode) noexcept
 			{
-				this->notifyUser(Libs::BlobTrait{} << "Shader '" << shaderIdentifier << "' compilation failed!");
+				this->notifyUser(Base::BlobTrait{} << "Shader '" << shaderIdentifier << "' compilation failed!");
 
 				m_coreMessages.emplace(sourceCode);
 			}
@@ -1403,7 +1403,7 @@ namespace EmEn
 			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_notifier}; ///< Scene graph management.
 			/* Reusable capture buffer for screenshots. */
-			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};
+			std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};
 			/* Service tracking. */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;   ///< Enabled primary service pointers.
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled; ///< Enabled secondary service pointers.

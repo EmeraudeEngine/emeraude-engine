@@ -1,5 +1,5 @@
 /*
- * src/Scenes/EffectsToolkit.FX.hpp
+ * src/Scenes/EffectsToolkit/FX.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 #include <memory>
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Scenes/Component/PointLight.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/Node.hpp"
@@ -47,7 +47,7 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 	 * @param duration The animation duration in milliseconds.
 	 * @return std::shared_ptr< Component::PointLight >
 	 */
-	std::shared_ptr< Component::PointLight > createFlashEffect (Node & node, const Libs::PixelFactory::Color< float > & color, float radius, float intensity, uint32_t duration) noexcept;
+	std::shared_ptr< Component::PointLight > createFlashEffect (Node & node, const Base::PixelFactory::Color< float > & color, float radius, float intensity, uint32_t duration) noexcept;
 
 	/**
 	 * @brief Creates a temporary spherical push force.

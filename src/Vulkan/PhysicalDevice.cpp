@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,13 +32,13 @@
 #include <sstream>
 
 /* Local inclusions. */
-#include "Libs/String.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {
-	using namespace Libs;
+	using namespace Base;
 
 	PhysicalDevice::PhysicalDevice (const VkPhysicalDevice & physicalDevice) noexcept
 		: m_physicalDevice{physicalDevice}

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/Variant.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Animations
 {
@@ -74,7 +74,7 @@ namespace EmEn::Animations
 			 * @note Cannot be const because the method can change the internal value of the object.
 			 * @return Variant
 			 */
-			virtual Libs::Variant getNextValue () noexcept = 0;
+			virtual Base::Variant getNextValue () noexcept = 0;
 
 			/**
 			 * @brief Returns whether the animation is running.

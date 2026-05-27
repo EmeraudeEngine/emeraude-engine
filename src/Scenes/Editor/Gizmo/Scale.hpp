@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -60,7 +60,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 			/** @copydoc EmEn::Scenes::Editor::Gizmo::Abstract::hitTest() */
 			[[nodiscard]]
-			AxisID hitTest (const Libs::Math::Space3D::Segment< float > & ray) const noexcept override;
+			AxisID hitTest (const Base::Math::Space3D::Segment< float > & ray) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Editor::Gizmo::Abstract::render() */
 			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept override;
@@ -89,7 +89,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			static constexpr float HighlightScale{1.15F};
 			static constexpr float HighlightBrightness{1.6F};
 
-			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Libs::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
+			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Base::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
 
 			std::array< std::shared_ptr< Graphics::Geometry::Interface >, SubElementCount > m_subGeometries{};
 	};

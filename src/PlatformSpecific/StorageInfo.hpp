@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -38,13 +38,13 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	 */
 	struct DriveInfo
 	{
-		std::string filesystem;      /* Device path (e.g., "/dev/sda1") or description (Windows). */
-		std::string mounted;         /* Mount point (e.g., "/", "/mnt/usb") or drive letter (e.g., "C:"). */
-		std::string fsType;          /* Filesystem type (e.g., "ext4", "NTFS", "apfs", "exfat"). */
-		uint64_t totalBytes{0};      /* Total size in bytes. */
-		uint64_t usedBytes{0};       /* Used space in bytes. */
+		std::string filesystem;	  /* Device path (e.g., "/dev/sda1") or description (Windows). */
+		std::string mounted;		 /* Mount point (e.g., "/", "/mnt/usb") or drive letter (e.g., "C:"). */
+		std::string fsType;		  /* Filesystem type (e.g., "ext4", "NTFS", "apfs", "exfat"). */
+		uint64_t totalBytes{0};	  /* Total size in bytes. */
+		uint64_t usedBytes{0};	   /* Used space in bytes. */
 		uint64_t availableBytes{0};  /* Available space in bytes. */
-		bool removable{false};       /* True if the drive is removable (USB, SD card). */
+		bool removable{false};	   /* True if the drive is removable (USB, SD card). */
 	};
 
 	/**

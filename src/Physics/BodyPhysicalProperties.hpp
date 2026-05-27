@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,10 +39,10 @@
 #include "json/json.h"
 
 /* Local inclusions for inheritances. */
-#include "Libs/ObservableTrait.hpp"
+#include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Matrix.hpp"
+#include "Math/Matrix.hpp"
 #include "Physics.hpp"
 
 namespace EmEn::Physics
@@ -50,9 +50,9 @@ namespace EmEn::Physics
 	/**
 	 * @brief Class defining physical properties of an object.
 	 * @note [OBS][SHARED-OBSERVABLE]
-	 * @extends EmEn::Libs::ObservableTrait This notifies each physical property changes.
+	 * @extends EmEn::Base::ObservableTrait This notifies each physical property changes.
 	 */
-	class BodyPhysicalProperties final : public Libs::ObservableTrait
+	class BodyPhysicalProperties final : public Base::ObservableTrait
 	{
 		public:
 
@@ -107,7 +107,7 @@ namespace EmEn::Physics
 			 * @param inertiaTensor A reference to a matrix 3x3. Default matrix identity.
 			 */
 			explicit
-			BodyPhysicalProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness, const Libs::Math::Matrix< 3, float > & inertiaTensor = Libs::Math::Matrix< 3, float >::identity()) noexcept
+			BodyPhysicalProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness, const Base::Math::Matrix< 3, float > & inertiaTensor = Base::Math::Matrix< 3, float >::identity()) noexcept
 				: m_mass{mass},
 				m_inverseMass{1.0F / m_mass},
 				m_surface{surface},
@@ -128,10 +128,10 @@ namespace EmEn::Physics
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -139,7 +139,7 @@ namespace EmEn::Physics
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -294,14 +294,14 @@ namespace EmEn::Physics
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
-			bool setInertiaTensor (const Libs::Math::Matrix< 3, float > & inertiaTensor, bool fireEvents = true) noexcept;
+			bool setInertiaTensor (const Base::Math::Matrix< 3, float > & inertiaTensor, bool fireEvents = true) noexcept;
 
 			/**
 			 * @brief Returns the moment of inertia tensor.
-			 * @return const Libs::Math::Matrix< 3, float > &
+			 * @return const Base::Math::Matrix< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 3, float > &
+			const Base::Math::Matrix< 3, float > &
 			inertiaTensor () const noexcept
 			{
 				return m_inertiaTensor;
@@ -318,7 +318,7 @@ namespace EmEn::Physics
 			 * @param inertiaTensor A reference to a matrix 3x3.
 			 * @return bool
 			 */
-			bool setProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness, float stickiness, const Libs::Math::Matrix< 3, float > & inertiaTensor) noexcept;
+			bool setProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness, float stickiness, const Base::Math::Matrix< 3, float > & inertiaTensor) noexcept;
 
 			/**
 			 * @brief Sets physical properties at once from JSON data.
@@ -377,7 +377,7 @@ namespace EmEn::Physics
 			float m_angularDragCoefficient{DefaultAngularDragCoefficient};
 			float m_bounciness{DefaultBounciness};
 			float m_stickiness{DefaultStickiness};
-			Libs::Math::Matrix< 3, float > m_inertiaTensor;
+			Base::Math::Matrix< 3, float > m_inertiaTensor;
 	};
 
 	inline

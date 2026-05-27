@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -81,7 +81,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept final
 			{
 				return NullBoundingBox;
@@ -89,7 +89,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept final
 			{
 				return NullBoundingSphere;
@@ -101,7 +101,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return void
 			 */
 			void
-			setAverageColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setAverageColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_averageColor = color;
 			}
@@ -112,7 +112,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return void
 			 */
 			void
-			setLightPosition (const Libs::Math::Vector< 3, float > & position) noexcept
+			setLightPosition (const Base::Math::Vector< 3, float > & position) noexcept
 			{
 				m_lightPosition = position;
 			}
@@ -123,7 +123,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return void
 			 */
 			void
-			setLightAmbientColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setLightAmbientColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_lightAmbientColor = color;
 			}
@@ -134,7 +134,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return void
 			 */
 			void
-			setLightDiffuseColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setLightDiffuseColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_lightDiffuseColor = color;
 			}
@@ -145,7 +145,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return void
 			 */
 			void
-			setLightSpecularColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			setLightSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_lightSpecularColor = color;
 			}
@@ -155,7 +155,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			averageColor () const noexcept
 			{
 				return m_averageColor;
@@ -163,10 +163,10 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Returns the light position.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			lightPosition () const noexcept
 			{
 				return m_lightPosition;
@@ -177,7 +177,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			lightAmbientColor () const noexcept
 			{
 				return m_lightAmbientColor;
@@ -188,7 +188,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			lightDiffuseColor () const noexcept
 			{
 				return m_lightDiffuseColor;
@@ -199,7 +199,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			lightSpecularColor () const noexcept
 			{
 				return m_lightSpecularColor;
@@ -255,10 +255,10 @@ namespace EmEn::Graphics::Renderable
 			/* FIXME: Set the correct size. */
 			static constexpr auto SkySize{512.0F};
 
-			Libs::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};
-			Libs::Math::Vector< 3, float > m_lightPosition{0.6666F, 0.3333F, 0.6666F};
-			Libs::PixelFactory::Color< float > m_lightAmbientColor{0.0F, 0.0F, 0.13F, 1.0F};
-			Libs::PixelFactory::Color< float > m_lightDiffuseColor{1.0F, 1.0F, 1.0F, 1.0F};
-			Libs::PixelFactory::Color< float > m_lightSpecularColor{1.0F, 1.0F, 1.0F, 1.0F};
+			Base::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};
+			Base::Math::Vector< 3, float > m_lightPosition{0.6666F, 0.3333F, 0.6666F};
+			Base::PixelFactory::Color< float > m_lightAmbientColor{0.0F, 0.0F, 0.13F, 1.0F};
+			Base::PixelFactory::Color< float > m_lightDiffuseColor{1.0F, 1.0F, 1.0F, 1.0F};
+			Base::PixelFactory::Color< float > m_lightSpecularColor{1.0F, 1.0F, 1.0F, 1.0F};
 	};
 }

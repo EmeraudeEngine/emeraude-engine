@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 #include <unordered_set>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
+#include "Math/CartesianFrame.hpp"
 #include "CoreTypes.hpp"
 #include "Types.hpp"
 
@@ -315,10 +315,10 @@ namespace EmEn::Scenes::AVConsole
 
 			/**
 			 * @brief Returns the world coordinates of this device.
-			 * @return Libs::Math::CartesianFrame< float >
+			 * @return Base::Math::CartesianFrame< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept = 0;
+			virtual Base::Math::CartesianFrame< float > getWorldCoordinates () const noexcept = 0;
 
 			/**
 			 * @brief Updates the device from object coordinates in world space holding it.
@@ -326,7 +326,7 @@ namespace EmEn::Scenes::AVConsole
 			 * @param worldVelocity A reference to the velocity vector of the device.
 			 * @return void
 			 */
-			virtual void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept = 0;
+			virtual void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept = 0;
 
 		protected:
 

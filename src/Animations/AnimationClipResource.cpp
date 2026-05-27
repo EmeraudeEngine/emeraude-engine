@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -40,7 +40,7 @@ namespace EmEn::Animations
 		}
 
 		/* Default: an empty clip (no channels). */
-		m_clip = Libs::Animation::AnimationClip< float >{"default", {}};
+		m_clip = Base::Animation::AnimationClip< float >{"default", {}};
 
 		return this->setLoadSuccess(true);
 	}
@@ -72,7 +72,7 @@ namespace EmEn::Animations
 	}
 
 	bool
-	AnimationClipResource::load (Libs::Animation::AnimationClip< float > clip) noexcept
+	AnimationClipResource::load (Base::Animation::AnimationClip< float > clip) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

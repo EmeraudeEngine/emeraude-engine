@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,22 +32,22 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Libs/FlagTrait.hpp"
+#include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/VertexFactory/ShapeBuilderOptions.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
+#include "VertexFactory/ShapeBuilderOptions.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
 	/**
 	 * @brief Defines parameters to generate a geometry with the resource generator.
-	 * @extends EmEn::Libs::FlagTrait Needs FlagTrait to pass it to generated geometries.
+	 * @extends EmEn::Base::FlagTrait Needs FlagTrait to pass it to generated geometries.
 	 */
-	class GenerationParameters final : public Libs::FlagTrait< uint32_t >
+	class GenerationParameters final : public Base::FlagTrait< uint32_t >
 	{
 		public:
 
@@ -94,7 +94,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return void
 			 */
 			void
-			setGlobalVertexColor (const Libs::PixelFactory::Color< float > & globalVertexColor) noexcept
+			setGlobalVertexColor (const Base::PixelFactory::Color< float > & globalVertexColor) noexcept
 			{
 				m_globalVertexColor = globalVertexColor;
 
@@ -107,7 +107,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return void
 			 */
 			void
-			setTransformMatrix (const Libs::Math::Matrix< 4, float > & transformMatrix) noexcept
+			setTransformMatrix (const Base::Math::Matrix< 4, float > & transformMatrix) noexcept
 			{
 				m_transformMatrix = transformMatrix;
 			}
@@ -120,7 +120,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setTextureCoordinatesMultiplier (float multiplier) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				m_textureCoordinatesMultiplier[X] = multiplier;
 				m_textureCoordinatesMultiplier[Y] = multiplier;
@@ -136,7 +136,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				m_textureCoordinatesMultiplier[X] = xMultiplier;
 				m_textureCoordinatesMultiplier[Y] = yMultiplier;
@@ -153,7 +153,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier, float zMultiplier) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				m_textureCoordinatesMultiplier[X] = xMultiplier;
 				m_textureCoordinatesMultiplier[Y] = yMultiplier;
@@ -168,7 +168,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setCapTextureCoordinatesMultiplier (float multiplier) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				m_capTextureCoordinatesMultiplier[X] = multiplier;
 				m_capTextureCoordinatesMultiplier[Y] = multiplier;
@@ -184,7 +184,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setCapTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				m_capTextureCoordinatesMultiplier[X] = xMultiplier;
 				m_capTextureCoordinatesMultiplier[Y] = yMultiplier;
@@ -201,7 +201,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setCapTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier, float zMultiplier) noexcept
 			{
-				using namespace Libs::Math;
+				using namespace Base::Math;
 
 				m_capTextureCoordinatesMultiplier[X] = xMultiplier;
 				m_capTextureCoordinatesMultiplier[Y] = yMultiplier;
@@ -210,10 +210,10 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Returns the cap texture coordinate multipliers vector.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			capTextureCoordinatesMultiplier () const noexcept
 			{
 				return m_capTextureCoordinatesMultiplier;
@@ -257,7 +257,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > &
+			const Base::PixelFactory::Color< float > &
 			globalVertexColor () const noexcept
 			{
 				return m_globalVertexColor;
@@ -265,10 +265,10 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Returns the transform matrix.
-			 * @return const Libs::Math::Matrix< 4, float > &
+			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
+			const Base::Math::Matrix< 4, float > &
 			transformMatrix () const noexcept
 			{
 				return m_transformMatrix;
@@ -276,10 +276,10 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Returns the texture coordinate multipliers vector.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			textureCoordinatesMultiplier () const noexcept
 			{
 				return m_textureCoordinatesMultiplier;
@@ -333,15 +333,15 @@ namespace EmEn::Graphics::Geometry
 			 * @return Libraries::VertexFactory::ShapeBuilderOptions< float >
 			 */
 			[[nodiscard]]
-			Libs::VertexFactory::ShapeBuilderOptions< float > getShapeBuilderOptions (bool enableNormalsGeneration, bool enableTextureCoordinatesGeneration, bool enableVertexColorsGeneration) const noexcept;
+			Base::VertexFactory::ShapeBuilderOptions< float > getShapeBuilderOptions (bool enableNormalsGeneration, bool enableTextureCoordinatesGeneration, bool enableVertexColorsGeneration) const noexcept;
 
 		private:
 
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
-			Libs::PixelFactory::Color< float > m_globalVertexColor{Libs::PixelFactory::Magenta};
-			Libs::Math::Matrix< 4, float > m_transformMatrix;
-			Libs::Math::Vector< 3, float > m_textureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
-			Libs::Math::Vector< 3, float > m_capTextureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
+			Base::PixelFactory::Color< float > m_globalVertexColor{Base::PixelFactory::Magenta};
+			Base::Math::Matrix< 4, float > m_transformMatrix;
+			Base::Math::Vector< 3, float > m_textureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
+			Base::Math::Vector< 3, float > m_capTextureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
 			bool m_centerAtBottom{false};
 			bool m_flipGeometry{false};
 			bool m_globalVertexColorSet{false};

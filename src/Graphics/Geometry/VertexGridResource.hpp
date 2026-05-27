@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -115,10 +115,10 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -126,7 +126,7 @@ namespace EmEn::Graphics::Geometry
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -178,7 +178,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_localData.boundingBox();
@@ -186,7 +186,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_localData.boundingSphere();
@@ -263,7 +263,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param color A reference to a color.
 			 * @return void.
 			 */
-			void enableVertexColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void enableVertexColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Enables vertex color from a color map.
@@ -304,13 +304,13 @@ namespace EmEn::Graphics::Geometry
 			 * @param grid A reference to a geometry from vertex factory library.
 			 * @return bool
 			 */
-			bool load (const Libs::VertexFactory::Grid< float > & grid) noexcept;
+			bool load (const Base::VertexFactory::Grid< float > & grid) noexcept;
 
 			/**
 			 * @brief Gives access to the local geometry data.
 			 * @return Libraries::VertexFactory::Grid< float > &
 			 */
-			Libs::VertexFactory::Grid< float > &
+			Base::VertexFactory::Grid< float > &
 			localData () noexcept
 			{
 				return m_localData;
@@ -321,7 +321,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return const Libraries::VertexFactory::Grid< float > &
 			 */
 			[[nodiscard]]
-			const Libs::VertexFactory::Grid< float > &
+			const Base::VertexFactory::Grid< float > &
 			localData () const noexcept
 			{
 				return m_localData;
@@ -358,10 +358,10 @@ namespace EmEn::Graphics::Geometry
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_indexBufferObject;
 			/* Local data. */
-			Libs::VertexFactory::Grid< float > m_localData;
+			Base::VertexFactory::Grid< float > m_localData;
 			/* VBO generation options. */
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
-			Libs::PixelFactory::Color< float > m_globalVertexColor;
+			Base::PixelFactory::Color< float > m_globalVertexColor;
 			std::shared_ptr< ImageResource > m_vertexColorMap;
 	};
 }

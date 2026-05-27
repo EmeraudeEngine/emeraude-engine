@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -82,10 +82,10 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -93,7 +93,7 @@ namespace EmEn::Graphics::Renderable
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -159,7 +159,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_geometry != nullptr ?
@@ -169,7 +169,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_geometry != nullptr ?
@@ -227,17 +227,17 @@ namespace EmEn::Graphics::Renderable
 				return m_waterLevel;
 			}
 
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
+			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(const Base::Math::Vector< 3, float > &) const */
 			[[nodiscard]]
 			float
-			getLevelAt (const Libs::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
+			getLevelAt (const Base::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
 			{
 				return m_waterLevel;
 			}
 
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(float, float, float) const */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override
 			{
 				return {positionX, m_waterLevel + deltaY, positionZ};
@@ -245,8 +245,8 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::getNormalAt() const */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
-			getNormalAt (const Libs::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
+			Base::Math::Vector< 3, float >
+			getNormalAt (const Base::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
 			{
 				return {0.0F, 1.0F, 0.0F};
 			}
@@ -254,22 +254,22 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::isSubmerged() const */
 			[[nodiscard]]
 			bool
-			isSubmerged (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
+			isSubmerged (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
 			{
-				return worldPosition[Libs::Math::Y] < m_waterLevel;
+				return worldPosition[Base::Math::Y] < m_waterLevel;
 			}
 
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::getDepthAt() const */
 			[[nodiscard]]
 			float
-			getDepthAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
+			getDepthAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
 			{
-				return m_waterLevel - worldPosition[Libs::Math::Y];
+				return m_waterLevel - worldPosition[Base::Math::Y];
 			}
 
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::updateVisibility() */
 			void
-			updateVisibility (const Libs::Math::Vector< 3, float > & /*worldPosition*/) noexcept override
+			updateVisibility (const Base::Math::Vector< 3, float > & /*worldPosition*/) noexcept override
 			{
 				/* NOTE: Nothing to do for a simple flat water plane. */
 			}

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,9 +33,9 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
-#include "Libs/Math/Base.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Libs/PixelFactory/Color.hpp"
+#include "Math/Base.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 
 namespace EmEn::Saphir
 {
@@ -68,7 +68,7 @@ namespace EmEn::Saphir
 			 * @return StaticLighting &
 			 */
 			StaticLighting &
-			setAmbientParameters (const Libs::PixelFactory::Color< float > & color, float intensity = DefaultAmbientIntensity) noexcept
+			setAmbientParameters (const Base::PixelFactory::Color< float > & color, float intensity = DefaultAmbientIntensity) noexcept
 			{
 				m_ambientColor = color;
 				m_ambientIntensity = intensity;
@@ -83,7 +83,7 @@ namespace EmEn::Saphir
 			 * @return StaticLighting &
 			 */
 			StaticLighting &
-			setLightParameters (const Libs::PixelFactory::Color< float > & color, float intensity = DefaultLightIntensity) noexcept
+			setLightParameters (const Base::PixelFactory::Color< float > & color, float intensity = DefaultLightIntensity) noexcept
 			{
 				m_color = color;
 				m_intensity = intensity;
@@ -98,7 +98,7 @@ namespace EmEn::Saphir
 			 * @return void
 			 */
 			void
-			setAsDirectionalLight (const Libs::Math::Vector< 3, float > & vector, bool isDirection = false) noexcept
+			setAsDirectionalLight (const Base::Math::Vector< 3, float > & vector, bool isDirection = false) noexcept
 			{
 				m_type = Graphics::LightType::Directional;
 				m_direction = isDirection ?
@@ -113,7 +113,7 @@ namespace EmEn::Saphir
 			 * @return void
 			 */
 			void
-			setAsPointLight (const Libs::Math::Vector< 3, float > & position, float radius = DefaultLightRadius) noexcept
+			setAsPointLight (const Base::Math::Vector< 3, float > & position, float radius = DefaultLightRadius) noexcept
 			{
 				m_type = Graphics::LightType::Point;
 				m_position = position;
@@ -130,7 +130,7 @@ namespace EmEn::Saphir
 			 * @return StaticLighting &
 			 */
 			void
-			setAsSpotLight (const Libs::Math::Vector< 3, float > & position, const Libs::Math::Vector< 3, float > & pointTo, float innerAngle = DefaultSpotLightInnerAngle, float outerAngle = DefaultSpotLightOuterAngle, float radius = DefaultLightRadius) noexcept
+			setAsSpotLight (const Base::Math::Vector< 3, float > & position, const Base::Math::Vector< 3, float > & pointTo, float innerAngle = DefaultSpotLightInnerAngle, float outerAngle = DefaultSpotLightOuterAngle, float radius = DefaultLightRadius) noexcept
 			{
 				m_type = Graphics::LightType::Spot;
 				m_position = position;
@@ -140,13 +140,13 @@ namespace EmEn::Saphir
 				if ( innerAngle > outerAngle )
 				{
 					/* NOTE: Swap angles if the outer angle is bigger than the inner angle. */
-					m_innerCosAngle = std::cos(Libs::Math::Radian(outerAngle));
-					m_outerCosAngle = std::cos(Libs::Math::Radian(innerAngle));
+					m_innerCosAngle = std::cos(Base::Math::Radian(outerAngle));
+					m_outerCosAngle = std::cos(Base::Math::Radian(innerAngle));
 				}
 				else
 				{
-					m_innerCosAngle = std::cos(Libs::Math::Radian(innerAngle));
-					m_outerCosAngle = std::cos(Libs::Math::Radian(outerAngle));
+					m_innerCosAngle = std::cos(Base::Math::Radian(innerAngle));
+					m_outerCosAngle = std::cos(Base::Math::Radian(outerAngle));
 				}
 			}
 
@@ -171,7 +171,7 @@ namespace EmEn::Saphir
 			{
 				std::stringstream output;
 
-				output << "vec3(" << m_position[Libs::Math::X] << ", " << m_position[Libs::Math::Y] << ", " << m_position[Libs::Math::Z] << ")";
+				output << "vec3(" << m_position[Base::Math::X] << ", " << m_position[Base::Math::Y] << ", " << m_position[Base::Math::Z] << ")";
 
 				return output.str();
 			}
@@ -186,7 +186,7 @@ namespace EmEn::Saphir
 			{
 				std::stringstream output;
 
-				output << "vec4(" << m_position[Libs::Math::X] << ", " << m_position[Libs::Math::Y] << ", " << m_position[Libs::Math::Z] << ", 1.0)";
+				output << "vec4(" << m_position[Base::Math::X] << ", " << m_position[Base::Math::Y] << ", " << m_position[Base::Math::Z] << ", 1.0)";
 
 				return output.str();
 			}
@@ -201,7 +201,7 @@ namespace EmEn::Saphir
 			{
 				std::stringstream output;
 
-				output << "vec3(" << m_direction[Libs::Math::X] << ", " << m_direction[Libs::Math::Y] << ", " << m_direction[Libs::Math::Z] << ")";
+				output << "vec3(" << m_direction[Base::Math::X] << ", " << m_direction[Base::Math::Y] << ", " << m_direction[Base::Math::Z] << ")";
 
 				return output.str();
 			}
@@ -216,7 +216,7 @@ namespace EmEn::Saphir
 			{
 				std::stringstream output;
 
-				output << "vec4(" << m_direction[Libs::Math::X] << ", " << m_direction[Libs::Math::Y] << ", " << m_direction[Libs::Math::Z] << ", 0.0)";
+				output << "vec4(" << m_direction[Base::Math::X] << ", " << m_direction[Base::Math::Y] << ", " << m_direction[Base::Math::Z] << ", 0.0)";
 
 				return output.str();
 			}
@@ -350,14 +350,14 @@ namespace EmEn::Saphir
 		private:
 
 			Graphics::LightType m_type{Graphics::LightType::Directional};
-			Libs::Math::Vector< 3, float > m_position{250.0F, -500.0F, 250.0F}; /* (Spot & Point) */
-			Libs::Math::Vector< 3, float > m_direction{-0.333F, 0.333F, -0.333F}; /* (Directional & Spot) */
-			Libs::PixelFactory::Color< float > m_ambientColor{Libs::PixelFactory::DarkCyan};
-			Libs::PixelFactory::Color< float > m_color{Libs::PixelFactory::White}; /* (All) */
+			Base::Math::Vector< 3, float > m_position{250.0F, -500.0F, 250.0F}; /* (Spot & Point) */
+			Base::Math::Vector< 3, float > m_direction{-0.333F, 0.333F, -0.333F}; /* (Directional & Spot) */
+			Base::PixelFactory::Color< float > m_ambientColor{Base::PixelFactory::DarkCyan};
+			Base::PixelFactory::Color< float > m_color{Base::PixelFactory::White}; /* (All) */
 			float m_ambientIntensity{DefaultAmbientIntensity};
 			float m_intensity{DefaultLightIntensity}; /* (All) */
 			float m_radius{DefaultLightRadius}; /* (Spot & Point) */
-			float m_innerCosAngle{std::cos(Libs::Math::Radian(DefaultSpotLightInnerAngle))}; /* (Spot) */
-			float m_outerCosAngle{std::cos(Libs::Math::Radian(DefaultSpotLightOuterAngle))}; /* (Spot) */
+			float m_innerCosAngle{std::cos(Base::Math::Radian(DefaultSpotLightInnerAngle))}; /* (Spot) */
+			float m_outerCosAngle{std::cos(Base::Math::Radian(DefaultSpotLightOuterAngle))}; /* (Spot) */
 	};
 }

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Animation/Skin.hpp"
+#include "Animation/Skin.hpp"
 
 namespace EmEn::Animations
 {
@@ -78,10 +78,10 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Returns the skin binding (per-mesh).
-			 * @return const Libs::Animation::Skin< float > &
+			 * @return const Base::Animation::Skin< float > &
 			 */
 			[[nodiscard]]
-			const Libs::Animation::Skin< float > &
+			const Base::Animation::Skin< float > &
 			skin () const noexcept
 			{
 				return m_skin;
@@ -107,7 +107,7 @@ namespace EmEn::Graphics::Renderable
 			void
 			setSkeletalData (
 				std::shared_ptr< Animations::SkeletonResource > skeleton,
-				Libs::Animation::Skin< float > skin,
+				Base::Animation::Skin< float > skin,
 				std::vector< std::shared_ptr< Animations::AnimationClipResource > > clips
 			) noexcept
 			{
@@ -125,7 +125,7 @@ namespace EmEn::Graphics::Renderable
 			void
 			setSkeletalData (
 				std::shared_ptr< Animations::SkeletonResource > skeleton,
-				Libs::Animation::Skin< float > skin
+				Base::Animation::Skin< float > skin
 			) noexcept
 			{
 				m_skeleton = std::move(skeleton);
@@ -168,7 +168,7 @@ namespace EmEn::Graphics::Renderable
 		private:
 
 			std::shared_ptr< Animations::SkeletonResource > m_skeleton;
-			Libs::Animation::Skin< float > m_skin;
+			Base::Animation::Skin< float > m_skin;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
 	};
 }

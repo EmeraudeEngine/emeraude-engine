@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -64,8 +64,8 @@ namespace EmEn::Vulkan
 		uint32_t vertexCount{0};
 		uint32_t vertexStride{0};
 		VkBuffer indexBuffer{VK_NULL_HANDLE};
-		uint32_t firstIndex{0};    /* First index (uint32) for this sub-geometry; ignored if cpuIndices is set. */
-		uint32_t indexCount{0};    /* Number of indices for this sub-geometry. */
+		uint32_t firstIndex{0};	/* First index (uint32) for this sub-geometry; ignored if cpuIndices is set. */
+		uint32_t indexCount{0};	/* Number of indices for this sub-geometry. */
 		VkIndexType indexType{VK_INDEX_TYPE_UINT32};
 
 		/* Optional CPU-side triangle-list indices (e.g. converted from TriangleStrip).

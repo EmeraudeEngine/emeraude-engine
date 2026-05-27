@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -68,9 +68,9 @@ namespace EmEn::Graphics::Effects::Lens
 		/* Step 5: Reconstruct color from sharp Y + blurred UV. */
 		Code{fragmentShader} <<
 			"vec3 cbResult = vec3(" << Line::End <<
-			"    cbY + 1.13983 * cbV," << Line::End <<
-			"    cbY - 0.39465 * cbU - 0.58060 * cbV," << Line::End <<
-			"    cbY + 2.03211 * cbU" << Line::End <<
+			"	cbY + 1.13983 * cbV," << Line::End <<
+			"	cbY - 0.39465 * cbU - 0.58060 * cbV," << Line::End <<
+			"	cbY + 2.03211 * cbU" << Line::End <<
 			");";
 
 		/* Step 6: Mix with original based on intensity. */

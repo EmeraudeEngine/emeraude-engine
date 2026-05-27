@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -39,8 +39,8 @@
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 	using namespace Vulkan;
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
@@ -168,7 +168,7 @@ namespace EmEn::Graphics
 	float
 	ViewMatrices3DUBO::fieldOfView () const noexcept
 	{
-		using namespace Libs::Math;
+		using namespace Base::Math;
 
 		constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
 

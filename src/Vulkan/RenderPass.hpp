@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -33,7 +33,7 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/StaticVector.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -173,11 +173,11 @@ namespace EmEn::Vulkan
 
 			VkSubpassDescriptionFlags m_flags;
 			VkPipelineBindPoint m_pipelineBindPoint;
-			Libs::StaticVector< VkAttachmentReference, 8 > m_inputAttachments;
-			Libs::StaticVector< VkAttachmentReference, 8 > m_colorAttachments;
-			Libs::StaticVector< VkAttachmentReference, 8 > m_resolveAttachments; // Use the color attachments count.
+			Base::StaticVector< VkAttachmentReference, 8 > m_inputAttachments;
+			Base::StaticVector< VkAttachmentReference, 8 > m_colorAttachments;
+			Base::StaticVector< VkAttachmentReference, 8 > m_resolveAttachments; // Use the color attachments count.
 			VkAttachmentReference m_depthStencilAttachment{};
-			Libs::StaticVector< uint32_t, 8 > m_preserveAttachments;
+			Base::StaticVector< uint32_t, 8 > m_preserveAttachments;
 			bool m_depthStencilAttachmentSet{false};
 			VkAttachmentReference m_depthStencilResolveAttachment{};
 			VkResolveModeFlagBits m_depthResolveMode{VK_RESOLVE_MODE_NONE};
@@ -368,10 +368,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Pack subpass descriptions.
-			 * @return Libs::StaticVector< VkSubpassDescription, 4 >
+			 * @return Base::StaticVector< VkSubpassDescription, 4 >
 			 */
 			[[nodiscard]]
-			Libs::StaticVector< VkSubpassDescription, 4 > getSubPassDescriptions () const noexcept;
+			Base::StaticVector< VkSubpassDescription, 4 > getSubPassDescriptions () const noexcept;
 
 			/**
 			 * @brief Returns whether any subpass requires depth/stencil resolve (Vulkan 1.2+).
@@ -389,9 +389,9 @@ namespace EmEn::Vulkan
 
 			VkRenderPass m_handle{VK_NULL_HANDLE};
 			VkRenderPassCreateInfo m_createInfo{};
-			Libs::StaticVector< VkAttachmentDescription, 8 > m_attachmentDescriptions;
-			Libs::StaticVector< RenderSubPass, 4 > m_renderSubPasses;
-			Libs::StaticVector< VkSubpassDependency, 8 > m_subPassDependencies;
+			Base::StaticVector< VkAttachmentDescription, 8 > m_attachmentDescriptions;
+			Base::StaticVector< RenderSubPass, 4 > m_renderSubPasses;
+			Base::StaticVector< VkSubpassDependency, 8 > m_subPassDependencies;
 			VkRenderPassMultiviewCreateInfo m_multiviewCreateInfo{};
 			uint32_t m_viewMask{0};
 			uint32_t m_correlationMask{0};

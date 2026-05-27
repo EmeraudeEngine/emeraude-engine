@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "AnimationInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Variant.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Animations
 {
@@ -56,14 +56,14 @@ namespace EmEn::Animations
 			 * @param value The next value.
 			 */
 			explicit
-			ConstantValue (Libs::Variant value) noexcept
+			ConstantValue (Base::Variant value) noexcept
 				: m_value{std::move(value)}
 			{
 
 			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::getNextValue() */
-			Libs::Variant
+			Base::Variant
 			getNextValue () noexcept override
 			{
 				return m_value;
@@ -113,13 +113,13 @@ namespace EmEn::Animations
 			 * @return void
 			 */
 			void
-			setValue (const Libs::Variant & value) noexcept
+			setValue (const Base::Variant & value) noexcept
 			{
 				m_value = value;
 			}
 
 		private:
 
-			Libs::Variant m_value;
+			Base::Variant m_value;
 	};
 }

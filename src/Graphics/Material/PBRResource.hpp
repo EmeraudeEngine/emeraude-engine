@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -169,10 +169,10 @@ namespace EmEn::Graphics::Material
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -180,7 +180,7 @@ namespace EmEn::Graphics::Material
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -295,7 +295,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setAlbedoComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setAlbedoComponent (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets the albedo (base color) component as a texture.
@@ -443,7 +443,7 @@ namespace EmEn::Graphics::Material
 			 * @param amount The intensity multiplier. Default 1.0.
 			 * @return bool
 			 */
-			bool setAutoIlluminationComponent (const Libs::PixelFactory::Color< float > & color, float amount = DefaultAutoIlluminationAmount) noexcept;
+			bool setAutoIlluminationComponent (const Base::PixelFactory::Color< float > & color, float amount = DefaultAutoIlluminationAmount) noexcept;
 
 			/**
 			 * @brief Sets the auto-illumination (emissive) component as a texture.
@@ -531,7 +531,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setAlbedoColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setAlbedoColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the roughness value.
@@ -579,7 +579,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to the emissive color.
 			 * @return void
 			 */
-			void setAutoIlluminationColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setAutoIlluminationColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the auto-illumination intensity multiplier.
@@ -623,7 +623,7 @@ namespace EmEn::Graphics::Material
 			 * @param color The SSS color tint. Default reddish (skin-like).
 			 * @return bool
 			 */
-			bool setSubsurfaceComponent (float intensity = DefaultSubsurfaceIntensity, float radius = DefaultSubsurfaceRadius, const Libs::PixelFactory::Color< float > & color = DefaultSubsurfaceColor) noexcept;
+			bool setSubsurfaceComponent (float intensity = DefaultSubsurfaceIntensity, float radius = DefaultSubsurfaceRadius, const Base::PixelFactory::Color< float > & color = DefaultSubsurfaceColor) noexcept;
 
 			/**
 			 * @brief Sets the subsurface thickness component as a texture.
@@ -642,7 +642,7 @@ namespace EmEn::Graphics::Material
 			 * @param roughness The sheen roughness (0.0 = satin, 1.0 = wool). Default 0.5.
 			 * @return bool
 			 */
-			bool setSheenComponent (const Libs::PixelFactory::Color< float > & color = DefaultSheenColor, float roughness = DefaultSheenRoughness) noexcept;
+			bool setSheenComponent (const Base::PixelFactory::Color< float > & color = DefaultSheenColor, float roughness = DefaultSheenRoughness) noexcept;
 
 			/**
 			 * @brief Sets the sheen component as a texture for fabric-like materials.
@@ -698,7 +698,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to the SSS color tint.
 			 * @return void
 			 */
-			void setSubsurfaceColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setSubsurfaceColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/* ==================== Sheen Dynamic Property Setters (Post-creation) ==================== */
 
@@ -708,7 +708,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to the sheen color tint.
 			 * @return void
 			 */
-			void setSheenColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setSheenColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the sheen roughness.
@@ -747,7 +747,7 @@ namespace EmEn::Graphics::Material
 			 * @param thickness The material thickness. Default 1.0.
 			 * @return bool
 			 */
-			bool setTransmissionComponent (float factor = DefaultTransmissionFactor, const Libs::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
+			bool setTransmissionComponent (float factor = DefaultTransmissionFactor, const Base::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
 
 			/**
 			 * @brief Sets the transmission component as a texture (per-pixel transmission factor).
@@ -758,7 +758,7 @@ namespace EmEn::Graphics::Material
 			 * @param thickness The material thickness. Default 1.0.
 			 * @return bool
 			 */
-			bool setTransmissionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Libs::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
+			bool setTransmissionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
 
 			/**
 			 * @brief Sets the transmission component using the GrabPass for screen-space refraction.
@@ -771,7 +771,7 @@ namespace EmEn::Graphics::Material
 			 * @param thickness The material thickness. Default 1.0.
 			 * @return bool
 			 */
-			bool setTransmissionComponentFromGrabPass (float factor = DefaultTransmissionFactor, const Libs::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
+			bool setTransmissionComponentFromGrabPass (float factor = DefaultTransmissionFactor, const Base::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
 
 			/**
 			 * @brief Enables or disables depth-based opacity for GrabPass transmission.
@@ -871,7 +871,7 @@ namespace EmEn::Graphics::Material
 		 * @param color The specular color that tints dielectric F0. Default white (no tint).
 		 * @return bool
 		 */
-		bool setSpecularComponent (float factor, const Libs::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
+		bool setSpecularComponent (float factor, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
 
 		/* ==================== Specular Dynamic Property Setters (Post-creation) ==================== */
 
@@ -889,7 +889,7 @@ namespace EmEn::Graphics::Material
 		 * @param color A reference to the specular color tint.
 		 * @return void
 		 */
-		void setSpecularColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+		void setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 		/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */
 
@@ -925,7 +925,7 @@ namespace EmEn::Graphics::Material
 			 * @param color A reference to the attenuation color.
 			 * @return void
 			 */
-			void setAttenuationColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setAttenuationColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Changes the attenuation distance for Beer's law.
@@ -1185,39 +1185,39 @@ namespace EmEn::Graphics::Material
 			bool generateGrabPassTransmissionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
 
 			/* Uniform buffer object layout (STD140 aligned, 52 floats = 208 bytes):
-			 * vec4 albedoColor              (offset 0-3)
-			 * float roughness               (offset 4)
-			 * float metalness               (offset 5)
-			 * float normalScale             (offset 6)
-			 * float specularFactor          (offset 7)  - KHR_materials_specular factor (scales dielectric F0)
-			 * float ior                     (offset 8)  - Index of refraction for glass/transparent
-			 * float iblIntensity            (offset 9)  - IBL contribution intensity (0.0-1.0)
+			 * vec4 albedoColor			  (offset 0-3)
+			 * float roughness			   (offset 4)
+			 * float metalness			   (offset 5)
+			 * float normalScale			 (offset 6)
+			 * float specularFactor		  (offset 7)  - KHR_materials_specular factor (scales dielectric F0)
+			 * float ior					 (offset 8)  - Index of refraction for glass/transparent
+			 * float iblIntensity			(offset 9)  - IBL contribution intensity (0.0-1.0)
 			 * float autoIlluminationAmount  (offset 10) - Emissive intensity multiplier
-			 * float aoIntensity             (offset 11) - Ambient occlusion intensity
-			 * vec4 autoIlluminationColor    (offset 12-15) - Emissive color
-			 * float clearCoatFactor         (offset 16) - Clear coat intensity (0.0-1.0)
-			 * float clearCoatRoughness      (offset 17) - Clear coat roughness (0.0-1.0)
-			 * float subsurfaceIntensity     (offset 18) - SSS master weight + wrap amount (0.0-1.0)
-			 * float subsurfaceRadius        (offset 19) - SSS scatter distance for thickness falloff
-			 * vec4 subsurfaceColor          (offset 20-23) - SSS scattered light color tint
-			 * vec4 sheenColor               (offset 24-27) - Sheen color tint (black = disabled)
-			 * float sheenRoughness          (offset 28) - Sheen roughness (0.0 = satin, 1.0 = wool)
-			 * float anisotropy             (offset 29) - Anisotropy strength (-1..1, 0 = isotropic)
-			 * float anisotropyRotation     (offset 30) - Anisotropy direction rotation (0..1)
-			 * float transmissionFactor     (offset 31) - Transmission weight (0.0 = opaque, 1.0 = transmissive)
-			 * vec4 attenuationColor        (offset 32-35) - Beer's law absorption color
-			 * float attenuationDistance    (offset 36) - Distance for full attenuation
-			 * float thicknessFactor        (offset 37) - Constant material thickness for Beer's law
-			 * float heightScale            (offset 38) - Parallax occlusion mapping depth
-			 * float iridescenceFactor      (offset 39) - Iridescence intensity (0.0-1.0)
-			 * float iridescenceIOR         (offset 40) - Thin film IOR (1.0-2.333)
+			 * float aoIntensity			 (offset 11) - Ambient occlusion intensity
+			 * vec4 autoIlluminationColor	(offset 12-15) - Emissive color
+			 * float clearCoatFactor		 (offset 16) - Clear coat intensity (0.0-1.0)
+			 * float clearCoatRoughness	  (offset 17) - Clear coat roughness (0.0-1.0)
+			 * float subsurfaceIntensity	 (offset 18) - SSS master weight + wrap amount (0.0-1.0)
+			 * float subsurfaceRadius		(offset 19) - SSS scatter distance for thickness falloff
+			 * vec4 subsurfaceColor		  (offset 20-23) - SSS scattered light color tint
+			 * vec4 sheenColor			   (offset 24-27) - Sheen color tint (black = disabled)
+			 * float sheenRoughness		  (offset 28) - Sheen roughness (0.0 = satin, 1.0 = wool)
+			 * float anisotropy			 (offset 29) - Anisotropy strength (-1..1, 0 = isotropic)
+			 * float anisotropyRotation	 (offset 30) - Anisotropy direction rotation (0..1)
+			 * float transmissionFactor	 (offset 31) - Transmission weight (0.0 = opaque, 1.0 = transmissive)
+			 * vec4 attenuationColor		(offset 32-35) - Beer's law absorption color
+			 * float attenuationDistance	(offset 36) - Distance for full attenuation
+			 * float thicknessFactor		(offset 37) - Constant material thickness for Beer's law
+			 * float heightScale			(offset 38) - Parallax occlusion mapping depth
+			 * float iridescenceFactor	  (offset 39) - Iridescence intensity (0.0-1.0)
+			 * float iridescenceIOR		 (offset 40) - Thin film IOR (1.0-2.333)
 			 * float iridescenceThicknessMin (offset 41) - Min thin film thickness (nm)
 			 * float iridescenceThicknessMax (offset 42) - Max thin film thickness (nm)
-			 * float dispersion             (offset 43) - Chromatic dispersion (KHR_materials_dispersion)
-			 * vec4 specularColorFactor     (offset 44-47) - KHR_materials_specular color (tints dielectric F0)
-			 * float emissiveStrength       (offset 48) - KHR_materials_emissive_strength HDR multiplier
+			 * float dispersion			 (offset 43) - Chromatic dispersion (KHR_materials_dispersion)
+			 * vec4 specularColorFactor	 (offset 44-47) - KHR_materials_specular color (tints dielectric F0)
+			 * float emissiveStrength	   (offset 48) - KHR_materials_emissive_strength HDR multiplier
 			 * float clearCoatNormalScale   (offset 49) - Clear coat normal map scale
-			 * float padding[2]             (offset 50-51) - STD140 padding
+			 * float padding[2]			 (offset 50-51) - STD140 padding
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1253,27 +1253,27 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ClearCoatNormalScaleOffset{49UL};
 
 			/* Default values. */
-			static constexpr auto DefaultAlbedoColor{Libs::PixelFactory::Grey};
+			static constexpr auto DefaultAlbedoColor{Base::PixelFactory::Grey};
 			static constexpr auto DefaultRoughness{0.5F};
 			static constexpr auto DefaultMetalness{0.0F};
 			static constexpr auto DefaultNormalScale{1.0F};
 			static constexpr auto DefaultSpecularFactor{1.0F}; /* KHR_materials_specular: scales dielectric F0 (1.0 = unchanged). */
 			static constexpr auto DefaultIOR{1.5F}; /* Standard IOR for glass. */
 			static constexpr auto DefaultIBLIntensity{1.0F}; /* Full IBL contribution by default. */
-			static constexpr auto DefaultAutoIlluminationColor{Libs::PixelFactory::Black};
+			static constexpr auto DefaultAutoIlluminationColor{Base::PixelFactory::Black};
 			static constexpr auto DefaultAutoIlluminationAmount{0.0F}; /* Disabled by default. */
 			static constexpr auto DefaultAOIntensity{1.0F}; /* Full AO contribution by default. */
 			static constexpr auto DefaultClearCoatFactor{0.0F}; /* No clear coat by default. */
 			static constexpr auto DefaultClearCoatRoughness{0.0F}; /* Mirror-smooth coat by default. */
 			static constexpr auto DefaultSubsurfaceIntensity{0.0F}; /* No SSS by default. */
 			static constexpr auto DefaultSubsurfaceRadius{1.0F}; /* Default scatter distance. */
-			static constexpr Libs::PixelFactory::Color< float > DefaultSubsurfaceColor{1.0F, 0.2F, 0.1F, 1.0F}; /* Reddish (skin-like). */
-			static constexpr Libs::PixelFactory::Color< float > DefaultSheenColor{0.0F, 0.0F, 0.0F, 1.0F}; /* Black = disabled. */
+			static constexpr Base::PixelFactory::Color< float > DefaultSubsurfaceColor{1.0F, 0.2F, 0.1F, 1.0F}; /* Reddish (skin-like). */
+			static constexpr Base::PixelFactory::Color< float > DefaultSheenColor{0.0F, 0.0F, 0.0F, 1.0F}; /* Black = disabled. */
 			static constexpr auto DefaultSheenRoughness{0.5F}; /* Mid-roughness (fabric-like). */
 			static constexpr auto DefaultAnisotropy{0.0F}; /* No anisotropy by default (isotropic). */
 			static constexpr auto DefaultAnisotropyRotation{0.0F}; /* No rotation (tangent direction). */
 			static constexpr auto DefaultTransmissionFactor{0.0F}; /* No transmission by default (opaque). */
-			static constexpr Libs::PixelFactory::Color< float > DefaultAttenuationColor{1.0F, 1.0F, 1.0F, 1.0F}; /* White = no absorption. */
+			static constexpr Base::PixelFactory::Color< float > DefaultAttenuationColor{1.0F, 1.0F, 1.0F, 1.0F}; /* White = no absorption. */
 			static constexpr auto DefaultAttenuationDistance{1.0F}; /* 1 meter for full attenuation. */
 			static constexpr auto DefaultThicknessFactor{1.0F}; /* Default material thickness. */
 			static constexpr auto DefaultHeightScale{0.02F}; /* Parallax occlusion mapping depth. */
@@ -1282,7 +1282,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultIridescenceThicknessMin{100.0F}; /* Min thin film thickness in nm. */
 			static constexpr auto DefaultIridescenceThicknessMax{400.0F}; /* Max thin film thickness in nm. */
 			static constexpr auto DefaultDispersion{0.0F}; /* No chromatic dispersion (0.0 = off). */
-			static constexpr Libs::PixelFactory::Color< float > DefaultSpecularColor{1.0F, 1.0F, 1.0F, 1.0F}; /* White = no tint (pass-through). */
+			static constexpr Base::PixelFactory::Color< float > DefaultSpecularColor{1.0F, 1.0F, 1.0F, 1.0F}; /* White = no tint (pass-through). */
 			static constexpr auto DefaultEmissiveStrength{1.0F}; /* KHR_materials_emissive_strength: HDR multiplier (1.0 = pass-through). */
 			static constexpr auto DefaultClearCoatNormalScale{1.0F}; /* Clear coat normal map scale (1.0 = full effect). */
 

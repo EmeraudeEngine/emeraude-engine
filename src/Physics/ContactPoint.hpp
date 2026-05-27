@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,7 +27,7 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
+#include "Math/Vector.hpp"
 #include "MovableTrait.hpp"
 
 namespace EmEn::Physics
@@ -55,7 +55,7 @@ namespace EmEn::Physics
 			 * @param bodyB Pointer to the second movable body.
 			 */
 			constexpr
-			ContactPoint (const Libs::Math::Vector< 3, float > & worldPosition, const Libs::Math::Vector< 3, float > & worldNormal, float depth, MovableTrait * bodyA, MovableTrait * bodyB) noexcept
+			ContactPoint (const Base::Math::Vector< 3, float > & worldPosition, const Base::Math::Vector< 3, float > & worldNormal, float depth, MovableTrait * bodyA, MovableTrait * bodyB) noexcept
 				: m_positionWorld{worldPosition},
 				  m_normal{worldNormal},
 				  m_penetrationDepth{depth},
@@ -66,14 +66,14 @@ namespace EmEn::Physics
 			}
 
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			positionWorld () const noexcept
 			{
 				return m_positionWorld;
 			}
 
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			normal () const noexcept
 			{
 				return m_normal;
@@ -87,14 +87,14 @@ namespace EmEn::Physics
 			}
 
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			rA () const noexcept
 			{
 				return m_rA;
 			}
 
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			rB () const noexcept
 			{
 				return m_rB;
@@ -150,10 +150,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the first tangent vector.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			tangent1 () const noexcept
 			{
 				return m_tangent1;
@@ -161,10 +161,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the second tangent vector.
-			 * @return const Libs::Math::Vector< 3, float > &
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
+			const Base::Math::Vector< 3, float > &
 			tangent2 () const noexcept
 			{
 				return m_tangent2;
@@ -237,17 +237,17 @@ namespace EmEn::Physics
 			friend std::ostream & operator<< (std::ostream & out, const ContactPoint & obj);
 
 			/* Contact geometry */
-			Libs::Math::Vector< 3, float > m_positionWorld;   ///< Contact point in world space
-			Libs::Math::Vector< 3, float > m_normal;		  ///< Contact normal (from A to B)
+			Base::Math::Vector< 3, float > m_positionWorld;   ///< Contact point in world space
+			Base::Math::Vector< 3, float > m_normal;		  ///< Contact normal (from A to B)
 			float m_penetrationDepth{0.0F};				   ///< Penetration depth (positive = penetrating)
 
 			/* Contact relative positions (computed once per manifold) */
-			Libs::Math::Vector< 3, float > m_rA;			  ///< Vector from body A center of mass to contact
-			Libs::Math::Vector< 3, float > m_rB;			  ///< Vector from body B center of mass to contact
+			Base::Math::Vector< 3, float > m_rA;			  ///< Vector from body A center of mass to contact
+			Base::Math::Vector< 3, float > m_rB;			  ///< Vector from body B center of mass to contact
 
 			/* Friction tangent basis (computed once per manifold) */
-			Libs::Math::Vector< 3, float > m_tangent1;		///< First tangent vector (perpendicular to normal)
-			Libs::Math::Vector< 3, float > m_tangent2;		///< Second tangent vector (perpendicular to normal and tangent1)
+			Base::Math::Vector< 3, float > m_tangent1;		///< First tangent vector (perpendicular to normal)
+			Base::Math::Vector< 3, float > m_tangent2;		///< Second tangent vector (perpendicular to normal and tangent1)
 
 			/* Bodies involved */
 			MovableTrait * m_bodyA{nullptr};				  ///< First body (can be nullptr for static)

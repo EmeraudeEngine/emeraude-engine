@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
-#include "Libs/PixelFactory/Processor.hpp"
+#include "PixelFactory/Processor.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
@@ -165,7 +165,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	SceneRenderTarget::capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool /*withStencilBuffer*/, std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept
+	SceneRenderTarget::capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool /*withStencilBuffer*/, std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept
 	{
 		if ( layerIndex > 0 )
 		{
@@ -182,7 +182,7 @@ namespace EmEn::Graphics
 
 			if ( !keepAlpha )
 			{
-				result[0] = Libs::PixelFactory::Processor< uint8_t >::toRGB(result[0]);
+				result[0] = Base::PixelFactory::Processor< uint8_t >::toRGB(result[0]);
 			}
 		}
 
@@ -204,14 +204,14 @@ namespace EmEn::Graphics
 		this->updateViewRangesProperties(fovOrNear, distanceOrFar);
 	}
 
-	Libs::Math::CartesianFrame< float >
+	Base::Math::CartesianFrame< float >
 	SceneRenderTarget::getWorldCoordinates () const noexcept
 	{
 		return m_worldCoordinates;
 	}
 
 	void
-	SceneRenderTarget::updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept
+	SceneRenderTarget::updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept
 	{
 		m_worldCoordinates = worldCoordinates;
 		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);

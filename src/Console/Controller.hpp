@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -32,8 +32,8 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Libs/ObservableTrait.hpp"
-#include "Libs/Time/EventTrait.hpp"
+#include "ObservableTrait.hpp"
+#include "Time/EventTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "ControllableTrait.hpp"
@@ -52,10 +52,10 @@ namespace EmEn::Console
 	 * @brief The console controller service class.
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObservableTrait This is a service is observable.
-	 * @extends EmEn::Libs::Time::EventTrait This service needs to delay some behavior.
+	 * @extends EmEn::Base::ObservableTrait This is a service is observable.
+	 * @extends EmEn::Base::Time::EventTrait This service needs to delay some behavior.
 	 */
-	class Controller final : public ServiceInterface, public Libs::ObservableTrait, private Libs::Time::EventTrait< uint32_t, std::milli >
+	class Controller final : public ServiceInterface, public Base::ObservableTrait, private Base::Time::EventTrait< uint32_t, std::milli >
 	{
 		public:
 
@@ -106,10 +106,10 @@ namespace EmEn::Console
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -117,7 +117,7 @@ namespace EmEn::Console
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -42,7 +42,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Libs/BlobTrait.hpp"
+#include "BlobTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
@@ -656,7 +656,7 @@ namespace EmEn
 	 * @version 0.8.38
 	 */
 	template< typename helper_t, Severity severity_t >
-	class T_TraceHelperBase : public Libs::BlobTrait
+	class T_TraceHelperBase : public Base::BlobTrait
 	{
 		public:
 
@@ -898,7 +898,7 @@ namespace EmEn
 	 * @see BlobTrait, Tracer
 	 * @version 0.8.38
 	 */
-	class TraceFatal final : public Libs::BlobTrait
+	class TraceFatal final : public Base::BlobTrait
 	{
 		public:
 
@@ -1002,7 +1002,7 @@ namespace EmEn
 	 * @see BlobTrait, Tracer
 	 * @version 0.8.38
 	 */
-	class TraceAPI final : public Libs::BlobTrait
+	class TraceAPI final : public Base::BlobTrait
 	{
 		public:
 

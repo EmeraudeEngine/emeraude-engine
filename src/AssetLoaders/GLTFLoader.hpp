@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -38,9 +38,9 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Animation/Skin.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "Animation/Skin.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
 
 /* Forward declarations. */
@@ -134,10 +134,10 @@ namespace EmEn::AssetLoaders
 			std::vector< std::shared_ptr< Graphics::TextureResource::Texture2D > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
-			std::vector< std::shared_ptr< Libs::VertexFactory::Shape< float > > > m_shapes;
+			std::vector< std::shared_ptr< Base::VertexFactory::Shape< float > > > m_shapes;
 			/* Skeletal animation data — indexed by glTF skin index. */
 			std::vector< std::shared_ptr< Animations::SkeletonResource > > m_skeletons;
-			std::vector< Libs::Animation::Skin< float > > m_skins;
+			std::vector< Base::Animation::Skin< float > > m_skins;
 			std::unordered_map< size_t, size_t > m_meshToSkinIndex;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
 			std::unordered_set< size_t > m_skinJointNodeIndices;

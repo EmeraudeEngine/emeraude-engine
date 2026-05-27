@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,17 +27,17 @@
 #include "SoundResource.hpp"
 
 /* Local inclusions. */
-#include "Libs/WaveFactory/FileIO.hpp"
-#include "Libs/WaveFactory/Processor.hpp"
-#include "Libs/WaveFactory/SFXScript.hpp"
-#include "Libs/WaveFactory/Synthesizer.hpp"
+#include "WaveFactory/FileIO.hpp"
+#include "WaveFactory/Processor.hpp"
+#include "WaveFactory/SFXScript.hpp"
+#include "WaveFactory/Synthesizer.hpp"
 #include "Manager.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
 {
-	using namespace Libs;
+	using namespace Base;
 
 	bool
 	SoundResource::load () noexcept

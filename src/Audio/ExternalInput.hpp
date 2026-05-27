@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -42,7 +42,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/WaveFactory/Types.hpp"
+#include "WaveFactory/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -163,8 +163,8 @@ namespace EmEn::Audio
 			std::vector< std::string > m_availableDevices;
 			std::string m_selectedDeviceName;
 			ALCdevice * m_device{nullptr};
-			Libs::WaveFactory::Channels m_channels{Libs::WaveFactory::Channels::Mono};
-			Libs::WaveFactory::Frequency m_frequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			Base::WaveFactory::Channels m_channels{Base::WaveFactory::Channels::Mono};
+			Base::WaveFactory::Frequency m_frequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			/* Memory mode. */
 			std::vector< ALshort > m_samples;
 			/* Streaming mode. */

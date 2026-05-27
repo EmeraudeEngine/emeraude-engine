@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -89,8 +89,8 @@ namespace EmEn
 	 *
 	 * @note Only @ref EmEn::Settings is granted friend access to this class.
 	 * @todo Simplify internal storage by merging @c m_variables and @c m_arrays into a
-	 *       single @c std::map<std::string, SettingValue, std::less<>> and reworking
-	 *       the accessor layer accordingly.
+	 *	   single @c std::map<std::string, SettingValue, std::less<>> and reworking
+	 *	   the accessor layer accordingly.
 	 * @see EmEn::Settings
 	 * @version 0.8.61
 	 */
@@ -249,7 +249,7 @@ namespace EmEn
 			 *
 			 * @param variableName The variable name to look up.
 			 * @return A non-owning pointer to the matching @ref SettingValue, or
-			 *         @c nullptr if no such variable exists.
+			 *		 @c nullptr if no such variable exists.
 			 */
 			[[nodiscard]]
 			const SettingValue *
@@ -274,7 +274,7 @@ namespace EmEn
 			 *
 			 * @param variableName The array variable name to look up.
 			 * @return A non-owning pointer to the matching value vector, or @c nullptr
-			 *         if no such array variable exists.
+			 *		 if no such array variable exists.
 			 */
 			[[nodiscard]]
 			const std::vector< SettingValue > *
@@ -341,8 +341,8 @@ namespace EmEn
 	 * store with an empty key.
 	 *
 	 * @note Child-process instances (constructed with @p childProcess @c = @c true)
-	 *       are read-only proxies. They do not enable auto-save and do not write
-	 *       the file on termination.
+	 *	   are read-only proxies. They do not enable auto-save and do not write
+	 *	   the file on termination.
 	 * @see EmEn::SettingStore, EmEn::SettingValue, EmEn::SettingType
 	 * @version 0.8.61
 	 */
@@ -371,12 +371,12 @@ namespace EmEn
 			 * is enabled immediately so that settings are persisted on normal exit.
 			 *
 			 * @param arguments A reference to the parsed command-line arguments, used to
-			 *        resolve the settings file path and control verbosity / autosave.
+			 *		resolve the settings file path and control verbosity / autosave.
 			 * @param fileSystem A reference to the engine file-system service, used to
-			 *        resolve the default settings file path inside the config directory.
+			 *		resolve the default settings file path inside the config directory.
 			 * @param childProcess Pass @c true when this instance is a read-only proxy
-			 *        running inside a child process (e.g. the CEF browser process). Child
-			 *        instances never write the file on termination.
+			 *		running inside a child process (e.g. the CEF browser process). Child
+			 *		instances never write the file on termination.
 			 */
 			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
@@ -622,7 +622,7 @@ namespace EmEn
 			 * @param key Slash-delimited path, e.g. @c "Audio/OpenAL/bufferSize".
 			 * @param defaultValue Value to store and return when the key is absent.
 			 * @return The stored value coerced to @p variable_t, or @p defaultValue if
-			 *         the key was absent (in which case @p defaultValue is now stored).
+			 *		 the key was absent (in which case @p defaultValue is now stored).
 			 */
 			template< SettingType variable_t >
 			[[nodiscard]]
@@ -781,7 +781,7 @@ namespace EmEn
 			 * Acquires a shared lock (read-only pass over the stores).
 			 *
 			 * @return @c true on success, @c false when no file path is set or if the
-			 *         write operation fails.
+			 *		 write operation fails.
 			 */
 			[[nodiscard]]
 			bool save () const noexcept;
@@ -795,7 +795,7 @@ namespace EmEn
 			 * Acquires a shared lock.
 			 *
 			 * @return A JSON string representing all stores and their variables,
-			 *         or an empty string if the JsonCpp writer fails.
+			 *		 or an empty string if the JsonCpp writer fails.
 			 */
 			[[nodiscard]]
 			std::string toJsonString () const noexcept;
@@ -822,8 +822,8 @@ namespace EmEn
 			 *
 			 * @param settingPath The raw path to parse, e.g. @c "Graphics/Vulkan/msaa".
 			 * @return A pair of @c std::string_view where @c first is the store key and
-			 *         @c second is the variable name. Both views reference the storage of
-			 *         @p settingPath and must not outlive it.
+			 *		 @c second is the variable name. Both views reference the storage of
+			 *		 @p settingPath and must not outlive it.
 			 */
 			[[nodiscard]]
 			static std::pair< std::string_view, std::string_view > parseAccessKey (std::string_view settingPath) noexcept;
@@ -836,7 +836,7 @@ namespace EmEn
 			 * when either the store or the variable does not exist.
 			 *
 			 * @note This method does not acquire any lock; callers must hold an
-			 *       appropriate lock on @c m_storeAccess before calling.
+			 *	   appropriate lock on @c m_storeAccess before calling.
 			 *
 			 * @param settingPath Slash-delimited path to the variable.
 			 * @return The stored value wrapped in @c std::optional, or @c std::nullopt.
@@ -1291,7 +1291,7 @@ namespace EmEn
 			 *
 			 * @param data The JSON object node to parse.
 			 * @param key  The accumulated store-key prefix for this recursion level.
-			 *             Pass an empty string for the root level.
+			 *			 Pass an empty string for the root level.
 			 * @return @c true on success, @c false if a recursive level fails.
 			 */
 			[[nodiscard]]

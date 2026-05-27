@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -65,14 +65,14 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "Libs/FastJSON.hpp"
+#include "FastJSON.hpp"
 #include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Resources
 {
-	using namespace Libs;
+	using namespace Base;
 
 	ContainerInterface *
 	Manager::getContainerInternal (const std::type_index & typeIndex) noexcept

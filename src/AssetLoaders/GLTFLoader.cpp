@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -50,28 +50,28 @@
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
-#include "Libs/Animation/AnimationClip.hpp"
-#include "Libs/Animation/Joint.hpp"
-#include "Libs/Animation/Skeleton.hpp"
-#include "Libs/Animation/Skin.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Quaternion.hpp"
-#include "Libs/Math/TransformUtils.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Libs/PixelFactory/FileIO.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
-#include "Libs/PixelFactory/StreamIO.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "Animation/AnimationClip.hpp"
+#include "Animation/Joint.hpp"
+#include "Animation/Skeleton.hpp"
+#include "Animation/Skin.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Quaternion.hpp"
+#include "Math/TransformUtils.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/StreamIO.hpp"
+#include "VertexFactory/Shape.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::AssetLoaders
 {
 	using namespace Graphics;
 	using namespace Graphics::Geometry;
-	using namespace Libs::Animation;
-	using namespace Libs::Math;
-	using namespace Libs::VertexFactory;
-	using namespace Libs::PixelFactory;
+	using namespace Base::Animation;
+	using namespace Base::Math;
+	using namespace Base::VertexFactory;
+	using namespace Base::PixelFactory;
 
 	/* Detect image format from MIME type. */
 	static
@@ -1113,7 +1113,7 @@ namespace EmEn::AssetLoaders
 		}
 
 		/* Build a node-index → parent-node-index lookup from the node tree. */
-		std::vector< int32_t > nodeParents(asset.nodes.size(), Libs::Animation::NoParent);
+		std::vector< int32_t > nodeParents(asset.nodes.size(), Base::Animation::NoParent);
 
 		for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
 		{

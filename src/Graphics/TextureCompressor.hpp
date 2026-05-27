@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,9 +31,9 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Pixmap.hpp"
 
-namespace EmEn::Libs
+namespace EmEn::Base
 {
 	class ThreadPool;
 }
@@ -91,9 +91,9 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static std::vector< CompressedMipLevel > compress (
-				const Libs::PixelFactory::Pixmap< uint8_t > & pixmap,
+				const Base::PixelFactory::Pixmap< uint8_t > & pixmap,
 				uint32_t maxMipLevels,
-				Libs::ThreadPool & threadPool
+				Base::ThreadPool & threadPool
 			) noexcept;
 
 			/**
@@ -104,8 +104,8 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static CompressedMipLevel compressSingle (
-				const Libs::PixelFactory::Pixmap< uint8_t > & pixmap,
-				Libs::ThreadPool & threadPool
+				const Base::PixelFactory::Pixmap< uint8_t > & pixmap,
+				Base::ThreadPool & threadPool
 			) noexcept;
 
 			/**
@@ -134,8 +134,8 @@ namespace EmEn::Graphics
 			 * @return Downscaled pixmap (half width, half height, minimum 1x1).
 			 */
 			[[nodiscard]]
-			static Libs::PixelFactory::Pixmap< uint8_t > generateMip (
-				const Libs::PixelFactory::Pixmap< uint8_t > & source
+			static Base::PixelFactory::Pixmap< uint8_t > generateMip (
+				const Base::PixelFactory::Pixmap< uint8_t > & source
 			) noexcept;
 
 			/**
@@ -146,8 +146,8 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static CompressedMipLevel compressLevel (
-				const Libs::PixelFactory::Pixmap< uint8_t > & pixmap,
-				Libs::ThreadPool & threadPool
+				const Base::PixelFactory::Pixmap< uint8_t > & pixmap,
+				Base::ThreadPool & threadPool
 			) noexcept;
 
 			static bool s_initialized;

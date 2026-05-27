@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/WaveFactory/Wave.hpp"
+#include "WaveFactory/Wave.hpp"
 #include "Resources/Container.hpp"
 
 /* Forward declarations. */
@@ -78,10 +78,10 @@ namespace EmEn::Audio
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -89,7 +89,7 @@ namespace EmEn::Audio
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -143,7 +143,7 @@ namespace EmEn::Audio
 			 * @return const Libraries::WaveFactory::Wave< int16_t > &
 			 */
 			[[nodiscard]]
-			const Libs::WaveFactory::Wave< int16_t > &
+			const Base::WaveFactory::Wave< int16_t > &
 			localData () const noexcept
 			{
 				return m_localData;
@@ -153,7 +153,7 @@ namespace EmEn::Audio
 			 * @brief Returns the local data.
 			 * @return Libraries::WaveFactory::Wave< int16_t > &
 			 */
-			Libs::WaveFactory::Wave< int16_t > &
+			Base::WaveFactory::Wave< int16_t > &
 			localData () noexcept
 			{
 				return m_localData;
@@ -162,7 +162,7 @@ namespace EmEn::Audio
 			/**
 			 * @brief Returns the title of the music.
 			 * @note Falls back to the resource name (filename-derived) when no ID3/metadata title is available.
-			 *       Useful for formats without tag support (e.g. MIDI) where m_title remains at its default.
+			 *	   Useful for formats without tag support (e.g. MIDI) where m_title remains at its default.
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
@@ -221,10 +221,10 @@ namespace EmEn::Audio
 			static constexpr auto DefaultInfo{"Unknown"};
 
 			std::vector< std::shared_ptr< Buffer > > m_buffers;
-			Libs::WaveFactory::Wave< int16_t > m_localData;
+			Base::WaveFactory::Wave< int16_t > m_localData;
 			std::string m_title{DefaultInfo};
 			std::string m_artist{DefaultInfo};
-			Libs::WaveFactory::Frequency m_frequency{Libs::WaveFactory::Frequency::Invalid};
+			Base::WaveFactory::Frequency m_frequency{Base::WaveFactory::Frequency::Invalid};
 			size_t m_chunkSize{0};
 			std::filesystem::path m_pendingMidiPath; ///< Path to MIDI file awaiting soundfont dependency.
 			std::shared_ptr< SoundfontResource > m_soundfontDependency; ///< Reference to the soundfont dependency.

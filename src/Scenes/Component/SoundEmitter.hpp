@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,7 +34,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "Libs/ObserverTrait.hpp"
+#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Audio/SoundResource.hpp"
@@ -46,9 +46,9 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a sound source emitter.
 	 * @note You can virtually define an infinite number of sound emitters, they are not strictly linked to hardware.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::Libs::ObserverTrait This component observes sound loading events.
+	 * @extends EmEn::Base::ObserverTrait This component observes sound loading events.
 	 */
-	class SoundEmitter final : public Abstract, public Libs::ObserverTrait
+	class SoundEmitter final : public Abstract, public Base::ObserverTrait
 	{
 		public:
 
@@ -101,7 +101,7 @@ namespace EmEn::Scenes::Component
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
@@ -266,18 +266,18 @@ namespace EmEn::Scenes::Component
 			void onWakeup () noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
 			 * @brief Updates the source properties with the entity.
 			 * @param worldCoordinates A reference to a coordinate.
 			 * @return void
 			 */
-			void updateSource (const Libs::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
+			void updateSource (const Base::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
 
 			/**
 			 * @brief Plays the attached sound resource.

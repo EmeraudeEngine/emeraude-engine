@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -44,7 +44,7 @@
 
 namespace EmEn::Scenes
 {
-	using namespace Libs;
+	using namespace Base;
 
 	void
 	Manager::onRegisterToConsole () noexcept
@@ -139,7 +139,7 @@ namespace EmEn::Scenes
 
 			if ( cameraNode != nullptr )
 			{
-				cameraNode->setPosition({camX, camY, camZ}, Libs::Math::TransformSpace::World);
+				cameraNode->setPosition({camX, camY, camZ}, Base::Math::TransformSpace::World);
 				cameraNode->componentBuilder< Component::Camera >(cameraNodeName + "Camera").asPrimary().build(true);
 				cameraNode->componentBuilder< Component::Microphone >(cameraNodeName + "Microphone").asPrimary().build();
 			}
@@ -246,7 +246,7 @@ namespace EmEn::Scenes
 				const auto y = arguments[2].asFloat();
 				const auto z = arguments[3].asFloat();
 
-				node->setPosition({x, y, z}, Libs::Math::TransformSpace::World);
+				node->setPosition({x, y, z}, Base::Math::TransformSpace::World);
 
 				outputs.emplace_back(Severity::Success, std::stringstream{} << "Node '" << name << "' created at (" << x << ", " << y << ", " << z << ").");
 			}
@@ -462,7 +462,7 @@ namespace EmEn::Scenes
 
 			mesh->setUniformScale(scale);
 
-			const Libs::Math::Vector< 3, float > position{x, y, z};
+			const Base::Math::Vector< 3, float > position{x, y, z};
 			auto entity = m_activeScene->createStaticEntity(entityName, position);
 
 			if ( entity == nullptr )
@@ -475,7 +475,7 @@ namespace EmEn::Scenes
 			const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual")
 				.setup([scale] (auto & component) {
 					component.getRenderableInstance()->enableLighting();
-					component.getRenderableInstance()->setTransformationMatrix(Libs::Math::Matrix4F::scaling(scale));
+					component.getRenderableInstance()->setTransformationMatrix(Base::Math::Matrix4F::scaling(scale));
 				}).build(mesh);
 
 			if ( visual == nullptr )

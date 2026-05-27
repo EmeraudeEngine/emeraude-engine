@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,8 +31,8 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
 
 namespace EmEn::Graphics
 {
@@ -109,7 +109,7 @@ namespace EmEn::Graphics::TextureResource
 			 * @return Color< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::PixelFactory::Color< float > averageColor () const noexcept = 0;
+			virtual Base::PixelFactory::Color< float > averageColor () const noexcept = 0;
 
 			/**
 			 * @brief Validates a pixmap for Vulkan requirements.
@@ -119,7 +119,7 @@ namespace EmEn::Graphics::TextureResource
 			 * @return bool
 			 */
 			[[nodiscard]]
-			static bool validatePixmap (const char * classId, const std::string & resourceName, Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+			static bool validatePixmap (const char * classId, const std::string & resourceName, Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
 			 * @brief Enables sRGB format for this texture resource.
@@ -189,14 +189,14 @@ namespace EmEn::Graphics::TextureResource
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool validateTexture (const Libs::PixelFactory::Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept;
+			bool validateTexture (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept;
 
 			/**
 			 * @brief Applies the normal map Y flip if enabled.
 			 * @note Call this after validatePixmap() and before GPU upload.
 			 * @param pixmap A reference to the pixmap to modify.
 			 */
-			void applyFlipNormalMapY (Libs::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
+			void applyFlipNormalMapY (Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
 
 		private:
 

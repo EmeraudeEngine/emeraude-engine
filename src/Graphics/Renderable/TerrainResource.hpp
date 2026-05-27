@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -83,10 +83,10 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -94,7 +94,7 @@ namespace EmEn::Graphics::Renderable
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -160,7 +160,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_localData.boundingBox();
@@ -168,7 +168,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_localData.boundingSphere();
@@ -200,17 +200,17 @@ namespace EmEn::Graphics::Renderable
 				return 0;
 			}
 
-			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(const Base::Math::Vector< 3, float > &) const */
 			[[nodiscard]]
 			float
-			getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
+			getLevelAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
 			{
-				return m_localData.getHeightAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
+				return m_localData.getHeightAt(worldPosition[Base::Math::X], worldPosition[Base::Math::Z]);
 			}
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(float, float, float) const */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
+			Base::Math::Vector< 3, float >
 			getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override
 			{
 				return {positionX, m_localData.getHeightAt(positionX, positionZ) + deltaY, positionZ};
@@ -218,14 +218,14 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::getNormalAt() const */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
-			getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
+			Base::Math::Vector< 3, float >
+			getNormalAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
 			{
-				return m_localData.getNormalAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
+				return m_localData.getNormalAt(worldPosition[Base::Math::X], worldPosition[Base::Math::Z]);
 			}
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::updateVisibility() */
-			void updateVisibility (const Libs::Math::Vector< 3, float > & worldPosition) noexcept override;
+			void updateVisibility (const Base::Math::Vector< 3, float > & worldPosition) noexcept override;
 
 			/**
 			 * @brief Loads a parametric terrain with a material.
@@ -252,7 +252,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			template< typename pixmapData_t >
 			bool
-			load (float gridSize, uint32_t gridDivision, const Libs::PixelFactory::Pixmap< pixmapData_t > & displacementMap, float displacementFactor, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F) noexcept requires (std::is_arithmetic_v< pixmapData_t >)
+			load (float gridSize, uint32_t gridDivision, const Base::PixelFactory::Pixmap< pixmapData_t > & displacementMap, float displacementFactor, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F) noexcept requires (std::is_arithmetic_v< pixmapData_t >)
 			{
 				if ( !this->beginLoading() )
 				{
@@ -309,7 +309,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param shiftHeight Apply a shift on each final height. Default none.
 			 * @return bool
 			 */
-			bool loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Libs::VertexFactory::DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
+			bool loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Base::VertexFactory::DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
 
 			/**
 			 * @brief Loads a terrain by using parameters to generate the ground with perlin noise and a material to paint it.
@@ -322,7 +322,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param shiftHeight Apply a shift on each final height. Default none.
 			 * @return bool
 			 */
-			bool loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Libs::VertexFactory::PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
+			bool loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Base::VertexFactory::PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
 
 		private:
 
@@ -339,8 +339,8 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			Libs::VertexFactory::Grid< float > m_localData;
-			Libs::Math::Vector< 2, float > m_lastAdaptiveGridPositionUpdated;
+			Base::VertexFactory::Grid< float > m_localData;
+			Base::Math::Vector< 2, float > m_lastAdaptiveGridPositionUpdated;
 			RasterizationOptions m_rasterizationOptions;
 			float m_visibleSize{DefaultVisibleSize};
 	};

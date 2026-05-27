@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -34,11 +34,11 @@
 
 /* Local inclusions for usages. */
 #include "json/json.h"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 
-namespace EmEn::Libs { class ThreadPool; }
+namespace EmEn::Base { class ThreadPool; }
 
 namespace EmEn::Graphics
 {
@@ -55,7 +55,7 @@ namespace EmEn::Graphics
 		public:
 
 			/** @brief A frame from the movie with duration in milliseconds. */
-			using Frame = std::pair< Libs::PixelFactory::Pixmap< uint8_t >, uint32_t >;
+			using Frame = std::pair< Base::PixelFactory::Pixmap< uint8_t >, uint32_t >;
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MovieResource"};
@@ -84,10 +84,10 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -95,7 +95,7 @@ namespace EmEn::Graphics
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -141,7 +141,7 @@ namespace EmEn::Graphics
 			 * @return const Libraries::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Pixmap< uint8_t > & data (size_t frameIndex) const noexcept;
+			const Base::PixelFactory::Pixmap< uint8_t > & data (size_t frameIndex) const noexcept;
 
 			/**
 			 * @brief Returns the frames from the movie.
@@ -198,14 +198,14 @@ namespace EmEn::Graphics
 			 * @param threadPool A pointer to a thread pool. Default sequential loading.
 			 * @return bool
 			 */
-			bool loadWaterNormals (uint32_t size, uint32_t frameCount, uint32_t frameDuration, float scale = 8.0F, uint32_t seed = 0, uint32_t octaves = 4, float persistence = 0.5F, float strength = 2.0F, Libs::ThreadPool * threadPool = nullptr) noexcept;
+			bool loadWaterNormals (uint32_t size, uint32_t frameCount, uint32_t frameDuration, float scale = 8.0F, uint32_t seed = 0, uint32_t octaves = 4, float persistence = 0.5F, float strength = 2.0F, Base::ThreadPool * threadPool = nullptr) noexcept;
 
 			/**
 			 * @brief Returns the average color of the movie.
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float > averageColor () const noexcept;
+			Base::PixelFactory::Color< float > averageColor () const noexcept;
 
 			/**
 			 * @brief Returns the duration in milliseconds.

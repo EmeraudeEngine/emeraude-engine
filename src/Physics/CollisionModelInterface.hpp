@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -27,10 +27,10 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
-#include "Libs/Math/Vector.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
 
 namespace EmEn::Physics
 {
@@ -51,9 +51,9 @@ namespace EmEn::Physics
 	 */
 	struct CollisionDetectionResults
 	{
-		Libs::Math::Vector< 3, float > m_MTV;		  /**< Minimum Translation Vector to separate shapes. */
-		Libs::Math::Vector< 3, float > m_contact;	  /**< Absolute contact point in world space. */
-		Libs::Math::Vector< 3, float > m_impactNormal; /**< Normal of the impact surface. */
+		Base::Math::Vector< 3, float > m_MTV;		  /**< Minimum Translation Vector to separate shapes. */
+		Base::Math::Vector< 3, float > m_contact;	  /**< Absolute contact point in world space. */
+		Base::Math::Vector< 3, float > m_impactNormal; /**< Normal of the impact surface. */
 		float m_depth{0.0F};							 /**< Penetration depth. */
 		bool m_collisionDetected{false};				 /**< Whether a collision was detected. */
 	};
@@ -93,14 +93,14 @@ namespace EmEn::Physics
 			 * @return CollisionDetectionResults containing collision information.
 			 */
 			[[nodiscard]]
-			virtual CollisionDetectionResults isCollidingWith (const Libs::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Libs::Math::CartesianFrame< float > & otherWorldFrame) const noexcept = 0;
+			virtual CollisionDetectionResults isCollidingWith (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept = 0;
 
 			/**
 			 * @brief Returns the axis-aligned bounding box in local space.
 			 * @return AACuboid representing the local-space AABB.
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Space3D::AACuboid< float > getAABB () const noexcept = 0;
+			virtual Base::Math::Space3D::AACuboid< float > getAABB () const noexcept = 0;
 
 			/**
 			 * @brief Returns the axis-aligned bounding box in world space.
@@ -108,7 +108,7 @@ namespace EmEn::Physics
 			 * @return AACuboid representing the world-space AABB.
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Space3D::AACuboid< float > getAABB (const Libs::Math::CartesianFrame< float > & worldFrame) const noexcept = 0;
+			virtual Base::Math::Space3D::AACuboid< float > getAABB (const Base::Math::CartesianFrame< float > & worldFrame) const noexcept = 0;
 
 			/**
 			 * @brief Returns the maximum bounding radius of the collision shape.
@@ -132,7 +132,7 @@ namespace EmEn::Physics
 			 * @param dimensions The dimensions (width, height, depth) of the bounding shape.
 			 * @param centerOffset The offset of the shape center from the entity's origin.
 			 */
-			virtual void overrideShapeParameters (const Libs::Math::Vector< 3, float > & dimensions, const Libs::Math::Vector< 3, float > & centerOffset = {}) noexcept = 0;
+			virtual void overrideShapeParameters (const Base::Math::Vector< 3, float > & dimensions, const Base::Math::Vector< 3, float > & centerOffset = {}) noexcept = 0;
 
 			/**
 			 * @brief Returns whether the shape parameters have been manually overridden.
@@ -153,21 +153,21 @@ namespace EmEn::Physics
 			 * @param dimensions The dimensions (width, height, depth) to merge.
 			 * @param centerOffset The offset of the shape center from the entity's origin.
 			 */
-			virtual void mergeShapeParameters (const Libs::Math::Vector< 3, float > & dimensions, const Libs::Math::Vector< 3, float > & centerOffset = {}) noexcept = 0;
+			virtual void mergeShapeParameters (const Base::Math::Vector< 3, float > & dimensions, const Base::Math::Vector< 3, float > & centerOffset = {}) noexcept = 0;
 
 			/**
 			 * @brief Merges/expands the bounding shape to encompass the given AABB.
 			 * @note Unlike overrideShapeParameters(), this does NOT set the override flag.
 			 * @param aabb The axis-aligned bounding box to merge.
 			 */
-			virtual void mergeShapeParameters (const Libs::Math::Space3D::AACuboid< float > & aabb) noexcept = 0;
+			virtual void mergeShapeParameters (const Base::Math::Space3D::AACuboid< float > & aabb) noexcept = 0;
 
 			/**
 			 * @brief Merges/expands the bounding shape to encompass the given sphere.
 			 * @note Unlike overrideShapeParameters(), this does NOT set the override flag.
 			 * @param sphere The bounding sphere to merge.
 			 */
-			virtual void mergeShapeParameters (const Libs::Math::Space3D::Sphere< float > & sphere) noexcept = 0;
+			virtual void mergeShapeParameters (const Base::Math::Space3D::Sphere< float > & sphere) noexcept = 0;
 
 			/**
 			 * @brief Resets the shape parameters to their initial empty state.

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -110,10 +110,10 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			getClassUID () noexcept
 			{
-				return Libs::Hash::FNV1a(ClassId);
+				return Base::Hash::FNV1a(ClassId);
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -121,7 +121,7 @@ namespace EmEn::Graphics::Geometry
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -190,7 +190,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
+			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_localData.boundingBox();
@@ -198,7 +198,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
+			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_localData.boundingSphere();
@@ -274,14 +274,14 @@ namespace EmEn::Graphics::Geometry
 			 * @param shape A reference to a geometry from vertexFactory library.
 			 * @return bool
 			 */
-			bool load (const Libs::VertexFactory::Shape< float > & shape) noexcept;
+			bool load (const Base::VertexFactory::Shape< float > & shape) noexcept;
 
 			/**
 			 * @brief Gives access to the local geometry data.
 			 * @return Libraries::VertexFactory::Shape< float > &
 			 */
 			[[nodiscard]]
-			Libs::VertexFactory::Shape< float > &
+			Base::VertexFactory::Shape< float > &
 			localData () noexcept
 			{
 				return m_localData;
@@ -292,7 +292,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return const Libraries::VertexFactory::Shape< float > &
 			 */
 			[[nodiscard]]
-			const Libs::VertexFactory::Shape< float > &
+			const Base::VertexFactory::Shape< float > &
 			localData () const noexcept
 			{
 				return m_localData;
@@ -314,7 +314,7 @@ namespace EmEn::Graphics::Geometry
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_indexBufferObject;
-			Libs::VertexFactory::Shape< float, uint32_t > m_localData;
+			Base::VertexFactory::Shape< float, uint32_t > m_localData;
 			std::vector< SubGeometry > m_subGeometries;
 	};
 }

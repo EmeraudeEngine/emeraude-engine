@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -50,7 +50,7 @@
 /* Local inclusions. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/OverlayRendering.hpp"
@@ -62,9 +62,9 @@
 
 namespace EmEn::Overlay
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Libs::VertexFactory;
+	using namespace Base;
+	using namespace Base::Math;
+	using namespace Base::VertexFactory;
 	using namespace Saphir;
 	using namespace Graphics;
 	using namespace Vulkan;

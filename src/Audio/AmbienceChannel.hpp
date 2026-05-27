@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -189,7 +189,7 @@ namespace EmEn::Audio
 			 * @return void
 			 */
 			void
-			setPosition (const Libs::Math::Vector< 3, float > & position) noexcept
+			setPosition (const Base::Math::Vector< 3, float > & position) noexcept
 			{
 				m_position = position;
 			}
@@ -200,7 +200,7 @@ namespace EmEn::Audio
 			 * @return void
 			 */
 			void
-			setVelocity (const Libs::Math::Vector< 3, float > & velocity) noexcept
+			setVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept
 			{
 				m_velocity = velocity;
 			}
@@ -218,8 +218,8 @@ namespace EmEn::Audio
 		private:
 
 			SourceRequest m_source;
-			Libs::Math::Vector< 3, float > m_position;
-			Libs::Math::Vector< 3, float > m_velocity;
+			Base::Math::Vector< 3, float > m_position;
+			Base::Math::Vector< 3, float > m_velocity;
 			unsigned int m_timeBeforeNextPlay{0U};
 			unsigned int m_time{0U};
 	};

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -38,14 +38,14 @@
 
 /* Local inclusions. */
 #include "CubemapResource.hpp"
-#include "Libs/Algorithms/PerlinNoise.hpp"
-#include "Libs/Algorithms/VoronoiNoise.hpp"
-#include "Libs/FastJSON.hpp"
-#include "Libs/ThreadPool.hpp"
+#include "Algorithms/PerlinNoise.hpp"
+#include "Algorithms/VoronoiNoise.hpp"
+#include "FastJSON.hpp"
+#include "ThreadPool.hpp"
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
+	using namespace Base;
 
 	/* JSON keys. */
 	constexpr auto JKBaseCubemapName{"BaseCubemapName"};
@@ -510,12 +510,12 @@ namespace EmEn::Graphics
 
 						switch ( faceIndex )
 						{
-							case 0: /* PositiveX */ dx =  1.0F; dy = -t;    dz = -s;    break;
-							case 1: /* NegativeX */ dx = -1.0F; dy = -t;    dz =  s;    break;
-							case 2: /* PositiveY */ dx =  s;    dy =  1.0F; dz =  t;    break;
-							case 3: /* NegativeY */ dx =  s;    dy = -1.0F; dz = -t;    break;
-							case 4: /* PositiveZ */ dx =  s;    dy = -t;    dz =  1.0F; break;
-							default: /* NegativeZ */ dx = -s;   dy = -t;    dz = -1.0F; break;
+							case 0: /* PositiveX */ dx =  1.0F; dy = -t;	dz = -s;	break;
+							case 1: /* NegativeX */ dx = -1.0F; dy = -t;	dz =  s;	break;
+							case 2: /* PositiveY */ dx =  s;	dy =  1.0F; dz =  t;	break;
+							case 3: /* NegativeY */ dx =  s;	dy = -1.0F; dz = -t;	break;
+							case 4: /* PositiveZ */ dx =  s;	dy = -t;	dz =  1.0F; break;
+							default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
 						}
 
 						/* Normalize the direction. */
@@ -628,12 +628,12 @@ namespace EmEn::Graphics
 
 						switch ( faceIndex )
 						{
-							case 0: dx =  1.0F; dy = -t;    dz = -s;    break;
-							case 1: dx = -1.0F; dy = -t;    dz =  s;    break;
-							case 2: dx =  s;    dy =  1.0F; dz =  t;    break;
-							case 3: dx =  s;    dy = -1.0F; dz = -t;    break;
-							case 4: dx =  s;    dy = -t;    dz =  1.0F; break;
-							default: dx = -s;   dy = -t;    dz = -1.0F; break;
+							case 0: dx =  1.0F; dy = -t;	dz = -s;	break;
+							case 1: dx = -1.0F; dy = -t;	dz =  s;	break;
+							case 2: dx =  s;	dy =  1.0F; dz =  t;	break;
+							case 3: dx =  s;	dy = -1.0F; dz = -t;	break;
+							case 4: dx =  s;	dy = -t;	dz =  1.0F; break;
+							default: dx = -s;   dy = -t;	dz = -1.0F; break;
 						}
 
 						/* Normalize the direction. */
@@ -649,11 +649,11 @@ namespace EmEn::Graphics
 						 *
 						 * We simulate this by:
 						 * 1. Domain warping: Perlin noise displaces the sample coordinates,
-						 *    mimicking the deflection of light rays through a wavy surface.
+						 *	mimicking the deflection of light rays through a wavy surface.
 						 * 2. Multi-octave evaluation: Several noise layers at different frequencies
-						 *    are combined to produce both broad light patches and fine detail.
+						 *	are combined to produce both broad light patches and fine detail.
 						 * 3. Power curve: Concentrates brightness into peaks, simulating the
-						 *    non-linear focusing behavior of refractive caustics. */
+						 *	non-linear focusing behavior of refractive caustics. */
 
 						/* First pass: domain warping to simulate surface wave refraction. */
 						const auto warpX = perlin.generate(nx + 5.2F, ny + 1.3F, nz + 3.7F);

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -50,8 +50,8 @@
 
 namespace EmEn::Graphics::RenderableInstance
 {
-	using namespace Libs;
-	using namespace Libs::Math;
+	using namespace Base;
+	using namespace Base::Math;
 	using namespace Vulkan;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
@@ -130,10 +130,10 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Initialize SSBO with identity matrices so the mesh renders in bind pose
 		 * until the first animation frame uploads real skinning matrices. */
 		{
-			std::vector< Libs::Math::Matrix< 4, float > > identityMatrices(boneCount);
+			std::vector< Base::Math::Matrix< 4, float > > identityMatrices(boneCount);
 			m_skinningSSBO->writeData(Vulkan::MemoryRegion{
 				identityMatrices.data(),
-				identityMatrices.size() * sizeof(Libs::Math::Matrix< 4, float >)
+				identityMatrices.size() * sizeof(Base::Math::Matrix< 4, float >)
 			});
 		}
 
@@ -141,7 +141,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Abstract::updateSkinningMatrices (const std::vector< Libs::Math::Matrix< 4, float > > & matrices) noexcept
+	Abstract::updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept
 	{
 		if ( m_skinningSSBO == nullptr || matrices.empty() )
 		{
@@ -150,7 +150,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		return m_skinningSSBO->writeData(Vulkan::MemoryRegion{
 			matrices.data(),
-			matrices.size() * sizeof(Libs::Math::Matrix< 4, float >)
+			matrices.size() * sizeof(Base::Math::Matrix< 4, float >)
 		});
 	}
 
@@ -421,10 +421,10 @@ namespace EmEn::Graphics::RenderableInstance
 					errorMessage <<
 						"Unable to generate the shader program !\n"
 						"  Renderable  : " << m_renderable->name() << "\n"
-						"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
+						"  Material	: " << (material != nullptr ? material->name() : "null") << "\n"
 						"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
 						"  RenderPass  : " << to_string(renderPassType) << "\n"
-						"  Layer       : " << layerIndex;
+						"  Layer	   : " << layerIndex;
 
 					this->setBroken(errorMessage.str());
 
@@ -610,8 +610,8 @@ namespace EmEn::Graphics::RenderableInstance
 				"There is no suitable shadow program for the renderable instance !\n"
 				"  Renderable  : " << m_renderable->name() << "\n"
 				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
-				"  Layer       : " << layerIndex << "\n"
-				"  CacheKey    : ProgramType=ShadowCasting, RPHandle=" << renderPassHandle << "\n"
+				"  Layer	   : " << layerIndex << "\n"
+				"  CacheKey	: ProgramType=ShadowCasting, RPHandle=" << renderPassHandle << "\n"
 				"  BrokenState : " << (this->isBroken() ? "YES (shader generation failed earlier)" : "no");
 
 			return;
@@ -705,11 +705,11 @@ namespace EmEn::Graphics::RenderableInstance
 			TraceWarning{TracerTag} <<
 				"There is no suitable render program for the renderable instance (Maybe in loading stage)!\n"
 				"  Renderable  : " << m_renderable->name() << "\n"
-				"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
+				"  Material	: " << (material != nullptr ? material->name() : "null") << "\n"
 				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
 				"  RenderPass  : " << to_string(renderPassType) << "\n"
-				"  Layer       : " << layerIndex << "\n"
-				"  CacheKey    : ProgramType=Rendering, RPHandle=" << renderPassHandle << ", Lighting=" << (cacheKey.isLightingEnabled ? "yes" : "no") << ", Bindless=" << (cacheKey.isBindlessEnabled ? "yes" : "no") << "\n"
+				"  Layer	   : " << layerIndex << "\n"
+				"  CacheKey	: ProgramType=Rendering, RPHandle=" << renderPassHandle << ", Lighting=" << (cacheKey.isLightingEnabled ? "yes" : "no") << ", Bindless=" << (cacheKey.isBindlessEnabled ? "yes" : "no") << "\n"
 				"  BrokenState : " << (this->isBroken() ? "YES (shader generation failed earlier)" : "no");
 
 			return;
@@ -839,11 +839,11 @@ namespace EmEn::Graphics::RenderableInstance
 			TraceWarning{TracerTag} <<
 				"There is no suitable render program for the renderable instance (Maybe in loading stage)!\n"
 				"  Renderable  : " << m_renderable->name() << "\n"
-				"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
+				"  Material	: " << (material != nullptr ? material->name() : "null") << "\n"
 				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
 				"  RenderPass  : " << to_string(renderPassType) << "\n"
-				"  Layer       : " << layerIndex << "\n"
-				"  CacheKey    : ProgramType=Rendering, RPHandle=" << renderPassHandle << ", Lighting=" << (cacheKey.isLightingEnabled ? "yes" : "no") << ", Bindless=" << (cacheKey.isBindlessEnabled ? "yes" : "no") << "\n"
+				"  Layer	   : " << layerIndex << "\n"
+				"  CacheKey	: ProgramType=Rendering, RPHandle=" << renderPassHandle << ", Lighting=" << (cacheKey.isLightingEnabled ? "yes" : "no") << ", Bindless=" << (cacheKey.isBindlessEnabled ? "yes" : "no") << "\n"
 				"  BrokenState : " << (this->isBroken() ? "YES (shader generation failed earlier)" : "no");
 
 			return;

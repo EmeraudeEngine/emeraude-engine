@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -31,7 +31,7 @@
 #include <cstdint>
 
 /* Local inclusions for inheritances. */
-#include "Libs/FlagTrait.hpp"
+#include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Helpers.hpp"
@@ -40,9 +40,9 @@ namespace EmEn::Graphics::Geometry
 {
 	/**
 	 * @brief Defines how to use an IBO or a VBO to draw a specific geometry or sub-geometry.
-	 * @extends EmEn::Libs::FlagTrait
+	 * @extends EmEn::Base::FlagTrait
 	 */
-	class SubGeometry final : public Libs::FlagTrait< uint32_t >
+	class SubGeometry final : public Base::FlagTrait< uint32_t >
 	{
 		public:
 

@@ -19,7 +19,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Complete project and additional information can be found at :
- * https://github.com/londnoir/emeraude-engine
+ * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
@@ -30,7 +30,7 @@
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/WaveFactory/Wave.hpp"
+#include "WaveFactory/Wave.hpp"
 
 namespace EmEn::Audio
 {
@@ -100,7 +100,7 @@ namespace EmEn::Audio
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool feedData (const Libs::WaveFactory::Wave< short int > & wave, size_t chunkIndex = 0, size_t length = 0) noexcept;
+			bool feedData (const Base::WaveFactory::Wave< short int > & wave, size_t chunkIndex = 0, size_t length = 0) noexcept;
 
 			/**
 			 * @brief Returns the frequency of the buffer.
