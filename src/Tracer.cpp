@@ -46,6 +46,7 @@
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
 #include "String.hpp"
+#include "Logging/Logging.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
 #endif
@@ -281,6 +282,10 @@ namespace EmEn
 
 	Tracer::~Tracer ()
 	{
+		/* Ave robustus A.0: stop routing base diagnostics here before teardown
+		 * (base falls back to its default cerr sink). */
+		Base::Logging::setSink(nullptr);
+
 		this->disableLogger();
 
 		if constexpr ( IsDebug )
@@ -295,6 +300,13 @@ namespace EmEn
 		m_processName = std::move(processName);
 
 		m_isChildProcess = childProcess;
+
+		/* Ave robustus A.0: route emeraude-base diagnostics into this Tracer. Registered
+		 * before the early returns (-q / --disable-log) so it is always installed; trace()
+		 * applies the disabled/tag-filter state at call time. Reset in ~Tracer(). */
+		Base::Logging::setSink([] (Severity severity, const char * tag, std::string_view message) {
+			Tracer::getInstance().trace(severity, tag, message);
+		});
 
 		/* NOTE: Register once PPID and PID for this tracer. */
 #if IS_LINUX || IS_MACOS
