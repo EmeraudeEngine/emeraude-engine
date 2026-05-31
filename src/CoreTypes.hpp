@@ -30,6 +30,9 @@
 #include <cstdint>
 #include <string>
 
+/* Emeraude-base inclusions. */
+#include "Logging/Severity.hpp"
+
 namespace EmEn
 {
 	namespace Graphics
@@ -87,73 +90,16 @@ namespace EmEn
 		NotAllowed
 	};
 
-	/**
-	 * @brief The message severity enumeration.
-	 */
-	enum class Severity : uint8_t
-	{
-		Debug,
-		Success,
-		Info,
-		Warning,
-		Error,
-		Fatal
-	};
-
-	static constexpr auto DebugString{"Debug"};
-	static constexpr auto SuccessString{"Success"};
-	static constexpr auto InfoString{"Info"};
-	static constexpr auto WarningString{"Warning"};
-	static constexpr auto ErrorString{"Error"};
-	static constexpr auto FatalString{"Fatal"};
-
-	/**
-	 * @brief Returns a C-String version of the enum value.
-	 * @param value The enum value.
-	 * @return const char *
-	 */
-	[[nodiscard]]
-	inline
-	const char *
-	to_cstring (Severity value) noexcept
-	{
-		switch ( value )
-		{
-			case Severity::Debug :
-				return DebugString;
-
-			case Severity::Info :
-				return InfoString;
-
-			case Severity::Success :
-				return SuccessString;
-
-			case Severity::Warning :
-				return WarningString;
-
-			case Severity::Error :
-				return ErrorString;
-
-			case Severity::Fatal :
-				return FatalString;
-
-			default:
-				return "Unknown";
-		}
-	}
-
-	/**
-	 * @brief Returns a string version of the enum value.
-	 * @param value The enum value.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	inline
-	std::string
-	to_string (Severity value)
-	{
-		return {to_cstring(value)};
-	}
+	/* Severity descended into emeraude-base (Ave robustus A.0): the shared logging
+	 * primitive now lives in EmEn::Base. Re-exported here so engine code keeps
+	 * using EmEn::Severity; to_cstring()/to_string() resolve via ADL into EmEn::Base. */
+	using Base::Severity;
+	using Base::DebugString;
+	using Base::SuccessString;
+	using Base::InfoString;
+	using Base::WarningString;
+	using Base::ErrorString;
+	using Base::FatalString;
 
 	/** @brief Log file format enumeration. */
 	enum class LogFormat : uint8_t
