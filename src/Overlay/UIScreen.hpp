@@ -212,7 +212,7 @@ namespace EmEn::Overlay
 			std::shared_ptr< surface_t >
 			createSurface (const std::string & name, ctor_args... args) noexcept requires (std::is_base_of_v< Surface, surface_t >)
 			{
-				const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+				const std::scoped_lock lock{m_surfacesMutex};
 
 				if ( !m_framebufferProperties.isValid() )
 				{

@@ -78,7 +78,7 @@ namespace EmEn::Overlay
 	void
 	UIScreen::render (const std::shared_ptr< RenderTarget::Abstract > & /*renderTarget*/, const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Geometry::IndexedVertexResource & surfaceGeometry) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		for ( const auto & surface : m_surfaces )
 		{
@@ -119,7 +119,7 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::destroySurface (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		/* NOTE: Wait for the GPU to finish all pending work before destroying the surface.
 		 * The rendering thread records Vulkan commands (bind descriptor set, draw) that reference
@@ -151,7 +151,7 @@ namespace EmEn::Overlay
 	void
 	UIScreen::clearSurfaces () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		/* NOTE: Same GPU sync rationale as destroySurface(). */
 		m_graphicsRenderer.device()->waitIdle("UIScreen::clearSurfaces()");
@@ -365,13 +365,10 @@ namespace EmEn::Overlay
 
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			TraceDebug{ClassId} << "Dispatch to EXCLUSIVE surface '" << exclusiveSurface->name() << "' !";
-
 			return dispatchEvent(exclusiveSurface);
 		}
 
 		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
-			TraceDebug{ClassId} << "Dispatch to surface '" << surface->name() << "' !";
 			return dispatchEvent(surface);
 		});
 	}
@@ -445,7 +442,7 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::bringToFront (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -476,7 +473,7 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::sendToBack (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -507,7 +504,7 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::bringForward (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -536,7 +533,7 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::sendBackward (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -572,7 +569,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto srcIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -622,7 +619,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto srcIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -663,7 +660,7 @@ namespace EmEn::Overlay
 	std::optional< size_t >
 	UIScreen::indexOf (const std::string & name) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -680,7 +677,7 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	UIScreen::stackOrder () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
+		const std::scoped_lock lock{m_surfacesMutex};
 
 		std::vector< std::string > order;
 		order.reserve(m_surfaces.size());
