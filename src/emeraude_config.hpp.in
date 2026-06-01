@@ -35,7 +35,7 @@
 #endif
 
 /* Foundation config: platform detection + shared base constants (IsDebug, factory
- * debug flags, ThreadPool, InternetCheckDomain, DefaultUserAgent, LIBSNDFILE_ENABLED). */
+ * debug flags, ThreadPool, InternetCheckDomain, DefaultUserAgent). */
 #include "emeraude_base_config.hpp"
 
 #define EMERAUDE_ENGINE 1
