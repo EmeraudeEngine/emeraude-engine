@@ -163,13 +163,6 @@ elseif ( MSVC )
 	string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 endif ()
 
-# Download the binary precompiled package for the current configuration.
-#include(InstallExternalDependencies)
-
-# Print out project paths
-message("[EmeraudeEngine] Project directory: ${CMAKE_SOURCE_DIR}, current : ${CMAKE_CURRENT_SOURCE_DIR}")
-message("[EmeraudeEngine] Binary directory: ${CMAKE_BINARY_DIR}, current : ${CMAKE_CURRENT_BINARY_DIR}")
-
 #######################################################################
 ## Foundation library (emeraude-base)
 # Provides Base/*, platform/config headers, and the external dependencies. Cloned if
@@ -182,10 +175,10 @@ include(InstallEmeraudeBase)
 # cmake/ dir so the engine can include(Setup<Lib>) from there.
 list(APPEND CMAKE_MODULE_PATH ${EMERAUDE_BASE_CMAKE_DIR})
 
-# The engine's own Setup*.cmake (Vulkan/glslang, GLFW, OpenAL, …) and the base-provided ones
-# resolve their libraries through LOCAL_LIB_DIR. emeraude-base is the single provider of the
-# external deps, so alias LOCAL_LIB_DIR onto the path it exposes.
-set(LOCAL_LIB_DIR ${EMERAUDE_EXT_LIBS_PATH})
+# Print out project paths
+message("[EmeraudeEngine] Project directory: ${CMAKE_SOURCE_DIR}, current : ${CMAKE_CURRENT_SOURCE_DIR}")
+message("[EmeraudeEngine] Binary directory: ${CMAKE_BINARY_DIR}, current : ${CMAKE_CURRENT_BINARY_DIR}")
+message("[EmeraudeEngine] Local external dependencies: ${EMERAUDE_EXT_LIBS_PATH}")
 
 #######################################################################
 ## Pre sources assembly operations.

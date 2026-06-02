@@ -22,12 +22,12 @@ else ()
 
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Avrt.lib)
 
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/OpenAL32.lib)
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${EMERAUDE_EXT_LIBS_PATH}/lib/OpenAL32.lib)
 	else ()
 		if ( APPLE )
 			target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE "-framework CoreAudio -framework AudioToolbox")
 		endif ()
 
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libopenal.a)
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${EMERAUDE_EXT_LIBS_PATH}/lib/libopenal.a)
 	endif ()
 endif ()

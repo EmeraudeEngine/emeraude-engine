@@ -66,10 +66,10 @@ message("Enabling GLSLang (with SPIR-V codegen) from local precompiled source ..
 
 # glslang's exported config calls find_dependency(SPIRV-Tools-opt), which itself
 # pulls SPIRV-Tools. find_dependency follows CMAKE_PREFIX_PATH, so we point both
-# the initial find_package and the transitive ones at LOCAL_LIB_DIR.
-list(PREPEND CMAKE_PREFIX_PATH ${LOCAL_LIB_DIR})
+# the initial find_package and the transitive ones at EMERAUDE_EXT_LIBS_PATH.
+list(PREPEND CMAKE_PREFIX_PATH ${EMERAUDE_EXT_LIBS_PATH})
 
-find_package(glslang CONFIG REQUIRED PATHS ${LOCAL_LIB_DIR} NO_DEFAULT_PATH)
+find_package(glslang CONFIG REQUIRED PATHS ${EMERAUDE_EXT_LIBS_PATH} NO_DEFAULT_PATH)
 
-# Headers are already included via ${LOCAL_LIB_DIR}/include in the main CMakeLists.txt.
+# Headers are already included via ${EMERAUDE_EXT_LIBS_PATH}/include in the main CMakeLists.txt.
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE glslang::SPIRV glslang::glslang)

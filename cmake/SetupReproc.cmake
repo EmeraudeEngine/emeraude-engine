@@ -4,8 +4,8 @@ endif ()
 
 message("Enabling reproc/reproc++ library from local precompiled source ...")
 
-find_package(reproc CONFIG REQUIRED PATHS ${LOCAL_LIB_DIR} NO_DEFAULT_PATH)
-find_package(reproc++ CONFIG REQUIRED PATHS ${LOCAL_LIB_DIR} NO_DEFAULT_PATH)
+find_package(reproc CONFIG REQUIRED PATHS ${EMERAUDE_EXT_LIBS_PATH} NO_DEFAULT_PATH)
+find_package(reproc++ CONFIG REQUIRED PATHS ${EMERAUDE_EXT_LIBS_PATH} NO_DEFAULT_PATH)
 
-# Headers are already included via ${LOCAL_LIB_DIR}/include in the main CMakeLists.txt.
+# Headers are already included via ${EMERAUDE_EXT_LIBS_PATH}/include in the main CMakeLists.txt.
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE reproc reproc++)
