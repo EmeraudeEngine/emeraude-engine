@@ -332,6 +332,16 @@ namespace EmEn::Overlay
 			return false;
 		};
 
+		/* NOTE: While a surface holds the pointer capture, it receives every move
+		 * directly — even outside its own rectangle (drag-outside). */
+		if ( const auto capturedSurface = m_pointerCaptureSurface.lock() )
+		{
+			if ( capturedSurface->isVisible() && capturedSurface->isListeningPointer() )
+			{
+				return capturedSurface->onPointerMove(positionX, positionY);
+			}
+		}
+
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
 			return dispatchEvent(exclusiveSurface);
@@ -350,6 +360,8 @@ namespace EmEn::Overlay
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer button press event!";
 		}
 
+		const auto buttonBit = static_cast< uint8_t >(1U << (buttonNumber & 7));
+
 		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
@@ -363,14 +375,36 @@ namespace EmEn::Overlay
 			return false;
 		};
 
+		/* NOTE: A capture is already active (multi-button drag in progress): the new
+		 * button also goes to the capturing surface, bypassing the stack resolution. */
+		if ( const auto capturedSurface = m_pointerCaptureSurface.lock() )
+		{
+			m_pointerCaptureButtons |= buttonBit;
+
+			return capturedSurface->onButtonPress(positionX, positionY, buttonNumber, modifiers);
+		}
+
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
-			return dispatchEvent(surface);
-		});
+		/* NOTE: Top-down resolution. The first surface that consumes the press
+		 * (returns true) captures the pointer for the whole press→drag→release
+		 * sequence, so every following move/release reaches it wherever the cursor
+		 * goes. Same short-circuit behaviour as the previous any_of. */
+		for ( const auto & surface : std::views::reverse(m_surfaces) )
+		{
+			if ( dispatchEvent(surface) )
+			{
+				m_pointerCaptureSurface = surface;
+				m_pointerCaptureButtons = buttonBit;
+
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	bool
@@ -381,6 +415,8 @@ namespace EmEn::Overlay
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer button release event!";
 		}
 
+		const auto buttonBit = static_cast< uint8_t >(1U << (buttonNumber & 7));
+
 		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
@@ -389,6 +425,24 @@ namespace EmEn::Overlay
 
 			return false;
 		};
+
+		/* NOTE: If a surface holds the capture, it MUST receive the release wherever
+		 * the pointer is — that completes the interaction it began (otherwise CEF never
+		 * gets the mouseUp and JS state stays stuck). The capture is released once its
+		 * last held button is up. */
+		if ( const auto capturedSurface = m_pointerCaptureSurface.lock() )
+		{
+			const auto blocked = capturedSurface->onButtonRelease(positionX, positionY, buttonNumber, modifiers);
+
+			m_pointerCaptureButtons &= static_cast< uint8_t >(~buttonBit);
+
+			if ( m_pointerCaptureButtons == 0 )
+			{
+				m_pointerCaptureSurface.reset();
+			}
+
+			return blocked;
+		}
 
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
@@ -416,6 +470,12 @@ namespace EmEn::Overlay
 
 			return false;
 		};
+
+		/* NOTE: A wheel event during a drag goes to the capturing surface. */
+		if ( const auto capturedSurface = m_pointerCaptureSurface.lock() )
+		{
+			return capturedSurface->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
+		}
 
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{

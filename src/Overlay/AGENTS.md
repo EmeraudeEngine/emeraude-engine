@@ -173,7 +173,24 @@ Program selection uses bitwise index: `(premultipliedAlpha ? 1 : 0) | (isUsingBG
 - **OverlayManager is InputManager client**: Receives mouse/keyboard events
 - **Hierarchical dispatch**: Manager → Screen → Surface
 - **Interaction handling**: Clicks, hover, keyboard focus
-- **Z-ordering**: Higher Z Surfaces receive events first
+r- **Top-down resolution**: events traverse the stack from top to bottom (`std::views::reverse`); the first surface that consumes a press stops the propagation.
+
+#### Pointer routing: per-event resolution, exclusive surface, and pointer capture
+
+`UIScreen` resolves the target of every pointer event through three layers, checked in this order (see `UIScreen.cpp` `onPointerMove` / `onButtonPress` / `onButtonRelease` / `onMouseWheel`):
+
+1. **Implicit pointer capture (grab)** — *the* mechanism that keeps a press→drag→release sequence coherent.
+   - When a button press is **consumed** by a surface (its `onButtonPress` returns `true`), that surface becomes the **captor**: `m_pointerCaptureSurface` (a `mutable std::weak_ptr< Surface >`) + `m_pointerCaptureButtons` (a `mutable uint8_t` bitmask of the buttons it currently holds).
+   - While a capture is active, **every** subsequent move / release / wheel / extra-button press is routed **directly to the captor**, bypassing position (`isBelowPoint`) and alpha testing. This is exactly Win32 `SetCapture` / DOM `setPointerCapture` semantics.
+   - The capture is released automatically once the captor's **last** held button is up (`m_pointerCaptureButtons == 0` → `m_pointerCaptureSurface.reset()`). A destroyed captor expires its `weak_ptr` and is dropped on the next event.
+   - **Why it exists:** without it, each event independently re-resolves its target by pixel position. With stacked, partially-transparent CEF surfaces, a drag that starts on surface A and ends over (or outside) surface B delivers the release to the wrong surface — A's `mouseUp` never reaches CEF and its JS state (camera rotation, slider drag…) stays stuck, while B receives a phantom `mouseUp` it never saw pressed. Capture binds the whole gesture to A.
+2. **Explicit exclusive surface** — app-driven, set via `setInputExclusiveSurface(name)` / `disableInputExclusiveSurface()` / `isInputExclusiveSurfaceEnabled()` / `inputExclusiveSurface()` (`m_inputExclusiveSurface`, a `std::weak_ptr< Surface >`). When set (and no capture is active), all events go to that single surface regardless of the stack.
+3. **Normal top-down stack resolution** — the default `std::views::reverse(m_surfaces)` walk.
+
+**Precedence is deliberate:** an active capture **wins over** the explicit exclusive surface, so an in-flight drag is never yanked away by a concurrent `setInputExclusiveSurface()`. Capture is transient (bounded by the button hold); exclusive is a persistent app policy.
+
+> [!NOTE]
+> Capture attaches to the surface that **consumes** the press (returns `true`). A surface that forwards events to its content without blocking propagation (`processUnblockedPointerEvents`-style) does not become the captor — the natural owner of a drag is the blocker beneath it. The CEF consumer side still needs its own "I already sent the mousedown, so I must send the matching mouseup" tracking for the case where the release lands on a now-transparent pixel of the captor itself (see app_system `WebView::m_CEFButtonsDown`). The two layers are complementary: `UIScreen` decides **which** surface gets the event; the surface decides **whether** to forward it to its backend.
 
 ### CEF Integration (external)
 - CEF not integrated in framework (external dependency)

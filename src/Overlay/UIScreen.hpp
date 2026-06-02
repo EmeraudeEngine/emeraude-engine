@@ -522,6 +522,14 @@ namespace EmEn::Overlay
 			const FramebufferProperties & m_framebufferProperties;
 			std::vector< std::shared_ptr< Surface > > m_surfaces;
 			std::weak_ptr< Surface > m_inputExclusiveSurface;
+			/* NOTE: Implicit pointer capture (grab). The surface that consumes a button
+			 * press receives every subsequent move/release/wheel until all of its buttons
+			 * are released — regardless of pointer position or alpha test. Mirrors Win32
+			 * SetCapture / DOM setPointerCapture semantics. Distinct from the explicit,
+			 * app-driven m_inputExclusiveSurface above: this one is set/cleared internally
+			 * by the press/release dispatch, never by the application. */
+			mutable std::weak_ptr< Surface > m_pointerCaptureSurface;
+			mutable uint8_t m_pointerCaptureButtons{0};
 			mutable std::mutex m_surfacesMutex;
 			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
