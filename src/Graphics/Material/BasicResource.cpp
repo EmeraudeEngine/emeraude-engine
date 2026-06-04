@@ -533,8 +533,32 @@ namespace EmEn::Graphics::Material
 	std::string
 	BasicResource::fragmentColor () const noexcept
 	{
+		/* Prioritize the texture's alpha channel over the uniform opacity. An
+		 * alpha-mapped texture (sprite cutout, smoke gradient, foliage) carries
+		 * per-texel alpha that MUST drive blending; the uniform Opacity is only a
+		 * global multiplier/fallback. This mirrors setupLightGenerator() so the
+		 * unlit path behaves like the lit one. Forcing OpacityEnabled (the RT
+		 * alpha-test signal set by SpriteResource) must NOT discard the texture
+		 * alpha, otherwise blended sprites render as opaque quads. */
+		const auto hasTextureAlpha = m_textureComponent != nullptr && m_textureComponent->alphaEnabled();
+
+		if ( hasTextureAlpha )
+		{
+			if ( this->isFlagEnabled(OpacityEnabled) )
+			{
+				/* Texture alpha gradient modulated by the global opacity fade. */
+				std::stringstream surfaceColor;
+				surfaceColor << "vec4(" << SurfaceColor << ".rgb, " << SurfaceColor << ".a * " << MaterialUB(UniformBlock::Component::Opacity) << ')';
+				return surfaceColor.str();
+			}
+
+			/* Pure texture alpha (cutout / blend) drives the output alpha. */
+			return SurfaceColor;
+		}
+
 		if ( this->isFlagEnabled(OpacityEnabled) )
 		{
+			/* No texture alpha: fall back to the uniform global opacity. */
 			std::stringstream surfaceColor;
 			surfaceColor << "vec4(" << SurfaceColor << ".rgb, " << MaterialUB(UniformBlock::Component::Opacity) << ')';
 			return surfaceColor.str();

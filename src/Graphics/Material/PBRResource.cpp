@@ -2284,7 +2284,9 @@ namespace EmEn::Graphics::Material
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
 
-		/* Declare the bindless cubemap array (unbounded). */
+		/* Declare the global bindless cubemap array (unbounded). Several features and
+		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
+		 * silent no-op (see the Saphir declare de-duplication contract). */
 		if ( !fragmentShader.declare(Declaration::Sampler{
 			bindlessSetIndex,
 			BindlessTextureManager::TextureCubeBinding,
@@ -2333,29 +2335,25 @@ namespace EmEn::Graphics::Material
 		/* NOTE: For automatic refraction with bindless textures, we use the scene's environment
 		 * cubemap from the bindless array. No per-material refraction component is needed. */
 
-		/* NOTE: The bindless cubemap array declaration is shared with reflection.
-		 * If reflection was already generated, the array is already declared. */
-
 		/* Get the bindless set index from the program. */
 		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
 
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
 
-		/* Declare the bindless cubemap array (unbounded) if not already declared by reflection. */
-		if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap )
+		/* Declare the global bindless cubemap array (unbounded). Several features and
+		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
+		 * silent no-op (see the Saphir declare de-duplication contract). */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::TextureCubeBinding,
+			GLSL::SamplerCube,
+			Bindless::TexturesCube,
+			Declaration::Sampler::UnboundedArray}) )
 		{
-			if ( !fragmentShader.declare(Declaration::Sampler{
-				bindlessSetIndex,
-				BindlessTextureManager::TextureCubeBinding,
-				GLSL::SamplerCube,
-				Bindless::TexturesCube,
-				Declaration::Sampler::UnboundedArray}) )
-			{
-				TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for refraction !";
+			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for refraction !";
 
-				return false;
-			}
+			return false;
 		}
 
 		/* Generate the refraction sampling code using bindless textures. */
@@ -2432,22 +2430,19 @@ namespace EmEn::Graphics::Material
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
 
-		/* Declare the bindless cubemap array if not already declared by bindless reflection/refraction.
-		 * NOTE: Component-based reflection (render target) does NOT declare the bindless array,
-		 * only the m_isUsingEnvironmentCubemap and m_isUsingEnvironmentCubemapForRefraction paths do. */
-		if ( !m_isUsingEnvironmentCubemap && !m_isUsingEnvironmentCubemapForRefraction )
+		/* Declare the global bindless cubemap array (unbounded). Several features and
+		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
+		 * silent no-op (see the Saphir declare de-duplication contract). */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::TextureCubeBinding,
+			GLSL::SamplerCube,
+			Bindless::TexturesCube,
+			Declaration::Sampler::UnboundedArray}) )
 		{
-			if ( !fragmentShader.declare(Declaration::Sampler{
-				bindlessSetIndex,
-				BindlessTextureManager::TextureCubeBinding,
-				GLSL::SamplerCube,
-				Bindless::TexturesCube,
-				Declaration::Sampler::UnboundedArray}) )
-			{
-				TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for transmission !";
+			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for transmission !";
 
-				return false;
-			}
+			return false;
 		}
 
 		/* Generate the transmission sampling code using bindless prefiltered cubemap. */

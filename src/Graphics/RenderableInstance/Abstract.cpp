@@ -26,9 +26,6 @@
 
 #include "Abstract.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Material/Interface.hpp"
@@ -59,17 +56,17 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr auto TracerTag{"RenderableInstance"};
 
 	bool
-	Abstract::createSkinningResources (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Vulkan::DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept
+	Abstract::createSkinningResources (const std::shared_ptr< Device > & device, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept
 	{
 		if ( boneCount == 0 || device == nullptr || descriptorSetLayout == nullptr )
 		{
 			return false;
 		}
 
-		const auto bufferSize = static_cast< VkDeviceSize >(boneCount * 16 * sizeof(float));
+		const auto bufferSize = static_cast< VkDeviceSize >(boneCount * 16UL * sizeof(float));
 
 		/* Create the SSBO (host-visible for CPU write each frame). */
-		m_skinningSSBO = std::make_unique< Vulkan::ShaderStorageBufferObject >(device, bufferSize, true);
+		m_skinningSSBO = std::make_unique< ShaderStorageBufferObject >(device, bufferSize, true);
 		m_skinningSSBO->setIdentifier(TracerTag, "SkinningMatrices", "SSBO");
 
 		if ( !m_skinningSSBO->createOnHardware() )
@@ -82,7 +79,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* Create descriptor pool (1 SSBO descriptor, 1 set, free-able). */
-		m_skinningDescriptorPool = std::make_shared< Vulkan::DescriptorPool >(
+		m_skinningDescriptorPool = std::make_shared< DescriptorPool >(
 			device,
 			std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}},
 			1,
@@ -100,7 +97,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* Allocate descriptor set. */
-		m_skinningDescriptorSet = std::make_unique< Vulkan::DescriptorSet >(m_skinningDescriptorPool, descriptorSetLayout);
+		m_skinningDescriptorSet = std::make_unique< DescriptorSet >(m_skinningDescriptorPool, descriptorSetLayout);
 
 		if ( !m_skinningDescriptorSet->create() )
 		{
@@ -130,10 +127,10 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Initialize SSBO with identity matrices so the mesh renders in bind pose
 		 * until the first animation frame uploads real skinning matrices. */
 		{
-			std::vector< Base::Math::Matrix< 4, float > > identityMatrices(boneCount);
-			m_skinningSSBO->writeData(Vulkan::MemoryRegion{
+			std::vector< Matrix< 4, float > > identityMatrices(boneCount);
+			m_skinningSSBO->writeData(MemoryRegion{
 				identityMatrices.data(),
-				identityMatrices.size() * sizeof(Base::Math::Matrix< 4, float >)
+				identityMatrices.size() * sizeof(Matrix< 4, float >)
 			});
 		}
 
@@ -141,16 +138,16 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Abstract::updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept
+	Abstract::updateSkinningMatrices (const std::vector< Matrix< 4, float > > & matrices) const noexcept
 	{
 		if ( m_skinningSSBO == nullptr || matrices.empty() )
 		{
 			return false;
 		}
 
-		return m_skinningSSBO->writeData(Vulkan::MemoryRegion{
+		return m_skinningSSBO->writeData(MemoryRegion{
 			matrices.data(),
-			matrices.size() * sizeof(Base::Math::Matrix< 4, float >)
+			matrices.size() * sizeof(Matrix< 4, float >)
 		});
 	}
 
@@ -267,8 +264,13 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* NOTE: Check whether the renderable interface is ready for instantiation.
-		 * If not, this is no big deal; a loading event exists to relaunch the whole process. */
+		/* NOTE: The underlying renderable resource is not loaded yet. This is NOT an error:
+		 * returning true simply defers the instance. The per-frame render-list build
+		 * (Scenes::Scene::checkRenderableInstanceForRendering) re-invokes this method on
+		 * subsequent frames until the renderable becomes ready. There is NO event that
+		 * relaunches program generation: the resource LoadFinished event only refreshes
+		 * entity-level properties (AABB, mass), and Vulkan program/pipeline creation must
+		 * run on the render thread, never on the resource loader thread. */
 		if ( !m_renderable->isReadyForInstantiation() )
 		{
 			return true;
@@ -326,8 +328,13 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* NOTE: Check whether the renderable interface is ready for instantiation.
-		 * If not, this is no big deal; a loading event exists to relaunch the whole process. */
+		/* NOTE: The underlying renderable resource is not loaded yet. This is NOT an error:
+		 * returning true simply defers the instance. The per-frame render-list build
+		 * (Scenes::Scene::checkRenderableInstanceForRendering) re-invokes this method on
+		 * subsequent frames until the renderable becomes ready. There is NO event that
+		 * relaunches program generation: the resource LoadFinished event only refreshes
+		 * entity-level properties (AABB, mass), and Vulkan program/pipeline creation must
+		 * run on the render thread, never on the resource loader thread. */
 		if ( !m_renderable->isReadyForInstantiation() )
 		{
 			return true;

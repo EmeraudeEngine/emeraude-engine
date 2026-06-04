@@ -268,16 +268,39 @@ if (material->isAnimated()) {
 
 ## Lifecycle and Notifications
 
+Resource readiness and GPU rendering-readiness travel through **two independent channels**.
+
+**Channel A — Observer event (entity properties only):**
+
 ```
-Renderable (finishes loading)
-    → notifies Visual (observer)
-        → propagates to Scene
-            → triggers GPU upload (programs, textures, mesh...)
-                → marks Renderable as ready
-                    → RenderableInstance becomes OK for rendering
+Renderable finishes loading (resource thread-pool worker)
+    → marks itself ready (setReadyForInstantiation) + emits LoadFinished
+        → Visual (observer) → notify(ComponentContentModified)
+            → AbstractEntity::updateEntityProperties()
+               (recomputes AABB, mass, rendering-ability flag)
 ```
 
-This mechanism enables asynchronous resource loading while keeping the system reactive.
+This channel does **not** generate shader programs. It only refreshes entity-level
+spatial/physical properties once the geometry is available.
+
+**Channel B — Per-frame polling on the render thread (actual GPU readiness):**
+
+```
+Each frame, per render-target, per instance:
+  Scene::checkRenderableInstanceForRendering
+    → renderable not ready yet?  → skip, retried next frame
+    → getReadyForRender()        → lazily generates + caches shader programs
+    → isReadyToRender()          → queries the program cache → render
+```
+
+**Why two channels:** `LoadFinished` is emitted on a resource thread-pool worker
+(`ResourceTrait::checkDependencies`), whereas Vulkan program/pipeline creation must run on
+the render thread. Program generation therefore **cannot** be event-driven; it is polled
+lazily from the render-list build, which runs on the render thread. There is no event that
+relaunches program generation — the per-frame poll is the only relauncher.
+
+This mechanism enables asynchronous resource loading while keeping GPU object creation on
+the render thread.
 
 ## Unique vs Multiple: Technical Details
 
@@ -365,7 +388,10 @@ renderableInstance->setTransformationMatrix(scaleMatrix);
 
 - `Visual` component creates `Unique` instances
 - `MultipleVisuals` component creates `Multiple` instances
-- Scene observes Renderables and triggers GPU preparation when ready
+- `Visual`/`MultipleVisuals` observe their Renderable's `LoadFinished` to refresh entity
+  properties (AABB, mass) — see *Lifecycle and Notifications*. GPU program preparation is
+  **not** event-driven: it is polled per-frame on the render thread via
+  `Scene::checkRenderableInstanceForRendering`.
 
 ### Saphir Integration
 

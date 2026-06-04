@@ -415,6 +415,38 @@ The bindless array declarations use `Declaration::Sampler::UnboundedArray` and a
 
 **Why bindless?** Per-light descriptor sets use `UNIFORM_BUFFER_DYNAMIC` (binding 0), which does not support `UPDATE_AFTER_BIND_BIT`. This makes deferred texture writes unsafe with frames-in-flight. The bindless set uses `UPDATE_AFTER_BIND_BIT` + `PARTIALLY_BOUND_BIT`, allowing textures to be registered asynchronously after resource loading completes.
 
+### Declaration de-duplication contract
+
+Several declaration kinds are **global, fixed-identity resources** that multiple
+composable generators legitimately declare into the *same* shader without
+coordinating. For these, `declare()` is **silently idempotent** — a re-declaration
+of the same name is byte-identical, returns `true`, and emits **no warning**:
+
+- **Vertex input attributes** (`VertexShader::declare(const Declaration::InputAttribute &)`).
+  Name, location and GLSL type are all derived from the `VertexAttributeType`, so a
+  duplicate cannot conflict. The `synthesize*` / TBN helpers in `VertexShader.cpp`
+  and the `Generator/*` passes each declare what they consume.
+- **Unbounded bindless arrays** (`AbstractShader::declare(const Declaration::Sampler &)`
+  when `declaration.isUnbounded()`). A fixed name maps to a fixed set/binding/type
+  (e.g. `uBindlessTexturesCube` → cube binding on the `PerBindless` set). They are
+  declared **independently** by materials (`PBRResource`, `StandardResource`) **and**
+  the `LightGenerator` variants (cube shadows, color projection) into one fragment
+  shader — there is **no single coordinator** across those subsystems, so a localized
+  "declare once" cannot cover it. Silent de-dup is the mechanism.
+
+**Do not re-introduce a warning or a `quiet`/once-guard for these** — it only
+produced log spam (hundreds of lines per program build) with zero actionable
+signal. **Bounded / named samplers still warn** on duplicates: there a
+same-name / different-binding clash is a real bug worth catching.
+
+> [!NOTE]
+> Every subsystem declares the bindless arrays **on use** (each PBR/Standard material
+> feature, each `LightGenerator` variant), unconditionally — no up-front "declare once"
+> coordinator and no guards. There is no shared owner across material ↔ LightGenerator,
+> so the silent de-dup above is what keeps a single declaration in the shader and the log
+> clean. Do not add a localized once-guard back; it cannot cover the cross-subsystem case
+> and only fragments the pattern.
+
 ### ScaleBiasMatrix UV Caveat
 
 > [!WARNING]

@@ -108,10 +108,10 @@ namespace EmEn::Saphir::Generator
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
 		/* Input declarations. */
-		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}, true);
+		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position});
 		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Tangent});
 		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Binormal});
-		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Normal}, true);
+		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Normal});
 
 		if ( !this->declareMatrixPushConstantBlock(*vertexShader) )
 		{

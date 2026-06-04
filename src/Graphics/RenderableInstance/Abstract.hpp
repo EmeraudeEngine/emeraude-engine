@@ -91,28 +91,22 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr bool MergePushConstants{true};
 
 	/** @brief Renderable instance flag bits. */
-	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
-	enum RenderableInstanceFlagBits : uint32_t
+	enum RenderableInstanceFlagBits : uint32_t // NOLINT(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	{
 		None = 0U,
-		/**
-		 * @brief This flag is set when the renderable instance is ready to be rendered in a 3D scene.
-		 * @warning This is different from the renderable flag "IsReadyForInstantiation"!
-		 */
-		IsReadyToRender = 1U << 0,
 		/**
 		 * @brief This flag is set when all positions (GPU instancing) are up to date.
 		 * @note Used by Multiple to avoid redundant VBO uploads when local data hasn't changed.
 		 */
-		ArePositionsSynchronized = 1U << 1,
+		ArePositionsSynchronized = 1U << 0,
 		/** @brief This flag is set when the renderable instance can't be loaded in the rendering system and must be removed. */
-		BrokenState = 1U << 2,
+		BrokenState = 1U << 1,
 		/** @brief This flag is set when the renderable instance needs to generate a shader with lighting code. */
-		EnableLighting = 1U << 3,
+		EnableLighting = 1U << 2,
 		/** @brief This flag disables shadow casting (the instance won't be rendered in shadow maps). */
-		DisableShadowCasting = 1U << 4,
+		DisableShadowCasting = 1U << 3,
 		/** @brief This flag disables shadow receiving (the instance won't sample shadow maps during rendering). */
-		DisableShadowReceiving = 1U << 13,
+		DisableShadowReceiving = 1U << 4,
 		/** @brief This flag is set to update the renderable instance model matrix with rotations only. Useful for sky rendering. */
 		UseInfinityView = 1U << 5,
 		/**
@@ -509,7 +503,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param matrices The skinning matrices to upload.
 			 * @return bool
 			 */
-			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept;
+			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) const noexcept;
 
 			/**
 			 * @brief Returns whether skinning GPU resources are available.
@@ -647,6 +641,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 * @param LODLevel The desired LOD level. Default 0.
 			 *
 			 * @note Shadow maps use depth-only rendering without material/lighting bindings.
 			 *
@@ -672,6 +667,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 * @param LODLevel The desired LOD level. Default 0.
 			 * @param bindlessTexturesManager A pointer to the bindless textures manager for materials using automatic reflection. Can be nullptr.
 			 *
 			 * @todo The lightEmitter parameter should be refactored to use a smart pointer for safety.
@@ -701,7 +697,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
 			 * @param tracker A reference to the state tracker for redundant bind elimination.
 			 * @param LODLevel The geometry LOD level to render.
-			 * @param bindlessTexturesManager A pointer to the bindless textures manager. Can be nullptr.
+			 * @param bindlessTexturesManager A pointer to the bindless texture manager. Can be nullptr.
 			 *
 			 * @see render() For the non-tracked version.
 			 */
@@ -871,9 +867,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Mutex protecting local data access (e.g. VBO data in Multiple).
-			 *
-			 * @note Used to synchronize access between Logic thread (updating data) and Render thread (uploading to
-			 * GPU).
+			 * @note Used to synchronize access between Logic thread (updating data) and Render thread (uploading to GPU).
 			 */
 			mutable std::mutex m_localDataAccess;
 

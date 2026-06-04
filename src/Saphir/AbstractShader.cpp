@@ -174,9 +174,19 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_samplers, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_samplers, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
-			TraceWarning{TracerTag} << "A sampler declaration named '" << declaration.name() << "' already exists !";
+			/* Unbounded arrays are global bindless arrays: a fixed name maps to a fixed
+			 * set/binding/type (e.g. uBindlessTexturesCube → cube binding on PerBindless).
+			 * Several composable generators (materials, LightGenerator, color projection)
+			 * declare them independently into the same shader, so a re-declaration is
+			 * byte-identical and safely ignored — silent de-dup, no warning. Named samplers
+			 * can genuinely collide (same name, different binding/type = a real bug), so
+			 * those still warn. */
+			if ( !declaration.isUnbounded() )
+			{
+				TraceWarning{TracerTag} << "A sampler declaration named '" << declaration.name() << "' already exists !";
+			}
 
 			return true;
 		}

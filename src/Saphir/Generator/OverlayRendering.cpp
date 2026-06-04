@@ -107,7 +107,7 @@ namespace EmEn::Saphir::Generator
 				return false;
 			}
 
-			if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}, true) )
+			if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}) )
 			{
 				return false;
 			}

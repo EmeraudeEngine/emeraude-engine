@@ -264,8 +264,8 @@ namespace EmEn::Saphir::Generator
 		{
 			vertexShader->enableSkinning();
 
-			vertexShader->declare(Declaration::InputAttribute{Graphics::VertexAttributeType::BoneInfluence}, true);
-			vertexShader->declare(Declaration::InputAttribute{Graphics::VertexAttributeType::BoneWeight}, true);
+			vertexShader->declare(Declaration::InputAttribute{Graphics::VertexAttributeType::BoneInfluence});
+			vertexShader->declare(Declaration::InputAttribute{Graphics::VertexAttributeType::BoneWeight});
 
 			const auto setIndex = program.setIndexes().set(SetType::PerModel);
 

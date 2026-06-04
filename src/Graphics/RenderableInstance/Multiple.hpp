@@ -236,9 +236,9 @@ namespace EmEn::Graphics::RenderableInstance
 			//static constexpr uint32_t MeshVBOElementBytes = 64UL + 48UL;
 
 			/* Position vector + scale vector */
-			static constexpr uint32_t SpriteVBOElementCount = 3U + 3U;
+			static constexpr uint32_t SpriteVBOElementCount{3U + 3U};
 			/* Model matrix 4x4 + normal matrix 3x3 */
-			static constexpr uint32_t MeshVBOElementCount = 16U + 9U;
+			static constexpr uint32_t MeshVBOElementCount{16U + 9U};
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::vector< float > m_localData;

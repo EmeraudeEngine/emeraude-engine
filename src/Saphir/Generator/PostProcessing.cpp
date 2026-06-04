@@ -115,7 +115,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Input: vertex position (NDC quad [-1,1]). */
-		if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}, true) )
+		if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}) )
 		{
 			return false;
 		}

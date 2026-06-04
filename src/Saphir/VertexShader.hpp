@@ -92,11 +92,15 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a vertex attribute to be used in a vertex shader.
+			 * @note Re-declaring an already-present attribute is a silent no-op: the
+			 * name, location and GLSL type are all derived from the VertexAttributeType,
+			 * so a duplicate is byte-identical and harmless. Composable shader generators
+			 * (the synthesize and TBN helpers) declare the attributes they consume independently
+			 * and rely on this de-duplication.
 			 * @param declaration A reference to a shader input attribute.
-			 * @param quiet Disable message from already existing attributes. Default false.
 			 * @return bool
 			 */
-			bool declare (const Declaration::InputAttribute & declaration, bool quiet = false) noexcept;
+			bool declare (const Declaration::InputAttribute & declaration) noexcept;
 
 			/**
 			 * @brief Declares a stage output variable to be used in the shader.

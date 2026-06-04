@@ -128,7 +128,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::declare (const InputAttribute & declaration, bool quiet) noexcept
+	VertexShader::declare (const InputAttribute & declaration) noexcept
 	{
 		if ( !declaration.isValid() )
 		{
@@ -144,13 +144,12 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_inputAttributes, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		/* Silent de-duplication: the attribute name/location/type are all derived
+		 * from the VertexAttributeType, so a re-declaration is byte-identical and
+		 * safely ignored. Composable generators declare what they consume without
+		 * coordinating and rely on this — no warning, no cost beyond the lookup. */
+		if ( std::ranges::any_of(m_inputAttributes, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
-			if ( !quiet )
-			{
-				TraceWarning{ClassId} << "An input attribute declaration named '" << declaration.name() << "' already exists !";
-			}
-
 			return true;
 		}
 
@@ -534,7 +533,7 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::synthesizeVertexPositionInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope, bool asGLStandardPosition) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}, true) )
+		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
 		{
 			return false;
 		}
@@ -605,7 +604,7 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::synthesizeVertexPositionInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}, true) )
+		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
 		{
 			return false;
 		}
@@ -647,7 +646,7 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::synthesizeVertexPositionInScreenSpace (std::string & outputInstructions) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}, true) )
+		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
 		{
 			return false;
 		}
@@ -980,7 +979,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}, true) )
+		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}) )
 		{
 			return false;
 		}
@@ -1045,7 +1044,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}, true) )
+		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}) )
 		{
 			return false;
 		}
@@ -1099,7 +1098,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}, true) )
+		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}) )
 		{
 			return false;
 		}

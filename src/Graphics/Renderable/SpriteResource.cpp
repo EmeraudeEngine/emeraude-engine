@@ -27,7 +27,7 @@
 #include "SpriteResource.hpp"
 
 /* Project configuration. */
-#include "emeraude_config.hpp"
+#include "emeraude_base_config.hpp"
 
 /* Local inclusions. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
@@ -214,7 +214,7 @@ namespace EmEn::Graphics::Renderable
 	bool
 	SpriteResource::prepareGeometry (bool isAnimated, bool centerAtBottom, bool flip) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{s_lockGeometryLoading};
+		const std::scoped_lock lock{s_lockGeometryLoading};
 
 		std::stringstream resourceName;
 		resourceName << "QuadSprite" << isAnimated << centerAtBottom << flip;

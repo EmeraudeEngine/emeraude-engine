@@ -323,6 +323,71 @@ if ( materialType == PBRResource::ClassId )
 >   `viewMatrices().position()` to `rebuild()`
 > - `Graphics/Renderable/SpriteResource.cpp` — `setOpacity` always called
 
+### Fixed: Unlit Sprite Alpha/Blending Regression from RT `setOpacity` Forcing (June 2026)
+
+> [!WARNING]
+> **Side-effect of the RT alpha-test fix above.** Forcing `setOpacity()` on every
+> sprite (to set `OpacityEnabled` for `isAlphaTest()`) silently broke the **raster**
+> rendering of all unlit alpha-blended sprites (smoke, fireball, any
+> `BasicResource` sprite without `enableLighting()`).
+>
+> **Root cause:** the unlit fragment output path (`SceneRendering.cpp` →
+> `Material::Interface::fragmentColor()`) returned `vec4(SurfaceColor.rgb,
+> <uniform Opacity>)` whenever `OpacityEnabled` was set — **discarding the
+> texture's per-texel alpha channel**. With the RT fix now setting `OpacityEnabled`
+> on every sprite (uniform Opacity defaulting to 1.0), the output alpha became 1.0
+> everywhere → `Normal` blending with `srcAlpha=1.0` rendered the sprite as an
+> opaque quad instead of a soft alpha gradient.
+>
+> **Why the lit path was immune:** `BasicResource::setupLightGenerator()` already
+> prioritizes the texture alpha channel (`SurfaceColor.a`) over the uniform
+> opacity. Only the unlit `fragmentColor()` ignored it.
+>
+> **Fix:** `BasicResource::fragmentColor()` now mirrors `setupLightGenerator()` —
+> when the texture has an alpha channel (`m_textureComponent->alphaEnabled()`), the
+> output alpha is driven by `SurfaceColor.a` (optionally `× uniform Opacity` when a
+> global fade is also requested). The uniform-opacity-only branch is now a fallback
+> for alpha-less textures. RT alpha-test (driven by `OpacityEnabled || BlendingEnabled`)
+> is unaffected.
+>
+> **Takeaway:** `OpacityEnabled` must NOT mean "override the texture alpha". A flag
+> repurposed as an RT signal must stay neutral on the raster path.
+>
+> **Files involved:**
+> - `Graphics/Material/BasicResource.cpp` — `fragmentColor()` respects texture alpha
+
+### Fixed: Lit Sprite Shadow-Map Vertex Shader — `vaModelMatrix` Undeclared (June 2026)
+
+> [!WARNING]
+> **A billboard sprite with `enableLighting()` failed to compile its
+> light/shadow-pass vertex shader** (`DirectionalLightPassColorMap`, also spot and
+> point-light cubemap passes). GLSL error: `'vaModelMatrix' : undeclared identifier`.
+>
+> **Root cause:** `LightGenerator::generateVertexShaderShadowMapCode()` computed the
+> light-space position as `PositionLightSpace = ViewProjectionMatrix * vaModelMatrix
+> * vec4(Position, 1.0)` (and `DirectionWorldSpace` likewise for point lights),
+> branching only on `isInstancingEnabled()` → `Attribute::ModelMatrix` (`vaModelMatrix`)
+> vs push-constant. But a **billboard sprite** is instanced AND face-camera: its main
+> matrix path (`VertexShader::prepareModelViewMatrix()` / MVP) declares
+> `ShaderVariable::SpriteModelMatrix` (`svSpriteModelMatrix`, computed in-shader from
+> `vaModelPosition`/`vaModelScaling`) and never declares the `vaModelMatrix` attribute.
+> The shadow code referenced a variable that does not exist for sprites.
+>
+> **Fix:** mirror the billboard branch from `prepareModelViewMatrix()`. When
+> `isInstancingEnabled() && isBillBoardingEnabled()`, use `ShaderVariable::SpriteModelMatrix`
+> instead of `Attribute::ModelMatrix`. Safe because the sprite's `gl_Position`
+> synthesis always prepares `SpriteModelMatrix` before the light code runs (it is
+> emitted earlier in the final shader).
+>
+> **Takeaway:** any shader-gen path that consumes the model matrix must account for
+> the THREE matrix sources — instanced attribute (`vaModelMatrix`), push constant,
+> and billboard-sprite in-shader (`svSpriteModelMatrix`). Grep for `Attribute::ModelMatrix`
+> when adding a new vertex code path; a bare instancing check is incomplete.
+>
+> **Files involved:**
+> - `Saphir/LightGenerator.ShadowMap.cpp` — `generateVertexShaderShadowMapCode()`
+>   billboard branch for both `PositionLightSpace` and `DirectionWorldSpace`
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]
@@ -414,6 +479,43 @@ if ( materialType == PBRResource::ClassId )
 > **Trigger:** Scenes without skybox/background (e.g. closed rooms with no `enableBasicBackground()`).
 >
 > **File:** `Scenes/Scene.rendering.cpp:1385`
+
+---
+
+### Fixed: `Node::destroyTree()` Did Not Recurse → Zombie Components on Child Nodes (June 2026)
+
+> [!WARNING]
+> **`Node::destroyChildren()` only did `m_children.clear()` — it did NOT tear down
+> child subtrees properly.** `clearComponents()` (the ONLY path emitting component
+> `*Destroyed` notifications: `PointLightDestroyed`, `CameraDestroyed`,
+> `MicrophoneDestroyed`, `ModifierDestroyed`, `SpotLightDestroyed`) was therefore run
+> on the SUBTREE ROOT only. Child nodes were destroyed by their default destructors,
+> which never fire those notifications.
+>
+> **Consequence:** any registry that holds a `shared_ptr` to a component and releases
+> it only on the `*Destroyed` notification — `LightSet` (lights), `AVConsoleManager`
+> (cameras/microphones), modifier lists — kept the component alive as a **zombie**
+> after its parent node was freed. The component's `m_parentEntity` reference then
+> dangled.
+>
+> **Crash:** the rendering thread (`LightSet::updateVideoMemory` →
+> `Component::Abstract::getWorldCoordinates` → `m_parentEntity.getWorldCoordinates()`)
+> dereferenced the freed parent node → use-after-free → intermittent
+> `pure virtual method called`. Reproduced with `Actor::Fire` (projet-alpha), whose
+> `PointLight` sits on a child node and dies when the fire fades out.
+>
+> **Fix:** `Node::destroyChildren()` now recurses — `child->destroyTree()` for each
+> child BEFORE `m_children.clear()` — so every descendant runs `clearComponents()` and
+> emits its notifications before being freed. Registry removal happens synchronously on
+> the logics thread under the registry's mutex, correctly serialized against the
+> rendering thread.
+>
+> **File:** `Scenes/Node.hpp` — `destroyChildren()`.
+>
+> **Takeaway:** the logics/rendering threads run concurrently under a SHARED scene lock
+> and are decoupled by double-buffering; the rendering thread must never outlive-read an
+> entity. A `*Destroyed` notification that drives registry cleanup MUST fire on every
+> teardown path, including deep subtrees — a destructor is not a substitute.
 
 ---
 

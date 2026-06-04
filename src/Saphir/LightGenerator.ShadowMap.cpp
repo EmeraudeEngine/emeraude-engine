@@ -53,8 +53,18 @@ namespace EmEn::Saphir
 
 			if ( vertexShader.isInstancingEnabled() )
 			{
-				/* Get the model matrix from VBO. */
-				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				if ( vertexShader.isBillBoardingEnabled() )
+				{
+					/* Billboard sprite: the model matrix is computed in-shader
+					 * (SpriteModelMatrix) from the per-instance position/scaling, not
+					 * supplied as the vaModelMatrix vertex attribute. */
+					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << ShaderVariable::SpriteModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				}
+				else
+				{
+					/* Get the model matrix from VBO. */
+					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				}
 			}
 			else
 			{
@@ -72,7 +82,17 @@ namespace EmEn::Saphir
 
 			if ( vertexShader.isInstancingEnabled() )
 			{
-				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				if ( vertexShader.isBillBoardingEnabled() )
+				{
+					/* Billboard sprite: the model matrix is computed in-shader
+					 * (SpriteModelMatrix) from the per-instance position/scaling, not
+					 * supplied as the vaModelMatrix vertex attribute. */
+					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << ShaderVariable::SpriteModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				}
+				else
+				{
+					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				}
 			}
 			else
 			{

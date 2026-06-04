@@ -27,9 +27,9 @@
 #include "Unique.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
 #include <cstring>
+#include <array>
 
 /* Local inclusions. */
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -132,12 +132,12 @@ namespace EmEn::Graphics::RenderableInstance
 			/* Classic 2D with advanced matrices: push View, Model, and frameIndex. */
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 
-			std::array< float, Matrix4Alignment * 2 + 1 > buffer{};
+			std::array< float, (Matrix4Alignment * 2) + 1 > buffer{};
 			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
 			std::memcpy(&buffer[Matrix4Alignment], modelMatrix.data(), MatrixBytes);
 			buffer[Matrix4Alignment * 2] = frameIndex;
 
-			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes * 2 + sizeof(float), buffer.data());
+			vkCmdPushConstants(handle, layout, flags, 0, (MatrixBytes * 2UL) + sizeof(float), buffer.data());
 		}
 		else
 		{

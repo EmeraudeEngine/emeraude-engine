@@ -735,10 +735,16 @@ namespace EmEn::Scenes
 			bool destroyChild (const std::string & name) noexcept;
 
 			/**
-			 * @brief Immediately removes all child nodes.
+			 * @brief Immediately removes all child nodes, tearing down each subtree.
 			 *
-			 * Clears the children map, destroying all direct children. Descendants are
-			 * destroyed recursively by their parent's destructor.
+			 * Recurses into every child with destroyTree() BEFORE clearing the map, so
+			 * each descendant runs clearComponents() and emits its component
+			 * *Destroyed notifications (PointLightDestroyed, CameraDestroyed, ...).
+			 * This is mandatory: registries that hold a shared_ptr to a component
+			 * (e.g. LightSet, AVConsoleManager) only release it on that notification.
+			 * Relying on the destructors alone would leak those components as zombies
+			 * whose m_parentEntity dangles after the node is freed — a use-after-free
+			 * read from the rendering thread (LightSet::updateVideoMemory).
 			 *
 			 * @post children() returns an empty map.
 			 * @see destroyTree(), destroyChild()
@@ -746,6 +752,11 @@ namespace EmEn::Scenes
 			void
 			destroyChildren () noexcept
 			{
+				for ( const auto & [name, child] : m_children )
+				{
+					child->destroyTree();
+				}
+
 				m_children.clear();
 			}
 

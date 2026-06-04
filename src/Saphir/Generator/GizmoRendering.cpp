@@ -116,7 +116,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* NOTE: Declare position input attribute. */
-		if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}, true) )
+		if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}) )
 		{
 			return false;
 		}

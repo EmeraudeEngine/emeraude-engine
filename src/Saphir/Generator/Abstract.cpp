@@ -57,7 +57,7 @@ namespace EmEn::Saphir::Generator
 			);
 			vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
-			if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}, true) )
+			if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}) )
 			{
 				return false;
 			}
@@ -89,7 +89,7 @@ namespace EmEn::Saphir::Generator
 			);
 			vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
-			if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}, true) )
+			if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}) )
 			{
 				return false;
 			}
