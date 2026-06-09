@@ -22,9 +22,17 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > emeraude-base is also the **single source of truth for external dependencies**: it owns
 > every `Setup*.cmake` (even libs only the engine uses: ufbx, fastgltf, taglib, bc7enc,
 > cpu_features, hwloc, libvpx), the `ext-deps-generator` resolution (`EMERAUDE_EXT_LIBS_*`),
-> and the **project-wide compile policy** (`EMERAUDE_COMPILE_*`, `EMERAUDE_CXX_VERSION`,
-> `EMERAUDE_C_VERSION`). The engine inherits all of it via `emeraude::base` and adds
-> `EMERAUDE_BASE_CMAKE_DIR` to its module path.
+> the **project-wide compile policy** (`EMERAUDE_COMPILE_*`, `EMERAUDE_CXX_VERSION`,
+> `EMERAUDE_C_VERSION`), and the **shared STL hot-set precompiled header** (`PrecompiledHeaders.hpp`
+> + `cmake/EnablePrecompiledHeaders.cmake`). The engine inherits all of it via `emeraude::base`
+> and adds `EMERAUDE_BASE_CMAKE_DIR` to its module path.
+>
+> **Precompiled header:** the engine itself is **deliberately NOT precompiled-header'd.** It is a
+> SHARED library built with `WINDOWS_EXPORT_ALL_SYMBOLS`, and CMake's auto-generated export `.def`
+> scans the PCH object, pulling compiler-internal symbols that then fail to resolve (`LNK2001` in
+> `exports.def`). base's shared STL PCH is applied only to **leaf** targets (app_kernel's Kernel,
+> app_system's binaries — none of which export all symbols), never to the engine or to base's own
+> modules linked into it. See `dependencies/emeraude-base/AGENTS.md` § 3a.
 >
 > **Rule:** a bug or a missing feature in the foundation layer (math, factories, I/O,
 > threading, …) is fixed **in emeraude-base**, never worked around in the engine — the same

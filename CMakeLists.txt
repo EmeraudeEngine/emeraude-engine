@@ -66,7 +66,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
-option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
+# EMERAUDE_ENABLE_PCH is owned by emeraude-base (project-wide compile policy, default On) —
+# declared there and consumed via emeraude_base_target_enable_pch(). Not re-declared here.
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
@@ -207,10 +208,11 @@ add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
 target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
 
-# Precompiled headers
-if ( EMERAUDE_ENABLE_PCH )
-	target_precompile_headers(${PROJECT_NAME} PUBLIC ${EMERAUDE_HEADER_FILES})
-endif ()
+# No precompiled header on the engine. It is a SHARED library built with
+# WINDOWS_EXPORT_ALL_SYMBOLS, and CMake's auto-generated export .def scans the PCH object,
+# pulling compiler-internal symbols that then fail to resolve (LNK2001 in exports.def). The
+# shared STL PCH owned by emeraude-base is therefore applied only to LEAF targets — app_kernel's
+# Kernel and app_system's binaries — never to the engine or to base's own modules linked into it.
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${EMERAUDE_EXT_LIBS_LIB_DIR})
 
