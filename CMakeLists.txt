@@ -65,9 +65,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
-option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
-# EMERAUDE_ENABLE_PCH is owned by emeraude-base (project-wide compile policy, default On) —
-# declared there and consumed via emeraude_base_target_enable_pch(). Not re-declared here.
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
@@ -85,13 +82,6 @@ option(EMERAUDE_DEBUG_POINTER_HEAVY_INPUT "Enable printing of events to the cons
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
 option(EMERAUDE_ENABLE_RENDERDOC "Enable RenderDoc in-application API for GPU frame capture [FETCHED] (Default Off)." Off)
-
-# Force the compilation directory for testing (Only if empty)
-if ( EMERAUDE_ENABLE_TESTS AND "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
-	message(STATUS "[EmeraudeEngine] EMERAUDE_ENABLE_TESTS has been enabled but the EMERAUDE_COMPILATION_DIR is not set. Forcing to : '${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}'.")
-
-	set(EMERAUDE_COMPILATION_DIR "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}" CACHE STRING "" FORCE)
-endif ()
 
 # Create constant variable for dependency inclusions
 get_filename_component(TEMP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src ABSOLUTE)
@@ -196,8 +186,6 @@ if ( EMERAUDE_ENABLE_IMGUI )
 	list(APPEND EMERAUDE_SOURCE_FILES ${IMGUI_SOURCE_FILES})
 endif ()
 
-# External dependencies are downloaded/provided by emeraude-base (see InstallEmeraudeBase).
-
 #######################################################################
 ## Declare the library target and configure it per platform.
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
@@ -207,12 +195,6 @@ add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 #target_compile_definitions(Emeraude PRIVATE EMERAUDE_BUILD_DLL)
 
 target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
-
-# No precompiled header on the engine. It is a SHARED library built with
-# WINDOWS_EXPORT_ALL_SYMBOLS, and CMake's auto-generated export .def scans the PCH object,
-# pulling compiler-internal symbols that then fail to resolve (LNK2001 in exports.def). The
-# shared STL PCH owned by emeraude-base is therefore applied only to LEAF targets — app_kernel's
-# Kernel and app_system's binaries — never to the engine or to base's own modules linked into it.
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${EMERAUDE_EXT_LIBS_LIB_DIR})
 
@@ -355,8 +337,7 @@ include(SetupCPUFeatures)
 include(SetupHWLOC)
 
 if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
-	# Threads + OpenMP are provided by emeraude::base (used by its ThreadPool / VertexFactory)
-	# and inherited transitively.
+	# Threads + OpenMP are provided by emeraude::base (used by its ThreadPool / VertexFactory) and inherited transitively.
 
 	include(SetupVulkan) # Using add_subdirectory()
 
@@ -391,17 +372,6 @@ else ()
 endif ()
 
 unset(TARGET_BINARY_FOR_SETUP)
-
-#######################################################################
-## Testing
-if ( EMERAUDE_ENABLE_TESTS )
-	# The foundation test suite (EmeraudeBaseUnitTests) is built and registered with ctest
-	# by emeraude-base. Engine-specific tests (Graphics, Scenes, Vulkan, …) would be added
-	# here, reusing the gtest targets fetched by emeraude-base and registered via
-	# gtest_discover_tests, so a single `ctest` run aggregates both suites.
-	# No engine-specific tests exist yet — all current tests cover the base library.
-	message(STATUS "[EmeraudeEngine] Tests enabled — foundation suite provided by emeraude-base.")
-endif ()
 
 #######################################################################
 ## Write the project C++ config file
@@ -439,9 +409,6 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 			DESTINATION ${EMERAUDE_COMPILATION_DIR}/data
 		)
 	endif ()
-
-	# Test fixtures live in emeraude-base (emeraude-base/resources/assets); the base test
-	# suite runs from there. Nothing to copy here.
 else ()
 	message(STATUS "[EmeraudeEngine] EMERAUDE_COMPILATION_DIR is not set, the compilation directory won't have all files for development ! This is a sub-project warning !")
 endif ()
