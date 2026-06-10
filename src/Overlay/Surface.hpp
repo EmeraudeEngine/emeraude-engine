@@ -245,7 +245,7 @@ namespace EmEn::Overlay
 			 * @param rectangle A reference to a rectangle for the surface geometry on screen. Default the whole screen.
 			 * @param visible Set visibility state on startup. Default true.
 			 */
-			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Base::Math::Space2D::AARectangle< float > & rectangle = {}, bool visible = true) noexcept
+			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Base::Math::Space2D::AARectangle< float > & rectangle = Base::Math::Space2D::AARectangle< float >::Unit(), bool visible = true) noexcept
 				: NameableTrait{std::move(name)},
 				m_framebufferProperties{framebufferProperties},
 				m_rectangle{rectangle}
