@@ -31,9 +31,9 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <cstddef>
 #include <any>
 #include <array>
-#include <cstddef>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -47,14 +47,14 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "ObserverTrait.hpp"
 #include "ObservableTrait.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/PointerListenerInterface.hpp"
-#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "FramebufferProperties.hpp"
 #include "Input/Manager.hpp"
+#include "FramebufferProperties.hpp"
 #include "UIScreen.hpp"
 
 /* Forward declarations. */
@@ -69,12 +69,12 @@ namespace EmEn::Overlay
 	 * @brief The overlay manager service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Base::ObserverTrait This service observe screens.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Input::KeyboardListenerInterface The manager needs to listen to the keyboard.
 	 * @extends EmEn::Input::PointerListenerInterface The manager needs to listen to the pointer.
-	 * @extends EmEn::Base::ObservableTrait This service observer.
 	 */
-	class Manager final : public ServiceInterface, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface, public Base::ObserverTrait
+	class Manager final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
 	{
 		public:
 
@@ -131,27 +131,6 @@ namespace EmEn::Overlay
 			{
 				return classUID == getClassUID();
 			}
-
-			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
-			bool onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override;
-
-			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyRelease() */
-			bool onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept override;
-
-			/** @copydoc EmEn::Input::KeyboardListenerInterface::onCharacterType() */
-			bool onCharacterType (uint32_t unicode) noexcept override;
-
-			/** @copydoc EmEn::Input::PointerListenerInterface::onPointerMove() */
-			bool onPointerMove (float positionX, float positionY) noexcept override;
-
-			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonPress() */
-			bool onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
-
-			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonRelease() */
-			bool onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
-
-			/** @copydoc EmEn::Input::PointerListenerInterface::onMouseWheel() */
-			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) noexcept override;
 
 			/**
 			 * @brief Returns the reference to the primary services.
@@ -413,6 +392,27 @@ namespace EmEn::Overlay
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+
+			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
+			bool onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override;
+
+			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyRelease() */
+			bool onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept override;
+
+			/** @copydoc EmEn::Input::KeyboardListenerInterface::onCharacterType() */
+			bool onCharacterType (uint32_t unicode) noexcept override;
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onPointerMove() */
+			bool onPointerMove (float positionX, float positionY) noexcept override;
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonPress() */
+			bool onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonRelease() */
+			bool onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onMouseWheel() */
+			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) noexcept override;
 
 			/**
 			 * @brief Fetches framebuffer properties.

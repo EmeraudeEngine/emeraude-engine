@@ -305,11 +305,15 @@ namespace EmEn::Overlay
 		/* NOTE: RGBA format (4 channels) is always used for overlay surfaces. */
 		constexpr uint32_t colorCount = 4;
 
-		buffer.image = std::make_shared< Vulkan::Image >(
+		buffer.image = std::make_shared< Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
 			Image::getFormat< uint8_t >(colorCount),
-			VkExtent3D{width, height, 1U},
+			VkExtent3D{
+				.width = width,
+				.height = height,
+				.depth = 1U
+			},
 			imageUsage,
 			0, /* createFlags */
 			1, /* mipLevels */
@@ -437,7 +441,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_framebufferAccess};
+		const std::scoped_lock lock{m_framebufferAccess};
 
 		if ( !m_transitionBuffer.isValid() )
 		{

@@ -29,6 +29,9 @@
 /* Project configuration. */
 #include "emeraude_platform.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+
 namespace EmEn
 {
 	/* Core */

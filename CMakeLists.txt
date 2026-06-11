@@ -189,7 +189,9 @@ endif ()
 #######################################################################
 ## Declare the library target and configure it per platform.
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
-add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
+add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES}
+        src/Overlay/Manager.PointerListenerInterface.cpp
+		src/Overlay/Manager.KeyboardListenerInterface.cpp)
 
 # TODO: Change this by creating a real API with "emeraude_export.hpp", set all classes/functions like : class MaClasse; class EMERAUDE_API MaClasse;
 #target_compile_definitions(Emeraude PRIVATE EMERAUDE_BUILD_DLL)

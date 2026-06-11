@@ -34,9 +34,6 @@
 /* Local inclusions for inheritances. */
 #include "NameableTrait.hpp"
 
-/* Local inclusions for usages. */
-#include "ObservableTrait.hpp"
-
 namespace EmEn
 {
 	/**
@@ -171,6 +168,8 @@ namespace EmEn
 
 			}
 
+		private:
+
 			/**
 			 * @brief This method must be overridden by the final service on initialization.
 			 * @return bool
@@ -182,8 +181,6 @@ namespace EmEn
 			 * @return bool
 			 */
 			virtual bool onTerminate () noexcept = 0;
-
-		private:
 
 			bool m_serviceInitialized{false};
 	};

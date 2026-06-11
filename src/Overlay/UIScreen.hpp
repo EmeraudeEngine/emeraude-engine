@@ -508,7 +508,7 @@ namespace EmEn::Overlay
 			 * @note The caller MUST hold m_surfacesMutex when invoking this method.
 			 * @return void
 			 */
-			void recomputeDepths () noexcept;
+			void recomputeDepths () const noexcept;
 
 			/**
 			 * @brief STL streams printable object.

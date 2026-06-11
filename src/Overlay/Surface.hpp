@@ -34,18 +34,17 @@
 #include <concepts>
 
 /* Local inclusions for usages. */
-#include "FramebufferProperties.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Space2D/AARectangle.hpp"
 #include "NameableTrait.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/DescriptorSet.hpp"
 #include "Tracer.hpp"
+#include "Framebuffer.hpp"
+#include "FramebufferProperties.hpp"
 
+/* Forward declarations. */
 namespace EmEn::Vulkan
 {
-	class LayoutManager;
+	class Sampler;
 }
 
 namespace EmEn::Overlay
@@ -59,10 +58,8 @@ namespace EmEn::Overlay
 	{
 		/** Transition buffer is ready. Drawing and committing are allowed. */
 		Ready,
-
 		/** Transition buffer is being recreated due to resize. Drawing is not allowed. */
 		Resizing,
-
 		/** Transition buffer has been recreated, waiting for async content.
 		 *  Drawing is allowed, call contentReady() when done. */
 		WaitingForContent
@@ -77,149 +74,10 @@ namespace EmEn::Overlay
 	{
 		/** Frame dimensions don't match any buffer - skip the frame. */
 		None,
-
 		/** Frame matches active buffer dimensions - normal operation. */
 		Active,
-
 		/** Frame matches transition buffer dimensions - completing a resize. */
 		Transition
-	};
-
-	/**
-	 * @brief Encapsulates all resources for a single framebuffer.
-	 * @details This structure groups the local pixmap data with its corresponding
-	 * GPU resources (image, image view, descriptor set). Used internally by Surface
-	 * for both single and double buffer modes.
-	 */
-	struct Framebuffer final
-	{
-		/**
-		 * @brief Checks if all GPU resources are valid and created.
-		 * @return bool True if the framebuffer is ready for rendering.
-		 */
-		[[nodiscard]]
-		bool
-		isValid () const noexcept
-		{
-			return image != nullptr && image->isCreated() &&
-				   imageView != nullptr && imageView->isCreated() &&
-				   descriptorSet != nullptr && descriptorSet->isCreated();
-		}
-
-		/**
-		 * @brief Returns the framebuffer width in pixels.
-		 * @return uint32_t The width, or 0 if not initialized.
-		 */
-		[[nodiscard]]
-		uint32_t
-		width () const noexcept
-		{
-			if ( image != nullptr )
-			{
-				return image->createInfo().extent.width;
-			}
-
-			return pixmap.width();
-		}
-
-		/**
-		 * @brief Returns the framebuffer height in pixels.
-		 * @return uint32_t The height, or 0 if not initialized.
-		 */
-		[[nodiscard]]
-		uint32_t
-		height () const noexcept
-		{
-			if ( image != nullptr )
-			{
-				return image->createInfo().extent.height;
-			}
-
-			return pixmap.height();
-		}
-
-		/**
-		 * @brief Checks if the image dimensions match the given size.
-		 * @param targetWidth Target width in pixels.
-		 * @param targetHeight Target height in pixels.
-		 * @return bool True if dimensions match.
-		 */
-		[[nodiscard]]
-		bool
-		matchesSize (uint32_t targetWidth, uint32_t targetHeight) const noexcept
-		{
-			return this->width() == targetWidth && this->height() == targetHeight;
-		}
-
-		/**
-		 * @brief Destroys all GPU resources.
-		 * @return void
-		 */
-		void
-		destroy () noexcept
-		{
-			if ( descriptorSet != nullptr )
-			{
-				descriptorSet->destroy();
-				descriptorSet.reset();
-			}
-
-			if ( imageView != nullptr )
-			{
-				imageView->destroyFromHardware();
-				imageView.reset();
-			}
-
-			if ( image != nullptr )
-			{
-				image->destroyFromHardware();
-				image.reset();
-			}
-		}
-
-		/**
-		 * @brief Writes to the GPU image using memory mapping with RAII safety.
-		 * @details Maps the GPU memory, calls the provided function with the mapped pointer
-		 * and row pitch, then unmaps automatically. Only works when image is host visible.
-		 * @tparam write_func_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
-		 * @param writeFunction The function to call with the mapped memory.
-		 * @return bool True if mapping and write succeeded, false otherwise.
-		 */
-		template< typename write_func_t >
-		requires std::invocable< write_func_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< write_func_t, void *, VkDeviceSize >, bool >
-		[[nodiscard]]
-		bool
-		writeWithMapping (write_func_t && writeFunction) const noexcept
-		{
-			if ( image == nullptr || !image->isHostVisible() )
-			{
-				return false;
-			}
-
-			void * mappedPtr = image->mapMemory();
-
-			if ( mappedPtr == nullptr )
-			{
-				return false;
-			}
-
-			const auto rowPitch = image->rowPitch();
-
-			const bool result = std::forward< write_func_t >(writeFunction)(mappedPtr, rowPitch);
-
-			image->unmapMemory();
-
-			return result;
-		}
-
-		/** @brief Local pixmap data (CPU-side). Only used when memory mapping is disabled. */
-		Base::PixelFactory::Pixmap< uint8_t > pixmap;
-		/** @brief Vulkan image on GPU. */
-		std::shared_ptr< Vulkan::Image > image;
-		/** @brief Vulkan image view for the image. */
-		std::shared_ptr< Vulkan::ImageView > imageView;
-		/** @brief Descriptor set binding the image for shader access. */
-		std::unique_ptr< Vulkan::DescriptorSet > descriptorSet;
 	};
 
 	/**
@@ -857,34 +715,34 @@ namespace EmEn::Overlay
 			 * @brief Writes to the active buffer GPU image using memory mapping.
 			 * @details Convenience method that wraps activeBuffer().writeWithMapping().
 			 * Maps the GPU memory, calls the provided function, then unmaps automatically.
-			 * @tparam write_func_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
+			 * @tparam function_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
 			 * @param writeFunction The function to call with the mapped memory.
 			 * @return bool True if mapping and write succeeded, false otherwise.
 			 */
-			template< typename write_func_t >
-			requires std::invocable< write_func_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< write_func_t, void *, VkDeviceSize >, bool >
+			template< typename function_t >
+			requires std::invocable< function_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< function_t, void *, VkDeviceSize >, bool >
 			[[nodiscard]]
 			bool
-			writeActiveBufferWithMapping (write_func_t && writeFunction) const noexcept
+			writeActiveBufferWithMapping (function_t && writeFunction) const noexcept
 			{
-				return m_activeBuffer.writeWithMapping(std::forward< write_func_t >(writeFunction));
+				return m_activeBuffer.writeWithMapping(std::forward< function_t >(writeFunction));
 			}
 
 			/**
 			 * @brief Writes to the transition buffer GPU image using memory mapping.
 			 * @details Convenience method that wraps transitionBuffer().writeWithMapping().
 			 * Maps the GPU memory, calls the provided function, then unmaps automatically.
-			 * @tparam write_func_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
+			 * @tparam function_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
 			 * @param writeFunction The function to call with the mapped memory.
 			 * @return bool True if mapping and write succeeded, false otherwise.
 			 */
-			template< typename write_func_t >
-			requires std::invocable< write_func_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< write_func_t, void *, VkDeviceSize >, bool >
+			template< typename function_t >
+			requires std::invocable< function_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< function_t, void *, VkDeviceSize >, bool >
 			[[nodiscard]]
 			bool
-			writeTransitionBufferWithMapping (write_func_t && writeFunction) const noexcept
+			writeTransitionBufferWithMapping (function_t && writeFunction) const noexcept
 			{
-				return m_transitionBuffer.writeWithMapping(std::forward< write_func_t >(writeFunction));
+				return m_transitionBuffer.writeWithMapping(std::forward< function_t >(writeFunction));
 			}
 
 			/**

@@ -392,7 +392,7 @@ namespace EmEn::Overlay
 		/* NOTE: Top-down resolution. The first surface that consumes the press
 		 * (returns true) captures the pointer for the whole press→drag→release
 		 * sequence, so every following move/release reaches it wherever the cursor
-		 * goes. Same short-circuit behaviour as the previous any_of. */
+		 * goes. Same short-circuit behavior as the previous any_of. */
 		for ( const auto & surface : std::views::reverse(m_surfaces) )
 		{
 			if ( dispatchEvent(surface) )
@@ -488,7 +488,7 @@ namespace EmEn::Overlay
 	}
 
 	void
-	UIScreen::recomputeDepths () noexcept
+	UIScreen::recomputeDepths () const noexcept
 	{
 		/* NOTE: Caller holds m_surfacesMutex. We walk the stack and let each surface
 		 * derive its internal depth from its index. The actual step value is owned by

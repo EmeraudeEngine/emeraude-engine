@@ -64,4 +64,25 @@ namespace EmEn::Overlay
 		m_resolutionX = 0.0F;
 		m_resolutionY = 0.0F;
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const FramebufferProperties & obj)
+	{
+		// clang-format off
+		return out <<
+			"Framebuffer size : " << obj.width() << "x" << obj.height() << "px" "\n"
+			"Screen scaling (HDPI). X : " << obj.screenScaleX() << ", Y : " << obj.screenScaleY() << "\n"
+			"Resolution : " << obj.resolutionX() << "x" << obj.resolutionY() << "pt" "\n";
+		// clang-format on
+	}
+
+	std::string
+	to_string (const FramebufferProperties & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }
