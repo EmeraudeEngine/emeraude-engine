@@ -30,18 +30,18 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <array>
-#include <concepts>
 #include <string>
+#include <concepts>
 
 /* Local inclusions for usages. */
 #include "FramebufferProperties.hpp"
-#include "Graphics/TextureResource/Abstract.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Space2D/AARectangle.hpp"
 #include "NameableTrait.hpp"
-#include "Tracer.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -205,7 +205,7 @@ namespace EmEn::Overlay
 
 			const auto rowPitch = image->rowPitch();
 
-			const bool result = writeFunction(mappedPtr, rowPitch);
+			const bool result = std::forward< write_func_t >(writeFunction)(mappedPtr, rowPitch);
 
 			image->unmapMemory();
 
@@ -242,16 +242,15 @@ namespace EmEn::Overlay
 			 * (bringToFront, sendToBack, moveAbove, moveBelow, ...) to reorder.
 			 * @param framebufferProperties A reference to the overlay framebuffer properties.
 			 * @param name A string [std::move].
-			 * @param rectangle A reference to a rectangle for the surface geometry on screen. Default the whole screen.
-			 * @param visible Set visibility state on startup. Default true.
+			 * @param rectangle A reference to a rectangle for the surface geometry on screen.
+			 * @param visible Set visibility state on startup.
 			 */
-			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Base::Math::Space2D::AARectangle< float > & rectangle = Base::Math::Space2D::AARectangle< float >::Unit(), bool visible = true) noexcept
+			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Base::Math::Space2D::AARectangle< float > & rectangle, bool visible) noexcept
 				: NameableTrait{std::move(name)},
 				m_framebufferProperties{framebufferProperties},
-				m_rectangle{rectangle}
+				m_rectangle{rectangle},
+				m_isVisible{visible}
 			{
-				m_isVisible = visible;
-
 				this->updateModelMatrix();
 			}
 
