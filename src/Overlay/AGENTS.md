@@ -306,6 +306,8 @@ context, so exactly one `NewFrame()/Render()` pair is valid per frame.
 `NewFrame()` and `Render()`, (4) submits all draw data once via
 `ImGui_ImplVulkan_RenderDrawData()`. Individual `ImGUIScreen`s never run their own
 frame cycle — `ImGUIScreen::draw()` only emits widgets (calls the draw function).
+`Manager::render()`'s early-return guard considers **both** containers: an ImGUI-only
+overlay (no `UIScreen`) still renders (`m_screens.empty() && m_ImGUIScreens.empty()`).
 
 **ImGui version / backend API (1.92.8):**
 - The Vulkan backend's `ImGui_ImplVulkan_InitInfo` no longer carries `RenderPass`

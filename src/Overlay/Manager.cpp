@@ -530,8 +530,16 @@ namespace EmEn::Overlay
 	{
 		const std::lock_guard< std::mutex > lock{m_screensAccess};
 
-		/* Check if the overlay is enabled or there is something to render. */
-		if ( !this->isEnabled() || m_screens.empty() )
+		/* Check if the overlay is enabled and there is something to render.
+		 * NOTE: ImGUI screens live in a separate container, so an ImGUI-only
+		 * overlay (no UIScreen) must still be rendered. */
+#ifdef IMGUI_ENABLED
+		const bool nothingToRender = m_screens.empty() && m_ImGUIScreens.empty();
+#else
+		const bool nothingToRender = m_screens.empty();
+#endif
+
+		if ( !this->isEnabled() || nothingToRender )
 		{
 			return;
 		}
