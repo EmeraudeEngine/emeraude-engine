@@ -66,15 +66,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
-option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
-option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
 option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
-option(EMERAUDE_ENABLE_LIBSNDFILE "Enable 'libsndfile' library. Adds a GUI to the engine [LOCAL] (Default On)." On)
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)
@@ -189,9 +186,7 @@ endif ()
 #######################################################################
 ## Declare the library target and configure it per platform.
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
-add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES}
-        src/Overlay/Manager.PointerListenerInterface.cpp
-		src/Overlay/Manager.KeyboardListenerInterface.cpp)
+add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
 # TODO: Change this by creating a real API with "emeraude_export.hpp", set all classes/functions like : class MaClasse; class EMERAUDE_API MaClasse;
 #target_compile_definitions(Emeraude PRIVATE EMERAUDE_BUILD_DLL)

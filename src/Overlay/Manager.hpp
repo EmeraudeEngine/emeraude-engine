@@ -27,7 +27,7 @@
 #pragma once
 
 /* Project configuration. */
-#include "emeraude_config.hpp"
+#include "emeraude_config.hpp" // IMGUI_ENABLED
 
 /* STL inclusions. */
 #include <cstdint>
