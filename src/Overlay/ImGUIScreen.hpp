@@ -39,12 +39,6 @@
 /* Local inclusions for inheritances. */
 #include "NameableTrait.hpp"
 
-/* Forward declarations. */
-namespace EmEn::Vulkan
-{
-	class CommandBuffer;
-}
-
 namespace EmEn::Overlay
 {
 	/**
@@ -63,7 +57,7 @@ namespace EmEn::Overlay
 			 * @param name A string [std::move].
 			 * @param drawFunction A reference to a function.
 			 */
-			ImGUIScreen (const std::string & name, const std::function< void () > & drawFunction) noexcept
+			ImGUIScreen (std::string name, const std::function< void () > & drawFunction) noexcept
 				: NameableTrait{std::move(name)},
 				m_drawFunction{drawFunction}
 			{
@@ -93,11 +87,17 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Renders the screen.
-			 * @param commandBuffer A reference to a vulkan command buffer;
+			 * @brief Emits the ImGUI widgets of this screen.
+			 * @note Must be called between ImGui::NewFrame() and ImGui::Render(). The
+			 * Overlay::Manager drives a single NewFrame()/Render() cycle per frame for
+			 * every visible ImGUI screen (ImGUI uses a single global context).
 			 * @return void
 			 */
-			void render (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void
+			draw () const noexcept
+			{
+				m_drawFunction();
+			}
 
 		private:
 

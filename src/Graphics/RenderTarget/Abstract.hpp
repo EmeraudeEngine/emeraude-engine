@@ -38,10 +38,9 @@
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "PixelFactory/Pixmap.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Types.hpp"
-#include "PixelFactory/Pixmap.hpp"
-#include "Vulkan/Sync/Semaphore.hpp"
 
 namespace EmEn
 {
@@ -53,6 +52,11 @@ namespace EmEn
 
 	namespace Vulkan
 	{
+		namespace Sync
+		{
+			class Semaphore;
+		}
+
 		class Device;
 		class Framebuffer;
 		class RenderPass;

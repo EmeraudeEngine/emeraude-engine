@@ -563,7 +563,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			Vulkan::ShaderStorageBufferObject *
-			rtLightBuffer () const noexcept
+			RTLightBuffer () const noexcept
 			{
 				return m_RTLightSSBO.get();
 			}
@@ -574,7 +574,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			uint32_t
-			rtLightCount () const noexcept
+			RTLightCount () const noexcept
 			{
 				return m_RTLightCount;
 			}

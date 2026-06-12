@@ -594,14 +594,31 @@ namespace EmEn::Overlay
 		}
 
 #ifdef IMGUI_ENABLED
-		for ( const auto & screen : m_ImGUIScreens | std::views::values )
+		/* NOTE: ImGUI relies on a single global context, so exactly one
+		 * NewFrame()/Render() cycle is allowed per frame. We open the frame
+		 * once, let every visible ImGUI screen emit its widgets, then submit
+		 * all the draw data in a single pass. */
+		const bool hasVisibleImGUIScreen = std::ranges::any_of(m_ImGUIScreens | std::views::values, [] (const auto & screen) {
+			return screen->isVisible();
+		});
+
+		if ( hasVisibleImGUIScreen )
 		{
-			if ( !screen->isVisible() )
+			ImGui_ImplVulkan_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+
+			for ( const auto & screen : m_ImGUIScreens | std::views::values )
 			{
-				continue;
+				if ( screen->isVisible() )
+				{
+					screen->draw();
+				}
 			}
 
-			screen->render(commandBuffer);
+			ImGui::Render();
+
+			ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer.handle());
 		}
 #endif
 	}
@@ -676,7 +693,9 @@ namespace EmEn::Overlay
 	bool
 	Manager::initImGUI () noexcept
 	{
-		if ( !m_graphicsRenderer.usable() )
+		auto & graphicsRenderer = m_resourceManager.graphicsRenderer();
+
+		if ( !graphicsRenderer.usable() )
 		{
 			TraceError{ClassId} << "No Vulkan graphics layer !";
 
@@ -690,8 +709,6 @@ namespace EmEn::Overlay
 
 		/* NOTE: Initialize ImGUI library. */
 		{
-			// this initializes the core structures of imgui
-			// Setup Dear ImGui context
 			IMGUI_CHECKVERSION();
 
 			ImGui::CreateContext();
@@ -708,7 +725,7 @@ namespace EmEn::Overlay
 		}
 
 		/* NOTE: Initialize ImGUI with GLFW. */
-		if ( !ImGui_ImplGlfw_InitForVulkan(m_window.handle(), true) )
+		if ( !ImGui_ImplGlfw_InitForVulkan(graphicsRenderer.window().handle(), true) )
 		{
 			Tracer::error(ClassId, "Unable to initialize ImGUI with GLFW !");
 
@@ -717,11 +734,23 @@ namespace EmEn::Overlay
 
 		/* NOTE: Initialize ImGUI with Vulkan. */
 		{
-			const auto swapChain = m_graphicsRenderer.swapChain();
-			const auto device = swapChain->device();
+			const auto & device = graphicsRenderer.device();
 
-			/* Create a descriptor pool */
-			/* FIXME: These are fancy numbers ! */
+			/* NOTE: ImGUI draws inside the engine overlay render pass (post-process
+			 * framebuffer). Its main pipeline must be created against that render pass,
+			 * otherwise the Vulkan backend silently skips pipeline creation (see
+			 * imgui_impl_vulkan.cpp) and nothing is ever drawn. */
+			const auto * overlayFramebuffer = graphicsRenderer.overlayFramebuffer();
+
+			if ( overlayFramebuffer == nullptr )
+			{
+				Tracer::error(ClassId, "No overlay framebuffer available to create the ImGUI pipeline !");
+
+				return false;
+			}
+
+			/* Create the descriptor pool.
+			 * FIXME: These are fancy numbers ! */
 			const auto sizes = std::vector< VkDescriptorPoolSize >{
 				{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
 				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
@@ -746,33 +775,33 @@ namespace EmEn::Overlay
 				return false;
 			}
 
+			const auto frameCount = std::max< uint32_t >(graphicsRenderer.framesInFlight(), 2);
+
 			// Setup Platform/Renderer backends
 			ImGui_ImplVulkan_InitInfo info{};
-			info.Instance = m_graphicsRenderer.vulkanInstance().handle();
+			info.ApiVersion = VK_API_VERSION_1_3;
+			info.Instance = graphicsRenderer.vulkanInstance().handle();
 			info.PhysicalDevice = device->physicalDevice()->handle();
 			info.Device = device->handle();
 			info.QueueFamily = device->getGraphicsFamilyIndex();
-			info.Queue = device->getQueue(QueueJob::Graphics, QueuePriority::High)->handle();
-			info.PipelineCache = VK_NULL_HANDLE;
+			info.Queue = device->getGraphicsQueue(QueuePriority::High)->handle();
 			info.DescriptorPool = m_ImGUIDescriptorPool->handle();
-			info.RenderPass = swapChain->framebuffer()->renderPass()->handle();
-			info.Subpass = 0;
-			info.MinImageCount = swapChain->createInfo().minImageCount;
-			info.ImageCount = swapChain->imageCount();
-			info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+			//info.DescriptorPoolSize = 1;
+			info.MinImageCount = frameCount;
+			info.ImageCount = frameCount;
+			info.PipelineCache = VK_NULL_HANDLE;
+			info.PipelineInfoMain.RenderPass = overlayFramebuffer->renderPass()->handle();
+			info.PipelineInfoMain.Subpass = 0;
+			info.UseDynamicRendering = false;
 			info.Allocator = VK_NULL_HANDLE;
 			info.CheckVkResultFn = nullptr;
+			info.MinAllocationSize = 1024 * 1024; // Minimum allocation size. Set to 1024*1024 to satisfy zealous best practices validation layer and waste a little memory.
+			//info.CustomShaderVertCreateInfo = ;
+			//info.CustomShaderFragCreateInfo = ;
 
 			if ( !ImGui_ImplVulkan_Init(&info) )
 			{
 				Tracer::error(ClassId, "Unable to initialize ImGUI with Vulkan !");
-
-				return false;
-			}
-
-			if ( !ImGui_ImplVulkan_CreateFontsTexture() )
-			{
-				Tracer::error(ClassId, "Unable to create ImGUI fonts texture !");
 
 				return false;
 			}
@@ -784,8 +813,6 @@ namespace EmEn::Overlay
 	void
 	Manager::releaseImGUI () noexcept
 	{
-		ImGui_ImplVulkan_DestroyFontsTexture();
-
 		ImGui_ImplVulkan_Shutdown();
 
 		ImGui_ImplGlfw_Shutdown();

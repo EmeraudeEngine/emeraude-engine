@@ -175,6 +175,19 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the queue handle.
+			 * @note Provided for interop with external libraries (e.g. ImGUI) that require
+			 * a raw VkQueue. Engine code must go through submit()/present() instead.
+			 * @return VkQueue
+			 */
+			[[nodiscard]]
+			VkQueue
+			handle () const noexcept
+			{
+				return m_handle;
+			}
+
+			/**
 			 * @brief Submits a command buffer to the queue.
 			 * @param commandBuffer A reference to a command buffer smart pointer.
 			 * @return bool

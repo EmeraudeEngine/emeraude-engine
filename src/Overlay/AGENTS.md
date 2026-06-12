@@ -281,16 +281,46 @@ surface->markDirty();
 ```
 
 ### Using ImGui for Debug
+
+ImGui screens are **retained**: you register a draw callback once via
+`createImGUIScreen(name, drawFunction)`, and the manager invokes it every frame
+while the screen is visible. There is **no** `beginImGuiFrame()/endImGuiFrame()`
+API — the `NewFrame()/Render()` cycle is owned by `Manager::render()` (see below).
+
 ```cpp
-// ImGui integrated for rapid development
-overlayManager.beginImGuiFrame();
+// Register once (e.g. in a Core/Application init step). Hidden by default.
+auto screen = overlayManager.createImGUIScreen("debug", [&] () {
+    ImGui::Begin("Debug Info");
+    ImGui::Text("FPS: %.1f", fps);
+    ImGui::SliderFloat("Volume", &volume, 0.0f, 1.0f);
+    ImGui::End();
+});
 
-ImGui::Begin("Debug Info");
-ImGui::Text("FPS: %.1f", fps);
-ImGui::SliderFloat("Volume", &volume, 0.0f, 1.0f);
-ImGui::End();
+screen->setVisibility(true); // toggle on/off at will
+```
 
-overlayManager.endImGuiFrame();
+**Single-cycle, multi-screen rendering model:** ImGui uses a single global
+context, so exactly one `NewFrame()/Render()` pair is valid per frame.
+`Manager::render()` therefore: (1) checks whether any `ImGUIScreen` is visible,
+(2) opens one frame, (3) calls `draw()` on every visible screen between
+`NewFrame()` and `Render()`, (4) submits all draw data once via
+`ImGui_ImplVulkan_RenderDrawData()`. Individual `ImGUIScreen`s never run their own
+frame cycle — `ImGUIScreen::draw()` only emits widgets (calls the draw function).
+
+**ImGui version / backend API (1.92.8):**
+- The Vulkan backend's `ImGui_ImplVulkan_InitInfo` no longer carries `RenderPass`
+  / `Subpass`; they live in `PipelineInfoMain`. The overlay draws inside the
+  post-process render pass, so `Manager::initImGUI()` sets
+  `info.PipelineInfoMain.RenderPass = renderer.overlayFramebuffer()->renderPass()->handle()`
+  and `Subpass = 0`. **Without this the backend silently creates no pipeline and
+  nothing is drawn** (see `imgui_impl_vulkan.cpp` main-pipeline condition).
+- Font atlas is **dynamic** since 1.92 (`ImGuiBackendFlags_RendererHasTextures`):
+  `ImGui_ImplVulkan_CreateFontsTexture()` / `DestroyFontsTexture()` were removed
+  and the atlas is created/updated automatically. Do not call them.
+- `MinImageCount`/`ImageCount` are fed from `Renderer::framesInFlight()` (clamped
+  to ≥ 2), not from the swap chain — the swap chain is private to the renderer.
+- `info.Queue` needs a raw `VkQueue`; `Vulkan::Queue::handle()` exposes it for
+  external-lib interop only. Engine code keeps using `submit()`/`present()`.
 ```
 
 ### CEF Integration (external)

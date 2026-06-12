@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <any>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <any>
+#include <array>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -52,6 +52,7 @@
 #include "MDI/BatchBuilder.hpp"
 #include "PostProcessor.hpp"
 #include "Recorder.hpp"
+#include "RendererFrameScope.hpp"
 #include "RenderTarget/Abstract.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -62,10 +63,9 @@
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/TransferManager.hpp"
-#include "Window.hpp"
 
+/* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan
@@ -145,183 +145,6 @@ namespace EmEn
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief Declares the scope of one renderer frame.
-	 */
-	class RendererFrameScope final
-	{
-		public:
-
-			/** @brief Class identifier. */
-			static constexpr auto ClassId{"RendererFrameScope"};
-
-			/**
-			 * @brief Constructs a render frame scope.
-			 */
-			RendererFrameScope () noexcept = default;
-
-			/**
-			 * @brief Initializes the command pool and the command buffer.
-			 * @param device A reference to the graphics device smart pointer.
-			 * @param frameIndex The frame index.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool initialize (const std::shared_ptr< Vulkan::Device > & device, uint32_t frameIndex) noexcept;
-
-			/**
-			 * @brief Declares a semaphore to be waited on by a later submission.
-			 * @note The semaphore is added to exactly ONE list (primary or secondary), never both.
-			 * Primary semaphores (shadow maps) are consumed by render-to-textures, then forwarded
-			 * to secondary via promotePrimaryToSecondary(). Secondary semaphores are waited on
-			 * by the final frame submission. Binary semaphores can only be waited on once per signal.
-			 * @param semaphore A reference to a semaphore smart pointer.
-			 * @param primary True for shadow map semaphores (consumed by RTTs), false for RTT semaphores.
-			 * @return void
-			 */
-			void declareSemaphore (const std::shared_ptr< Vulkan::Sync::Semaphore > & semaphore, bool primary) noexcept;
-
-			/**
-			 * @brief Returns the command pool smart pointer.
-			 * @return std::shared_ptr< Vulkan::CommandPool >
-			 */
-			[[nodiscard]]
-			const std::shared_ptr< Vulkan::CommandPool > &
-			commandPool () const noexcept
-			{
-				return m_commandPool;
-			}
-
-			/**
-			 * @brief Returns the command buffer smart pointer for a render-target.
-			 * @param renderTarget A pointer to a render target.
-			 * @return std::shared_ptr< Vulkan::CommandPool >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::CommandBuffer > getCommandBuffer (const RenderTarget::Abstract * renderTarget) noexcept;
-
-			/**
-			 * @brief Returns the frame index.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			frameIndex () const noexcept
-			{
-				return m_frameIndex;
-			}
-
-			/**
-			 * @brief Returns primary semaphores ready to use with vkQueueSubmit().
-			 * @return Base::Storage< VkSemaphore, 16 > &
-			 */
-			[[nodiscard]]
-			Base::StaticVector< VkSemaphore, 16 > &
-			primarySemaphores () noexcept
-			{
-				return m_primarySemaphores;
-			}
-
-			/**
-			 * @brief Returns secondary semaphores ready to use with vkQueueSubmit().
-			 * @return Base::Storage< VkSemaphore, 16 > &
-			 */
-			[[nodiscard]]
-			Base::StaticVector< VkSemaphore, 16 > &
-			secondarySemaphores () noexcept
-			{
-				return m_secondarySemaphores;
-			}
-
-			/**
-			 * @brief Forwards unconsumed primary semaphores to the secondary list.
-			 * @note Call this after render-to-textures to ensure shadow map semaphores
-			 * are waited on by the final submit when no RTT consumed them.
-			 * @return void
-			 */
-			void
-			promotePrimaryToSecondary () noexcept
-			{
-				for ( const auto sem : m_primarySemaphores )
-				{
-					m_secondarySemaphores.emplace_back(sem);
-				}
-
-				m_primarySemaphores.clear();
-			}
-
-			/**
-			 * @brief Returns the in-flight fence.
-			 * @return Vulkan::Sync::Fence *
-			 */
-			[[nodiscard]]
-			Vulkan::Sync::Fence *
-			inFlightFence () const noexcept
-			{
-				return m_inFlightFence.get();
-			}
-
-			/**
-			 * @brief Returns the image available semaphore.
-			 * @return Vulkan::Sync::Semaphore *
-			 */
-			[[nodiscard]]
-			Vulkan::Sync::Semaphore *
-			imageAvailableSemaphore () const noexcept
-			{
-				return m_imageAvailableSemaphore.get();
-			}
-
-			/**
-			 * @brief Returns the image finished semaphore.
-			 * @return Vulkan::Sync::Semaphore *
-			 */
-			[[nodiscard]]
-			Vulkan::Sync::Semaphore *
-			renderFinishedSemaphore () const noexcept
-			{
-				return m_renderFinishedSemaphore.get();
-			}
-
-			/**
-			 * @brief Clears all command buffers and semaphores for a next frame usage.
-			 * @return bool
-			 */
-			bool
-			prepareForNewFrame () noexcept
-			{
-				m_primarySemaphores.clear();
-				m_secondarySemaphores.clear();
-
-				return m_commandPool->resetCommandBuffers(false);
-			}
-
-		private:
-
-			/**
-			 * @brief Returns the frame name.
-			 * @param frameIndex The number of the frame.
-			 * @return std::string
-			 */
-			[[nodiscard]]
-			static
-			std::string
-			getFrameName (uint32_t frameIndex) noexcept
-			{
-				return "Frame" + std::to_string(frameIndex);
-			}
-
-			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
-			std::unordered_map< const RenderTarget::Abstract *, std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
-			Base::StaticVector< VkSemaphore, 16 > m_primarySemaphores;
-			Base::StaticVector< VkSemaphore, 16 > m_secondarySemaphores;
-			/* Synchronization. */
-			std::unique_ptr< Vulkan::Sync::Fence > m_inFlightFence;
-			std::unique_ptr< Vulkan::Sync::Semaphore > m_imageAvailableSemaphore;
-			std::unique_ptr< Vulkan::Sync::Semaphore > m_renderFinishedSemaphore;
-			uint32_t m_frameIndex{0};
-	};
-
-	/**
 	 * @brief The graphics renderer service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface The renderer is a service.
@@ -375,6 +198,36 @@ namespace EmEn::Graphics
 			 * @param window A reference to a handle.
 			 */
 			Renderer (PrimaryServices & primaryServices, Resources::Manager & resourcesManager, Vulkan::Instance & instance, Window & window) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 */
+			Renderer (const Renderer & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 */
+			Renderer (Renderer && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 * @return Renderer &
+			 */
+			Renderer & operator= (const Renderer & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @note A service cannot be duplicated.
+			 * @param copy A reference to the copied instance.
+			 * @return Renderer &
+			 */
+			Renderer & operator= (Renderer && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the graphics renderer.
@@ -1073,7 +926,7 @@ namespace EmEn::Graphics
 			uint32_t
 			rtLightCount () const noexcept
 			{
-				return m_rtLightCount;
+				return m_RTLightCount;
 			}
 
 			/**
@@ -1268,6 +1121,7 @@ namespace EmEn::Graphics
 			 * @brief Render a new offscreen frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
+			 * @param editorManager
 			 * @return void
 			 */
 			void renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
@@ -1276,6 +1130,7 @@ namespace EmEn::Graphics
 			 * @brief Render a new frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
+			 * @param editorManager
 			 * @return void
 			 */
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
@@ -1421,10 +1276,11 @@ namespace EmEn::Graphics
 			void renderViews (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
 
 			/**
-			 * @brief Renders a frame directly to the swapchain (no internal target).
+			 * @brief Renders a frame directly to the swap-chain (no internal target).
 			 * @note Used when no post-processing and no MSAA is active.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
+			 * @param editorManager
 			 * @param currentFrameScope A reference to the current frame scope.
 			 * @param commandBuffer A reference to the command buffer smart pointer.
 			 * @return void
@@ -1435,9 +1291,10 @@ namespace EmEn::Graphics
 			 * @brief Renders a frame through the internal scene render target.
 			 * @note Used when post-processing is active (HDR pipeline).
 			 * Renders scene to internal target, blits to grab pass, runs effects,
-			 * then draws final quad + overlay to swapchain.
+			 * then draws final quad + overlay to swap-chain.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
+			 * @param editorManager
 			 * @param currentFrameScope A reference to the current frame scope.
 			 * @param commandBuffer A reference to the command buffer smart pointer.
 			 * @return void
@@ -1521,7 +1378,7 @@ namespace EmEn::Graphics
 			std::vector< std::shared_ptr< SceneRenderTarget > > m_retiredSceneTargets;
 			uint32_t m_retiredFrameCountdown{0};
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
-			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
+			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope{};
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/** @brief Transparent hash for heterogeneous string_view lookup in unordered_map. */
@@ -1548,7 +1405,14 @@ namespace EmEn::Graphics
 			std::array< VkClearValue, 2 > m_swapChainClearColors{};
 			/* NOTE: Shadow maps only have a depth attachment at index 0, so they need
 			 * separate clear values with depth=1.0 at index 0 (not index 1 like main render). */
-			std::array< VkClearValue, 1 > m_shadowMapClearValues{VkClearValue{.depthStencil = {1.0F, 0}}};
+			std::array< VkClearValue, 1 > m_shadowMapClearValues{
+				VkClearValue{
+					.depthStencil = {
+						.depth = 1.0F,
+						.stencil = 0
+					}
+				}
+			};
 			uint32_t m_currentFrameIndex{0};
 			uint32_t m_currentReadStateIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
@@ -1569,7 +1433,7 @@ namespace EmEn::Graphics
 			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;
-			uint32_t m_rtLightCount{0};
+			uint32_t m_RTLightCount{0};
 			/** @brief MDI batch builder for GPU-driven opaque rendering. */
 			std::unique_ptr< MDI::BatchBuilder > m_MDIBatchBuilder;
 			bool m_debugMode{false};

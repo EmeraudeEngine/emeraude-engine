@@ -67,107 +67,6 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 	using namespace Saphir;
 
-	bool
-	RendererFrameScope::initialize (const std::shared_ptr< Device > & device, uint32_t frameIndex) noexcept
-	{
-		const auto frameName = RendererFrameScope::getFrameName(frameIndex);
-
-		m_frameIndex = frameIndex;
-
-		/* NOTE: We create a rendering command pool, no individual reset for command buffer. */
-		m_commandPool = std::make_shared< CommandPool >(device, device->getGraphicsFamilyIndex(), true, false, false);
-		m_commandPool->setIdentifier(ClassId, frameName, "CommandPool");
-
-		if ( !m_commandPool->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create the command pool #" << m_frameIndex << '!';
-
-			return false;
-		}
-
-		m_inFlightFence = std::make_unique< Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
-#if IS_MACOS
-		m_inFlightFence->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "ImageInFlight").str(), "Fence");
-#else
-		m_inFlightFence->setIdentifier(ClassId, std::format("Frame{}ImageInFlight", frameIndex), "Fence");
-#endif
-
-		if ( !m_inFlightFence->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create a fence #" << frameIndex << " for in-flight!";
-
-			return false;
-		}
-
-		m_imageAvailableSemaphore = std::make_unique< Sync::Semaphore >(device);
-#if IS_MACOS
-		m_imageAvailableSemaphore->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "ImageAvailable").str(), "Semaphore");
-#else
-		m_imageAvailableSemaphore->setIdentifier(ClassId, std::format("Frame{}ImageAvailable", frameIndex), "Semaphore");
-#endif
-
-		if ( !m_imageAvailableSemaphore->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image available!";
-
-			return false;
-		}
-
-		m_renderFinishedSemaphore = std::make_unique< Sync::Semaphore >(device);
-#if IS_MACOS
-		m_renderFinishedSemaphore->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "RenderFinished").str(), "Semaphore");
-#else
-		m_renderFinishedSemaphore->setIdentifier(ClassId, std::format("Frame{}RenderFinished", frameIndex), "Semaphore");
-#endif
-
-		if ( !m_renderFinishedSemaphore->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image finished!";
-
-			return false;
-		}
-
-		return true;
-	}
-
-	std::shared_ptr< CommandBuffer >
-	RendererFrameScope::getCommandBuffer (const RenderTarget::Abstract * renderTarget) noexcept
-	{
-		if ( const auto commandBufferIt = m_commandBuffers.find(renderTarget); commandBufferIt != m_commandBuffers.cend() )
-		{
-			return commandBufferIt->second;
-		}
-
-		auto commandBuffer = std::make_shared< CommandBuffer >(m_commandPool, true);
-		commandBuffer->setIdentifier(ClassId, renderTarget->id(), "CommandBuffer");
-
-		if ( !commandBuffer->isCreated() )
-		{
-			TraceError{ClassId} << "Unable to create a command buffer for render target '" << renderTarget->id() << "' !";
-
-			return {};
-		}
-
-		m_commandBuffers.emplace(renderTarget, commandBuffer);
-
-		return commandBuffer;
-	}
-
-	void
-	RendererFrameScope::declareSemaphore (const std::shared_ptr< Sync::Semaphore > & semaphore, bool primary) noexcept
-	{
-		const auto handle = semaphore->handle();
-
-		if ( primary )
-		{
-			m_primarySemaphores.emplace_back(handle);
-		}
-		else
-		{
-			m_secondarySemaphores.emplace_back(handle);
-		}
-	}
-
 	Renderer::Renderer (PrimaryServices & primaryServices, Resources::Manager & resourcesManager, Instance & instance, Window & window) noexcept
 		: ServiceInterface{ClassId},
 		ControllableTrait{ClassId},
@@ -426,7 +325,7 @@ namespace EmEn::Graphics
 		{
 			m_frameDuration = std::chrono::nanoseconds(1'000'000'000 / m_frameRateLimit);
 
-			TraceInfo{ClassId} << "Frame rate limiter enabled: " << m_frameRateLimit << " FPS (frame duration: " << m_frameDuration.count() / 1'000'000.0 << " ms)";
+			TraceInfo{ClassId} << "Frame rate limiter enabled: " << m_frameRateLimit << " FPS (frame duration: " << static_cast< double >(m_frameDuration.count()) / 1'000'000.0 << " ms)";
 		}
 
 		m_rayTracingSettingEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsRayTracingEnabledKey, DefaultGraphicsRayTracingEnabled);
@@ -900,15 +799,15 @@ namespace EmEn::Graphics
 			return true;
 		}
 
-		/* Determine color format: float16 for HDR, swapchain format otherwise. */
+		/* Determine color format: float16 for HDR, swap-chain format otherwise. */
 		const auto colorFormat = m_postProcessor.cachedRequiresHDR()
 			? VK_FORMAT_R16G16B16A16_SFLOAT
 			: this->swapChainColorFormat();
 
 		const auto depthFormat = this->swapChainDepthStencilFormat();
 
-		uint32_t width;
-		uint32_t height;
+		uint32_t width = 0;
+		uint32_t height = 0;
 
 		if ( m_swapChain != nullptr )
 		{
@@ -963,7 +862,7 @@ namespace EmEn::Graphics
 			m_sceneTarget->setSourceViewMatrices(mainTarget->viewMatrices());
 		}
 
-		TraceSuccess{ClassId} << "Scene render target created (" << width << "x" << height << ", format: " << (m_postProcessor.cachedRequiresHDR() ? "R16G16B16A16_SFLOAT" : "swapchain") << ").";
+		TraceSuccess{ClassId} << "Scene render target created (" << width << "x" << height << ", format: " << ( m_postProcessor.cachedRequiresHDR() ? "R16G16B16A16_SFLOAT" : "swapchain" ) << ").";
 
 		return true;
 	}
@@ -1001,7 +900,7 @@ namespace EmEn::Graphics
 		std::string id{identifier};
 
 		auto sampler = std::make_shared< Sampler >(m_device, createInfo);
-		sampler->setIdentifier(ClassId, id.c_str(), "Sampler");
+		sampler->setIdentifier(ClassId, id, "Sampler");
 
 		if ( !sampler->createOnHardware() )
 		{
@@ -1362,7 +1261,7 @@ namespace EmEn::Graphics
 
 		/* Lazy creation/destruction of the internal scene target based on post-processor state.
 		 * When PP is enabled: create the HDR scene target and reconfigure PP with it.
-		 * When PP is disabled: destroy the scene target and return to direct swapchain rendering.
+		 * When PP is disabled: destroy the scene target and return to direct swap-chain rendering.
 		 * NOTE: Defer creation until the scene's PostProcessStack is ready. The logic thread
 		 * may still be building the scene when the render thread first reaches this point.
 		 * Creating the scene target without the stack leads to wrong formats (no HDR/depth/normals). */
@@ -1667,14 +1566,14 @@ namespace EmEn::Graphics
 			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet());
 		}
 
-		/* Establish swapchain image layouts by running RP1 (CLEAR) with no draw calls.
-		 * This transitions swapchain color from UNDEFINED to COLOR_ATTACHMENT_OPTIMAL
+		/* Establish swap-chain image layouts by running RP1 (CLEAR) with no draw calls.
+		 * This transitions swap-chain color from UNDEFINED to COLOR_ATTACHMENT_OPTIMAL
 		 * and depth from UNDEFINED to DEPTH_STENCIL_ATTACHMENT_OPTIMAL. */
 		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 		commandBuffer->endRenderPass();
 
-		/* RP-final (swapchain postProcess, LOAD): Draw the PP fullscreen quad + overlay.
-		 * This transitions the swapchain color to PRESENT_SRC_KHR for presentation. */
+		/* RP-final (swap-chain postProcess, LOAD): Draw the PP fullscreen quad + overlay.
+		 * This transitions the swap-chain color to PRESENT_SRC_KHR for presentation. */
 		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 		/* Process camera lens effects (single-pass). */
@@ -1790,7 +1689,7 @@ namespace EmEn::Graphics
 
 			const auto signalSemaphoreHandle = renderToTexture->semaphore()->handle();
 
-			bool submitted;
+			bool submitted = false;
 
 			/* Only the first render-to-texture waits on primary (shadow map) semaphores.
 			 * Binary semaphores can only be waited on once per signal. */
@@ -2022,8 +1921,12 @@ namespace EmEn::Graphics
 	bool
 	Renderer::createRTDescriptorSet () noexcept
 	{
-		/* Layout: binding 0 = TLAS, binding 1 = mesh metadata SSBO,
-		 *		 binding 2 = material data SSBO, binding 3 = light array SSBO. */
+		/* Raytracing descriptor layout:
+		 * binding 0 = TLAS,
+		 * binding 1 = mesh metadata SSBO,
+		 * binding 2 = material data SSBO,
+		 * binding 3 = light array SSBO.
+		 */
 		m_rtDescriptorSetLayout = std::make_shared< DescriptorSetLayout >(m_device, "RTDescriptorSet");
 
 		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, VK_SHADER_STAGE_FRAGMENT_BIT) ||
@@ -2077,46 +1980,55 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const auto * tlas = sceneMetaData.TLAS();
+		const auto * TLAS = sceneMetaData.TLAS();
 
-		if ( tlas == nullptr )
+		if ( TLAS == nullptr )
 		{
 			return;
 		}
 
 		/* Update only the current frame's descriptor set to avoid write-while-pending. */
-		auto & descriptorSet = m_rtDescriptorSets[m_currentFrameIndex];
+		const auto & descriptorSet = m_rtDescriptorSets[m_currentFrameIndex];
 
 		/* Binding 0: TLAS. */
-		static_cast< void >(descriptorSet->writeAccelerationStructure(0, tlas->handle()));
+		static_cast< void >(descriptorSet->writeAccelerationStructure(0, TLAS->handle()));
 
 		/* Binding 1: Mesh metadata SSBO (per-frame to avoid CPU/GPU race). */
-		const auto * meshSSBO = sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex);
-
-		if ( meshSSBO != nullptr )
+		if ( const auto * meshSSBO = sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex); meshSSBO != nullptr )
 		{
-			const VkDescriptorBufferInfo meshInfo{meshSSBO->handle(), 0, meshSSBO->bytes()};
+			const VkDescriptorBufferInfo meshInfo{
+				.buffer = meshSSBO->handle(),
+				.offset = 0,
+				.range = meshSSBO->bytes()
+			};
+
 			static_cast< void >(descriptorSet->writeStorageBuffer(1, meshInfo));
 		}
 
 		/* Binding 2: Material data SSBO (per-frame to avoid CPU/GPU race). */
-		const auto * materialSSBO = sceneMetaData.materialDataSSBO(m_currentFrameIndex);
-
-		if ( materialSSBO != nullptr )
+		if ( const auto * materialSSBO = sceneMetaData.materialDataSSBO(m_currentFrameIndex); materialSSBO != nullptr )
 		{
-			const VkDescriptorBufferInfo materialInfo{materialSSBO->handle(), 0, materialSSBO->bytes()};
+			const VkDescriptorBufferInfo materialInfo{
+				.buffer = materialSSBO->handle(),
+				.offset = 0,
+				.range = materialSSBO->bytes()
+			};
+
 			static_cast< void >(descriptorSet->writeStorageBuffer(2, materialInfo));
 		}
 
 		/* Binding 3: Light array SSBO. */
-		const auto * lightSSBO = lightSet.rtLightBuffer();
-
-		if ( lightSSBO != nullptr )
+		if ( const auto * lightSSBO = lightSet.RTLightBuffer(); lightSSBO != nullptr )
 		{
-			const VkDescriptorBufferInfo lightInfo{lightSSBO->handle(), 0, lightSSBO->bytes()};
+			const VkDescriptorBufferInfo lightInfo{
+				.buffer = lightSSBO->handle(),
+				.offset = 0,
+				.range = lightSSBO->bytes()
+			};
+
 			static_cast< void >(descriptorSet->writeStorageBuffer(3, lightInfo));
 		}
 
-		m_rtLightCount = lightSet.rtLightCount();
+		m_RTLightCount = lightSet.RTLightCount();
 	}
 }

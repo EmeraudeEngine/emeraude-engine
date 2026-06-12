@@ -26,38 +26,8 @@
 
 #include "ImGUIScreen.hpp"
 
-#ifdef IMGUI_ENABLED
-
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
-/* Third-party inclusions. */
-#include "imgui.h"
-#include "backends/imgui_impl_vulkan.h"
-#include "backends/imgui_impl_glfw.h"
-
-/* Local inclusions. */
-#include "Vulkan/CommandBuffer.hpp"
-
-namespace EmEn::Overlay
-{
-	using namespace Vulkan;
-
-	void
-	ImGUIScreen::render (const CommandBuffer & commandBuffer) const noexcept
-	{
-		ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
-
-		m_drawFunction();
-
-		ImGui::Render();
-
-		ImDrawData * draw_data = ImGui::GetDrawData();
-
-		ImGui_ImplVulkan_RenderDrawData(draw_data, commandBuffer.handle());
-	}
-}
-
-#endif
+/*
+ * NOTE: ImGUIScreen has no out-of-line definitions: draw() is a trivial inline
+ * forwarder declared in the header. The widget emission, as well as the single
+ * per-frame ImGui::NewFrame()/Render() cycle, is driven by Overlay::Manager.
+ */
