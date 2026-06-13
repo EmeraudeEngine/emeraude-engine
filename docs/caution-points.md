@@ -591,6 +591,29 @@ Parallax Occlusion Mapping ray-marching is expensive at far distances, especiall
 
 ---
 
+## Build / Compiler
+
+### PCH shifts GCC's inlining context → `-Wstringop-overread` false positives
+
+With the shared STL precompiled header enabled (`EMERAUDE_ENABLE_PCH=ON`, applied to the engine
+since the cascade-wide PCH wiring), GCC 14 can raise a **`-Werror=stringop-overread`** in
+`<bits/char_traits.h>` (`__builtin_memcpy reading N bytes from a region of size 16`) on perfectly
+valid `std::string` code. It is a known GCC false positive: the PCH changes how the STL headers are
+pre-parsed, which shifts inlining decisions, and GCC's value-range analysis then mis-judges that a
+string whose inferred length exceeds the 15-byte SSO buffer could still live in that inline buffer
+during a move-construct.
+
+- **Seen in:** `Saphir/LightGenerator.cpp::finalNormalViewSpaceExpression()` — a
+  `std::string{"normalize("} + Keys::ShaderVariable::NormalViewSpace + ")"` concat (28-char result).
+- **Wrong fixes:** silencing the warning (`-Wno-stringop-overread`, `#pragma GCC diagnostic`,
+  `NOLINT`) — the project never disables warnings. Also note that merely rewriting `operator+`
+  into `+=` does **not** help: the trip-wire is the move-construct on `return`, not the concat.
+- **Correct fix:** make the buffer unambiguously heap-allocated so GCC cannot assume SSO — build the
+  string into a local and `reserve()` past 15 bytes before appending. That removes the ambiguity the
+  analysis chokes on, with no behavioural change.
+- **Only one site in the whole cascade** trips this today (274/275 TUs compile clean under PCH); do
+  not pre-emptively rewrite other concatenations — fix sites as the compiler actually flags them.
+
 ## Platform-Specific
 
 ### String Conversions on Windows

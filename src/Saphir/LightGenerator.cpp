@@ -80,7 +80,19 @@ namespace EmEn::Saphir
 			return "N";
 		}
 
-		return std::string{"normalize("} + Keys::ShaderVariable::NormalViewSpace + ")";
+		/* NOTE: reserve() forces a heap buffer up-front. Without it, GCC 14's value-range
+		 * analysis infers a length (~28) that exceeds the 15-byte SSO capacity yet still
+		 * believes the data could live in the inline buffer, then flags the move-construct's
+		 * char_traits::copy as a -Wstringop-overread overflow (a known false positive that
+		 * only surfaces once the PCH shifts the STL inlining context). A guaranteed-heap
+		 * string removes the ambiguity. */
+		std::string expression;
+		expression.reserve(sizeof("normalize(") + sizeof(Keys::ShaderVariable::NormalViewSpace));
+		expression += "normalize(";
+		expression += Keys::ShaderVariable::NormalViewSpace;
+		expression += ')';
+
+		return expression;
 	}
 
 	std::string

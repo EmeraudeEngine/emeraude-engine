@@ -188,6 +188,12 @@ endif ()
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
 add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
+# Shared STL hot-set precompiled header (owned by emeraude-base, applied PRIVATE here).
+# See the WINDOWS_EXPORT_ALL_SYMBOLS caveat in emeraude-base/CMakeLists.txt: if exports.def
+# fails to link on Windows (LNK2001 from PCH-object symbols), the fix is the real export API
+# (the TODO below), NOT removing this call. No-op when -DEMERAUDE_ENABLE_PCH=OFF.
+emeraude_base_target_enable_pch(${PROJECT_NAME})
+
 # TODO: Change this by creating a real API with "emeraude_export.hpp", set all classes/functions like : class MaClasse; class EMERAUDE_API MaClasse;
 #target_compile_definitions(Emeraude PRIVATE EMERAUDE_BUILD_DLL)
 

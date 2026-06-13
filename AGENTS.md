@@ -27,12 +27,15 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > + `cmake/EnablePrecompiledHeaders.cmake`). The engine inherits all of it via `emeraude::base`
 > and adds `EMERAUDE_BASE_CMAKE_DIR` to its module path.
 >
-> **Precompiled header:** the engine itself is **deliberately NOT precompiled-header'd.** It is a
-> SHARED library built with `WINDOWS_EXPORT_ALL_SYMBOLS`, and CMake's auto-generated export `.def`
-> scans the PCH object, pulling compiler-internal symbols that then fail to resolve (`LNK2001` in
-> `exports.def`). base's shared STL PCH is applied only to **leaf** targets (app_kernel's Kernel,
-> app_system's binaries — none of which export all symbols), never to the engine or to base's own
-> modules linked into it. See `dependencies/emeraude-base/AGENTS.md` § 3a.
+> **Precompiled header:** the engine target **now applies** base's shared STL PCH via
+> `emeraude_base_target_enable_pch(${PROJECT_NAME})`, like every other target in the cascade.
+> **Windows caveat (empirically under test):** the engine is a SHARED library built with
+> `WINDOWS_EXPORT_ALL_SYMBOLS`, whose auto-generated export `.def` scans every object — including
+> the PCH object. It was *assumed* (never reproduced) this would pull compiler-internal symbols
+> that fail to resolve (`LNK2001` in `exports.def`). If that actually reproduces on Windows, the
+> fix is the real export API (`generate_export_header` + `EMERAUDE_API`, the TODO on the engine
+> target) — **not** removing the PCH call. Linux is verified clean. See
+> `dependencies/emeraude-base/AGENTS.md` § 3a.
 >
 > **Rule:** a bug or a missing feature in the foundation layer (math, factories, I/O,
 > threading, …) is fixed **in emeraude-base**, never worked around in the engine — the same
