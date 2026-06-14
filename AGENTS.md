@@ -23,7 +23,7 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > every `Setup*.cmake` (even libs only the engine uses: ufbx, fastgltf, taglib, bc7enc,
 > cpu_features, hwloc, libvpx), the `ext-deps-generator` resolution (`EMERAUDE_EXT_LIBS_*`),
 > the **project-wide compile policy** (`EMERAUDE_COMPILE_*`, `EMERAUDE_CXX_VERSION`,
-> `EMERAUDE_C_VERSION`), and the **shared STL hot-set precompiled header** (`PrecompiledHeaders.hpp`
+> `EMERAUDE_C_VERSION`), and the **shared STL hot-set precompiled header** (`STLPrecompiledHeaders.hpp`
 > + `cmake/EnablePrecompiledHeaders.cmake`). The engine inherits all of it via `emeraude::base`
 > and adds `EMERAUDE_BASE_CMAKE_DIR` to its module path.
 >

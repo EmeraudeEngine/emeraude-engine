@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <source_location>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -42,7 +43,6 @@
 #include "Graphics/Types.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
-#include "std_source_location.hpp"
 #include "RenderContext.hpp"
 #include "RenderStateTracker.hpp"
 #include "Vulkan/DescriptorPool.hpp"
