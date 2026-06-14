@@ -26,12 +26,36 @@
 
 #pragma once
 
-#if defined(_WIN32) || defined(__CYGWIN__)
-	#ifdef EMERAUDE_BUILD_DLL
-		#define EMERAUDE_API __declspec(dllexport)
+/*
+ * EMERAUDE_API — public boundary annotation for the engine shared library (Emeraude.dll).
+ * See docs/windows-export-api.md for the full migration procedure and rationale.
+ *
+ * Two modes, selected by the EMERAUDE_USE_EXPLICIT_EXPORTS build option (CMake):
+ *
+ *  - OFF (default): the macro expands to NOTHING. The DLL's exported surface is produced by
+ *    CMake's WINDOWS_EXPORT_ALL_SYMBOLS, exactly as before. Annotations are harmless no-ops,
+ *    so the public API can be migrated class-by-class without ever breaking the build.
+ *
+ *  - ON: the macro becomes __declspec(dllexport) while building the DLL (CMake auto-defines
+ *    Emeraude_EXPORTS for the SHARED target) and __declspec(dllimport) for consumers
+ *    (projet-alpha); WINDOWS_EXPORT_ALL_SYMBOLS is dropped. This is the end state required on
+ *    MSVC, where WINDOWS_EXPORT_ALL_SYMBOLS + precompiled headers leak PCH marker symbols into
+ *    the auto-generated exports.def and fail to link (LNK2001 on a bogus '__' symbol).
+ *
+ * Annotate public CLASSES (exports every member) and out-of-line free functions with
+ * EMERAUDE_API. A dll-interface class whose base is not itself EMERAUDE_API triggers C4275 on
+ * MSVC — its bases must be annotated too (see the doc).
+ */
+#if defined(EMERAUDE_USE_EXPLICIT_EXPORTS)
+	#if defined(_WIN32) || defined(__CYGWIN__)
+		#ifdef Emeraude_EXPORTS
+			#define EMERAUDE_API __declspec(dllexport)
+		#else
+			#define EMERAUDE_API __declspec(dllimport)
+		#endif
 	#else
-		#define EMERAUDE_API __declspec(dllimport)
+		#define EMERAUDE_API __attribute__((visibility("default")))
 	#endif
 #else
-	#define EMERAUDE_API __attribute__((visibility("default")))
+	#define EMERAUDE_API
 #endif

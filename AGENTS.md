@@ -289,6 +289,7 @@ how to add new commands.
 -   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
 -   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
 -   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
+-   **Windows Export API:** [`docs/windows-export-api.md`](docs/windows-export-api.md) (`EMERAUDE_API` migration — required on MSVC with PCH; in progress).
 
 > [!CRITICAL]
 > **Maintenance:** AI documentation is **MORE IMPORTANT than the code itself.** A code change
@@ -429,3 +430,4 @@ All outbound references from this file, grouped by type.
 | Runtime Session | [`docs/runtime-session.md`](docs/runtime-session.md) |
 | Pipeline Caching | [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) |
 | Toolkit System | [`docs/toolkit-system.md`](docs/toolkit-system.md) |
+| Windows Export API | [`docs/windows-export-api.md`](docs/windows-export-api.md) |

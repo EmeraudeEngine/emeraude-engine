@@ -114,6 +114,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <any>
@@ -161,7 +162,7 @@ namespace EmEn
 	 * @extends EmEn::Base::ObservableTrait The core is observable.
 	 * @version 0.8.35
 	 */
-	class Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMERAUDE_API Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 

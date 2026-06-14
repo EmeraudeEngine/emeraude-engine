@@ -72,6 +72,10 @@ option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to 
 option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
+# Explicit DLL export API: drop WINDOWS_EXPORT_ALL_SYMBOLS in favour of the EMERAUDE_API macro
+# (emeraude_export.hpp). Required on MSVC once the PCH is enabled — auto-generated exports.def
+# leaks PCH marker symbols and fails to link. Migration in progress: see docs/windows-export-api.md.
+option(EMERAUDE_USE_EXPLICIT_EXPORTS "Use the explicit EMERAUDE_API export macro instead of WINDOWS_EXPORT_ALL_SYMBOLS (Default Off)." Off)
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)
@@ -189,13 +193,24 @@ endif ()
 add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
 # Shared STL hot-set precompiled header (owned by emeraude-base, applied PRIVATE here).
-# See the WINDOWS_EXPORT_ALL_SYMBOLS caveat in emeraude-base/CMakeLists.txt: if exports.def
-# fails to link on Windows (LNK2001 from PCH-object symbols), the fix is the real export API
-# (the TODO below), NOT removing this call. No-op when -DEMERAUDE_ENABLE_PCH=OFF.
+# On MSVC this PCH is exactly what breaks WINDOWS_EXPORT_ALL_SYMBOLS: the PCH marker symbols leak
+# into the auto-generated exports.def and fail to link (LNK2001 on a bogus '__'). The fix is
+# EMERAUDE_USE_EXPLICIT_EXPORTS below, NOT removing this call. No-op when -DEMERAUDE_ENABLE_PCH=OFF.
+# See docs/windows-export-api.md.
 emeraude_base_target_enable_pch(${PROJECT_NAME})
 
-# TODO: Change this by creating a real API with "emeraude_export.hpp", set all classes/functions like : class MaClasse; class EMERAUDE_API MaClasse;
-#target_compile_definitions(Emeraude PRIVATE EMERAUDE_BUILD_DLL)
+# Public DLL boundary — see docs/windows-export-api.md.
+#  - EMERAUDE_USE_EXPLICIT_EXPORTS=OFF (default): WINDOWS_EXPORT_ALL_SYMBOLS produces the export set;
+#    the EMERAUDE_API macro (emeraude_export.hpp) is a no-op, so the public API can be annotated
+#    class-by-class without ever breaking the build.
+#  - ON: EMERAUDE_API drives __declspec(dllexport/import) and WINDOWS_EXPORT_ALL_SYMBOLS is dropped.
+#    Required on MSVC once the PCH is enabled.
+if ( EMERAUDE_USE_EXPLICIT_EXPORTS )
+	set(EMERAUDE_WINDOWS_EXPORT_ALL OFF)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC EMERAUDE_USE_EXPLICIT_EXPORTS)
+else ()
+	set(EMERAUDE_WINDOWS_EXPORT_ALL ON)
+endif ()
 
 target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
 
@@ -219,7 +234,7 @@ if ( MSVC )
 		CXX_STANDARD_REQUIRED On
 		CXX_EXTENSIONS Off
 		VERSION ${PROJECT_VERSION}
-		WINDOWS_EXPORT_ALL_SYMBOLS ON # TODO: Change this by creating a real API with "emeraude_export.hpp"
+		WINDOWS_EXPORT_ALL_SYMBOLS ${EMERAUDE_WINDOWS_EXPORT_ALL}
 	)
 
 	# Link Secur32 for GetUserNameExW (Extended Security API).
