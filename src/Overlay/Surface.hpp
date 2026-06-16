@@ -164,13 +164,47 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Enable the GPU image to be mappable from the CPU for direct writing
+			 * @brief CPU-to-GPU memory-mapping policy for the surface image. Resolved against the device
+			 * at creation: Auto maps only on unified-memory devices (integrated GPUs, software, full-ReBAR
+			 * discrete GPUs) where the image is not sampled across PCIe.
+			 */
+			enum class MemoryMappingMode : uint8_t
+			{
+				/** Always use a staging upload (DEVICE_LOCAL OPTIMAL image). */
+				Staging,
+				/** Force direct CPU mapping (LINEAR host-visible image) when the format allows it. */
+				Direct,
+				/** Decide from the device memory architecture (unified -> map, discrete -> staging). */
+				Auto
+			};
+
+			/**
+			 * @brief Enable the GPU image to be mappable from the CPU for direct writing.
+			 * @note Equivalent to setMemoryMappingMode(MemoryMappingMode::Direct).
 			 */
 			void
 			enableMapping () noexcept
 			{
-				m_memoryMappingEnabled = true;
+				m_memoryMappingMode = MemoryMappingMode::Direct;
 			}
+
+			/**
+			 * @brief Sets the CPU-to-GPU memory-mapping mode. Resolved against the device in createOnHardware().
+			 * @param mode Off (staging), On (force mapping), Auto (decide from the device).
+			 */
+			void
+			setMemoryMappingMode (MemoryMappingMode mode) noexcept
+			{
+				m_memoryMappingMode = mode;
+			}
+
+			/**
+			 * @brief Parses a memory-mapping mode from a setting value ("on"/"off"/"auto", tolerant; unknown -> Auto).
+			 * @param value The setting string.
+			 * @return MemoryMappingMode
+			 */
+			[[nodiscard]]
+			static MemoryMappingMode parseMemoryMappingMode (const std::string & value) noexcept;
 
 			/**
 			 * @brief Returns the framebuffer properties from the overlay.
@@ -1161,6 +1195,7 @@ namespace EmEn::Overlay
 			float m_depth{0.0F};
 			float m_alphaThreshold{0.1F};
 			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
+			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
 			bool m_transitionResizeRequested{false};
 			bool m_videoMemorySizeValid{false};
 			bool m_videoMemoryUpToDate{false};

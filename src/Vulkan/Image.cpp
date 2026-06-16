@@ -236,6 +236,15 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		if ( m_hostVisible )
+		{
+			/* NOTE: Proof of where VMA actually placed a host-visible (mappable) image: DEVICE_LOCAL
+			 * means VRAM (Resizable BAR), otherwise system RAM sampled across PCIe. */
+			VkMemoryPropertyFlags chosenFlags = 0;
+			vmaGetAllocationMemoryProperties(this->device()->memoryAllocatorHandle(), m_memoryAllocation, &chosenFlags);
+			TraceInfo{ClassId} << "Host-visible image '" << this->identifier() << "' placed by VMA in " << ((chosenFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ? "DEVICE_LOCAL (VRAM)" : "host (system RAM)") << " memory.";
+		}
+
 		return true;
 	}
 

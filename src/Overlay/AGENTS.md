@@ -110,43 +110,46 @@ For performance optimization, Surface supports direct GPU memory writes bypassin
 - When content provider already has pixel data in memory
 - Reduces CPU→GPU copy overhead
 
+**Modes (`Surface::MemoryMappingMode`, tri-state):**
+- `Staging` — always staging upload (`DEVICE_LOCAL` `OPTIMAL` image). Default for plain surfaces.
+- `Direct` — force direct mapping (falls back to staging with a warning if the format lacks `LINEAR`+`SAMPLED`).
+- `Auto` — decide from the device (see below). This is what the apps set for CEF web-views (setting `App/CEF/TextureUploadStrategy` (`direct` / `staging` / `auto`), default `"auto"`).
+
+**Auto resolution (in `createOnHardware()`):** mapping is enabled only when **both**:
+1. the overlay format supports `VK_IMAGE_TILING_LINEAR` + `SAMPLED` (`PhysicalDevice::getFormatProperties`), and
+2. `PhysicalDevice::hasMappableDeviceLocalMemory()` is true — a large `DEVICE_LOCAL | HOST_VISIBLE | HOST_COHERENT` memory type exists (integrated GPUs, software rasterizers, or discrete GPUs with **full Resizable BAR**; the legacy 256 MiB BAR is excluded by a heap-size test). When true, VMA places the CPU-mapped image in device-local memory (sampled without crossing PCIe), so `Auto` chooses direct mapping; otherwise it stages into a `DEVICE_LOCAL` `OPTIMAL` image. (`Image::createWithVMA` logs where VMA actually placed each host-visible image.)
+
+The resolved decision is logged once per surface at creation:
+`Surface 'X' memory mapping ENABLED/DISABLED [mode=auto, UMA=yes/no, linearSampled=yes/no]`.
+
 **Requirements:**
-- Call `enableMapping()` **before** `createOnHardware()` (typically in constructor)
-- Image created with `VK_IMAGE_TILING_LINEAR` and `VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT`
-- Image layout transitioned to `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` after creation
+- Set the mode **before** `createOnHardware()` (typically in constructor): `setMemoryMappingMode(mode)` or the legacy `enableMapping()` (= `On`).
+- When enabled: image created with `VK_IMAGE_TILING_LINEAR` + `HOST_VISIBLE | HOST_COHERENT`, usage `SAMPLED` only (no transfer/staging).
 
 **API:**
 ```cpp
 // In constructor (BEFORE createOnHardware is called):
-this->enableMapping();
+this->setMemoryMappingMode(Surface::MemoryMappingMode::Auto);
+// or from a setting string ("on" / "off" / "auto", tolerant):
+this->setMemoryMappingMode(Surface::parseMemoryMappingMode(settingValue));
 
 // Write to active buffer:
 bool success = this->writeActiveBufferWithMapping([&](void* ptr, VkDeviceSize rowPitch) {
     // Copy pixel data respecting rowPitch
     return true;
 });
-
-// Write to transition buffer:
-bool success = this->writeTransitionBufferWithMapping([&](void* ptr, VkDeviceSize rowPitch) {
-    // Copy pixel data respecting rowPitch
-    return true;
-});
-```
-
-**C++20 type safety:** `writeWithMapping()` uses `requires` constraint:
-```cpp
-requires std::invocable<write_func_t, void*, VkDeviceSize> &&
-         std::convertible_to<std::invoke_result_t<write_func_t, void*, VkDeviceSize>, bool>
 ```
 
 **Code references:**
-- `Surface.hpp:enableMapping()` - Enable memory mapping mode
-- `Surface.hpp:isMemoryMappingEnabled()` - Check if enabled
+- `Surface.hpp:MemoryMappingMode` / `setMemoryMappingMode()` / `parseMemoryMappingMode()` - tri-state mode
+- `Surface.hpp:enableMapping()` - legacy alias for `MemoryMappingMode::Direct`
+- `Surface.hpp:isMemoryMappingEnabled()` - the **resolved** bool (valid only after `createOnHardware()`)
+- `Surface.cpp:createOnHardware()` - resolves `Auto` against the device (UMA + LINEAR/SAMPLED), logs the decision
+- `Vulkan/PhysicalDevice.cpp:hasMappableDeviceLocalMemory()` - device-local + host-visible memory detection (UMA / full ReBAR)
 - `Surface.hpp:Framebuffer::writeWithMapping()` - RAII mapping with lambda
-- `Surface.cpp:createFramebufferResources()` - Image creation with LINEAR tiling
-- `Vulkan/Image.cpp:mapMemory()` / `unmapMemory()` - VMA memory mapping
+- `Surface.cpp:createFramebufferResources()` - image creation with LINEAR tiling
 
-**CRITICAL:** `enableMapping()` must be called before `createOnHardware()`. If called after, the image is already created without host-visible memory and mapping will fail.
+**CRITICAL:** set the mode before `createOnHardware()`. `isMemoryMappingEnabled()` only reflects the final decision **after** `createOnHardware()` — `Auto` is resolved there (against the device), not when the mode is set.
 
 ### Supported Content Types
 
@@ -357,9 +360,9 @@ overlay (no `UIScreen`) still renders (`m_screens.empty() && m_ImGUIScreens.empt
 WebView::WebView(...) : Surface{...} {
     this->enableTransitionBuffer();  // For smooth resize
 
-    if (settings.get<bool>("CEF/UseMemoryMapping")) {
-        this->enableMapping();  // MUST be before createOnHardware()
-    }
+    // Texture upload path: "map" / "staging" / "auto" (auto resolved against the device).
+    this->setMemoryMappingMode(Surface::parseMemoryMappingMode(
+        settings.getOrSetDefault<std::string>("App/CEF/TextureUploadStrategy", "auto")));
 }
 
 // CEF OnPaint callback - dual path implementation

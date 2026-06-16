@@ -474,6 +474,16 @@ namespace EmEn::Vulkan
 			VkFormatProperties getFormatProperties (VkFormat format) const noexcept;
 
 			/**
+			 * @brief Returns whether the device exposes a large DEVICE_LOCAL + HOST_VISIBLE + HOST_COHERENT
+			 * memory type — integrated GPUs, software rasterizers, or discrete GPUs with full Resizable BAR.
+			 * When true a CPU-mapped image can live in device-local memory (sampled without crossing PCIe),
+			 * so direct mapping beats a staging upload. The legacy 256 MiB BAR does not qualify.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasMappableDeviceLocalMemory () const noexcept;
+
+			/**
 			 * @brief Returns the physical device image format properties.
 			 * @param format
 			 * @param type

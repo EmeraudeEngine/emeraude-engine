@@ -291,6 +291,50 @@ namespace EmEn::Vulkan
 		return formatProperties;
 	}
 
+	bool
+	PhysicalDevice::hasMappableDeviceLocalMemory () const noexcept
+	{
+		/* NOTE: Direct CPU mapping is worth it only when the mapped image can live in DEVICE_LOCAL
+		 * memory (sampled locally, not across PCIe). That needs a DEVICE_LOCAL + HOST_VISIBLE +
+		 * HOST_COHERENT type with a large heap: integrated GPUs (shared RAM), software rasterizers, or
+		 * discrete GPUs with full Resizable BAR (whole VRAM host-visible). The legacy 256 MiB BAR must
+		 * not qualify, hence the proportion test against the largest device-local heap. VMA is trusted
+		 * to actually place a host-visible image in that type when it exists. */
+		const auto & memory = m_memoryProperties.memoryProperties;
+
+		constexpr VkMemoryPropertyFlags mappable =
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+		VkDeviceSize largestDeviceLocal = 0;
+		VkDeviceSize largestMappableDeviceLocal = 0;
+
+		for ( uint32_t typeIndex = 0; typeIndex < memory.memoryTypeCount; ++typeIndex )
+		{
+			const auto flags = memory.memoryTypes[typeIndex].propertyFlags;
+
+			if ( (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0 )
+			{
+				continue;
+			}
+
+			const auto heapSize = memory.memoryHeaps[memory.memoryTypes[typeIndex].heapIndex].size;
+
+			if ( heapSize > largestDeviceLocal )
+			{
+				largestDeviceLocal = heapSize;
+			}
+
+			if ( (flags & mappable) == mappable && heapSize > largestMappableDeviceLocal )
+			{
+				largestMappableDeviceLocal = heapSize;
+			}
+		}
+
+		constexpr VkDeviceSize minHeapSize = VkDeviceSize{256} * 1024 * 1024;
+
+		return largestMappableDeviceLocal > minHeapSize && (largestMappableDeviceLocal * 10) >= (largestDeviceLocal * 8);
+	}
+
 	VkImageFormatProperties
 	PhysicalDevice::getImageFormatProperties (VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags) const noexcept
 	{
