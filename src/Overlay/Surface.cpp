@@ -576,6 +576,17 @@ namespace EmEn::Overlay
 		const auto textureWidth = framebuffer.getSurfaceWidth(geometry.width());
 		const auto textureHeight = framebuffer.getSurfaceHeight(geometry.height());
 
+		/* NOTE: During an aggressive resize or a minimize, the framebuffer can transiently
+		 * report 0 px, yielding a 0-sized surface. Creating a 0-dimension pixmap/image fails
+		 * and would otherwise propagate up as a hard error that disables the whole UIScreen
+		 * permanently. A degenerate size is not an error but a transient state: keep the
+		 * current buffer and defer recreation. The next resize event (window back to a valid
+		 * size) re-invalidates the surface and recreates it correctly. */
+		if ( textureWidth == 0 || textureHeight == 0 )
+		{
+			return true;
+		}
+
 		/* NOTE: Check if resize is actually needed. */
 		if ( m_activeBuffer.matchesSize(textureWidth, textureHeight) )
 		{
