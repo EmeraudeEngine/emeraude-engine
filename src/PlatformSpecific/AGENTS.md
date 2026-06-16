@@ -220,6 +220,36 @@ See: `Dialog/SaveFile.hpp:setDefaultFilename()`, `Dialog/SaveFile.hpp:setDefault
 | Linux | kdialog positional arg / zenity `--filename=` | Same | Appended to path arg | Handled by desktop tool |
 | macOS | `NSOpenPanel setDirectoryURL:` | `NSSavePanel setDirectoryURL:` | `setNameFieldStringValue:` | Handled by `allowedContentTypes` |
 
+### Windows: native file dialogs run on a dedicated STA thread (critical)
+
+On Windows, `OpenFile::execute()` and `SaveFile::execute()` show the modern
+`IFileOpenDialog` / `IFileSaveDialog` on a **dedicated STA thread**, not on the calling
+thread. This is mandatory for performance — not stylistic.
+
+**Why:** the dialog's modal message loop pumps **every** message of the thread it runs on.
+Shown from a busy thread (the engine main loop pumping rendering, input, and — under
+app_system — CEF), the Windows shell re-resolves its navigation pane on every message
+burst: thousands of redundant known-folder / cloud-sync-root (`SyncRootManager`) registry
+lookups. On a machine whose known folders are redirected to a cloud provider (OneDrive —
+the Windows default), this delays the dialog by **3–5 s**. A dedicated thread has an empty
+message queue, so the pane is resolved once and the dialog appears in ~140 ms (measured
+×25 speed-up). Apps with an idle UI thread (e.g. Notepad++) never hit this — which is why
+the same dialog is instant elsewhere on the same machine.
+
+**Implementation:** `execute()` spawns a `std::thread` that `CoInitializeEx(STA)`s and
+re-enters `execute()` (a `thread_local` guard prevents recursion), then `join()`s. The
+owner HWND is intentionally `null` (`parentToWindow=false` on the worker): the caller
+blocks on `join()` — `execute()` is synchronous by contract — so a cross-thread owner
+window would risk a modal-pump deadlock. Trade-off: the dialog is not owned by the main
+window (harmless: the app is already blocked while it is up). See the comment block in
+`Dialog/OpenFile.windows.cpp`.
+
+> [!WARNING]
+> Do **not** "simplify" this back to a direct `Show()` on the calling thread — it silently
+> reintroduces the 3–5 s freeze on any machine with cloud-redirected known folders (i.e.
+> most Windows installs with OneDrive). The cost is invisible on a developer machine
+> without OneDrive folder redirection.
+
 ### Linux Dialog Implementation (zenity/kdialog)
 
 Linux dialogs use native desktop tools via shell commands.

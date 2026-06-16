@@ -36,6 +36,7 @@
 /* STL inclusions. */
 #include <filesystem>
 #include <map>
+#include <thread>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -241,6 +242,47 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	bool
 	OpenFile::execute (Window & window, bool parentToWindow) noexcept
 	{
+		/* The native file dialog runs on a DEDICATED STA thread whose message queue is empty.
+		 *
+		 * Rationale: shown from the engine's main thread, the dialog's modal message loop pumps
+		 * the main thread's heavy message traffic (rendering, input, CEF). The Windows shell
+		 * reacts by re-resolving the navigation pane on every burst — thousands of redundant
+		 * known-folder / cloud-sync-root (SyncRootManager) registry lookups — which delays the
+		 * dialog by 3-5 s on machines whose known folders are redirected to a cloud provider
+		 * (e.g. OneDrive, the Windows default). On a dedicated thread the queue stays quiet, the
+		 * pane is resolved once, and the dialog appears in ~140 ms.
+		 *
+		 * We re-enter execute() on the worker (the thread-local guard prevents recursion) with
+		 * parentToWindow=false: the calling thread blocks on join() (execute() is synchronous by
+		 * contract), so giving the modal dialog a cross-thread owner window would risk a
+		 * message-pump deadlock. Trade-off: the dialog is not owned by the main window — harmless
+		 * here since the app is already blocked while the dialog is up. */
+		{
+			static thread_local bool onDedicatedDialogThread = false;
+
+			if ( !onDedicatedDialogThread )
+			{
+				bool result = false;
+
+				std::thread worker{[this, &window, &result] () {
+					onDedicatedDialogThread = true;
+
+					const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+					result = this->execute(window, false);
+
+					if ( SUCCEEDED(comInit) )
+					{
+						CoUninitialize();
+					}
+				}};
+
+				worker.join();
+
+				return result;
+			}
+		}
+
 		HWND parentWindow = parentToWindow ? window.getWin32Window() : nullptr;
 
 		/* NOTE: Branch to the Win32 legacy path when the compatibility setting is enabled.
