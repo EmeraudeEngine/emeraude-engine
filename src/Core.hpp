@@ -117,11 +117,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <any>
 #include <array>
 #include <atomic>
-#include <cstddef>
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -175,9 +175,9 @@ namespace EmEn
 			 */
 			static constexpr auto ToolsArg{"-t"}; ///< Short argument for tools mode.
 			static constexpr auto ToolsLongArg{"--tools-mode"}; ///< Long argument for tools mode.
-	static constexpr auto WipeLocalDataArg{"--wipe-local-data"}; ///< Argument to preview local data wipe (dry run).
+			static constexpr auto WipeLocalDataArg{"--wipe-local-data"}; ///< Argument to preview local data wipe (dry run).
 			static constexpr auto WipeLocalDataConfirmArg{"--wipe-local-data-confirm"}; ///< Argument to actually wipe local data.
-			static constexpr auto ResetSettingsArg{"--reset-settings"}; ///< Argument to backup and reset settings file.
+			static constexpr auto ResetSettingsArg{"--reset-settings"}; ///< Argument to back up and reset settings file.
 			/** @} */
 
 			/** @brief Number of consecutive `onBeforeCoreStop()` vetoes after which Core prompts the user for a force-quit.
