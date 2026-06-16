@@ -285,6 +285,14 @@ Linux dialogs use native desktop tools via shell commands.
 
 **Required for TaskDialog**: Common Controls v6 manifest dependency (automatically injected via `#pragma comment`).
 
+#### Legacy Win32 file dialogs (accessibility compatibility fallback)
+
+`OpenFile` / `SaveFile` default to the **modern COM** dialogs (`IFileOpenDialog` / `IFileSaveDialog`). The setting `Core/Compatibility/Windows/UseLegacyFileDialogs` (`CompatibilityWindowsUseLegacyFileDialogsKey`, default **`false`**) switches them to the **legacy Win32** API (`GetOpenFileNameW` / `GetSaveFileNameW`, plus a folder-picker variant).
+
+- **Why it exists — not dead code:** the modern COM dialog can misbehave with some assistive technologies (screen readers / accessibility tools) on Windows 11. The Win32 path is a documented escape hatch for those users. Keep it.
+- **Read-only at runtime:** read via `getOrSetDefault()` in `OpenFile.windows.cpp:execute()` and `SaveFile.windows.cpp:execute()`; never written by the engine. Toggle only by editing the settings file.
+- **COM is primary, Win32 is the fallback:** the dedicated-STA-thread performance work above applies to the **COM** path only. The Win32 path is a thinner fallback (no dedicated-thread treatment, no `SyncRootManager` mitigation) kept for accessibility compatibility. Validate it on the target Windows version before relying on it.
+
 ### macOS Dialog Implementation
 
 | Dialog | API |

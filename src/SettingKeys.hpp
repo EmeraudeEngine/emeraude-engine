@@ -351,8 +351,12 @@ namespace EmEn
 		constexpr auto DefaultHWLOCVerbosityKey{"2"}; // 0:All, 1:no ENOSYS, 2:None
 
 		/* Cross-platform specific control */
+		/* NOTE: false = modern COM file dialogs (IFileOpenDialog/IFileSaveDialog); true = legacy
+		 * Win32 (GetOpenFileNameW/GetSaveFileNameW). The Win32 path is an accessibility
+		 * compatibility fallback for Windows 11 cases where the COM dialog misbehaves with
+		 * assistive tools - not dead code. See PlatformSpecific/AGENTS.md. */
 		constexpr auto CompatibilityWindowsUseLegacyFileDialogsKey{"Core/Compatibility/Windows/UseLegacyFileDialogs"};
-		constexpr auto DefaultCompatibilityWindowsUseLegacyFileDialogs{false}; // Use Win32 API instead of COM
+		constexpr auto DefaultCompatibilityWindowsUseLegacyFileDialogs{false};
 		/*constexpr auto CompatibilityLinuxSampleKey{"Core/Compatibility/Linux/XXX"}; // Linux example
 		constexpr auto DefaultCompatibilityLinuxSample{false};*/
 		/*constexpr auto CompatibilityMacOSSampleKey{"Core/Compatibility/macOS/XXX"}; // macOS example
