@@ -70,10 +70,36 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 4. `commitTransitionBuffer()` - Swap buffers when new content ready
 5. Callbacks: `onActiveBufferReady()`, `onTransitionBufferReady()` for notifications
 
+**Status state machine (`TransitionBufferStatus`):** `Ready` → `Resizing` (GPU resources being (re)created, drawing/commit forbidden, `isTransitionBufferReady()` returns false) → `WaitingForContent` (sized, awaiting provider frame) → back to `Ready` on commit.
+
+> [!CRITICAL]
+> **The content provider's painted size is the source of truth — not the engine's surface-size formula.**
+> A frame is committed only when its pixel size matches the transition buffer *exactly*
+> (`determineTargetBuffer()` / `matchesSize()` use strict equality, no tolerance). The transition
+> buffer is initially sized via `FramebufferProperties::getSurfaceWidth/Height()`
+> (`round(round(resolution·geom)·screenScale)`, double-round, per-axis scale), while an OSR
+> provider like CEF paints at `providerRounding(viewRect · device_scale_factor)` using its own
+> internal rounding and a single `maxScreenScale()`. **On fractional display scales (e.g. 125%)
+> these can diverge by ±1 px**, so the painted frame matches neither buffer and the resize commit
+> stalls — the active buffer keeps the old size → **black/stale render until the next resize**.
+> This was reproducible by maximizing the window (single deterministic size jump) on 125%-scaled
+> Windows monitors; manual drag hid it because it sweeps many sizes.
+>
+> **Resolution — provider-driven transition resize (convergence loop):** when the provider paints a
+> size matching neither buffer, it calls `requestTransitionBufferResize(width, height)` (thread-safe
+> setter, no GPU work, guarded by a dedicated mutex). On the next `processUpdates()` (render thread),
+> `recreateTransitionBufferToRequestedSize()` recreates the transition buffer at that exact painted
+> size (dedicated path — it does **not** recompute via the surface-size formula, and deliberately
+> does **not** fire `onTransitionBufferReady()`, which would re-trigger a CEF `WasResized()` and risk
+> looping). The next identical frame then matches and commits. Converges within one render iteration.
+
 **Code references:**
 - `Surface.hpp:Framebuffer` struct definition
 - `Surface.cpp:commitTransitionBuffer()` - Buffer swap logic
 - `Surface.hpp:isTransitionBufferReady()` - Check if transition buffer awaits content
+- `Surface.cpp:requestTransitionBufferResize()` - Provider-thread setter recording the authoritative painted size
+- `Surface.cpp:recreateTransitionBufferToRequestedSize()` - Render-thread dedicated recreation path (called from `processUpdates()` Step 1.b)
+- Consumer side: `app_system/src/UI/WebView.CefRenderHandler.cpp:directPaint()/indirectPaint()` request the resize on a size mismatch instead of dropping the frame
 
 ### Direct GPU Memory Mapping
 
@@ -418,6 +444,8 @@ class CustomSurface : public Surface {
 - **Size matching:** Always compare frame size with `activeBuffer().width()/height()`, not pixmap dimensions
 - **Commit timing:** Call `commitTransitionBuffer()` only after content is fully written
 - **Callback order:** `onTransitionBufferReady()` fires when new buffer is ready for content
+- **Provider size is authoritative:** the strict-equality commit means a ±1 px divergence between the engine's surface-size formula and the provider's device-scale rounding (fractional display scales, e.g. 125%) stalls the resize → black render. On a no-match frame the provider must call `requestTransitionBufferResize(paintedW, paintedH)` (instead of dropping the frame); the render thread then recreates the transition buffer at the painted size via `recreateTransitionBufferToRequestedSize()` (`processUpdates()` Step 1.b). Do **not** call `onTransitionBufferReady()` from that dedicated path (it re-triggers the provider's resize and risks a loop).
+- **Threading:** `requestTransitionBufferResize()` is provider-thread-safe (records size under `m_requestedTransitionSizeMutex`, no GPU work). All GPU (re)creation stays on the render thread inside `processUpdates()` under `m_framebufferAccess`; the `Resizing` status blocks provider writes/commits during recreation.
 
 ## Detailed Documentation
 

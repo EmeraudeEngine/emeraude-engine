@@ -787,6 +787,24 @@ namespace EmEn::Overlay
 			bool commitTransitionBuffer () noexcept;
 
 			/**
+			 * @brief Requests a recreation of the transition buffer at an explicit pixel size.
+			 * @details For asynchronous content providers (e.g. CEF), the provider is the source
+			 * of truth for the painted pixel size. The engine's surface-size formula and the
+			 * provider's own device-scale rounding can diverge by a sub-pixel on fractional
+			 * display scales (e.g. 125%), so the painted frame may match neither the active nor
+			 * the transition buffer — which would otherwise stall the resize commit (black render).
+			 * Call this from the provider's paint callback with the actually-painted size: the
+			 * transition buffer is then recreated at that size on the render thread (next
+			 * processUpdates()), so the following identical frame can commit.
+			 * @note Thread-safe: only records the requested size under a dedicated mutex, performs
+			 * no GPU work. The actual recreation happens on the render thread.
+			 * @param width The painted frame width in pixels.
+			 * @param height The painted frame height in pixels.
+			 * @return void
+			 */
+			void requestTransitionBufferResize (uint32_t width, uint32_t height) noexcept;
+
+			/**
 			 * @brief On key press event handler.
 			 * @note Override this method to react on the input event.
 			 * @param key The keyboard universal key code. I.e., QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
@@ -1071,6 +1089,24 @@ namespace EmEn::Overlay
 			bool updatePhysicalRepresentation (Graphics::Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Recreates the transition buffer at the size requested by the content provider.
+			 * @details Dedicated path for the content-provider-driven resize (see
+			 * requestTransitionBufferResize()). Unlike updatePhysicalRepresentation(), it does NOT
+			 * recompute the size from the engine's surface-size formula — it uses the exact painted
+			 * size recorded by the provider, which is authoritative. A no-op (returns true) when no
+			 * resize was requested or the transition buffer already matches the requested size.
+			 * @warning Must be called on the render thread while holding m_framebufferAccess (i.e.
+			 * from processUpdates()). It performs GPU resource destruction/creation and a waitIdle().
+			 * It deliberately does NOT call onTransitionBufferReady(): the provider is already
+			 * painting at this size, so notifying it again (which triggers a CEF WasResized()) could
+			 * restart the convergence loop.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool True on success (including the no-op case), false on GPU failure.
+			 */
+			[[nodiscard]]
+			bool recreateTransitionBufferToRequestedSize (Graphics::Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Called when the active buffer is ready for use.
 			 * @details Override this method to be notified when the active buffer has been
 			 * created or recreated. This is called:
@@ -1119,9 +1155,13 @@ namespace EmEn::Overlay
 			Framebuffer m_transitionBuffer;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
 			mutable std::mutex m_framebufferAccess;
+			mutable std::mutex m_requestedTransitionSizeMutex;
+			uint32_t m_requestedTransitionWidth{0};
+			uint32_t m_requestedTransitionHeight{0};
 			float m_depth{0.0F};
 			float m_alphaThreshold{0.1F};
 			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
+			bool m_transitionResizeRequested{false};
 			bool m_videoMemorySizeValid{false};
 			bool m_videoMemoryUpToDate{false};
 			bool m_transitionBufferEnabled{false};

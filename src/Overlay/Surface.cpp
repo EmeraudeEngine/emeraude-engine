@@ -214,6 +214,22 @@ namespace EmEn::Overlay
 			return true;
 		}
 
+		/* Step 1.b: Honor a content-provider-driven transition resize.
+		 * The async provider (e.g. CEF) is the source of truth for the painted pixel size. When the
+		 * engine's surface-size formula and the provider's own device-scale rounding diverge by a
+		 * sub-pixel (typical on fractional display scales, e.g. 125%), the painted frame matches
+		 * neither buffer and the resize commit stalls (black render). The provider then requests a
+		 * resize to its painted size via requestTransitionBufferResize(); we honor it here so the
+		 * next identical frame can commit. This converges within one render iteration. */
+		if ( m_transitionBufferEnabled && !this->recreateTransitionBufferToRequestedSize(renderer) )
+		{
+			TraceError{ClassId} << "Unable to honor the requested transition buffer resize for surface '" << this->name() << "' !";
+
+			m_framebufferAccess.unlock();
+
+			return false;
+		}
+
 		/* Step 2: Upload active buffer content to GPU.
 		 * This uploads the active pixmap data to the GPU when setVideoMemoryOutdated() was called.
 		 * NOTE: When memory mapping is enabled, the caller writes directly to the GPU, so we skip this step. */
@@ -465,6 +481,88 @@ namespace EmEn::Overlay
 		{
 			m_videoMemoryUpToDate = false;
 		}
+
+		return true;
+	}
+
+	void
+	Surface::requestTransitionBufferResize (uint32_t width, uint32_t height) noexcept
+	{
+		if ( !m_transitionBufferEnabled || width == 0 || height == 0 )
+		{
+			return;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_requestedTransitionSizeMutex};
+
+		m_requestedTransitionWidth = width;
+		m_requestedTransitionHeight = height;
+		m_transitionResizeRequested = true;
+	}
+
+	bool
+	Surface::recreateTransitionBufferToRequestedSize (Renderer & renderer) noexcept
+	{
+		uint32_t requestedWidth = 0;
+		uint32_t requestedHeight = 0;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_requestedTransitionSizeMutex};
+
+			if ( !m_transitionResizeRequested )
+			{
+				return true;
+			}
+
+			requestedWidth = m_requestedTransitionWidth;
+			requestedHeight = m_requestedTransitionHeight;
+			m_transitionResizeRequested = false;
+		}
+
+		/* NOTE: The content provider's painted size is authoritative. If the transition buffer
+		 * already matches it, there is nothing to do — the next incoming frame will commit. */
+		if ( m_transitionBuffer.matchesSize(requestedWidth, requestedHeight) )
+		{
+			return true;
+		}
+
+		TraceWarning{ClassId} <<
+			"Surface '" << this->name() << "' transition buffer size (" << m_transitionBuffer.width() << "x" << m_transitionBuffer.height() <<
+			"px) diverges from the content provider's painted size (" << requestedWidth << "x" << requestedHeight <<
+			"px). Recreating the transition buffer at the painted size.";
+
+		/* NOTE: Block any transition write/commit from the content provider while we destroy and
+		 * recreate the GPU resources (isTransitionBufferReady() returns false during Resizing). */
+		m_transitionBufferStatus = TransitionBufferStatus::Resizing;
+
+		/* NOTE: Memory-mapping path writes straight to GPU memory and needs no pixmap.
+		 * CPU pixmap path needs an empty pixmap of the requested size. */
+		if ( !m_memoryMappingEnabled )
+		{
+			if ( !m_transitionBuffer.pixmap.initialize(requestedWidth, requestedHeight, ChannelMode::RGBA) )
+			{
+				TraceError{ClassId} << "Unable to initialize the transition pixmap for the surface '" << this->name() << "' !";
+
+				return false;
+			}
+		}
+
+		renderer.device()->waitIdle("Surface::recreateTransitionBufferToRequestedSize()");
+
+		m_transitionBuffer.destroy();
+
+		if ( !this->createFramebufferResources(m_transitionBuffer, renderer, requestedWidth, requestedHeight) )
+		{
+			m_transitionBuffer.destroy();
+
+			return false;
+		}
+
+		/* NOTE: The transition buffer now matches the provider's painted size. The next incoming
+		 * frame at this size will be accepted and committed. We deliberately DO NOT call
+		 * onTransitionBufferReady() here: the provider is already painting at this size, and
+		 * notifying it (which triggers WasResized() on the CEF side) could restart the loop. */
+		m_transitionBufferStatus = TransitionBufferStatus::WaitingForContent;
 
 		return true;
 	}
