@@ -111,8 +111,8 @@ namespace EmEn::Vulkan
 			m_applicationInfo.pNext = nullptr;
 			m_applicationInfo.pApplicationName = m_identification.applicationId().c_str();
 			m_applicationInfo.applicationVersion = VK_MAKE_VERSION(m_identification.applicationVersion().major(), m_identification.applicationVersion().minor(), m_identification.applicationVersion().revision());
-			m_applicationInfo.pEngineName = Identification::LibraryName;
-			m_applicationInfo.engineVersion = VK_MAKE_VERSION(Identification::LibraryVersion.major(), Identification::LibraryVersion.minor(), Identification::LibraryVersion.revision());
+			m_applicationInfo.pEngineName = EmEn::EngineName;
+			m_applicationInfo.engineVersion = VK_MAKE_VERSION(Identification::EngineVersion.major(), Identification::EngineVersion.minor(), Identification::EngineVersion.revision());
 			/* [VULKAN-API-SETUP] Vulkan API version selection. */
 			if constexpr ( IsMacOS )
 			{

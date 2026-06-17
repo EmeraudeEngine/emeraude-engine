@@ -50,11 +50,11 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Identification"};
 
-			static constexpr auto LibraryAuthorName{"\"LondNoir\" <londnoir@gmail.com>"};
-			static constexpr auto LibraryName{EngineName};
-			static constexpr auto LibraryVersion{Base::Version(VersionMajor, VersionMinor, VersionPatch)};
-			static constexpr auto LibraryPlatform{PlatformTargeted};
-			static constexpr auto LibraryCompilationDate{__DATE__};
+			static constexpr auto AuthorName{"\"LondNoir\" <londnoir@gmail.com>"};
+			static constexpr auto EngineVersion{Base::Version(VersionMajor, VersionMinor, VersionPatch)};
+			static constexpr auto LibraryVersion{Base::Version(BaseVersionMajor, BaseVersionMinor, BaseVersionPatch)};
+			static constexpr auto Platform{PlatformTargeted};
+			static constexpr auto CompilationDate{__DATE__};
 
 			/** 
 			 * @brief Constructs an application identification structure.
@@ -73,7 +73,7 @@ namespace EmEn
 				{
 					std::stringstream stream;
 
-					stream << LibraryName << " (" << LibraryVersion << "; " << LibraryPlatform << "; " << LibraryCompilationDate << ") LGPLv3 - " << LibraryAuthorName;
+					stream << EngineName << " (" << EngineVersion << ", base " << LibraryVersion << "; " << Platform << "; " << CompilationDate << ") LGPLv3 - " << AuthorName;
 
 					m_engineId = stream.str();
 				}
