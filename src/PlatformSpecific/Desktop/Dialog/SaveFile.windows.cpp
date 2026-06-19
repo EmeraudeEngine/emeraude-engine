@@ -197,41 +197,19 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	bool
 	SaveFile::execute (Window & window, bool parentToWindow) noexcept
 	{
-		/* The native file dialog runs on a DEDICATED STA thread whose message queue is empty.
-		 * See OpenFile::execute() for the full rationale: on the engine main thread the modal
-		 * message pump lets the Windows shell re-resolve its navigation pane thousands of times
-		 * (empty SyncRootManager / known-folder lookups), delaying the dialog by 3-5 s on
-		 * cloud-redirected-known-folder machines; a quiet thread resolves the pane once (~140 ms).
-		 * We re-enter execute() on the worker (thread-local guard prevents recursion) with
-		 * parentToWindow=false to avoid a cross-thread modal owner (the caller blocks on join()). */
-		{
-			static thread_local bool onDedicatedDialogThread = false;
+		/* All native file dialogs run on a dedicated STA thread, centered on the application
+		 * window via a worker-thread owner proxy (no cross-thread owner). See
+		 * PlatformSpecific/Helpers.hpp (runFileDialogOnDedicatedThread) for the full rationale
+		 * (perf + deadlock-free centering). showDialog() below is the IFileSaveDialog body; it
+		 * receives the resolved parent window handle. */
+		return runFileDialogOnDedicatedThread(window, parentToWindow, [this, &window] (HWND parentWindow) {
+			return this->showDialog(window, parentWindow);
+		});
+	}
 
-			if ( !onDedicatedDialogThread )
-			{
-				bool result = false;
-
-				std::thread worker{[this, &window, &result] () {
-					onDedicatedDialogThread = true;
-
-					const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-
-					result = this->execute(window, false);
-
-					if ( SUCCEEDED(comInit) )
-					{
-						CoUninitialize();
-					}
-				}};
-
-				worker.join();
-
-				return result;
-			}
-		}
-
-		HWND parentWindow = parentToWindow ? window.getWin32Window() : nullptr;
-
+	bool
+	SaveFile::showDialog (Window & window, HWND parentWindow) noexcept
+	{
 		/* NOTE: Branch to the Win32 legacy path when the compatibility setting is enabled.
 		 * Useful on Windows 11 when the modern COM dialog misbehaves with accessibility tools. */
 		if ( window.primaryServices().settings().getOrSetDefault< bool >(CompatibilityWindowsUseLegacyFileDialogsKey, DefaultCompatibilityWindowsUseLegacyFileDialogs) )

@@ -31,6 +31,12 @@
 #include <utility>
 #include <vector>
 
+/* Local inclusions. */
+#include "emeraude_platform.hpp"
+#if IS_WINDOWS
+	#include "PlatformSpecific/Helpers.hpp" /* Provides the Win32 HWND type for the Windows-only showDialog(). */
+#endif
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
@@ -132,6 +138,18 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 
 		private:
+
+#if IS_WINDOWS
+			/**
+			 * @brief Windows COM implementation of the dialog (IFileOpenDialog), shown with the
+			 * given parent window. Invoked by execute() on the dedicated STA thread set up by
+			 * runFileDialogOnDedicatedThread(). Windows-only.
+			 * @param window A reference to the application window.
+			 * @param parentWindow The native parent (centering owner) window handle, may be null.
+			 * @return bool
+			 */
+			bool showDialog (Window & window, HWND parentWindow) noexcept;
+#endif
 
 			std::vector< std::pair< std::string, std::vector< std::string > > > m_extensionFilters;
 			std::vector< std::filesystem::path > m_filepaths;

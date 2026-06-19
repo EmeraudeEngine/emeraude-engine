@@ -27,8 +27,12 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
+#include <exception>
+#include <functional>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
+#include <thread>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -38,11 +42,13 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
+#include <objbase.h>
 #include <psapi.h>
 #include <tlhelp32.h>
 
 /* Local inclusions. */
 #include "Tracer.hpp"
+#include "Window.hpp"
 
 namespace EmEn::PlatformSpecific
 {
@@ -364,5 +370,145 @@ namespace EmEn::PlatformSpecific
 		}
 
 		return filterPointers;
+	}
+
+	namespace
+	{
+		constexpr auto FileDialogClassId{"FileDialog"};
+
+		/**
+		 * @brief Hidden top-level owner window positioned over a target screen rectangle, created
+		 * on the calling (STA worker) thread so the shell centers the modal dialog on it WITHOUT a
+		 * cross-thread owner.
+		 *
+		 * Uses the built-in "STATIC" class (no RegisterClass, no class-atom lifetime concern) and
+		 * is never shown (no WS_VISIBLE) — the shell only needs its geometry. Created and destroyed
+		 * (RAII) on the same thread as the dialog's modal loop, so the implicit owner enable/disable
+		 * sends stay same-thread and cannot deadlock against the blocked caller thread.
+		 */
+		class CenteringOwner final
+		{
+			public:
+
+				explicit
+				CenteringOwner (const RECT * targetRect) noexcept
+				{
+					if ( targetRect == nullptr )
+					{
+						return;
+					}
+
+					const LONG rawWidth = targetRect->right - targetRect->left;
+					const LONG rawHeight = targetRect->bottom - targetRect->top;
+					const int width = rawWidth > 1 ? static_cast< int >(rawWidth) : 1;
+					const int height = rawHeight > 1 ? static_cast< int >(rawHeight) : 1;
+
+					m_handle = CreateWindowExW(
+						WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+						L"STATIC", L"",
+						WS_POPUP,
+						static_cast< int >(targetRect->left), static_cast< int >(targetRect->top),
+						width, height,
+						nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+				}
+
+				CenteringOwner (const CenteringOwner &) = delete;
+
+				CenteringOwner (CenteringOwner &&) = delete;
+
+				CenteringOwner & operator= (const CenteringOwner &) = delete;
+
+				CenteringOwner & operator= (CenteringOwner &&) = delete;
+
+				~CenteringOwner ()
+				{
+					if ( m_handle != nullptr )
+					{
+						DestroyWindow(m_handle);
+					}
+				}
+
+				[[nodiscard]]
+				HWND
+				handle () const noexcept
+				{
+					return m_handle;
+				}
+
+			private:
+
+				HWND m_handle{nullptr};
+		};
+	}
+
+	bool
+	runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND) > & dialogBody) noexcept
+	{
+		/* Read the main window geometry + DPI context on the CALLER thread; never deref the main
+		 * window HWND from the worker.
+		 *
+		 * Skip the centering owner when the window is minimized: GetWindowRect then returns the
+		 * iconic ghost coordinates (~{-32000, -32000}), which would center the dialog off-screen.
+		 * With no owner rect we fall back to the shell's default (visible) placement. We test
+		 * IsIconic rather than the coordinate sign — a window on a left secondary monitor has a
+		 * legitimately negative X. */
+		const HWND mainWindow = window.getWin32Window();
+		RECT ownerRect{};
+		const bool haveOwnerRect = parentToWindow && mainWindow != nullptr && IsIconic(mainWindow) == 0 && GetWindowRect(mainWindow, &ownerRect) != 0;
+		const DPI_AWARENESS_CONTEXT dpiContext = mainWindow != nullptr ? GetWindowDpiAwarenessContext(mainWindow) : nullptr;
+
+		/* The actual dialog run: STA COM init + hidden centering owner + body, on whichever thread
+		 * invokes it (the dedicated worker normally, the caller thread on the fallback path). */
+		const auto runDialog = [&dialogBody, haveOwnerRect, &ownerRect] () -> bool {
+			const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+			/* RAII hidden owner, created and destroyed on the running thread. */
+			const CenteringOwner owner{haveOwnerRect ? &ownerRect : nullptr};
+
+			const bool dialogResult = dialogBody(owner.handle());
+
+			if ( SUCCEEDED(comInit) )
+			{
+				CoUninitialize();
+			}
+
+			return dialogResult;
+		};
+
+		bool result = false;
+
+		/* The dialog runs on a DEDICATED STA thread (empty message queue) — see the header for the
+		 * full perf rationale. The DPI awareness is replicated on the worker ONLY; setting it on the
+		 * caller thread would permanently mutate the main thread's context.
+		 *
+		 * Only the thread CONSTRUCTION is guarded: it is the sole realistic failure (std::thread
+		 * throws std::system_error on OS resource exhaustion). join() on a freshly joinable thread
+		 * does not throw, so it stays outside the try. */
+		std::optional< std::thread > worker;
+
+		try
+		{
+			worker.emplace([&runDialog, &result, dpiContext] () {
+				if ( dpiContext != nullptr )
+				{
+					SetThreadDpiAwarenessContext(dpiContext);
+				}
+
+				result = runDialog();
+			});
+		}
+		catch ( const std::exception & error )
+		{
+			/* Spawning the dedicated thread failed. Fall back to running the dialog on the caller
+			 * thread: slower on cloud-redirected-known-folder machines (the original symptom), but
+			 * functional. No DPI mutation here — the caller thread already owns the window. */
+			TraceWarning{FileDialogClassId} << "Unable to spawn the dedicated dialog thread (" << error.what() << "); running the dialog inline.";
+
+			return runDialog();
+		}
+
+		worker->join();
+
+		return result;
 	}
 }

@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #if IS_WINDOWS
+	#include <functional>
 	#include <map>
 #endif
 #include <string>
@@ -48,6 +49,14 @@
 
 	#include <Windows.h>
 	#include <shtypes.h>
+#endif
+
+#if IS_WINDOWS
+/* Forward declarations. */
+namespace EmEn
+{
+	class Window;
+}
 #endif
 
 namespace EmEn::PlatformSpecific
@@ -138,6 +147,40 @@ namespace EmEn::PlatformSpecific
 	 */
 	[[nodiscard]]
 	std::vector< COMDLG_FILTERSPEC > createExtensionFilter (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters, std::map< std::wstring, std::wstring > & dataHolder);
+
+	/**
+	 * @brief Runs a native Windows file-dialog body on a DEDICATED STA thread, with the dialog
+	 * centered on the application window — without a cross-thread owner.
+	 *
+	 * Shared machinery for OpenFile/SaveFile (the dialog-specific COM code is the @a dialogBody).
+	 * It encapsulates three concerns that are identical for every native file dialog:
+	 *
+	 * 1. **Perf:** the dialog runs on a fresh STA thread whose message queue is empty, instead of
+	 *    the engine's main thread. On the main thread the modal message loop pumps the heavy main
+	 *    traffic (rendering, input, CEF), making the Windows shell re-resolve its navigation pane
+	 *    thousands of times (empty SyncRootManager / known-folder lookups) — a 3-5 s delay on
+	 *    cloud-redirected-known-folder machines. A quiet thread resolves the pane once (~140 ms).
+	 *
+	 * 2. **Centering:** a hidden owner window is created ON THE WORKER THREAD, over the
+	 *    main window's screen rectangle (read on the caller thread, passed by value, with the main
+	 *    window's DPI awareness context replicated). The shell centers the dialog on it natively —
+	 *    no post-show jump, correct monitor. A cross-thread owner is impossible here: the caller
+	 *    blocks on join() while the dialog is up, so a modal dialog owned by a window on that
+	 *    blocked thread would deadlock on the implicit cross-thread WM_ENABLE / activation sends.
+	 *    The proxy lives on the worker thread → those sends stay same-thread.
+	 *
+	 * 3. **COM:** CoInitializeEx(STA) / CoUninitialize around the body.
+	 *
+	 * @param window A reference to the application window (read on the caller thread only).
+	 * @param parentToWindow Whether to center on @a window. When false, the body receives a null
+	 * parent (no centering) — matches the previous behavior for ownerless dialogs.
+	 * @param dialogBody The dialog-specific work. Receives the parent window handle to pass to
+	 * IFileDialog::Show() (and the legacy hwndOwner). Runs on the dedicated STA thread. Returns
+	 * its own success flag, which becomes this function's return value.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND parentWindow) > & dialogBody) noexcept;
 #endif
 
 #if IS_LINUX
