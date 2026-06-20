@@ -48,6 +48,7 @@
 #include "Scenes/LightSet.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneMetaData.hpp"
+#include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -536,6 +537,22 @@ namespace EmEn::Graphics
 			Tracer::warning(ClassId, "Unable to create RT descriptor set. Ray tracing reflections will be unavailable.");
 		}
 
+		/* Create the single, renderer-owned acceleration structure builder. It is shared by every
+		 * geometry (BLAS, for SHARED geometries that outlive any scene) and every scene (TLAS).
+		 * It must NOT be owned per-scene: deleting a scene would otherwise destroy the builder the
+		 * active scene still needs and leave geometries unable to build their BLAS. */
+		if ( m_device->rayTracingEnabled() && this->isRayTracingSettingEnabled() )
+		{
+			m_accelerationStructureBuilder = std::make_unique< Vulkan::AccelerationStructureBuilder >(m_device);
+
+			if ( !m_accelerationStructureBuilder->initialize() )
+			{
+				Tracer::warning(ClassId, "Unable to initialize the acceleration structure builder. Ray tracing will be unavailable.");
+
+				m_accelerationStructureBuilder.reset();
+			}
+		}
+
 		/* NOTE: Console registration is handled by Core via registerToObject(). */
 
 		/* Create the grab pass texture (initially disabled, but pre-allocated). */
@@ -654,6 +671,7 @@ namespace EmEn::Graphics
 		 * These textures have VMA allocations that must be freed before the device is destroyed. */
 		this->clearDefaultResources();
 
+		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
 		m_rtDescriptorSetLayout.reset();
 		m_descriptorPool.reset();

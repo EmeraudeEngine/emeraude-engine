@@ -55,18 +55,6 @@ namespace EmEn::Graphics::Geometry
 		public:
 
 			/**
-			 * @brief Sets the acceleration structure builder for ray tracing BLAS.
-			 * @param builder A pointer to the builder. Null disables RT BLAS building.
-			 * @return void
-			 */
-			static
-			void
-			setAccelerationStructureBuilder (Vulkan::AccelerationStructureBuilder * builder) noexcept
-			{
-				s_accelerationStructureBuilder = builder;
-			}
-
-			/**
 			 * @brief Returns whether the tangent space is present in local data.
 			 * @return bool
 			 */
@@ -561,8 +549,6 @@ namespace EmEn::Graphics::Geometry
 
 		private:
 
-			/** @brief Access to the acceleration structure builder for ray tracing BLAS. Null when RT is disabled. */
-			static Vulkan::AccelerationStructureBuilder * s_accelerationStructureBuilder;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]

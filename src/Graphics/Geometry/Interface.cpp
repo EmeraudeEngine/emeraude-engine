@@ -45,9 +45,6 @@ namespace EmEn::Graphics::Geometry
 
 	constexpr auto TracerTag{"GeometryInterface"};
 
-	/* TODO: Remove this ! */
-	AccelerationStructureBuilder * Interface::s_accelerationStructureBuilder = nullptr;
-
 	bool
 	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, uint32_t length) noexcept
 	{
@@ -104,8 +101,11 @@ namespace EmEn::Graphics::Geometry
 	void
 	Interface::buildAccelerationStructure () noexcept
 	{
-		/* Skip if RT is not available. */
-		if ( s_accelerationStructureBuilder == nullptr )
+		/* The acceleration structure builder is owned by the renderer (single instance, shared by
+		 * all geometries and scenes). Skip if RT is unavailable/disabled. */
+		auto * accelerationStructureBuilder = this->serviceProvider().graphicsRenderer().accelerationStructureBuilder();
+
+		if ( accelerationStructureBuilder == nullptr )
 		{
 			return;
 		}
@@ -221,7 +221,7 @@ namespace EmEn::Graphics::Geometry
 			}
 		}
 
-		m_accelerationStructure = s_accelerationStructureBuilder->buildBLAS(geometries);
+		m_accelerationStructure = accelerationStructureBuilder->buildBLAS(geometries);
 
 		if ( m_accelerationStructure == nullptr )
 		{

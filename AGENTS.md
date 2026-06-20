@@ -212,6 +212,7 @@ and the AI executes, measures, and iterates at industrial speed.
 5.  **sRGB Convention:** Material variable names ending with `Color` trigger `VK_FORMAT_*_SRGB`. Data textures (normals, roughness) use `_UNORM`. Enforced in `Material::Component::Texture` constructors. See `Material/Component/Texture.hpp`.
 6.  **BC7 Compression:** All `Texture2D` resources are BC7-compressed at load time when `textureCompressionBC` is available. Compressed data cached on disk (`TextureCache`). Format: `VK_FORMAT_BC7_SRGB_BLOCK` or `VK_FORMAT_BC7_UNORM_BLOCK` based on sRGB flag.
 7.  **Image Format Awareness:** When adding new `VkFormat` variants, update `Image::pixelBytes()` AND `Image::colorCount()` — missing cases return 0, breaking multi-layer uploads silently.
+8.  **Multi-Scene Resource Ownership:** Several scenes can be loaded at once (one ACTIVE) and are loaded/switched/**deleted at runtime**. A resource **shared across scenes or that outlives a scene** (samplers, pipelines, programs, layouts, the bindless table, the AS builder, default textures) is owned **ONCE** at the Renderer/device level — **never per-scene, never via a global `static`**; consumers **release references, never destroy** cache-owned objects. Per-scene state only **describes/borrows** (cf. `LightSet`, `BindlessTextureSet`); the global service mirrors the active scene and is cleared on disable. **Mandatory read before writing resource code:** [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md).
 
 ## 3b. Licensing
 
@@ -285,6 +286,7 @@ how to add new commands.
 -   **Coordinates:** [`docs/coordinate-system.md`](docs/coordinate-system.md) (Y-DOWN convention — absolute law).
 -   **Graphics Hub:** [`docs/graphics-system.md`](docs/graphics-system.md) (High-level rendering architecture).
 -   **Scene Graph:** [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) (Entity-Component hierarchy).
+-   **Multi-Scene Resource Ownership:** [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) (**Code-generation doctrine** — who owns what across scene load/switch/delete; read before writing resource code).
 -   **Shadow Mapping:** [`docs/shadow-mapping.md`](docs/shadow-mapping.md) (PCF, color projection, render pass types).
 -   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
 -   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
@@ -424,6 +426,7 @@ All outbound references from this file, grouped by type.
 | Coordinate System | [`docs/coordinate-system.md`](docs/coordinate-system.md) |
 | Graphics System | [`docs/graphics-system.md`](docs/graphics-system.md) |
 | Scene Graph Architecture | [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) |
+| Multi-Scene Resource Ownership | [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) |
 | Shadow Mapping | [`docs/shadow-mapping.md`](docs/shadow-mapping.md) |
 | Physics System | [`docs/physics-system.md`](docs/physics-system.md) |
 | Resource Management | [`docs/resource-management.md`](docs/resource-management.md) |

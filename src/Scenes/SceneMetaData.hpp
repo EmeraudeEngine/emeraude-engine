@@ -94,7 +94,7 @@ namespace EmEn::Scenes
 			 * @param device A reference to the Vulkan device smart pointer.
 			 * @param enableRayTracing Whether the user setting allows ray tracing.
 			 */
-			explicit SceneMetaData (const std::shared_ptr< Vulkan::Device > & device, bool enableRayTracing = true) noexcept;
+			SceneMetaData (const std::shared_ptr< Vulkan::Device > & device, Vulkan::AccelerationStructureBuilder * accelerationStructureBuilder) noexcept;
 
 			SceneMetaData (const SceneMetaData & copy) noexcept = delete;
 
@@ -240,7 +240,7 @@ namespace EmEn::Scenes
 			/** @brief Reference to the Vulkan device for SSBO creation. */
 			std::shared_ptr< Vulkan::Device > m_device;
 			/** @brief Acceleration structure builder for ray tracing. Null when RT is disabled. */
-			std::unique_ptr< Vulkan::AccelerationStructureBuilder > m_accelerationStructureBuilder;
+			Vulkan::AccelerationStructureBuilder * m_accelerationStructureBuilder{nullptr};
 			/** @brief Top-level acceleration structure for the scene. Rebuilt each frame. */
 			std::unique_ptr< Vulkan::AccelerationStructure > m_TLAS;
 			/** @brief Pending TLAS build request (prepared by rebuild, consumed by recordTLASBuild). */

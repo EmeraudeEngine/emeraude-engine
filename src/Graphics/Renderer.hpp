@@ -75,6 +75,7 @@ namespace EmEn
 		class DescriptorSet;
 		class DescriptorSetLayout;
 		class AccelerationStructure;
+		class AccelerationStructureBuilder;
 		class CommandPool;
 		class CommandBuffer;
 		class GraphicsPipeline;
@@ -411,6 +412,21 @@ namespace EmEn::Graphics
 			bindlessTextureManager () const noexcept
 			{
 				return m_bindlessTextureManager;
+			}
+
+			/**
+			 * @brief Returns the single ray-tracing acceleration structure builder, or nullptr
+			 * when ray tracing is unavailable/disabled.
+			 * @note Renderer-owned and shared: BLAS are built for SHARED geometries (which outlive
+			 * any scene) and each scene's TLAS goes through the same builder. It must NOT be owned
+			 * per-scene. Geometry::Interface and Scenes::SceneMetaData obtain it from here.
+			 * @return Vulkan::AccelerationStructureBuilder *
+			 */
+			[[nodiscard]]
+			Vulkan::AccelerationStructureBuilder *
+			accelerationStructureBuilder () const noexcept
+			{
+				return m_accelerationStructureBuilder.get();
 			}
 
 			/**
@@ -1430,6 +1446,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTextureCube;
 			std::unique_ptr< GrabPass > m_grabPass;
 			const Vulkan::AccelerationStructure * m_currentTLAS{nullptr};
+			/** @brief Single ray-tracing acceleration structure builder, shared by all geometries (BLAS) and scenes (TLAS). Null when RT is off. */
+			std::unique_ptr< Vulkan::AccelerationStructureBuilder > m_accelerationStructureBuilder;
 			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;

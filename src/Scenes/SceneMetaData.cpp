@@ -47,41 +47,21 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	SceneMetaData::SceneMetaData (const std::shared_ptr< Device > & device, bool enableRayTracing) noexcept
-		: m_device(device)
+	SceneMetaData::SceneMetaData (const std::shared_ptr< Device > & device, AccelerationStructureBuilder * accelerationStructureBuilder) noexcept
+		: m_device(device),
+		m_accelerationStructureBuilder(accelerationStructureBuilder)
 	{
-		if ( !enableRayTracing || !device->rayTracingEnabled() )
-		{
-			return;
-		}
-
-		m_accelerationStructureBuilder = std::make_unique< AccelerationStructureBuilder >(device);
-
-		if ( m_accelerationStructureBuilder->initialize() )
-		{
-			Geometry::Interface::setAccelerationStructureBuilder(m_accelerationStructureBuilder.get());
-		}
-		else
-		{
-			Tracer::error(ClassId, "Failed to initialize acceleration structure builder, RT disabled for this scene.");
-
-			m_accelerationStructureBuilder.reset();
-		}
+		/* NOTE: The acceleration structure builder is owned by the Renderer (single shared
+		 * instance) and is null when RT is unavailable/disabled. SceneMetaData only borrows it for
+		 * TLAS building and buffer device addresses; it does NOT own it and must not destroy it. */
 	}
 
 	SceneMetaData::~SceneMetaData ()
 	{
-		/* Reset RT static builder pointer before destroying it. */
-		if ( m_accelerationStructureBuilder != nullptr )
-		{
-			Geometry::Interface::setAccelerationStructureBuilder(nullptr);
-		}
-
 		m_meshMetaDataSSBOs.clear();
 		m_materialDataSSBOs.clear();
 		m_TLAS.reset();
 		m_retiredRequests.clear();
-		m_accelerationStructureBuilder.reset();
 	}
 
 	bool

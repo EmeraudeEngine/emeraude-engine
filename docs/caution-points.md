@@ -505,6 +505,40 @@ if ( materialType == PBRResource::ClassId )
 > `Scenes/Scene.{hpp,cpp}`, `Scenes/Scene.rendering.cpp`, `Graphics/Renderer.cpp`. See
 > `src/Graphics/AGENTS.md` §6 "Bindless Textures Manager".
 
+### Fixed: Acceleration structure builder was per-scene via a global static (Jun 2026)
+
+> [!CRITICAL]
+> **Symptom (multi-scene):** reloading/deleting a scene caused BLAS/TLAS build errors and a GPU
+> stall — geometries silently stopped getting their BLAS.
+>
+> **Root cause:** `Vulkan::AccelerationStructureBuilder` was created **per scene** (in
+> `SceneMetaData`) and published through a **global static** pointer
+> `Geometry::Interface::s_accelerationStructureBuilder`. But BLAS are built for **shared
+> geometries** (which outlive any scene). Deleting a scene ran
+> `setAccelerationStructureBuilder(nullptr)`, clobbering the builder the *active* scene still
+> needed → `Interface::buildAccelerationStructure` saw null and skipped → geometries without BLAS
+> → invalid TLAS instances → GPU hang.
+>
+> **Fix:** the builder is now a **single Renderer-owned instance** (`Renderer::m_accelerationStructureBuilder`,
+> created at init when RT is enabled, exposed via `Renderer::accelerationStructureBuilder()`).
+> The global static was **removed**: `Geometry::Interface::buildAccelerationStructure` fetches the
+> builder from `serviceProvider().graphicsRenderer()`, and `SceneMetaData` borrows it (non-owning)
+> for TLAS / buffer addresses. The builder is stateless infra (command pool + fence + fps, mutex-
+> guarded) and the BLAS it returns is owned by the geometry, so a single shared instance is safe.
+>
+> **Files:** `Graphics/Renderer.{hpp,cpp}`, `Graphics/Geometry/Interface.{hpp,cpp}`,
+> `Scenes/SceneMetaData.{hpp,cpp}`, `Scenes/Scene.cpp`.
+
+> [!IMPORTANT]
+> **Systemic pattern (the four Jun 2026 fixes share one root):** a resource that is **shared or
+> global** had its *ownership / lifecycle* wired **per-scene** (or via a global static):
+> view-matrices on camera connect, bindless textures, the cached sampler, the AS builder. The
+> engine was built and tested single-scene; multi-scene load/switch/delete exposes these. **Rule
+> of thumb:** anything shared across scenes (samplers, pipelines, programs, layouts, the AS
+> builder, the bindless table) is owned ONCE at the Renderer/device level; per-scene objects only
+> *borrow* or *describe* (cf. `LightSet`, `BindlessTextureSet`). Avoid global statics for these —
+> reach the owner through the renderer. Audit new singletons/statics against multi-scene teardown.
+
 ### Fixed: Texture resources destroyed the SHARED cached sampler (Jun 2026)
 
 > [!CRITICAL]
