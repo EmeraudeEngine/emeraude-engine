@@ -166,8 +166,10 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			virtual
 			uint32_t
-			frameIndexAt (uint32_t /*sceneTimeMS*/) const noexcept
+			frameIndexAt (uint32_t sceneTimeMS) const noexcept
 			{
+				static_cast< void >(sceneTimeMS);
+
 				return 0;
 			}
 

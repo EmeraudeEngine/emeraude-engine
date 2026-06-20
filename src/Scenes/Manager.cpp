@@ -336,6 +336,12 @@ namespace EmEn::Scenes
 		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
 		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
+		/* NOTE: Drop this scene's textures from the global bindless descriptor table before it stops
+		 * being rendered. The manager only ever mirrors the ACTIVE scene; a scene that is no longer
+		 * active must leave no descriptor behind, otherwise destroying it later (deleteScene) would
+		 * destroy samplers/images still referenced by the descriptor set. */
+		m_activeScene->AVConsoleManager().graphicsRenderer().bindlessTextureManager().clearTextureSet(m_activeScene->bindlessTextureSet());
+
 		m_activeScene->disable(m_inputManager);
 
 		/* Send out a message that the scene has been deactivated. */

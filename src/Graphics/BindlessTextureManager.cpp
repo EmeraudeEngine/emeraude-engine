@@ -30,14 +30,20 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "Renderer.hpp"
-#include "Tracer.hpp"
+#include "Graphics/DummyColorProjectionTexture.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/Sampler.hpp"
 #include "Vulkan/TextureInterface.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
+#include "Renderer.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -223,32 +229,6 @@ namespace EmEn::Graphics
 		return true;
 	}
 
-	uint32_t
-	BindlessTextureManager::allocateIndex (std::queue< uint32_t > & freeIndices, uint32_t & nextIndex, uint32_t maxIndex) noexcept
-	{
-		if ( !freeIndices.empty() )
-		{
-			const auto index = freeIndices.front();
-
-			freeIndices.pop();
-
-			return index;
-		}
-
-		if ( nextIndex >= maxIndex )
-		{
-			return UINT32_MAX;
-		}
-
-		return nextIndex++;
-	}
-
-	void
-	BindlessTextureManager::freeIndex (std::queue< uint32_t > & freeIndices, uint32_t index) noexcept
-	{
-		freeIndices.push(index);
-	}
-
 	bool
 	BindlessTextureManager::writeTextureToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const Vulkan::TextureInterface & texture) const noexcept
 	{
@@ -270,7 +250,7 @@ namespace EmEn::Graphics
 
 		if ( descriptorInfo.sampler == VK_NULL_HANDLE || descriptorInfo.imageView == VK_NULL_HANDLE )
 		{
-			Tracer::error(ClassId, "Invalid texture descriptor info !");
+			TraceError{ClassId} << "Invalid texture descriptor info (binding:" << binding << ", arrayIndex:" << arrayIndex << ", texture image: " << texture.image()->identifier() << ") !";
 
 			return false;
 		}
@@ -296,189 +276,131 @@ namespace EmEn::Graphics
 		return true;
 	}
 
-	uint32_t
-	BindlessTextureManager::registerTexture1D (const Vulkan::TextureInterface & texture) noexcept
-	{
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
-
-		const auto index = allocateIndex(m_freeIndices1D, m_nextIndex1D, MaxTextures1D);
-
-		if ( index == UINT32_MAX )
-		{
-			Tracer::error(ClassId, "No more slots available for 1D textures !");
-
-			return UINT32_MAX;
-		}
-
-		if ( !this->writeTextureToDescriptorSet(Texture1DBinding, index, texture) )
-		{
-			freeIndex(m_freeIndices1D, index);
-
-			return UINT32_MAX;
-		}
-
-		return index;
-	}
-
-	uint32_t
-	BindlessTextureManager::registerTexture2D (const Vulkan::TextureInterface & texture) noexcept
-	{
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
-
-		const auto index = allocateIndex(m_freeIndices2D, m_nextIndex2D, MaxTextures2D);
-
-		if ( index == UINT32_MAX )
-		{
-			Tracer::error(ClassId, "No more slots available for 2D textures !");
-
-			return UINT32_MAX;
-		}
-
-		if ( !this->writeTextureToDescriptorSet(Texture2DBinding, index, texture) )
-		{
-			freeIndex(m_freeIndices2D, index);
-
-			return UINT32_MAX;
-		}
-
-		return index;
-	}
-
-	uint32_t
-	BindlessTextureManager::registerTexture3D (const Vulkan::TextureInterface & texture) noexcept
-	{
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
-
-		const auto index = allocateIndex(m_freeIndices3D, m_nextIndex3D, MaxTextures3D);
-
-		if ( index == UINT32_MAX )
-		{
-			Tracer::error(ClassId, "No more slots available for 3D textures !");
-
-			return UINT32_MAX;
-		}
-
-		if ( !this->writeTextureToDescriptorSet(Texture3DBinding, index, texture) )
-		{
-			freeIndex(m_freeIndices3D, index);
-
-			return UINT32_MAX;
-		}
-
-		return index;
-	}
-
-	uint32_t
-	BindlessTextureManager::registerTextureCube (const Vulkan::TextureInterface & texture) noexcept
-	{
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
-
-		const auto index = allocateIndex(m_freeIndicesCube, m_nextIndexCube, MaxTexturesCube);
-
-		if ( index == UINT32_MAX )
-		{
-			Tracer::error(ClassId, "No more slots available for cubemap textures !");
-
-			return UINT32_MAX;
-		}
-
-		if ( !this->writeTextureToDescriptorSet(TextureCubeBinding, index, texture) )
-		{
-			freeIndex(m_freeIndicesCube, index);
-
-			return UINT32_MAX;
-		}
-
-		return index;
-	}
-
-	uint32_t
-	BindlessTextureManager::registerTextureCubeArray (const Vulkan::TextureInterface & texture) noexcept
-	{
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
-
-		const auto index = allocateIndex(m_freeIndicesCubeArray, m_nextIndexCubeArray, MaxTexturesCubeArray);
-
-		if ( index == UINT32_MAX )
-		{
-			Tracer::error(ClassId, "No more slots available for cube array textures !");
-
-			return UINT32_MAX;
-		}
-
-		if ( !this->writeTextureToDescriptorSet(TextureCubeArrayBinding, index, texture) )
-		{
-			freeIndex(m_freeIndicesCubeArray, index);
-
-			return UINT32_MAX;
-		}
-
-		return index;
-	}
-
 	void
-	BindlessTextureManager::unregisterTexture1D (uint32_t index) noexcept
+	BindlessTextureManager::syncTextureSet (const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept
 	{
-		if ( index >= MaxTextures1D )
+		if ( m_descriptorSet == nullptr || !m_descriptorSet->isCreated() )
 		{
 			return;
 		}
 
+		const auto snapshot = set.snapshot();
+
 		const std::lock_guard< std::mutex > lock{m_indexMutex};
 
-		freeIndex(m_freeIndices1D, index);
+		/* Environment cubemap occupies its reserved slot. Fall back to the engine default when the
+		 * active scene has none, so a scene switch never leaves the previous scene's cubemap bound. */
+		if ( snapshot.environmentCubemap != nullptr && snapshot.environmentCubemap->isCreated() )
+		{
+			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *snapshot.environmentCubemap));
+		}
+		else if ( const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap(); defaultCubemap != nullptr && defaultCubemap->isCreated() )
+		{
+			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *defaultCubemap));
+		}
+
+		/* 2D textures. Animated textures expose their current-frame 2D view (the main view is a
+		 * 2D_ARRAY, invalid for sampler2D[]); that view is swapped in every frame. */
+		for ( const auto & entry : snapshot.textures2D )
+		{
+			const auto * texture = entry.texture.get();
+
+			if ( texture == nullptr || !texture->isCreated() )
+			{
+				continue;
+			}
+
+			if ( texture->frameCount() > 1 )
+			{
+				if ( const auto * animated = dynamic_cast< const TextureResource::AnimatedTexture2D * >(texture); animated != nullptr )
+				{
+					const auto frameView = animated->imageViewForFrame(animated->frameIndexAt(sceneTimeMS));
+
+					if ( frameView == nullptr || animated->sampler() == nullptr )
+					{
+						continue;
+					}
+
+					VkDescriptorImageInfo descriptorInfo{};
+					descriptorInfo.sampler = animated->sampler()->handle();
+					descriptorInfo.imageView = frameView->handle();
+					descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+					static_cast< void >(this->writeRawToDescriptorSet(Texture2DBinding, entry.globalIndex, descriptorInfo));
+
+					continue;
+				}
+			}
+
+			static_cast< void >(this->writeTextureToDescriptorSet(Texture2DBinding, entry.globalIndex, *texture));
+		}
+
+		/* Cube textures. */
+		for ( const auto & entry : snapshot.texturesCube )
+		{
+			if ( const auto * texture = entry.texture.get(); texture != nullptr && texture->isCreated() )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, entry.globalIndex, *texture));
+			}
+		}
+
+		/* Cube array textures. */
+		for ( const auto & entry : snapshot.texturesCubeArray )
+		{
+			if ( const auto * texture = entry.texture.get(); texture != nullptr && texture->isCreated() )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeArrayBinding, entry.globalIndex, *texture));
+			}
+		}
 	}
 
 	void
-	BindlessTextureManager::unregisterTexture2D (uint32_t index) noexcept
+	BindlessTextureManager::clearTextureSet (const Scenes::BindlessTextureSet & set) const noexcept
 	{
-		if ( index >= MaxTextures2D )
+		if ( m_descriptorSet == nullptr || !m_descriptorSet->isCreated() )
 		{
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const auto snapshot = set.snapshot();
 
-		freeIndex(m_freeIndices2D, index);
-	}
-
-	void
-	BindlessTextureManager::unregisterTexture3D (uint32_t index) noexcept
-	{
-		if ( index >= MaxTextures3D )
+		/* Nothing to clear (and avoid a needless GPU stall). */
+		if ( snapshot.textures2D.empty() && snapshot.texturesCube.empty() )
 		{
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
-
-		freeIndex(m_freeIndices3D, index);
-	}
-
-	void
-	BindlessTextureManager::unregisterTextureCube (uint32_t index) noexcept
-	{
-		if ( index >= MaxTexturesCube )
+		/* Drain in-flight frames that may still reference this set's textures through the
+		 * descriptor table, before we overwrite the descriptors (and the textures get destroyed). */
+		if ( m_device != nullptr )
 		{
-			return;
+			m_device->waitIdle("BindlessTextureManager::clearTextureSet");
 		}
 
 		const std::lock_guard< std::mutex > lock{m_indexMutex};
 
-		freeIndex(m_freeIndicesCube, index);
-	}
-
-	void
-	BindlessTextureManager::unregisterTextureCubeArray (uint32_t index) noexcept
-	{
-		if ( index >= MaxTexturesCubeArray )
+		/* Park each freed 2D slot on an engine-owned dummy so the descriptor never dangles. */
+		if ( const auto & dummy2D = m_renderer.getDummyColorProjectionTexture2D(); dummy2D != nullptr && dummy2D->isCreated() )
 		{
-			return;
+			for ( const auto & entry : snapshot.textures2D )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(Texture2DBinding, entry.globalIndex, *dummy2D));
+			}
 		}
 
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		/* Park each freed cube slot (and reset the reserved env slot) on the default cubemap. */
+		if ( const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap(); defaultCubemap != nullptr && defaultCubemap->isCreated() )
+		{
+			for ( const auto & entry : snapshot.texturesCube )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, entry.globalIndex, *defaultCubemap));
+			}
 
-		freeIndex(m_freeIndicesCubeArray, index);
+			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *defaultCubemap));
+		}
+
+		/* NOTE: cube-array slots (animated cubemap gobos) have no engine dummy; they are rare and
+		 * left untouched. If such a scene is destroyed, drop a dummy cube-array texture here. */
 	}
 
 	bool
@@ -562,7 +484,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	BindlessTextureManager::writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, VkDescriptorImageInfo descriptorInfo) const noexcept
+	BindlessTextureManager::writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const VkDescriptorImageInfo & descriptorInfo) const noexcept
 	{
 		if ( m_descriptorSet == nullptr || !m_descriptorSet->isCreated() )
 		{
@@ -573,7 +495,7 @@ namespace EmEn::Graphics
 
 		if ( descriptorInfo.sampler == VK_NULL_HANDLE || descriptorInfo.imageView == VK_NULL_HANDLE )
 		{
-			Tracer::error(ClassId, "Invalid raw descriptor info !");
+			TraceError{ClassId} << "Invalid raw descriptor info (binding:" << binding << ", arrayIndex:" << arrayIndex << ") !";
 
 			return false;
 		}
@@ -600,7 +522,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	BindlessTextureManager::updateTexture2DFromDescriptorInfo (uint32_t index, VkDescriptorImageInfo descriptorInfo) const noexcept
+	BindlessTextureManager::updateTexture2DFromDescriptorInfo (uint32_t index, const VkDescriptorImageInfo & descriptorInfo) const noexcept
 	{
 		if ( index >= MaxTextures2D )
 		{

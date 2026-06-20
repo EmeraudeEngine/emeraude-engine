@@ -27,7 +27,7 @@
 #include "AbstractLightEmitter.hpp"
 
 /* Local inclusions. */
-#include "Graphics/BindlessTextureManager.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -206,7 +206,7 @@ namespace EmEn::Scenes::Component
 	{
 		m_colorProjectionTexture = texture;
 
-		if ( m_colorProjectionTexture != nullptr && m_bindlessTextureManager != nullptr )
+		if ( m_colorProjectionTexture != nullptr && m_bindlessTextureSet != nullptr )
 		{
 			auto * resource = dynamic_cast< Resources::ResourceTrait * >(m_colorProjectionTexture.get());
 
@@ -226,7 +226,7 @@ namespace EmEn::Scenes::Component
 	void
 	AbstractLightEmitter::registerColorProjectionInBindless () noexcept
 	{
-		if ( m_bindlessTextureManager == nullptr || m_colorProjectionTexture == nullptr )
+		if ( m_bindlessTextureSet == nullptr || m_colorProjectionTexture == nullptr )
 		{
 			return;
 		}
@@ -236,20 +236,20 @@ namespace EmEn::Scenes::Component
 			/* Check if the texture is a cube array (animated cubemap) or a regular cube. */
 			if ( m_colorProjectionTexture->type() == Vulkan::TextureType::TextureCubeArray )
 			{
-				m_colorProjectionBindlessIndex = m_bindlessTextureManager->registerTextureCubeArray(*m_colorProjectionTexture);
+				m_colorProjectionBindlessIndex = m_bindlessTextureSet->registerTextureCubeArray(m_colorProjectionTexture);
 				m_colorProjectionIsCubeArray = true;
 				m_colorProjectionFrameIndex = 0;
 			}
 			else
 			{
-				m_colorProjectionBindlessIndex = m_bindlessTextureManager->registerTextureCube(*m_colorProjectionTexture);
+				m_colorProjectionBindlessIndex = m_bindlessTextureSet->registerTextureCube(m_colorProjectionTexture);
 				m_colorProjectionIsCubeArray = false;
 				m_colorProjectionFrameIndex = NoColorProjectionTexture;
 			}
 		}
 		else
 		{
-			m_colorProjectionBindlessIndex = m_bindlessTextureManager->registerTexture2D(*m_colorProjectionTexture);
+			m_colorProjectionBindlessIndex = m_bindlessTextureSet->registerTexture2D(m_colorProjectionTexture);
 			m_colorProjectionIsCubeArray = false;
 			m_colorProjectionFrameIndex = NoColorProjectionTexture;
 		}
@@ -270,19 +270,19 @@ namespace EmEn::Scenes::Component
 	void
 	AbstractLightEmitter::unregisterColorProjectionFromBindless (bool useCubemap) noexcept
 	{
-		if ( m_colorProjectionBindlessIndex != NoColorProjectionTexture && m_bindlessTextureManager != nullptr )
+		if ( m_colorProjectionBindlessIndex != NoColorProjectionTexture && m_bindlessTextureSet != nullptr && m_colorProjectionTexture != nullptr )
 		{
 			if ( useCubemap && m_colorProjectionIsCubeArray )
 			{
-				m_bindlessTextureManager->unregisterTextureCubeArray(m_colorProjectionBindlessIndex);
+				m_bindlessTextureSet->unregisterTextureCubeArray(m_colorProjectionTexture.get());
 			}
 			else if ( useCubemap )
 			{
-				m_bindlessTextureManager->unregisterTextureCube(m_colorProjectionBindlessIndex);
+				m_bindlessTextureSet->unregisterTextureCube(m_colorProjectionTexture.get());
 			}
 			else
 			{
-				m_bindlessTextureManager->unregisterTexture2D(m_colorProjectionBindlessIndex);
+				m_bindlessTextureSet->unregisterTexture2D(m_colorProjectionTexture.get());
 			}
 
 			m_colorProjectionBindlessIndex = NoColorProjectionTexture;

@@ -383,9 +383,9 @@ namespace EmEn::Scenes
 
 		/* Rebuild the TLAS and RT metadata from RT-specific render lists (no frustum culling).
 		 * RT effects cast rays in world space and need ALL scene geometry, not just what's on screen. */
-		auto * mutableBindlessManager = bindlessManager.usable() ? &m_AVConsoleManager.graphicsRenderer().bindlessTextureManager() : nullptr;
+		auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
 		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
-		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessManager, frameIndex, this->lifetimeMS(), renderTarget->viewMatrices().position());
+		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
 
 		return true;
 	}
@@ -1612,13 +1612,11 @@ namespace EmEn::Scenes
 		{
 			m_environmentCubemap = m_backgroundResource->environmentCubemap();
 
-			/* Update the bindless textures manager with the scene's environment cubemap. */
-			const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
+			/* Describe the scene's environment cubemap in the bindless set; the manager writes
+			 * it to the reserved slot when it syncs the active scene's set. */
+			m_bindlessTextureSet.setEnvironmentCubemap(m_environmentCubemap);
 
-			if ( bindlessManager.usable() && bindlessManager.updateTextureCube(BindlessTextureManager::EnvironmentCubemapSlot, *m_environmentCubemap) )
-			{
-				TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
-			}
+			TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
 		}
 
 		/* If the object is ready to render, there is nothing more to do! */

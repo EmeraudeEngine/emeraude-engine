@@ -265,15 +265,13 @@ namespace EmEn::Scenes
 			m_initialized = true;
 		}
 
-		/* Update the bindless textures manager with the scene's environment cubemap (If already usable). */
-		if ( m_environmentCubemap != nullptr && m_environmentCubemap->isCreated() )
+		/* Describe the scene's environment cubemap in the bindless set; the manager writes it to
+		 * the reserved slot when it syncs the active scene's set. */
+		if ( m_environmentCubemap != nullptr )
 		{
-			const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
+			m_bindlessTextureSet.setEnvironmentCubemap(m_environmentCubemap);
 
-			if ( bindlessManager.usable() && bindlessManager.updateTextureCube(BindlessTextureManager::EnvironmentCubemapSlot, *m_environmentCubemap) )
-			{
-				TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
-			}
+			TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
 		}
 
 		/* FIXME: When re-enabling, the swap-chain does not have the correct ambient light parameters! */

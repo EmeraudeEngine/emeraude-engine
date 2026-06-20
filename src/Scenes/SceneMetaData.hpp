@@ -62,6 +62,8 @@ namespace EmEn::Graphics
 
 namespace EmEn::Scenes
 {
+	class BindlessTextureSet;
+
 	/**
 	 * @brief Manages scene-level ray tracing metadata: TLAS, mesh metadata, and material data.
 	 * @note When RT is not available on the device, this class is inert (rebuild() is a no-op,
@@ -145,7 +147,7 @@ namespace EmEn::Scenes
 			 *		shader, and the RT side needs the equivalent rotation baked into the
 			 *		TLAS instance transform so reflection rays hit the correct quad face.
 			 */
-			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, Graphics::BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
+			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureSet * bindlessTextureSet, uint32_t frameIndex, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
 
 			/**
 			 * @brief Records the pending TLAS build into an external command buffer.

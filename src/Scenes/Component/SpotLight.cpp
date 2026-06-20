@@ -156,7 +156,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		/* Store the bindless texture manager for color projection registration. */
-		m_bindlessTextureManager = &scene.AVConsoleManager().graphicsRenderer().bindlessTextureManager();
+		m_bindlessTextureSet = &scene.bindlessTextureSet();
 
 		/* If a color projection texture is set, try to register it in bindless now. */
 		if ( this->hasColorProjectionTexture() && this->colorProjectionBindlessIndex() == NoColorProjectionTexture )

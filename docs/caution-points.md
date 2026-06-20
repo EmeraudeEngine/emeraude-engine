@@ -462,6 +462,76 @@ if ( materialType == PBRResource::ClassId )
 
 ## Scene Rendering
 
+### Fixed: Bindless texture manager was not multi-scene — stale/freed slots on scene switch (Jun 2026)
+
+> [!CRITICAL]
+> **Symptom:** after loading two scenes and deleting one (even the inactive one), the log spams
+> `[Error][BindlessTextureManagerService] Invalid raw descriptor info !` every frame.
+>
+> **Root cause:** `BindlessTextureManager` is a single global service, but scene code
+> (`SceneMetaData`, light emitters, `Scene::enable`) registered textures **directly** into it
+> and stored raw slot indices. `~SceneMetaData` never unregistered its slots, lights
+> (`~AbstractLightEmitter = default`) never unregistered theirs, and nothing released a scene's
+> slots on disable. The manager had no notion of which scene owned which slot, so a deleted
+> scene left dangling descriptors that the per-frame refresh kept re-writing.
+>
+> **Fix — per-scene `Scenes::BindlessTextureSet` (the bindless analogue of `LightSet`):**
+> - Each scene owns a `BindlessTextureSet` describing its textures and allocating its own
+>   dynamic slots (from `FirstDynamicSlot`). Scene code registers into the **set**, never the
+>   manager.
+> - The manager only READS the **active** scene's set, via `syncTextureSet(set, sceneTimeMS)`
+>   called by the `Renderer` each frame right after `Scene::prepareRender`. It writes the
+>   descriptor table, performs the animated-texture per-frame view swap, and writes the
+>   environment-cubemap reserved slot (engine-default fallback when the scene has none).
+> - The manager's dynamic `registerTexture*/unregisterTexture*` and free-lists were removed.
+>   `updateTexture*` (reserved-slot writes) stay for the Renderer (grab pass, default env, IBL).
+> - Slots are scene-local → table capacity is the largest scene, not the sum.
+>
+> **Second pass — clearing the GPU descriptor table on scene disable (the `vkDestroySampler` part):**
+> mirroring only the active set is not enough. When a scene stops being active (loading another
+> demo disables the previous one), its descriptors stay in the **global** table until overwritten.
+> A later `deleteScene` then destroys that scene's samplers/images while the descriptor set still
+> references them → `VUID-vkDestroySampler-sampler-01082` ("currently in use by VkDescriptorSet")
+> plus `Invalid texture descriptor info !` spam. Fix: `Scenes::Manager::disableActiveScene()` calls
+> `BindlessTextureManager::clearTextureSet(scene.bindlessTextureSet())` under the exclusive lock,
+> which does a `device->waitIdle()` (drain in-flight) then overwrites each of that scene's freed
+> dynamic slots with an engine-owned dummy (2D → dummy color-projection 2D, cube + reserved env
+> slot → default cubemap). After that the leaving scene has zero descriptor references, so deleting
+> it (active or inactive) is safe. **Known gap:** cube-array slots (animated cubemap gobos) have no
+> engine dummy and are left untouched — rare, add a dummy cube-array if a scene uses them.
+>
+> **Files:** `Scenes/BindlessTextureSet.{hpp,cpp}` (new), `Graphics/BindlessTextureManager.{hpp,cpp}`,
+> `Scenes/SceneMetaData.{hpp,cpp}`, `Scenes/Component/AbstractLightEmitter.{hpp,cpp}` (+ Directional/Point/Spot),
+> `Scenes/Scene.{hpp,cpp}`, `Scenes/Scene.rendering.cpp`, `Graphics/Renderer.cpp`. See
+> `src/Graphics/AGENTS.md` §6 "Bindless Textures Manager".
+
+### Fixed: Texture resources destroyed the SHARED cached sampler (Jun 2026)
+
+> [!CRITICAL]
+> **Symptom (multi-scene):** deleting an inactive scene spammed
+> `Invalid texture descriptor info` for EVERY texture of the *active* scene, plus
+> `VUID-vkDestroySampler-sampler-01082`. Only a handful of distinct samplers were destroyed for
+> dozens of broken textures — the tell-tale sign of a shared sampler.
+>
+> **Root cause:** samplers come from a **renderer-level cache** keyed by kind
+> (`Renderer::getSampler("Texture2D", …)` → `m_samplers`), so every `Texture2D` shares ONE
+> `Vulkan::Sampler`; the cache owns it and destroys it at renderer shutdown. But each texture
+> type's cleanup (`Texture1D/2D/3D`, `TextureCubemap`, `AnimatedTexture2D`,
+> `AnimatedTextureCubemap`) did `m_sampler->destroyFromHardware()` before resetting. When a few
+> textures unique to the deleted scene unloaded (refcount 0), they destroyed the **shared**
+> sampler from hardware — instantly invalidating it for every other texture still using it (and
+> leaving the bindless descriptor set referencing a dead `VkSampler`).
+>
+> **Fix:** texture cleanup now only **releases its reference** (`m_sampler.reset();`) — it must
+> NOT destroy a cache-owned, shared object. The cache (`Renderer::m_samplers`) remains the sole
+> owner and destroys every sampler once, at shutdown.
+>
+> **Takeaway:** anything obtained from a shared cache (`getSampler`, and by analogy pipelines,
+> programs, layouts) is reference-held, not owned — drop the smart pointer, never call
+> `destroyFromHardware()` on it.
+>
+> **Files:** `Graphics/TextureResource/{Texture1D,Texture2D,Texture3D,TextureCubemap,AnimatedTexture2D,AnimatedTextureCubemap}.cpp`.
+
  ### Fixed: View-matrices freed on camera disconnect — render-thread use-after-free (Jun 2026)
 
 > [!CRITICAL]

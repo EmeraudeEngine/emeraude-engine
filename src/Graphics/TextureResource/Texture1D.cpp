@@ -2,7 +2,7 @@
  * src/Graphics/TextureResource/Texture1D.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - SÃ©bastien LÃ©on Claude Christian BÃ©melmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -165,11 +165,11 @@ namespace EmEn::Graphics::TextureResource
 			m_imageView.reset();
 		}
 
-		if ( m_sampler != nullptr )
-		{
-			m_sampler->destroyFromHardware();
-			m_sampler.reset();
-		}
+		/* NOTE: The sampler comes from the renderer's shared sampler cache (Renderer::getSampler) and is
+		 * shared by every texture of this kind. Only release our reference here — destroying it from
+		 * hardware would kill it for all other textures still using it (dangling bindless descriptors,
+		 * "vkDestroySampler ... in use"). The cache owns it and destroys it at renderer shutdown. */
+		m_sampler.reset();
 
 		return true;
 	}

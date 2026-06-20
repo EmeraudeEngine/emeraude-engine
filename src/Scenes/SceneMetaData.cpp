@@ -31,20 +31,16 @@
 
 /* Local inclusions. */
 #include "GPUMeshMetaData.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
+#include "BindlessTextureSet.hpp"
 #include "Graphics/Geometry/Helpers.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
-#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
-
-/* For wall-clock animation time (passed to AnimatedTexture2D::frameIndexAt). */
-#include <chrono>
 
 namespace EmEn::Scenes
 {
@@ -121,7 +117,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureManager * bindlessTextureManager, uint32_t frameIndex, uint32_t sceneTimeMS, const Base::Math::Vector< 3, float > & cameraPosition) noexcept
+	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureSet * bindlessTextureSet, uint32_t frameIndex, const Base::Math::Vector< 3, float > & cameraPosition) noexcept
 	{
 		if ( m_accelerationStructureBuilder == nullptr )
 		{
@@ -378,7 +374,7 @@ namespace EmEn::Scenes
 
 
 		/* --- Resolve bindless texture indices for RT materials --- */
-		if ( bindlessTextureManager != nullptr && !materialMap.empty() )
+		if ( bindlessTextureSet != nullptr && !materialMap.empty() )
 		{
 			/* Reuse persistent set (clear but keep allocated memory). */
 			m_rebuildActiveTextures.clear();
@@ -410,7 +406,7 @@ namespace EmEn::Scenes
 					}
 					else
 					{
-						bindlessIndex = bindlessTextureManager->registerTexture2D(*texture);
+						bindlessIndex = bindlessTextureSet->registerTexture2D(texture);
 
 						if ( bindlessIndex == UINT32_MAX )
 						{
@@ -461,50 +457,13 @@ namespace EmEn::Scenes
 			{
 				if ( !activeTextures.contains(it->first) )
 				{
-					bindlessTextureManager->unregisterTexture2D(it->second);
+					bindlessTextureSet->unregisterTexture2D(it->first);
 					it = m_textureRegistrationCache.erase(it);
 				}
 				else
 				{
 					++it;
 				}
-			}
-
-			/* Refresh animated textures' bindless slots with the current frame's 2D view.
-			 * AnimatedTexture2D's main imageView is a VK_IMAGE_VIEW_TYPE_2D_ARRAY which is
-			 * invalid for sampling via the bindless sampler2D[] descriptor used by the RT
-			 * trace shaders. We pre-create one VK_IMAGE_VIEW_TYPE_2D view per frame and
-			 * swap them into the slot each rebuild — UPDATE_AFTER_BIND lets us patch the
-			 * descriptor while the GPU may still be reading the previous frame's value.
-			 * This makes sprites animate AND alpha-test correctly in RT reflections. */
-			for ( const auto & [texturePtr, bindlessIndex] : m_textureRegistrationCache )
-			{
-				if ( texturePtr == nullptr || texturePtr->frameCount() <= 1 )
-				{
-					continue;
-				}
-
-				const auto * animated = dynamic_cast< const Graphics::TextureResource::AnimatedTexture2D * >(texturePtr);
-
-				if ( animated == nullptr )
-				{
-					continue;
-				}
-
-				const auto currentFrame = animated->frameIndexAt(sceneTimeMS);
-				const auto frameView = animated->imageViewForFrame(currentFrame);
-
-				if ( frameView == nullptr || animated->sampler() == nullptr )
-				{
-					continue;
-				}
-
-				VkDescriptorImageInfo info{};
-				info.sampler = animated->sampler()->handle();
-				info.imageView = frameView->handle();
-				info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-				static_cast< void >(bindlessTextureManager->updateTexture2DFromDescriptorInfo(bindlessIndex, info));
 			}
 		}
 

@@ -55,6 +55,7 @@
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "GroundLevelInterface.hpp"
 #include "Randomizer.hpp"
+#include "BindlessTextureSet.hpp"
 #include "LightSet.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
@@ -661,6 +662,32 @@ namespace EmEn::Scenes
 				return m_lightSet;
 			}
 
+			/**
+			 * @brief Returns the scene's bindless texture set (const).
+			 * @note Describes every bindless texture the scene uses (RT material textures,
+			 * light color projections, environment cubemap). The global
+			 * Graphics::BindlessTextureManager reads this to populate its descriptor table for
+			 * the active scene — the scene never writes the manager directly.
+			 * @return const BindlessTextureSet &
+			 */
+			[[nodiscard]]
+			const BindlessTextureSet &
+			bindlessTextureSet () const noexcept
+			{
+				return m_bindlessTextureSet;
+			}
+
+			/**
+			 * @brief Returns the scene's bindless texture set (mutable).
+			 * @return BindlessTextureSet &
+			 */
+			[[nodiscard]]
+			BindlessTextureSet &
+			bindlessTextureSet () noexcept
+			{
+				return m_bindlessTextureSet;
+			}
+
 			/* Post-processing. */
 
 			/**
@@ -1079,6 +1106,7 @@ namespace EmEn::Scenes
 			setEnvironmentCubemap (const std::shared_ptr< Graphics::TextureResource::TextureCubemap > & cubemap) noexcept
 			{
 				m_environmentCubemap = cubemap;
+				m_bindlessTextureSet.setEnvironmentCubemap(cubemap);
 			}
 
 			/**
@@ -2300,6 +2328,8 @@ namespace EmEn::Scenes
 			AVConsole::Manager m_AVConsoleManager;
 			/** @brief Light management system for the scene. */
 			LightSet m_lightSet;
+			/** @brief Per-scene bindless texture description, read by the BindlessTextureManager. */
+			BindlessTextureSet m_bindlessTextureSet;
 			/** @brief Scene metadata manager (TLAS, mesh/material SSBOs for RT). */
 			SceneMetaData m_sceneMetaData;
 			/** @brief Render lists indexed by render category (Opaque, Translucent, TranslucentGB, etc.). */

@@ -381,6 +381,36 @@ When active, a displaced UV (`pomTexCoords`) is computed at the start of the fra
 
 The `BindlessTexturesManager` provides a global descriptor set with arrays of textures that can be indexed dynamically in shaders using non-uniform indexing. This eliminates the need to rebind descriptor sets for each material.
 
+> [!CRITICAL]
+> **Per-scene ownership — the manager only ever reflects the ACTIVE scene.**
+> The bindless table has no scene concept of its own. Each scene owns a
+> `Scenes::BindlessTextureSet` (the bindless analogue of `LightSet`) that **describes** the
+> textures it uses (RT material textures, light color projections, environment cubemap) and
+> **allocates its own dynamic slots** from `FirstDynamicSlot`. Scene code (`SceneMetaData`,
+> light emitters, `Scene::enable`) registers into that per-scene set, **never into the manager
+> directly**. The manager READS the active scene's set each frame via
+> `BindlessTextureManager::syncTextureSet(set, sceneTimeMS)` (driven by the `Renderer` right
+> after `Scene::prepareRender`) and writes the descriptor table from it — this also performs
+> the per-frame animated-texture frame-view swap and the environment-cubemap write (falling
+> back to the engine default cubemap when the scene has none).
+>
+> Because only one scene is active at a time and the table is mirrored from the active set,
+> two scenes may legitimately reuse the same slot indices — **table capacity is the largest
+> scene, not the sum of all scenes**.
+>
+> **On scene disable**, `Scenes::Manager::disableActiveScene()` calls
+> `BindlessTextureManager::clearTextureSet(scene.bindlessTextureSet())` (under the exclusive
+> lock): a `device->waitIdle()` then each of that scene's freed dynamic slots is overwritten
+> with an engine dummy (2D → dummy color-projection 2D; cube + reserved env slot → default
+> cubemap). This is REQUIRED — the global table outlives a single scene, so a scene that stops
+> being active must leave no descriptor behind, otherwise a later `deleteScene` destroys
+> samplers/images still referenced by the descriptor set (`VUID-vkDestroySampler-sampler-01082`).
+> The set's CPU data persists with the scene (re-enable re-syncs it). cube-array slots have no
+> dummy yet (rare; see `docs/caution-points.md`).
+>
+> This replaced an earlier design where scenes registered/unregistered directly in the manager,
+> which leaked slots and left dangling descriptors on scene switch.
+
 ### Architecture
 
 ```
@@ -406,15 +436,21 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 
 ### Usage
 
-**Registering a texture:**
+**Registering a texture (scene side — into the per-scene set, NOT the manager):**
 ```cpp
-uint32_t index = bindlessManager.registerTexture2D(texture);
-// Use 'index' in shader to access the texture
+// e.g. from SceneMetaData::rebuild or a light emitter
+uint32_t index = scene.bindlessTextureSet().registerTexture2D(texture); // global table index
+// Store 'index' in the material SSBO / light UBO for shader access.
 ```
 
-**Updating reserved slots:**
+**Reflecting the active scene into the GPU table (Renderer side, per frame):**
 ```cpp
-bindlessManager.updateTextureCube(BindlessTexturesManager::EnvironmentCubemapSlot, envMap);
+bindlessManager.syncTextureSet(scene.bindlessTextureSet(), scene.lifetimeMS());
+```
+
+**Updating reserved slots directly (Renderer-owned: grab pass, default env, IBL):**
+```cpp
+bindlessManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, grabPass);
 ```
 
 **In GLSL shaders:**
@@ -427,11 +463,12 @@ vec4 color = texture(textures2D[nonuniformEXT(textureIndex)], uv);
 
 ### Color Projection via Bindless
 
-Light color projection textures are registered in the bindless arrays during `createOnHardware()` or asynchronously via `ObserverTrait` notification when resource loading completes. Each light UBO carries a `ColorProjectionIndex` field (`uint` encoded as `bit_cast<float>`) that indexes into the bindless 2D or Cube array.
+Light color projection textures are registered into the **scene's `BindlessTextureSet`** during `createOnHardware()` or asynchronously via `ObserverTrait` notification when resource loading completes. Each light UBO carries a `ColorProjectionIndex` field (`uint` encoded as `bit_cast<float>`) that indexes into the bindless 2D or Cube array. The light stores a `Scenes::BindlessTextureSet *` (set in each light's setup from `scene.bindlessTextureSet()`), not a manager pointer.
 
-- **2D lights** (directional, spot): use `registerTexture2D()` → `sampler2D` array at binding 1
-- **Point lights**: use `registerTextureCube()` → `samplerCube` array at binding 3
+- **2D lights** (directional, spot): `set.registerTexture2D()` → `sampler2D` array at binding 1
+- **Point lights**: `set.registerTextureCube()` → `samplerCube` array at binding 3
 - **Sentinel value**: `UINT32_MAX` means no color projection texture assigned
+- **Unregistration**: by texture instance (`set.unregisterTexture2D(texture.get())`), done in the light's `destroyFromHardware()`
 
 The bindless set is bound during lighting passes when `renderPassUsesColorProjection(renderPassType)` returns true, alongside the standard environment cubemap usage.
 

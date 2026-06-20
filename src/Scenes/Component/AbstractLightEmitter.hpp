@@ -53,13 +53,17 @@ namespace EmEn
 
 	namespace Graphics
 	{
-		class BindlessTextureManager;
 		class SharedUniformBuffer;
 
 		namespace RenderTarget
 		{
 			class Abstract;
 		}
+	}
+
+	namespace Scenes
+	{
+		class BindlessTextureSet;
 	}
 
 	namespace Saphir::Declaration
@@ -547,7 +551,7 @@ namespace EmEn::Scenes::Component
 
 			static constexpr auto ShadowMapName{"ShadowMapSampler"};
 
-			Graphics::BindlessTextureManager * m_bindlessTextureManager{nullptr};
+			BindlessTextureSet * m_bindlessTextureSet{nullptr};
 			uint32_t m_colorProjectionFrameIndex{NoColorProjectionTexture};
 			bool m_colorProjectionIsCubeArray{false};
 

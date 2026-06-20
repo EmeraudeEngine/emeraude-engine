@@ -47,6 +47,11 @@ namespace EmEn::Vulkan
 	class TextureInterface;
 }
 
+namespace EmEn::Scenes
+{
+	class BindlessTextureSet;
+}
+
 namespace EmEn::Graphics
 {
 	class Renderer;
@@ -106,79 +111,32 @@ namespace EmEn::Graphics
 			void setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept;
 
 			/**
-			 * @brief Registers a 1D texture and returns its index in the bindless array.
-			 * @param texture A reference to the texture interface.
-			 * @return uint32_t The index in the bindless array, or UINT32_MAX on failure.
-			 */
-			[[nodiscard]]
-			uint32_t registerTexture1D (const Vulkan::TextureInterface & texture) noexcept;
-
-			/**
-			 * @brief Registers a 2D texture and returns its index in the bindless array.
-			 * @param texture A reference to the texture interface.
-			 * @return uint32_t The index in the bindless array, or UINT32_MAX on failure.
-			 */
-			[[nodiscard]]
-			uint32_t registerTexture2D (const Vulkan::TextureInterface & texture) noexcept;
-
-			/**
-			 * @brief Registers a 3D texture and returns its index in the bindless array.
-			 * @param texture A reference to the texture interface.
-			 * @return uint32_t The index in the bindless array, or UINT32_MAX on failure.
-			 */
-			[[nodiscard]]
-			uint32_t registerTexture3D (const Vulkan::TextureInterface & texture) noexcept;
-
-			/**
-			 * @brief Registers a cubemap texture and returns its index in the bindless array.
-			 * @param texture A reference to the texture interface.
-			 * @return uint32_t The index in the bindless array, or UINT32_MAX on failure.
-			 */
-			[[nodiscard]]
-			uint32_t registerTextureCube (const Vulkan::TextureInterface & texture) noexcept;
-
-			/**
-			 * @brief Registers a cube array texture and returns its index in the bindless array.
-			 * @param texture A reference to the texture interface.
-			 * @return uint32_t The index in the bindless array, or UINT32_MAX on failure.
-			 */
-			[[nodiscard]]
-			uint32_t registerTextureCubeArray (const Vulkan::TextureInterface & texture) noexcept;
-
-			/**
-			 * @brief Unregisters a 1D texture and frees its index.
-			 * @param index The index of the texture to unregister.
+			 * @brief Mirrors the active scene's bindless texture set into the descriptor table.
+			 * @note This is the single entry point through which scene textures reach the GPU
+			 * descriptor table. The manager READS the per-scene Scenes::BindlessTextureSet — the
+			 * scene never writes the manager directly. Called every frame for the active scene
+			 * (handles newly added textures and per-frame animated-texture frame swaps) and on
+			 * scene activation. Dynamic slots not present in the set are simply left untouched;
+			 * they are never sampled because materials/lights only reference occupied slots.
+			 * @param set A reference to the active scene's bindless texture set.
+			 * @param sceneTimeMS The active scene lifetime in milliseconds (for animated textures).
 			 * @return void
 			 */
-			void unregisterTexture1D (uint32_t index) noexcept;
+			void syncTextureSet (const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept;
 
 			/**
-			 * @brief Unregisters a 2D texture and frees its index.
-			 * @param index The index of the texture to unregister.
+			 * @brief Clears, in the GPU descriptor table, the slots occupied by a scene's set.
+			 * @note Called when a scene stops being active (Scenes::Manager::disableActiveScene),
+			 * so the global descriptor set no longer references that scene's textures/samplers
+			 * before they may be destroyed (otherwise vkDestroySampler/Image fire
+			 * "currently in use by VkDescriptorSet"). Each freed dynamic slot is overwritten with
+			 * an engine-owned dummy texture; the environment reserved slot is reset to the default
+			 * cubemap. Performs a device waitIdle first to drain in-flight frames that may still
+			 * reference these descriptors.
+			 * @param set A reference to the leaving scene's bindless texture set.
 			 * @return void
 			 */
-			void unregisterTexture2D (uint32_t index) noexcept;
-
-			/**
-			 * @brief Unregisters a 3D texture and frees its index.
-			 * @param index The index of the texture to unregister.
-			 * @return void
-			 */
-			void unregisterTexture3D (uint32_t index) noexcept;
-
-			/**
-			 * @brief Unregisters a cubemap texture and frees its index.
-			 * @param index The index of the texture to unregister.
-			 * @return void
-			 */
-			void unregisterTextureCube (uint32_t index) noexcept;
-
-			/**
-			 * @brief Unregisters a cube array texture and frees its index.
-			 * @param index The index of the texture to unregister.
-			 * @return void
-			 */
-			void unregisterTextureCubeArray (uint32_t index) noexcept;
+			void clearTextureSet (const Scenes::BindlessTextureSet & set) const noexcept;
 
 			/**
 			 * @brief Updates a specific slot in the 1D texture array.
@@ -237,7 +195,7 @@ namespace EmEn::Graphics
 			 * @return bool True if successful.
 			 */
 			[[nodiscard]]
-			bool updateTexture2DFromDescriptorInfo (uint32_t index, VkDescriptorImageInfo descriptorInfo) const noexcept;
+			bool updateTexture2DFromDescriptorInfo (uint32_t index, const VkDescriptorImageInfo & descriptorInfo) const noexcept;
 
 			/**
 			 * @brief Returns the descriptor set for binding during rendering.
@@ -293,24 +251,6 @@ namespace EmEn::Graphics
 			bool createDescriptorSet () noexcept;
 
 			/**
-			 * @brief Allocates a new index from a free list or increments the counter.
-			 * @param freeIndices A reference to the free indices queue.
-			 * @param nextIndex A reference to the next available index counter.
-			 * @param maxIndex The maximum allowed index.
-			 * @return uint32_t The allocated index, or UINT32_MAX on failure.
-			 */
-			[[nodiscard]]
-			static uint32_t allocateIndex (std::queue< uint32_t > & freeIndices, uint32_t & nextIndex, uint32_t maxIndex) noexcept;
-
-			/**
-			 * @brief Frees an index back to the free list.
-			 * @param freeIndices A reference to the free indices queue.
-			 * @param index The index to free.
-			 * @return void
-			 */
-			static void freeIndex (std::queue< uint32_t > & freeIndices, uint32_t index) noexcept;
-
-			/**
 			 * @brief Writes a texture to the descriptor set at a specific binding and array index.
 			 * @param binding The binding point.
 			 * @param arrayIndex The index in the array.
@@ -328,7 +268,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, VkDescriptorImageInfo descriptorInfo) const noexcept;
+			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const VkDescriptorImageInfo & descriptorInfo) const noexcept;
 
 			Renderer & m_renderer;
 			std::shared_ptr< Vulkan::Device > m_device;
@@ -336,19 +276,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 
-			/* Index management for dynamic allocation. */
-			std::queue< uint32_t > m_freeIndices1D;
-			std::queue< uint32_t > m_freeIndices2D;
-			std::queue< uint32_t > m_freeIndices3D;
-			std::queue< uint32_t > m_freeIndicesCube;
-			std::queue< uint32_t > m_freeIndicesCubeArray;
-			uint32_t m_nextIndex1D{FirstDynamicSlot};
-			uint32_t m_nextIndex2D{FirstDynamicSlot};
-			uint32_t m_nextIndex3D{FirstDynamicSlot};
-			uint32_t m_nextIndexCube{FirstDynamicSlot};
-			uint32_t m_nextIndexCubeArray{0};
-
-			/* Thread safety for index allocation. */
+			/* Thread safety for reserved-slot updates and active-scene set synchronization. */
 			mutable std::mutex m_indexMutex;
 	};
 }

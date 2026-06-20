@@ -1102,6 +1102,8 @@ namespace EmEn::Graphics
 		{
 			if ( scene->prepareRender(m_windowLessView) )
 			{
+				m_bindlessTextureManager.syncTextureSet(scene->bindlessTextureSet(), scene->lifetimeMS());
+
 				scene->renderOpaque(m_windowLessView, *commandBuffer);
 				scene->renderTranslucent(m_windowLessView, *commandBuffer);
 				scene->renderTranslucentGB(m_windowLessView, *commandBuffer);
@@ -1356,9 +1358,12 @@ namespace EmEn::Graphics
 		/* Prepare scene render lists once (frustum culling, Z-sorting). */
 		const bool sceneHasContent = scenePtr != nullptr && scenePtr->prepareRender(m_swapChain);
 
-		/* Record deferred TLAS build into the render command buffer (no CPU stall). */
+		/* Mirror the active scene's bindless texture set into the global descriptor table before
+		 * any pass samples it (RT effects), then record the deferred TLAS build (no CPU stall). */
 		if ( scenePtr != nullptr )
 		{
+			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
+
 			scenePtr->recordTLASBuild(commandBuffer->handle());
 		}
 
@@ -1459,9 +1464,12 @@ namespace EmEn::Graphics
 		 * against the internal scene target (HDR float16 framebuffer). */
 		const bool sceneHasContent = scenePtr != nullptr && scenePtr->prepareRender(m_sceneTarget);
 
-		/* Record deferred TLAS build into the render command buffer (no CPU stall). */
+		/* Mirror the active scene's bindless texture set into the global descriptor table before
+		 * any pass samples it (RT effects), then record the deferred TLAS build (no CPU stall). */
 		if ( scenePtr != nullptr )
 		{
+			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
+
 			scenePtr->recordTLASBuild(commandBuffer->handle());
 		}
 
@@ -1676,6 +1684,8 @@ namespace EmEn::Graphics
 
 			if ( scene.prepareRender(renderToTexture) )
 			{
+				m_bindlessTextureManager.syncTextureSet(scene.bindlessTextureSet(), scene.lifetimeMS());
+
 				scene.renderOpaque(renderToTexture, *commandBuffer);
 				scene.renderTranslucent(renderToTexture, *commandBuffer);
 				scene.renderTranslucentGB(renderToTexture, *commandBuffer);
