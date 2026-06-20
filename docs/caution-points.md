@@ -494,10 +494,13 @@ if ( materialType == PBRResource::ClassId )
 > references them → `VUID-vkDestroySampler-sampler-01082` ("currently in use by VkDescriptorSet")
 > plus `Invalid texture descriptor info !` spam. Fix: `Scenes::Manager::disableActiveScene()` calls
 > `BindlessTextureManager::clearTextureSet(scene.bindlessTextureSet())` under the exclusive lock,
-> which does a `device->waitIdle()` (drain in-flight) then overwrites each of that scene's freed
-> dynamic slots with an engine-owned dummy (2D → dummy color-projection 2D, cube + reserved env
-> slot → default cubemap). After that the leaving scene has zero descriptor references, so deleting
-> it (active or inactive) is safe. **Known gap:** cube-array slots (animated cubemap gobos) have no
+> which overwrites each of that scene's freed dynamic slots with an engine-owned dummy (2D → dummy
+> color-projection 2D, cube + reserved env slot → default cubemap). After that the leaving scene
+> has zero descriptor references. **`clearTextureSet` does NOT waitIdle** — disable/switch stays
+> hitch-free (overwriting bound descriptors mid-flight is safe via UPDATE_AFTER_BIND, and the
+> dormant scene's textures stay alive). The drain that protects destruction lives in
+> `Scenes::Manager::deleteScene`: `device->waitIdle()` before `m_scenes.erase`, so a delete (active
+> or inactive) is safe. **Known gap:** cube-array slots (animated cubemap gobos) have no
 > engine dummy and are left untouched — rare, add a dummy cube-array if a scene uses them.
 >
 > **Files:** `Scenes/BindlessTextureSet.{hpp,cpp}` (new), `Graphics/BindlessTextureManager.{hpp,cpp}`,

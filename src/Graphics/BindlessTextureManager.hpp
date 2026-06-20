@@ -131,8 +131,10 @@ namespace EmEn::Graphics
 			 * before they may be destroyed (otherwise vkDestroySampler/Image fire
 			 * "currently in use by VkDescriptorSet"). Each freed dynamic slot is overwritten with
 			 * an engine-owned dummy texture; the environment reserved slot is reset to the default
-			 * cubemap. Performs a device waitIdle first to drain in-flight frames that may still
-			 * reference these descriptors.
+			 * cubemap. Hitch-free: NO device waitIdle here (overwriting bound descriptors while
+			 * frames are in flight is safe via UPDATE_AFTER_BIND, and the leaving scene's textures
+			 * stay alive while dormant). The drain that protects destruction is in
+			 * Scenes::Manager::deleteScene, before the scene is erased.
 			 * @param set A reference to the leaving scene's bindless texture set.
 			 * @return void
 			 */

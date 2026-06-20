@@ -225,11 +225,11 @@ namespace EmEn::Overlay
 		m_transitionBuffer.destroy();
 		m_activeBuffer.destroy();
 
-		if ( m_sampler != nullptr )
-		{
-			m_sampler->destroyFromHardware();
-			m_sampler.reset();
-		}
+		/* NOTE: The sampler comes from the renderer's shared sampler cache (Renderer::getSampler,
+		 * id "OverlaySurface") and is shared by every overlay surface. Only release our reference —
+		 * destroying it from hardware would kill it for all other surfaces still using it. The
+		 * cache owns it and destroys it at renderer shutdown. */
+		m_sampler.reset();
 
 		return true;
 	}

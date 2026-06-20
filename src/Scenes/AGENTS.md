@@ -368,6 +368,43 @@ Scene::enable()  → entity->wakeup()  → entity->onWakeup()
 
 See `Scene.cpp:enable()`, `Scene.cpp:disable()`, `AbstractEntity.cpp:suspend()`, `AbstractEntity.cpp:wakeup()`
 
+## Multi-Scene Lifecycle (Active / Dormant / Deleted)
+
+> [!CRITICAL]
+> Several scenes can be loaded at once; **exactly one is ACTIVE**. Read
+> [`docs/multi-scene-resource-ownership.md`](../../docs/multi-scene-resource-ownership.md) — it is
+> the code-generation doctrine for any code touching GPU resources. The four Jun 2026 fixes
+> (view-matrices, bindless, sampler cache, AS builder) all came from wiring a shared/global
+> resource per-scene.
+
+**Three states (the application designer decides transitions — the engine only offers them):**
+
+- **Active** — the **only** scene that is rendered (`Renderer::renderFrame`) AND ticked
+  (`processLogics`). The global services (bindless table, env cubemap, AS builder) mirror it.
+- **Loaded-Dormant** — loaded but not active: **not rendered, not ticked**. It therefore does
+  **NOT** contaminate the active scene's rendering (a common misconception — the renderer only
+  reads the *active* scene's LightSet / post-process / render targets). Its pooled resources
+  (audio sources) are released via Suspend/Wakeup. It still holds its per-scene GPU resources, so
+  keep the dormant set small (memory; the RTX 3070 Ti 8 GB constraint is deliberate). Re-activating
+  re-syncs the bindless table in ~1 frame.
+- **Deleted** — destroyed; per-scene state dies with it, global services keep running referencing
+  nothing of it.
+
+**Disable contract** (`Manager::disableActiveScene`, under the exclusive `m_activeSceneSharedAccess` lock):
+editor deactivate → `BindlessTextureManager::clearTextureSet` (overwrites this scene's dynamic
+slots with dummies — **hitch-free, NO waitIdle**) → `Scene::disable` (suspend entities, node
+controller). The scene stays loaded (dormant) unless also deleted.
+
+**Delete contract** (`Manager::deleteScene`): if active, `disableActiveScene` first; then
+**`device->waitIdle()` (the drain lives HERE, before `m_scenes.erase`)** so in-flight frames that
+referenced the scene's textures/buffers complete before destruction. The drain is on delete, not
+disable, precisely so scene **switching stays seamless**.
+
+**Jun 2026 audit (from the Scene Manager outward):** no remaining multi-scene-hazardous global
+statics; the cached-shared-resource-destruction class was fully swept (all `TextureResource` types
++ `Overlay::Surface` now release the cache-owned sampler instead of destroying it). Dormant scenes
+do not contaminate rendering; suspend/wakeup already releases their pooled (audio) resources.
+
 ## Octree Depth Limit
 
 The OctreeSector class has a maximum subdivision depth (`DefaultMaxDepth = 16`) to prevent infinite recursion when many entities occupy the same position.
@@ -541,14 +578,19 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 `SceneMetaData` manages all scene-level RT resources. It is inert when the device lacks RT support.
 
 ### Lifecycle
-1. **Construction** (`Scene::Scene()`) — Creates `AccelerationStructureBuilder`, registers it with `Geometry::Interface`
+1. **Construction** (`Scene::Scene()`) — **Borrows** the single renderer-owned `AccelerationStructureBuilder` (`graphicsRenderer.accelerationStructureBuilder()`, created once at renderer init when RT is enabled; null otherwise). `SceneMetaData` does **NOT** create or own the builder. `isRayTracingEnabled()` == (borrowed pointer != null).
 2. **Per-frame buffer init** (`Scene::Scene()`) — `initializePerFrameBuffers(framesInFlight())` creates per-frame SSBOs
 3. **Per-frame rebuild** (`Scene::prepareRender()`) — `rebuild(renderLists, ..., frameIndex)` collects TLAS instances, uploads SSBOs
-4. **Destruction** — Unregisters builder, clears all RT resources
+4. **Destruction** — Clears this scene's RT resources (per-frame SSBOs, TLAS, retired requests). The builder is renderer-owned — nothing to unregister.
+
+> [!CRITICAL]
+> **The `AccelerationStructureBuilder` is owned ONCE by the Renderer, never per-scene.** BLAS are
+> built for SHARED geometries that outlive any scene; a per-scene builder (the old design, via a
+> `Geometry::Interface` global static) got destroyed/nulled when a scene was deleted and broke the
+> active scene's BLAS. See [`docs/multi-scene-resource-ownership.md`](../../docs/multi-scene-resource-ownership.md).
 
 ### BLAS Building
-- **Centralized** in `Geometry::Interface::onDependenciesLoaded()` — called after `createOnHardware()`
-- **On-demand** in `SceneMetaData::rebuild()` — for geometries loaded before the RT builder was set (`const_cast` + `buildAccelerationStructure()`)
+- **Centralized** in `Geometry::Interface::onDependenciesLoaded()` — called after `createOnHardware()`. The geometry fetches the builder from `serviceProvider().graphicsRenderer().accelerationStructureBuilder()` (skips if null = RT off). The returned `AccelerationStructure` is owned by the geometry; the builder only builds it.
 - **TriangleStrip support** — `generateTriangleListIndicesForRT()` virtual method converts strip+primitive restart to triangle list. Persistent `m_rtIndexBufferObject` stored in `Geometry::Interface` for shader access to converted indices.
 - **Subclasses**: `VertexGridResource` overrides `generateTriangleListIndicesForRT()` for strip conversion
 
@@ -587,6 +629,7 @@ These are cleared and refilled each frame without deallocating.
 - `Graphics/Geometry/Interface.hpp/.cpp` — `buildAccelerationStructure()`, `generateTriangleListIndicesForRT()`, `m_rtIndexBufferObject`
 - `Graphics/Geometry/VertexGridResource.cpp` — Strip→TriangleList conversion
 - `Vulkan/AccelerationStructureBuilder.hpp/.cpp` — BLAS/TLAS building, `TLASBuildRequest`, `prepareTLAS()`, `recordTLASBuild()`, retired request deque
+- `Graphics/Renderer.hpp/.cpp` — **owns** the single `AccelerationStructureBuilder` (`accelerationStructureBuilder()` getter); `SceneMetaData` and `Geometry::Interface` borrow it
 
 ## Render List Categories
 

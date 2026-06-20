@@ -39,6 +39,7 @@
 #include "DefinitionResource.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Vulkan/Device.hpp"
 #include "FastJSON.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
@@ -273,6 +274,12 @@ namespace EmEn::Scenes
 			 * we are safe from a deadlock. */
 			this->disableActiveScene();
 		}
+
+		/* NOTE: Drain the GPU before destroying the scene's resources. In-flight frames (from when
+		 * this scene was last rendered) may still reference its textures/buffers/samplers through
+		 * descriptor sets. The disable/switch path is kept hitch-free (no waitIdle) for seamless
+		 * transitions; the stall is paid HERE, on the deliberate delete. */
+		sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
 
 		m_scenes.erase(sceneIt);
 

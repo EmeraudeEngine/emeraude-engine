@@ -152,6 +152,16 @@ The `Renderer` maintains global caches for performance optimization:
 
 **Statistics** available at shutdown via `programBuiltCount()`, `programsReusedCount()`, `pipelineBuiltCount()`, `pipelineReusedCount()`.
 
+> [!CRITICAL]
+> **These caches OWN their objects; consumers only borrow.** A `shared_ptr` handed out by
+> `getSampler()` (and likewise programs/pipelines/layouts) is shared by many users. A consumer's
+> teardown must **release its reference** (`m_x.reset()`) — **never** call `destroyFromHardware()`
+> on it. The Renderer destroys each cached object **once**, at shutdown (`onTerminate`). Destroying
+> a cached sampler from a texture/overlay teardown invalidated it for every other user
+> (`VUID-vkDestroySampler-sampler-01082` + invalid descriptors). Fixed Jun 2026 across all
+> `TextureResource` types and `Overlay::Surface`; see [`docs/caution-points.md`](../../docs/caution-points.md)
+> and [`docs/multi-scene-resource-ownership.md`](../../docs/multi-scene-resource-ownership.md).
+
 ### Renderable-Level Cache
 
 Each `Renderable::Abstract` maintains a program cache per render target:

@@ -101,6 +101,16 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 - `Surface.cpp:recreateTransitionBufferToRequestedSize()` - Render-thread dedicated recreation path (called from `processUpdates()` Step 1.b)
 - Consumer side: `app_system/src/UI/WebView.CefRenderHandler.cpp:directPaint()/indirectPaint()` request the resize on a size mismatch instead of dropping the frame
 
+### Sampler ownership (shared cache)
+
+`Surface`'s sampler comes from the renderer's shared sampler cache
+(`Renderer::getSampler("OverlaySurface", …)`) and is **shared by every overlay surface**.
+`Surface::destroyFromHardware()` must only **release** its reference (`m_sampler.reset()`), never
+`m_sampler->destroyFromHardware()` — destroying it would invalidate it for all other surfaces
+(`VUID-vkDestroySampler-sampler-01082`). The cache owns it and destroys it once at renderer
+shutdown. (Fixed Jun 2026; see `docs/multi-scene-resource-ownership.md` — "anything from a shared
+cache is borrowed, not owned".)
+
 ### Direct GPU Memory Mapping
 
 For performance optimization, Surface supports direct GPU memory writes bypassing the staging buffer path.

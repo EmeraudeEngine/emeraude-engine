@@ -370,13 +370,11 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* Drain in-flight frames that may still reference this set's textures through the
-		 * descriptor table, before we overwrite the descriptors (and the textures get destroyed). */
-		if ( m_device != nullptr )
-		{
-			m_device->waitIdle("BindlessTextureManager::clearTextureSet");
-		}
-
+		/* NOTE: No device waitIdle here — this runs on every scene disable/switch and must stay
+		 * hitch-free. Overwriting bound descriptors while frames are in flight is safe (same as the
+		 * per-frame syncTextureSet, via UPDATE_AFTER_BIND); the leaving scene's textures stay alive
+		 * (the scene goes dormant). The drain that protects actual destruction lives at the
+		 * destruction site — Scenes::Manager::deleteScene waits idle before erasing the scene. */
 		const std::lock_guard< std::mutex > lock{m_indexMutex};
 
 		/* Park each freed 2D slot on an engine-owned dummy so the descriptor never dangles. */
