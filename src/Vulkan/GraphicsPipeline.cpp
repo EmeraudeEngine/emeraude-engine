@@ -1072,6 +1072,15 @@ namespace EmEn::Vulkan
 		/* Hash the render pass handle to ensure pipelines are not shared across incompatible render passes. */
 		hashCombine(hash, reinterpret_cast< uintptr_t >(renderPass.handle()));
 
+		/* Hash the pipeline layout. CRITICAL: two pipelines that differ ONLY by their layout —
+		 * e.g. same shaders/state but different push-constant range (billboard PC[0,132) vs simple
+		 * PC[0,68)) or a different descriptor-set-layout set — MUST NOT share a cache entry.
+		 * Without this, the cache returns a pipeline created with an incompatible layout, and a
+		 * draw then trips VUID-vkCmdDrawIndexed-None-08600 ("set 0 is not compatible with the
+		 * pipeline layout bound") — seen on sprites whose billboard layout collided with a simpler
+		 * one. The layout handle is content-stable (deduplicated by the LayoutManager). */
+		hashCombine(hash, reinterpret_cast< uintptr_t >(m_createInfo.layout));
+
 		/* Hash shader stages. */
 		for ( const auto & stage : m_shaderStages )
 		{
