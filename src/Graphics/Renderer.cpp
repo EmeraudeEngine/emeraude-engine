@@ -1322,8 +1322,16 @@ namespace EmEn::Graphics
 			m_retiredFrameCountdown = static_cast< uint32_t >(m_rendererFrameScope.size());
 		}
 
-		/* Dispatch to the appropriate rendering strategy. */
-		if ( m_sceneTarget != nullptr && m_postProcessor.isEnabled() )
+		/* Dispatch to the appropriate rendering strategy.
+		 * NOTE: The post-processing path is only taken when there IS an active scene. The
+		 * PostProcessor is a renderer-global service that executes the ACTIVE scene's post-process
+		 * stack and holds the final composite descriptor referencing that stack's effect outputs
+		 * (e.g. FXAASharpenOutput). With no active scene (just deleted/disabled) the stack is being
+		 * torn down, so we must NOT run the composite against its stale, about-to-be-destroyed
+		 * descriptors — fall back to direct rendering (black frame), exactly like a plain scene
+		 * deletion. Same multi-scene rule as the bindless table: a global service only ever
+		 * mirrors the active scene. */
+		if ( scene != nullptr && m_sceneTarget != nullptr && m_postProcessor.isEnabled() )
 		{
 			this->renderFrameWithInternal(scene, overlayManager, editorManager, currentFrameScope, commandBuffer);
 		}
@@ -1421,8 +1429,13 @@ namespace EmEn::Graphics
 			scenePtr->renderTranslucentGB(m_swapChain, *commandBuffer);
 		}
 
-		/* Post-processing: end RP2, blit the complete scene, restart RP2, draw fullscreen quad. */
-		if ( m_postProcessor.isEnabled() )
+		/* Post-processing: end RP2, blit the complete scene, restart RP2, draw fullscreen quad.
+		 * NOTE: Only run the composite when there IS an active scene. The PostProcessor stays
+		 * "enabled" (a user/demo master switch) after a scene is deleted, but with no scene there is
+		 * nothing rendered to blit and the composite's primary-sampler descriptor points at a
+		 * destroyed/null image (the deleted scene's effect output) → invalid render pass + device
+		 * lost. With no scene we fall through as a plain cleared frame (black), like a non-PP scene. */
+		if ( scenePtr != nullptr && m_postProcessor.isEnabled() )
 		{
 			commandBuffer->endRenderPass();
 

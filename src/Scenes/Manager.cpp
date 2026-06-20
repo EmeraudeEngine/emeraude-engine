@@ -275,13 +275,21 @@ namespace EmEn::Scenes
 			this->disableActiveScene();
 		}
 
-		/* NOTE: Drain the GPU before destroying the scene's resources. In-flight frames (from when
-		 * this scene was last rendered) may still reference its textures/buffers/samplers through
-		 * descriptor sets. The disable/switch path is kept hitch-free (no waitIdle) for seamless
-		 * transitions; the stall is paid HERE, on the deliberate delete. */
-		sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
+		/* NOTE: Destroy the scene with the render thread BLOCKED and the GPU drained.
+		 * A bare waitIdle is NOT enough — it does not prevent the render thread from submitting a
+		 * new frame between the drain and the destruction. Under the EXCLUSIVE active-scene lock the
+		 * render thread cannot enter withSharedActiveScene, so nothing references this scene's
+		 * resources (e.g. the post-process stack's intermediate render targets, sampled by the
+		 * renderer-global PostProcessor descriptor set) while ~Scene destroys them — otherwise the
+		 * GPU faults on freed memory (device lost). The stall is paid only here, on the deliberate
+		 * delete; the switch/disable path stays hitch-free. */
+		{
+			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
-		m_scenes.erase(sceneIt);
+			sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
+
+			m_scenes.erase(sceneIt);
+		}
 
 		this->notify(SceneDestroyed);
 
