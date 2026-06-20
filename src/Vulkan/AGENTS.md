@@ -13,6 +13,36 @@ Vulkan abstraction layer that hides API complexity while providing precise contr
 - Use abstraction classes: `Device`, `Buffer`, `Image`, `Pipeline`, etc.
 - All Vulkan resources must be encapsulated
 
+### Debug Object Naming (mandatory for every Vulkan object)
+
+> [!CRITICAL]
+> **Every device-owned Vulkan object MUST forward its identifier to Vulkan** so validation
+> messages and GPU captures (RenderDoc) show readable names instead of raw handles
+> (`VkImageView 0x...`). This is not cosmetic: a multi-scene device-lost crash was diagnosed only
+> because named objects revealed `PostProcessorService-…-Descriptor` `uPrimarySampler` = `0x0`
+> (see [`docs/caution-points.md`](../../docs/caution-points.md)).
+
+- `setIdentifier(...)` only stores a **CPU-side** name. It runs **before** the handle exists, so
+  it can NOT name the Vulkan object by itself.
+- `AbstractObject::setVulkanObjectName(device, objectType, handle)` (in `AbstractObject.hpp`)
+  forwards the stored identifier via `vkSetDebugUtilsObjectNameEXT`. It is a **no-op** when
+  `VK_EXT_debug_utils` is unavailable or the name is empty (release builds).
+- **Call it inside `createOnHardware()`, right after the handle is created and before
+  `setCreated()`:**
+  ```cpp
+  if ( const auto result = vkCreateXxx(device, &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS ) { … }
+
+  this->setVulkanObjectName(this->device()->handle(), VK_OBJECT_TYPE_XXX, reinterpret_cast< uint64_t >(m_handle));
+
+  this->setCreated();
+  ```
+- **Coverage:** all device-owned objects are named — `Image`, `ImageView`, `DescriptorSet`,
+  `AccelerationStructure`, `Buffer`, `CommandPool`, `ComputePipeline`, `DescriptorPool`,
+  `DescriptorSetLayout`, `DeviceMemory`, `Framebuffer`, `GraphicsPipeline`, `PipelineLayout`,
+  `RenderPass` (both v1 and v2 paths), `Sampler`, `ShaderModule`. **Any new Vulkan object type
+  added to this layer MUST do the same.** (`DescriptorSet` is an `AbstractObject`, not an
+  `AbstractDeviceDependentObject`, so it uses `m_descriptorPool->device()->handle()`.)
+
 ### GPU Memory Management
 - **VMA mandatory** for all GPU memory allocations
 - Use `MemoryRegion` and `DeviceMemory` for encapsulation
@@ -223,6 +253,8 @@ UniformBufferObject::getDescriptorInfo (uint32_t elementOffset) const noexcept
 2. Implement RAII with appropriate destructor
 3. Use VMA for memory allocations
 4. Add necessary synchronizations
+5. In `createOnHardware()`, after the handle exists and before `setCreated()`, call
+   `setVulkanObjectName(device, VK_OBJECT_TYPE_…, handle)` (see *Debug Object Naming* above)
 
 ### Adding a New Pipeline
 1. Define descriptors and layouts

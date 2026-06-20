@@ -533,9 +533,10 @@ if ( materialType == PBRResource::ClassId )
 > `Scenes/SceneMetaData.{hpp,cpp}`, `Scenes/Scene.cpp`.
 
 > [!IMPORTANT]
-> **Systemic pattern (the four Jun 2026 fixes share one root):** a resource that is **shared or
+> **Systemic pattern (the five Jun 2026 fixes share one root):** a resource that is **shared or
 > global** had its *ownership / lifecycle* wired **per-scene** (or via a global static):
-> view-matrices on camera connect, bindless textures, the cached sampler, the AS builder. The
+> view-matrices on camera connect, bindless textures, the cached sampler, the AS builder — or a
+> renderer-global service (the PostProcessor) that kept running after its scene was deleted. The
 > engine was built and tested single-scene; multi-scene load/switch/delete exposes these. **Rule
 > of thumb:** anything shared across scenes (samplers, pipelines, programs, layouts, the AS
 > builder, the bindless table) is owned ONCE at the Renderer/device level; per-scene objects only
@@ -568,6 +569,40 @@ if ( materialType == PBRResource::ClassId )
 > `destroyFromHardware()` on it.
 >
 > **Files:** `Graphics/TextureResource/{Texture1D,Texture2D,Texture3D,TextureCubemap,AnimatedTexture2D,AnimatedTextureCubemap}.cpp`.
+
+### Fixed: PostProcessor composited with no active scene → device lost (Jun 2026)
+
+> [!CRITICAL]
+> **Symptom:** deleting a post-processed scene (e.g. the `citadel` demo: SSR/RTAO/Bloom/FXAA…)
+> crashed with `VK_ERROR_DEVICE_LOST` (SIGABRT in the fence wait). The validation log — once
+> Vulkan objects were named (see `src/Vulkan/AGENTS.md`) — showed
+> `VUID-vkCmdBeginRenderPass-initialLayout-00900` (PRESENT_SRC vs COLOR_ATTACHMENT) and
+> `VUID-vkCmdDrawIndexed-None-08114` with `PostProcessorService-…-Descriptor` `uPrimarySampler`
+> = imageView `0x0`.
+>
+> **Root cause:** the `PostProcessor` is a **renderer-global** service, enabled by the demo
+> (`renderer.postProcessor().enable(true)`, `Builtin/AbstractDemo`) and **never disabled on scene
+> delete** — so `isEnabled()` stayed true after the scene was gone. Both render paths then ran the
+> final composite. `Renderer::renderFrameDirect` gated its in-place post-process block **only** on
+> `m_postProcessor.isEnabled()`, regardless of the active scene: with no scene it did
+> `recordBlit` + composite against a destroyed/null primary-sampler image (the deleted scene's
+> effect output, e.g. `FXAASharpenOutput`) with an incompatible render-pass layout → broken
+> command buffer → device lost.
+>
+> **Fix:** the composite only runs for an **active scene**. `renderFrameDirect`'s post-process
+> block is gated on `scenePtr != nullptr`; the `renderFrame` dispatch takes the internal-target PP
+> path only when `scene != nullptr`. With no scene, a scene-less frame falls through as a plain
+> cleared (black) frame, exactly like a non-post-processed scene. `Scenes::Manager::deleteScene`
+> also now holds the exclusive active-scene lock across `device->waitIdle()` + erase, so the
+> render thread can't submit a frame referencing the scene while `~Scene` runs.
+>
+> **Takeaway:** a renderer-global service that *records GPU work* (not just holds resources) must
+> **only run for the ACTIVE scene** — its inputs belong to a scene that may be gone. Mirror the
+> active scene like the bindless table; never key the work on a "user enabled" master switch alone.
+>
+> **Files:** `Graphics/Renderer.cpp` (`renderFrame`, `renderFrameDirect`), `Scenes/Manager.cpp`
+> (`deleteScene`). See [`multi-scene-resource-ownership.md`](multi-scene-resource-ownership.md)
+> anti-pattern #5.
 
  ### Fixed: View-matrices freed on camera disconnect — render-thread use-after-free (Jun 2026)
 

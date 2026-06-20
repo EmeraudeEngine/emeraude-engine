@@ -3,10 +3,11 @@
 > [!CRITICAL]
 > **This is a code-generation doctrine.** Most rendering features in this engine were first built
 > and tested with a *single* scene. Loading several scenes, switching between them, and deleting
-> them at runtime exposes a whole class of resource-lifetime bugs (four were found and fixed in
+> them at runtime exposes a whole class of resource-lifetime bugs (five were found and fixed in
 > Jun 2026 — see [`caution-points.md`](caution-points.md)). Every one shared the same root: a
 > **shared or global resource whose ownership/lifecycle was wired per-scene** (or via a global
-> static). Read this before writing any code that creates, references, or destroys a GPU resource.
+> static), **or a renderer-global service that kept operating after its active scene was gone**.
+> Read this before writing any code that creates, references, or destroys a GPU resource.
 
 ## The runtime model you must assume
 
@@ -24,11 +25,15 @@ For any resource, ask: **"is it shared across scenes / does it outlive a single 
 1. **Engine-global — owned ONCE by the Renderer/device, for the renderer's whole lifetime.**
    Samplers (`Renderer::getSampler` cache), pipeline / program / descriptor-set-layout caches,
    the main `DescriptorPool`, `BindlessTextureManager` (the descriptor table),
-   `AccelerationStructureBuilder`, default/dummy textures, `GrabPass`.
+   `AccelerationStructureBuilder`, `PostProcessor` (the composite/blit pass), default/dummy
+   textures, `GrabPass`.
    - Create once at renderer init; reach it **through the Renderer**.
    - **NEVER** own it per-scene. **NEVER** publish it through a global `static`. Consumers
      **release their reference**, they do **not** `destroyFromHardware()` it — the owner destroys
      it once, at shutdown.
+   - A global service that *executes work* (not just holds resources) must **only run for the
+     ACTIVE scene**. If there is no active scene, it must **not** record its pass — its inputs
+     (descriptors, sampled images) belong to a scene that may be gone. See anti-pattern #5.
 
 2. **Shared resources — `Resources::Manager`, reference-counted.**
    Geometries, textures, materials, skeletons… outlive any single scene. Their GPU sub-objects may
@@ -57,7 +62,12 @@ For any resource, ask: **"is it shared across scenes / does it outlive a single 
 - **On delete:** per-scene state dies with the scene; global services keep running and must hold
   **zero** references to the deleted scene.
 
-## Anti-patterns — the four canonical bugs
+> The `PostProcessStack` itself is **per-scene state (tier 3)**: the demo builds it and moves it
+> into the `Scene`. The renderer-global `PostProcessor` *executes* the active scene's stack. So
+> the stack is owned by the scene; the executing service is owned by the renderer and must mirror
+> the active scene exactly like the bindless table.
+
+## Anti-patterns — the five canonical bugs
 
 1. **Lifecycle tied to a transient event** instead of the owner's lifecycle → view-matrices were
    created/destroyed on camera connect/disconnect (unsynchronized with the render thread).
@@ -67,6 +77,14 @@ For any resource, ask: **"is it shared across scenes / does it outlive a single 
    AS builder were per-scene yet serve shared geometries/textures.
 4. **A consumer destroying a cache-owned shared object** → `Texture2D` cleanup called
    `m_sampler->destroyFromHardware()` on the shared cached sampler.
+5. **A renderer-global service running its pass with no active scene** → the `PostProcessor` is
+   enabled by the demo (`postProcessor().enable(true)`) and stays enabled after the scene is
+   deleted. Both render paths then ran the final composite: in `Renderer::renderFrameDirect` the
+   post-process block was gated only on `m_postProcessor.isEnabled()`, so with no scene it blit +
+   composited against a **destroyed/null** primary-sampler image (the deleted scene's effect
+   output) with an incompatible render-pass layout → device lost. Fix: gate the composite on an
+   **active scene** (`scenePtr != nullptr`), and take the internal-target PP path in `renderFrame`
+   only when `scene != nullptr`. With no scene, fall through to a plain cleared frame.
 
 ## Checklist before generating resource code
 
