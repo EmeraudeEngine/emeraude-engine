@@ -110,6 +110,13 @@ namespace EmEn::Graphics::Geometry
 			return;
 		}
 
+		/* If the device was lost, the builder refuses all builds; skip silently rather than spam a
+		 * per-geometry "Failed to build BLAS" for every geometry of every reloaded scene. */
+		if ( accelerationStructureBuilder->isDeviceLost() )
+		{
+			return;
+		}
+
 		const auto topo = this->topology();
 
 		/* Only triangle-based topologies can produce a BLAS. */

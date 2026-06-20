@@ -140,10 +140,10 @@ namespace EmEn::Vulkan
 
 		const std::lock_guard< std::mutex > lock{m_buildAccess};
 
+		/* Device already lost: refuse silently (the loss is reported once, loudly, at detection).
+		 * Logging per call here floods the console and hides the first, real fault. */
 		if ( m_deviceLost )
 		{
-			Tracer::error(ClassId, "Device is lost, cannot build BLAS !");
-
 			return nullptr;
 		}
 
@@ -417,10 +417,9 @@ namespace EmEn::Vulkan
 	{
 		const std::lock_guard< std::mutex > lock{m_buildAccess};
 
+		/* Device already lost: refuse silently (reported once at detection). */
 		if ( m_deviceLost )
 		{
-			Tracer::error(ClassId, "Device is lost, cannot prepare TLAS !");
-
 			return nullptr;
 		}
 
@@ -627,7 +626,10 @@ namespace EmEn::Vulkan
 		/* 5. Wait for completion. */
 		if ( !m_fence->wait() )
 		{
-			Tracer::error(ClassId, "Fence wait failed, device may be lost !");
+			/* This is the FIRST detection of the device loss (the sticky flag silences all
+			 * subsequent build attempts). Report it once, loudly — this is THE fault to investigate;
+			 * the GPU faulted on a prior submission (look just above this line for the cause). */
+			Tracer::error(ClassId, "DEVICE LOST detected on acceleration-structure build fence wait — ray tracing is now disabled for this session. Look at the messages just BEFORE this one for the faulting command.");
 
 			m_deviceLost = true;
 

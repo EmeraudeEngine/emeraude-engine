@@ -157,6 +157,19 @@ namespace EmEn::Vulkan
 			std::unique_ptr< AccelerationStructure > buildBLAS (const std::vector< BLASGeometryInput > & geometries) noexcept;
 
 			/**
+			 * @brief Returns whether the device was lost during a build (sticky flag).
+			 * @note Once true, all further BLAS/TLAS builds are refused silently (the loss is
+			 * reported once, loudly, at detection). Callers should skip building rather than spam.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDeviceLost () const noexcept
+			{
+				return m_deviceLost;
+			}
+
+			/**
 			 * @brief Prepares a TLAS build (CPU-side): uploads instances, allocates AS and scratch.
 			 * @note Does NOT submit any GPU commands. The caller must record the build
 			 * into a command buffer via recordTLASBuild().
