@@ -118,3 +118,38 @@ See [`docs/shadow-mapping.md`](shadow-mapping.md) for complete shadow mapping ar
 ### 5. Recursive Rendering
 **Limitation**: A texture showing itself (e.g., TV showing camera filming TV) causes infinite recursion / read-after-write hazard.
 **Status**: Triggers validation warning. Future fix: Double buffering.
+
+## View Matrices Lifecycle (CRITICAL)
+
+Every render target owns a `ViewMatricesInterface` GPU resource (UBO + descriptor set),
+returned by `viewMatrices()` and bound every frame by `RenderableInstance::Abstract::render()`
+(`renderTarget->viewMatrices().descriptorSet()->handle()`).
+
+**Ownership rule:** the view-matrices GPU resource lives and dies **with the render target**,
+NOT with the input camera (the AVConsole device feeding it):
+
+- **Created** in `RenderTarget::Abstract::createRenderTarget()` (after `onCreate()` succeeds),
+  via the polymorphic `this->viewMatrices().create(renderer, this->id())`.
+- **Destroyed** in `RenderTarget::Abstract::destroyRenderTarget()`, via `this->viewMatrices().destroy()`.
+- **Camera connect/disconnect** (`onInputDeviceConnected` / `onInputDeviceDisconnected`) must
+  only update the matrices **DATA** (`updateDeviceFromCoordinates()`), never the GPU resource
+  lifecycle. These handlers are intentionally absent on all render targets (SwapChain, Texture,
+  ShadowMap, View, SceneRenderTarget) — the base no-op is used.
+
+**Why this matters (was a use-after-free):** previously each render target created its view
+matrices on camera connect and **destroyed them on camera disconnect**. The rendering thread
+synchronizes scene swaps only through `Scenes::Manager::m_activeSceneSharedAccess` (shared vs
+exclusive lock); camera teardown goes through a *different* channel (AVConsole device
+disconnection) that does **not** take that lock. So destroying the primary camera while the
+scene was still active (e.g. `Stage::unloadActiveAct` resetting the player Act before disabling
+the scene) freed the swap-chain descriptor set under the render thread → `descriptorSet()`
+returned `nullptr` → crash in `DescriptorSet::handle()`. Tying the resource to the render
+target lifetime removes the freeing path entirely.
+
+**Init-order constraint:** because the swap-chain creates its view matrices inside
+`createRenderTarget()` at renderer init, the main `DescriptorPool` must be created **before**
+the swap-chain / windowless view in `Renderer::onInitialize()` (it is now created right after
+`initializeSubServices()`, before the windowless/swap-chain branch).
+
+A resize goes through `SwapChain::recreate()` / `fullRecreate()`, which only call
+`updateViewProperties()` (data) — the view-matrices GPU resource survives a resize untouched.

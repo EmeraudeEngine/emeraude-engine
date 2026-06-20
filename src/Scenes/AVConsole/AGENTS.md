@@ -37,6 +37,22 @@ Audio-video mixing console for managing connections between cameras, microphones
 - **Automatic registration**: Components register automatically
 - **Lifecycle**: AVConsole follows Scene lifecycle
 
+### CRITICAL: device connect/disconnect must NOT manage GPU resource lifecycle
+
+`onInputDeviceConnected` / `onInputDeviceDisconnected` (and `removeVideoDevice` →
+`disconnectFromAll`) run **synchronously on whatever thread destroys the device** (e.g. the
+main/UI thread tearing down a player Act), and do **NOT** take the rendering lock
+(`Scenes::Manager::m_activeSceneSharedAccess`). They must therefore only update **data**
+(coordinates via `updateDeviceFromCoordinates()`), never create or destroy GPU resources that
+the render thread dereferences.
+
+Historically the render targets created/destroyed their view-matrices descriptor set in these
+handlers. Disconnecting the primary camera while the scene was still active freed the
+swap-chain descriptor set under the render thread → null-deref crash in
+`DescriptorSet::handle()`. Fixed by moving that resource's lifecycle to the render target
+itself (`RenderTarget::Abstract::createRenderTarget()` / `destroyRenderTarget()`). See
+[`docs/render-targets.md`](../../../docs/render-targets.md) → "View Matrices Lifecycle".
+
 ### Camera Switch
 ```cpp
 // Scene with multiple cameras

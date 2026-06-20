@@ -217,18 +217,6 @@ namespace EmEn::Graphics
 		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 	}
 
-	void
-	SceneRenderTarget::onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & /*sourceDevice*/) noexcept
-	{
-		m_viewMatrices.create(engineContext.graphicsRenderer, this->id());
-	}
-
-	void
-	SceneRenderTarget::onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
-	{
-		m_viewMatrices.destroy();
-	}
-
 	bool
 	SceneRenderTarget::writeCombinedImageSampler (const Vulkan::DescriptorSet & /*descriptorSet*/, uint32_t /*bindingIndex*/) const noexcept
 	{

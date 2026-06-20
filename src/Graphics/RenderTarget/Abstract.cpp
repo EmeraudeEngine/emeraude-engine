@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Image.hpp"
@@ -68,6 +69,22 @@ namespace EmEn::Graphics::RenderTarget
 			return false;
 		}
 
+		/* NOTE: The view-matrices GPU resource (UBO + descriptor set) is owned by the
+		 * render target, NOT by the input camera. It is created here, with the render
+		 * target, and destroyed in destroyRenderTarget(). It MUST NOT be tied to the
+		 * AVConsole device connection lifecycle (onInputDeviceConnected/Disconnected):
+		 * disconnecting a camera while the render thread is still drawing would free this
+		 * descriptor set under the renderer and crash on the next bind. Camera connection
+		 * only updates the matrices DATA (see updateDeviceFromCoordinates()). */
+		if ( !this->viewMatrices().create(renderer, this->id()) )
+		{
+			Tracer::error(TracerTag, "Unable to create the render target view matrices! Destroying it...");
+
+			this->destroyRenderTarget();
+
+			return false;
+		}
+
 		m_renderOutOfDate = true;
 
 		return true;
@@ -76,6 +93,10 @@ namespace EmEn::Graphics::RenderTarget
 	bool
 	Abstract::destroyRenderTarget () noexcept
 	{
+		/* NOTE: Symmetric with createRenderTarget(): the view-matrices resource lives and
+		 * dies with the render target, independently of camera connect/disconnect. */
+		this->viewMatrices().destroy();
+
 		this->onDestroy();
 
 		m_semaphore.reset();

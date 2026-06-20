@@ -1453,21 +1453,6 @@ namespace EmEn::Vulkan
 		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 	}
 
-	void
-	SwapChain::onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & /*sourceDevice*/) noexcept
-	{
-		if ( !m_viewMatrices.create(engineContext.graphicsRenderer, this->id()) )
-		{
-			Tracer::error(ClassId, "Unable to create the view matrices on source device connexion !");
-		}
-	}
-
-	void
-	SwapChain::onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
-	{
-		m_viewMatrices.destroy();
-	}
-
 	bool
 	SwapChain::capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Pixmap< uint8_t >, 3 > & result) const noexcept
 	{

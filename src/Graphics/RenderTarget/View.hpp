@@ -330,20 +330,6 @@ namespace EmEn::Graphics::RenderTarget
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 			}
 
-			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
-			void
-			onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
-			{
-				m_viewMatrices.create(engineContext.graphicsRenderer, this->id());
-			}
-
-			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
-			void
-			onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
-			{
-				m_viewMatrices.destroy();
-			}
-
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]
 			bool

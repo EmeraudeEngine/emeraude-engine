@@ -382,73 +382,10 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* NOTE: Create the swap-chain for presenting images to the screen. */
-		if ( m_windowLess )
-		{
-			const auto viewDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
-
-			/* NOTE: Windowless mode uses single-sample only. renderOffscreenFrame() has a single
-			 * render pass, so the overlay pipeline (created for single-sample) must match.
-			 * TODO: Add a two-pass structure (scene MSAA -> resolve -> overlay single-sample)
-			 * to renderOffscreenFrame() to support MSAA for quality screenshots. */
-			constexpr uint32_t sampleCount = 1;
-			/*auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
-
-			if ( sampleCount > 1 )
-			{
-				sampleCount = m_device->checkMultisampleCount(sampleCount);
-			}*/
-
-			m_windowLessView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
-				"WindowLessView",
-				m_window.state().windowWidth,
-				m_window.state().windowHeight,
-				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount},
-				viewDistance,
-				false
-			);
-
-			if ( !m_windowLessView->createRenderTarget(*this) )
-			{
-				Tracer::fatal(ClassId, "Unable to create the window less view!");
-
-				return false;
-			}
-
-			/* Create a command pools and command buffers following the offscreen view image. */
-			if ( !this->createRenderingSystem(1) )
-			{
-				m_windowLessView.reset();
-
-				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers!");
-
-				return false;
-			}
-		}
-		else
-		{
-			m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings(), m_vulkanInstance.showInformation());
-			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
-
-			if ( !m_swapChain->createOnHardware() )
-			{
-				Tracer::fatal(ClassId, "Unable to create the swap-chain!");
-
-				return false;
-			}
-
-			/* Create a command pools and command buffers following the swap-chain images. */
-			if ( !this->createRenderingSystem(m_swapChain->imageCount()) )
-			{
-				m_swapChain.reset();
-
-				Tracer::fatal(ClassId, "Unable to create the swap-chain command pools and buffers!");
-
-				return false;
-			}
-		}
-
-		/* NOTE: Create the main descriptor pool. */
+		/* NOTE: Create the main descriptor pool BEFORE any render target.
+		 * Render targets now create their view-matrices descriptor set inside
+		 * createRenderTarget() (see RenderTarget::Abstract), so the pool must already
+		 * exist when the swap-chain / windowless view is created below. */
 		{
 			// TODO: Sizes management is maybe in the wrong place !
 			auto sizes = std::vector< VkDescriptorPoolSize >{
@@ -522,6 +459,72 @@ namespace EmEn::Graphics
 			if ( !m_descriptorPool->createOnHardware() )
 			{
 				Tracer::fatal(ClassId, "Unable to create the descriptor pool!");
+
+				return false;
+			}
+		}
+
+		/* NOTE: Create the swap-chain for presenting images to the screen. */
+		if ( m_windowLess )
+		{
+			const auto viewDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
+
+			/* NOTE: Windowless mode uses single-sample only. renderOffscreenFrame() has a single
+			 * render pass, so the overlay pipeline (created for single-sample) must match.
+			 * TODO: Add a two-pass structure (scene MSAA -> resolve -> overlay single-sample)
+			 * to renderOffscreenFrame() to support MSAA for quality screenshots. */
+			constexpr uint32_t sampleCount = 1;
+			/*auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
+
+			if ( sampleCount > 1 )
+			{
+				sampleCount = m_device->checkMultisampleCount(sampleCount);
+			}*/
+
+			m_windowLessView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
+				"WindowLessView",
+				m_window.state().windowWidth,
+				m_window.state().windowHeight,
+				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount},
+				viewDistance,
+				false
+			);
+
+			if ( !m_windowLessView->createRenderTarget(*this) )
+			{
+				Tracer::fatal(ClassId, "Unable to create the window less view!");
+
+				return false;
+			}
+
+			/* Create a command pools and command buffers following the offscreen view image. */
+			if ( !this->createRenderingSystem(1) )
+			{
+				m_windowLessView.reset();
+
+				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers!");
+
+				return false;
+			}
+		}
+		else
+		{
+			m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings(), m_vulkanInstance.showInformation());
+			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
+
+			if ( !m_swapChain->createOnHardware() )
+			{
+				Tracer::fatal(ClassId, "Unable to create the swap-chain!");
+
+				return false;
+			}
+
+			/* Create a command pools and command buffers following the swap-chain images. */
+			if ( !this->createRenderingSystem(m_swapChain->imageCount()) )
+			{
+				m_swapChain.reset();
+
+				Tracer::fatal(ClassId, "Unable to create the swap-chain command pools and buffers!");
 
 				return false;
 			}

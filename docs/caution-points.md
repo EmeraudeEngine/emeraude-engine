@@ -462,6 +462,40 @@ if ( materialType == PBRResource::ClassId )
 
 ## Scene Rendering
 
+ ### Fixed: View-matrices freed on camera disconnect — render-thread use-after-free (Jun 2026)
+
+> [!CRITICAL]
+> **Crash signature:** segfault in `Vulkan::DescriptorSet::handle()` (`return m_handle;`),
+> called from `RenderableInstance::Abstract::render()` →
+> `renderTarget->viewMatrices().descriptorSet()->handle()`, on the **rendering thread**, when
+> unloading a demo/scene after interacting with it.
+>
+> **Root cause:** each render target created its view-matrices GPU resource (UBO + descriptor
+> set) on **camera connect** (`onInputDeviceConnected`) and **destroyed it on camera disconnect**
+> (`onInputDeviceDisconnected` → `m_viewMatrices.destroy()`). The rendering thread synchronizes
+> scene swaps only through `Scenes::Manager::m_activeSceneSharedAccess` (shared lock for
+> render/logic, exclusive for scene enable/disable). Camera teardown reaches the swap-chain
+> through a **different** channel — `CameraDestroyed` → `AVConsole::removeVideoDevice` →
+> `disconnectFromAll` → `SwapChain::onInputDeviceDisconnected` — that does **not** take that
+> lock. Destroying the primary camera while the scene was still active (e.g. projet-alpha
+> `Stage::unloadActiveAct` resets the player Act *before* calling `disableActiveScene`) freed the
+> swap-chain descriptor set under the render thread → `descriptorSet()` returned `nullptr` →
+> crash.
+>
+> **Fix:** the view-matrices resource lifecycle now belongs to the **render target**, not the
+> input camera:
+> - Created in `RenderTarget::Abstract::createRenderTarget()`, destroyed in `destroyRenderTarget()`.
+> - `onInputDeviceConnected` / `onInputDeviceDisconnected` overrides removed from SwapChain,
+>   Texture, ShadowMap, View, SceneRenderTarget (base no-op used); camera connection only feeds
+>   matrix **data** via `updateDeviceFromCoordinates()`.
+> - The main `DescriptorPool` is now created **before** the swap-chain in `Renderer::onInitialize()`
+>   (the swap-chain creates its view matrices at init time and needs the pool ready).
+>
+> **Files:** `Graphics/RenderTarget/Abstract.cpp`, `Graphics/Renderer.cpp` (init order),
+> `Vulkan/SwapChain.{hpp,cpp}`, `Graphics/SceneRenderTarget.{hpp,cpp}`,
+> `Graphics/RenderTarget/{Texture,ShadowMap,View}.hpp`. See
+> [`docs/render-targets.md`](render-targets.md) → "View Matrices Lifecycle".
+
 ### Fixed: Scene Visual Components Null Check (Feb 2026)
 
 > [!WARNING]

@@ -346,12 +346,6 @@ namespace EmEn::Vulkan
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
-			void onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & sourceDevice) noexcept override;
-
-			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
-			void onInputDeviceDisconnected (EngineContext & engineContext, AbstractVirtualDevice & sourceDevice) noexcept override;
-
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]
 			bool onCreate (Graphics::Renderer & renderer) noexcept override;
