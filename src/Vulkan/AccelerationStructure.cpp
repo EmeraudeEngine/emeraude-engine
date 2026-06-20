@@ -148,6 +148,8 @@ namespace EmEn::Vulkan
 
 		m_deviceAddress = fpGetAccelerationStructureDeviceAddress(deviceHandle, &addressInfo);
 
+		this->setVulkanObjectName(deviceHandle, VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR, reinterpret_cast< uint64_t >(m_handle));
+
 		this->setCreated();
 
 		return true;
