@@ -60,6 +60,8 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		this->setVulkanObjectName(m_descriptorPool->device()->handle(), VK_OBJECT_TYPE_DESCRIPTOR_SET, reinterpret_cast< uint64_t >(m_handle));
+
 		this->setCreated();
 
 		return true;

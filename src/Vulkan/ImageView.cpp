@@ -72,6 +72,8 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		this->setVulkanObjectName(this->device()->handle(), VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast< uint64_t >(m_handle));
+
 		this->setCreated();
 
 		return true;

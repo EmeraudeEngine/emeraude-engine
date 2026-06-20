@@ -207,6 +207,50 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Pushes this object's identifier to Vulkan as a debug name, so validation
+			 * messages and GPU captures name the object instead of showing a raw handle.
+			 * @note setIdentifier() runs BEFORE the handle exists, so it can only STORE the name;
+			 * this must be called from createOnHardware() AFTER the handle is created. No-op if
+			 * VK_EXT_debug_utils is unavailable, the handle is null, or the name is empty (release).
+			 * @param device The Vulkan device handle owning the object.
+			 * @param objectType The VkObjectType of the object.
+			 * @param objectHandle The object handle, reinterpreted as uint64_t.
+			 * @return void
+			 */
+			void
+			setVulkanObjectName (VkDevice device, VkObjectType objectType, uint64_t objectHandle) const noexcept
+			{
+				if ( device == VK_NULL_HANDLE || objectHandle == 0 )
+				{
+					return;
+				}
+
+				const auto & name = this->identifier();
+
+				if ( name.empty() )
+				{
+					return;
+				}
+
+				const auto fpSetName = reinterpret_cast< PFN_vkSetDebugUtilsObjectNameEXT >(vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT"));
+
+				if ( fpSetName == nullptr )
+				{
+					return;
+				}
+
+				const VkDebugUtilsObjectNameInfoEXT nameInfo{
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.pNext = nullptr,
+					.objectType = objectType,
+					.objectHandle = objectHandle,
+					.pObjectName = name.c_str()
+				};
+
+				static_cast< void >(fpSetName(device, &nameInfo));
+			}
+
+			/**
 			 * @brief Returns whether the object is in video memory and usable.
 			 * @return bool
 			 */
