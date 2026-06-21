@@ -1064,6 +1064,14 @@ namespace EmEn::AssetLoaders
 					materialList.push_back(defaultMaterial());
 				}
 
+				/* Caller-forced double-sided (LoaderOptions::forceDoubleSided): OR with
+				 * the asset flag above. Lets a caller render a whole model double-sided
+				 * regardless of what the glTF declares (symmetric with FBXLoader). */
+				if ( m_options.forceDoubleSided )
+				{
+					rasterization.setCullingMode(CullingMode::None);
+				}
+
 				rasterizationList.push_back(rasterization);
 			}
 

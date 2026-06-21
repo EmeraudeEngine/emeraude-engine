@@ -1105,6 +1105,15 @@ namespace EmEn::AssetLoaders
 					material = defaultMaterial();
 				}
 
+				/* Caller-forced double-sided (LoaderOptions::forceDoubleSided): OR with
+				 * the asset flag above. Covers formats/exporters (Mixamo FBX Phong) that
+				 * carry no double-sided material property ufbx can surface. Applies to
+				 * default-material parts too. */
+				if ( m_options.forceDoubleSided )
+				{
+					rasterization.setCullingMode(CullingMode::None);
+				}
+
 				materialList.push_back(std::move(material));
 				rasterizationList.push_back(rasterization);
 			}

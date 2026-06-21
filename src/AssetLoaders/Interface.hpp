@@ -80,6 +80,23 @@ namespace EmEn::AssetLoaders
 		MaterialMode materialMode{MaterialMode::PBR};
 		bool skipSkinning{false};
 		/**
+		 * @brief Forces every material part of the loaded model to render
+		 * double-sided (back-face culling disabled, CullingMode::None),
+		 * regardless of what the asset declares. OR-ed with the per-material
+		 * asset flag (glTF doubleSided / FBX ufbx double_sided feature).
+		 *
+		 * Use for assets whose format/exporter cannot carry a double-sided
+		 * flag the loader can read - e.g. Mixamo FBX rigs, which ship plain
+		 * FbxSurfacePhong materials; ufbx only surfaces double_sided for
+		 * glTF-style materials, so these models always import single-sided
+		 * and thin shells (inner armour, cloth) show see-through holes.
+		 *
+		 * @note Two-sided lighting is already handled engine-side (back-face
+		 * shading normals are flipped), so enabling this yields correctly lit
+		 * back-faces, not inward-lit ones.
+		 */
+		bool forceDoubleSided{false};
+		/**
 		 * @brief Strips the translation track of every root joint from animation
 		 * clips produced by `loadAnimationClipsOnly`. Rotation and scale tracks
 		 * are kept intact, and non-root joints are not touched.
