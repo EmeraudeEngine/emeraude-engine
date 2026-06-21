@@ -267,7 +267,7 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingEnableGlobalIlluminationKey{"Core/Graphics/RayTracing/EnableGlobalIllumination"};
 			constexpr auto DefaultGraphicsRayTracingEnableGlobalIllumination{true};
 			constexpr auto GraphicsRayTracingGISampleCountKey{"Core/Graphics/RayTracing/GISampleCount"};
-			constexpr auto DefaultGraphicsRayTracingGISampleCount{2U};
+			constexpr auto DefaultGraphicsRayTracingGISampleCount{16U};
 			constexpr auto GraphicsRayTracingGIPixelDoublingKey{"Core/Graphics/RayTracing/GIPixelDoubling"};
 			constexpr auto DefaultGraphicsRayTracingGIPixelDoubling{true};
 			constexpr auto GraphicsRayTracingEnableContactShadowsKey{"Core/Graphics/RayTracing/EnableContactShadows"};

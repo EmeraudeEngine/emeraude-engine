@@ -547,6 +547,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
+		/* Rays per pixel for the GI trace, driven by the setting (more = less noise, more cost). */
+		m_parameters.sampleCount = renderer.primaryServices().settings().getOrSetDefault< uint32_t >(GraphicsRayTracingGISampleCountKey, DefaultGraphicsRayTracingGISampleCount);
+
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )
 		{
