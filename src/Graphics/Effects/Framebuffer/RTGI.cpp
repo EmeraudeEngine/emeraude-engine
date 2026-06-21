@@ -185,10 +185,21 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 	return uv0 * (1.0 - bary.x - bary.y) + uv1 * bary.x + uv2 * bary.y;
 }
 
-/* Hash function for pseudo-random sampling. */
-float hash (vec2 p)
+/* PCG integer hash → decorrelated white noise from integer pixel coordinates.
+ * The previous fract(sin(dot(...))) hash is a deterministic function of screen position with
+ * float-precision beating: it produced a fixed, scene-independent grid/banding pattern, identical
+ * on every GPU, that the spatial denoiser cannot remove. PCG gives proper per-pixel white noise. */
+uint pcgHash (uint v)
 {
-	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+	v = v * 747796405u + 2891336453u;
+	uint s = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+	return (s >> 22u) ^ s;
+}
+
+vec2 hash2 (uvec2 p)
+{
+	uint h = pcgHash(p.x + pcgHash(p.y));
+	return vec2(float(h & 0xffffu), float((h >> 16u) & 0xffffu)) * (1.0 / 65535.0);
 }
 
 /* Generate a cosine-weighted hemisphere sample direction. */
@@ -301,7 +312,7 @@ void main()
 	mat3 TBN = mat3(tangent, bitangent, worldNormal);
 
 	/* Per-pixel random rotation to break banding. */
-	vec2 noiseVec = vec2(hash(vUV), hash(vUV * 2.37));
+	vec2 noiseVec = hash2(uvec2(gl_FragCoord.xy));
 
 	/* Adaptive bias: scale with camera distance AND grazing angle.
 	 * Distance: pixel footprint grows → needs larger offset.
