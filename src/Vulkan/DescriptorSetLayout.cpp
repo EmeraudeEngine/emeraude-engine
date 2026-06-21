@@ -121,8 +121,11 @@ namespace EmEn::Vulkan
 			m_handle = VK_NULL_HANDLE;
 		}
 
-		/* FIXME: Descriptor set layout can be instanced without the need of being created. */
-		this->setCreated();
+		/* NOTE: A layout may be instanced (bindings declared) but never created on hardware
+		 * (e.g. LayoutManager dedup: another thread won the race). That case is already safe —
+		 * the leak check (~AbstractObject) only fires on "created && !destroyed", so an uncreated
+		 * object never warns. We only mark it destroyed; forcing setCreated() here would defeat
+		 * leak detection for genuinely-created layouts. */
 		this->setDestroyed();
 
 		return true;
