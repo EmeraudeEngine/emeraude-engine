@@ -303,7 +303,15 @@ namespace EmEn::Graphics::MDI
 						tracker.lastLayerIndex = layerIndex;
 					}
 
-					/* Push MDI constants: BDA(8) + VP(64) + frameIndex(4) = 76 bytes. */
+					/* Push MDI constants in the std430 layout the shader declares:
+					 *   uint perDrawAddrLo  @ 0
+					 *   uint perDrawAddrHi  @ 4
+					 *   (8 bytes padding — a mat4 has 16-byte base alignment)
+					 *   mat4 viewProjection @ 16
+					 *   float frameIndex    @ 80
+					 * Total 84 bytes. Writing the matrix at offset 8 (naive 76-byte layout) makes the
+					 * GPU read it from the wrong place → garbage transforms; the range size must also
+					 * match the layout (now 84, see PushConstantBlock::bytes()). */
 					{
 						const auto & viewMatrix = renderTarget->viewMatrices().viewMatrix(readStateIndex, false, 0);
 						const auto & projectionMatrix = renderTarget->viewMatrices().projectionMatrix(readStateIndex);
@@ -312,13 +320,14 @@ namespace EmEn::Graphics::MDI
 						const auto bdaLo = static_cast< uint32_t >(bdaAddress & 0xFFFFFFFFUL);
 						const auto bdaHi = static_cast< uint32_t >((bdaAddress >> 32) & 0xFFFFFFFFUL);
 
-						std::array< float, 19 > buffer{};
+						std::array< float, 21 > buffer{};
 						std::memcpy(&buffer[0], &bdaLo, sizeof(uint32_t));
 						std::memcpy(&buffer[1], &bdaHi, sizeof(uint32_t));
-						std::memcpy(&buffer[2], viewProjectionMatrix.data(), 64);
-						buffer[18] = 0.0F;
+						/* buffer[2], buffer[3] : 8 bytes of std430 padding before the mat4. */
+						std::memcpy(&buffer[4], viewProjectionMatrix.data(), 64);
+						buffer[20] = 0.0F;
 
-						vkCmdPushConstants(commandBuffer.handle(), pipelineLayout->handle(), VK_SHADER_STAGE_VERTEX_BIT, 0, 76, buffer.data());
+						vkCmdPushConstants(commandBuffer.handle(), pipelineLayout->handle(), VK_SHADER_STAGE_VERTEX_BIT, 0, 84, buffer.data());
 					}
 
 					/* Descriptor sets. */
@@ -344,6 +353,23 @@ namespace EmEn::Graphics::MDI
 						{
 							commandBuffer.bind(*materialDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
 							tracker.lastMaterialDS = materialDS->handle();
+						}
+
+						setOffset++;
+					}
+
+					/* Bind the bindless textures descriptor set (set 2). MDI samples ALL material
+					 * textures through the global bindless table — per-draw material descriptor sets
+					 * cannot be rebound inside a single indirect call — so the MDI pipeline always
+					 * statically uses this set. Without it: VUID-vkCmdDrawIndexedIndirect-None-08600. */
+					if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr )
+					{
+						const auto * bindlessDS = bindlessTexturesManager->descriptorSet();
+
+						if ( tracker.lastBindlessDS != bindlessDS->handle() )
+						{
+							commandBuffer.bind(*bindlessDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
+							tracker.lastBindlessDS = bindlessDS->handle();
 						}
 
 						setOffset++;

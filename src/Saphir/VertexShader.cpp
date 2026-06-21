@@ -388,14 +388,30 @@ namespace EmEn::Saphir
 			return true;
 		}
 
-		if ( !this->prepareModelViewMatrix() )
-		{
-			return false;
-		}
-
 		std::stringstream code{};
 
-		code << "\t" "const mat3 " << ShaderVariable::NormalMatrix << " = transpose(mat3(inverse(" << ShaderVariable::ModelViewMatrix << ")));" "\n";
+		if ( this->isMDIEnabled() )
+		{
+			/* MDI pushes only the combined view-projection matrix (BDA per-draw model matrix +
+			 * VP), so there is no separate view matrix available. The MDI vertex shader works
+			 * entirely in world space (world-space position and tangent-to-world outputs), so the
+			 * normal matrix is derived from the world model matrix, not from a model-view matrix. */
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat3 " << ShaderVariable::NormalMatrix << " = transpose(mat3(inverse(" << ShaderVariable::MDIModelMatrix << ")));" "\n";
+		}
+		else
+		{
+			if ( !this->prepareModelViewMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat3 " << ShaderVariable::NormalMatrix << " = transpose(mat3(inverse(" << ShaderVariable::ModelViewMatrix << ")));" "\n";
+		}
 
 		m_uniquePreparations.emplace_back(ShaderVariable::NormalMatrix, code.str());
 

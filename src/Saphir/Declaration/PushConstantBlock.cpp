@@ -49,12 +49,31 @@ namespace EmEn::Saphir::Declaration
 			size += structure.bytes();
 		}
 
+		/* Push-constant blocks use std430 layout: each member starts at an offset aligned to its
+		 * base alignment (e.g. a mat4 aligns to 16). Summing raw member sizes underestimates the
+		 * block size whenever a smaller member precedes a mat4 — e.g. the MDI block
+		 * (uint, uint, mat4, float): naive sum 76 vs real layout 84 (8 bytes of padding before the
+		 * mat4). A too-small VkPushConstantRange then trips VUID-VkGraphicsPipelineCreateInfo-layout
+		 * (the SPIR-V block is larger than the declared range). For the scalar/vector/matrix types
+		 * used in push constants, std430 and std140 base alignments coincide, so base_alignment_std140
+		 * is reused here. */
 		for ( const auto & pushConstant : this->members() | std::views::values )
 		{
-			size +=  pushConstant .bytes();
+			const auto alignment = base_alignment_std140(pushConstant.type());
+
+			if ( alignment > 0 )
+			{
+				const auto remainder = size % alignment;
+
+				if ( remainder != 0 )
+				{
+					size += alignment - remainder;
+				}
+			}
+
+			size += pushConstant.bytes();
 		}
 
-		/* FIXME: Check alignment. */
 		if ( this->arraySize() > 1U )
 		{
 			size *= this->arraySize();
