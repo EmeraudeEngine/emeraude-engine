@@ -228,7 +228,10 @@ namespace EmEn::Saphir
 		/* Discard backward normal sample code. */
 		if ( !m_useStaticLighting )
 		{
-			Code{fragmentShader} << "if ( dot(-" << rayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << ") < -0.33 ) { discard; }";
+			/* Double-sided: use the front-facing-corrected normal so back-faces are not discarded
+			 * by this "facing away" test. (Tangent-space lighting of back-faces stays approximate
+			 * for this legacy normal-mapped Phong path — the geometry is no longer culled.) */
+			Code{fragmentShader} << "if ( dot(-" << rayDirectionViewSpace << ", (gl_FrontFacing ? " << ShaderVariable::NormalViewSpace << " : -" << ShaderVariable::NormalViewSpace << ")) < -0.33 ) { discard; }";
 		}
 
 		/* Get the ray direction in texture space */

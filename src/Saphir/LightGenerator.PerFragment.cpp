@@ -363,7 +363,9 @@ namespace EmEn::Saphir
 				"float " << DiffuseFactor << " = 0.0;" << Line::Blank <<
 
 				"if ( " << LightFactor << " > 0.0 )" << Line::End <<
-				"	" << DiffuseFactor << " = max(dot(-" << rayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << "), 0.0) * " << LightFactor << ';' << Line::End;
+				/* Double-sided: flip the surface normal on back-facing fragments (front faces are
+				 * unaffected — gl_FrontFacing true → NormalViewSpace unchanged). */
+				"	" << DiffuseFactor << " = max(dot(-" << rayDirectionViewSpace << ", (gl_FrontFacing ? " << ShaderVariable::NormalViewSpace << " : -" << ShaderVariable::NormalViewSpace << ")), 0.0) * " << LightFactor << ';' << Line::End;
 		}
 
 		if ( !m_surfaceSpecularColor.empty() )
@@ -375,7 +377,7 @@ namespace EmEn::Saphir
 
 				"if ( " << DiffuseFactor << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
-				"	const vec3 R = reflect(" << rayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << ");" << Line::End <<
+				"	const vec3 R = reflect(" << rayDirectionViewSpace << ", (gl_FrontFacing ? " << ShaderVariable::NormalViewSpace << " : -" << ShaderVariable::NormalViewSpace << "));" << Line::End <<
 				"	const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
 				"	" << SpecularFactor << " = pow(max(dot(R, V), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
 				'}' << Line::End;

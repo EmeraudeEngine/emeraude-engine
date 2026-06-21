@@ -513,7 +513,9 @@ namespace EmEn::Saphir
 		if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
 		{
 			Code{fragmentShader} <<
-				"const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");" << Line::End <<
+				/* Double-sided: flip the shading normal on back-facing fragments (gl_FrontFacing
+				 * is true → ×1.0, byte-identical for front faces; false → ×-1.0). */
+				"const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ") * (gl_FrontFacing ? 1.0 : -1.0);" << Line::End <<
 				"const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
 				"const vec3 L = -" << rayDirectionViewSpace << ";" << Line::End <<
 				"const vec3 H = normalize(V + L);" << Line::Blank;
@@ -521,7 +523,7 @@ namespace EmEn::Saphir
 		else
 		{
 			Code{fragmentShader} <<
-				"const vec3 N = normalize(" << ShaderVariable::NormalViewSpace << ");" << Line::End <<
+				"const vec3 N = normalize(" << ShaderVariable::NormalViewSpace << ") * (gl_FrontFacing ? 1.0 : -1.0);" << Line::End <<
 				"const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
 				"const vec3 L = -" << rayDirectionViewSpace << ";" << Line::End <<
 				"const vec3 H = normalize(V + L);" << Line::Blank;
