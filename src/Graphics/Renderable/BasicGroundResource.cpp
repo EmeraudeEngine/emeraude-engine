@@ -323,16 +323,19 @@ namespace EmEn::Graphics::Renderable
 	bool
 	BasicGroundResource::loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
 	{
-		if ( !isPowerOfTwo(gridDivision) )
-		{
-			TraceError{ClassId} << "The grid division (" << gridDivision << ") must be a power of two to use diamond square!";
+		/* Diamond-square displaces the grid by recursive halving, so the division must be a power
+		 * of two. Rather than failing on a non-power-of-two value, snap UP to the next power of two
+		 * so the relief is still generated (zero-failure: the ground is always produced). */
+		const auto division = nextPowerOfTwo(gridDivision);
 
-			return false;
+		if ( division != gridDivision )
+		{
+			TraceInfo{ClassId} << "The grid division (" << gridDivision << ") is not a power of two; snapped to " << division << " for diamond-square.";
 		}
 
 		Grid< float > grid{};
 
-		if ( grid.initializeByGridSize(gridSize, gridDivision) )
+		if ( grid.initializeByGridSize(gridSize, division) )
 		{
 			grid.setUVMultiplier(UVMultiplier);
 			grid.applyDiamondSquare(noise.factor, noise.roughness, noise.seed);

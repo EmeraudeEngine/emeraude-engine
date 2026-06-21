@@ -390,15 +390,18 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		if ( !isPowerOfTwo(gridDivision) )
-		{
-			TraceError{ClassId} << "The grid division (" << gridDivision << ") must be a power of two to use diamond square!";
+		/* Diamond-square displaces the grid by recursive halving, so the division must be a power
+		 * of two. Rather than failing on a non-power-of-two value, snap UP to the next power of two
+		 * so the relief is still generated (zero-failure: the terrain is always produced). */
+		const auto division = nextPowerOfTwo(gridDivision);
 
-			return this->setLoadSuccess(false);
+		if ( division != gridDivision )
+		{
+			TraceInfo{ClassId} << "The grid division (" << gridDivision << ") is not a power of two; snapped to " << division << " for diamond-square.";
 		}
 
 		/* Initialize local data. */
-		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+		if ( !m_localData.initializeByGridSize(gridSize, division) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 

@@ -14,6 +14,29 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### Fixed: Diamond-square ground/terrain — non-power-of-two division now snaps instead of failing (Jun 2026)
+
+> **Symptom:** loading a demo whose ground used `loadDiamondSquare` (e.g. `basic-scenery`)
+> crashed with `SIGSEGV` in the demo's `onBuilding` at `ground->getLevelAt(...)`. The log showed
+> `The grid division (2000) must be a power of two to use diamond square!`.
+>
+> **Root cause:** diamond-square displaces the grid by recursive halving, so the division must be
+> a power of two. `sceneAreaSize()` returns `2000` (a non-power-of-two), which every demo passed
+> verbatim as `gridDivision`. `loadDiamondSquare` rejected it and returned `false` →
+> `onSetupGroundLevel` returned `nullptr` → `m_groundLevel` was null → the demo dereferenced it.
+>
+> **Fix (zero-failure):** `BasicGroundResource::loadDiamondSquare` and
+> `TerrainResource::loadDiamondSquare` now **snap `gridDivision` up to the next power of two**
+> (`EmEn::Base::Math::nextPowerOfTwo`, e.g. 2000 → 2048) and log an info instead of failing. The
+> relief is still generated and a ground is **always** produced — callers never get a null ground
+> for a non-power-of-two division.
+>
+> **Takeaway:** `gridDivision` is not guaranteed to be used verbatim by diamond-square loaders — it
+> is snapped to a valid power of two. `loadPerlinNoise` and the flat `load` accept any division.
+>
+> **Files:** `Graphics/Renderable/BasicGroundResource.cpp`, `Graphics/Renderable/TerrainResource.cpp`,
+> `emeraude-base Math/Base.hpp` (`nextPowerOfTwo`).
+
 ### Critical: Shared UBO Offset (Materials)
 
 > [!CRITICAL]
