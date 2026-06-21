@@ -1067,13 +1067,16 @@ namespace EmEn::AssetLoaders
 			 * Fall back to the default PBR resource when the mesh has no material
 			 * or the referenced material failed to load. */
 			std::vector< std::shared_ptr< Material::Interface > > materialList;
+			std::vector< RasterizationOptions > rasterizationList;
 
 			const size_t partCount = (mesh.material_parts.count == 0) ? 1 : mesh.material_parts.count;
 			materialList.reserve(partCount);
+			rasterizationList.reserve(partCount);
 
 			for ( size_t partIdx = 0; partIdx < partCount; ++partIdx )
 			{
 				std::shared_ptr< Material::Interface > material;
+				RasterizationOptions rasterization{};
 
 				if ( partIdx < mesh.materials.count )
 				{
@@ -1087,6 +1090,13 @@ namespace EmEn::AssetLoaders
 						{
 							material = m_materials[matTypedId];
 						}
+
+						/* Honour the FBX material's double-sided feature (ufbx): disable back-face
+						 * culling so both faces rasterize (cloth, inner armour surfaces, …). */
+						if ( fbxMat->features.double_sided.enabled )
+						{
+							rasterization.setCullingMode(CullingMode::None);
+						}
 					}
 				}
 
@@ -1096,6 +1106,7 @@ namespace EmEn::AssetLoaders
 				}
 
 				materialList.push_back(std::move(material));
+				rasterizationList.push_back(rasterization);
 			}
 
 			/* Create the renderable. Single-material meshes use SimpleMeshResource
@@ -1105,17 +1116,18 @@ namespace EmEn::AssetLoaders
 			if ( materialList.size() <= 1 )
 			{
 				auto singleMaterial = materialList[0];
+				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
 				renderable = m_resources.container< Renderable::SimpleMeshResource >()
-					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial)] (auto & meshResource) {
-						return meshResource.load(geometry, singleMaterial);
+					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
+						return meshResource.load(geometry, singleMaterial, singleRasterization);
 					});
 			}
 			else
 			{
 				renderable = m_resources.container< Renderable::MeshResource >()
-					->getOrCreateResource(meshName, [geometry, materialList] (auto & meshResource) {
-						return meshResource.load(geometry, materialList);
+					->getOrCreateResource(meshName, [geometry, materialList, rasterizationList] (auto & meshResource) {
+						return meshResource.load(geometry, materialList, rasterizationList);
 					});
 			}
 

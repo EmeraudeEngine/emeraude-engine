@@ -1029,12 +1029,16 @@ namespace EmEn::AssetLoaders
 				continue;
 			}
 
-			/* Collect materials for each primitive. */
+			/* Collect materials (and per-layer rasterization) for each primitive. */
 			std::vector< std::shared_ptr< Material::Interface > > materialList;
+			std::vector< RasterizationOptions > rasterizationList;
 			materialList.reserve(glTFMesh.primitives.size());
+			rasterizationList.reserve(glTFMesh.primitives.size());
 
 			for ( const auto & primitive : glTFMesh.primitives )
 			{
+				RasterizationOptions rasterization{};
+
 				if ( primitive.materialIndex.has_value() )
 				{
 					const auto materialIndex = primitive.materialIndex.value();
@@ -1047,11 +1051,20 @@ namespace EmEn::AssetLoaders
 					{
 						materialList.push_back(defaultMaterial());
 					}
+
+					/* Honour the glTF material's double-sided flag (glTF 2.0 standard): disable
+					 * back-face culling so both faces rasterize (curtains, foliage, cloth, …). */
+					if ( materialIndex < asset.materials.size() && asset.materials[materialIndex].doubleSided )
+					{
+						rasterization.setCullingMode(CullingMode::None);
+					}
 				}
 				else
 				{
 					materialList.push_back(defaultMaterial());
 				}
+
+				rasterizationList.push_back(rasterization);
 			}
 
 			/* Create renderable mesh resource. */
@@ -1063,16 +1076,18 @@ namespace EmEn::AssetLoaders
 					? defaultMaterial()
 					: materialList[0];
 
+				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
+
 				mesh = m_resources.container< Renderable::SimpleMeshResource >()
-					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial)] (auto & meshResource) {
-						return meshResource.load(geometry, singleMaterial);
+					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
+						return meshResource.load(geometry, singleMaterial, singleRasterization);
 					});
 			}
 			else
 			{
 				mesh = m_resources.container< Renderable::MeshResource >()
-					->getOrCreateResource(meshName, [geometry, materialList = std::move(materialList)] (auto & meshResource) {
-						return meshResource.load(geometry, materialList);
+					->getOrCreateResource(meshName, [geometry, materialList = std::move(materialList), rasterizationList = std::move(rasterizationList)] (auto & meshResource) {
+						return meshResource.load(geometry, materialList, rasterizationList);
 					});
 			}
 

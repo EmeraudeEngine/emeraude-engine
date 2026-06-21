@@ -430,7 +430,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & /*rasterizationOptions*/) noexcept
+	MeshResource::load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -450,8 +450,10 @@ namespace EmEn::Graphics::Renderable
 		/* Check the materials. */
 		m_layers.clear();
 
-		for ( const auto & material : materialList )
+		for ( size_t index = 0; index < materialList.size(); ++index )
 		{
+			const auto & material = materialList[index];
+
 			if ( material == nullptr )
 			{
 				Tracer::error(ClassId, "One material of the list is empty !");
@@ -459,8 +461,11 @@ namespace EmEn::Graphics::Renderable
 				return this->setLoadSuccess(false);
 			}
 
-			/* TODO: Find a better solution to load a multiple layer mesh. */
-			this->addMaterial(material, {}, 0);
+			/* Apply per-layer rasterization options when the caller provides them (e.g. an asset
+			 * loader flagging a double-sided material → CullingMode::None); otherwise defaults. */
+			const RasterizationOptions options = index < rasterizationOptions.size() ? rasterizationOptions[index] : RasterizationOptions{};
+
+			this->addMaterial(material, options, 0);
 		}
 
 		return this->setLoadSuccess(true);

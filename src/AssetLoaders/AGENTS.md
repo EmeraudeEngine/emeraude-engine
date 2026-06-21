@@ -50,6 +50,28 @@ class Interface {
 
 **Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::AssetDataConsumer`.
 
+### Double-sided materials (honored since Jun 2026)
+
+Both loaders read the standard per-material **double-sided** flag and translate it to a per-layer
+`RasterizationOptions{ CullingMode::None }` passed into `MeshResource::load(geometry, materialList, rasterizationOptions)` / `SimpleMeshResource::load(geometry, material, rasterizationOptions)`:
+- **glTF** — `fastgltf::Material::doubleSided` (glTF 2.0 standard), read in `GLTFLoader::loadMeshes` per primitive.
+- **FBX** — `ufbx_material.features.double_sided.enabled`, read in `FBXLoader` per material part.
+
+Without this, back-faces were culled and thin double-sided surfaces (Sponza curtains, foliage,
+cloth, inner armour shells) rendered front-face-only with see-through holes. The models were correct
+(Sponza curtains declare `"doubleSided":true`); the loaders simply ignored the flag.
+
+> [!WARNING]
+> **The multi-material `MeshResource::load(geometry, materialList, rasterizationOptions)` overload
+> previously IGNORED its `rasterizationOptions` argument** (every layer got defaults). It now applies
+> `rasterizationOptions[i]` per layer (defaults when the vector is shorter). Keep it that way.
+
+> [!NOTE]
+> **Geometry double-sidedness is only half of two-sided rendering.** Correct *lighting* of a
+> back-face also requires flipping its normal (`N = gl_FrontFacing ? N : -N`) in the lighting
+> fragment shader — otherwise back-faces render but are shaded with an inward-pointing normal
+> (lit as if facing away from the light). See `src/Saphir/` shader generation.
+
 **Default behaviour preserved:** if neither `onMeshLoaded` nor `materialMode` is set, the loader behaves exactly like before (PBR container, no callback, every existing call site unaffected). Both fields are gated: `onMeshLoaded` is invoked under `if ( m_options.onMeshLoaded )` (a default-constructed `std::function` evaluates to `false`); `materialMode` defaults to `MaterialMode::PBR`.
 
 ### Cross-material setters on StandardResource
