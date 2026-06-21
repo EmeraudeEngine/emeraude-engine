@@ -82,6 +82,46 @@ namespace EmEn::Graphics
 			return true;
 		}, "Captures the current framebuffer and saves it as a PNG.");
 
+		this->bindCommand("triggerRenderDocCapture", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			auto & renderDoc = m_vulkanInstance.renderDocCapture();
+
+			if ( !renderDoc.isAvailable() )
+			{
+				outputs.emplace_back(Severity::Error, "RenderDoc is not available (launch the app under renderdoccmd to inject it).");
+
+				return false;
+			}
+
+			/* Define WHERE captures are written. RenderDoc is never told otherwise, so without this
+			 * the .rdc lands in an undefined default and the autonomous capture workflow produces
+			 * nothing findable. Point it at the user-data RenderDoc directory. */
+			auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("RenderDoc");
+
+			if ( IO::writable(captureDirectory) )
+			{
+				renderDoc.setCaptureFilePath(captureDirectory.append("capture").string());
+			}
+
+			/* Optional first argument: number of consecutive frames to capture (default 1).
+			 * Capturing past the first frame is how per-frame / state-tracking bugs are caught. */
+			const auto frameCount = arguments.empty() ? 1U : static_cast< uint32_t >(std::max(1, arguments[0].asInteger()));
+
+			if ( frameCount > 1U )
+			{
+				renderDoc.triggerMultiFrameCapture(frameCount);
+
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "RenderDoc: " << frameCount << " consecutive frame captures triggered.");
+			}
+			else
+			{
+				renderDoc.triggerCapture();
+
+				outputs.emplace_back(Severity::Success, "RenderDoc: frame capture triggered (captured on the next present).");
+			}
+
+			return true;
+		}, "Triggers a RenderDoc frame capture (requires launch under renderdoccmd). Optional arg: frame count.");
+
 		this->bindCommand("getStatus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			const auto & stats = this->statistics();
 

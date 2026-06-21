@@ -6,6 +6,27 @@ This document is **THE reference** for any AI agent controlling the Emeraude-Eng
 
 The AI connects to a running engine instance via TCP and sends commands to discover resources, create scenes, place cameras, add objects, take screenshots, play music, modify settings, and verify results visually.
 
+## Philosophy — the Remote Console is the AI's hands
+
+> [!CRITICAL]
+> The Remote Console (the `RemoteListener` / `ConsoleController` TCP service) is **the AI's hands
+> on the running engine**. It is **designed by the AI, for the AI** — it exists so an autonomous
+> agent can drive, inspect, and verify the engine at runtime without a human in the loop.
+>
+> **Consequently, the AI is entitled to extend it.** When a task needs a capability the console
+> does not yet expose (trigger a GPU capture, dump a state, toggle a debug view, force a rebuild
+> of some cache…), the correct move is to **add the command to the relevant service's
+> `onRegisterToConsole()`** rather than work around its absence. Growing the console surface makes
+> the engine more controllable and more flexible for every future AI session. This is encouraged,
+> not exceptional.
+>
+> **Rules when adding a command:**
+> - Register it on the service that owns the capability (e.g. rendering commands on `Renderer`).
+> - Keep it self-describing (clear name + help string — it shows up in the command listing).
+> - Document it here in the command reference, in the same work session.
+>
+> Example added this way: `Core.RendererService.triggerRenderDocCapture()` (see §6).
+
 ## Connection
 
 The engine listens on **TCP port 7777** (configurable via `Core/Console/RemoteListenerPort`).
@@ -408,6 +429,28 @@ echo "Core.RendererService.screenshot()" | nc -q 2 localhost 7777
 ```
 
 Screenshots are saved to: `~/.local/share/LNIsle/<app-name>/captures/`
+
+### Triggering a RenderDoc GPU frame capture
+
+For deep GPU analysis (draw calls, bound descriptors, sampled images, pipeline state) the engine
+can trigger a [RenderDoc](https://renderdoc.org/) frame capture from the console:
+
+```bash
+echo "Core.RendererService.triggerRenderDocCapture()"  | nc -q 2 localhost 7777   # next frame
+echo "Core.RendererService.triggerRenderDocCapture(5)" | nc -q 2 localhost 7777   # next 5 frames
+```
+
+- The optional argument is the number of consecutive frames to capture (default 1). Capturing a
+  frame **past the first** is how per-frame / state-tracking bugs are caught.
+- **Requires the app to be launched under RenderDoc** so the in-application API is injected, and a
+  build with `EMERAUDE_ENABLE_RENDERDOC=ON` (otherwise the call reports "RenderDoc is not
+  available" and is a no-op):
+  ```bash
+  /opt/renderdoc_<ver>/bin/renderdoccmd capture --wait-for-exit ./<app> --load-demo <demo> --disable-cef
+  ```
+- The command sets the capture output path to `~/.local/share/LNIsle/<app-name>/RenderDoc/` before
+  triggering (RenderDoc is otherwise never told where to write).
+- Captures are then analysed with the RenderDoc Python module (see the project's RenderDoc notes).
 
 ### The fundamental loop
 
