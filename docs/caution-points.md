@@ -485,6 +485,37 @@ if ( materialType == PBRResource::ClassId )
 
 ## Scene Rendering
 
+### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)
+
+> [!CRITICAL]
+> **Symptom:** with any framebuffer post-process effect enabled (RTGI, RTR, RTAO, volumetric light,
+> bloom…), the image showed a grid of hard blocks arranged on a diagonal — looking like H.264
+> macroblocks / "blocks from the previous frame". **Only visible while the camera moved**; perfectly
+> stable (invisible) when static. Identical on every RTX card. Unaffected by GI sample count, the
+> noise hash, or temporal accumulation — because it was **not** a shading/denoising artifact.
+>
+> **Root cause:** `IntermediateRenderTarget::createRenderPass()` declared its subpass→external (and
+> external→subpass) dependency with **`VK_DEPENDENCY_BY_REGION_BIT`**. A by-region dependency only
+> orders the SAME (x,y) framebuffer tile between the write and the subsequent read — valid only for a
+> strict 1:1 passthrough. But every effect that consumes an IRT samples it **non-locally**: the
+> bilateral blurs read a neighbourhood, the volumetric light marches radially, temporal reprojection
+> reads a far reprojected UV. With by-region, a neighbouring/reprojected tile **may not be written
+> yet** when sampled, so the read returns the previous frame's residual (the IRT loads with
+> `LOAD_OP_DONT_CARE`, so old content lingers), in the GPU's diagonal tile order → oblique blocks of
+> stale frame-N-1 content. Invisible when static (frame N ≡ N-1), visible in motion.
+>
+> **Fix:** drop `VK_DEPENDENCY_BY_REGION_BIT` from both IRT subpass dependencies (`dependencyFlags = 0`).
+> A full (non-by-region) write→read dependency makes the **entire** write complete before any read.
+> Fixes the whole framebuffer-effect class at once (shared IRT).
+>
+> **Takeaway:** `VK_DEPENDENCY_BY_REGION_BIT` is ONLY valid when the consumer reads the exact same
+> pixel it processes. Any blur / gather / reprojection / radial read MUST use a full dependency.
+> This class of bug reads "previous-frame blocks in a diagonal pattern, only in motion" — that is a
+> read-before-write-complete **synchronization hazard**, not a shading artifact. Confirm with the
+> Vulkan **Synchronization Validation** layer (it flags `SYNC-HAZARD-READ-AFTER-WRITE`).
+>
+> **File:** `Graphics/IntermediateRenderTarget.cpp::createRenderPass()`.
+
 ### Fixed: Bindless texture manager was not multi-scene — stale/freed slots on scene switch (Jun 2026)
 
 > [!CRITICAL]

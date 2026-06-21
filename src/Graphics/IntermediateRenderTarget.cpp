@@ -229,7 +229,9 @@ namespace EmEn::Graphics
 
 		renderPass->addSubPass(subPass);
 
-		/* External -> subpass 0 dependency. */
+		/* External -> subpass 0 dependency.
+		 * NOT by-region: the next writer must wait for the WHOLE previous read, because effects
+		 * sample this IRT non-locally (see below). */
 		renderPass->addSubPassDependency(VkSubpassDependency{
 			.srcSubpass = VK_SUBPASS_EXTERNAL,
 			.dstSubpass = 0,
@@ -237,10 +239,19 @@ namespace EmEn::Graphics
 			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 			.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
 			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+			.dependencyFlags = 0
 		});
 
-		/* Subpass 0 -> external dependency. */
+		/* Subpass 0 -> external dependency.
+		 * CRITICAL: this must NOT be VK_DEPENDENCY_BY_REGION_BIT. A by-region dependency only
+		 * guarantees that the SAME (x,y) tile is finished before it is read — valid only for a 1:1
+		 * passthrough. But the post-process effects that consume this IRT sample it NON-LOCALLY:
+		 * the bilateral blurs (RTGI/RTR/RTAO) read a neighbourhood, the volumetric light marches
+		 * radially, and the RTGI temporal reprojection reads a far reprojected UV. With by-region,
+		 * a neighbouring/reprojected tile may not be written yet, so the read returns the previous
+		 * frame's residual (the IRT loads with DONT_CARE), in the GPU's diagonal tile order →
+		 * oblique blocks of stale frame-N-1 content, visible only during camera motion. A full
+		 * (non-by-region) write→read dependency makes the entire write complete before any read. */
 		renderPass->addSubPassDependency(VkSubpassDependency{
 			.srcSubpass = 0,
 			.dstSubpass = VK_SUBPASS_EXTERNAL,
@@ -248,7 +259,7 @@ namespace EmEn::Graphics
 			.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-			.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+			.dependencyFlags = 0
 		});
 
 		if ( !renderPass->createOnHardware() )
