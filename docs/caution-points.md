@@ -624,6 +624,22 @@ if ( materialType == PBRResource::ClassId )
 >
 > **Files:** `Graphics/TextureResource/{Texture1D,Texture2D,Texture3D,TextureCubemap,AnimatedTexture2D,AnimatedTextureCubemap}.cpp`.
 
+### Tooling: automatic GPU fault dump on DEVICE_LOST (Jun 2026)
+
+> [!NOTE]
+> **When you hit `VK_ERROR_DEVICE_LOST`, read the `DEVICE LOST (...) — GPU diagnostics follow:`
+> block in the log first.** The engine now auto-dumps GPU fault info at every loss site
+> (`Device::dumpDeviceLostDiagnostics`, called from `Queue`/`Fence`/`Device` — reported once per
+> device). It combines `VK_EXT_device_fault` (faulting addresses; Mesa/AMD/Intel) and
+> `VK_NV_device_diagnostic_checkpoints` (last GPU region reached; NVIDIA).
+>
+> **The checkpoint marker is the smoking gun** — it names the GPU command region that was executing
+> when the device died, NOT the CPU call that observed the loss (which is almost always innocent).
+> Markers are placed at `AS-build:begin/:end` and `transfer:image-layout-transition`. To blame a new
+> region, drop a `Device::setCheckpoint(cmdBuf, "literal")` there (string literal only — read back
+> after the loss). On the NVIDIA proprietary driver, `VK_EXT_device_fault` is **absent**, so
+> checkpoints carry the diagnosis. See `src/Vulkan/AGENTS.md` → *GPU device-lost diagnostics*.
+
 ### Fixed: PostProcessor composited with no active scene → device lost (Jun 2026)
 
 > [!CRITICAL]

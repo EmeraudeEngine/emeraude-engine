@@ -220,7 +220,6 @@ class Instance
     // Booleans at the end
     bool m_showInformation{false};
     bool m_debugMode{false};
-    bool m_useDebugMessenger{false};
 };
 ```
 

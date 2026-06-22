@@ -71,16 +71,11 @@ namespace EmEn::Vulkan
 			arguments.isSwitchPresent("--debug-vulkan") ||
 			settings.getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
 
-		/* NOTE: Only if the validation layer is enabled. */
+		/* NOTE: The debug messenger create-info must be ready before vkCreateInstance (instance pNext).
+		 * It is only actually wired when validation layers are requested (see isUsingDebugMessenger()). */
 		if ( this->isDebugModeEnabled() )
 		{
-			/* Enable the vulkan debug messenger. */
-			m_useDebugMessenger = settings.getOrSetDefault< bool >(VkInstanceUseDebugMessengerKey, DefaultVkInstanceUseDebugMessenger);
-
-			if ( this->isUsingDebugMessenger() )
-			{
-				m_debugCreateInfo = DebugMessenger::getCreateInfo();
-			}
+			m_debugCreateInfo = DebugMessenger::getCreateInfo();
 		}
 
 		/* NOTE: Check the automatic device selection mode. */
@@ -98,6 +93,9 @@ namespace EmEn::Vulkan
 	{
 		this->readSettings();
 
+		/* NOTE: Debug mode only. EnableDebug is the master switch: when on, this exposes the
+		 * available validation layers in the settings file (to help edit RequestedValidationLayers)
+		 * and selects the requested ones. When off, nothing debug-related touches the settings. */
 		if ( this->isDebugModeEnabled() )
 		{
 			this->configureValidationLayers();
@@ -491,17 +489,13 @@ namespace EmEn::Vulkan
 			m_requiredInstanceExtensions.emplace_back(glfwExtensions[index]);
 		}
 
-		/* If debug mode enabled, push back debug utilities. */
+		/* NOTE: EnableDebug is the master switch for the debug-utils channel: object/label naming
+		 * for RenderDoc & Nsight, plus support for the (layer-driven) validation messenger. */
 		if ( this->isDebugModeEnabled() )
 		{
-			//m_requiredGraphicsDeviceExtensions.emplace_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
-
-			if ( this->isUsingDebugMessenger() )
-			{
-				/* NOTE: VK_EXT_debug_report (vk 1.0) has been deprecated in favor of VK_EXT_debug_utils (vk 1.2 ?). */
-				//m_requiredInstanceExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-				m_requiredInstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-			}
+			/* NOTE: VK_EXT_debug_report (vk 1.0) has been deprecated in favor of VK_EXT_debug_utils (vk 1.2 ?). */
+			//m_requiredInstanceExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+			m_requiredInstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		}
 
 		/* NOTE: Specific for MoltenVK. */
@@ -914,6 +908,26 @@ namespace EmEn::Vulkan
 			else
 			{
 				Tracer::info(ClassId, "Ray tracing not supported by this device.");
+			}
+
+			/* NOTE: GPU device-lost diagnostics (best-effort, ZERO runtime cost until a fault occurs).
+			 * Enabled whenever supported so a DEVICE_LOST is self-documented even in normal/release runs
+			 * — see Device::dumpDeviceLostDiagnostics(). The two extensions are vendor-complementary:
+			 *  - VK_EXT_device_fault: faulting GPU virtual addresses (Mesa/AMD/Intel; absent on NVIDIA proprietary).
+			 *  - VK_NV_device_diagnostic_checkpoints: last GPU command region reached (NVIDIA). */
+			if ( hasExtension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME) )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+				requirements.faultFeatures().deviceFault = VK_TRUE;
+
+				Tracer::info(ClassId, "VK_EXT_device_fault detected and enabled (GPU fault address reporting).");
+			}
+
+			if ( hasExtension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+
+				Tracer::info(ClassId, "VK_NV_device_diagnostic_checkpoints detected and enabled (GPU checkpoint markers).");
 			}
 		}
 

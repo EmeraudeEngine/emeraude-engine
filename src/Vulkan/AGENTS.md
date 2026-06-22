@@ -26,7 +26,8 @@ Vulkan abstraction layer that hides API complexity while providing precise contr
   it can NOT name the Vulkan object by itself.
 - `AbstractObject::setVulkanObjectName(device, objectType, handle)` (in `AbstractObject.hpp`)
   forwards the stored identifier via `vkSetDebugUtilsObjectNameEXT`. It is a **no-op** when
-  `VK_EXT_debug_utils` is unavailable or the name is empty (release builds).
+  `VK_EXT_debug_utils` is unavailable (i.e. `EnableDebug` is off — see *Validation & debug-utils
+  configuration* below) or the name is empty.
 - **Call it inside `createOnHardware()`, right after the handle is created and before
   `setCreated()`:**
   ```cpp
@@ -42,6 +43,57 @@ Vulkan abstraction layer that hides API complexity while providing precise contr
   `RenderPass` (both v1 and v2 paths), `Sampler`, `ShaderModule`. **Any new Vulkan object type
   added to this layer MUST do the same.** (`DescriptorSet` is an `AbstractObject`, not an
   `AbstractDeviceDependentObject`, so it uses `m_descriptorPool->device()->handle()`.)
+
+### Validation & debug-utils configuration
+
+`EnableDebug` (`Core/Video/VulkanInstance/EnableDebug`, or the `--debug-vulkan` CLI switch) is the
+**single master switch** for the whole `VK_EXT_debug_utils` channel. There is **no** separate
+`UseDebugMessenger` key (removed 2026-06-22 — folded into this model). Behaviour:
+
+| `EnableDebug` | `RequestedValidationLayers` | `debug_utils` ext (object naming) | `AvailableValidationLayers` mirrored to settings | validation layers loaded | debug messenger |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| **false** | *(ignored)* | ✗ | ✗ | ✗ | ✗ |
+| **true**  | empty       | ✓ | ✓ | ✗ | ✗ |
+| **true**  | non-empty   | ✓ | ✓ | ✓ | ✓ |
+
+- When `EnableDebug` is off, nothing debug-related touches the settings file.
+- When on, the engine mirrors the system's available layers into `AvailableValidationLayers` so a
+  human editing settings knows what to put in `RequestedValidationLayers` (that array is the only
+  thing meant to be hand-edited; `Available…` is informational, the engine does not consume it).
+- The debug messenger (routes validation messages into the engine `Tracer`) is created **only** when
+  at least one validation layer is actually requested:
+  `isUsingDebugMessenger()` == `m_debugMode && !m_requiredValidationLayers.empty()`. A
+  `VkDebugUtilsMessengerEXT` cannot exist without the `debug_utils` extension, hence the dependency
+  on `EnableDebug`.
+- Object naming therefore works whenever `EnableDebug` is on, **independently of validation layers**
+  — useful for clean RenderDoc/Nsight captures without validation overhead.
+
+### GPU device-lost diagnostics (automatic)
+
+`VK_ERROR_DEVICE_LOST` is reported **late**: the `vkQueueSubmit`/`vkWaitForFences` that returns it
+is rarely the culprit — the GPU faulted on an *earlier* submission. To self-document the real fault
+even in normal/release runs, the engine wires two **vendor-complementary** extensions whenever the
+device advertises them (enabled in `Instance.cpp`, zero runtime cost until a fault occurs):
+
+- **`VK_EXT_device_fault`** → faulting GPU virtual addresses (Mesa/AMD/Intel; **absent on the NVIDIA
+  proprietary driver** as of 550.x). Requires the `VkPhysicalDeviceFaultFeaturesEXT.deviceFault`
+  feature, chained in `DeviceRequirements`.
+- **`VK_NV_device_diagnostic_checkpoints`** → the last GPU command region reached per queue (NVIDIA).
+
+**`Device::dumpDeviceLostDiagnostics(context)`** is the single facility. It is called at every
+DEVICE_LOST observation site — `Queue::submit`/`present`, `Fence::wait`/`waitAndReset`,
+`Device::waitIdle` — and is **self-guarded (reports once per device)** and **takes no device lock**
+(safe to call from inside a locked submit/wait path). It logs `device_fault` addresses + the last
+checkpoint marker(s) reached. **The marker is the answer**: it names the GPU region executing when
+the device died.
+
+**Placing markers** — `Device::setCheckpoint(commandBuffer, "literal")` records a checkpoint
+(no-op when the extension is absent). The marker **MUST** be a string literal (static storage —
+it is read back *after* the loss). Markers are currently placed at the two crash-window submissions:
+`AS-build:begin`/`:end` (`AccelerationStructureBuilder::submitOneShot`, covers all BLAS builds) and
+`transfer:image-layout-transition` (`TransferManager`). **Add a `setCheckpoint` at any new
+GPU-recording site you want to be able to blame** (render passes, TLAS inline build, compute
+dispatches).
 
 ### GPU Memory Management
 - **VMA mandatory** for all GPU memory allocations

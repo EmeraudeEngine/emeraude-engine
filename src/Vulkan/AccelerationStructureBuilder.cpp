@@ -589,8 +589,11 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* 2. Record commands. */
+		/* 2. Record commands. Bracket them with GPU checkpoints so a DEVICE_LOST during an
+		 * acceleration-structure build is pinpointed to this region (VK_NV_device_diagnostic_checkpoints). */
+		m_device->setCheckpoint(m_commandBuffer->handle(), "AS-build:begin");
 		recordCommands(m_commandBuffer->handle());
+		m_device->setCheckpoint(m_commandBuffer->handle(), "AS-build:end");
 
 		/* 3. End recording. */
 		if ( !m_commandBuffer->end() )

@@ -61,6 +61,11 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
 
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				m_device->dumpDeviceLostDiagnostics("Queue::submit");
+			}
+
 			return false;
 		}
 
@@ -99,6 +104,11 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
 
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				m_device->dumpDeviceLostDiagnostics("Queue::submit");
+			}
+
 			return false;
 		}
 
@@ -135,6 +145,11 @@ namespace EmEn::Vulkan
 			case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT :
 			default :
 				TraceError{ClassId} << "Unable to present an image : " << vkResultToCString(result) << " !";
+
+				if ( result == VK_ERROR_DEVICE_LOST )
+				{
+					m_device->dumpDeviceLostDiagnostics("Queue::present");
+				}
 
 				swapChainStatus = Status::Failure;
 

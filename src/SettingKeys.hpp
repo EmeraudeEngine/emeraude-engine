@@ -161,8 +161,6 @@ namespace EmEn
 			constexpr auto DefaultVkInstanceEnableDebug{false};
 			constexpr auto VkInstanceRequestedValidationLayersKey{"Core/Video/VulkanInstance/RequestedValidationLayers"};
 			constexpr auto VkInstanceAvailableValidationLayersKey{"Core/Video/VulkanInstance/AvailableValidationLayers"};
-			constexpr auto VkInstanceUseDebugMessengerKey{"Core/Video/VulkanInstance/UseDebugMessenger"};
-			constexpr auto DefaultVkInstanceUseDebugMessenger{true};
 
 			/* Vulkan device */
 			constexpr auto VkDeviceAvailableGPUsKey{"Core/Video/VulkanDevice/AvailableGPUs"};

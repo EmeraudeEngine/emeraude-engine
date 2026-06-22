@@ -60,9 +60,12 @@ namespace EmEn::Vulkan
 				m_enableGraphics{enableGraphics},
 				m_enableCompute{enableCompute}
 			{
+				/* NOTE: Device fault features (EXT extension) — GPU device-lost diagnostics. */
+				m_faultFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
+				m_faultFeatures.pNext = nullptr;
 				/* NOTE: Ray query features (KHR extension). */
 				m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-				m_rayQueryFeatures.pNext = nullptr;
+				m_rayQueryFeatures.pNext = &m_faultFeatures;
 				/* NOTE: Acceleration structure features (KHR extension). */
 				m_accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
 				m_accelerationStructureFeatures.pNext = &m_rayQueryFeatures;
@@ -267,6 +270,17 @@ namespace EmEn::Vulkan
 				return m_rayQueryFeatures;
 			}
 
+			/**
+			 * @brief Gives access to configure device fault features (EXT extension).
+			 * @return VkPhysicalDeviceFaultFeaturesEXT &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceFaultFeaturesEXT &
+			faultFeatures () noexcept
+			{
+				return m_faultFeatures;
+			}
+
 		private:
 
 			/**
@@ -294,6 +308,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
+			VkPhysicalDeviceFaultFeaturesEXT m_faultFeatures{};
 			VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 			bool m_enableGraphics{false};
 			bool m_enableCompute{false};

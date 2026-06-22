@@ -50,6 +50,10 @@
 /* NOTE: Inverted includes order is required here! */
 #include "Device.hpp"
 
+/* STL inclusions. */
+#include <sstream>
+#include <vector>
+
 /* Third-party inclusions. */
 #include "magic_enum/magic_enum.hpp"
 
@@ -671,6 +675,12 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: Load GPU device-lost diagnostic entry points. Each is null unless its extension was
+		 * enabled at device creation (vkGetDeviceProcAddr returns null otherwise). See dumpDeviceLostDiagnostics(). */
+		m_fpGetDeviceFaultInfo = reinterpret_cast< PFN_vkGetDeviceFaultInfoEXT >(vkGetDeviceProcAddr(m_deviceHandle, "vkGetDeviceFaultInfoEXT"));
+		m_fpGetQueueCheckpointData = reinterpret_cast< PFN_vkGetQueueCheckpointDataNV >(vkGetDeviceProcAddr(m_deviceHandle, "vkGetQueueCheckpointDataNV"));
+		m_fpCmdSetCheckpoint = reinterpret_cast< PFN_vkCmdSetCheckpointNV >(vkGetDeviceProcAddr(m_deviceHandle, "vkCmdSetCheckpointNV"));
+
 		return true;
 	}
 
@@ -689,7 +699,144 @@ namespace EmEn::Vulkan
 		if ( const auto result = vkDeviceWaitIdle(m_deviceHandle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the device " << m_deviceHandle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
+
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				this->dumpDeviceLostDiagnostics("Device::waitIdle");
+			}
 		}
+	}
+
+	void
+	Device::setCheckpoint (VkCommandBuffer commandBuffer, const char * marker) const noexcept
+	{
+		if ( m_fpCmdSetCheckpoint == nullptr || commandBuffer == VK_NULL_HANDLE )
+		{
+			return;
+		}
+
+		m_fpCmdSetCheckpoint(commandBuffer, marker);
+	}
+
+	void
+	Device::dumpDeviceLostDiagnostics (const char * context) const noexcept
+	{
+		/* NOTE: A lost device cascades into many failing submits/waits — report only the first. */
+		if ( m_deviceLostReported.exchange(true) )
+		{
+			return;
+		}
+
+		if ( m_deviceHandle == VK_NULL_HANDLE )
+		{
+			return;
+		}
+
+		if ( m_fpGetDeviceFaultInfo == nullptr && m_fpGetQueueCheckpointData == nullptr )
+		{
+			TraceError{ClassId} << "DEVICE LOST (" << context << "): no GPU diagnostic extension available "
+				"(VK_EXT_device_fault / VK_NV_device_diagnostic_checkpoints) — cannot retrieve fault details.";
+
+			return;
+		}
+
+		std::stringstream report;
+		report << "DEVICE LOST (" << context << ") — GPU diagnostics follow:" "\n";
+
+		/* --- VK_EXT_device_fault: faulting GPU virtual addresses (Mesa/AMD/Intel). --- */
+		if ( m_fpGetDeviceFaultInfo != nullptr )
+		{
+			VkDeviceFaultCountsEXT counts{};
+			counts.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT;
+
+			if ( m_fpGetDeviceFaultInfo(m_deviceHandle, &counts, nullptr) == VK_SUCCESS )
+			{
+				std::vector< VkDeviceFaultAddressInfoEXT > addressInfos(counts.addressInfoCount);
+				std::vector< VkDeviceFaultVendorInfoEXT > vendorInfos(counts.vendorInfoCount);
+
+				VkDeviceFaultInfoEXT faultInfo{};
+				faultInfo.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT;
+				faultInfo.pAddressInfos = addressInfos.empty() ? nullptr : addressInfos.data();
+				faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
+
+				/* NOTE: We never request the vendor binary crash dump. */
+				counts.vendorBinarySize = 0;
+
+				if ( m_fpGetDeviceFaultInfo(m_deviceHandle, &counts, &faultInfo) == VK_SUCCESS )
+				{
+					report << "\t[device_fault] " << faultInfo.description << "\n";
+
+					for ( uint32_t i = 0; i < counts.addressInfoCount; ++i )
+					{
+						const auto & info = addressInfos[i];
+
+						report << "\t  - addr=0x" << std::hex << info.reportedAddress << std::dec
+							<< " type=" << magic_enum::enum_name(info.addressType)
+							<< " precision=0x" << std::hex << info.addressPrecision << std::dec << "\n";
+					}
+
+					for ( uint32_t i = 0; i < counts.vendorInfoCount; ++i )
+					{
+						const auto & info = vendorInfos[i];
+
+						report << "\t  - vendor: " << info.description
+							<< " code=" << info.vendorFaultCode << " data=" << info.vendorFaultData << "\n";
+					}
+				}
+			}
+		}
+		else
+		{
+			report << "\t[device_fault] extension not available on this driver." "\n";
+		}
+
+		/* --- VK_NV_device_diagnostic_checkpoints: last GPU command region reached (NVIDIA). --- */
+		if ( m_fpGetQueueCheckpointData != nullptr )
+		{
+			report << "\t[checkpoints] last GPU markers reached per queue:" "\n";
+
+			for ( const auto & queue : m_queues )
+			{
+				if ( queue == nullptr )
+				{
+					continue;
+				}
+
+				uint32_t count = 0;
+				m_fpGetQueueCheckpointData(queue->handle(), &count, nullptr);
+
+				if ( count == 0 )
+				{
+					continue;
+				}
+
+				std::vector< VkCheckpointDataNV > data(count);
+
+				for ( auto & entry : data )
+				{
+					entry.sType = VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV;
+					entry.pNext = nullptr;
+				}
+
+				m_fpGetQueueCheckpointData(queue->handle(), &count, data.data());
+
+				for ( const auto & entry : data )
+				{
+					const auto * marker = entry.pCheckpointMarker != nullptr ? static_cast< const char * >(entry.pCheckpointMarker) : "(none)";
+
+					report << "\t  - queue 0x" << std::hex << reinterpret_cast< uintptr_t >(queue->handle()) << std::dec
+						<< " stage=0x" << std::hex << static_cast< uint32_t >(entry.stage) << std::dec << " marker='" << marker << "'" "\n";
+				}
+			}
+		}
+		else
+		{
+			report << "\t[checkpoints] extension not available on this driver." "\n";
+		}
+
+		report << "\tNOTE: a checkpoint marker above is the LAST GPU region reached before the loss — that is where the faulting command lives.";
+
+		TraceError{ClassId} << report.str();
 	}
 
 	uint32_t

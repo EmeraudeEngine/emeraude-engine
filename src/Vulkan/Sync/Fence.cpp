@@ -154,6 +154,11 @@ namespace EmEn::Vulkan::Sync
 		{
 			TraceError{ClassId} << "Unable to wait the fence : " << vkResultToCString(result) << " !";
 
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				this->device()->dumpDeviceLostDiagnostics("Fence::wait");
+			}
+
 			return false;
 		}
 
@@ -183,6 +188,11 @@ namespace EmEn::Vulkan::Sync
 
 			default:
 				TraceError{ClassId} << "Unable to wait the fence : " << vkResultToCString(result) << " !";
+
+				if ( result == VK_ERROR_DEVICE_LOST )
+				{
+					this->device()->dumpDeviceLostDiagnostics("Fence::waitAndReset");
+				}
 
 				return false;
 		}

@@ -563,6 +563,26 @@ namespace EmEn::Vulkan
 				m_logicalDeviceAccess.unlock();
 			}
 
+			/**
+			 * @brief Records a GPU diagnostic checkpoint into a command buffer (VK_NV_device_diagnostic_checkpoints).
+			 * @note No-op when the extension is unavailable. The marker MUST point to storage that stays
+			 * valid until a device-lost readback — always pass a string literal (static storage).
+			 * @param commandBuffer The command buffer currently being recorded.
+			 * @param marker A static string identifying the GPU command region.
+			 * @return void
+			 */
+			void setCheckpoint (VkCommandBuffer commandBuffer, const char * marker) const noexcept;
+
+			/**
+			 * @brief Dumps all available GPU fault diagnostics after a VK_ERROR_DEVICE_LOST.
+			 * @note Best-effort and self-guarded: reports only once per device. Combines VK_EXT_device_fault
+			 * (faulting GPU addresses) and VK_NV_device_diagnostic_checkpoints (last command region reached).
+			 * Takes NO device lock — safe to call from within a locked submit/wait path.
+			 * @param context A short string naming the CPU call site that observed the loss.
+			 * @return void
+			 */
+			void dumpDeviceLostDiagnostics (const char * context) const noexcept;
+
 		private:
 
 			/**
@@ -652,11 +672,15 @@ namespace EmEn::Vulkan
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
 			VkDevice m_deviceHandle{VK_NULL_HANDLE};
 			VmaAllocator m_memoryAllocatorHandle{VK_NULL_HANDLE};
+			PFN_vkGetDeviceFaultInfoEXT m_fpGetDeviceFaultInfo{nullptr};
+			PFN_vkGetQueueCheckpointDataNV m_fpGetQueueCheckpointData{nullptr};
+			PFN_vkCmdSetCheckpointNV m_fpCmdSetCheckpoint{nullptr};
 			Base::StaticVector< std::unique_ptr< Queue >, 32 > m_queues;
 			DeviceQueueConfiguration m_graphicsQueueConfiguration;
 			DeviceQueueConfiguration m_computeQueueConfiguration;
 			DeviceQueueConfiguration m_transferQueueConfiguration;
 			mutable std::mutex m_logicalDeviceAccess;
+			mutable std::atomic_bool m_deviceLostReported{false};
 			bool m_showInformation{false};
 			bool m_basicSupport{false};
 			bool m_useMemoryAllocator{false};

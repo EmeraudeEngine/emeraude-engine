@@ -138,6 +138,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: GPU checkpoint — pinpoints a DEVICE_LOST that strikes during a transfer-queue layout transition. */
+		m_device->setCheckpoint(m_imageLayoutTransitionCommandBuffer->handle(), "transfer:image-layout-transition");
+
 		VkAccessFlags srcAccessMask = VK_IMAGE_ASPECT_NONE;
 		VkAccessFlags dstAccessMask = VK_IMAGE_ASPECT_NONE;
 

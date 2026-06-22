@@ -198,14 +198,16 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns whether the vulkan debug messenger is enabled.
+			 * @brief Returns whether the Vulkan debug messenger is active.
+			 * @note Created only in debug mode AND when at least one validation layer is requested;
+			 * an empty layer list with debug mode on yields object naming only (no messenger).
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isUsingDebugMessenger () const noexcept
 			{
-				return m_useDebugMessenger;
+				return m_debugMode && !m_requiredValidationLayers.empty();
 			}
 
 			/**
@@ -470,7 +472,6 @@ namespace EmEn::Vulkan
 			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};
-			bool m_useDebugMessenger{false};
 			bool m_dynamicStateExtensionEnabled{false};
 			bool m_standardTextureCheckEnabled{false};
 			bool m_enableFailSafe{false};
