@@ -341,6 +341,15 @@ namespace EmEn
 		/* 2. JSON File body. */
 		for ( const auto & [key, store] : m_stores )
 		{
+			/* NOTE: Skip empty stores. An emptied store (e.g. left behind after
+			 * removing its last key) would resolve to a null JSON node which,
+			 * combined with dropNullPlaceholders, serializes as an invalid
+			 * '"key" :' entry with no value and corrupts the whole file. */
+			if ( store.variables().empty() && store.arrays().empty() )
+			{
+				continue;
+			}
+
 			auto & data = getLevel(root, std::string{key});
 
 			/* Write variables at this level. */
@@ -509,6 +518,13 @@ namespace EmEn
 
 		for ( const auto & [key, store] : m_stores )
 		{
+			/* NOTE: Skip empty stores (see Settings::writeFile) to avoid emitting
+			 * an invalid null-valued JSON entry. */
+			if ( store.variables().empty() && store.arrays().empty() )
+			{
+				continue;
+			}
+
 			auto & data = getLevel(root, std::string{key});
 
 			for ( const auto & [name, value] : store.variables() )
