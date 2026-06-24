@@ -125,6 +125,9 @@
 #include <string>
 #include <vector>
 
+/* Local inclusions. */
+#include "Constants.hpp"
+
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Console/ControllableTrait.hpp"
@@ -857,6 +860,23 @@ namespace EmEn
 				return m_cycle;
 			}
 
+			/**
+			 * @brief Returns the engine main event-loop frequency ceiling, in Hz.
+			 * @details Idle tick ceiling of the main loop: it is the inverse of the timeout passed to
+			 * waitSystemEvents(), so the loop returns earlier when OS events arrive (the effective rate
+			 * can be higher under input) but never idles slower than this. Governs the cadence of
+			 * onCoreMainLoopCycle() -- and thus, for windowless consumers driving SendExternalBeginFrame
+			 * there, the begin-frame cadence. Distinct from WorldPhysicsUpdateFrequency, which paces the
+			 * fixed-timestep logics loop.
+			 * @return Frequency in Hz.
+			 */
+			[[nodiscard]]
+			uint32_t
+			mainLoopFrequencyHz () const noexcept
+			{
+				return m_mainLoopFrequency;
+			}
+
 			/** @} */ // End of Service Accessors group
 
 		protected:
@@ -908,6 +928,7 @@ namespace EmEn
 			 * (like F11 for fullscreen). Use this when your application handles all
 			 * keyboard input directly.
 			 * @warning Only enable this if your application provides complete keyboard handling.
+			 * @return void
 			 */
 			void
 			preventDefaultKeyBehaviors () noexcept
@@ -917,11 +938,24 @@ namespace EmEn
 
 			/**
 			 * @brief Disables the notifier creation by the Core.
+			 * @return void
 			 */
 			void
 			disableNotifier () noexcept
 			{
 				m_disableNotifier = true;
+			}
+
+			/**
+			 * @brief Set the main loop frequency in hertz. The default is 100Hz
+			 * @param frequency The value hertz (Hz).
+			 * @return void
+			 */
+			void
+			setMainLoopFrequency (uint32_t frequency) noexcept
+			{
+				m_mainLoopFrequency = frequency;
+				m_mainLoopEventTimeoutSeconds = 1.0 / static_cast< double >(frequency);
 			}
 
 			/**
@@ -1420,6 +1454,8 @@ namespace EmEn
 			std::filesystem::path m_rushVoiceOverPath;
 			int m_userExitCode{0};
 			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
+			uint32_t m_mainLoopFrequency{DefaultMainLoopFrequencyHz< uint32_t >}; ///< Main event-loop tick ceiling (Hz), set at construction. @see mainLoopFrequencyHz()
+			double m_mainLoopEventTimeoutSeconds{1.0 / DefaultMainLoopFrequencyHz< double >}; ///< Precomputed 1/Hz wait timeout passed to waitSystemEvents().
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).

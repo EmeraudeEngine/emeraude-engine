@@ -439,7 +439,7 @@ namespace EmEn::Audio
 			/* NOTE : Update the time. */
 			if ( !channel.isTimeToPlay() )
 			{
-				channel.update(EngineUpdateCycleDurationMS< uint32_t >);
+				channel.update(WorldPhysicsUpdateCycleDurationMS< uint32_t >);
 
 				continue;
 			}

@@ -59,7 +59,7 @@ namespace EmEn::Scenes::Component
 		/* Skeletal animation: lazily initialize from renderable, then update each frame. */
 		if ( m_skeletalAnimator != nullptr )
 		{
-			m_skeletalAnimator->update(EngineUpdateCycleDurationS< float >);
+			m_skeletalAnimator->update(WorldPhysicsUpdateCycleDurationS< float >);
 
 			/* Upload skinning matrices to GPU. */
 			if ( m_skeletalAnimator->hasPose() && m_renderableInstance->hasSkinningResources() )

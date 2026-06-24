@@ -54,7 +54,7 @@ namespace EmEn::Physics
 			 */
 			EnvironmentPhysicalProperties (float surfaceGravity, float atmosphericDensity, float planetRadius) noexcept
 				: m_surfaceGravity{surfaceGravity},
-				m_steppedSurfaceGravity{surfaceGravity * EngineUpdateCycleDurationS< float >},
+				m_steppedSurfaceGravity{surfaceGravity * WorldPhysicsUpdateCycleDurationS< float >},
 				m_atmosphericDensity{atmosphericDensity},
 				m_planetRadius{planetRadius}
 			{
@@ -107,7 +107,7 @@ namespace EmEn::Physics
 			float
 			steppedGravity (float altitude) const noexcept
 			{
-				return this->gravity(altitude) * EngineUpdateCycleDurationS< float >;
+				return this->gravity(altitude) * WorldPhysicsUpdateCycleDurationS< float >;
 			}
 
 			/**

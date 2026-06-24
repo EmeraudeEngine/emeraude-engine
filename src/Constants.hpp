@@ -33,12 +33,24 @@
 namespace EmEn
 {
 	/**
-	 * @brief Returns how many times the engine will be updated in one second.
+	 * @brief Default ceiling frequency (Hz) of the engine main event loop.
+	 * @note 100 Hz => a 0.010 s waitSystemEvents() timeout. This is an idle tick ceiling,
+	 * not a fixed period: the loop returns earlier when OS events arrive. Overridable via
+	 * the Core constructor's mainLoopFrequencyHz parameter.
+	 */
+	template< typename number_t = uint32_t >
+	requires (std::is_arithmetic_v< number_t >)
+	constexpr number_t DefaultMainLoopFrequencyHz{100};
+
+	/**
+	 * @brief Returns how many times the world physics simulation is updated in one second.
+	 * @note Fixed-timestep cadence of the logics loop (Core::logicsTask). Distinct from the
+	 * engine main event-loop frequency (see the Core constructor's mainLoopFrequencyHz parameter).
 	 * @tparam number_t The type of number. Default uint32_t.
 	 */
 	template< typename number_t = uint32_t >
 	requires (std::is_arithmetic_v< number_t >)
-	constexpr number_t EngineUpdateFrequency{60};
+	constexpr number_t WorldPhysicsUpdateFrequency{60};
 
 	/**
 	 * @brief Returns the duration of one cycle in a second.
@@ -47,7 +59,7 @@ namespace EmEn
 	 */
 	template< typename number_t = float >
 	requires (std::is_arithmetic_v< number_t >)
-	constexpr number_t EngineUpdateCycleDurationS{static_cast< number_t >(1) / EngineUpdateFrequency< number_t >};
+	constexpr number_t WorldPhysicsUpdateCycleDurationS{static_cast< number_t >(1) / WorldPhysicsUpdateFrequency< number_t >};
 
 	/**
 	 * @brief Returns in milliseconds the duration of one cycle.
@@ -56,7 +68,7 @@ namespace EmEn
 	 */
 	template< typename number_t = float >
 	requires (std::is_arithmetic_v< number_t >)
-	constexpr number_t EngineUpdateCycleDurationMS{static_cast< number_t >(1000) / EngineUpdateFrequency< number_t >};
+	constexpr number_t WorldPhysicsUpdateCycleDurationMS{static_cast< number_t >(1000) / WorldPhysicsUpdateFrequency< number_t >};
 
 	/**
 	 * @brief Returns in microseconds the duration of one cycle.
@@ -65,7 +77,7 @@ namespace EmEn
 	 */
 	template< typename number_t = float >
 	requires (std::is_arithmetic_v< number_t >)
-	constexpr number_t EngineUpdateCycleDurationUS{static_cast< number_t >(1000000) / EngineUpdateFrequency< number_t >};
+	constexpr number_t WorldPhysicsUpdateCycleDurationUS{static_cast< number_t >(1000000) / WorldPhysicsUpdateFrequency< number_t >};
 
 	/**
 	 * @brief Constant for scaling to 0.

@@ -869,7 +869,7 @@ namespace EmEn::Scenes
 	{
 		this->updateAnimations(scene.cycle());
 
-		m_lifetime += EngineUpdateCycleDurationUS< uint64_t >;
+		m_lifetime += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 
 		/* NOTE: Check if the node has disabled its ability to move. */
 		if ( !this->isMovable() || !this->isCollidable() )

@@ -190,7 +190,7 @@ namespace EmEn::Scenes
 					 * momentum = mass × velocity (N·s), then convert to force (N) by dividing by Δt.
 					 * F = (m × Δv) / Δt */
 					const float impactVelocity = Vector< 3, float >::dotProduct(movable->linearVelocity(), dominantNormal);
-					const float impactForce = std::max(0.0F, impactVelocity) * movable->getBodyPhysicalProperties().mass() / EngineUpdateCycleDurationS< float >;
+					const float impactForce = std::max(0.0F, impactVelocity) * movable->getBodyPhysicalProperties().mass() / WorldPhysicsUpdateCycleDurationS< float >;
 
 					/* Apply position correction (move out of collision). */
 					movable->moveFromPhysics(positionCorrection);
@@ -265,7 +265,7 @@ namespace EmEn::Scenes
 		/* Resolve dynamic collisions via impulse solver, then enforce boundaries. */
 		if ( !dynamicManifolds.empty() )
 		{
-			m_constraintSolver.solve(dynamicManifolds, EngineUpdateCycleDurationS< float >);
+			m_constraintSolver.solve(dynamicManifolds, WorldPhysicsUpdateCycleDurationS< float >);
 
 			/* Immediately clip all involved entities to boundaries.
 			 * This ensures impulse resolution cannot push entities outside. */

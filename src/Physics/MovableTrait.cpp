@@ -145,7 +145,7 @@ namespace EmEn::Physics
 		if ( m_linearSpeed > 0.0F )
 		{
 			/* Dispatch the final move to the entity according to the new velocity. */
-			this->moveFromPhysics(m_linearVelocity * EngineUpdateCycleDurationS< float >);
+			this->moveFromPhysics(m_linearVelocity * WorldPhysicsUpdateCycleDurationS< float >);
 
 			isMoveOccurs = true;
 		}
@@ -177,7 +177,7 @@ namespace EmEn::Physics
 
 			/* Dispatch the final rotation to the entity according to the new angular velocity. */
 			this->rotateFromPhysics(
-				m_angularSpeed * EngineUpdateCycleDurationS< float >,
+				m_angularSpeed * WorldPhysicsUpdateCycleDurationS< float >,
 				m_angularVelocity / m_angularSpeed
 			);
 

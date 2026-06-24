@@ -134,7 +134,7 @@ namespace EmEn::Physics
 			void
 			addAcceleration (const Base::Math::Vector< 3, float > & acceleration) noexcept
 			{
-				m_linearVelocity += acceleration * EngineUpdateCycleDurationS< float >;
+				m_linearVelocity += acceleration * WorldPhysicsUpdateCycleDurationS< float >;
 				m_linearSpeed = m_linearVelocity.length();
 
 				this->onImpulse();

@@ -408,7 +408,7 @@ namespace EmEn::Physics
 		scene.forEachModifiers([this, &worldCoordinates, &particleProperties] (const auto & modifier) {
 			const auto force = modifier.getForceAppliedTo(worldCoordinates, m_size * 0.5F);
 
-			m_linearVelocity += force * particleProperties.inverseMass() * EngineUpdateCycleDurationS< float >;
+			m_linearVelocity += force * particleProperties.inverseMass() * WorldPhysicsUpdateCycleDurationS< float >;
 		});
 
 		const EnvironmentPhysicalProperties & envProperties = scene.physicalEnvironmentProperties();
@@ -433,7 +433,7 @@ namespace EmEn::Physics
 
 		const auto force = m_linearVelocity.normalized().scale(-dragMagnitude);
 
-		m_linearVelocity += force * particleProperties.inverseMass() * EngineUpdateCycleDurationS< float >;
+		m_linearVelocity += force * particleProperties.inverseMass() * WorldPhysicsUpdateCycleDurationS< float >;
 
 		return true;
 	}
@@ -441,9 +441,9 @@ namespace EmEn::Physics
 	void
 	Particle::update (const Vector< 3, float > & velocity, float sizeDelta, float chaos) noexcept
 	{
-		if ( m_lifetime >= EngineUpdateCycleDurationMS< uint32_t > )
+		if ( m_lifetime >= WorldPhysicsUpdateCycleDurationMS< uint32_t > )
 		{
-			m_lifetime -= EngineUpdateCycleDurationMS< uint32_t >;
+			m_lifetime -= WorldPhysicsUpdateCycleDurationMS< uint32_t >;
 		}
 		else
 		{
@@ -472,7 +472,7 @@ namespace EmEn::Physics
 			m_linearVelocity = velocity;
 
 			/* Apply the velocity vector to particle position. */
-			m_cartesianFrame.translate(m_linearVelocity * EngineUpdateCycleDurationS< float >, false);
+			m_cartesianFrame.translate(m_linearVelocity * WorldPhysicsUpdateCycleDurationS< float >, false);
 
 			if ( !Utility::isZero(chaos) )
 			{

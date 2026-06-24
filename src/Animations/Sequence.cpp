@@ -532,7 +532,7 @@ namespace EmEn::Animations
 	void
 	Sequence::advanceTime () noexcept
 	{
-		m_elapsedTime += EngineUpdateCycleDurationMS< uint32_t >;
+		m_elapsedTime += WorldPhysicsUpdateCycleDurationMS< uint32_t >;
 
 		/* Checks for the end of the cycle. */
 		if ( m_elapsedTime < m_durationMS )

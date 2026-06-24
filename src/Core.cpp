@@ -119,7 +119,7 @@ namespace EmEn
 	void
 	Core::logicsTask () noexcept
 	{
-		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{EngineUpdateCycleDurationUS< uint64_t >};
+		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{WorldPhysicsUpdateCycleDurationUS< uint64_t >};
 
 		while ( m_isLogicsLoopRunning )
 		{
@@ -135,7 +135,7 @@ namespace EmEn
 
 			{
 				/* NOTE: Print a warning if this loop takes more than 16.66 ms, which means we are below 60Hz. */
-				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"logicsTask", EngineUpdateCycleDurationMS< double >};
+				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"logicsTask", WorldPhysicsUpdateCycleDurationMS< double >};
 
 				/* Core-application cyclic update on the active scene only.
 				 * NOTE: It will ask for a shared-access to the active scene
@@ -154,7 +154,7 @@ namespace EmEn
 				/* User-application cyclic update. */
 				this->onCoreProcessLogics(m_cycle);
 
-				m_lifetime += EngineUpdateCycleDurationUS< uint64_t >;
+				m_lifetime += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 				m_cycle++;
 			}
 
@@ -329,7 +329,7 @@ namespace EmEn
 		{
 			/* EventInput: Update user events.
 			 * DirectInput: Copy the state of every input device to use it in the engine cycle. */
-			m_inputManager.waitSystemEvents(0.010);
+			m_inputManager.waitSystemEvents(m_mainLoopEventTimeoutSeconds);
 
 			/* NOTE: Check if the graphics render do not have a problem. */
 			if ( m_graphicsRenderer.usable() )

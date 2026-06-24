@@ -298,8 +298,8 @@ namespace EmEn::Scenes
 	void
 	Scene::processLogics (size_t engineCycle) noexcept
 	{
-		m_lifetimeUS += EngineUpdateCycleDurationUS< uint64_t >;
-		m_lifetimeMS += EngineUpdateCycleDurationMS< uint32_t >;
+		m_lifetimeUS += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
+		m_lifetimeMS += WorldPhysicsUpdateCycleDurationMS< uint32_t >;
 
 		m_nodeController.update();
 

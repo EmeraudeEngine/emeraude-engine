@@ -764,7 +764,7 @@ namespace EmEn::Scenes
 			 * @brief Returns how long this node has existed.
 			 *
 			 * Lifetime is accumulated during logic updates (onProcessLogics).
-			 * Incremented by EngineUpdateCycleDurationUS each cycle.
+			 * Incremented by WorldPhysicsUpdateCycleDurationUS each cycle.
 			 *
 			 * @return Lifetime in microseconds since creation.
 			 * @see onProcessLogics()

@@ -16,9 +16,9 @@ Fundamental framework components located directly in `src/`. These files constit
 **Responsibilities**:
 - **Orchestration**: Coordinates all engine subsystems
 - **Main loops**: Manages three execution loops
-  - Main loop
-  - Logic loop (separate thread)
-  - Render loop (separate thread)
+  - Main loop (input/events + `onCoreMainLoopCycle`; idle tick ceiling configurable via the `Core` constructor's `mainLoopFrequencyHz` parameter, default `DefaultMainLoopFrequencyHz` = 100 Hz)
+  - Logic loop (separate thread; fixed timestep at `WorldPhysicsUpdateFrequency` = 60 Hz)
+  - Render loop (separate thread; uncapped)
 - **Lifecycle**: Entry point for overriding application behavior
 
 **Usage pattern**:
@@ -414,7 +414,8 @@ Arguments > Settings > Default values
 
 **Constants.hpp** (6KB):
 - Engine constants
-- Logic update frequency
+- `WorldPhysicsUpdateFrequency` — logics fixed-timestep cadence (60 Hz). *Renamed from `EngineUpdateFrequency`.*
+- `DefaultMainLoopFrequencyHz` — default main event-loop idle ceiling (100 Hz), overridable via the `Core` constructor's `mainLoopFrequencyHz` parameter
 - Limits and default values
 
 **Identification.hpp** (10KB):

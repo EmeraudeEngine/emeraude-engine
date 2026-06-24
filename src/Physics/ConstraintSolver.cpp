@@ -273,7 +273,7 @@ namespace EmEn::Physics
 			/* Notify bodies of collision event.
 			 * Convert impulse (N·s) to force (N) by dividing by delta time.
 			 * F = J / Δt where J is the impulse magnitude. */
-			const float impactForce = std::abs(lambda) / EngineUpdateCycleDurationS< float >;
+			const float impactForce = std::abs(lambda) / WorldPhysicsUpdateCycleDurationS< float >;
 
 			if ( impactForce > 0.0F )
 			{

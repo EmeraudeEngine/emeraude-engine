@@ -334,7 +334,7 @@ Particles (used by ParticlesEmitter) integrate with the scene modifier system.
 ```cpp
 scene.forEachModifiers([this, &worldCoordinates, &particleProperties] (const auto & modifier) {
     const auto force = modifier.getForceAppliedTo(worldCoordinates, m_size * 0.5F);
-    m_linearVelocity += force * particleProperties.inverseMass() * EngineUpdateCycleDurationS<float>;
+    m_linearVelocity += force * particleProperties.inverseMass() * WorldPhysicsUpdateCycleDurationS<float>;
 });
 ```
 
