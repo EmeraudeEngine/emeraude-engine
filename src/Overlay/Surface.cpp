@@ -37,6 +37,7 @@
 #include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "magic_enum/magic_enum.hpp"
 
 namespace EmEn::Overlay
 {
@@ -139,41 +140,42 @@ namespace EmEn::Overlay
 	bool
 	Surface::createOnHardware (Renderer & renderer) noexcept
 	{
-	{
-		/* NOTE: Resolve the CPU-to-GPU memory-mapping decision against the actual device. Auto maps
-		 * only on unified-memory devices (integrated GPUs, software, full-ReBAR discrete GPUs) where
-		 * a host-mapped image is not sampled across PCIe, and only when the overlay format supports
-		 * LINEAR + SAMPLED. Otherwise we fall back to a staging upload. */
-		const auto & physicalDevice = *renderer.device()->physicalDevice();
-		const auto overlayFormat = Image::getFormat< uint8_t >(4);
-		const bool linearSampled = (physicalDevice.getFormatProperties(overlayFormat).linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
-		const bool mappableDeviceLocal = physicalDevice.hasMappableDeviceLocalMemory();
-
-		switch ( m_memoryMappingMode )
 		{
-			case MemoryMappingMode::Staging :
-				m_memoryMappingEnabled = false;
-				break;
+			/* NOTE: Resolve the CPU-to-GPU memory-mapping decision against the actual device. Auto maps
+			 * only on unified-memory devices (integrated GPUs, software, full-ReBAR discrete GPUs) where
+			 * a host-mapped image is not sampled across PCIe, and only when the overlay format supports
+			 * LINEAR + SAMPLED. Otherwise, we fall back to a staging upload. */
+			const auto & physicalDevice = *renderer.device()->physicalDevice();
+			const auto overlayFormat = Image::getFormat< uint8_t >(4);
+			const bool linearSampled = (physicalDevice.getFormatProperties(overlayFormat).linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
+			const bool mappableDeviceLocal = physicalDevice.hasMappableDeviceLocalMemory();
 
-			case MemoryMappingMode::Direct :
-				m_memoryMappingEnabled = linearSampled;
+			switch ( m_memoryMappingMode )
+			{
+				case MemoryMappingMode::Staging :
+					m_memoryMappingEnabled = false;
+					break;
 
-				if ( !linearSampled )
-				{
-					TraceWarning{ClassId} << "Surface '" << this->name() << "': memory mapping forced ON but the device lacks LINEAR+SAMPLED for the overlay format; falling back to staging.";
-				}
-				break;
+				case MemoryMappingMode::Direct :
+					m_memoryMappingEnabled = linearSampled;
 
-			case MemoryMappingMode::Auto :
-				m_memoryMappingEnabled = linearSampled && mappableDeviceLocal;
-				break;
+					if ( !linearSampled )
+					{
+						TraceWarning{ClassId} << "Surface '" << this->name() << "': memory mapping forced ON but the device lacks LINEAR+SAMPLED for the overlay format; falling back to staging.";
+					}
+					break;
+
+				case MemoryMappingMode::Auto :
+					m_memoryMappingEnabled = linearSampled && mappableDeviceLocal;
+					break;
+			}
+
+			TraceInfo{ClassId} <<
+				"Surface '" << this->name() << "' memory mapping " << ( m_memoryMappingEnabled ? "ENABLED (direct CPU write)" : "DISABLED (staging upload)" ) << " "
+				"[mode=" << magic_enum::enum_name(m_memoryMappingMode) << ", "
+				"deviceLocalMappable=" << ( mappableDeviceLocal ? "yes" : "no" ) << ", "
+				"linearSampled=" << ( linearSampled ? "yes" : "no" ) << "].";
 		}
-
-		TraceInfo{ClassId} <<
-			"Surface '" << this->name() << "' memory mapping " << (m_memoryMappingEnabled ? "ENABLED (direct CPU write)" : "DISABLED (staging upload)") <<
-			" [mode=" << (m_memoryMappingMode == MemoryMappingMode::Auto ? "auto" : (m_memoryMappingMode == MemoryMappingMode::Direct ? "direct" : "staging")) <<
-			", deviceLocalMappable=" << (mappableDeviceLocal ? "yes" : "no") << ", linearSampled=" << (linearSampled ? "yes" : "no") << "].";
-	}
 
 		const auto & framebuffer = this->framebufferProperties();
 		const auto & geometry = this->geometry();
