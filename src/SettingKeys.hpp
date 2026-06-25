@@ -167,7 +167,7 @@ namespace EmEn
 			constexpr auto VkDeviceAutoSelectModeKey{"Core/Video/VulkanDevice/AutoSelectMode"};
 			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"}; // "DontCare", "Performance" and "PowerSaving"
 			constexpr auto VkDeviceEnableFailSafeKey{"Core/Video/VulkanDevice/EnableFailSafe"};
-			constexpr auto DefaultEnableFailSafe{true};
+			constexpr auto DefaultEnableFailSafe{false};
 			constexpr auto VkDeviceForceGPUKey{"Core/Video/VulkanDevice/ForceGPU"};
 			constexpr auto VkDeviceUseVMAKey{"Core/Video/VulkanDevice/UseVMA"};
 			constexpr auto DefaultVkDeviceUseVMA{true};
