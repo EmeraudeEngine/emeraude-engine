@@ -94,6 +94,9 @@ namespace EmEn::PlatformSpecific
 			// Call: "cat /var/lib/dbus/machine-id"
 			// System: cc4719450adf495083f5ab483b0cebca
 			// Requested: cc471945-0adf-4950-83f5-ab483b0cebca
+			// FIXME: Node.js module use the second pattern.
+			// 9db073cb-6101-4a3b-a425-7b4471697a8b
+			// 9db073cb6-1014a-3ba42-57b44-71697a8b
 
 			std::ifstream file{"/var/lib/dbus/machine-id"};
 
