@@ -260,6 +260,39 @@ namespace EmEn
 		this->notify(SurfaceRefreshed);
 	}
 
+	void
+	Core::updatePointerScaling () noexcept
+	{
+		/* NOTE: Decide whether the cursor must be scaled to physical pixels. Some windowing systems
+		 * report it in logical/DIP coordinates, which would mismatch the physical framebuffer
+		 * dimensions used by the overlay hit-testing (Overlay::Surface::isBelowPoint / isEventBlocked).
+		 *  - macOS: cursor in screen points (DIP) -> always scale.
+		 *  - Linux/Wayland: GLFW reports logical surface coordinates (fractional-scale aware) -> scale.
+		 *  - Linux/X11, Windows: cursor already in physical pixels -> no scaling. */
+		bool requiresScaling = false;
+
+		if constexpr ( IsMacOS )
+		{
+			requiresScaling = true;
+		}
+
+		if constexpr ( IsLinux )
+		{
+			requiresScaling = PlatformManager::isUsingWayland();
+		}
+
+		if ( requiresScaling )
+		{
+			/* NOTE: Use the surface content scale (glfwGetWindowContentScale), i.e. the same factor the
+			 * framebuffer uses (1.5 for a 150% fractional scale) - NOT the per-monitor integer scale. */
+			m_inputManager.enablePointerScaling(m_window.state().contentXScale, m_window.state().contentYScale);
+		}
+		else
+		{
+			m_inputManager.disablePointerScaling();
+		}
+	}
+
 	int
 	Core::run () noexcept
 	{
@@ -686,12 +719,11 @@ namespace EmEn
 			/* Adds Core keyboard listener to the input manager. */
 			m_inputManager.addKeyboardListener(this);
 
-#if IS_MACOS
-			m_inputManager.enablePointerScaling(
-				m_window.state().contentXScale,
-				m_window.state().contentYScale
-			);
-#endif
+			/* NOTE: Scale the cursor to physical pixels on windowing systems that report it in
+			 * logical/DIP coordinates (macOS, Linux/Wayland), so it stays consistent with the
+			 * framebuffer dimensions used by the overlay hit-testing. Refreshed on scale changes
+			 * via Window::OSRequestsToRescaleContentBy (see onNotification). */
+			this->updatePointerScaling();
 
 			this->observe(&m_inputManager);
 
@@ -1640,12 +1672,17 @@ namespace EmEn
 					}
 					break;
 
-				/* NOTE: These two notifications indicate framebuffer size or DPI scale changes.
-				 * We don't want to respond here. */
+				/* NOTE: Framebuffer size change — the swap-chain handles it elsewhere, nothing to do here. */
 				case Window::OSNotifiesFramebufferResized :
-				case Window::OSRequestsToRescaleContentBy :
 					/* NOTE: Commented for excessive logs. */
-					//Tracer::debug(ClassId, "The GLFW API detected a framebuffer content size or scale changes.");
+					//Tracer::debug(ClassId, "The GLFW API detected a framebuffer content size change.");
+					break;
+
+				/* NOTE: The surface content scale changed (window moved to a monitor with a different
+				 * scale, or a fractional-scale change). Refresh the pointer scaling so cursor coordinates
+				 * stay consistent with the framebuffer used by the overlay hit-testing. */
+				case Window::OSRequestsToRescaleContentBy :
+					this->updatePointerScaling();
 					break;
 
 				case Window::OSRequestsToTerminate :

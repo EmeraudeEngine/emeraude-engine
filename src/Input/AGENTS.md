@@ -213,6 +213,17 @@ Inject methods copy the listener vector before iterating. Handlers may add/remov
 ### Coordinate Space
 Mouse coordinates must match GLFW's coordinate space. Query `Core.WindowService.getState()` to get `windowWidth`, `framebufferWidth`, and `contentXScale` to determine the correct range.
 
+### Pointer scaling (logical → physical)
+`Manager::enablePointerScaling(xScale, yScale)` / `disablePointerScaling()` multiply the raw `glfwGetCursorPos` value before dispatch. The goal: **deliver pointer coordinates in physical framebuffer pixels** so they stay consistent with the framebuffer dimensions used by overlay hit-testing (`Overlay::Surface::isBelowPoint`, which compares against `framebufferProperties().width() * rectangle`, i.e. physical).
+
+Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Core.cpp`):
+- **macOS** (cursor in DIP) and **Linux/Wayland** (cursor in logical surface coords) → enabled, using the **surface** content scale `m_window.state().contentXScale/Y` (`glfwGetWindowContentScale`, fractional-aware — e.g. `1.5` at 150%, **not** the per-monitor integer scale `glfwGetMonitorContentScale`).
+- **Linux/X11, Windows** → disabled (GLFW already reports physical pixels).
+
+`Core::updatePointerScaling()` is called at init and again on **`Window::OSRequestsToRescaleContentBy`** (emitted by `windowContentScaleCallback` after updating `m_state.contentXScale`), so the factor follows live scale changes — window dragged to a monitor with a different scale (e.g. 2.0 → 1.0), or a Wayland fractional-scale change. This single mechanism fixes both the Wayland mixed-DPI input bug and the macOS monitor-switch (2.0→1.0) bug.
+
+> Consumers that map this physical coordinate further (e.g. app_system's `WebView::windowXToViewX`) must account for whether their own target buffer is physical or logical. See `app_system/src/UI/AGENTS.md § Pointer coordinate space`.
+
 ## Critical Points
 
 - **Unregistration**: Unregister listeners before destruction

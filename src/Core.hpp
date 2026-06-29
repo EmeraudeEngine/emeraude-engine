@@ -1175,6 +1175,19 @@ namespace EmEn
 			void onWindowChanged () noexcept;
 
 			/**
+			 * @brief Refreshes the pointer-coordinate scaling according to the current surface content scale.
+			 * @details Some windowing systems report the cursor position in logical/DIP coordinates instead
+			 * of physical pixels (macOS screen points; Linux/Wayland logical surface coordinates). On those,
+			 * the cursor must be scaled to physical pixels so it stays consistent with the framebuffer
+			 * dimensions used by the overlay hit-testing. On Linux/X11 and Windows the cursor is already in
+			 * physical pixels, so scaling is disabled. This is called at initialization and again whenever the
+			 * surface content scale changes (Window::OSRequestsToRescaleContentBy), e.g. when the window moves
+			 * to a monitor with a different scale or a fractional-scale change occurs.
+			 * @return void
+			 */
+			void updatePointerScaling () noexcept;
+
+			/**
 			 * @brief Performs engine shutdown sequence.
 			 * @details Terminates all services in reverse initialization order.
 			 * @return int Exit code (0 for success).
