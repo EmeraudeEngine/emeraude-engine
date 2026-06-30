@@ -209,6 +209,21 @@ namespace EmEn::Overlay
 	}
 
 	bool
+	UIScreen::setPointerMoveTapSurface (const std::string & name) noexcept
+	{
+		const auto surface = this->getSurface(name);
+
+		if ( surface == nullptr )
+		{
+			return false;
+		}
+
+		m_pointerMoveTapSurface = surface;
+
+		return true;
+	}
+
+	bool
 	UIScreen::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) const noexcept
 	{
 		if constexpr ( KeyboardInputDebugEnabled )
@@ -332,24 +347,58 @@ namespace EmEn::Overlay
 			return false;
 		};
 
+		/* NOTE: Pointer-move tap (fan-out). A designated surface receives the move in addition to the
+		 * normal routing below — regardless of the cursor position, the alpha test, or which surface
+		 * holds the capture. Delivered directly via Surface::onPointerMove (like the capture path, no
+		 * enter/leave bookkeeping) and skipped when it is the very surface already handling the move,
+		 * so the tap never gets a duplicate. The tap does NOT consume the event: the normal routing
+		 * result below is what propagates. Scoping (set/clear around a gesture) is the application's job. */
+		const auto tapSurface = m_pointerMoveTapSurface.lock();
+
+		const auto deliverTap = [&tapSurface, positionX, positionY] (const Surface * handledSurface) noexcept -> void {
+			if ( tapSurface != nullptr && tapSurface.get() != handledSurface && tapSurface->isVisible() && tapSurface->isListeningPointer() )
+			{
+				tapSurface->onPointerMove(positionX, positionY);
+			}
+		};
+
 		/* NOTE: While a surface holds the pointer capture, it receives every move
 		 * directly — even outside its own rectangle (drag-outside). */
 		if ( const auto capturedSurface = m_pointerCaptureSurface.lock() )
 		{
 			if ( capturedSurface->isVisible() && capturedSurface->isListeningPointer() )
 			{
+				deliverTap(capturedSurface.get());
+
 				return capturedSurface->onPointerMove(positionX, positionY);
 			}
 		}
 
 		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
+			deliverTap(exclusiveSurface.get());
+
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
-			return dispatchEvent(surface);
-		});
+		/* NOTE: Top-down walk. The loop (instead of std::ranges::any_of) keeps the exact short-circuit
+		 * semantics — stop on the first surface that consumes the move — while also capturing which
+		 * surface handled it, so the tap is not delivered twice when it happens to be that surface. */
+		std::shared_ptr< Surface > handledSurface;
+
+		for ( const auto & surface : std::views::reverse(m_surfaces) )
+		{
+			if ( dispatchEvent(surface) )
+			{
+				handledSurface = surface;
+
+				break;
+			}
+		}
+
+		deliverTap(handledSurface.get());
+
+		return handledSurface != nullptr;
 	}
 
 	bool
@@ -754,13 +803,15 @@ namespace EmEn::Overlay
 	operator<< (std::ostream & out, const UIScreen & obj)
 	{
 		const auto exclusiveSurface = obj.m_inputExclusiveSurface.lock();
+		const auto pointerMoveTapSurface = obj.m_pointerMoveTapSurface.lock();
 
 		out <<
 			"UI screen '" << obj.name() << "' data :" "\n"
 			"Is visible : " << ( obj.isVisible() ? "YES" : "NO" ) << "\n" <<
 			"Is listening to the keyboard : " << ( obj.isListeningKeyboard() ? "YES" : "NO" ) << "\n" <<
 			"Is listening to the mouse/pointer : " << ( obj.isListeningPointer() ? "YES" : "NO" ) << "\n" <<
-			"Has input exclusive surface : " << ( exclusiveSurface == nullptr ? "[No]" : exclusiveSurface->name() ) << '\n';
+			"Has input exclusive surface : " << ( exclusiveSurface == nullptr ? "[No]" : exclusiveSurface->name() ) << "\n" <<
+			"Has pointer-move tap surface : " << ( pointerMoveTapSurface == nullptr ? "[No]" : pointerMoveTapSurface->name() ) << '\n';
 
 		if ( obj.m_surfaces.empty() )
 		{

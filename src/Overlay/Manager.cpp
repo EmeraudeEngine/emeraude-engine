@@ -193,7 +193,7 @@ namespace EmEn::Overlay
 	std::shared_ptr< UIScreen >
 	Manager::createScreen (const std::string & name, bool enableKeyboardListener, bool enablePointerListener) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensAccess};
+		const std::scoped_lock lock{m_screensAccess};
 
 		if constexpr ( IsDebug )
 		{
@@ -249,7 +249,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::destroyScreen (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensAccess};
+		const std::scoped_lock lock{m_screensAccess};
 
 		const auto screenIt = m_screens.find(name);
 
@@ -272,7 +272,7 @@ namespace EmEn::Overlay
 	void
 	Manager::clearScreens () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensAccess};
+		const std::scoped_lock lock{m_screensAccess};
 
 		/* [ERASE IN LOOP] */
 		auto screenIt = m_screens.begin();
@@ -454,7 +454,7 @@ namespace EmEn::Overlay
 	Manager::updateVideoMemory () noexcept
 	{
 		/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
-		const std::lock_guard< std::mutex > lock{m_physicalRepresentationUpdateMutex};
+		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
 
 		if ( !this->isEnabled() || m_screens.empty() )
 		{
@@ -481,7 +481,7 @@ namespace EmEn::Overlay
 	Manager::onWindowResized () noexcept
 	{
 		/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
-		const std::lock_guard< std::mutex > lock{m_physicalRepresentationUpdateMutex};
+		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
 
 		/* Step 1: Update shared framebuffer properties with new window dimensions. */
 		this->updateFramebufferProperties();
@@ -528,7 +528,7 @@ namespace EmEn::Overlay
 	void
 	Manager::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const CommandBuffer & commandBuffer) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensAccess};
+		const std::scoped_lock lock{m_screensAccess};
 
 		/* Check if the overlay is enabled and there is something to render.
 		 * NOTE: ImGUI screens live in a separate container, so an ImGUI-only
@@ -555,7 +555,7 @@ namespace EmEn::Overlay
 		}
 
 		/* Lock for overlay resizing ! */
-		const std::lock_guard< std::mutex > overlayLock{m_physicalRepresentationUpdateMutex};
+		const std::scoped_lock overlayLock{m_physicalRepresentationUpdateMutex};
 
 		for ( const auto & screen : m_screens | std::views::values )
 		{
@@ -587,8 +587,14 @@ namespace EmEn::Overlay
 				vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
 
 				const VkRect2D scissor{
-					.offset = {0, 0},
-					.extent = {extent3D.width, extent3D.height}
+					.offset = {
+						.x = 0,
+						.y = 0
+					},
+					.extent = {
+						.width = extent3D.width,
+						.height = extent3D.height
+					}
 				};
 				vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 			}

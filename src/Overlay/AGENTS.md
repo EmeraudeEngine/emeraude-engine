@@ -228,6 +228,19 @@ r- **Top-down resolution**: events traverse the stack from top to bottom (`std::
 
 **Precedence is deliberate:** an active capture **wins over** the explicit exclusive surface, so an in-flight drag is never yanked away by a concurrent `setInputExclusiveSurface()`. Capture is transient (bounded by the button hold); exclusive is a persistent app policy.
 
+##### Pointer-move tap (fan-out) — orthogonal to the three resolution layers
+
+The three layers above each pick **one** target. The **pointer-move tap** is a parallel "tee" on the
+move stream only: a single designated surface (`m_pointerMoveTapSurface`, a `std::weak_ptr< Surface >`)
+that **also** receives every `onPointerMove`, *in addition to* whichever surface the resolution picked —
+regardless of the cursor position, alpha test, or which surface holds the capture.
+
+- API (app-driven, like the exclusive surface): `setPointerMoveTapSurface(name)` / `disablePointerMoveTapSurface()` / `isPointerMoveTapSurfaceEnabled()` / `pointerMoveTapSurface()`.
+- It is **non-consuming**: it does not change the routing result, does not block, and only fires on `onPointerMove` (not press/release/wheel). The tap move is delivered **directly** via `Surface::onPointerMove` (no enter/leave bookkeeping), mirroring the capture path.
+- **No double delivery:** if the tap surface is the very surface the resolution already delivered the move to (capture / exclusive / the consuming surface in the stack walk), the tap is skipped for that event.
+- **Scoping is the application's responsibility** — set it when a gesture begins, clear it when it ends. It is *not* managed internally by the press/release dispatch (unlike capture).
+- **Why it exists:** a control on an upper surface (e.g. a slider on a UI overlay) consumes the press and thus **captures** the pointer, so a lower surface (e.g. a 3D view) would normally see no moves during the drag. The tap lets that lower surface keep receiving the live move stream — e.g. to update a 3D scene in real time while the slider is dragged — without disturbing the capture/consume semantics. See app_system `Manager::setPointerMoveTapWebView` and `AppControl.overlayManager.setWebViewPointerMoveTap`.
+
 > [!NOTE]
 > Capture attaches to the surface that **consumes** the press (returns `true`). A surface that forwards events to its content without blocking propagation (`processUnblockedPointerEvents`-style) does not become the captor — the natural owner of a drag is the blocker beneath it. The CEF consumer side still needs its own "I already sent the mousedown, so I must send the matching mouseup" tracking for the case where the release lands on a now-transparent pixel of the captor itself (see app_system `WebView::m_CEFButtonsDown`). The two layers are complementary: `UIScreen` decides **which** surface gets the event; the surface decides **whether** to forward it to its backend.
 

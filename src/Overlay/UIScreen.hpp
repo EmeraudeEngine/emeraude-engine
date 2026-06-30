@@ -433,6 +433,58 @@ namespace EmEn::Overlay
 			}
 
 			/**
+			 * @brief Sets a surface that also receives every pointer-move event, in addition to the normal routing.
+			 * @details This is a "tee" (fan-out) on the pointer-move stream: the designated surface receives every
+			 * move regardless of the cursor position, the alpha test, or which surface currently holds the implicit
+			 * pointer capture. It does NOT consume the event nor alter the normal routing — the primary surface still
+			 * receives the move and may block it as usual. Typical use: let a background surface react live to the
+			 * cursor while a control (e.g. a slider) on another, stacked surface holds the pointer capture during a
+			 * drag.
+			 * @note The move is delivered directly via Surface::onPointerMove (no enter/leave bookkeeping), mirroring
+			 * the capture path. Delivery is skipped when the tap surface is the very one already handling the move
+			 * (no double delivery).
+			 * @note Scoping is the caller's responsibility: set it when the gesture begins, clear it when it ends.
+			 * This is distinct from m_pointerCaptureSurface (internal) and from m_inputExclusiveSurface (consumes input).
+			 * @param name A reference to a string.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool setPointerMoveTapSurface (const std::string & name) noexcept;
+
+			/**
+			 * @brief Disables a previous pointer-move tap surface.
+			 * @return void
+			 */
+			void
+			disablePointerMoveTapSurface () noexcept
+			{
+				m_pointerMoveTapSurface.reset();
+			}
+
+			/**
+			 * @brief Returns whether a pointer-move tap surface has been set.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPointerMoveTapSurfaceEnabled () const noexcept
+			{
+				return !m_pointerMoveTapSurface.expired();
+			}
+
+			/**
+			 * @brief Returns the surface set as pointer-move tap.
+			 * @warning This can be nullptr if the surface was destroyed or never set.
+			 * @return std::shared_ptr< Surface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Surface >
+			pointerMoveTapSurface () const noexcept
+			{
+				return m_pointerMoveTapSurface.lock();
+			}
+
+			/**
 			 * @brief Transfers the key press event to surfaces.
 			 * @param key The keyboard universal key code. Example, QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
@@ -530,6 +582,12 @@ namespace EmEn::Overlay
 			 * by the press/release dispatch, never by the application. */
 			mutable std::weak_ptr< Surface > m_pointerCaptureSurface;
 			mutable uint8_t m_pointerCaptureButtons{0};
+			/* NOTE: Pointer-move tap (fan-out). A surface that also receives every move event in addition to the
+			 * normal routing, regardless of capture, position or alpha test. Set/cleared explicitly by the application
+			 * (unlike m_pointerCaptureSurface which is managed internally by the press/release dispatch). Lets a
+			 * surface react live to the cursor while another stacked surface holds the pointer capture (e.g. a slider
+			 * drag on an overlay view while a 3D view below keeps receiving the moves). */
+			std::weak_ptr< Surface > m_pointerMoveTapSurface;
 			mutable std::mutex m_surfacesMutex;
 			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
