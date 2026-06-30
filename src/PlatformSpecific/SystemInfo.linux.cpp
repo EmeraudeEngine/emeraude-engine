@@ -116,7 +116,7 @@ namespace EmEn::PlatformSpecific
 					{
 						m_OSInformation.machineUUID[destIndex++] = line[index];
 
-						if ( index == 8 || index == 13 || index == 18 || index == 23 )
+						if ( index == 9 || index == 15 || index == 21 || index == 27 )
 						{
 							m_OSInformation.machineUUID[destIndex++] = '-';
 						}
