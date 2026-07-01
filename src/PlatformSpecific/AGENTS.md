@@ -66,7 +66,7 @@ PlatformSpecific/
 ├── Helpers.linux.cpp            # Linux helper implementations
 ├── Helpers.mac.cpp              # macOS helper implementations
 ├── Helpers.windows.cpp          # Windows helper implementations (incl. runFileDialogOnDedicatedThread()
-│                                #   + file-local CenteringOwner — dedicated STA thread + centering proxy)
+│                                #   — dedicated STA thread, dialog owned by the real main window)
 ├── SystemInfo.hpp/.cpp          # System information (+ hybrid CPU detection via hwloc)
 ├── UserInfo.hpp/.cpp            # User information (+ platform files)
 ├── Types.hpp                    # Common type definitions (CPU struct with E/P-core counts)
@@ -92,10 +92,9 @@ PlatformSpecific/
 ```
 
 > [!NOTE]
-> The Windows dedicated-STA-thread file-dialog helper (`runFileDialogOnDedicatedThread()`
-> + the file-local `CenteringOwner`) lives in `PlatformSpecific/Helpers.{hpp,windows.cpp}`,
-> **not** under `Desktop/Dialog/` — it is OS-machinery shared by `OpenFile`/`SaveFile`, so it
-> sits with the other Windows helpers.
+> The Windows dedicated-STA-thread file-dialog helper (`runFileDialogOnDedicatedThread()`) lives in
+> `PlatformSpecific/Helpers.{hpp,windows.cpp}`, **not** under `Desktop/Dialog/` — it is OS-machinery
+> shared by `OpenFile`/`SaveFile`, so it sits with the other Windows helpers.
 
 ### File Naming Convention
 
@@ -117,50 +116,114 @@ CMake selects the appropriate file based on target platform.
 wrapper that delegates to the shared helper `runFileDialogOnDedicatedThread()`
 (`Helpers.hpp` / `Helpers.windows.cpp`): it spawns a **dedicated STA thread** with an empty
 message queue, runs the dialog body (`OpenFile::showDialog` / `SaveFile::showDialog`) there, and
-`join()`s it. The helper owns the thread, COM init, and the centering proxy; the per-dialog
-`showDialog()` only does the COM dialog work and receives the resolved parent `HWND`. On failure
-to spawn the worker (OS resource exhaustion), it falls back to running the dialog inline on the
-caller thread.
+waits for it. The helper owns the thread, COM init, the cross-thread owner handshake
+(`AttachThreadInput`) and the message-pumping wait; the per-dialog `showDialog()` only does the COM
+dialog work and receives the owner `HWND`. On failure to spawn the worker (OS resource exhaustion),
+it falls back to running the dialog inline on the caller thread.
 
-**Why (perf):** on the main thread the dialog's modal message loop pumps the heavy main-thread
-traffic (rendering, input, CEF). The Windows shell reacts by re-resolving its navigation pane on
-every burst — thousands of redundant known-folder / cloud-sync-root (`SyncRootManager`) registry
-lookups — delaying the dialog **3–5 s** on machines whose known folders are redirected to a cloud
-provider (OneDrive, the Windows default). On a quiet dedicated thread the pane resolves once and
-the dialog appears in **~140 ms**.
+**Why (perf):** the dialog's modal message loop pumps **every** message of the thread it runs on.
+On the engine main thread that means the heavy main-thread traffic (rendering, input, and — under
+app_system — CEF), and the Windows shell reacts by re-resolving its navigation pane on every burst:
+thousands of redundant known-folder / cloud-sync-root (`SyncRootManager`) registry lookups. On a
+machine whose known folders are redirected to a cloud provider (OneDrive, the Windows default), this
+delays the dialog **3–5 s**. A dedicated thread has an empty message queue, so the pane resolves once
+and the dialog appears in **~140 ms** (measured ≈×25 speed-up). Apps with an idle UI thread (e.g.
+Notepad++) never hit this — which is why the same dialog is instant elsewhere on the same machine.
 
 > [!WARNING]
 > Do **not** "simplify" by calling `Show()` directly on the calling thread — it silently
 > reintroduces the 3–5 s freeze on any machine with cloud-redirected known folders (invisible on
 > a plain dev box, hence hard to diagnose).
 
-### Dialog centering — `CenteringOwner` (TECH-1838)
+### Owner-based modality, centering & Z-order
 
-Passing the main window as the modal dialog's owner is **not** possible here: the main window
-lives on the main thread, which is blocked on `join()` while the dialog is up, so a cross-thread
-owner risks a message-pump deadlock (the modal dialog's implicit `WM_ENABLE` / activation sends to
-the owner thread would never return). The first perf fix therefore used a **null owner** — which
-also dropped native placement (dialog no longer centered on the app window, wrong monitor in
-multi-screen). Note the lag and the owner are **independent**: the lag is purely a function of the
-thread on which `Show()` pumps messages, not of the owner — so the centering fix below does not
-reintroduce it.
+The dialog is shown **owned by the real main window** (its `HWND` is passed to the dialog body and
+fed to `IFileDialog::Show(owner)` and the legacy `OPENFILENAMEW.hwndOwner` / `BROWSEINFOW.hwndOwner`).
+Win32 owner relationships are the OS-native mechanism for all three behaviors the dialog needs, so
+the OS handles them for free:
 
-`runFileDialogOnDedicatedThread()` restores placement **without** a cross-thread owner:
+- **Modality** — the OS disables the owner while the dialog is up.
+- **Centering** — the shell positions the dialog on its owner, correct monitor, no post-show jump.
+- **Z-order** — an owned window is always above its owner and is **raised with it on activation**, so
+  the dialog resurfaces after an alt-tab / taskbar click instead of being buried behind the main
+  window.
 
-1. On the **caller thread**, before spawning the worker, it reads the main window's screen
-   rectangle (`GetWindowRect`) and DPI awareness context (`GetWindowDpiAwarenessContext`), passed
-   **by value** to the worker (no cross-thread HWND deref on the worker).
-2. On the **worker (STA) thread**, `SetThreadDpiAwarenessContext(...)` matches the main window,
-   then a `CenteringOwner` (file-local in `Helpers.windows.cpp`) is built — a hidden
-   top-level window (built-in `STATIC` class, `WS_POPUP` without `WS_VISIBLE`) positioned over that
-   rectangle. It is created **and destroyed on the worker thread** (RAII), so there is **no
-   cross-thread owner** and no deadlock risk — the owner enable/disable sends stay same-thread.
-3. The proxy `HWND` is passed to the dialog body, which feeds it to `Show(parentWindow)` and to the
-   legacy `OPENFILENAMEW.hwndOwner` / `BROWSEINFOW.hwndOwner` paths.
+The owner is **cross-thread**: the dialog runs on the worker (STA) thread, the owner lives on the
+main thread. A cross-thread owner deadlocks if the owner thread stops pumping messages (e.g. a bare
+`join()`), so it is made safe here by two things the helper does:
 
-The shell centers the dialog on the proxy natively, at creation time — **no post-show jump, no
-flash**, correct monitor in multi-screen. The proxy is never shown; the shell only needs its
-geometry.
+1. **The caller pumps messages while it waits** (see § Responsiveness) — so the owner's implicit
+   `WM_ENABLE` / activation sends, dispatched from the worker, are serviced instead of deadlocking.
+2. **`AttachThreadInput(workerThreadId, ownerThreadId, TRUE)`** for the dialog's lifetime — merges the
+   two threads' input state so activation and **focus return on close** behave as if same-thread.
+   It is detached after the dialog returns. (Attaching a thread to itself fails harmlessly on the
+   inline-fallback path, where owner and dialog are already on the same thread.)
+
+The worker still replicates the owner's DPI awareness context (`SetThreadDpiAwarenessContext`) so the
+dialog renders at the right scale. Everything is **gated on `parentToWindow`**: when it is `false`
+the dialog is shown with a null owner — no modality, no centering — for callers that deliberately
+want an ownerless dialog.
+
+### Responsiveness — message-pumping wait
+
+`execute()` is synchronous by contract (the app_system IPC handler needs the result to send its
+ZeroMQ reply), so the caller must wait for the worker — but a bare `join()` **hard-blocks** the main
+thread, which breaks two things:
+
+1. The dialog **owns the main window cross-thread**, so the OS dispatches `WM_ENABLE` / activation
+   sends to the main thread from the worker; a non-pumping thread never services them, deadlocking
+   the native modal handshake.
+2. After ~5 s a non-pumping thread is marked **"Not Responding"** (DWM ghost: greyed snapshot,
+   spinning cursor), even though the dialog is alive on the worker.
+
+`runFileDialogOnDedicatedThread()` therefore replaces the bare `join()` with a **drain-then-wait**
+loop on the worker's thread handle: each iteration first drains the caller thread's own queue
+(`PeekMessage` / `Translate` / `Dispatch`), then blocks in `MsgWaitForMultipleObjectsEx` until the
+worker terminates or new serviceable work arrives, then `join()`s (which returns immediately).
+`WM_QUIT` is handled specially — it is re-posted (`PostQuitMessage`) and the dialog is waited out, so
+the engine's main loop sees the quit only after the dialog closes.
+
+> [!WARNING]
+> The wake mask **excludes `QS_INPUT`** (it is `QS_PAINT | QS_TIMER | QS_POSTMESSAGE |
+> QS_SENDMESSAGE`), and `MWMO_INPUTAVAILABLE` is **not** used (hence drain-*first*). This is not
+> cosmetic: `AttachThreadInput` shares the worker's input queue with the main thread, so mouse-moves
+> / keystrokes aimed at the **dialog** flag input as "available" on the main thread. With `QS_INPUT`
+> in the mask (or with `MWMO_INPUTAVAILABLE`), the wait would return immediately and repeatedly while
+> `PeekMessage` — which only retrieves messages for the main thread's *own* windows — removes nothing:
+> a **100 % CPU busy-spin whenever the user moves the mouse over the dialog**. The main window is
+> disabled by the modal and has no input to process anyway; it only needs paint / posted (CEF) / timer
+> messages. Sent messages (the owner's `WM_ENABLE` / activation handshake) are serviced by the wait
+> regardless of the mask.
+
+This does **not** reintroduce the 3–5 s perf storm: that was the *dialog's* modal loop pumping heavy
+traffic, and the dialog's loop runs on the worker. This pump only services the main thread's own
+messages (paint, CEF, DWM responsiveness pings). The main window is disabled by the native modal (it
+is the owner), so the pumped input is ignored — **responsive but non-interactive**, the correct
+modal behavior.
+
+### Reentrancy — a reentrant open is refused, not nested
+
+The pump above dispatches messages, which re-enters the main window's `WndProc`. A dispatched
+message can call back into `runFileDialogOnDedicatedThread()` to open a **second** native file dialog
+on the same thread. This is **refused at the top of the function** (a `thread_local` "active" flag,
+RAII-scoped over the whole operation): a reentrant call logs a warning and returns `false`, which the
+caller treats as a cancellation.
+
+Refusing — rather than nesting — is the only robust fix, because the damage is done by the nested
+dialog *opening*, not by any nested pumping:
+
+- A nested dialog owned by the same main window calls `EnableWindow(owner, FALSE)` on `Show()` and
+  `EnableWindow(owner, TRUE)` on close. Win32 owner enable/disable is **not ref-counted**, so the
+  inner dialog's close would **re-enable the main window while the outer dialog is still modal** —
+  the app becomes interactive under an open modal. Preventing the nested `Show()` is what closes this
+  hole; merely avoiding a nested pump would not.
+- Two stacked native file choosers are not a meaningful UX anyway.
+
+> [!WARNING]
+> Do **not** "fix" a reentrant dialog request by opening it on another worker/owner or by pumping
+> differently — a second dialog owned by the same window reopens the non-ref-counted owner-enable
+> hole above. The reentrant request must be refused (or deferred by the caller until the first
+> dialog closes).
 
 ---
 
@@ -283,37 +346,14 @@ See: `Dialog/SaveFile.hpp:setDefaultFilename()`, `Dialog/SaveFile.hpp:setDefault
 | Linux | kdialog positional arg / zenity `--filename=` | Same | Appended to path arg | Handled by desktop tool |
 | macOS | `NSOpenPanel setDirectoryURL:` | `NSSavePanel setDirectoryURL:` | `setNameFieldStringValue:` | Handled by `allowedContentTypes` |
 
-### Windows: native file dialogs run on a dedicated STA thread (critical)
+### Windows dialog mechanism (dedicated STA thread, main-window owner)
 
-On Windows, `OpenFile::execute()` and `SaveFile::execute()` show the modern
-`IFileOpenDialog` / `IFileSaveDialog` on a **dedicated STA thread**, not on the calling
-thread. This is mandatory for performance — not stylistic.
-
-**Why:** the dialog's modal message loop pumps **every** message of the thread it runs on.
-Shown from a busy thread (the engine main loop pumping rendering, input, and — under
-app_system — CEF), the Windows shell re-resolves its navigation pane on every message
-burst: thousands of redundant known-folder / cloud-sync-root (`SyncRootManager`) registry
-lookups. On a machine whose known folders are redirected to a cloud provider (OneDrive —
-the Windows default), this delays the dialog by **3–5 s**. A dedicated thread has an empty
-message queue, so the pane is resolved once and the dialog appears in ~140 ms (measured
-×25 speed-up). Apps with an idle UI thread (e.g. Notepad++) never hit this — which is why
-the same dialog is instant elsewhere on the same machine.
-
-**Implementation:** `execute()` delegates to `runFileDialogOnDedicatedThread()`
-(`Helpers.{hpp,windows.cpp}`), passing its COM dialog body (`showDialog()`) as a callback. The
-helper spawns a `std::thread` that `CoInitializeEx(STA)`s, builds the hidden `CenteringOwner`
-(see § Dialog centering above), runs the body, then `join()`s — the caller blocks on `join()`
-because `execute()` is synchronous by contract. The centering owner is created **on the worker
-thread** (never a cross-thread owner), which is what makes native centering possible without a
-modal-pump deadlock. If the worker thread cannot be spawned, the helper runs the dialog inline on
-the caller thread (slower on cloud-redirected machines, but functional). See the comment block in
-`Dialog/OpenFile.windows.cpp` and `Helpers.windows.cpp`.
-
-> [!WARNING]
-> Do **not** "simplify" this back to a direct `Show()` on the calling thread — it silently
-> reintroduces the 3–5 s freeze on any machine with cloud-redirected known folders (i.e.
-> most Windows installs with OneDrive). The cost is invisible on a developer machine
-> without OneDrive folder redirection.
+On Windows, `OpenFile::execute()` / `SaveFile::execute()` delegate to
+`runFileDialogOnDedicatedThread()`, which shows the modern `IFileOpenDialog` / `IFileSaveDialog` on a
+**dedicated STA thread owned by the main window**. The complete rationale and mechanism — perf
+(why a dedicated thread), owner-based modality / centering / Z-order, and the message-pumping wait —
+are documented once in the top-level section **§ Windows: native file dialogs run on a dedicated STA
+thread** (above). It is not repeated here to avoid drift.
 
 ### Linux Dialog Implementation (zenity/kdialog)
 

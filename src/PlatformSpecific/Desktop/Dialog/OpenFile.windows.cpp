@@ -36,7 +36,6 @@
 /* STL inclusions. */
 #include <filesystem>
 #include <map>
-#include <thread>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -242,11 +241,11 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	bool
 	OpenFile::execute (Window & window, bool parentToWindow) noexcept
 	{
-		/* All native file dialogs run on a dedicated STA thread, centered on the application
-		 * window via a worker-thread owner proxy (no cross-thread owner). See
+		/* All native file dialogs run on a dedicated STA thread, owned by the real main window (a
+		 * cross-thread owner, made safe by the message-pumping wait + AttachThreadInput). See
 		 * PlatformSpecific/Helpers.hpp (runFileDialogOnDedicatedThread) for the full rationale
-		 * (perf + deadlock-free centering). showDialog() below is the IFileOpenDialog body; it
-		 * receives the resolved parent window handle. */
+		 * (perf + owner-based modality/centering/Z-order + reentrancy-safe wait). showDialog() below
+		 * is the IFileOpenDialog body; it receives the owner window handle. */
 		return runFileDialogOnDedicatedThread(window, parentToWindow, [this, &window] (HWND parentWindow) {
 			return this->showDialog(window, parentWindow);
 		});

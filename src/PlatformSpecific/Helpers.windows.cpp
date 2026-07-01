@@ -375,97 +375,70 @@ namespace EmEn::PlatformSpecific
 	namespace
 	{
 		constexpr auto FileDialogClassId{"FileDialog"};
-
-		/**
-		 * @brief Hidden top-level owner window positioned over a target screen rectangle, created
-		 * on the calling (STA worker) thread so the shell centers the modal dialog on it WITHOUT a
-		 * cross-thread owner.
-		 *
-		 * Uses the built-in "STATIC" class (no RegisterClass, no class-atom lifetime concern) and
-		 * is never shown (no WS_VISIBLE) — the shell only needs its geometry. Created and destroyed
-		 * (RAII) on the same thread as the dialog's modal loop, so the implicit owner enable/disable
-		 * sends stay same-thread and cannot deadlock against the blocked caller thread.
-		 */
-		class CenteringOwner final
-		{
-			public:
-
-				explicit
-				CenteringOwner (const RECT * targetRect) noexcept
-				{
-					if ( targetRect == nullptr )
-					{
-						return;
-					}
-
-					const LONG rawWidth = targetRect->right - targetRect->left;
-					const LONG rawHeight = targetRect->bottom - targetRect->top;
-					const int width = rawWidth > 1 ? static_cast< int >(rawWidth) : 1;
-					const int height = rawHeight > 1 ? static_cast< int >(rawHeight) : 1;
-
-					m_handle = CreateWindowExW(
-						WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-						L"STATIC", L"",
-						WS_POPUP,
-						static_cast< int >(targetRect->left), static_cast< int >(targetRect->top),
-						width, height,
-						nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-				}
-
-				CenteringOwner (const CenteringOwner &) = delete;
-
-				CenteringOwner (CenteringOwner &&) = delete;
-
-				CenteringOwner & operator= (const CenteringOwner &) = delete;
-
-				CenteringOwner & operator= (CenteringOwner &&) = delete;
-
-				~CenteringOwner ()
-				{
-					if ( m_handle != nullptr )
-					{
-						DestroyWindow(m_handle);
-					}
-				}
-
-				[[nodiscard]]
-				HWND
-				handle () const noexcept
-				{
-					return m_handle;
-				}
-
-			private:
-
-				HWND m_handle{nullptr};
-		};
 	}
 
 	bool
 	runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND) > & dialogBody) noexcept
 	{
-		/* Read the main window geometry + DPI context on the CALLER thread; never deref the main
-		 * window HWND from the worker.
-		 *
-		 * Skip the centering owner when the window is minimized: GetWindowRect then returns the
-		 * iconic ghost coordinates (~{-32000, -32000}), which would center the dialog off-screen.
-		 * With no owner rect we fall back to the shell's default (visible) placement. We test
-		 * IsIconic rather than the coordinate sign — a window on a left secondary monitor has a
-		 * legitimately negative X. */
+		/* Reentrancy guard. While the dialog is up, the caller pumps its message queue (below), which
+		 * re-enters the main window's WndProc; a dispatched message can call back into this function to
+		 * open a SECOND native file dialog on the same thread. That is refused outright: two stacked
+		 * native file choosers make no UX sense, and — more importantly — a nested dialog owned by the
+		 * same main window would EnableWindow(owner, TRUE) on close (Win32 owner enable/disable is NOT
+		 * ref-counted), re-enabling the main window while the outer dialog is still modal. Refusing at
+		 * the top prevents the nested Show() entirely, which is the only robust fix. A refused call
+		 * returns false — the caller treats it as a cancellation. The flag is thread_local (file dialogs
+		 * are shown from the UI thread) and RAII-scoped over the whole operation, including the inline
+		 * fallback path. */
+		static thread_local bool s_fileDialogActive = false;
+
+		if ( s_fileDialogActive )
+		{
+			TraceWarning{FileDialogClassId} << "Reentrant native file dialog ignored: one is already open on this thread.";
+
+			return false;
+		}
+
+		struct ActiveGuard final
+		{
+			ActiveGuard () noexcept { s_fileDialogActive = true; }
+			~ActiveGuard () { s_fileDialogActive = false; }
+			ActiveGuard (const ActiveGuard &) = delete;
+			ActiveGuard (ActiveGuard &&) = delete;
+			ActiveGuard & operator= (const ActiveGuard &) = delete;
+			ActiveGuard & operator= (ActiveGuard &&) = delete;
+		} activeGuard;
+
+		/* The dialog is OWNED by the real main window so the OS provides native modality (it disables
+		 * the owner), native centering (on the owner), and native Z-order (the dialog stays above the
+		 * owner and resurfaces with it on activation — e.g. after an alt-tab / taskbar click). Read
+		 * the owner + its DPI context on the CALLER thread; the worker only receives handles/ids by
+		 * value. When parentToWindow == false the owner is null: the dialog is shown ownerless —
+		 * no modality, no centering. The DPI context is replicated whenever a main window exists
+		 * (independent of parentToWindow) so even an ownerless dialog renders at the right scale. */
 		const HWND mainWindow = window.getWin32Window();
-		RECT ownerRect{};
-		const bool haveOwnerRect = parentToWindow && mainWindow != nullptr && IsIconic(mainWindow) == 0 && GetWindowRect(mainWindow, &ownerRect) != 0;
+		const HWND ownerWindow = parentToWindow ? mainWindow : nullptr;
+		const DWORD ownerThreadId = ownerWindow != nullptr ? GetWindowThreadProcessId(ownerWindow, nullptr) : 0;
 		const DPI_AWARENESS_CONTEXT dpiContext = mainWindow != nullptr ? GetWindowDpiAwarenessContext(mainWindow) : nullptr;
 
-		/* The actual dialog run: STA COM init + hidden centering owner + body, on whichever thread
-		 * invokes it (the dedicated worker normally, the caller thread on the fallback path). */
-		const auto runDialog = [&dialogBody, haveOwnerRect, &ownerRect] () -> bool {
+		/* The actual dialog run: STA COM init + body, on whichever thread invokes it (the dedicated
+		 * worker normally, the caller thread on the fallback path).
+		 *
+		 * The owner is CROSS-THREAD (dialog on the worker, owner on the main thread). That is safe
+		 * here because the caller pumps messages while waiting (below), so the owner's implicit
+		 * enable/disable/activation sends complete. AttachThreadInput merges the two threads' input
+		 * state for the dialog's lifetime so activation and focus return behave as if same-thread. */
+		const auto runDialog = [&dialogBody, ownerWindow, ownerThreadId] () -> bool {
 			const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
-			/* RAII hidden owner, created and destroyed on the running thread. */
-			const CenteringOwner owner{haveOwnerRect ? &ownerRect : nullptr};
+			const bool inputAttached = ownerThreadId != 0 && AttachThreadInput(GetCurrentThreadId(), ownerThreadId, TRUE) != 0;
 
-			const bool dialogResult = dialogBody(owner.handle());
+			const bool dialogResult = dialogBody(ownerWindow);
+
+			if ( inputAttached )
+			{
+				AttachThreadInput(GetCurrentThreadId(), ownerThreadId, FALSE);
+			}
 
 			if ( SUCCEEDED(comInit) )
 			{
@@ -505,6 +478,74 @@ namespace EmEn::PlatformSpecific
 			TraceWarning{FileDialogClassId} << "Unable to spawn the dedicated dialog thread (" << error.what() << "); running the dialog inline.";
 
 			return runDialog();
+		}
+
+		/* Wait for the dialog WITHOUT hard-blocking the main thread — drain the caller's own message
+		 * queue, then block, repeat. Pumping is required for two reasons:
+		 *   1. The dialog owns the main window CROSS-THREAD, so the OS sends it WM_ENABLE / activation
+		 *      messages originating from the worker; a bare join() would never service them, deadlocking
+		 *      the native modal handshake.
+		 *   2. A thread that stops pumping is marked "Not Responding" by Windows after ~5 s (DWM ghost:
+		 *      greyed snapshot, spinning cursor), even though the dialog is alive on the worker.
+		 * The main window is disabled by the native modal (it is the owner), so the pumped input is
+		 * ignored — responsive but non-interactive, the correct modal behavior. A reentrant open from a
+		 * dispatched message is refused by the guard at the top of this function.
+		 *
+		 * This does NOT reintroduce the shell-pane perf storm: that was the DIALOG's modal loop pumping
+		 * heavy traffic. The dialog's loop runs on the worker; this pump only services the main thread's
+		 * own messages (paint, CEF, DWM pings). */
+		const HANDLE workerHandle = static_cast< HANDLE >(worker->native_handle());
+
+		for ( ;; )
+		{
+			/* Drain FIRST, then wait. Dispatch everything currently queued for THIS thread's own
+			 * windows (paint, posted CEF work, timers, WM_QUIT), then block. Draining before the wait
+			 * catches a WM_QUIT already sitting in the queue immediately, and removes the need for
+			 * MWMO_INPUTAVAILABLE — which, combined with the shared input queue (see the wait below),
+			 * is what caused the busy-spin. */
+			MSG message;
+			bool quitReceived = false;
+
+			while ( PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE) != 0 )
+			{
+				if ( message.message == WM_QUIT )
+				{
+					/* App is quitting. Stop pumping, wait the dialog out with a plain block (brief,
+					 * and only on this rare path), then re-post WM_QUIT so the engine's main loop
+					 * sees it after we return — we never return while the dialog is still up. */
+					WaitForSingleObject(workerHandle, INFINITE);
+					PostQuitMessage(static_cast< int >(message.wParam));
+					quitReceived = true;
+					break;
+				}
+
+				TranslateMessage(&message);
+				DispatchMessageW(&message);
+			}
+
+			if ( quitReceived )
+			{
+				break;
+			}
+
+			/* Wait for the worker to finish OR for work THIS thread must service. The wake mask
+			 * deliberately EXCLUDES QS_INPUT: AttachThreadInput (in runDialog) shares the worker's
+			 * input queue, so mouse-moves / keystrokes aimed at the DIALOG would otherwise wake this
+			 * wait continuously while the PeekMessage drain above — which only retrieves messages for
+			 * THIS thread's own windows — removes nothing, spinning at 100% CPU whenever the user
+			 * moves the mouse over the dialog. The main window is disabled by the modal and has no
+			 * input to process anyway; it only needs paint, posted (CEF), timer and sent messages.
+			 * MWMO_INPUTAVAILABLE is intentionally omitted (we drained first), so already-seen shared
+			 * input never forces an immediate return. Sent messages (the owner's WM_ENABLE /
+			 * activation handshake) are serviced regardless of the mask. */
+			const DWORD waitStatus = MsgWaitForMultipleObjectsEx(1, &workerHandle, INFINITE, QS_PAINT | QS_TIMER | QS_POSTMESSAGE | QS_SENDMESSAGE, 0);
+
+			/* WAIT_OBJECT_0 → worker finished; anything other than "a message is available" (or an
+			 * unexpected wait failure) → stop and let join() reap the worker. */
+			if ( waitStatus != WAIT_OBJECT_0 + 1 )
+			{
+				break;
+			}
 		}
 
 		worker->join();

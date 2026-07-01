@@ -149,11 +149,11 @@ namespace EmEn::PlatformSpecific
 	std::vector< COMDLG_FILTERSPEC > createExtensionFilter (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters, std::map< std::wstring, std::wstring > & dataHolder);
 
 	/**
-	 * @brief Runs a native Windows file-dialog body on a DEDICATED STA thread, with the dialog
-	 * centered on the application window — without a cross-thread owner.
+	 * @brief Runs a native Windows file-dialog body on a DEDICATED STA thread, owned by the real
+	 * application window so the OS provides native modality, centering and Z-order.
 	 *
 	 * Shared machinery for OpenFile/SaveFile (the dialog-specific COM code is the @a dialogBody).
-	 * It encapsulates three concerns that are identical for every native file dialog:
+	 * It reconciles two otherwise-conflicting needs:
 	 *
 	 * 1. **Perf:** the dialog runs on a fresh STA thread whose message queue is empty, instead of
 	 *    the engine's main thread. On the main thread the modal message loop pumps the heavy main
@@ -161,26 +161,29 @@ namespace EmEn::PlatformSpecific
 	 *    thousands of times (empty SyncRootManager / known-folder lookups) — a 3-5 s delay on
 	 *    cloud-redirected-known-folder machines. A quiet thread resolves the pane once (~140 ms).
 	 *
-	 * 2. **Centering:** a hidden owner window is created ON THE WORKER THREAD, over the
-	 *    main window's screen rectangle (read on the caller thread, passed by value, with the main
-	 *    window's DPI awareness context replicated). The shell centers the dialog on it natively —
-	 *    no post-show jump, correct monitor. A cross-thread owner is impossible here: the caller
-	 *    blocks on join() while the dialog is up, so a modal dialog owned by a window on that
-	 *    blocked thread would deadlock on the implicit cross-thread WM_ENABLE / activation sends.
-	 *    The proxy lives on the worker thread → those sends stay same-thread.
+	 * 2. **Native owner behavior:** the dialog is shown OWNED BY the real main window (passed to
+	 *    @a dialogBody as the parent HWND). The OS then disables the owner (modality), centers the
+	 *    dialog on it (placement), and keeps it above the owner in Z-order — so it resurfaces with
+	 *    the main window after an alt-tab / taskbar click, instead of being buried. The owner is
+	 *    cross-thread (dialog on the worker, owner on the main thread); this is made safe by (a) the
+	 *    caller PUMPING messages while it waits — see the implementation — so the owner's
+	 *    enable/disable/activation sends complete instead of deadlocking, and (b) AttachThreadInput
+	 *    merging the two threads' input state for the dialog's lifetime so activation / focus return
+	 *    behave as if same-thread. The worker also replicates the owner's DPI awareness context.
 	 *
-	 * 3. **COM:** CoInitializeEx(STA) / CoUninitialize around the body.
+	 * COM (CoInitializeEx STA / CoUninitialize) wraps the body. If the worker thread cannot be
+	 * spawned, the body runs inline on the caller thread (slower, but functional).
 	 *
 	 * @param window A reference to the application window (read on the caller thread only).
-	 * @param parentToWindow Whether to center on @a window. When false, the body receives a null
-	 * parent (no centering) — matches the previous behavior for ownerless dialogs.
-	 * @param dialogBody The dialog-specific work. Receives the parent window handle to pass to
+	 * @param parentToWindow Whether to own/center on @a window. When false, the body receives a null
+	 * owner: the dialog is shown ownerless — no modality, no centering.
+	 * @param dialogBody The dialog-specific work. Receives the owner window handle to pass to
 	 * IFileDialog::Show() (and the legacy hwndOwner). Runs on the dedicated STA thread. Returns
 	 * its own success flag, which becomes this function's return value.
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND parentWindow) > & dialogBody) noexcept;
+	bool runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND ownerWindow) > & dialogBody) noexcept;
 #endif
 
 #if IS_LINUX
