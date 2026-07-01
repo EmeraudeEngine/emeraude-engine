@@ -42,7 +42,8 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	 * @param devicePath The device path (e.g., "/dev/sdb1").
 	 * @return bool True if removable.
 	 */
-	static bool
+	static
+	bool
 	isDeviceRemovable (const std::string & devicePath) noexcept
 	{
 		/* Extract the base block device name: "/dev/sdb1" → "sdb", "/dev/nvme0n1p2" → "nvme0n1". */
