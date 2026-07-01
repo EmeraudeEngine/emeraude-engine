@@ -177,7 +177,8 @@ Platform-specific utility functions are centralized in `Helpers.hpp` with separa
 | `hasKdialog()` | Cached check for kdialog availability |
 | `isKdeDesktop()` | Checks `XDG_CURRENT_DESKTOP` for "KDE" |
 | `escapeShellArg(arg)` | Escapes string for shell (single quotes) |
-| `executeCommand(cmd, exitCode)` | Runs command via `popen`, returns stdout |
+| `cleanLoaderEnvCommand(cmd)` | Prefixes a command with `env -u LD_LIBRARY_PATH -u LD_PRELOAD` so a spawned system tool (zenity/kdialog) runs with a pristine dynamic-loader environment |
+| `executeCommand(cmd, exitCode)` | Runs command via `popen` (through `cleanLoaderEnvCommand`), returns stdout |
 | `buildZenityFilters(filters)` | Builds `--file-filter=` arguments |
 | `buildKdialogFilters(filters)` | Builds kdialog filter string |
 
@@ -335,6 +336,22 @@ Linux dialogs use native desktop tools via shell commands.
 |------|--------|------------------|
 | zenity (switch mode) | Outputs clicked button text | Match against button labels |
 | kdialog | Exit codes: 0=Yes, 1=No, 2=Cancel | Direct mapping |
+
+> [!IMPORTANT]
+> **Spawn desktop tools with a clean dynamic-loader environment.** zenity/kdialog are
+> *system* programs and must load *system* libraries. When the host application is
+> launched with its bundled library directory pushed into `LD_LIBRARY_PATH` (AppImage
+> wrappers, dev launchers, Steam-like parents), that value is inherited by the spawned
+> child and a bundled library can shadow its system counterpart. The observed failure:
+> a consumer (app_system) bundles CEF's stripped `libvulkan.so.1`, which does **not**
+> export `vkCreateXlibSurfaceKHR`; a GTK-4 zenity built with the Vulkan renderer
+> (Fedora 43+) then aborts with `undefined symbol: vkCreateXlibSurfaceKHR`. Both spawn
+> paths therefore route through `cleanLoaderEnvCommand()` (prefix
+> `env -u LD_LIBRARY_PATH -u LD_PRELOAD`): `executeCommand()` (all `popen`-based dialogs)
+> and `Notification::show()` (`system()`-based). **Any new desktop-tool spawn must wrap
+> its command the same way.** Prefer fixing the pollution at the source too (link with
+> RPATH `$ORIGIN` instead of exporting `LD_LIBRARY_PATH` in launchers) — this scrub is
+> the defense-in-depth net for launches the engine does not control.
 
 ### Windows Dialog Implementation
 

@@ -95,11 +95,19 @@ namespace EmEn::PlatformSpecific
 	}
 
 	std::string
+	cleanLoaderEnvCommand (const std::string & command) noexcept
+	{
+		/* Strip the dynamic-loader variables for the spawned system tool so a bundled
+		 * library (e.g. CEF's stripped libvulkan.so.1) cannot shadow the system one. */
+		return "env -u LD_LIBRARY_PATH -u LD_PRELOAD " + command;
+	}
+
+	std::string
 	executeCommand (const std::string & command, int & exitCode) noexcept
 	{
 		std::string output;
 
-		FILE * pipe = popen(command.c_str(), "r");
+		FILE * pipe = popen(cleanLoaderEnvCommand(command).c_str(), "r");
 
 		if ( pipe == nullptr )
 		{

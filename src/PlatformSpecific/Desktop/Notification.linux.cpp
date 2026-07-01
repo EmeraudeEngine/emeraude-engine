@@ -30,6 +30,9 @@
 #include <cstdlib>
 #include <string>
 
+/* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
+
 namespace EmEn::PlatformSpecific::Desktop
 {
 	namespace
@@ -167,8 +170,9 @@ namespace EmEn::PlatformSpecific::Desktop
 		/* Redirect output to /dev/null. */
 		command += " > /dev/null 2>&1 &";
 
-		/* Execute command in background. */
-		const int result = system(command.c_str());
+		/* Execute command in background with a pristine dynamic-loader environment so a
+		 * bundled library cannot shadow the system one in the spawned tool. */
+		const int result = system(cleanLoaderEnvCommand(command).c_str());
 
 		return result == 0;
 	}

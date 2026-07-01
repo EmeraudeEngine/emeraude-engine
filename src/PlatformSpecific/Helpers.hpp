@@ -227,6 +227,22 @@ namespace EmEn::PlatformSpecific
 	std::string escapeShellArg (const std::string & arg) noexcept;
 
 	/**
+	 * @brief Wraps a desktop-tool command so it runs with a pristine dynamic-loader environment.
+	 * @note External GUI helpers (zenity, kdialog) are system programs that must load the system
+	 * libraries. When the host application is launched with its bundled library directory pushed into
+	 * @c LD_LIBRARY_PATH (AppImage AppRun, development wrappers, Steam-like parents), that value is
+	 * inherited by every spawned child. A bundled library then shadows its system counterpart in the
+	 * child; for example CEF ships a stripped @c libvulkan.so.1 that does not export
+	 * @c vkCreateXlibSurfaceKHR, so a GTK-4 zenity built with the Vulkan renderer (Fedora 43+) aborts
+	 * at startup with "undefined symbol: vkCreateXlibSurfaceKHR". Stripping @c LD_LIBRARY_PATH and
+	 * @c LD_PRELOAD for the child restores a pristine system environment and avoids the collision.
+	 * @param command The desktop-tool command to run.
+	 * @return std::string The command prefixed to clear the dynamic-loader environment variables.
+	 */
+	[[nodiscard]]
+	std::string cleanLoaderEnvCommand (const std::string & command) noexcept;
+
+	/**
 	 * @brief Executes a shell command and captures its output.
 	 * @param command The command to execute.
 	 * @param exitCode Output parameter for the command's exit code.
