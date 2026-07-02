@@ -67,8 +67,37 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		// TODO: Not required for now
-		m_OSInformation.computerName = "MyComputer";
+		/* NOTE: Get the DNS host name (matches Node.js os.hostname() on Windows). */
+		{
+			DWORD size = 0;
+
+			/* First call retrieves the required buffer size (including the trailing null). */
+			GetComputerNameExW(ComputerNameDnsHostname, nullptr, &size);
+
+			if ( size == 0 )
+			{
+				std::cerr << "GetComputerNameExW() size probe failed : 0x" << std::hex << GetLastError() << std::endl;
+
+				m_OSInformation.computerName = "UnknownComputer";
+			}
+			else
+			{
+				std::wstring buffer(size, L'\0');
+
+				if ( GetComputerNameExW(ComputerNameDnsHostname, buffer.data(), &size) )
+				{
+					buffer.resize(size); // Strip the trailing null.
+
+					m_OSInformation.computerName = convertWideToUTF8(buffer);
+				}
+				else
+				{
+					std::cerr << "GetComputerNameExW() failed : 0x" << std::hex << GetLastError() << std::endl;
+
+					m_OSInformation.computerName = "UnknownComputer";
+				}
+			}
+		}
 
 		/* NOTE: Get the system unique identifier. */
 		{
