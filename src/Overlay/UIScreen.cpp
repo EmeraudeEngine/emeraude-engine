@@ -441,17 +441,40 @@ namespace EmEn::Overlay
 		/* NOTE: Top-down resolution. The first surface that consumes the press
 		 * (returns true) captures the pointer for the whole press→drag→release
 		 * sequence, so every following move/release reaches it wherever the cursor
-		 * goes. Same short-circuit behavior as the previous any_of. */
+		 * goes. Same short-circuit behavior as the previous any_of.
+		 * Surfaces walked BEFORE the consumer received the press without consuming
+		 * it (observers, e.g. a view processing unblocked events): they are recorded
+		 * so the release reaches them too — otherwise their internal state keeps the
+		 * button pressed forever (a CEF web-view would hold a phantom button). */
+		m_pressObserverSurfaces.clear();
+		m_pressObserverButtons = 0;
+
 		for ( const auto & surface : std::views::reverse(m_surfaces) )
 		{
-			if ( dispatchEvent(surface) )
+			if ( !surface->isVisible() || !surface->isListeningPointer() || !surface->isBelowPoint(positionX, positionY) )
+			{
+				surface->setFocusedState(false);
+
+				continue;
+			}
+
+			surface->setFocusedState(true);
+
+			if ( surface->onButtonPress(positionX, positionY, buttonNumber, modifiers) )
 			{
 				m_pointerCaptureSurface = surface;
 				m_pointerCaptureButtons = buttonBit;
+				m_pressObserverButtons = buttonBit;
 
 				return true;
 			}
+
+			m_pressObserverSurfaces.emplace_back(surface);
 		}
+
+		/* NOTE: No surface consumed the press — the release will follow the normal
+		 * top-down walk and reach the observers by itself. */
+		m_pressObserverSurfaces.clear();
 
 		return false;
 	}
@@ -483,11 +506,32 @@ namespace EmEn::Overlay
 		{
 			const auto blocked = capturedSurface->onButtonRelease(positionX, positionY, buttonNumber, modifiers);
 
+			/* NOTE: The surfaces that observed the initial press without consuming it
+			 * (recorded by onButtonPress) must receive the release too: the capture
+			 * bypasses the stack walk, and a press-without-release leaves them with a
+			 * phantom held button (e.g. the CEF/Blink side of a web-view processing
+			 * unblocked events). Their return value is ignored — the captured surface
+			 * alone decides the blocking. */
+			if ( (m_pressObserverButtons & buttonBit) != 0 )
+			{
+				for ( const auto & observerWeak : m_pressObserverSurfaces )
+				{
+					if ( const auto observer = observerWeak.lock() )
+					{
+						observer->onButtonRelease(positionX, positionY, buttonNumber, modifiers);
+					}
+				}
+
+				m_pressObserverButtons &= static_cast< uint8_t >(~buttonBit);
+			}
+
 			m_pointerCaptureButtons &= static_cast< uint8_t >(~buttonBit);
 
 			if ( m_pointerCaptureButtons == 0 )
 			{
 				m_pointerCaptureSurface.reset();
+				m_pressObserverSurfaces.clear();
+				m_pressObserverButtons = 0;
 			}
 
 			return blocked;

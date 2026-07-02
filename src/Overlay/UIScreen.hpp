@@ -582,6 +582,14 @@ namespace EmEn::Overlay
 			 * by the press/release dispatch, never by the application. */
 			mutable std::weak_ptr< Surface > m_pointerCaptureSurface;
 			mutable uint8_t m_pointerCaptureButtons{0};
+			/* NOTE: Surfaces that received the initial button press during the top-down walk
+			 * WITHOUT consuming it (e.g. a web-view processing unblocked events while a lower
+			 * surface captured the pointer). The capture routes the release to the consuming
+			 * surface only; these observers receive it too (return value ignored), otherwise
+			 * their internal state would keep the button pressed forever. Managed by
+			 * onButtonPress/onButtonRelease alongside the capture members above. */
+			mutable std::vector< std::weak_ptr< Surface > > m_pressObserverSurfaces;
+			mutable uint8_t m_pressObserverButtons{0};
 			/* NOTE: Pointer-move tap (fan-out). A surface that also receives every move event in addition to the
 			 * normal routing, regardless of capture, position or alpha test. Set/cleared explicitly by the application
 			 * (unlike m_pointerCaptureSurface which is managed internally by the press/release dispatch). Lets a

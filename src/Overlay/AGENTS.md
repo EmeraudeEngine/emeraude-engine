@@ -223,6 +223,16 @@ r- **Top-down resolution**: events traverse the stack from top to bottom (`std::
    - While a capture is active, **every** subsequent move / release / wheel / extra-button press is routed **directly to the captor**, bypassing position (`isBelowPoint`) and alpha testing. This is exactly Win32 `SetCapture` / DOM `setPointerCapture` semantics.
    - The capture is released automatically once the captor's **last** held button is up (`m_pointerCaptureButtons == 0` → `m_pointerCaptureSurface.reset()`). A destroyed captor expires its `weak_ptr` and is dropped on the next event.
    - **Why it exists:** without it, each event independently re-resolves its target by pixel position. With stacked, partially-transparent CEF surfaces, a drag that starts on surface A and ends over (or outside) surface B delivers the release to the wrong surface — A's `mouseUp` never reaches CEF and its JS state (camera rotation, slider drag…) stays stuck, while B receives a phantom `mouseUp` it never saw pressed. Capture binds the whole gesture to A.
+   - **Press observers get the release too.** During the top-down press walk, the surfaces
+     walked *before* the consumer received `onButtonPress` without consuming it (typically an
+     upper web-view processing unblocked events over a transparent zone). They are recorded
+     (`m_pressObserverSurfaces` + `m_pressObserverButtons`) and `onButtonRelease` delivers the
+     matching release to them alongside the captor (their return value is ignored — the captor
+     alone decides the blocking). Without this, an observer was left with a press-without-release:
+     its CEF/Blink side held a phantom button, which on Windows also shifted the synthesized DOM
+     `contextmenu` (fired at mouseup there) to a later, wrong position. The list is cleared when
+     the capture is freed, and unused when no surface consumed the press (the release then follows
+     the normal stack walk and reaches the observers by itself).
 2. **Explicit exclusive surface** — app-driven, set via `setInputExclusiveSurface(name)` / `disableInputExclusiveSurface()` / `isInputExclusiveSurfaceEnabled()` / `inputExclusiveSurface()` (`m_inputExclusiveSurface`, a `std::weak_ptr< Surface >`). When set (and no capture is active), all events go to that single surface regardless of the stack.
 3. **Normal top-down stack resolution** — the default `std::views::reverse(m_surfaces)` walk.
 
