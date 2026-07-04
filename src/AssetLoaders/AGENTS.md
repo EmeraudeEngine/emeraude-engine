@@ -79,13 +79,21 @@ cloth, inner armour shells) rendered front-face-only with see-through holes. The
 > `rasterizationOptions[i]` per layer (defaults when the vector is shorter). Keep it that way.
 
 > [!NOTE]
-> **Two-sided lighting (the other half) is implemented.** Geometry double-sidedness alone renders
-> back-faces, but they need their shading normal flipped or they are lit with an inward-pointing
-> normal. The lighting fragment shaders now flip on back-facing fragments
-> (`N = gl_FrontFacing ? N : -N`, byte-identical for front faces): `LightGenerator.PBR.cpp` (both
-> the normal-mapped and geometric N), `LightGenerator.PerFragment.cpp` (diffuse + specular). The
-> legacy normal-mapped Phong path (`LightGenerator.PerFragment.NormalMap.cpp`) only un-discards
-> back-faces; its tangent-space back-face shading stays approximate.
+> **Two-sided lighting (the other half) is implemented — view-based (`dot(N,V)`).** Geometry
+> double-sidedness alone renders back-faces, but they need their shading normal flipped or they
+> are lit with an inward-pointing normal. The lighting fragment shaders orient the normal toward
+> the viewer: `N = dot(N, V) < 0.0 ? -N : N` — in `LightGenerator.PBR.cpp` (both the normal-mapped
+> and geometric N) and `LightGenerator.PerFragment.cpp` (a shared `twoSidedN`/`twoSidedV` used by
+> diffuse + specular). The legacy normal-mapped Phong path
+> (`LightGenerator.PerFragment.NormalMap.cpp`) applies the same correction to its "facing away →
+> discard" test; its tangent-space back-face shading stays approximate.
+>
+> **Why `dot(N,V)` and not `gl_FrontFacing`:** `gl_FrontFacing` keys off the triangle *winding*,
+> so a surface whose visible face is wound "backwards" (e.g. a Perlin ground rasterized
+> back-facing) gets its correct normal wrongly flipped → its lighting collapses to zero. The
+> view-based test keys off the actual geometry (normal vs eye), so any surface facing the camera
+> is lit correctly regardless of winding. (This replaced an earlier `gl_FrontFacing` version that
+> broke point-light illumination on the ground.)
 
 **Default behaviour preserved:** if neither `onMeshLoaded` nor `materialMode` is set, the loader behaves exactly like before (PBR container, no callback, every existing call site unaffected). Both fields are gated: `onMeshLoaded` is invoked under `if ( m_options.onMeshLoaded )` (a default-constructed `std::function` evaluates to `false`); `materialMode` defaults to `MaterialMode::PBR`.
 

@@ -513,18 +513,22 @@ namespace EmEn::Saphir
 		if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
 		{
 			Code{fragmentShader} <<
-				/* Double-sided: flip the shading normal on back-facing fragments (gl_FrontFacing
-				 * is true → ×1.0, byte-identical for front faces; false → ×-1.0). */
-				"const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ") * (gl_FrontFacing ? 1.0 : -1.0);" << Line::End <<
+				"vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");" << Line::End <<
 				"const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
+				/* Two-sided lighting: orient the shading normal toward the viewer. Unlike a
+				 * gl_FrontFacing test (winding-dependent), dot(N,V) uses the actual geometry,
+				 * so a back-facing surface with a correct normal (e.g. a ground) stays lit. */
+				"N = dot(N, V) < 0.0 ? -N : N;" << Line::End <<
 				"const vec3 L = -" << rayDirectionViewSpace << ";" << Line::End <<
 				"const vec3 H = normalize(V + L);" << Line::Blank;
 		}
 		else
 		{
 			Code{fragmentShader} <<
-				"const vec3 N = normalize(" << ShaderVariable::NormalViewSpace << ") * (gl_FrontFacing ? 1.0 : -1.0);" << Line::End <<
+				"vec3 N = normalize(" << ShaderVariable::NormalViewSpace << ");" << Line::End <<
 				"const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
+				/* Two-sided lighting: orient the shading normal toward the viewer (see above). */
+				"N = dot(N, V) < 0.0 ? -N : N;" << Line::End <<
 				"const vec3 L = -" << rayDirectionViewSpace << ";" << Line::End <<
 				"const vec3 H = normalize(V + L);" << Line::Blank;
 		}

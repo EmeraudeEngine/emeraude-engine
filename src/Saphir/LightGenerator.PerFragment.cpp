@@ -356,6 +356,14 @@ namespace EmEn::Saphir
 			}
 		}
 
+		/* Two-sided lighting: orient the shading normal toward the viewer. dot(N,V) uses the
+		 * actual geometry (not the winding, as gl_FrontFacing would), so a back-facing surface
+		 * with a correct normal (e.g. a ground lit from above) is shaded correctly. Shared by
+		 * the diffuse and specular terms below. */
+		Code{fragmentShader} <<
+			"const vec3 twoSidedV = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
+			"const vec3 twoSidedN = dot(" << ShaderVariable::NormalViewSpace << ", twoSidedV) < 0.0 ? -" << ShaderVariable::NormalViewSpace << " : " << ShaderVariable::NormalViewSpace << ";" << Line::End;
+
 		{
 			fragmentShader.addComment("Compute the diffuse factor.");
 
@@ -363,9 +371,7 @@ namespace EmEn::Saphir
 				"float " << DiffuseFactor << " = 0.0;" << Line::Blank <<
 
 				"if ( " << LightFactor << " > 0.0 )" << Line::End <<
-				/* Double-sided: flip the surface normal on back-facing fragments (front faces are
-				 * unaffected — gl_FrontFacing true → NormalViewSpace unchanged). */
-				"	" << DiffuseFactor << " = max(dot(-" << rayDirectionViewSpace << ", (gl_FrontFacing ? " << ShaderVariable::NormalViewSpace << " : -" << ShaderVariable::NormalViewSpace << ")), 0.0) * " << LightFactor << ';' << Line::End;
+				"	" << DiffuseFactor << " = max(dot(-" << rayDirectionViewSpace << ", twoSidedN), 0.0) * " << LightFactor << ';' << Line::End;
 		}
 
 		if ( !m_surfaceSpecularColor.empty() )
@@ -377,9 +383,8 @@ namespace EmEn::Saphir
 
 				"if ( " << DiffuseFactor << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
-				"	const vec3 R = reflect(" << rayDirectionViewSpace << ", (gl_FrontFacing ? " << ShaderVariable::NormalViewSpace << " : -" << ShaderVariable::NormalViewSpace << "));" << Line::End <<
-				"	const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
-				"	" << SpecularFactor << " = pow(max(dot(R, V), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
+				"	const vec3 R = reflect(" << rayDirectionViewSpace << ", twoSidedN);" << Line::End <<
+				"	" << SpecularFactor << " = pow(max(dot(R, twoSidedV), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
 				'}' << Line::End;
 		}
 
