@@ -32,6 +32,7 @@
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Math/Space3D/Collisions/PointSphere.hpp"
+#include "Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -159,6 +160,14 @@ namespace EmEn::Scenes::Component
 		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
 
 		return Space3D::isColliding(position, boundingSphere);
+	}
+
+	bool
+	PointLight::touch (const Space3D::Sphere< float > & target) const noexcept
+	{
+		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
+
+		return Space3D::isColliding(boundingSphere, target);
 	}
 
 	bool

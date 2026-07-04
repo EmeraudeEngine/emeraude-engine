@@ -1285,6 +1285,23 @@ namespace EmEn::Scenes
 			/* Ambient pass. */
 			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
 
+			/* Instance world bounding sphere, computed once for the per-light culling
+			 * below. Lights are tested against the whole instance VOLUME, not just its
+			 * center point: a large instance (e.g. a ground) must be lit by any light
+			 * whose range overlaps it, not only by lights reaching its exact center. */
+			const auto * batchCoordinates = renderBatch.worldCoordinates();
+
+			Base::Math::Space3D::Sphere< float > instanceWorldSphere;
+
+			if ( batchCoordinates != nullptr )
+			{
+				const auto & localSphere = renderBatch.renderableInstance()->renderable()->boundingSphere();
+				const auto & scale = batchCoordinates->scalingFactor();
+				const auto worldRadius = localSphere.radius() * std::max({scale[0], scale[1], scale[2]});
+
+				instanceWorldSphere = Base::Math::Space3D::Sphere< float >{worldRadius, batchCoordinates->position()};
+			}
+
 			/* Loop through all directional lights. */
 			for ( const auto & light : m_lightSet.directionalLights() )
 			{
@@ -1333,15 +1350,11 @@ namespace EmEn::Scenes
 
 				const auto & instance = renderBatch.renderableInstance();
 
-				/* NOTE: If a light distance check is needed. */
-				if ( instance->isLightDistanceCheckEnabled() )
+				/* NOTE: If a light distance check is needed. Test against the instance
+				 * world bounding sphere (sphere-vs-sphere), not just its center point. */
+				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere) )
 				{
-					const auto * worldCoordinates = renderBatch.worldCoordinates();
-
-					if ( worldCoordinates != nullptr && !light->touch(worldCoordinates->position()) )
-					{
-						continue;
-					}
+					continue;
 				}
 
 				/* NOTE: Select the render pass type based on shadow and color projection state. */
@@ -1380,15 +1393,11 @@ namespace EmEn::Scenes
 
 				const auto & instance = renderBatch.renderableInstance();
 
-				/* NOTE: If a light distance check is needed. */
-				if ( instance->isLightDistanceCheckEnabled() )
+				/* NOTE: If a light distance check is needed. Test against the instance
+				 * world bounding sphere (sphere-vs-sphere), not just its center point. */
+				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere) )
 				{
-					const auto * worldCoordinates = renderBatch.worldCoordinates();
-
-					if ( worldCoordinates != nullptr && !light->touch(worldCoordinates->position()) )
-					{
-						continue;
-					}
+					continue;
 				}
 
 				/* NOTE: Select the render pass type based on shadow and color projection state. */
