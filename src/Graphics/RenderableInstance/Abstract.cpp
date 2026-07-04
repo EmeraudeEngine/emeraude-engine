@@ -940,11 +940,17 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
 			const auto * lightDS = lightEmitter->descriptorSet(useShadowMap);
+			const auto lightUBOOffset = lightEmitter->UBOOffset();
 
-			if ( tracker.lastLightDS != lightDS->handle() )
+			/* NOTE: Every light of a scene shares ONE descriptor set (shared UBO) — only
+			 * the dynamic offset tells them apart. The redundancy check MUST include the
+			 * offset: deduplicating on the handle alone made every light pass reuse the
+			 * first light's data (a single light lit the whole scene). */
+			if ( tracker.lastLightDS != lightDS->handle() || tracker.lastLightUBOOffset != lightUBOOffset )
 			{
-				commandBuffer.bind(*lightDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset, lightEmitter->UBOOffset());
+				commandBuffer.bind(*lightDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset, lightUBOOffset);
 				tracker.lastLightDS = lightDS->handle();
+				tracker.lastLightUBOOffset = lightUBOOffset;
 			}
 
 			setOffset++;

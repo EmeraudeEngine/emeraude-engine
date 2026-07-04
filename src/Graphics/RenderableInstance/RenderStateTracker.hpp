@@ -58,6 +58,11 @@ namespace EmEn::Graphics::RenderableInstance
 		VkDescriptorSet lastMaterialDS{VK_NULL_HANDLE};
 		/** @brief Last bound light descriptor set handle. */
 		VkDescriptorSet lastLightDS{VK_NULL_HANDLE};
+		/** @brief Last bound light UBO dynamic offset.
+		 * @note Every light of a scene shares ONE descriptor set (shared UBO) — only the
+		 * dynamic offset distinguishes them. Deduplicating on the handle alone made every
+		 * light pass reuse the FIRST light's offset (a single light lit the whole scene). */
+		uint32_t lastLightUBOOffset{UINT32_MAX};
 		/** @brief Last bound view descriptor set handle. */
 		VkDescriptorSet lastViewDS{VK_NULL_HANDLE};
 		/** @brief Last bound bindless descriptor set handle. */
@@ -79,6 +84,7 @@ namespace EmEn::Graphics::RenderableInstance
 			lastLayerIndex = UINT32_MAX;
 			lastMaterialDS = VK_NULL_HANDLE;
 			lastLightDS = VK_NULL_HANDLE;
+			lastLightUBOOffset = UINT32_MAX;
 			lastViewDS = VK_NULL_HANDLE;
 			lastBindlessDS = VK_NULL_HANDLE;
 			viewportSet = false;
@@ -95,6 +101,7 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			lastMaterialDS = VK_NULL_HANDLE;
 			lastLightDS = VK_NULL_HANDLE;
+			lastLightUBOOffset = UINT32_MAX;
 			lastViewDS = VK_NULL_HANDLE;
 			lastBindlessDS = VK_NULL_HANDLE;
 		}
