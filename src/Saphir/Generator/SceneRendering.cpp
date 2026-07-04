@@ -545,18 +545,46 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* When the render target has MRT attachments, duplicate the color blend attachment
-		 * for each additional buffer. This ensures:
-		 * - AmbientPass (no blend): writes the actual values (replace).
-		 * - Light passes (additive): writes vec4(0.0), adding nothing to the existing values. */
-		if ( m_hasNormalsAttachment )
+		/* When the render target has MRT attachments (G-buffer: [1]=normals,
+		 * [2]=material properties), the blend state differs per attachment
+		 * (requires the 'independentBlend' device feature):
+		 * - Ambient pass, opaque material: full write, same as the color attachment.
+		 * - Ambient pass, translucent material: the color attachment keeps its alpha
+		 *   blending, but the G-buffer receives the top-most surface data at 100%.
+		 *   With the duplicated alpha blending, a translucent surface used to leave
+		 *   only 'outNormal.a' (packed roughness+metalness, ~0.03 for water) of its
+		 *   normal in the G-buffer — RTR/SSR then reflected off the surface BELOW
+		 *   instead of the visible one (flat water reflections).
+		 * - Light passes (additive): the G-buffer must never be modified — write
+		 *   mask zero (previously they relied on shaders emitting vec4(0.0)). */
+		if ( m_hasNormalsAttachment || m_hasMaterialPropertiesAttachment )
 		{
-			graphicsPipeline.appendColorBlendAttachment(graphicsPipeline.colorBlendAttachments()[0]);
-		}
+			auto gBufferState = graphicsPipeline.colorBlendAttachments()[0];
 
-		if ( m_hasMaterialPropertiesAttachment )
-		{
-			graphicsPipeline.appendColorBlendAttachment(graphicsPipeline.colorBlendAttachments()[0]);
+			if ( Graphics::renderPassIsLightPass(m_renderPassType) )
+			{
+				gBufferState.colorWriteMask = 0;
+			}
+			else if ( gBufferState.blendEnable == VK_TRUE )
+			{
+				gBufferState.blendEnable = VK_FALSE;
+				gBufferState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+				gBufferState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+				gBufferState.colorBlendOp = VK_BLEND_OP_ADD;
+				gBufferState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				gBufferState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+				gBufferState.alphaBlendOp = VK_BLEND_OP_ADD;
+			}
+
+			if ( m_hasNormalsAttachment )
+			{
+				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+			}
+
+			if ( m_hasMaterialPropertiesAttachment )
+			{
+				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+			}
 		}
 
 		return true;

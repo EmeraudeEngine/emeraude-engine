@@ -53,6 +53,7 @@ namespace
 	 * Descriptor set 1 (input textures — per-frame):
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
+	 *   binding 2: environment cubemap (miss fallback)
 	 *
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
@@ -103,6 +104,7 @@ layout(set = 0, binding = 3) readonly buffer LightData
 /* Input textures (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
+layout(set = 1, binding = 2) uniform samplerCube envCubemap;
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array. */
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
@@ -316,8 +318,11 @@ void main()
 		return;
 	}
 
-	/* Skip very rough surfaces (no visible reflection). */
-	if (roughness > 0.5)
+	/* Progressive roughness fade-out instead of a hard cutoff — glossy surfaces
+	 * keep a soft reflection that the roughness-scaled blur spreads out. */
+	float roughnessFade = 1.0 - smoothstep(0.45, 0.7, roughness);
+
+	if (roughnessFade <= 0.0)
 	{
 		outReflection = vec4(0.0);
 		return;
@@ -337,6 +342,13 @@ void main()
 	vec3 cameraPos = vec3(viewPosX, viewPosY, viewPosZ);
 	vec3 viewDir = normalize(worldPos - cameraPos);
 	vec3 reflDir = reflect(viewDir, worldNormal);
+
+	/* Fresnel (Schlick): stronger reflections at grazing angles.
+	 * F0 floor at 0.15 so dielectrics viewed head-on still show visible reflections.
+	 * Computed before the trace: it applies to both hit and environment-miss paths. */
+	float F0 = mix(0.15, 0.9, originMetalness);
+	float NdotV = max(dot(worldNormal, -viewDir), 0.0);
+	float fresnel = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
 
 	/* Offset ray origin along normal to prevent self-intersection. */
 	vec3 rayOrigin = worldPos + worldNormal * 0.01;
@@ -474,19 +486,18 @@ void main()
 		/* Distance fade: reflection fades as hit gets further from the surface. */
 		float distFade = 1.0 - clamp(hitT / maxDistance, 0.0, 1.0);
 
-		/* Fresnel (Schlick): stronger reflections at grazing angles.
-		 * F0 floor at 0.15 so dielectrics viewed head-on still show visible reflections. */
-		float F0 = mix(0.15, 0.9, originMetalness);
-		float NdotV = max(dot(worldNormal, -viewDir), 0.0);
-		float fresnel = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
-
-		float confidence = distFade * fresnel;
+		float confidence = distFade * fresnel * roughnessFade;
 
 		outReflection = vec4(litColor * confidence, confidence);
 	}
 	else
 	{
-		outReflection = vec4(0.0);
+		/* Ray escaped the scene: reflect the environment cubemap (sky through
+		 * skylights, distant environment) instead of leaving a black hole. */
+		vec3 envColor = texture(envCubemap, reflDir).rgb;
+		float confidence = fresnel * roughnessFade;
+
+		outReflection = vec4(envColor * confidence, confidence);
 	}
 }
 )GLSL";
@@ -534,11 +545,17 @@ void main()
 	vec4 result = vec4(0.0);
 	float totalWeight = 0.0;
 
-	float spatialSigma = float(blurRadius) * 0.5;
+	/* Roughness-scaled radius: polished surfaces (water, onyx) keep mirror-sharp
+	 * reflections, rough surfaces get the full blur spread. */
+	float packedRM = texture(normalTex, vUV).a;
+	float centerRoughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
+	int effectiveRadius = max(1, int(float(blurRadius) * smoothstep(0.02, 0.5, centerRoughness)));
+
+	float spatialSigma = float(effectiveRadius) * 0.5;
 	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
 	float invDepthSigma2 = 1.0 / (2.0 * depthSigma * depthSigma);
 
-	for (int i = -blurRadius; i <= blurRadius; i++)
+	for (int i = -effectiveRadius; i <= effectiveRadius; i++)
 	{
 		vec2 sampleUV = vUV + dir * texelSize * float(i);
 		vec4 sampleVal = texture(inputTex, sampleUV);
@@ -571,6 +588,7 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D rtrTex;
 layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
+layout(set = 0, binding = 3) uniform sampler2D depthTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -583,7 +601,29 @@ layout(push_constant) uniform PushConstants
 void main()
 {
 	vec4 color = texture(colorTex, vUV);
-	vec4 rtrData = texture(rtrTex, vUV);
+
+	/* Depth-aware upsample of the half-res reflection buffer: 4 taps around the
+	 * pixel, each weighted by depth similarity. Plain bilinear filtering bleeds
+	 * reflections across depth discontinuities (halos around thin geometry). */
+	vec2 halfTexel = 1.0 / vec2(textureSize(rtrTex, 0));
+	float centerDepth = texture(depthTex, vUV).r;
+
+	const vec2 offsets[4] = vec2[](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(-0.5, 0.5), vec2(0.5, 0.5));
+
+	vec4 rtrData = vec4(0.0);
+	float totalWeight = 0.0;
+
+	for (int i = 0; i < 4; i++)
+	{
+		vec2 uv = vUV + offsets[i] * halfTexel;
+		float d = texture(depthTex, uv).r;
+		float w = exp(-abs(d - centerDepth) * 512.0) + 1e-4;
+
+		rtrData += texture(rtrTex, uv) * w;
+		totalWeight += w;
+	}
+
+	rtrData /= totalWeight;
 
 	/* Decode reflectivity from the material properties G-buffer (R channel, high nibble). */
 	vec4 mp = texture(materialPropsTex, vUV);
@@ -651,14 +691,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
-		auto traceInputLayout = this->getInputLayout(2);
+		/* Trace input (set 1): depth + normals + environment cubemap — 3 combined image samplers. */
+		auto traceInputLayout = this->getInputLayout(3);
 
 		/* Single input (blur): 1 combined image sampler. */
 		auto blurInputLayout = this->getInputLayout(3);
 
-		/* Composite input (color + blurred RTR + material properties): 3 combined image samplers. */
-		auto compositeLayout = this->getInputLayout(3);
+		/* Composite input (color + blurred RTR + material properties + depth): 4 combined image samplers. */
+		auto compositeLayout = this->getInputLayout(4);
 
 		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || compositeLayout == nullptr )
 		{
@@ -756,6 +796,32 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* Binding 2: environment cubemap for ray misses (fixed).
+		 * NOTE: The scene cubemap may still be loading asynchronously at
+		 * post-process setup time — binding a texture without its GPU image
+		 * ready stalls the device. Fall back to the renderer default cubemap
+		 * whenever the provided one is not created yet. */
+		{
+			auto cubemap = m_environmentCubemap != nullptr && m_environmentCubemap->isCreated()
+				? m_environmentCubemap
+				: renderer.getDefaultTextureCubemap();
+
+			if ( cubemap == nullptr || !cubemap->isCreated() )
+			{
+				TraceError{ClassId} << "No environment cubemap available for the trace miss fallback !";
+
+				return false;
+			}
+
+			for ( const auto & descriptorSet : m_tracePerFrame )
+			{
+				if ( !descriptorSet->writeCombinedImageSampler(2, *cubemap) )
+				{
+					return false;
+				}
+			}
+		}
+
 		/* Blur H: reads trace result + depth + normals (per-frame). */
 		m_blurHPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurH_DescSet");
 
@@ -844,6 +910,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
 		}
 
+		/* Upgrade from the default cubemap once the scene environment finishes
+		 * its asynchronous load (only the current frame's set is written — the
+		 * other frames' sets may still be in flight). */
+		if ( m_environmentCubemap != nullptr && m_environmentCubemap->isCreated() )
+		{
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, *m_environmentCubemap));
+		}
+
 		/* Update color descriptor for composite pass. */
 		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
@@ -851,6 +925,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputMaterialProperties != nullptr )
 		{
 			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
+
+		/* Update depth descriptor for the composite depth-aware upsample. */
+		if ( inputDepth != nullptr )
+		{
+			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(3, *inputDepth));
 		}
 
 		/* ---- Pass 1: Ray Trace ---- */

@@ -219,6 +219,39 @@ namespace EmEn::Graphics
 		}
 	}
 
+	/**
+	 * @brief Returns whether the render pass type is an additive direct-lighting pass.
+	 * @param value The enumeration value.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	renderPassIsLightPass (RenderPassType value) noexcept
+	{
+		switch ( value )
+		{
+			case RenderPassType::DirectionalLightPass :
+			case RenderPassType::DirectionalLightPassShadowMap :
+			case RenderPassType::DirectionalLightPassCSM :
+			case RenderPassType::DirectionalLightPassColorMap :
+			case RenderPassType::DirectionalLightPassFull :
+			case RenderPassType::DirectionalLightPassFullCSM :
+			case RenderPassType::PointLightPass :
+			case RenderPassType::PointLightPassShadowMap :
+			case RenderPassType::PointLightPassColorMap :
+			case RenderPassType::PointLightPassFull :
+			case RenderPassType::SpotLightPass :
+			case RenderPassType::SpotLightPassShadowMap :
+			case RenderPassType::SpotLightPassColorMap :
+			case RenderPassType::SpotLightPassFull :
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
 	/** @brief Defines the model matrices buffer type in video memory. */
 	enum class ModelMatrixType : uint32_t
 	{

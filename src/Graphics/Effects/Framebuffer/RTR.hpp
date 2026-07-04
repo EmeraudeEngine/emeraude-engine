@@ -33,6 +33,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
@@ -127,10 +128,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * @brief Constructs a ray-tracing reflexion effect.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param parameters The initial parameters.
+			 * @param environmentCubemap A cubemap sampled when a reflection ray escapes the scene (sky, distant environment). Default none (renderer default cubemap).
 			 */
-			RTR (Renderer & renderer, const Parameters & parameters) noexcept
+			RTR (Renderer & renderer, const Parameters & parameters, const std::shared_ptr< TextureResource::TextureCubemap > & environmentCubemap = nullptr) noexcept
 				: IndirectPostProcessEffect{renderer},
-				m_parameters{parameters}
+				m_parameters{parameters},
+				m_environmentCubemap{environmentCubemap}
 			{
 
 			}
@@ -211,6 +214,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			Parameters m_parameters;
+			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
 			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res), composite (full-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;

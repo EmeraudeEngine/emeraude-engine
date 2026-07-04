@@ -842,6 +842,7 @@ namespace EmEn::Vulkan
 			requirements.featuresVK10().geometryShader = VK_TRUE; // Required for TBN space display
 		}
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
+		requirements.featuresVK10().independentBlend = VK_TRUE; // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
 		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
 		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
 		requirements.featuresVK10().imageCubeArray = VK_TRUE; // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
