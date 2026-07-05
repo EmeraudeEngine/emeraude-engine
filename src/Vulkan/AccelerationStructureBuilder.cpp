@@ -148,18 +148,20 @@ namespace EmEn::Vulkan
 		}
 
 		/* Wait for pending buffer transfers before reading vertex/index data.
-		 * Only stall the transfer queue — the graphics/present queue keeps
-		 * running so the renderer is not blocked during scene loading. */
-		if ( auto * transferQueue = m_device->getGraphicsTransferQueue(QueuePriority::High); transferQueue != nullptr )
+		 * Only stall the transfer queues — the graphics/present queue keeps
+		 * running so the renderer is not blocked during scene loading.
+		 * NOTE: ALL transfer queues must be waited: they are distributed
+		 * round-robin, so the upload of the very buffers this build reads may
+		 * sit on a sibling queue. Waiting a single queue let the build read
+		 * mid-DMA vertex data — garbage triangles that could stall the GPU
+		 * acceleration-structure unit (Xid 109 CTX SWITCH TIMEOUT). */
+		if ( !m_device->waitTransferQueuesIdle() )
 		{
-			if ( !transferQueue->waitIdle() )
-			{
-				Tracer::error(ClassId, "Transfer queue wait failed !");
+			Tracer::error(ClassId, "Transfer queues wait failed !");
 
-				m_deviceLost = true;
+			m_deviceLost = true;
 
-				return nullptr;
-			}
+			return nullptr;
 		}
 
 		const auto deviceHandle = m_device->handle();

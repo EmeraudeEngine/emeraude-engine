@@ -640,6 +640,32 @@ if ( materialType == PBRResource::ClassId )
 > after the loss). On the NVIDIA proprietary driver, `VK_EXT_device_fault` is **absent**, so
 > checkpoints carry the diagnosis. See `src/Vulkan/AGENTS.md` → *GPU device-lost diagnostics*.
 
+### Fixed: BLAS builds raced buffer uploads across transfer queues → DEVICE_LOST at load (Jul 2026)
+
+> [!CRITICAL]
+> **Symptom:** intermittent `VK_ERROR_DEVICE_LOST` (`Xid 109 CTX SWITCH TIMEOUT`, checkpoint
+> markers straddling `AS-build:begin/end`) while loading streaming-heavy scenes, with **zero**
+> validation-layer errors. Probability rose with load-phase framerate (deterministic with the
+> GI effect disabled) and streaming density (foliage) — the second, independent cause of the
+> historical "intermittent Sponza DEVICE_LOST" (the first was the runtime-destruction
+> use-after-free family, fixed by `Vulkan::DeferredDestructor`).
+>
+> **Root cause:** buffer uploads are submitted round-robin across the transfer family's
+> queues (2 on the reference GPU), asynchronously. `AccelerationStructureBuilder::buildBLAS()`
+> guarded against pending uploads by waiting `waitIdle()` on ONE `getGraphicsTransferQueue()`
+> — itself round-robined. Whenever the vertex/index upload of the geometry being built sat on
+> the sibling queue, the build read mid-DMA data: garbage triangles can stall the GPU's
+> acceleration-structure unit past the kernel context-switch watchdog. Validation layers
+> cannot see it (device-address reads, memory content).
+>
+> **Fix:** `Device::waitTransferQueuesIdle()` — waits EVERY queue of the transfer
+> configuration (graphics fallback when no dedicated family) — used by `buildBLAS()`.
+> **Rule:** never assume a `waitIdle()` on a round-robined queue covers a previously
+> submitted operation; wait the whole family or track the operation's own fence.
+>
+> **Acceptance:** the two deterministic repros (GI disabled / GI 4 spp, glTF Sponza+extras,
+> no frame cap — ~100% fault before) pass 6/6 clean.
+
 ### Fixed: GPU use-after-free on runtime destruction → intermittent DEVICE_LOST / segfaults (Jul 2026)
 
 > [!CRITICAL]

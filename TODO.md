@@ -40,33 +40,20 @@
 
 ## Rendering
 
-### Throttle concurrent BLAS builds (scalability, measured 2026-07-05)
-- **Status**: open — identified during the deferred-destruction validation.
-- **Evidence**: streaming Sponza+extras dispatches BLAS builds on **all 16 graphics
-  queues simultaneously** (GPU checkpoint markers `AS-build:begin/end` live on every
-  queue at once). Under additional GPU load (vkmark), this saturation trips the kernel
-  watchdog: `Xid 109 CTX SWITCH TIMEOUT` → `VK_ERROR_DEVICE_LOST` — with **zero**
-  validation-layer errors (not a lifecycle bug; those were fixed by
-  `Vulkan::DeferredDestructor`, see `src/Vulkan/AGENTS.md`).
-- **Repro**: `gltf-loader --demo-options 1` + one `vkmark --run-forever` → ~1/3 launches
-  fault at load. Without synthetic load: 0/4 faults with RTGI enabled. **100% repro without
-  any synthetic load**: set `Core/Graphics/RayTracing/GlobalIllumination/Enabled=false` —
-  without the RTGI frame cost, the load-time framerate (and thus the per-frame TLAS rebuild
-  rate, which scales with FPS during streaming) is much higher and saturates the AS units
-  on its own. **Refinement (same night):** capping the framerate
-  at 60 (`Core/Video/FrameRateLimit`) does NOT prevent the gi-off faults — the rebuild RATE
-  is not the (sole) factor. Remaining hypothesis: RTGI's multi-second pipeline compilation
-  naturally staggers the swapchain→HDR scene-target switch (and its graphics-pipeline
-  recompilation storm) AWAY from the 16-queue BLAS burst; without RTGI both peaks overlap →
-  watchdog. So the fix should bound BLAS build concurrency first, then re-test gi-off as
-  the acceptance criterion (best deterministic repro: gi-off faults ~100%, GI-on ~0%).
-- **Fix path**: bound the number of in-flight BLAS builds (small queue/semaphore in
-  `AccelerationStructureBuilder`, e.g. 2-4 concurrent builds), and/or use dedicated
-  compute queues at lower priority. Measure load-time impact before/after (RTX 3070 Ti
-  target — GPU modesty is intentional).
+### ~~Throttle concurrent BLAS builds~~ — root cause found and FIXED (2026-07-05)
+- The "16 concurrent BLAS builds" reading was an artifact: builds are serialized
+  (`m_buildAccess` mutex + per-build fence wait) and `getGraphicsQueue()` round-robins,
+  so stale checkpoint markers linger on every queue. Nothing to throttle.
+- **Actual root cause**: `buildBLAS()` waited `waitIdle()` on ONE round-robined transfer
+  queue while the vertex/index upload of the very buffers it reads could be in flight on a
+  SIBLING transfer queue (the family has 2) → the build read mid-DMA data → the GPU AS unit
+  stalled on garbage triangles → `Xid 109 CTX SWITCH TIMEOUT` → `VK_ERROR_DEVICE_LOST`.
+- **Fix**: `Device::waitTransferQueuesIdle()` (all queues of the transfer family, graphics
+  fallback) used by the builder. Acceptance: the two deterministic repros (GI disabled and
+  GI 4 spp on the glTF Sponza+extras scene, no frame cap — both ~100% fault before) pass
+  6/6 clean.
 
-
-### Current State (v0.6.4)
+## Current State (v0.6.4)
 
 The renderer has a solid foundation:
 - **State sorting** via 64-bit composite key (pipeline > material > geometry > distance)

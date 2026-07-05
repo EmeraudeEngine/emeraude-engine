@@ -464,6 +464,40 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Waits every queue of the transfer configuration to be idle.
+			 * @note Queues are distributed round-robin: waiting a single queue does NOT
+			 * guarantee a previously submitted transfer has completed — it may sit on a
+			 * sibling queue. Use this before reading freshly uploaded buffer content
+			 * from another queue family (e.g. acceleration-structure builds).
+			 * Falls back to the graphics configuration when there is no dedicated
+			 * transfer family (transfers then run on graphics queues).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			waitTransferQueuesIdle () const noexcept
+			{
+				const auto & configuration = m_transferQueueConfiguration.enabled()
+					? m_transferQueueConfiguration
+					: m_graphicsQueueConfiguration;
+
+				bool success = true;
+
+				for ( auto priority : {QueuePriority::High, QueuePriority::Medium, QueuePriority::Low} )
+				{
+					for ( const auto * queue : configuration.queues(priority) )
+					{
+						if ( queue != nullptr && !queue->waitIdle() )
+						{
+							success = false;
+						}
+					}
+				}
+
+				return success;
+			}
+
+			/**
 			 * @brief Returns the transfer-only queue family index for compute if available.
 			 * @note This may return the same family queue index from the compute configuration.
 			 * @return uint32_t
