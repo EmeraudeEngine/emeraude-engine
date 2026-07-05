@@ -654,10 +654,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
-		const auto halfW = (width > 1) ? width / 2 : 1U;
-		const auto halfH = (height > 1) ? height / 2 : 1U;
+		/* Pixel doubling: half-res for performance (default), full-res for quality. */
+		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsRayTracingReflectionPixelDoublingKey, DefaultGraphicsRayTracingReflectionPixelDoubling);
+		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
+		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
-		/* Trace target (half-res, RGBA16F: reflected color RGB + confidence A). */
+		/* Trace target (half-res by default, RGBA16F: reflected color RGB + confidence A). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Trace") )
 		{
 			TraceError{ClassId} << "Failed to create RTR trace target !";

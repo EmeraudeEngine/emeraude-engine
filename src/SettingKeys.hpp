@@ -355,6 +355,9 @@ namespace EmEn
 			/* Ray Tracing > Reflection */
 			constexpr auto GraphicsRayTracingReflectionEnabledKey{"Core/Graphics/RayTracing/Reflection/Enabled"};
 			constexpr auto DefaultGraphicsRayTracingReflectionEnabled{true};
+			/* Compute reflections at half resolution (pixel doubling) to save performance. */
+			constexpr auto GraphicsRayTracingReflectionPixelDoublingKey{"Core/Graphics/RayTracing/Reflection/PixelDoubling"};
+			constexpr auto DefaultGraphicsRayTracingReflectionPixelDoubling{true};
 
 			/* Ray Tracing > Ambient Occlusion */
 			constexpr auto GraphicsRayTracingAOEnabledKey{"Core/Graphics/RayTracing/AmbientOcclusion/Enabled"};
@@ -362,6 +365,9 @@ namespace EmEn
 			/* Samples per pixel for ray-traced ambient occlusion. */
 			constexpr auto GraphicsRayTracingAOSampleCountKey{"Core/Graphics/RayTracing/AmbientOcclusion/SampleCount"};
 			constexpr auto DefaultGraphicsRayTracingAOSampleCount{8U};
+			/* Compute ambient occlusion at half resolution (pixel doubling) to save performance. */
+			constexpr auto GraphicsRayTracingAOPixelDoublingKey{"Core/Graphics/RayTracing/AmbientOcclusion/PixelDoubling"};
+			constexpr auto DefaultGraphicsRayTracingAOPixelDoubling{true};
 
 			/* Ray Tracing > Contact Shadows */
 			constexpr auto GraphicsRayTracingContactShadowsEnabledKey{"Core/Graphics/RayTracing/ContactShadows/Enabled"};
