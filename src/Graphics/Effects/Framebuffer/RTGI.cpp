@@ -553,13 +553,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
+		auto & settings = renderer.primaryServices().settings();
+
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
-		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsRayTracingGIPixelDoublingKey, DefaultGraphicsRayTracingGIPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingGIPixelDoublingKey, DefaultGraphicsRayTracingGIPixelDoubling);
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
-		/* Rays per pixel for the GI trace, driven by the setting (more = less noise, more cost). */
-		m_parameters.sampleCount = renderer.primaryServices().settings().getOrSetDefault< uint32_t >(GraphicsRayTracingGISampleCountKey, DefaultGraphicsRayTracingGISampleCount);
+		/* User-facing parameters, engine-wide and persisted in the settings file.
+		 * These override any constructor-provided values. */
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsRayTracingGIMaxDistanceKey, DefaultGraphicsRayTracingGIMaxDistance);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsRayTracingGIIntensityKey, DefaultGraphicsRayTracingGIIntensity);
+		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsRayTracingGIBiasKey, DefaultGraphicsRayTracingGIBias);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGISampleCountKey, DefaultGraphicsRayTracingGISampleCount);
+		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIBlurRadiusKey, DefaultGraphicsRayTracingGIBlurRadius);
+		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDepthSigmaKey, DefaultGraphicsRayTracingGIDepthSigma);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGINormalSigmaKey, DefaultGraphicsRayTracingGINormalSigma);
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )

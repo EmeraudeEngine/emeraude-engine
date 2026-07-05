@@ -342,34 +342,58 @@ namespace EmEn
 			constexpr auto GraphicsTextureViewDistanceKey{"Core/Graphics/Texture/ViewDistance"};
 			constexpr auto DefaultGraphicsTextureViewDistance{5000.0F}; /* NOTE: 5km */
 
-			/* Ray Tracing */
+			/* Ray Tracing.
+			 * The root group holds the master switch and the acceleration-structure
+			 * (BLAS/TLAS) options; each ray-traced effect has its own sub-group. */
 			/* Master switch for hardware ray tracing. */
 			constexpr auto GraphicsRayTracingEnabledKey{"Core/Graphics/RayTracing/Enabled"};
 			constexpr auto DefaultGraphicsRayTracingEnabled{false};
-			/* Ray-traced reflections. */
-			constexpr auto GraphicsRayTracingEnableReflectionKey{"Core/Graphics/RayTracing/EnableReflection"};
-			constexpr auto DefaultGraphicsRayTracingEnableReflection{true};
-			/* Ray-traced ambient occlusion. */
-			constexpr auto GraphicsRayTracingEnableAmbientOcclusionKey{"Core/Graphics/RayTracing/EnableAmbientOcclusion"};
-			constexpr auto DefaultGraphicsRayTracingEnableAmbientOcclusion{true};
-			/* Samples per pixel for ray-traced ambient occlusion. */
-			constexpr auto GraphicsRayTracingAOSampleCountKey{"Core/Graphics/RayTracing/AOSampleCount"};
-			constexpr auto DefaultGraphicsRayTracingAOSampleCount{4U};
-			/* Ray-traced global illumination. */
-			constexpr auto GraphicsRayTracingEnableGlobalIlluminationKey{"Core/Graphics/RayTracing/EnableGlobalIllumination"};
-			constexpr auto DefaultGraphicsRayTracingEnableGlobalIllumination{true};
-			/* Samples per pixel for ray-traced global illumination. */
-			constexpr auto GraphicsRayTracingGISampleCountKey{"Core/Graphics/RayTracing/GISampleCount"};
-			constexpr auto DefaultGraphicsRayTracingGISampleCount{16U};
-			/* Compute GI at half resolution (pixel doubling) to save performance. */
-			constexpr auto GraphicsRayTracingGIPixelDoublingKey{"Core/Graphics/RayTracing/GIPixelDoubling"};
-			constexpr auto DefaultGraphicsRayTracingGIPixelDoubling{true};
-			/* Ray-traced contact (short-range) shadows. */
-			constexpr auto GraphicsRayTracingEnableContactShadowsKey{"Core/Graphics/RayTracing/EnableContactShadows"};
-			constexpr auto DefaultGraphicsRayTracingEnableContactShadows{true};
 			/* Max distance for the top-level acceleration structure, in world units. */
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
+
+			/* Ray Tracing > Reflection */
+			constexpr auto GraphicsRayTracingReflectionEnabledKey{"Core/Graphics/RayTracing/Reflection/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingReflectionEnabled{true};
+
+			/* Ray Tracing > Ambient Occlusion */
+			constexpr auto GraphicsRayTracingAOEnabledKey{"Core/Graphics/RayTracing/AmbientOcclusion/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingAOEnabled{true};
+			/* Samples per pixel for ray-traced ambient occlusion. */
+			constexpr auto GraphicsRayTracingAOSampleCountKey{"Core/Graphics/RayTracing/AmbientOcclusion/SampleCount"};
+			constexpr auto DefaultGraphicsRayTracingAOSampleCount{8U};
+
+			/* Ray Tracing > Contact Shadows */
+			constexpr auto GraphicsRayTracingContactShadowsEnabledKey{"Core/Graphics/RayTracing/ContactShadows/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingContactShadowsEnabled{true};
+
+			/* Ray Tracing > Global Illumination */
+			constexpr auto GraphicsRayTracingGIEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingGIEnabled{true};
+			/* Samples per pixel for ray-traced global illumination. */
+			constexpr auto GraphicsRayTracingGISampleCountKey{"Core/Graphics/RayTracing/GlobalIllumination/SampleCount"};
+			constexpr auto DefaultGraphicsRayTracingGISampleCount{16U};
+			/* Compute GI at half resolution (pixel doubling) to save performance. */
+			constexpr auto GraphicsRayTracingGIPixelDoublingKey{"Core/Graphics/RayTracing/GlobalIllumination/PixelDoubling"};
+			constexpr auto DefaultGraphicsRayTracingGIPixelDoubling{true};
+			/* Maximum GI bounce ray distance, in world units. */
+			constexpr auto GraphicsRayTracingGIMaxDistanceKey{"Core/Graphics/RayTracing/GlobalIllumination/MaxDistance"};
+			constexpr auto DefaultGraphicsRayTracingGIMaxDistance{8.0F};
+			/* Indirect lighting intensity multiplier. */
+			constexpr auto GraphicsRayTracingGIIntensityKey{"Core/Graphics/RayTracing/GlobalIllumination/Intensity"};
+			constexpr auto DefaultGraphicsRayTracingGIIntensity{0.8F};
+			/* GI ray origin offset to prevent self-intersection, in world units. */
+			constexpr auto GraphicsRayTracingGIBiasKey{"Core/Graphics/RayTracing/GlobalIllumination/Bias"};
+			constexpr auto DefaultGraphicsRayTracingGIBias{0.02F};
+			/* Bilateral denoising blur radius for GI, in pixels. */
+			constexpr auto GraphicsRayTracingGIBlurRadiusKey{"Core/Graphics/RayTracing/GlobalIllumination/BlurRadius"};
+			constexpr auto DefaultGraphicsRayTracingGIBlurRadius{4U};
+			/* Depth edge-stopping sigma for the GI bilateral blur. */
+			constexpr auto GraphicsRayTracingGIDepthSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/DepthSigma"};
+			constexpr auto DefaultGraphicsRayTracingGIDepthSigma{1.0F};
+			/* Normal edge-stopping sigma for the GI bilateral blur. */
+			constexpr auto GraphicsRayTracingGINormalSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/NormalSigma"};
+			constexpr auto DefaultGraphicsRayTracingGINormalSigma{0.5F};
 
 			/* Level of Detail */
 			/* Automatically generate levels of detail for meshes. */

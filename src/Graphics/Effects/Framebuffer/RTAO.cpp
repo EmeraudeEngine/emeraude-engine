@@ -313,6 +313,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
+		/* Rays per pixel, engine-wide and persisted in the settings file.
+		 * This overrides any constructor-provided value. */
+		m_parameters.sampleCount = renderer.primaryServices().settings().getOrSetDefault< uint32_t >(GraphicsRayTracingAOSampleCountKey, DefaultGraphicsRayTracingAOSampleCount);
+
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 
