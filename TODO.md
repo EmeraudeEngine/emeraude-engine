@@ -40,6 +40,32 @@
 
 ## Rendering
 
+### Throttle concurrent BLAS builds (scalability, measured 2026-07-05)
+- **Status**: open — identified during the deferred-destruction validation.
+- **Evidence**: streaming Sponza+extras dispatches BLAS builds on **all 16 graphics
+  queues simultaneously** (GPU checkpoint markers `AS-build:begin/end` live on every
+  queue at once). Under additional GPU load (vkmark), this saturation trips the kernel
+  watchdog: `Xid 109 CTX SWITCH TIMEOUT` → `VK_ERROR_DEVICE_LOST` — with **zero**
+  validation-layer errors (not a lifecycle bug; those were fixed by
+  `Vulkan::DeferredDestructor`, see `src/Vulkan/AGENTS.md`).
+- **Repro**: `gltf-loader --demo-options 1` + one `vkmark --run-forever` → ~1/3 launches
+  fault at load. Without synthetic load: 0/4 faults with RTGI enabled. **100% repro without
+  any synthetic load**: set `Core/Graphics/RayTracing/GlobalIllumination/Enabled=false` —
+  without the RTGI frame cost, the load-time framerate (and thus the per-frame TLAS rebuild
+  rate, which scales with FPS during streaming) is much higher and saturates the AS units
+  on its own. **Refinement (same night):** capping the framerate
+  at 60 (`Core/Video/FrameRateLimit`) does NOT prevent the gi-off faults — the rebuild RATE
+  is not the (sole) factor. Remaining hypothesis: RTGI's multi-second pipeline compilation
+  naturally staggers the swapchain→HDR scene-target switch (and its graphics-pipeline
+  recompilation storm) AWAY from the 16-queue BLAS burst; without RTGI both peaks overlap →
+  watchdog. So the fix should bound BLAS build concurrency first, then re-test gi-off as
+  the acceptance criterion (best deterministic repro: gi-off faults ~100%, GI-on ~0%).
+- **Fix path**: bound the number of in-flight BLAS builds (small queue/semaphore in
+  `AccelerationStructureBuilder`, e.g. 2-4 concurrent builds), and/or use dedicated
+  compute queues at lower priority. Measure load-time impact before/after (RTX 3070 Ti
+  target — GPU modesty is intentional).
+
+
 ### Current State (v0.6.4)
 
 The renderer has a solid foundation:

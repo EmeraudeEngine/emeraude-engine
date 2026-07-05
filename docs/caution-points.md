@@ -640,6 +640,38 @@ if ( materialType == PBRResource::ClassId )
 > after the loss). On the NVIDIA proprietary driver, `VK_EXT_device_fault` is **absent**, so
 > checkpoints carry the diagnosis. See `src/Vulkan/AGENTS.md` → *GPU device-lost diagnostics*.
 
+### Fixed: GPU use-after-free on runtime destruction → intermittent DEVICE_LOST / segfaults (Jul 2026)
+
+> [!CRITICAL]
+> **Symptom:** intermittent `VK_ERROR_DEVICE_LOST` (kernel `Xid 109 CTX SWITCH TIMEOUT`,
+> engine checkpoint marker `AS-build:begin`) while loading streaming-heavy scenes (Sponza +
+> foliage extras), plus occasional SIGSEGV at load with validation errors
+> `VUID-vkFreeDescriptorSets-pDescriptorSets-00309` (set freed while in use) and
+> `VUID-vkDestroyBuffer-buffer-00922` (buffer in use by a descriptor set). Frequency depended
+> on machine load (desktop compositor contention widened the race window).
+>
+> **Root cause:** several code paths destroyed GPU-visible objects **in place at runtime**
+> while in-flight command buffers still referenced them:
+> 1. `SceneMetaData`: when the RT instance list became transiently empty during streaming,
+>    the live TLAS and every retired build request were destroyed immediately.
+> 2. `SceneMetaData`/TLAS retirement: the retired-request deque was capped **by count**
+>    ("keep at most 3"), not by elapsed frames — rebuild bursts under-covered the
+>    frames-in-flight window.
+> 3. `PostProcessor::configure()` relied on a mid-frame `vkDeviceWaitIdle()` before freeing
+>    its descriptor sets and grab pass (GPU stall; proceeds on device-loss errors).
+> 4. `Renderer::recreateSceneTarget()` destroyed the previous scene target **in place** when
+>    the scene's post-process stack became ready (swap-chain-format target → HDR target):
+>    its view-matrices descriptor set + UBO were freed while in-flight frames still used
+>    them — the deterministic load-time segfault (`VUID-vkFreeDescriptorSets-…-00309` +
+>    `VUID-vkDestroyBuffer-…-00922`, always the same early handles).
+>
+> **Fix:** central `Vulkan::DeferredDestructor` owned by the `Renderer` — frame-stamped
+> retirement queue, drained after `framesInFlight` render ticks, flushed at terminate.
+> All three sites migrated; the scene-target retirement vector was unified into it as well.
+> **Contract:** any new runtime destruction of GPU-visible objects MUST go through
+> `Renderer::deferredDestructor()`. See `src/Vulkan/AGENTS.md` ("Deferred destruction
+> contract").
+
 ### Fixed: PostProcessor composited with no active scene → device lost (Jun 2026)
 
 > [!CRITICAL]

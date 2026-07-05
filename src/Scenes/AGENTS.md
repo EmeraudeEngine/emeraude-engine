@@ -578,10 +578,18 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 `SceneMetaData` manages all scene-level RT resources. It is inert when the device lacks RT support.
 
 ### Lifecycle
-1. **Construction** (`Scene::Scene()`) — **Borrows** the single renderer-owned `AccelerationStructureBuilder` (`graphicsRenderer.accelerationStructureBuilder()`, created once at renderer init when RT is enabled; null otherwise). `SceneMetaData` does **NOT** create or own the builder. `isRayTracingEnabled()` == (borrowed pointer != null).
+1. **Construction** (`Scene::Scene()`) — **Borrows** the single renderer-owned `AccelerationStructureBuilder` (`graphicsRenderer.accelerationStructureBuilder()`, created once at renderer init when RT is enabled; null otherwise) **and the renderer-owned `Vulkan::DeferredDestructor`** (`graphicsRenderer.deferredDestructor()`). `SceneMetaData` does **NOT** create or own either. `isRayTracingEnabled()` == (borrowed builder pointer != null).
 2. **Per-frame buffer init** (`Scene::Scene()`) — `initializePerFrameBuffers(framesInFlight())` creates per-frame SSBOs
 3. **Per-frame rebuild** (`Scene::prepareRender()`) — `rebuild(renderLists, ..., frameIndex)` collects TLAS instances, uploads SSBOs
-4. **Destruction** — Clears this scene's RT resources (per-frame SSBOs, TLAS, retired requests). The builder is renderer-owned — nothing to unregister.
+4. **Destruction** — **Retires** this scene's RT resources (per-frame SSBOs, TLAS, pending build request) through the `DeferredDestructor`: a scene can be deleted at runtime while frames are still in flight. The builder is renderer-owned — nothing to unregister.
+
+> [!CRITICAL]
+> **All runtime destruction of TLAS/build requests goes through `Vulkan::DeferredDestructor`**
+> (2026-07-05): the transiently-empty instance list retires (never destroys in place) the live
+> TLAS, and each recorded rebuild retires its previous request frame-stamped — the old
+> count-capped deque ("keep at most 3") under-covered rebuild bursts and caused GPU
+> use-after-free (Xid 109 DEVICE_LOST). See `src/Vulkan/AGENTS.md`, "Deferred destruction
+> contract".
 
 > [!CRITICAL]
 > **The `AccelerationStructureBuilder` is owned ONCE by the Renderer, never per-scene.** BLAS are

@@ -880,7 +880,7 @@ Key design:
 - `Effects/Framebuffer/SSR.hpp` — Parameters, ResolvePushConstants, setEnvironmentCubemap()
 - `Effects/Framebuffer/SSR.cpp` — Shader source, descriptor layouts ("SSRResolveInput"), pipeline creation
 - `PostProcessEffect.hpp` — Base interface
-- `PostProcessor.hpp/cpp` — Chain management, push constants
+- `PostProcessor.hpp/cpp` — Chain management, push constants. `configure()` retires its previous grab pass + per-frame descriptor sets through `Renderer::deferredDestructor()` (frames-in-flight safety, no mid-frame `waitIdle`) — see `src/Vulkan/AGENTS.md`, "Deferred destruction contract"
 
 ### AtmosphericFog (Exponential Height Fog)
 

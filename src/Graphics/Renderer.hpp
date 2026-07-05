@@ -58,6 +58,7 @@
 #include "Saphir/ShaderManager.hpp"
 #include "SceneRenderTarget.hpp"
 #include "SharedUBOManager.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "TextureResource/TextureCubemap.hpp"
 #include "VertexBufferFormatManager.hpp"
 #include "Vulkan/Instance.hpp"
@@ -893,6 +894,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the deferred-destruction queue for Vulkan-backed objects.
+			 * @note This is the engine contract for destroying GPU-visible objects at
+			 * runtime: any object potentially referenced by an in-flight command buffer
+			 * MUST be retired through this queue instead of being destroyed in place.
+			 * @return Vulkan::DeferredDestructor &
+			 */
+			[[nodiscard]]
+			Vulkan::DeferredDestructor &
+			deferredDestructor () noexcept
+			{
+				return m_deferredDestructor;
+			}
+
+			/**
 			 * @brief Returns the internal scene render target.
 			 * @return std::shared_ptr< SceneRenderTarget >
 			 */
@@ -1391,8 +1406,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
 			std::shared_ptr< SceneRenderTarget > m_sceneTarget;
-			std::vector< std::shared_ptr< SceneRenderTarget > > m_retiredSceneTargets;
-			uint32_t m_retiredFrameCountdown{0};
+			Vulkan::DeferredDestructor m_deferredDestructor;
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope{};
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;

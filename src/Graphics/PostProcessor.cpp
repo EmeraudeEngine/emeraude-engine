@@ -375,15 +375,12 @@ namespace EmEn::Graphics
 			? m_renderer.sceneTarget()->materialPropertiesFormat()
 			: VK_FORMAT_UNDEFINED;
 
-		/* Ensure any in-flight command buffers referencing the old grab pass have completed
-		 * before destroying its resources. This only happens during (re)configuration,
-		 * not per-frame — typically once at scene load or on window resize. */
+		/* Retire the previous grab pass: in-flight command buffers may still reference
+		 * its images; the deferred destructor destroys it once every frame in flight
+		 * has completed — no device stall, no use-after-free. */
 		if ( m_grabPass != nullptr )
 		{
-			m_renderer.device()->waitIdle("PostProcessor::configure - grab pass reconfiguration");
-
-			m_grabPass->destroy();
-			m_grabPass.reset();
+			m_renderer.deferredDestructor().retireObject(std::move(m_grabPass));
 		}
 
 		m_grabPass = std::make_unique< GrabPass >();
@@ -410,6 +407,12 @@ namespace EmEn::Graphics
 			}
 
 			const auto frameCount = m_renderer.framesInFlight();
+
+			/* Retire the previous per-frame descriptor sets for the same reason. */
+			for ( auto & descriptorSet : m_descriptorSets )
+			{
+				m_renderer.deferredDestructor().retireObject(std::move(descriptorSet));
+			}
 
 			m_descriptorSets.clear();
 			m_descriptorSets.reserve(frameCount);

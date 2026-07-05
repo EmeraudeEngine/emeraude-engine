@@ -38,6 +38,7 @@
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
@@ -47,9 +48,10 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	SceneMetaData::SceneMetaData (const std::shared_ptr< Device > & device, AccelerationStructureBuilder * accelerationStructureBuilder) noexcept
+	SceneMetaData::SceneMetaData (const std::shared_ptr< Device > & device, AccelerationStructureBuilder * accelerationStructureBuilder, DeferredDestructor * deferredDestructor) noexcept
 		: m_device(device),
-		m_accelerationStructureBuilder(accelerationStructureBuilder)
+		m_accelerationStructureBuilder(accelerationStructureBuilder),
+		m_deferredDestructor(deferredDestructor)
 	{
 		/* NOTE: The acceleration structure builder is owned by the Renderer (single shared
 		 * instance) and is null when RT is unavailable/disabled. SceneMetaData only borrows it for
@@ -58,10 +60,26 @@ namespace EmEn::Scenes
 
 	SceneMetaData::~SceneMetaData ()
 	{
+		/* NOTE: A scene can be destroyed at runtime (scene switch) while frames are
+		 * still in flight: route GPU-visible objects through the deferred destructor. */
+		if ( m_deferredDestructor != nullptr )
+		{
+			for ( auto & meshSSBO : m_meshMetaDataSSBOs )
+			{
+				m_deferredDestructor->retireObject(std::move(meshSSBO));
+			}
+
+			for ( auto & materialSSBO : m_materialDataSSBOs )
+			{
+				m_deferredDestructor->retireObject(std::move(materialSSBO));
+			}
+
+			m_deferredDestructor->retireObject(std::move(m_TLAS));
+			m_deferredDestructor->retireObject(std::move(m_pendingTLASBuild));
+		}
+
 		m_meshMetaDataSSBOs.clear();
 		m_materialDataSSBOs.clear();
-		m_TLAS.reset();
-		m_retiredRequests.clear();
 	}
 
 	bool
@@ -449,9 +467,18 @@ namespace EmEn::Scenes
 
 		if ( instances.empty() )
 		{
+			/* NOTE: In-flight frames may still trace rays through the current TLAS:
+			 * retire it instead of destroying it in place (GPU use-after-free,
+			 * Xid 109 device loss). The pending build was never recorded, but its
+			 * buffers may be referenced if a record slipped in — retire it too. */
+			if ( m_deferredDestructor != nullptr )
+			{
+				m_deferredDestructor->retireObject(std::move(m_pendingTLASBuild));
+				m_deferredDestructor->retireObject(std::move(m_TLAS));
+			}
+
 			m_pendingTLASBuild.reset();
 			m_TLAS.reset();
-			m_retiredRequests.clear();
 			m_instanceCount = 0;
 			m_materialCount = 0;
 
@@ -481,13 +508,6 @@ namespace EmEn::Scenes
 		m_instanceCount = meshEntries.size();
 		m_materialCount = materialEntries.size();
 
-		/* Keep at most 3 retired requests (covers typical 2-3 frames-in-flight).
-		 * Each request owns instance/scratch buffers still referenced by in-flight command buffers. */
-		while ( m_retiredRequests.size() > 3 )
-		{
-			m_retiredRequests.pop_front();
-		}
-
 		/* Prepare the TLAS build (CPU-side only). The GPU build commands will be
 		 * recorded into the main render command buffer by recordTLASBuild(). */
 		m_pendingTLASBuild = m_accelerationStructureBuilder->prepareTLAS(instances);
@@ -504,10 +524,17 @@ namespace EmEn::Scenes
 		m_accelerationStructureBuilder->recordTLASBuild(cmdBuf, *m_pendingTLASBuild);
 
 		/* Swap the old TLAS into the retiring request so it stays alive alongside
-		 * the instance/scratch buffers while in-flight command buffers reference them. */
+		 * the instance/scratch buffers, then retire the whole request: it is destroyed
+		 * only after framesInFlight ticks, once no in-flight command buffer references it. */
 		auto oldTLAS = std::move(m_TLAS);
 		m_TLAS = std::move(m_pendingTLASBuild->tlas);
 		m_pendingTLASBuild->tlas = std::move(oldTLAS);
-		m_retiredRequests.emplace_back(std::move(m_pendingTLASBuild));
+
+		if ( m_deferredDestructor != nullptr )
+		{
+			m_deferredDestructor->retireObject(std::move(m_pendingTLASBuild));
+		}
+
+		m_pendingTLASBuild.reset();
 	}
 }

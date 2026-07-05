@@ -642,6 +642,9 @@ namespace EmEn::Graphics
 		/* NOTE: Final device idle to ensure all GPU work is complete. */
 		m_device->waitIdle("Renderer::onTerminate()");
 
+		/* NOTE: The device is idle, pending retirements can be destroyed now. */
+		m_deferredDestructor.flush();
+
 		/* Release MDI resources before other Vulkan objects are destroyed. */
 		m_MDIBatchBuilder.reset();
 
@@ -811,7 +814,14 @@ namespace EmEn::Graphics
 	{
 		if ( m_sceneTarget != nullptr )
 		{
-			m_sceneTarget->destroyRenderTarget();
+			/* Retire the previous target: in-flight command buffers still reference
+			 * its view-matrices descriptor set (and its UBO) and its attachments —
+			 * destroying them in place was a GPU use-after-free (segfault at scene
+			 * setup when the target is recreated with the HDR format). */
+			m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
+				target->destroyRenderTarget();
+			});
+
 			m_sceneTarget.reset();
 		}
 
@@ -1211,26 +1221,10 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* Clean up deferred resources once all in-flight frames have completed.
+		/* Destroy retired resources once all in-flight frames have completed.
 		 * After framesInFlight() fence waits, every command buffer that could
-		 * reference the retired resources has finished execution. */
-		if ( !m_retiredSceneTargets.empty() )
-		{
-			if ( m_retiredFrameCountdown > 0 )
-			{
-				--m_retiredFrameCountdown;
-			}
-
-			if ( m_retiredFrameCountdown == 0 )
-			{
-				for ( const auto & target : m_retiredSceneTargets )
-				{
-					target->destroyRenderTarget();
-				}
-
-				m_retiredSceneTargets.clear();
-			}
-		}
+		 * reference them has finished execution and been re-recorded. */
+		m_deferredDestructor.tick();
 
 		/* 3. Get the new frame to render to. */
 		const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
@@ -1315,11 +1309,12 @@ namespace EmEn::Graphics
 		}
 		else if ( !m_postProcessor.isEnabled() && m_sceneTarget != nullptr )
 		{
-			/* Defer destruction: move the scene target to a retirement queue so that
-			 * in-flight command buffers finish referencing its resources (framebuffer,
-			 * render pass, images) before they are destroyed. */
-			m_retiredSceneTargets.emplace_back(std::move(m_sceneTarget));
-			m_retiredFrameCountdown = static_cast< uint32_t >(m_rendererFrameScope.size());
+			/* Defer destruction: retire the scene target so that in-flight command
+			 * buffers finish referencing its resources (framebuffer, render pass,
+			 * images) before they are destroyed. */
+			m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
+				target->destroyRenderTarget();
+			});
 		}
 
 		/* Dispatch to the appropriate rendering strategy.
@@ -1830,6 +1825,8 @@ namespace EmEn::Graphics
 	Renderer::createRenderingSystem (uint32_t imageCount) noexcept
 	{
 		m_rendererFrameScope.resize(imageCount);
+
+		m_deferredDestructor.setFramesInFlight(imageCount);
 
 		for ( uint32_t imageIndex = 0; imageIndex < imageCount; imageIndex++ )
 		{

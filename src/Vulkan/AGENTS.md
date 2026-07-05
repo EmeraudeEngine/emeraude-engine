@@ -370,11 +370,14 @@ barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
 > - `recordTLASBuild(commandBuffer, request)` — GPU-side: records `vkCmdBuildAccelerationStructuresKHR` + barrier into an external command buffer.
 >
 > **TLASBuildRequest** owns the TLAS + instance buffer + scratch buffer for the current build.
-> After recording, the request is moved into a retirement deque for frames-in-flight safety.
+> After recording, the request is retired through the central `Vulkan::DeferredDestructor`
+> (see the dedicated section below) for frames-in-flight safety.
 >
 > **Buffer lifetime:** TLAS buffers are per-request (not persistent). Each build creates fresh
-> buffers. Retired requests are kept in a `std::deque` and popped from the front when the
-> deque exceeds `framesInFlight()` entries.
+> buffers. Retired requests are frame-stamped and destroyed by the deferred destructor once
+> `framesInFlight` render ticks have elapsed. (History: a count-capped deque — "keep at most
+> 3" — was used before 2026-07-05; it under-covered rebuild bursts during scene streaming and
+> caused GPU use-after-free → Xid 109 CTX SWITCH TIMEOUT → `VK_ERROR_DEVICE_LOST`.)
 >
 > **Pipeline barrier:** The barrier after TLAS build uses `FRAGMENT_SHADER_BIT | COMPUTE_SHADER_BIT`
 > as destination stage (NOT `RAY_TRACING_SHADER_BIT_KHR`). The engine uses **ray queries**
@@ -386,9 +389,45 @@ barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
 >
 > **Code references:**
 > - `AccelerationStructureBuilder.hpp` — `TLASBuildRequest` struct, `prepareTLAS()`, `recordTLASBuild()`
-> - `AccelerationStructureBuilder.cpp` — Implementation with retired request deque
+> - `AccelerationStructureBuilder.cpp` — Implementation
 > - `Scenes/SceneMetaData.cpp:recordTLASBuild()` — Delegates to builder
 > - `Graphics/Renderer.cpp:renderFrameWithInternal/renderFrameDirect` — Calls `scene->recordTLASBuild()` after `prepareRender()`, before `beginRenderPass()`
+
+## Critical: Deferred destruction contract (`DeferredDestructor`)
+
+> [!CRITICAL]
+> **Never destroy a GPU-visible Vulkan object in place at runtime.** With N frames in
+> flight, a command buffer submitted at frame F still executes while the CPU prepares
+> frame F+1: destroying a descriptor set, buffer, image or acceleration structure "as soon
+> as the CPU is done with it" pulls it from under the GPU — validation errors at best,
+> `VK_ERROR_DEVICE_LOST` (Xid 109) or segfaults at worst.
+>
+> **The contract:** route every runtime destruction through the renderer-owned queue
+> `Vulkan::DeferredDestructor` (`Renderer::deferredDestructor()`, header
+> `Vulkan/DeferredDestructor.hpp`):
+> - `retireObject(std::unique_ptr<T> / std::shared_ptr<T>)` — keeps the object alive and
+>   destroys it after `framesInFlight` render ticks.
+> - `retireAction(std::function<void()>)` — for objects needing an explicit tear-down call
+>   (e.g. `RenderTarget::Abstract::destroyRenderTarget()`); capture via `std::shared_ptr`.
+> - `tick()` is called once per frame by `Renderer::renderFrame()` right after the frame
+>   fence wait; `flush()` runs at `Renderer::onTerminate()` after the final device idle.
+> - Retiring is **thread-safe** (logic or render thread); `tick()`/`flush()` belong to the
+>   render thread.
+>
+> **Do NOT** use `vkDeviceWaitIdle()` as a destruction guard in per-frame code paths — it
+> stalls the whole GPU and silently proceeds on device-loss errors.
+>
+> Migrated call sites (2026-07-05): `SceneMetaData` (TLAS + build requests + per-frame RT
+> SSBOs — both the empty-instances path and the per-rebuild retirement), the
+> `PostProcessor::configure()` grab pass + per-frame descriptor sets (previously a
+> mid-frame `waitIdle`), `Renderer::recreateSceneTarget()` (previous target retired — its
+> in-place destruction freed the view-matrices descriptor set/UBO under in-flight frames),
+> and the renderer scene-target disable path (previously a local vector + countdown).
+> **Any new runtime destruction path MUST use this service.**
+>
+> Known candidates NOT yet migrated: `Overlay::Surface` framebuffer recreation,
+> material/shared-UBO teardown paths, `LightSet::terminate()` (scene teardown — currently
+> in-place), per-geometry BLAS destruction (`Geometry::Interface`).
 
 ## Critical: Ray Query vs RT Pipeline Stage Flags
 

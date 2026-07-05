@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <array>
-#include <deque>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -46,6 +45,7 @@
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
+	class DeferredDestructor;
 	class Device;
 	class TextureInterface;
 }
@@ -92,9 +92,10 @@ namespace EmEn::Scenes
 			 *	   AND the user setting enables it. Registers the builder with Geometry::Interface
 			 *	   for BLAS creation.
 			 * @param device A reference to the Vulkan device smart pointer.
-			 * @param enableRayTracing Whether the user setting allows ray tracing.
+			 * @param accelerationStructureBuilder The renderer acceleration structure builder, or nullptr when RT is unavailable.
+			 * @param deferredDestructor The renderer deferred-destruction queue.
 			 */
-			SceneMetaData (const std::shared_ptr< Vulkan::Device > & device, Vulkan::AccelerationStructureBuilder * accelerationStructureBuilder) noexcept;
+			SceneMetaData (const std::shared_ptr< Vulkan::Device > & device, Vulkan::AccelerationStructureBuilder * accelerationStructureBuilder, Vulkan::DeferredDestructor * deferredDestructor) noexcept;
 
 			SceneMetaData (const SceneMetaData & copy) noexcept = delete;
 
@@ -241,13 +242,13 @@ namespace EmEn::Scenes
 			std::shared_ptr< Vulkan::Device > m_device;
 			/** @brief Acceleration structure builder for ray tracing. Null when RT is disabled. */
 			Vulkan::AccelerationStructureBuilder * m_accelerationStructureBuilder{nullptr};
+			Vulkan::DeferredDestructor * m_deferredDestructor{nullptr};
 			/** @brief Top-level acceleration structure for the scene. Rebuilt each frame. */
 			std::unique_ptr< Vulkan::AccelerationStructure > m_TLAS;
 			/** @brief Pending TLAS build request (prepared by rebuild, consumed by recordTLASBuild). */
 			std::unique_ptr< Vulkan::TLASBuildRequest > m_pendingTLASBuild;
 			/** @brief Retired TLAS build requests kept alive until frames-in-flight have completed.
 			 * @note The requests own the instance/scratch buffers referenced by in-flight command buffers. */
-			std::deque< std::unique_ptr< Vulkan::TLASBuildRequest > > m_retiredRequests;
 			/** @brief Per-frame mesh metadata SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_meshMetaDataSSBOs;
 			/** @brief Per-frame material data SSBOs (one per frame-in-flight). */
