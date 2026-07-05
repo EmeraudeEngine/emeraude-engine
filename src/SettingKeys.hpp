@@ -370,9 +370,11 @@ namespace EmEn
 			/* Ray Tracing > Global Illumination */
 			constexpr auto GraphicsRayTracingGIEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/Enabled"};
 			constexpr auto DefaultGraphicsRayTracingGIEnabled{true};
-			/* Samples per pixel for ray-traced global illumination. */
+			/* Samples per pixel for ray-traced global illumination.
+			 * Measured 2026-07-05 (Sponza+extras, RTX 3070 Ti @ 3840x1990): 8 spp is
+			 * visually equivalent to 16 after the bilateral blur and ~16 ms/frame cheaper. */
 			constexpr auto GraphicsRayTracingGISampleCountKey{"Core/Graphics/RayTracing/GlobalIllumination/SampleCount"};
-			constexpr auto DefaultGraphicsRayTracingGISampleCount{16U};
+			constexpr auto DefaultGraphicsRayTracingGISampleCount{8U};
 			/* Compute GI at half resolution (pixel doubling) to save performance. */
 			constexpr auto GraphicsRayTracingGIPixelDoublingKey{"Core/Graphics/RayTracing/GlobalIllumination/PixelDoubling"};
 			constexpr auto DefaultGraphicsRayTracingGIPixelDoubling{true};
