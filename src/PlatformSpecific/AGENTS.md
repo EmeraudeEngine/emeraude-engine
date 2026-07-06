@@ -96,6 +96,15 @@ PlatformSpecific/
 > `PlatformSpecific/Helpers.{hpp,windows.cpp}`, **not** under `Desktop/Dialog/` — it is OS-machinery
 > shared by `OpenFile`/`SaveFile`, so it sits with the other Windows helpers.
 
+> [!NOTE]
+> **`Desktop/Commands.windows.cpp` opens files/folders/URLs via `ShellExecuteW()` — never route
+> them through a shell (`cmd.exe /c start`).** Shell re-parsing breaks paths containing spaces
+> (`start` consumes a quoted path as its window-title argument, silently, with exit code 0) and
+> corrupts non-ANSI characters (ANSI code page). `ShellExecuteW(nullptr, L"open", ...)` takes the
+> path verbatim as UTF-16 (`convertUTF8ToWide()` from `Helpers.hpp`) and returns a reliable
+> status (`> 32` = success). Linux (`xdg-open`, direct argv exec) and macOS (`open`) are not
+> concerned by the space issue.
+
 ### File Naming Convention
 
 Platform-specific implementations use suffixes:

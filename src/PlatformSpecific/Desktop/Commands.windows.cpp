@@ -26,9 +26,6 @@
 
 #include "Commands.hpp"
 
-/* STL inclusions. */
-#include <vector>
-
 /* Third-party inclusions. */
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -37,16 +34,26 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <shellapi.h>
 #include <shobjidl.h>
 
 /* Local inclusions. */
-#include "reproc++/run.hpp"
+#include "PlatformSpecific/Helpers.hpp"
 #include "Tracer.hpp"
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop
 {
 	constexpr auto TracerTag{"Commands"};
+
+	/* NOTE: These commands intentionally bypass reproc and any shell (cmd.exe/start).
+	 * reproc's Windows argv-join drops empty arguments ("" is never quoted — see
+	 * argument_should_escape() in reproc/src/process.windows.c), which makes it
+	 * impossible to pass the empty window-title placeholder "start" requires; a
+	 * quoted path (any path containing a space) is then consumed as the window
+	 * title. A shell also re-parses the command line ('%' expansion, ANSI code
+	 * page). ShellExecuteW() involves no intermediate command line: the target
+	 * is passed verbatim, as UTF-16, with a reliable status (> 32 = success). */
 
 	bool
 	runDesktopApplication (const std::string & executable, const std::string & argument) noexcept
@@ -58,24 +65,14 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		std::vector< const char * > args;
-		args.reserve(7);
-		args.push_back("cmd.exe");
-		args.push_back("/c");
-		args.push_back("start");
-		args.push_back(""); /* Requested by "start" */
-		args.push_back(executable.data());
-		if ( !argument.empty() )
-		{
-			args.push_back(argument.data());
-		}
-		args.push_back(nullptr);
+		const auto wideExecutable = convertUTF8ToWide(executable);
+		const auto wideArgument = argument.empty() ? std::wstring{} : L'"' + convertUTF8ToWide(argument) + L'"';
 
-		const auto [exitCode, errorCode] = reproc::run(args.data());
+		const auto result = reinterpret_cast< INT_PTR >(ShellExecuteW(nullptr, L"open", wideExecutable.c_str(), wideArgument.empty() ? nullptr : wideArgument.c_str(), nullptr, SW_SHOWNORMAL));
 
-		if ( exitCode != 0 )
+		if ( result <= 32 )
 		{
-			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+			TraceError{TracerTag} << "ShellExecuteW() failed to run '" << executable << "' (error code: " << result << ").";
 
 			return false;
 		}
@@ -89,25 +86,14 @@ namespace EmEn::PlatformSpecific::Desktop
 		if ( argument.empty() )
 		{
 			Tracer::error(TracerTag, "No argument to open with desktop terminal.");
-
 			return false;
 		}
 
-		std::vector< const char * > args;
-		args.reserve(6);
-		args.push_back("cmd.exe");
-		args.push_back("/c");
-		args.push_back("start");
-		args.push_back(""); /* Requested by "start" */
-		args.push_back(argument.data());
-		args.push_back(nullptr);
-
-		const auto [exitCode, errorCode] = reproc::run(args.data());
-
-		if ( exitCode != 0 )
+		const auto wideArgument = convertUTF8ToWide(argument);
+		const auto result = reinterpret_cast< INT_PTR >(ShellExecuteW(nullptr, L"open", wideArgument.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+		if ( result <= 32 )
 		{
-			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
-
+			TraceError{TracerTag} << "ShellExecuteW() failed to open '" << argument << "' (error code: " << result << ").";
 			return false;
 		}
 
