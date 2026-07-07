@@ -1748,10 +1748,15 @@ namespace EmEn
 					}
 					break;
 
-				/* NOTE: Framebuffer size change — the swap-chain handles it elsewhere, nothing to do here. */
+				/* NOTE: Framebuffer size change — the swap-chain is marked degraded by Renderer::onNotification.
+				 * In on-demand rendering the render thread is asleep, so it would never notice the degraded
+				 * swap-chain nor recreate it (the WindowContentRefreshed -> onWindowChanged -> requestRedraw
+				 * path only fires AFTER a recreation, which never happens). Wake it here so it processes the
+				 * resize; onWindowChanged() then re-budgets a redraw at the new size. No-op in continuous mode. */
 				case Window::OSNotifiesFramebufferResized :
 					/* NOTE: Commented for excessive logs. */
 					//Tracer::debug(ClassId, "The GLFW API detected a framebuffer content size change.");
+					this->requestRedraw();
 					break;
 
 				/* NOTE: The surface content scale changed (window moved to a monitor with a different
@@ -1759,6 +1764,9 @@ namespace EmEn
 				 * stay consistent with the framebuffer used by the overlay hit-testing. */
 				case Window::OSRequestsToRescaleContentBy :
 					this->updatePointerScaling();
+					/* NOTE: A scale change also degrades the swap-chain (see Renderer::onNotification):
+					 * wake the render thread for the same reason as OSNotifiesFramebufferResized above. */
+					this->requestRedraw();
 					break;
 
 				case Window::OSRequestsToTerminate :

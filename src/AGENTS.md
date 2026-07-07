@@ -88,7 +88,9 @@ for animated 3D real-time rendering.
   see [`Overlay/AGENTS.md`](Overlay/AGENTS.md) § On-Demand Redraw Signal) → `requestRedraw()`.
 - **Scene enable/disable** — `SceneEnabled`/`SceneDisabled` → `requestRedraw()` (start drawing a new
   scene without latency; render the final bare clear-color frame when the last scene is disabled).
-- **Window** — surface recreated (`onWindowChanged`) and focus/visibility regained → `requestRedraw()`.
+- **Window** — framebuffer resize / content-scale change (wakes the sleeping render thread so it can
+  recreate the swap-chain that `Renderer::onNotification` just marked degraded — otherwise, idle, it
+  would never notice), surface recreated (`onWindowChanged`), and focus/visibility regained → `requestRedraw()`.
 - **Explicit** — application/native code (or the remote console) may call `requestRedraw()` for changes
   not covered by the built-in triggers.
 
