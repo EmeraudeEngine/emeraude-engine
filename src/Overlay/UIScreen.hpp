@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -143,6 +144,26 @@ namespace EmEn::Overlay
 			setVisibility (bool state) noexcept
 			{
 				m_isVisible = state;
+
+				/* NOTE: Showing/hiding a whole screen changes the composited image: request a redraw. */
+				if ( m_redrawRequester )
+				{
+					m_redrawRequester();
+				}
+			}
+
+			/**
+			 * @brief Installs the callback invoked whenever this screen (or one of its surfaces)
+			 * changes in a way that affects the rendered image.
+			 * @details Set by the Overlay::Manager; propagated to every surface created afterwards.
+			 * Used by the on-demand rendering mode to wake the rendering thread; empty in continuous mode.
+			 * @param requester A callable invoked on every visual mutation, or an empty function to detach.
+			 * @return void
+			 */
+			void
+			setRedrawRequester (std::function< void () > requester) noexcept
+			{
+				m_redrawRequester = std::move(requester);
 			}
 
 			/**
@@ -242,6 +263,11 @@ namespace EmEn::Overlay
 
 					return nullptr;
 				}
+
+				/* NOTE: Propagate the redraw requester so any later visual mutation of this surface
+				 * (content, geometry, visibility, stack order) wakes the on-demand rendering thread.
+				 * Installed before setStackIndex() below, so the surface's arrival itself triggers a redraw. */
+				surface->setRedrawRequester(m_redrawRequester);
 
 				/* NOTE: New surfaces always join the top of the stack. The application can
 				 * call sendToBack(), moveBelow(), etc. immediately after creation to position
@@ -573,6 +599,7 @@ namespace EmEn::Overlay
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
 			std::vector< std::shared_ptr< Surface > > m_surfaces;
+			std::function< void () > m_redrawRequester{}; ///< Propagated from the Overlay::Manager to request a redraw on any visual mutation (on-demand rendering). @see setRedrawRequester()
 			std::weak_ptr< Surface > m_inputExclusiveSurface;
 			/* NOTE: Implicit pointer capture (grab). The surface that consumes a button
 			 * press receives every subsequent move/release/wheel until all of its buttons

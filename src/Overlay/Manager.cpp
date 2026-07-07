@@ -114,6 +114,9 @@ namespace EmEn::Overlay
 		}
 
 		m_enabled = state;
+
+		/* NOTE: Enabling/disabling the whole overlay changes what is rendered. */
+		this->requestRedraw();
 	}
 
 	bool
@@ -222,7 +225,14 @@ namespace EmEn::Overlay
 
 		m_screens[name] = screen;
 
+		/* NOTE: Propagate the redraw requester so this screen and every surface it creates can
+		 * wake the on-demand rendering thread on any visual mutation. No-op in continuous rendering. */
+		screen->setRedrawRequester([this] { this->requestRedraw(); });
+
 		this->notify(UIScreenCreated, screen);
+
+		/* NOTE: A new screen changes the composited image. */
+		this->requestRedraw();
 
 		return screen;
 	}
@@ -266,6 +276,9 @@ namespace EmEn::Overlay
 
 		this->notify(UIScreenDestroyed, name);
 
+		/* NOTE: Removing a screen changes the composited image. */
+		this->requestRedraw();
+
 		return true;
 	}
 
@@ -288,6 +301,9 @@ namespace EmEn::Overlay
 
 			this->notify(UIScreenDestroyed, name);
 		}
+
+		/* NOTE: The overlay screen set changed: request a redraw (on-demand rendering). */
+		this->requestRedraw();
 	}
 
 	bool

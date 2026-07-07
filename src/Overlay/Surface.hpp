@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <string>
 #include <concepts>
+#include <functional>
 
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
@@ -302,6 +303,8 @@ namespace EmEn::Overlay
 				m_rectangle.setTop(yPosition);
 
 				this->updateModelMatrix();
+
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -332,6 +335,8 @@ namespace EmEn::Overlay
 				m_rectangle.move(deltaX, deltaY);
 
 				this->updateModelMatrix();
+
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -342,6 +347,8 @@ namespace EmEn::Overlay
 			show () noexcept
 			{
 				m_isVisible = true;
+
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -352,6 +359,8 @@ namespace EmEn::Overlay
 			hide () noexcept
 			{
 				m_isVisible = false;
+
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -396,6 +405,8 @@ namespace EmEn::Overlay
 			{
 				m_videoMemorySizeValid = false;
 				m_videoMemoryUpToDate = false;
+
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -406,6 +417,38 @@ namespace EmEn::Overlay
 			setVideoMemoryOutdated () noexcept
 			{
 				m_videoMemoryUpToDate = false;
+
+				this->notifyRedrawRequired();
+			}
+
+			/**
+			 * @brief Installs the callback invoked whenever this surface changes in a way that
+			 * affects the rendered image (content, geometry, visibility, stack order).
+			 * @details Used by the on-demand rendering mode to wake the rendering thread. The
+			 * UIScreen owning the surface installs it; in continuous rendering it stays empty.
+			 * @param requester A callable invoked on every visual mutation, or an empty function to detach.
+			 * @return void
+			 */
+			void
+			setRedrawRequester (std::function< void () > requester) noexcept
+			{
+				m_redrawRequester = std::move(requester);
+			}
+
+			/**
+			 * @brief Requests a re-composite of the overlay WITHOUT marking the video memory outdated.
+			 * @details Fires the installed redraw requester only. Use when the on-screen result changed
+			 * but the GPU texture is already current, so no re-upload is needed - only a re-composite.
+			 * The canonical case is a memory-mapped CEF paint that writes pixels straight into device
+			 * memory (directPaint): it needs the on-demand rendering thread woken, but must NOT trigger
+			 * the CPU->GPU upload path that setVideoMemoryOutdated() would. No-op in continuous rendering.
+			 * @return void
+			 * @see setVideoMemoryOutdated(), setRedrawRequester()
+			 */
+			void
+			requestRedraw () noexcept
+			{
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -1067,6 +1110,22 @@ namespace EmEn::Overlay
 			friend class UIScreen;
 
 			/**
+			 * @brief Notifies the installed redraw requester that this surface changed visually.
+			 * @details Invoked by every visual mutation (content, geometry, visibility, stack order)
+			 * so the on-demand rendering mode can wake the rendering thread. No-op when no requester
+			 * is installed (continuous rendering). @see setRedrawRequester()
+			 * @return void
+			 */
+			void
+			notifyRedrawRequired () const noexcept
+			{
+				if ( m_redrawRequester )
+				{
+					m_redrawRequester();
+				}
+			}
+
+			/**
 			 * @brief Sets the surface depth from its stack index in the parent UIScreen.
 			 * @details Called by UIScreen after any stack mutation (creation, bring/send,
 			 * move above/below, destruction of a peer). The depth is computed as
@@ -1084,6 +1143,8 @@ namespace EmEn::Overlay
 				m_depth = static_cast< float >(stackIndex) * StackDepthStep;
 
 				this->updateModelMatrix();
+
+				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -1196,6 +1257,7 @@ namespace EmEn::Overlay
 			float m_alphaThreshold{0.1F};
 			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
 			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
+			std::function< void () > m_redrawRequester{}; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
 			bool m_transitionResizeRequested{false};
 			bool m_videoMemorySizeValid{false};
 			bool m_videoMemoryUpToDate{false};

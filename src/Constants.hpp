@@ -43,6 +43,18 @@ namespace EmEn
 	constexpr number_t DefaultMainLoopFrequencyHz{100};
 
 	/**
+	 * @brief Safety re-check cadence (Hz) of the on-demand rendering wait.
+	 * @note In RenderingMode::OnDemand the rendering thread sleeps until a redraw is
+	 * requested (Core::requestRedraw()). This 60 Hz ceiling bounds how long a defensively
+	 * assumed missed dirty signal can delay a refresh: the wait re-evaluates at least this
+	 * often. It does NOT force a frame on timeout, so the GPU stays idle when nothing changed.
+	 * @tparam number_t The type of number. Default uint32_t.
+	 */
+	template< typename number_t = uint32_t >
+	requires (std::is_arithmetic_v< number_t >)
+	constexpr number_t OnDemandRenderingSafetyRefreshHz{60};
+
+	/**
 	 * @brief Returns how many times the world physics simulation is updated in one second.
 	 * @note Fixed-timestep cadence of the logics loop (Core::logicsTask). Distinct from the
 	 * engine main event-loop frequency (see the Core constructor's mainLoopFrequencyHz parameter).

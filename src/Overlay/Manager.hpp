@@ -87,6 +87,7 @@ namespace EmEn::Overlay
 				UIScreenDestroying,
 				UIScreenDestroyed,
 				OverlayResized,
+				RedrawRequested, ///< The overlay changed visually (content, layout, visibility, order) and must be re-rendered.
 				MaxEnum
 			};
 
@@ -171,6 +172,22 @@ namespace EmEn::Overlay
 			isEnabled () const noexcept
 			{
 				return m_enabled;
+			}
+
+			/**
+			 * @brief Requests a re-render of the overlay.
+			 * @details Emits the RedrawRequested notification so an observer (typically the engine
+			 * Core) can wake its on-demand rendering thread. Called internally on every visual
+			 * mutation: surface content/geometry/visibility/stack-order (via the requester propagated
+			 * to screens and surfaces) and screen lifecycle/visibility. Harmless in continuous
+			 * rendering (observers simply ignore it). May also be called by application code that
+			 * changes the overlay in a way not covered by the built-in triggers.
+			 * @return void
+			 */
+			void
+			requestRedraw () noexcept
+			{
+				this->notify(RedrawRequested);
 			}
 
 			/**

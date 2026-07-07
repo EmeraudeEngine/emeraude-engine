@@ -169,9 +169,39 @@ namespace EmEn
 	}
 
 	void
+	Core::requestRedraw () noexcept
+	{
+		/* NOTE: In continuous mode the rendering thread never sleeps, so there is nothing to
+		 * wake and nothing to budget. */
+		if ( m_renderingMode != RenderingMode::OnDemand )
+		{
+			return;
+		}
+
+		/* NOTE: Budget enough frames to refresh every swap-chain image, otherwise a
+		 * multi-buffered swap-chain would keep re-displaying a stale buffer for the images
+		 * we did not redraw. framesInFlight() is sized from the swap-chain image count. */
+		const auto budget = std::max< uint32_t >(1, m_graphicsRenderer.framesInFlight());
+
+		{
+			/* NOTE: Mutate the shared budget under the same mutex the rendering thread waits on,
+			 * to close the lost-wakeup window between the predicate test and the wait. */
+			const std::lock_guard< std::mutex > lock{m_redrawMutex};
+
+			m_pendingFrames.store(budget, std::memory_order_relaxed);
+		}
+
+		m_redrawCondition.notify_one();
+	}
+
+	void
 	Core::renderingTask () noexcept
 	{
 		uint64_t frames = 0;
+
+		/* NOTE: On-demand safety re-check period (one 60 FPS frame). On timeout the thread merely
+		 * re-evaluates the predicate; it does not force a frame, so the GPU stays idle at rest. */
+		const std::chrono::duration< double > onDemandTimeout{1.0 / OnDemandRenderingSafetyRefreshHz< double >};
 
 		while ( m_isRenderingLoopRunning )
 		{
@@ -185,6 +215,30 @@ namespace EmEn
 				std::this_thread::sleep_for(std::chrono::milliseconds{33});
 
 				continue;
+			}
+
+			/* NOTE: On-demand rendering gate. When enabled and there is no active 3D scene, the
+			 * rendering thread sleeps until a redraw is requested (overlay/WebView repaint, window
+			 * event, scene enable/disable, or an explicit requestRedraw()) instead of rendering every
+			 * iteration. An active scene bypasses the gate entirely (v1: an active scene is treated as
+			 * always-dirty and renders continuously). The wait uses a 60 FPS-period safety timeout so a
+			 * missed dirty signal self-heals within one frame rather than freezing the display. */
+			if ( m_renderingMode == RenderingMode::OnDemand && !m_sceneManager.hasActiveScene() )
+			{
+				std::unique_lock< std::mutex > lock{m_redrawMutex};
+
+				if ( m_pendingFrames.load(std::memory_order_relaxed) == 0 )
+				{
+					m_redrawCondition.wait_for(lock, onDemandTimeout, [this] {
+						return m_pendingFrames.load(std::memory_order_relaxed) > 0 || !m_isRenderingLoopRunning;
+					});
+				}
+
+				/* NOTE: Woke on the safety timeout with nothing to draw (and still no scene): idle again. */
+				if ( m_pendingFrames.load(std::memory_order_relaxed) == 0 )
+				{
+					continue;
+				}
 			}
 
 			/* NOTE: Ask for a shared-access to the scene content preventing to lock the "logic thread" and draw the scene. */
@@ -224,6 +278,13 @@ namespace EmEn
 				}
 			}, false);
 
+			/* NOTE: Consume one frame from the on-demand budget. Harmless in continuous mode
+			 * (the budget stays at zero) and while a scene is active (the gate is bypassed). */
+			if ( m_pendingFrames.load(std::memory_order_relaxed) > 0 )
+			{
+				m_pendingFrames.fetch_sub(1, std::memory_order_relaxed);
+			}
+
 			frames++;
 		}
 
@@ -256,6 +317,10 @@ namespace EmEn
 
 			this->stopAudioVideoRecording();
 		}
+
+		/* NOTE: The surface was recreated (resize, scale change): force a redraw so the new
+		 * framebuffer is repainted in on-demand mode. No-op in continuous mode. */
+		this->requestRedraw();
 
 		this->notify(SurfaceRefreshed);
 	}
@@ -793,6 +858,10 @@ namespace EmEn
 		/* Initialization of the overlay manager. */
 		if ( m_overlayManager.initialize(m_secondaryServicesEnabled) )
 		{
+			/* NOTE: Observe the overlay manager so its RedrawRequested notifications (any visual
+			 * mutation of a screen or surface) drive the on-demand rendering thread. */
+			this->observe(&m_overlayManager);
+
 			m_overlayManager.enable(m_inputManager, true);
 
 			TraceSuccess{ClassId} << m_overlayManager.name() << " service up!";
@@ -980,6 +1049,10 @@ namespace EmEn
 		/* Stopping the logics and rendering threads. */
 		m_isRenderingLoopRunning = false;
 		m_isLogicsLoopRunning = false;
+
+		/* NOTE: Wake the rendering thread in case it is idling on the on-demand condition,
+		 * so it observes the stopped flag and exits promptly instead of waiting the timeout. */
+		m_redrawCondition.notify_all();
 
 		/* Stopping the main loop. */
 		m_isMainLoopRunning = false;
@@ -1662,6 +1735,9 @@ namespace EmEn
 				case Window::OSNotifiesWindowGetFocus :
 				case Window::OSNotifiesWindowVisible :
 					this->resume();
+					/* NOTE: The window became visible/focused again: repaint once so a freshly
+					 * revealed surface is not left showing a stale image in on-demand mode. */
+					this->requestRedraw();
 					break;
 
 				case Window::OSNotifiesWindowLostFocus :
@@ -1783,6 +1859,19 @@ namespace EmEn
 			return this->onCoreNotification(observable, notificationCode, data);
 		}
 
+		if ( observable == &m_overlayManager )
+		{
+			/* NOTE: The overlay signalled a visual change (surface content/geometry/visibility/order,
+			 * or a screen lifecycle/visibility change). Wake the on-demand rendering thread. No-op in
+			 * continuous rendering. */
+			if ( notificationCode == Overlay::Manager::RedrawRequested )
+			{
+				this->requestRedraw();
+			}
+
+			return true;
+		}
+
 		if ( observable == &m_sceneManager )
 		{
 			switch ( notificationCode )
@@ -1791,10 +1880,17 @@ namespace EmEn
 					m_resourceManager.unloadUnusedResources();
 					break;
 
-				case Scenes::Manager::SceneCreated :
-				case Scenes::Manager::SceneLoaded :
 				case Scenes::Manager::SceneEnabled :
 				case Scenes::Manager::SceneDisabled :
+					/* NOTE: On-demand rendering. Enabling a scene must wake the rendering thread so it
+					 * starts drawing it without the safety-timeout latency; disabling one must trigger a
+					 * final frame so the display falls back to the bare clear color instead of keeping the
+					 * last rendered scene image. No-op in continuous mode. */
+					this->requestRedraw();
+					break;
+
+				case Scenes::Manager::SceneCreated :
+				case Scenes::Manager::SceneLoaded :
 				default :
 					TraceDebug{ClassId} << "Receiving an event from '" << Scenes::Manager::ClassId << "' (code:" << notificationCode << ") ...";
 					break;

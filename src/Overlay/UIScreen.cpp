@@ -145,6 +145,14 @@ namespace EmEn::Overlay
 		 * their internal depth back to match the new positions. */
 		this->recomputeDepths();
 
+		/* NOTE: Removing a surface changes the composited image. recomputeDepths() already
+		 * re-notifies remaining surfaces, but not when the screen just became empty, so
+		 * request a redraw explicitly here (on-demand rendering). */
+		if ( m_redrawRequester )
+		{
+			m_redrawRequester();
+		}
+
 		return true;
 	}
 
@@ -157,6 +165,12 @@ namespace EmEn::Overlay
 		m_graphicsRenderer.device()->waitIdle("UIScreen::clearSurfaces()");
 
 		m_surfaces.clear();
+
+		/* NOTE: The screen is now empty: request a redraw (on-demand rendering). */
+		if ( m_redrawRequester )
+		{
+			m_redrawRequester();
+		}
 	}
 
 	std::shared_ptr< const Surface >

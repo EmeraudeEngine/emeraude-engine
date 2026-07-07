@@ -122,6 +122,9 @@
 #include <any>
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -243,6 +246,25 @@ namespace EmEn
 				Error, ///< An error occurred during initialization; engine cannot start.
 				ToolsMode, ///< Engine runs in tools mode (vulkanInfo, geometry tools, etc.).
 				Continue ///< Normal startup; proceed with full engine initialization.
+			};
+
+			/**
+			 * @brief Defines how the rendering thread is paced.
+			 * @details Continuous is the classic game-style loop: the rendering thread renders
+			 * as fast as the present mode allows (VSync / frame-rate limiter), keeping the GPU
+			 * busy every frame. OnDemand only renders when something actually changed on screen
+			 * (an overlay/WebView repaint, a window event, an active 3D scene, or an explicit
+			 * Core::requestRedraw()); otherwise the rendering thread sleeps and the GPU stays idle.
+			 * OnDemand suits overlay-centric applications (e.g. a CEF-based UI) where most frames
+			 * are identical, while Continuous suits animated 3D real-time rendering.
+			 * @note Only the rendering thread is affected; the main event loop keeps ticking (it
+			 * still drives, for instance, a windowless consumer's SendExternalBeginFrame cadence).
+			 * @see setRenderingMode(), requestRedraw()
+			 */
+			enum class RenderingMode : uint8_t
+			{
+				Continuous, ///< Render every loop iteration (default; game-style, GPU always active).
+				OnDemand ///< Render only when the frame content changed; sleep otherwise.
 			};
 
 			/**
@@ -877,6 +899,31 @@ namespace EmEn
 				return m_mainLoopFrequency;
 			}
 
+			/**
+			 * @brief Returns the current rendering thread pacing mode.
+			 * @return RenderingMode
+			 * @see setRenderingMode()
+			 */
+			[[nodiscard]]
+			RenderingMode
+			renderingMode () const noexcept
+			{
+				return m_renderingMode;
+			}
+
+			/**
+			 * @brief Requests the rendering thread to produce new frames [Thread-safe].
+			 * @details In RenderingMode::OnDemand this wakes the (possibly sleeping) rendering
+			 * thread and schedules enough frames to refresh every swap-chain image, so a
+			 * multi-buffered swap-chain never presents a stale buffer. In RenderingMode::Continuous
+			 * it is a cheap no-op (the thread already renders every iteration). Call it whenever
+			 * something affecting the rendered image changed outside the engine's own triggers
+			 * (overlay repaint, window event, scene enable/disable are already wired internally).
+			 * @return void
+			 * @see setRenderingMode()
+			 */
+			void requestRedraw () noexcept;
+
 			/** @} */ // End of Service Accessors group
 
 		protected:
@@ -956,6 +1003,22 @@ namespace EmEn
 			{
 				m_mainLoopFrequency = frequency;
 				m_mainLoopEventTimeoutSeconds = 1.0 / static_cast< double >(frequency);
+			}
+
+			/**
+			 * @brief Sets the rendering thread pacing mode. The default is RenderingMode::Continuous.
+			 * @details In RenderingMode::OnDemand the rendering thread sleeps until a redraw is
+			 * requested (see requestRedraw()), leaving the GPU idle when nothing changes on screen.
+			 * An active 3D scene forces continuous rendering regardless. Set this before the engine
+			 * main loop starts, typically in the sub-application constructor.
+			 * @param mode The rendering mode.
+			 * @return void
+			 * @see requestRedraw()
+			 */
+			void
+			setRenderingMode (RenderingMode mode) noexcept
+			{
+				m_renderingMode = mode;
 			}
 
 			/**
@@ -1469,6 +1532,11 @@ namespace EmEn
 			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
 			uint32_t m_mainLoopFrequency{DefaultMainLoopFrequencyHz< uint32_t >}; ///< Main event-loop tick ceiling (Hz), set at construction. @see mainLoopFrequencyHz()
 			double m_mainLoopEventTimeoutSeconds{1.0 / DefaultMainLoopFrequencyHz< double >}; ///< Precomputed 1/Hz wait timeout passed to waitSystemEvents().
+			/* On-demand rendering (used only in RenderingMode::OnDemand). @see setRenderingMode(), requestRedraw() */
+			std::mutex m_redrawMutex; ///< Guards the redraw condition variable / pending-frame budget against lost wakeups.
+			std::condition_variable m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested.
+			std::atomic< uint32_t > m_pendingFrames{0}; ///< Frames still owed before the rendering thread may idle (multi-buffer refresh budget).
+			RenderingMode m_renderingMode{RenderingMode::Continuous}; ///< Rendering thread pacing mode. @see setRenderingMode()
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).

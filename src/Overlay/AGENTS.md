@@ -208,6 +208,39 @@ Program selection uses bitwise index: `(premultipliedAlpha ? 1 : 0) | (isUsingBG
 - `Manager.cpp:739` - Program selection logic
 - `OverlayRendering.cpp:159-168` - Conditional BGRA swizzle in fragment shader
 
+### On-Demand Redraw Signal
+
+Supports the engine's `RenderingMode::OnDemand` (see [`../AGENTS.md`](../AGENTS.md) § Core - On-Demand
+Rendering). The overlay is the main dynamic content in an overlay-centric app, so it is the primary
+source of "the screen changed, re-render" signals.
+
+- **`Manager::RedrawRequested`** notification + **`Manager::requestRedraw()`** (emits it). `Core`
+  observes the manager and turns it into `Core::requestRedraw()`. Harmless in `Continuous` mode
+  (observers ignore it). Application code may also call `requestRedraw()` for a change not covered below.
+- **Propagated requester callback** (`std::function< void () >`): `Manager::createScreen` installs a
+  `[this]{ requestRedraw(); }` on each `UIScreen` (`UIScreen::setRedrawRequester`), which forwards it to
+  every `Surface` it creates (`Surface::setRedrawRequester`). This is how a deep surface change reaches
+  the manager without making `Surface` observable. Empty by default (continuous rendering).
+- **Surface-level triggers** (`Surface::notifyRedrawRequired()`, fired by): `invalidate()` and
+  `setVideoMemoryOutdated()` (content/size), `setPosition()`/`move()`/`setStackIndex()` (geometry & stack
+  order — the six `UIScreen` reorder ops go through `setStackIndex`, so they are covered transitively),
+  `show()`/`hide()` (visibility). Plus **`Surface::requestRedraw()`** — a public "re-composite without
+  marking video memory outdated" used by a memory-mapped CEF paint (`directPaint` writes pixels straight
+  to device memory, so it needs a wake but no re-upload).
+- **Screen/manager-level triggers**: `UIScreen::setVisibility` (whole-screen show/hide),
+  `UIScreen::destroySurface`/`clearSurfaces` (removal), `Manager::createScreen`/`destroyScreen`/
+  `clearScreens`/`enable` (screen lifecycle & overlay master switch). Per-screen enable/disable
+  (`Manager::enableScreen`/`disableScreen`/`toggleScreen`/`disableAllScreens`) go through
+  `UIScreen::setVisibility` and are covered transitively.
+
+> [!IMPORTANT]
+> All triggers fire from the **producer/app thread** (never the render thread — `processUpdates()` reads
+> the dirty flags but does not set them, and `updateModelMatrix()` is deliberately NOT a trigger because
+> it is also called from `processUpdates`). This avoids the render thread re-arming its own redraw.
+>
+> **ImGUI screens are NOT wired** (immediate-mode, separate `m_ImGUIScreens`): an animating ImGUI overlay
+> needs an explicit `Manager::requestRedraw()` or `Continuous` mode.
+
 ### Input Integration
 - **OverlayManager is InputManager client**: Receives mouse/keyboard events
 - **Hierarchical dispatch**: Manager → Screen → Surface

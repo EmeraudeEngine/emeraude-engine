@@ -324,6 +324,21 @@ namespace EmEn::Scenes
 			std::shared_ptr< const Scene > getScene (const std::string & sceneName) const noexcept;
 
 			/**
+			 * @brief Returns whether a scene is currently active [Thread-safe].
+			 * @note Cheap alternative to withSharedActiveScene() when only the presence of an
+			 * active scene is needed (e.g. the on-demand rendering gate in Core::renderingTask()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasActiveScene () const noexcept
+			{
+				const std::shared_lock lock{m_activeSceneSharedAccess};
+
+				return m_activeScene != nullptr;
+			}
+
+			/**
 			 * @brief Executes a function on the active scene with thread-safe shared access.
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< Scene > &)
 			 * @param processActiveScene A function to process the active scene.

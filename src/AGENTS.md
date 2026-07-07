@@ -18,7 +18,7 @@ Fundamental framework components located directly in `src/`. These files constit
 - **Main loops**: Manages three execution loops
   - Main loop (input/events + `onCoreMainLoopCycle`; idle tick ceiling configurable via the `Core` constructor's `mainLoopFrequencyHz` parameter, default `DefaultMainLoopFrequencyHz` = 100 Hz)
   - Logic loop (separate thread; fixed timestep at `WorldPhysicsUpdateFrequency` = 60 Hz)
-  - Render loop (separate thread; uncapped)
+  - Render loop (separate thread; uncapped in `RenderingMode::Continuous`, sleeps when idle in `RenderingMode::OnDemand` — see § Core - On-Demand Rendering)
 - **Lifecycle**: Entry point for overriding application behavior
 
 **Usage pattern**:
@@ -58,6 +58,51 @@ private:
 - `onCoreNotification()` - Observer pattern
 - `onCoreOpenFiles()` - File drag & drop
 - `onCoreSurfaceRefreshed()` - Window resize
+
+### Core - On-Demand Rendering
+
+By default the render thread (`Core::renderingTask`) loops uninterrupted, presenting a frame
+every iteration (game-style, GPU always busy). This is `RenderingMode::Continuous`.
+
+`RenderingMode::OnDemand` (opt-in via the protected setter `setRenderingMode(RenderingMode::OnDemand)`,
+typically in the sub-application constructor next to `setMainLoopFrequency`) makes the render thread
+**sleep when nothing changed on screen**, so the GPU idles. It suits overlay-centric applications
+(e.g. a CEF UI composited by the Overlay manager) where most frames are identical; keep `Continuous`
+for animated 3D real-time rendering.
+
+**Mechanism** — a single source of truth, `Core::requestRedraw()` (public, thread-safe):
+- Stores a *budget* of frames to render (= `Renderer::framesInFlight()`, i.e. the swap-chain image
+  count) so **every** swap-chain image is refreshed — rendering a single frame per change would leave
+  the other buffers stale on a multi-buffered swap-chain (flicker). Then it wakes the render thread via
+  a condition variable. In `Continuous` mode it is a cheap no-op.
+- The render-thread gate (`Core::renderingTask`) mirrors the existing `m_paused` fast-path: in
+  `OnDemand` **and** with no active 3D scene, it waits on the condition variable (bounded by a hard
+  60 FPS-period safety timeout — a *re-check* granularity, **not** a forced-render floor, so the GPU
+  stays idle) instead of rendering. An **active 3D scene bypasses the gate entirely** (v1 rule: an
+  active scene is treated as always-dirty and renders continuously). One frame of the budget is
+  consumed per rendered frame; when it reaches zero (and no scene) the thread idles again.
+
+**Redraw triggers wired into Core** (all no-ops in `Continuous`):
+- **Overlay change** — `Core` observes `Overlay::Manager`; a `RedrawRequested` notification (emitted on
+  any surface content/geometry/visibility/stack-order change and any screen lifecycle/visibility change,
+  see [`Overlay/AGENTS.md`](Overlay/AGENTS.md) § On-Demand Redraw Signal) → `requestRedraw()`.
+- **Scene enable/disable** — `SceneEnabled`/`SceneDisabled` → `requestRedraw()` (start drawing a new
+  scene without latency; render the final bare clear-color frame when the last scene is disabled).
+- **Window** — surface recreated (`onWindowChanged`) and focus/visibility regained → `requestRedraw()`.
+- **Explicit** — application/native code (or the remote console) may call `requestRedraw()` for changes
+  not covered by the built-in triggers.
+
+**First frame / no scene**: `Renderer::renderFrameDirect` already degenerates to *clear color + overlay*
+when `scene == nullptr`, so the guaranteed initial frame (seeded by a `requestRedraw()` before the loop)
+is just the clear color plus whatever the overlay draws.
+
+**Caveat**: ImGUI overlay screens (immediate-mode, `Overlay::Manager::m_ImGUIScreens`) are **not** covered
+by the redraw signal — a continuously-animating ImGUI screen needs an explicit `requestRedraw()` or
+`Continuous` mode. AppSystem's production UI is WebView-based (`UIScreen` surfaces), which **is** covered.
+
+**Files**: `Core.cpp` (`renderingTask` gate, `requestRedraw`, `onNotification` overlay/scene cases,
+`onWindowChanged`), `Core.hpp` (`RenderingMode`, `setRenderingMode`, redraw members), `Constants.hpp`
+(`OnDemandRenderingSafetyRefreshHz`).
 
 ### Core - Shutdown Policy
 
