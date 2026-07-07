@@ -33,6 +33,7 @@
 #include <cmath>
 
 /* Local inclusions. */
+#include "Arguments.hpp"
 #include "PlatformManager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"

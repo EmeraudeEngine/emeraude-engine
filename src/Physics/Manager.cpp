@@ -30,8 +30,10 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Arguments.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/Device.hpp"

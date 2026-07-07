@@ -33,6 +33,8 @@
 #include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Console
 {

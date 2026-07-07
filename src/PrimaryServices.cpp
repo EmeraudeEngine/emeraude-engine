@@ -33,16 +33,67 @@
 #include <iostream>
 #include <ranges>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 /* Local inclusions. */
 #include "IO/IO.hpp"
+#include "ThreadPool.hpp"
+#include "Arguments.hpp"
+#include "FileSystem.hpp"
+#include "Identification.hpp"
+#include "Net/Manager.hpp"
+#include "PlatformSpecific/SystemInfo.hpp"
+#include "PlatformSpecific/UserInfo.hpp"
+#include "ServiceInterface.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn
 {
 	using namespace Base;
 
-	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification) noexcept
+	/**
+	 * @brief Private implementation holding the concrete primary services (pimpl).
+	 * @note The method bodies below are kept identical to the former non-pimpl
+	 * implementation; only the qualified names change (PrimaryServices:: -> PrimaryServices::Impl::).
+	 */
+	class PrimaryServices::Impl final
+	{
+		public:
+
+			Impl (int argc, char * * argv, const Identification & identification) noexcept;
+
+			Impl (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept;
+
+#if IS_WINDOWS
+			Impl (int argc, wchar_t * * wargv, const Identification & identification) noexcept;
+
+			Impl (int argc, wchar_t * * wargv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept;
+#endif
+
+			[[nodiscard]]
+			bool initialize () noexcept;
+
+			void terminate () noexcept;
+
+			[[nodiscard]]
+			std::string information () const noexcept;
+
+			std::string m_processName;
+			Arguments m_arguments;
+			PlatformSpecific::UserInfo m_userInfo;
+			FileSystem m_fileSystem;
+			Settings m_settings;
+			PlatformSpecific::SystemInfo m_systemInfo{m_arguments, m_settings};
+			std::shared_ptr< Base::ThreadPool > m_threadPool;
+			Net::Manager m_networkManager{m_fileSystem, m_threadPool};
+			std::vector< ServiceInterface * > m_servicesEnabled;
+			bool m_childProcess{false};
+			bool m_showInformation{false};
+	};
+
+	PrimaryServices::Impl::Impl (int argc, char * * argv, const Identification & identification) noexcept
 		: m_processName{"main"},
 		m_arguments{argc, argv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
@@ -62,7 +113,7 @@ namespace EmEn
 		}
 	}
 
-	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
+	PrimaryServices::Impl::Impl (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
 		: m_processName{std::move(processName)},
 		m_arguments{argc, argv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
@@ -96,7 +147,7 @@ namespace EmEn
 	}
 
 #if IS_WINDOWS
-	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification) noexcept
+	PrimaryServices::Impl::Impl (int argc, wchar_t * * wargv, const Identification & identification) noexcept
 		: m_processName{"main"},
 		m_arguments{argc, wargv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
@@ -116,7 +167,7 @@ namespace EmEn
 		}
 	}
 
-	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
+	PrimaryServices::Impl::Impl (int argc, wchar_t * * wargv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
 		: m_processName{std::move(processName)},
 		m_arguments{argc, wargv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
@@ -150,8 +201,37 @@ namespace EmEn
 	}
 #endif
 
+	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification) noexcept
+		: m_impl{std::make_unique< Impl >(argc, argv, identification)}
+	{
+
+	}
+
+	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
+		: m_impl{std::make_unique< Impl >(argc, argv, identification, std::move(processName), additionalArguments)}
+	{
+
+	}
+
+#if IS_WINDOWS
+	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification) noexcept
+		: m_impl{std::make_unique< Impl >(argc, wargv, identification)}
+	{
+
+	}
+
+	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
+		: m_impl{std::make_unique< Impl >(argc, wargv, identification, std::move(processName), additionalArguments)}
+	{
+
+	}
+#endif
+
+	/* NOTE: Must be defined here, where Impl is a complete type (std::unique_ptr requirement). */
+	PrimaryServices::~PrimaryServices () = default;
+
 	bool
-	PrimaryServices::initialize () noexcept
+	PrimaryServices::Impl::initialize () noexcept
 	{
 		if ( m_userInfo.initialize(m_servicesEnabled) )
 		{
@@ -242,8 +322,14 @@ namespace EmEn
 		return true;
 	}
 
+	bool
+	PrimaryServices::initialize () noexcept
+	{
+		return m_impl->initialize();
+	}
+
 	void
-	PrimaryServices::terminate () noexcept
+	PrimaryServices::Impl::terminate () noexcept
 	{
 		if ( m_threadPool != nullptr )
 		{
@@ -264,8 +350,86 @@ namespace EmEn
 		}
 	}
 
+	void
+	PrimaryServices::terminate () noexcept
+	{
+		m_impl->terminate();
+	}
+
+	bool
+	PrimaryServices::isChildProcess () const noexcept
+	{
+		return m_impl->m_childProcess;
+	}
+
+	std::shared_ptr< Base::ThreadPool >
+	PrimaryServices::threadPool () const noexcept
+	{
+		return m_impl->m_threadPool;
+	}
+
+	const PlatformSpecific::SystemInfo &
+	PrimaryServices::systemInfo () const noexcept
+	{
+		return m_impl->m_systemInfo;
+	}
+
+	const PlatformSpecific::UserInfo &
+	PrimaryServices::userInfo () const noexcept
+	{
+		return m_impl->m_userInfo;
+	}
+
+	Arguments &
+	PrimaryServices::arguments () noexcept
+	{
+		return m_impl->m_arguments;
+	}
+
+	const Arguments &
+	PrimaryServices::arguments () const noexcept
+	{
+		return m_impl->m_arguments;
+	}
+
+	FileSystem &
+	PrimaryServices::fileSystem () noexcept
+	{
+		return m_impl->m_fileSystem;
+	}
+
+	const FileSystem &
+	PrimaryServices::fileSystem () const noexcept
+	{
+		return m_impl->m_fileSystem;
+	}
+
+	Settings &
+	PrimaryServices::settings () noexcept
+	{
+		return m_impl->m_settings;
+	}
+
+	const Settings &
+	PrimaryServices::settings () const noexcept
+	{
+		return m_impl->m_settings;
+	}
+
+	Net::Manager &
+	PrimaryServices::netManager () noexcept
+	{
+		return m_impl->m_networkManager;
+	}
+
+	const Net::Manager &
+	PrimaryServices::netManager () const noexcept
+	{
+		return m_impl->m_networkManager;
+	}
+
 	std::string
-	PrimaryServices::information () const noexcept
+	PrimaryServices::Impl::information () const noexcept
 	{
 		std::stringstream output;
 
@@ -279,5 +443,11 @@ namespace EmEn
 			" ================ GENERAL INFORMATION EOF ================" "\n\n";
 
 		return output.str();
+	}
+
+	std::string
+	PrimaryServices::information () const noexcept
+	{
+		return m_impl->information();
 	}
 }

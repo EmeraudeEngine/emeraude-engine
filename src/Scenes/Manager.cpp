@@ -44,6 +44,7 @@
 #include "FastJSON.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
+#include "Settings.hpp"
 
 namespace EmEn::Scenes
 {

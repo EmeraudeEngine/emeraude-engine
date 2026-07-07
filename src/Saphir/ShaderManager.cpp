@@ -40,11 +40,14 @@
 
 /* Local inclusions. */
 #include "AbstractShader.hpp"
+#include "Arguments.hpp"
+#include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "SourceCodeParser.hpp"
 #include "TokenFormatter.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Vulkan/ShaderModule.hpp"
 
 namespace EmEn::Saphir

@@ -35,6 +35,7 @@
 #include "Manager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Utility.hpp"
 
 namespace EmEn::Audio

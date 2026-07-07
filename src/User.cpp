@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "PrimaryServices.hpp"
+#include "Settings.hpp"
 
 namespace EmEn
 {

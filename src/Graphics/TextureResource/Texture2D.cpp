@@ -27,6 +27,7 @@
 #include "Texture2D.hpp"
 
 /* Local inclusions. */
+#include "FileSystem.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"

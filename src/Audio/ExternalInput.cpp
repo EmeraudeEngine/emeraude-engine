@@ -33,6 +33,8 @@
 #include "WaveFactory/FileIO.hpp"
 #include "WaveFactory/Wave.hpp"
 #include "Manager.hpp"
+#include "Arguments.hpp"
+#include "Settings.hpp"
 
 namespace EmEn::Audio
 {

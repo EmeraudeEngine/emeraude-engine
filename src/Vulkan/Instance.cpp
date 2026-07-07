@@ -43,6 +43,7 @@
 #include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
+#include "Arguments.hpp"
 #include "Device.hpp"
 #include "DeviceRequirements.hpp"
 #include "Identification.hpp"

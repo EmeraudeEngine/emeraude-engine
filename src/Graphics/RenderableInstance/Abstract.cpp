@@ -35,6 +35,7 @@
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
+#include "Settings.hpp"
 #include "Saphir/Generator/ShadowCasting.hpp"
 #include "Saphir/Generator/TBNSpaceRendering.hpp"
 #include "Saphir/Program.hpp"

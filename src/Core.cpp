@@ -45,7 +45,9 @@
 #endif
 
 /* Local inclusions. */
+#include "Arguments.hpp"
 #include "Constants.hpp"
+#include "FileSystem.hpp"
 #include "Graphics/Effects/Framebuffer/DepthOfField.hpp"
 #include "Graphics/Effects/Framebuffer/ToneMapping.hpp"
 #include "Graphics/Photometry.hpp"

@@ -34,9 +34,11 @@
 /* Local inclusions. */
 #include "Math/Base.hpp"
 #include "WaveFactory/Synthesizer.hpp"
+#include "Arguments.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "SoundResource.hpp"
 #include "Source.hpp"
 #include "Utility.hpp"

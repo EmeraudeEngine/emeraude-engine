@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "Compute/IBLBaker.hpp"
+#include "Arguments.hpp"
 #include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"

@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "Network/Network.hpp"
 #include "Network/URI.hpp"

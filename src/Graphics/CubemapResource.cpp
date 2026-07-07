@@ -40,6 +40,7 @@
 #include <cstring>
 
 /* Local inclusions. */
+#include "FileSystem.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "Resources/Manager.hpp"

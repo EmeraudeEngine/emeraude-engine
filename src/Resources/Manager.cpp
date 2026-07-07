@@ -65,10 +65,13 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Arguments.hpp"
 #include "FastJSON.hpp"
+#include "FileSystem.hpp"
 #include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 
 namespace EmEn::Resources
 {

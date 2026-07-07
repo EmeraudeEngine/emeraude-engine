@@ -43,9 +43,12 @@
 #include "GamepadController.hpp"
 #include "JoystickController.hpp"
 #include "IO/IO.hpp"
+#include "Arguments.hpp"
 #include "BaseUtility.hpp"
+#include "FileSystem.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Input

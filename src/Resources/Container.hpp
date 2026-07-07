@@ -47,6 +47,7 @@
 
 /* Local inclusions for usages. */
 #include "BaseInformation.hpp"
+#include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "Network/URL.hpp"
 #include "ObserverTrait.hpp"

@@ -34,6 +34,7 @@
 #include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "Renderer.hpp"
+#include "Settings.hpp"
 #include "RenderTarget/Abstract.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"

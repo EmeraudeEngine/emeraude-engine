@@ -31,23 +31,37 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <memory>
 #include <string>
 #include <vector>
 
-/* Local inclusions for usages. */
-#include "Arguments.hpp"
-#include "FileSystem.hpp"
-#include "Identification.hpp"
-#include "ThreadPool.hpp"
-#include "Net/Manager.hpp"
-#include "PlatformSpecific/SystemInfo.hpp"
-#include "PlatformSpecific/UserInfo.hpp"
-#include "Settings.hpp"
-
 namespace EmEn
 {
+	namespace Base
+	{
+		class ThreadPool;
+	}
+
+	namespace Net
+	{
+		class Manager;
+	}
+
+	namespace PlatformSpecific
+	{
+		class SystemInfo;
+		class UserInfo;
+	}
+
+	class Arguments;
+	class FileSystem;
+	class Identification;
+	class Settings;
+
 	/**
 	 * @brief This class holds the primary services.
+	 * @note Pimpl idiom: the concrete services live in the implementation file,
+	 * keeping this header free of heavy service inclusions (compile firewall).
 	 */
 	class EMEN_API PrimaryServices final
 	{
@@ -122,8 +136,9 @@ namespace EmEn
 
 			/**
 			 * @brief Destructs the primary services.
+			 * @note Defined in the implementation file where Impl is a complete type.
 			 */
-			~PrimaryServices () = default;
+			~PrimaryServices ();
 
 			/**
 			 * @brief Main initialization method for primary services.
@@ -143,132 +158,84 @@ namespace EmEn
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool
-			isChildProcess () const noexcept
-			{
-				return m_childProcess;
-			}
+			bool isChildProcess () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the primary service thread pool.
 			 * @return std::shared_ptr< Base::ThreadPool >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Base::ThreadPool >
-			threadPool () const noexcept
-			{
-				return m_threadPool;
-			}
+			std::shared_ptr< Base::ThreadPool > threadPool () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the system info.
 			 * @return const PlatformSpecific::SystemInfo &
 			 */
 			[[nodiscard]]
-			const PlatformSpecific::SystemInfo &
-			systemInfo () const noexcept
-			{
-				return m_systemInfo;
-			}
+			const PlatformSpecific::SystemInfo & systemInfo () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the user info.
 			 * @return const PlatformSpecific::UserInfo &
 			 */
 			[[nodiscard]]
-			const PlatformSpecific::UserInfo &
-			userInfo () const noexcept
-			{
-				return m_userInfo;
-			}
+			const PlatformSpecific::UserInfo & userInfo () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the argument service.
 			 * @return Arguments &
 			 */
 			[[nodiscard]]
-			Arguments &
-			arguments () noexcept
-			{
-				return m_arguments;
-			}
+			Arguments & arguments () noexcept;
 
 			/**
 			 * @brief Returns the reference to the argument service.
 			 * @return const Arguments &
 			 */
 			[[nodiscard]]
-			const Arguments &
-			arguments () const noexcept
-			{
-				return m_arguments;
-			}
+			const Arguments & arguments () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the file system service.
 			 * @return FileSystem &
 			 */
 			[[nodiscard]]
-			FileSystem &
-			fileSystem () noexcept
-			{
-				return m_fileSystem;
-			}
+			FileSystem & fileSystem () noexcept;
 
 			/**
 			 * @brief Returns the reference to the file system service.
 			 * @return const FileSystem &
 			 */
 			[[nodiscard]]
-			const FileSystem &
-			fileSystem () const noexcept
-			{
-				return m_fileSystem;
-			}
+			const FileSystem & fileSystem () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the settings service.
 			 * @return Settings &
 			 */
 			[[nodiscard]]
-			Settings &
-			settings () noexcept
-			{
-				return m_settings;
-			}
+			Settings & settings () noexcept;
 
 			/**
 			 * @brief Returns the reference to the settings service.
 			 * @return const Settings &
 			 */
 			[[nodiscard]]
-			const Settings &
-			settings () const noexcept
-			{
-				return m_settings;
-			}
+			const Settings & settings () const noexcept;
 
 			/**
 			 * @brief Returns the reference to the download manager service.
 			 * @return Net::Manager &
 			 */
 			[[nodiscard]]
-			Net::Manager &
-			netManager () noexcept
-			{
-				return m_networkManager;
-			}
+			Net::Manager & netManager () noexcept;
 
 			/**
 			 * @brief Returns the reference to the download manager service.
 			 * @return const Net::Manager &
 			 */
 			[[nodiscard]]
-			const Net::Manager &
-			netManager () const noexcept
-			{
-				return m_networkManager;
-			}
+			const Net::Manager & netManager () const noexcept;
 
 			/**
 			 * @brief Returns general information about the primary services.
@@ -279,16 +246,9 @@ namespace EmEn
 
 		private:
 
-			std::string m_processName;
-			Arguments m_arguments;
-			PlatformSpecific::UserInfo m_userInfo;
-			FileSystem m_fileSystem;
-			Settings m_settings;
-			PlatformSpecific::SystemInfo m_systemInfo{m_arguments, m_settings};
-			std::shared_ptr< Base::ThreadPool > m_threadPool;
-			Net::Manager m_networkManager{m_fileSystem, m_threadPool};
-			std::vector< ServiceInterface * > m_servicesEnabled;
-			bool m_childProcess{false};
-			bool m_showInformation{false};
+			/** @brief Private implementation holding the concrete services. */
+			class Impl;
+
+			std::unique_ptr< Impl > m_impl;
 	};
 }
