@@ -328,6 +328,21 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the single graphics queue used by the renderer for every frame submission.
+			 * @note External one-shot GPU work that must be ordered against in-flight frame command buffers
+			 * (e.g. the overlay accelerated-frame copy) MUST be submitted on this queue: a single VkQueue
+			 * executes submissions in FIFO order, so intra-queue barriers are sufficient — no cross-queue
+			 * semaphores needed. May be nullptr before the renderer is initialized.
+			 * @return Vulkan::Queue *
+			 */
+			[[nodiscard]]
+			Vulkan::Queue *
+			graphicsQueue () const noexcept
+			{
+				return m_graphicsQueue;
+			}
+
+			/**
 			 * @brief Returns the reference to the layout manager.
 			 * @return Vulkan::LayoutManager &
 			 */

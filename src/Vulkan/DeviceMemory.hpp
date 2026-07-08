@@ -61,6 +61,25 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Constructs a device memory with an extension chain for the allocation info.
+			 * @note Used for external-memory imports (e.g. VkMemoryDedicatedAllocateInfo → VkImportMemoryWin32HandleInfoKHR
+			 * for the zero-copy CEF accelerated-paint path).
+			 * @warning The pointed chain is NOT copied — it must stay alive until createOnHardware() returns.
+			 * @param device A reference to a smart pointer of the device.
+			 * @param requirement A reference to a memory requirement.
+			 * @param propertyFlags The type of memory.
+			 * @param allocateInfoNext A pointer to the pNext chain for VkMemoryAllocateInfo.
+			 */
+			DeviceMemory (const std::shared_ptr< Device > & device, const VkMemoryRequirements2 & requirement, VkMemoryPropertyFlags propertyFlags, const void * allocateInfoNext) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_requirement{requirement},
+				m_propertyFlags{propertyFlags},
+				m_allocateInfoNext{allocateInfoNext}
+			{
+
+			}
+
+			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
@@ -163,5 +182,7 @@ namespace EmEn::Vulkan
 			VkDeviceMemory m_handle{VK_NULL_HANDLE};
 			VkMemoryRequirements2 m_requirement;
 			VkMemoryPropertyFlags m_propertyFlags;
+			/* NOTE: Borrowed pNext chain for VkMemoryAllocateInfo (external-memory imports). Only read during createOnHardware(). */
+			const void * m_allocateInfoNext{nullptr};
 	};
 }

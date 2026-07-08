@@ -382,6 +382,45 @@ namespace EmEn::Vulkan
 		return externalImageFormatProperties;
 	}
 
+	bool
+	PhysicalDevice::supportsExternalImageImport (VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkExternalMemoryHandleTypeFlagBits externalHandleType) const noexcept
+	{
+		VkPhysicalDeviceExternalImageFormatInfo externalImageFormatInfo{};
+		externalImageFormatInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO;
+		externalImageFormatInfo.pNext = nullptr;
+		externalImageFormatInfo.handleType = externalHandleType;
+
+		VkPhysicalDeviceImageFormatInfo2 imageFormatInfo{};
+		imageFormatInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+		imageFormatInfo.pNext = &externalImageFormatInfo;
+		imageFormatInfo.format = format;
+		imageFormatInfo.type = type;
+		imageFormatInfo.tiling = tiling;
+		imageFormatInfo.usage = usage;
+		imageFormatInfo.flags = 0;
+
+		VkExternalImageFormatProperties externalImageFormatProperties{};
+		externalImageFormatProperties.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES;
+		externalImageFormatProperties.pNext = nullptr;
+
+		VkImageFormatProperties2 imageFormatProperties{};
+		imageFormatProperties.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+		imageFormatProperties.pNext = &externalImageFormatProperties;
+
+		if ( const auto result = vkGetPhysicalDeviceImageFormatProperties2(m_physicalDevice, &imageFormatInfo, &imageFormatProperties); result != VK_SUCCESS )
+		{
+			/* NOTE: VK_ERROR_FORMAT_NOT_SUPPORTED is a normal negative answer here, not an error. */
+			if ( result != VK_ERROR_FORMAT_NOT_SUPPORTED )
+			{
+				TraceError{ClassId} << "Unable to get external image format properties : " << vkResultToCString(result) << " !";
+			}
+
+			return false;
+		}
+
+		return ( externalImageFormatProperties.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT ) != 0;
+	}
+
 	VkExternalBufferProperties
 	PhysicalDevice::getExternalBufferProperties (const VkPhysicalDeviceExternalBufferInfo * pExternalBufferInfo) const noexcept
 	{

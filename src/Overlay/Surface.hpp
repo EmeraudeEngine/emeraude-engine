@@ -46,6 +46,14 @@
 namespace EmEn::Vulkan
 {
 	class Sampler;
+	class CommandPool;
+	class CommandBuffer;
+	struct ExternalImageDescriptor;
+
+	namespace Sync
+	{
+		class Fence;
+	}
 }
 
 namespace EmEn::Overlay
@@ -162,6 +170,86 @@ namespace EmEn::Overlay
 			enableTransitionBuffer () noexcept
 			{
 				m_transitionBufferEnabled = true;
+			}
+
+			/**
+			 * @brief Enables the accelerated (zero-copy GPU) content source mode.
+			 * @details The surface image becomes a pure GPU→GPU copy target (DEVICE_LOCAL, OPTIMAL,
+			 * TRANSFER_DST|SAMPLED) with NO CPU pixmap and NO staging upload. Content arrives through
+			 * importAcceleratedFrame() — an external GPU texture (e.g. a CEF shared texture) imported
+			 * and copied on the GPU. Mutually exclusive with the memory-mapping mode (forced to staging
+			 * layout, mapping disabled).
+			 * @warning Must be called BEFORE createOnHardware(). The CPU-side alpha-test event blocking
+			 * (isEventBlocked) degrades: without a pixmap, per-pixel alpha reads return transparent.
+			 * @return void
+			 */
+			void
+			enableAcceleratedSource () noexcept
+			{
+				m_acceleratedSourceEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the accelerated (zero-copy GPU) content source mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAcceleratedSourceEnabled () const noexcept
+			{
+				return m_acceleratedSourceEnabled;
+			}
+
+			/**
+			 * @brief Imports an external GPU frame (zero-copy shared texture) and copies it into this surface.
+			 * @details The whole operation is performed synchronously inside the call, per the producer's
+			 * handle-validity contract (for CEF the handle dies when OnAcceleratedPaint returns):
+			 * import the external texture as a VkImage, record acquire barriers, vkCmdCopyImage toward the
+			 * active (or transition) buffer image, restore SHADER_READ_ONLY, submit on the renderer's frame
+			 * queue and WAIT the fence, then destroy the imported image. The frame is routed by size through
+			 * the transition-buffer machinery (same rules as the CPU paths): a mismatching frame is clamped
+			 * into the active buffer and a transition resize is requested for convergence.
+			 * @note Callable from the content provider's thread once the surface exists on the GPU
+			 * (createOnHardware() caches the renderer).
+			 * @param descriptor A reference to the external image descriptor filled by the producer.
+			 * @return bool True when the frame was copied (or safely clamped), false on failure.
+			 */
+			[[nodiscard]]
+			bool importAcceleratedFrame (const Vulkan::ExternalImageDescriptor & descriptor) noexcept;
+
+			/**
+			 * @brief Imports an external GPU popup frame (e.g. a CEF <select> dropdown) into the popup cache.
+			 * @details The popup content is cached in a persistent surface-owned GPU image (recreated when
+			 * the popup size changes), then composited onto the active buffer at the popup position. The
+			 * cache exists because every accelerated view frame is a FULL copy that erases the popup — the
+			 * view path re-composites the cache after each frame while the popup is visible (mirror of the
+			 * CPU compositePopup() semantics). Synchronous, same handle contract as importAcceleratedFrame().
+			 * @param descriptor A reference to the external image descriptor filled by the producer.
+			 * @return bool True when the popup frame was cached and composited.
+			 */
+			[[nodiscard]]
+			bool importAcceleratedPopupFrame (const Vulkan::ExternalImageDescriptor & descriptor) noexcept;
+
+			/**
+			 * @brief Shows or hides the accelerated popup overlay.
+			 * @details On hide, the popup cache is released — the next view frame (a full copy)
+			 * naturally erases the popup from the surface.
+			 * @param visible The popup visibility state.
+			 * @return void
+			 */
+			void setAcceleratedPopupVisible (bool visible) noexcept;
+
+			/**
+			 * @brief Sets the accelerated popup position on the surface (view coordinates, pixels).
+			 * @param positionX The popup X position (may be negative — clamped at composite time).
+			 * @param positionY The popup Y position (may be negative — clamped at composite time).
+			 * @return void
+			 */
+			void
+			setAcceleratedPopupPosition (int32_t positionX, int32_t positionY) noexcept
+			{
+				m_acceleratedPopupX = positionX;
+				m_acceleratedPopupY = positionY;
 			}
 
 			/**
@@ -1243,12 +1331,42 @@ namespace EmEn::Overlay
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Surface & obj);
 
+			/**
+			 * @brief Lazily creates the one-shot GPU resources (command pool/buffer + fence) used by importAcceleratedFrame().
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool prepareAcceleratedCopyResources (Graphics::Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Records the popup-cache composite onto a target image (already in TRANSFER_DST layout).
+			 * @note No-op when the popup is hidden or the cache is absent. The copy region is clamped
+			 * to the target boundaries (negative positions and overflow handled).
+			 * @param targetImage A reference to the target image.
+			 * @return void
+			 */
+			void recordAcceleratedPopupComposite (Vulkan::Image & targetImage) noexcept;
+
+			/* NOTE: Cached by createOnHardware() so content providers (importAcceleratedFrame) can
+			 * reach the renderer from their own thread. The renderer outlives every overlay surface. */
+			Graphics::Renderer * m_renderer{nullptr};
 			const FramebufferProperties & m_framebufferProperties;
 			Base::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
 			Base::Math::Matrix< 4, float > m_modelMatrix;
 			Framebuffer m_activeBuffer;
 			Framebuffer m_transitionBuffer;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
+			/* NOTE: One-shot resources for the accelerated-frame GPU copy (lazily created, CEF-thread only). */
+			std::shared_ptr< Vulkan::CommandPool > m_acceleratedCommandPool;
+			std::shared_ptr< Vulkan::CommandBuffer > m_acceleratedCommandBuffer;
+			std::shared_ptr< Vulkan::Sync::Fence > m_acceleratedFence;
+			/* NOTE: Persistent GPU cache of the popup content (accelerated mode). Re-composited after
+			 * every view frame while visible; released on hide. Content-provider thread only. */
+			std::shared_ptr< Vulkan::Image > m_acceleratedPopupImage;
+			int32_t m_acceleratedPopupX{0};
+			int32_t m_acceleratedPopupY{0};
+			bool m_acceleratedPopupVisible{false};
 			mutable std::mutex m_framebufferAccess;
 			mutable std::mutex m_requestedTransitionSizeMutex;
 			uint32_t m_requestedTransitionWidth{0};
@@ -1259,6 +1377,7 @@ namespace EmEn::Overlay
 			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
 			std::function< void () > m_redrawRequester{}; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
 			bool m_transitionResizeRequested{false};
+			bool m_acceleratedSourceEnabled{false};
 			bool m_videoMemorySizeValid{false};
 			bool m_videoMemoryUpToDate{false};
 			bool m_transitionBufferEnabled{false};

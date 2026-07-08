@@ -262,6 +262,18 @@ namespace EmEn::Vulkan
 			return std::strcmp(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0;
 		});
 
+		/* NOTE: Detect if the Win32 external-memory import extension was enabled on this device
+		 * (zero-copy CEF accelerated paint: D3D11 shared texture → VkImage). */
+		m_externalMemoryWin32Enabled = std::ranges::any_of(extensions, [] (const char * ext) {
+			return std::strcmp(ext, "VK_KHR_external_memory_win32") == 0;
+		});
+
+		/* NOTE: Detect if the Metal-objects interop extension was enabled on this device
+		 * (zero-copy CEF accelerated paint on macOS: IOSurface → VkImage through MoltenVK). */
+		m_metalObjectsEnabled = std::ranges::any_of(extensions, [] (const char * ext) {
+			return std::strcmp(ext, "VK_EXT_metal_objects") == 0;
+		});
+
 		/* Initialize the vulkan memory allocator. */
 		if ( useVMA && !this->createMemoryAllocator() )
 		{

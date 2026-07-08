@@ -521,6 +521,19 @@ namespace EmEn::Vulkan
 			VkExternalImageFormatPropertiesNV getExternalFormatProperties (VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags, VkExternalMemoryHandleTypeFlagsNV externalHandleType) const noexcept;
 
 			/**
+			 * @brief Returns whether an image with the given properties can be IMPORTED from an external memory handle type (core Vulkan 1.1 query).
+			 * @note Used by the zero-copy CEF accelerated-paint path (e.g. VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT on Windows) to validate the import before creating the image.
+			 * @param format The image format.
+			 * @param type The image type.
+			 * @param tiling The image tiling.
+			 * @param usage The image usage flags.
+			 * @param externalHandleType The external memory handle type to test.
+			 * @return bool True when the driver reports VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT for this combination.
+			 */
+			[[nodiscard]]
+			bool supportsExternalImageImport (VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkExternalMemoryHandleTypeFlagBits externalHandleType) const noexcept;
+
+			/**
 			 * @brief Returns the physical device external buffer properties.
 			 * @param pExternalBufferInfo
 			 * @return VkExternalBufferProperties

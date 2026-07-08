@@ -607,6 +607,43 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, const VkImageCopy & region) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source image is not created.");
+
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination image is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to copy image " << src.handle() << " to image " << dst.handle();
+
+				return;
+			}
+		}
+
+		vkCmdCopyImage(
+			m_handle,
+			src.handle(), srcLayout,
+			dst.handle(), dstLayout,
+			1, &region
+		);
+	}
+
+	void
 	CommandBuffer::clearColor (const Image & image, VkImageLayout imageLayout, const PixelFactory::Color< float > & color) const noexcept
 	{
 		if constexpr ( IsDebug )

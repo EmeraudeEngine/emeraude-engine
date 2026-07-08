@@ -362,6 +362,20 @@ namespace EmEn::Vulkan
 			void copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) const noexcept;
 
 			/**
+			 * @brief Copies an explicit region from a source image to a destination image.
+			 * @note Same contract as the extent-clamped overload, but the caller fully controls
+			 * offsets and extent (e.g. compositing a small image at an offset in a bigger one).
+			 * The region must be valid for both images — no clamping is performed here.
+			 * @param src A reference to the source image.
+			 * @param srcLayout The current layout of the source image.
+			 * @param dst A reference to the destination image.
+			 * @param dstLayout The current layout of the destination image.
+			 * @param region A reference to the copy region.
+			 * @return void
+			 */
+			void copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, const VkImageCopy & region) const noexcept;
+
+			/**
 			 * @brief Clears the color part of the image.
 			 * @param image A reference to a command buffer.
 			 * @param imageLayout Specifies the current layout of the image subresource ranges to be cleared, and must be VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR, VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.

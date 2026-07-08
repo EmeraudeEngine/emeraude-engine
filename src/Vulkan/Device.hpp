@@ -299,6 +299,29 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the Win32 external-memory import extension (VK_KHR_external_memory_win32) is enabled on this device.
+			 * @note Used by the zero-copy CEF accelerated-paint path to import D3D11 shared textures as Vulkan images. Always false outside Windows.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			externalMemoryWin32Enabled () const noexcept
+			{
+				return m_externalMemoryWin32Enabled;
+			}
+
+			/**
+			 * @brief Returns whether VK_EXT_metal_objects is enabled on this device (macOS IOSurface import, see Image::importFromIOSurface()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			metalObjectsEnabled () const noexcept
+			{
+				return m_metalObjectsEnabled;
+			}
+
+			/**
 			 * @brief Returns whether the device has been set up for graphics.
 			 * @return bool
 			 */
@@ -719,5 +742,7 @@ namespace EmEn::Vulkan
 			bool m_basicSupport{false};
 			bool m_useMemoryAllocator{false};
 			bool m_rayTracingEnabled{false};
+			bool m_externalMemoryWin32Enabled{false};
+			bool m_metalObjectsEnabled{false};
 	};
 }

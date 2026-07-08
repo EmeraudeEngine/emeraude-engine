@@ -161,6 +161,44 @@ bool success = this->writeActiveBufferWithMapping([&](void* ptr, VkDeviceSize ro
 
 **CRITICAL:** set the mode before `createOnHardware()`. `isMemoryMappingEnabled()` only reflects the final decision **after** `createOnHardware()` — `Auto` is resolved there (against the device), not when the mode is set.
 
+### Accelerated Source Mode (zero-copy GPU shared texture)
+
+Third content path, exclusive with memory mapping (forces staging layout). Built for CEF
+`OnAcceleratedPaint` (Windows/D3D11 and macOS/IOSurface). The surface image is a pure GPU→GPU copy target
+(`DEVICE_LOCAL`, `OPTIMAL`, `TRANSFER_DST|SAMPLED`) with **no CPU pixmap and no staging upload**.
+
+**API:**
+- `enableAcceleratedSource()` — **before** `createOnHardware()` (like the other modes).
+- `importAcceleratedFrame(const Vulkan::ExternalImageDescriptor &)` — callable from the content
+  provider's thread. Synchronous by contract: import the external texture (platform dispatch
+  `importExternalImage()` → `Image::importFromWin32Handle` on Windows,
+  `Image::importFromIOSurface` on macOS), acquire barrier (`VK_QUEUE_FAMILY_EXTERNAL` → graphics
+  on Windows; plain layout transition on macOS — the metal_objects image is not Vulkan external
+  memory, and MoltenVK transitions are Metal no-ops so the content is preserved),
+  `vkCmdCopyImage` (extent clamped to min), restore `SHADER_READ_ONLY`, submit on
+  **`Renderer::graphicsQueue()`** (single frame queue → FIFO ordering vs in-flight frames — this is
+  why the copy needs no cross-queue semaphores) and **wait the fence before returning** (the
+  producer's handle is only valid during its callback — CEF 126 has no keyed mutex).
+- Frame routing reuses the transition-buffer machinery (`determineTargetBuffer`): a
+  transition-sized frame commits the swap inline; a mismatching frame is clamp-copied into the
+  active buffer + `requestTransitionBufferResize` (same convergence rules as the CPU paths).
+- One-shot GPU resources (transient `CommandPool` + `CommandBuffer` + `Fence`) are created lazily
+  per surface; `createOnHardware()` caches the `Renderer *` for provider-thread access.
+
+**Popup overlay (`importAcceleratedPopupFrame` + `setAcceleratedPopupVisible/Position`):**
+external popup frames (e.g. CEF `<select>` dropdowns) are copied into a persistent surface-owned
+GPU cache image and composited at the popup position on the active buffer. Because every
+accelerated view frame is a FULL copy (erasing the popup), the view path re-composites the cache
+after each frame while visible. On hide the cache is released — the next view frame erases the
+popup on screen. Uses the region overload of `CommandBuffer::copyImage` (explicit dst offset).
+
+**Limitations:**
+- **Alpha-test event blocking degrades**: `isEventBlocked()` reads the CPU pixmap, which does not
+  exist in this mode — surfaces needing per-pixel alpha routing must stay on the CPU path
+  (the consumer decides per surface; see app_system `WebView`).
+- Windows/D3D11 (`Win32D3D11Texture`) and macOS/IOSurface (`IOSurface`, via VK_EXT_metal_objects)
+  are implemented; DmaBuf (Linux) is a descriptor placeholder.
+
 ### Supported Content Types
 
 **Generic Surface**: Modifiable Pixmap bitmap (main use case)

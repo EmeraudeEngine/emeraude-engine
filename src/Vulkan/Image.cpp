@@ -30,6 +30,20 @@
 #include <numeric>
 #include <ranges>
 
+#if IS_WINDOWS
+/* NOTE: Win32 external-memory import (VkImportMemoryWin32HandleInfoKHR lives in vulkan_win32.h,
+ * which requires the Windows API types). Project-wide WIN32_LEAN_AND_MEAN/NOMINMAX apply. */
+#include <windows.h>
+#include <vulkan/vulkan_win32.h>
+#endif
+
+#if IS_MACOS
+/* NOTE: IOSurface import through VK_EXT_metal_objects (VkImportMetalIOSurfaceInfoEXT lives in
+ * vulkan_metal.h). The header is self-contained in C++: it forward-declares IOSurfaceRef itself,
+ * so no IOSurface framework header is needed here. */
+#include <vulkan/vulkan_metal.h>
+#endif
+
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Graphics/CubemapMovieResource.hpp"
@@ -68,6 +82,227 @@ namespace EmEn::Vulkan
 		return swapChainImage;
 	}
 
+#if IS_WINDOWS
+	std::shared_ptr< Image >
+	Image::importFromWin32Handle (const std::shared_ptr< Device > & device, const ExternalImageDescriptor & descriptor) noexcept
+	{
+		if ( descriptor.handleType != ExternalImageDescriptor::HandleType::Win32D3D11Texture || !descriptor.isValid() )
+		{
+			Tracer::error(ClassId, "Invalid external image descriptor for a Win32 D3D11 texture import !");
+
+			return nullptr;
+		}
+
+		if ( !device->externalMemoryWin32Enabled() )
+		{
+			Tracer::error(ClassId, "VK_KHR_external_memory_win32 is not enabled on this device ! Unable to import the external image.");
+
+			return nullptr;
+		}
+
+		/* 1. Create the image handle with the external-memory declaration chained.
+		 * NOTE: The pNext chain points to the stack and is reset right after creation. */
+		VkExternalMemoryImageCreateInfo externalMemoryCreateInfo{};
+		externalMemoryCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+		externalMemoryCreateInfo.pNext = nullptr;
+		externalMemoryCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT;
+
+		auto importedImage = std::make_shared< Image >(
+			device,
+			VK_IMAGE_TYPE_2D,
+			descriptor.format,
+			VkExtent3D{descriptor.width, descriptor.height, 1},
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		);
+		importedImage->setIdentifier(ClassId, "ExternalD3D11Texture", "Image");
+		importedImage->m_isImportedImage = true;
+		importedImage->m_createInfo.pNext = &externalMemoryCreateInfo;
+
+		if ( const auto result = vkCreateImage(device->handle(), &importedImage->m_createInfo, nullptr, &importedImage->m_handle); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create the external image : " << vkResultToCString(result) << " !";
+
+			return nullptr;
+		}
+
+		importedImage->m_createInfo.pNext = nullptr;
+
+		/* 2. Query the memory requirements (external images typically require a dedicated allocation). */
+		VkImageMemoryRequirementsInfo2 requirementsInfo{};
+		requirementsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
+		requirementsInfo.pNext = nullptr;
+		requirementsInfo.image = importedImage->m_handle;
+
+		VkMemoryDedicatedRequirements dedicatedRequirements{};
+		dedicatedRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS;
+		dedicatedRequirements.pNext = nullptr;
+
+		VkMemoryRequirements2 memoryRequirements{};
+		memoryRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+		memoryRequirements.pNext = &dedicatedRequirements;
+
+		vkGetImageMemoryRequirements2(device->handle(), &requirementsInfo, &memoryRequirements);
+
+		/* NOTE: The requirement struct is copied into DeviceMemory — detach the stack pNext chain first. */
+		memoryRequirements.pNext = nullptr;
+
+		/* 3. Import the D3D11 texture memory as a dedicated allocation (bypasses VMA — it cannot import external memory). */
+		VkImportMemoryWin32HandleInfoKHR importInfo{};
+		importInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR;
+		importInfo.pNext = nullptr;
+		importInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT;
+		importInfo.handle = static_cast< HANDLE >(descriptor.win32Handle);
+		importInfo.name = nullptr;
+
+		VkMemoryDedicatedAllocateInfo dedicatedAllocateInfo{};
+		dedicatedAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+		dedicatedAllocateInfo.pNext = &importInfo;
+		dedicatedAllocateInfo.image = importedImage->m_handle;
+		dedicatedAllocateInfo.buffer = VK_NULL_HANDLE;
+
+		/* NOTE: The chain lives on this stack frame — DeviceMemory only reads it inside createOnHardware() below. */
+		importedImage->m_deviceMemory = std::make_unique< DeviceMemory >(device, memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &dedicatedAllocateInfo);
+		importedImage->m_deviceMemory->setIdentifier(ClassId, "ExternalD3D11Texture", "DeviceMemory");
+
+		if ( !importedImage->m_deviceMemory->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to import the external D3D11 texture memory (handle @" << descriptor.win32Handle << ") !";
+
+			/* NOTE: The image handle is destroyed by destroyFromHardware() through the manual path. */
+			return nullptr;
+		}
+
+		/* 4. Bind the image to the imported memory. */
+		if ( const auto result = vkBindImageMemory(device->handle(), importedImage->m_handle, importedImage->m_deviceMemory->handle(), 0); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} <<
+				"Unable to bind the external image " << importedImage->m_handle << " to the imported device memory " << importedImage->m_deviceMemory->handle() <<
+				" : " << vkResultToCString(result) << " !";
+
+			return nullptr;
+		}
+
+		importedImage->setVulkanObjectName(device->handle(), VK_OBJECT_TYPE_IMAGE, reinterpret_cast< uint64_t >(importedImage->m_handle));
+
+		/* NOTE: The content already exists on the GPU, but from Vulkan's point of view the layout is
+		 * undefined until the acquire barrier (VK_QUEUE_FAMILY_EXTERNAL → graphics queue) is recorded. */
+		importedImage->m_currentImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		importedImage->setCreated();
+
+		return importedImage;
+	}
+#endif
+
+#if IS_MACOS
+	std::shared_ptr< Image >
+	Image::importFromIOSurface (const std::shared_ptr< Device > & device, const ExternalImageDescriptor & descriptor) noexcept
+	{
+		if ( descriptor.handleType != ExternalImageDescriptor::HandleType::IOSurface || !descriptor.isValid() )
+		{
+			Tracer::error(ClassId, "Invalid external image descriptor for an IOSurface import !");
+
+			return nullptr;
+		}
+
+		if ( !device->metalObjectsEnabled() )
+		{
+			Tracer::error(ClassId, "VK_EXT_metal_objects is not enabled on this device ! Unable to import the external image.");
+
+			return nullptr;
+		}
+
+		/* 1. Create the image handle with the IOSurface import chained. Unlike the Win32 path this
+		 * is NOT Vulkan external memory: MoltenVK builds the backing MTLTexture directly from the
+		 * IOSurface at image creation (VK_EXT_metal_objects).
+		 * NOTE: The pNext chain points to the stack and is reset right after creation. */
+		VkImportMetalIOSurfaceInfoEXT importIOSurfaceInfo{};
+		importIOSurfaceInfo.sType = VK_STRUCTURE_TYPE_IMPORT_METAL_IO_SURFACE_INFO_EXT;
+		importIOSurfaceInfo.pNext = nullptr;
+		importIOSurfaceInfo.ioSurface = static_cast< IOSurfaceRef >(descriptor.ioSurface);
+
+		auto importedImage = std::make_shared< Image >(
+			device,
+			VK_IMAGE_TYPE_2D,
+			descriptor.format,
+			VkExtent3D{descriptor.width, descriptor.height, 1},
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+		);
+		importedImage->setIdentifier(ClassId, "ExternalIOSurface", "Image");
+		importedImage->m_isImportedImage = true;
+		importedImage->m_createInfo.pNext = &importIOSurfaceInfo;
+
+		if ( const auto result = vkCreateImage(device->handle(), &importedImage->m_createInfo, nullptr, &importedImage->m_handle); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create the external image : " << vkResultToCString(result) << " !";
+
+			return nullptr;
+		}
+
+		importedImage->m_createInfo.pNext = nullptr;
+
+		/* 2. Query the memory requirements (dedicated allocation, mirrors the Win32 path). */
+		VkImageMemoryRequirementsInfo2 requirementsInfo{};
+		requirementsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
+		requirementsInfo.pNext = nullptr;
+		requirementsInfo.image = importedImage->m_handle;
+
+		VkMemoryDedicatedRequirements dedicatedRequirements{};
+		dedicatedRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS;
+		dedicatedRequirements.pNext = nullptr;
+
+		VkMemoryRequirements2 memoryRequirements{};
+		memoryRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+		memoryRequirements.pNext = &dedicatedRequirements;
+
+		vkGetImageMemoryRequirements2(device->handle(), &requirementsInfo, &memoryRequirements);
+
+		/* NOTE: The requirement struct is copied into DeviceMemory — detach the stack pNext chain first. */
+		memoryRequirements.pNext = nullptr;
+
+		/* 3. Allocate a dedicated device memory and bind it. There is no memory-import struct in
+		 * VK_EXT_metal_objects (the import happened at image creation): the allocation only
+		 * satisfies the Vulkan binding contract — MoltenVK keeps the IOSurface as the actual
+		 * texture storage. Bypass VMA like the Win32 path (dedicated allocation). */
+		VkMemoryDedicatedAllocateInfo dedicatedAllocateInfo{};
+		dedicatedAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+		dedicatedAllocateInfo.pNext = nullptr;
+		dedicatedAllocateInfo.image = importedImage->m_handle;
+		dedicatedAllocateInfo.buffer = VK_NULL_HANDLE;
+
+		/* NOTE: The chain lives on this stack frame — DeviceMemory only reads it inside createOnHardware() below. */
+		importedImage->m_deviceMemory = std::make_unique< DeviceMemory >(device, memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &dedicatedAllocateInfo);
+		importedImage->m_deviceMemory->setIdentifier(ClassId, "ExternalIOSurface", "DeviceMemory");
+
+		if ( !importedImage->m_deviceMemory->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to allocate the dedicated memory for the imported IOSurface (@" << descriptor.ioSurface << ") !";
+
+			/* NOTE: The image handle is destroyed by destroyFromHardware() through the manual path. */
+			return nullptr;
+		}
+
+		/* 4. Bind the image to the dedicated memory. */
+		if ( const auto result = vkBindImageMemory(device->handle(), importedImage->m_handle, importedImage->m_deviceMemory->handle(), 0); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} <<
+				"Unable to bind the external image " << importedImage->m_handle << " to the dedicated device memory " << importedImage->m_deviceMemory->handle() <<
+				" : " << vkResultToCString(result) << " !";
+
+			return nullptr;
+		}
+
+		importedImage->setVulkanObjectName(device->handle(), VK_OBJECT_TYPE_IMAGE, reinterpret_cast< uint64_t >(importedImage->m_handle));
+
+		/* NOTE: The content already exists on the GPU (the IOSurface is the storage). Vulkan-wise the
+		 * layout is undefined until the first transition; MoltenVK layout transitions are Metal no-ops,
+		 * so the UNDEFINED→TRANSFER_SRC transition in the consumer preserves the pixels. */
+		importedImage->m_currentImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		importedImage->setCreated();
+
+		return importedImage;
+	}
+#endif
+
 	bool
 	Image::createOnHardware () noexcept
 	{
@@ -79,6 +314,14 @@ namespace EmEn::Vulkan
 			this->setCreated();
 
 			return true;
+		}
+
+		// NOTE: Special case for imported (external-memory) images: they are fully built by their import factory.
+		if ( m_isImportedImage )
+		{
+			Tracer::error(ClassId, "This image was imported from an external memory handle ! It is created by its import factory.");
+
+			return this->isCreated();
 		}
 
 		if ( !this->hasDevice() )
@@ -120,8 +363,9 @@ namespace EmEn::Vulkan
 			return true;
 		}
 
+		/* NOTE: Imported images (external memory) never belong to VMA — always destroy them manually. */
 		const auto result =
-			this->device()->useMemoryAllocator() ?
+			this->device()->useMemoryAllocator() && !m_isImportedImage ?
 			this->destroyWithVMA() :
 			this->destroyManually();
 

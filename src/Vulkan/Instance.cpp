@@ -930,6 +930,36 @@ namespace EmEn::Vulkan
 
 				Tracer::info(ClassId, "VK_NV_device_diagnostic_checkpoints detected and enabled (GPU checkpoint markers).");
 			}
+
+			/* NOTE: External-memory image import (zero-copy CEF accelerated paint).
+			 * VK_KHR_external_memory and VK_KHR_external_memory_capabilities are core since
+			 * Vulkan 1.1 (instance API is 1.3) — only the platform handle extension is needed.
+			 * On Windows it allows importing a D3D11 shared texture (DXGI shared HANDLE) as a
+			 * VkImage. The literal name is used because vulkan_win32.h is not included here. */
+			if constexpr ( IsWindows )
+			{
+				if ( hasExtension("VK_KHR_external_memory_win32") )
+				{
+					m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_external_memory_win32");
+
+					Tracer::info(ClassId, "VK_KHR_external_memory_win32 detected and enabled (external D3D11 texture import).");
+				}
+			}
+
+			/* NOTE: On macOS the equivalent import path is VK_EXT_metal_objects (MoltenVK): a CEF
+			 * IOSurface becomes the backing MTLTexture of a VkImage at image creation
+			 * (VkImportMetalIOSurfaceInfoEXT). This is not Vulkan external memory — no
+			 * external-memory handle extension exists for IOSurface in this MoltenVK version.
+			 * The literal name is used because vulkan_metal.h is not included here. */
+			if constexpr ( IsMacOS )
+			{
+				if ( hasExtension("VK_EXT_metal_objects") )
+				{
+					m_requiredGraphicsDeviceExtensions.emplace_back("VK_EXT_metal_objects");
+
+					Tracer::info(ClassId, "VK_EXT_metal_objects detected and enabled (external IOSurface import).");
+				}
+			}
 		}
 
 		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, m_useVulkanMemoryAllocator) )

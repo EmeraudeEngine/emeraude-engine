@@ -45,6 +45,7 @@
 
 /* Local inclusions for usages. */
 #include "DeviceMemory.hpp"
+#include "ExternalImageDescriptor.hpp"
 #include "PixelFactory/Pixmap.hpp"
 
 #if IS_WINDOWS
@@ -507,6 +508,43 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			static std::shared_ptr< Image > createFromSwapChain (const std::shared_ptr< Device > & device, VkImage handle, const VkSwapchainCreateInfoKHR & createInfo) noexcept;
 
+#if IS_WINDOWS
+			/**
+			 * @brief Imports a Direct3D 11 shared texture (DXGI shared HANDLE) as a Vulkan image (zero-copy CEF accelerated paint).
+			 * @note The image is created with VK_IMAGE_USAGE_TRANSFER_SRC_BIT: the expected use is a single
+			 * GPU→GPU copy toward an engine-owned image (Overlay::Surface). Memory is allocated as a dedicated
+			 * import (VkMemoryDedicatedAllocateInfo + VkImportMemoryWin32HandleInfoKHR), bypassing VMA — VMA
+			 * cannot import external memory.
+			 * @warning The HANDLE is only borrowed and is NEVER closed by the engine. For CEF, the handle is
+			 * pool-managed and only valid during the OnAcceleratedPaint callback: the returned image (and any
+			 * GPU work reading it) must be finished and destroyed before the callback returns.
+			 * @param device A reference to a device smart pointer. VK_KHR_external_memory_win32 must be enabled (see Device::externalMemoryWin32Enabled()).
+			 * @param descriptor A reference to the external image descriptor (handleType must be Win32D3D11Texture).
+			 * @return std::shared_ptr< Image > The imported image, or nullptr on failure.
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Image > importFromWin32Handle (const std::shared_ptr< Device > & device, const ExternalImageDescriptor & descriptor) noexcept;
+#endif
+
+#if IS_MACOS
+			/**
+			 * @brief Imports an IOSurface as a Vulkan image through VK_EXT_metal_objects (zero-copy CEF accelerated paint).
+			 * @note The image is created with VK_IMAGE_USAGE_TRANSFER_SRC_BIT: the expected use is a single
+			 * GPU→GPU copy toward an engine-owned image (Overlay::Surface). Unlike the Win32 path this is not
+			 * Vulkan external memory: MoltenVK builds the backing MTLTexture directly from the IOSurface at
+			 * image creation (VkImportMetalIOSurfaceInfoEXT); the dedicated allocation only satisfies the
+			 * binding contract.
+			 * @warning The IOSurface is only borrowed and is NEVER released by the engine. For CEF, the surface
+			 * is pool-managed and only valid during the OnAcceleratedPaint callback: the returned image (and any
+			 * GPU work reading it) must be finished and destroyed before the callback returns.
+			 * @param device A reference to a device smart pointer. VK_EXT_metal_objects must be enabled (see Device::metalObjectsEnabled()).
+			 * @param descriptor A reference to the external image descriptor (handleType must be IOSurface).
+			 * @return std::shared_ptr< Image > The imported image, or nullptr on failure.
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Image > importFromIOSurface (const std::shared_ptr< Device > & device, const ExternalImageDescriptor & descriptor) noexcept;
+#endif
+
 			/**
 			 * @brief Returns the vulkan image format suitable for this pixmap.
 			 * @warngin This method does not handle a packed pixel format.
@@ -704,6 +742,9 @@ namespace EmEn::Vulkan
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			VkImageLayout m_currentImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
 			bool m_isSwapChainImage{false};
+			/* NOTE: True when the image memory was imported from an external handle (CEF accelerated paint).
+			 * Destruction always goes through the manual path — VMA never owned this allocation. */
+			bool m_isImportedImage{false};
 			bool m_hostVisible{false};
 	};
 }

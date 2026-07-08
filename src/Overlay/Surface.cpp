@@ -31,12 +31,18 @@
 #include "PixelFactory/Processor.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/ExternalImageDescriptor.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/Queue.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "Vulkan/Sync/Fence.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "magic_enum/magic_enum.hpp"
 
 namespace EmEn::Overlay
@@ -140,6 +146,16 @@ namespace EmEn::Overlay
 	bool
 	Surface::createOnHardware (Renderer & renderer) noexcept
 	{
+		/* NOTE: Cached for content providers running on their own thread (importAcceleratedFrame). */
+		m_renderer = &renderer;
+
+		/* NOTE: The accelerated (zero-copy GPU) source mode is exclusive with CPU memory mapping:
+		 * the image is a GPU→GPU copy target (OPTIMAL/DEVICE_LOCAL), never host-mapped. */
+		if ( m_acceleratedSourceEnabled )
+		{
+			m_memoryMappingMode = MemoryMappingMode::Staging;
+		}
+
 		{
 			/* NOTE: Resolve the CPU-to-GPU memory-mapping decision against the actual device. Auto maps
 			 * only on unified-memory devices (integrated GPUs, software, full-ReBAR discrete GPUs) where
@@ -183,9 +199,10 @@ namespace EmEn::Overlay
 		const auto textureWidth = framebuffer.getSurfaceWidth(geometry.width());
 		const auto textureHeight = framebuffer.getSurfaceHeight(geometry.height());
 
-		/* NOTE: When memory mapping is enabled, we skip the local pixmap entirely.
-		 * The caller will write directly to the GPU-mapped memory. */
-		if ( !m_memoryMappingEnabled )
+		/* NOTE: When memory mapping is enabled, we skip the local pixmap entirely (the caller
+		 * writes directly to the GPU-mapped memory). Same for the accelerated source mode
+		 * (content arrives through a GPU→GPU copy — no CPU-side pixels exist at all). */
+		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled )
 		{
 			if ( !m_activeBuffer.pixmap.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
 			{
@@ -226,6 +243,12 @@ namespace EmEn::Overlay
 		/* NOTE: Cleaning both buffers. */
 		m_transitionBuffer.destroy();
 		m_activeBuffer.destroy();
+
+		/* NOTE: Accelerated-mode resources (popup cache + one-shot copy resources). */
+		m_acceleratedPopupImage.reset();
+		m_acceleratedCommandBuffer.reset();
+		m_acceleratedCommandPool.reset();
+		m_acceleratedFence.reset();
 
 		/* NOTE: The sampler comes from the renderer's shared sampler cache (Renderer::getSampler,
 		 * id "OverlaySurface") and is shared by every overlay surface. Only release our reference —
@@ -288,8 +311,9 @@ namespace EmEn::Overlay
 
 		/* Step 2: Upload active buffer content to GPU.
 		 * This uploads the active pixmap data to the GPU when setVideoMemoryOutdated() was called.
-		 * NOTE: When memory mapping is enabled, the caller writes directly to the GPU, so we skip this step. */
-		if ( !m_memoryMappingEnabled && m_activeBuffer.image != nullptr && !this->isVideoMemoryUpToDate() )
+		 * NOTE: When memory mapping is enabled, the caller writes directly to the GPU, so we skip this
+		 * step. Same for the accelerated source: there is no CPU pixmap to upload. */
+		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled && m_activeBuffer.image != nullptr && !this->isVideoMemoryUpToDate() )
 		{
 			const MemoryRegion memoryRegion{
 				m_activeBuffer.pixmap.data().data(),
@@ -351,8 +375,8 @@ namespace EmEn::Overlay
 	Surface::createFramebufferResources (Framebuffer & buffer, Renderer & renderer, uint32_t width, uint32_t height) const noexcept
 	{
 		/* NOTE: When memory mapping is disabled, the pixmap is required.
-		 * When memory mapping is enabled, we skip the pixmap entirely. */
-		if ( !m_memoryMappingEnabled && !buffer.pixmap.isValid() )
+		 * When memory mapping OR the accelerated source is enabled, we skip the pixmap entirely. */
+		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled && !buffer.pixmap.isValid() )
 		{
 			TraceError{ClassId} << "The framebuffer local pixmap is invalid for the surface '" << this->name() << "' ! Unable to create the image for the GPU.";
 
@@ -396,10 +420,11 @@ namespace EmEn::Overlay
 		);
 		buffer.image->setIdentifier(ClassId, this->name(), "Image");
 
-		if ( m_memoryMappingEnabled )
+		if ( m_memoryMappingEnabled || m_acceleratedSourceEnabled )
 		{
-			/* NOTE: When memory mapping is enabled, just create the image on hardware.
-			 * The caller will write directly to the mapped memory. */
+			/* NOTE: Memory-mapping path: just create the image on hardware, the caller writes
+			 * directly to the mapped memory. Accelerated-source path: same empty creation — the
+			 * content arrives later through a GPU→GPU copy (importAcceleratedFrame()). */
 			if ( !buffer.image->createOnHardware() )
 			{
 				TraceError{ClassId} << "Unable to create the framebuffer image for the surface '" << this->name() << "' !";
@@ -530,10 +555,10 @@ namespace EmEn::Overlay
 		/* NOTE: After commit, the transition buffer status returns to Ready for next resize. */
 		m_transitionBufferStatus = TransitionBufferStatus::Ready;
 
-		/* NOTE: When memory mapping is enabled, the caller writes directly to GPU memory,
-		 * so the video memory is already up to date. When disabled, mark as outdated
-		 * so the pixmap gets uploaded via staging buffer. */
-		if ( !m_memoryMappingEnabled )
+		/* NOTE: When memory mapping or the accelerated source is enabled, the content lands
+		 * directly in GPU memory, so the video memory is already up to date. When disabled,
+		 * mark as outdated so the pixmap gets uploaded via staging buffer. */
+		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled )
 		{
 			m_videoMemoryUpToDate = false;
 		}
@@ -591,9 +616,9 @@ namespace EmEn::Overlay
 		 * recreate the GPU resources (isTransitionBufferReady() returns false during Resizing). */
 		m_transitionBufferStatus = TransitionBufferStatus::Resizing;
 
-		/* NOTE: Memory-mapping path writes straight to GPU memory and needs no pixmap.
-		 * CPU pixmap path needs an empty pixmap of the requested size. */
-		if ( !m_memoryMappingEnabled )
+		/* NOTE: Memory-mapping and accelerated-source paths write straight to GPU memory and need
+		 * no pixmap. CPU pixmap path needs an empty pixmap of the requested size. */
+		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled )
 		{
 			if ( !m_transitionBuffer.pixmap.initialize(requestedWidth, requestedHeight, ChannelMode::RGBA) )
 			{
@@ -657,10 +682,10 @@ namespace EmEn::Overlay
 			/* NOTE: Signal that resize is in progress (drawing not allowed during recreation). */
 			m_transitionBufferStatus = TransitionBufferStatus::Resizing;
 
-			/* NOTE: When memory mapping is enabled, skip the pixmap entirely.
+			/* NOTE: When memory mapping or the accelerated source is enabled, skip the pixmap entirely.
 			 * When disabled, copy and resize the active buffer content to the transition buffer
 			 * to have a placeholder image while waiting for new content. */
-			if ( !m_memoryMappingEnabled )
+			if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled )
 			{
 				if ( !m_disablePixmapCopyInTransitionBuffer && m_activeBuffer.pixmap.isValid() )
 				{
@@ -707,9 +732,10 @@ namespace EmEn::Overlay
 			}
 
 			/* NOTE: Set status based on whether we have placeholder content or not.
-			 * If pixmap copy is disabled or memory mapping is enabled, the buffer is empty and waiting for content.
+			 * If pixmap copy is disabled, or memory mapping / accelerated source is enabled,
+			 * the buffer is empty and waiting for content.
 			 * If pixmap copy is enabled, the buffer has a resized placeholder and is ready. */
-			if ( m_disablePixmapCopyInTransitionBuffer || m_memoryMappingEnabled )
+			if ( m_disablePixmapCopyInTransitionBuffer || m_memoryMappingEnabled || m_acceleratedSourceEnabled )
 			{
 				m_transitionBufferStatus = TransitionBufferStatus::WaitingForContent;
 			}
@@ -725,7 +751,7 @@ namespace EmEn::Overlay
 		}
 
 		/* SINGLE BUFFER MODE: Recreate active buffer directly (blocking). */
-		if ( !m_memoryMappingEnabled )
+		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled )
 		{
 			if ( !m_activeBuffer.pixmap.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
 			{
@@ -749,6 +775,520 @@ namespace EmEn::Overlay
 		this->onActiveBufferReady(m_activeBuffer);
 
 		return true;
+	}
+
+	bool
+	Surface::prepareAcceleratedCopyResources (Renderer & renderer) noexcept
+	{
+		if ( m_acceleratedCommandPool != nullptr && m_acceleratedCommandBuffer != nullptr && m_acceleratedFence != nullptr )
+		{
+			return true;
+		}
+
+		const auto & device = renderer.device();
+
+		m_acceleratedCommandPool = std::make_shared< CommandPool >(device, device->getGraphicsFamilyIndex(), true, true, false);
+		m_acceleratedCommandPool->setIdentifier(ClassId, this->name(), "AcceleratedCopyCommandPool");
+
+		if ( !m_acceleratedCommandPool->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the accelerated-copy command pool for the surface '" << this->name() << "' !";
+
+			m_acceleratedCommandPool.reset();
+
+			return false;
+		}
+
+		m_acceleratedCommandBuffer = std::make_shared< CommandBuffer >(m_acceleratedCommandPool, true);
+		m_acceleratedCommandBuffer->setIdentifier(ClassId, this->name(), "AcceleratedCopyCommandBuffer");
+
+		if ( !m_acceleratedCommandBuffer->isCreated() )
+		{
+			TraceError{ClassId} << "Unable to create the accelerated-copy command buffer for the surface '" << this->name() << "' !";
+
+			m_acceleratedCommandBuffer.reset();
+			m_acceleratedCommandPool.reset();
+
+			return false;
+		}
+
+		m_acceleratedFence = std::make_shared< Sync::Fence >(device, 0);
+		m_acceleratedFence->setIdentifier(ClassId, this->name(), "AcceleratedCopyFence");
+
+		if ( !m_acceleratedFence->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the accelerated-copy fence for the surface '" << this->name() << "' !";
+
+			m_acceleratedFence.reset();
+			m_acceleratedCommandBuffer.reset();
+			m_acceleratedCommandPool.reset();
+
+			return false;
+		}
+
+		return true;
+	}
+
+#if IS_WINDOWS || IS_MACOS
+	/**
+	 * @brief Platform dispatch of the external image import — the surrounding copy/sync logic
+	 * in the two importAccelerated*Frame() methods is platform-neutral.
+	 */
+	static
+	std::shared_ptr< Vulkan::Image >
+	importExternalImage (const std::shared_ptr< Vulkan::Device > & device, const Vulkan::ExternalImageDescriptor & descriptor) noexcept
+	{
+#if IS_WINDOWS
+		return Vulkan::Image::importFromWin32Handle(device, descriptor);
+#else
+		return Vulkan::Image::importFromIOSurface(device, descriptor);
+#endif
+	}
+#endif
+
+	bool
+	Surface::importAcceleratedFrame (const Vulkan::ExternalImageDescriptor & descriptor) noexcept
+	{
+#if IS_WINDOWS || IS_MACOS
+		if ( !m_acceleratedSourceEnabled )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' is not in accelerated source mode ! Call enableAcceleratedSource() before createOnHardware().";
+
+			return false;
+		}
+
+		if ( m_renderer == nullptr )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' is not created on the GPU yet ! Unable to import an accelerated frame.";
+
+			return false;
+		}
+
+		auto & renderer = *m_renderer;
+
+		const std::scoped_lock lock{m_framebufferAccess};
+
+		/* NOTE: Route the frame by size through the transition machinery — same rules as the
+		 * CPU paths (see directPaint()/indirectPaint() rationale in the consumer). */
+		const auto target = this->determineTargetBuffer(descriptor.width, descriptor.height);
+
+		if ( target == TargetBuffer::None && m_transitionBufferEnabled )
+		{
+			/* NOTE: CONVERGENCE: the producer's painted size is authoritative — ask for a transition
+			 * buffer at that exact size. Meanwhile the frame is clamp-copied into the active buffer
+			 * (SAFETY NET — the copy extent below is the min of both sizes by construction). */
+			this->requestTransitionBufferResize(descriptor.width, descriptor.height);
+		}
+
+		auto & targetBuffer = ( target == TargetBuffer::Transition ) ? m_transitionBuffer : m_activeBuffer;
+
+		if ( targetBuffer.image == nullptr || !targetBuffer.image->isCreated() )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' has no valid target image for the accelerated frame !";
+
+			return false;
+		}
+
+		if ( !this->prepareAcceleratedCopyResources(renderer) )
+		{
+			return false;
+		}
+
+		auto * queue = renderer.graphicsQueue();
+
+		if ( queue == nullptr )
+		{
+			TraceError{ClassId} << "The renderer has no graphics queue yet ! Unable to copy the accelerated frame for the surface '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* NOTE: Import the external texture. The handle is borrowed and only valid during the
+		 * producer's callback — everything below (record, submit, WAIT) happens synchronously. */
+		const auto importedImage = importExternalImage(renderer.device(), descriptor);
+
+		if ( importedImage == nullptr )
+		{
+			return false;
+		}
+
+		if ( !m_acceleratedFence->reset() )
+		{
+			TraceError{ClassId} << "Unable to reset the accelerated-copy fence for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !m_acceleratedCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			TraceError{ClassId} << "Unable to begin the accelerated-copy command buffer for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		const auto graphicsFamilyIndex = renderer.device()->getGraphicsFamilyIndex();
+
+#if IS_WINDOWS
+		/* NOTE: Acquire the imported external image (VK_QUEUE_FAMILY_EXTERNAL → graphics family).
+		 * Spec carve-out for D3D11 imports: the UNDEFINED transition preserves the texture content. */
+		const Sync::ImageMemoryBarrier acquireExternalBarrier{
+			*importedImage,
+			0,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_QUEUE_FAMILY_EXTERNAL,
+			graphicsFamilyIndex
+		};
+#else
+		/* NOTE: macOS — the IOSurface-backed image is NOT Vulkan external memory (metal_objects
+		 * import): no external queue family to acquire from. Plain layout transition; MoltenVK
+		 * layout transitions are Metal no-ops, the IOSurface content is preserved. */
+		static_cast< void >(graphicsFamilyIndex);
+
+		const Sync::ImageMemoryBarrier acquireExternalBarrier{
+			*importedImage,
+			0,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		};
+#endif
+
+		m_acceleratedCommandBuffer->pipelineBarrier(acquireExternalBarrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		/* NOTE: The surface image leaves the sampled state. srcStage FRAGMENT_SHADER orders this
+		 * against every in-flight frame command buffer sampling it — valid because the copy is
+		 * submitted on the renderer's single frame queue (FIFO). */
+		const Sync::ImageMemoryBarrier toTransferDstBarrier{
+			*targetBuffer.image,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			targetBuffer.image->currentImageLayout(),
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(toTransferDstBarrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		/* NOTE: The copy extent is the min of both images (clamped by CommandBuffer::copyImage). */
+		m_acceleratedCommandBuffer->copyImage(*importedImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *targetBuffer.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		/* NOTE: A view frame is a FULL copy and erases any composited popup — re-composite the
+		 * popup cache on top while it is visible (mirror of the CPU compositePopup() semantics). */
+		this->recordAcceleratedPopupComposite(*targetBuffer.image);
+
+		const Sync::ImageMemoryBarrier toSampledBarrier{
+			*targetBuffer.image,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(toSampledBarrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+		if ( !m_acceleratedCommandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the accelerated-copy command buffer for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !queue->submit(*m_acceleratedCommandBuffer, SynchInfo{}.withFence(m_acceleratedFence->handle())) )
+		{
+			TraceError{ClassId} << "Unable to submit the accelerated-copy command buffer for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* NOTE: WAIT before returning — the producer reclaims the shared texture right after
+		 * its callback returns (copy-during-callback contract, no keyed mutex on CEF 126). */
+		if ( !m_acceleratedFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to wait the accelerated-copy fence for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		targetBuffer.image->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		/* NOTE: A frame at the transition size completes a resize — commit inline (the commit
+		 * logic from commitTransitionBuffer(), replicated because m_framebufferAccess is held). */
+		if ( target == TargetBuffer::Transition )
+		{
+			std::swap(m_transitionBuffer, m_activeBuffer);
+
+			m_transitionBufferStatus = TransitionBufferStatus::Ready;
+
+			TraceSuccess{ClassId} << "Surface '" << this->name() << "' transition buffer committed by an accelerated frame (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px).";
+		}
+
+		/* NOTE: The GPU texture is current — only a re-composite is needed (on-demand rendering). */
+		this->notifyRedrawRequired();
+
+		return true;
+#else
+		static_cast< void >(descriptor);
+
+		TraceError{ClassId} << "The accelerated frame import is not implemented on this platform yet (surface '" << this->name() << "') !";
+
+		return false;
+#endif
+	}
+
+	void
+	Surface::setAcceleratedPopupVisible (bool visible) noexcept
+	{
+		const std::scoped_lock lock{m_framebufferAccess};
+
+		m_acceleratedPopupVisible = visible;
+
+		if ( !visible )
+		{
+			/* NOTE: Release the cache — the next view frame (a full copy) erases the popup on
+			 * screen. Safe to destroy inline: every accelerated submission fence-waits before
+			 * returning, so the GPU holds no pending reference on the cache image. */
+			m_acceleratedPopupImage.reset();
+		}
+	}
+
+	void
+	Surface::recordAcceleratedPopupComposite (Vulkan::Image & targetImage) noexcept
+	{
+		if ( !m_acceleratedPopupVisible || m_acceleratedPopupImage == nullptr || !m_acceleratedPopupImage->isCreated() )
+		{
+			return;
+		}
+
+		const auto targetWidth = targetImage.width();
+		const auto targetHeight = targetImage.height();
+
+		/* NOTE: Clamp the popup area to the target boundaries (negative positions and overflow). */
+		const auto popupX = static_cast< uint32_t >(std::max(0, m_acceleratedPopupX));
+		const auto popupY = static_cast< uint32_t >(std::max(0, m_acceleratedPopupY));
+
+		if ( popupX >= targetWidth || popupY >= targetHeight )
+		{
+			return;
+		}
+
+		const auto copyWidth = std::min(m_acceleratedPopupImage->width(), targetWidth - popupX);
+		const auto copyHeight = std::min(m_acceleratedPopupImage->height(), targetHeight - popupY);
+
+		if ( copyWidth == 0 || copyHeight == 0 )
+		{
+			return;
+		}
+
+		VkImageCopy region{};
+		region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		region.srcOffset = {0, 0, 0};
+		region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		region.dstOffset = {static_cast< int32_t >(popupX), static_cast< int32_t >(popupY), 0};
+		region.extent = {copyWidth, copyHeight, 1};
+
+		m_acceleratedCommandBuffer->copyImage(*m_acceleratedPopupImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, targetImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
+	}
+
+	bool
+	Surface::importAcceleratedPopupFrame (const Vulkan::ExternalImageDescriptor & descriptor) noexcept
+	{
+#if IS_WINDOWS || IS_MACOS
+		if ( !m_acceleratedSourceEnabled )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' is not in accelerated source mode !";
+
+			return false;
+		}
+
+		if ( m_renderer == nullptr )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' is not created on the GPU yet ! Unable to import an accelerated popup frame.";
+
+			return false;
+		}
+
+		auto & renderer = *m_renderer;
+
+		const std::scoped_lock lock{m_framebufferAccess};
+
+		if ( !m_acceleratedPopupVisible )
+		{
+			/* NOTE: The popup was hidden while the frame was in flight — drop it silently. */
+			return true;
+		}
+
+		if ( m_activeBuffer.image == nullptr || !m_activeBuffer.image->isCreated() )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' has no valid active image for the accelerated popup frame !";
+
+			return false;
+		}
+
+		if ( !this->prepareAcceleratedCopyResources(renderer) )
+		{
+			return false;
+		}
+
+		auto * queue = renderer.graphicsQueue();
+
+		if ( queue == nullptr )
+		{
+			TraceError{ClassId} << "The renderer has no graphics queue yet ! Unable to copy the accelerated popup frame for the surface '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* NOTE: (Re)create the persistent popup cache when the popup size changed. Safe inline:
+		 * every accelerated submission fence-waits, the GPU holds no reference on the old image. */
+		if ( m_acceleratedPopupImage == nullptr || m_acceleratedPopupImage->width() != descriptor.width || m_acceleratedPopupImage->height() != descriptor.height )
+		{
+			m_acceleratedPopupImage.reset();
+
+			auto popupImage = std::make_shared< Vulkan::Image >(
+				renderer.device(),
+				VK_IMAGE_TYPE_2D,
+				descriptor.format,
+				VkExtent3D{descriptor.width, descriptor.height, 1},
+				VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+			);
+			popupImage->setIdentifier(ClassId, this->name(), "AcceleratedPopupImage");
+
+			if ( !popupImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the accelerated popup cache image for the surface '" << this->name() << "' !";
+
+				return false;
+			}
+
+			m_acceleratedPopupImage = popupImage;
+		}
+
+		/* NOTE: Import the external popup texture (borrowed handle — synchronous contract). */
+		const auto importedImage = importExternalImage(renderer.device(), descriptor);
+
+		if ( importedImage == nullptr )
+		{
+			return false;
+		}
+
+		if ( !m_acceleratedFence->reset() || !m_acceleratedCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			TraceError{ClassId} << "Unable to prepare the accelerated-copy command buffer for the popup of surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		const auto graphicsFamilyIndex = renderer.device()->getGraphicsFamilyIndex();
+
+		/* 1. Acquire the imported external popup texture (queue-family transfer on Windows only —
+		 * see the view-path barrier rationale above). */
+#if IS_WINDOWS
+		const Sync::ImageMemoryBarrier acquireExternalBarrier{
+			*importedImage,
+			0,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_QUEUE_FAMILY_EXTERNAL,
+			graphicsFamilyIndex
+		};
+#else
+		static_cast< void >(graphicsFamilyIndex);
+
+		const Sync::ImageMemoryBarrier acquireExternalBarrier{
+			*importedImage,
+			0,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		};
+#endif
+
+		m_acceleratedCommandBuffer->pipelineBarrier(acquireExternalBarrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		/* 2. Refresh the popup cache (external → cache). */
+		const VkAccessFlags cacheSourceAccess = m_acceleratedPopupImage->currentImageLayout() == VK_IMAGE_LAYOUT_UNDEFINED ? 0U : static_cast< VkAccessFlags >(VK_ACCESS_TRANSFER_READ_BIT);
+
+		const Sync::ImageMemoryBarrier cacheToDstBarrier{
+			*m_acceleratedPopupImage,
+			cacheSourceAccess,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			m_acceleratedPopupImage->currentImageLayout(),
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(cacheToDstBarrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		m_acceleratedCommandBuffer->copyImage(*importedImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *m_acceleratedPopupImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		const Sync::ImageMemoryBarrier cacheToSrcBarrier{
+			*m_acceleratedPopupImage,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(cacheToSrcBarrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		/* 3. Composite the cache onto the active buffer at the popup position. */
+		const Sync::ImageMemoryBarrier activeToDstBarrier{
+			*m_activeBuffer.image,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			m_activeBuffer.image->currentImageLayout(),
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(activeToDstBarrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		this->recordAcceleratedPopupComposite(*m_activeBuffer.image);
+
+		const Sync::ImageMemoryBarrier activeToSampledBarrier{
+			*m_activeBuffer.image,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(activeToSampledBarrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+		if ( !m_acceleratedCommandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the accelerated-copy command buffer for the popup of surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !queue->submit(*m_acceleratedCommandBuffer, SynchInfo{}.withFence(m_acceleratedFence->handle())) )
+		{
+			TraceError{ClassId} << "Unable to submit the accelerated popup copy for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !m_acceleratedFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to wait the accelerated popup copy fence for the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		m_acceleratedPopupImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		m_activeBuffer.image->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		this->notifyRedrawRequired();
+
+		return true;
+#else
+		static_cast< void >(descriptor);
+
+		TraceError{ClassId} << "The accelerated popup import is not implemented on this platform yet (surface '" << this->name() << "') !";
+
+		return false;
+#endif
 	}
 
 	std::ostream &

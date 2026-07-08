@@ -50,7 +50,8 @@ namespace EmEn::Vulkan
 
 		VkMemoryAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocateInfo.pNext = nullptr;
+		/* NOTE: Extension chain for external-memory imports (dedicated allocation + import info). See the dedicated constructor. */
+		allocateInfo.pNext = m_allocateInfoNext;
 		allocateInfo.allocationSize = m_requirement.memoryRequirements.size;
 		allocateInfo.memoryTypeIndex = this->device()->findMemoryType(m_requirement.memoryRequirements.memoryTypeBits, m_propertyFlags);
 
