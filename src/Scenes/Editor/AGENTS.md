@@ -52,6 +52,7 @@ Scene (opaque → translucent) → Post-process → Editor Gizmos → Overlay (I
 - **Intersection**: `Segment-Sphere` and `Segment-AABB` from `Base/Math/Space3D/Intersections/`
 - **Selection**: Closest hit by distance to camera
 - **Priority**: Active gizmo hit-test checked BEFORE scene picking
+- **Camera-carrier exclusion**: Any entity whose collision volume CONTAINS the camera position is skipped (`isColliding(point, volume)` from `Base/Math/Space3D/Collisions/`). Without this, the entity carrying the active camera (e.g., the player actor) catches every click at near-zero distance since the ray origin sits inside its AABB
 
 ## Gizmo System
 

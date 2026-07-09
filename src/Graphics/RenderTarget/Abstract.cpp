@@ -75,8 +75,10 @@ namespace EmEn::Graphics::RenderTarget
 		 * AVConsole device connection lifecycle (onInputDeviceConnected/Disconnected):
 		 * disconnecting a camera while the render thread is still drawing would free this
 		 * descriptor set under the renderer and crash on the next bind. Camera connection
-		 * only updates the matrices DATA (see updateDeviceFromCoordinates()). */
-		if ( !this->viewMatrices().create(renderer, this->id()) )
+		 * only updates the matrices DATA (see updateDeviceFromCoordinates()).
+		 * ownViewMatrices() (not viewMatrices()) keeps the lifecycle on the OWNED resource
+		 * even when the render-time accessor delegates to a shared source. */
+		if ( !this->ownViewMatrices().create(renderer, this->id()) )
 		{
 			Tracer::error(TracerTag, "Unable to create the render target view matrices! Destroying it...");
 
@@ -94,8 +96,11 @@ namespace EmEn::Graphics::RenderTarget
 	Abstract::destroyRenderTarget () noexcept
 	{
 		/* NOTE: Symmetric with createRenderTarget(): the view-matrices resource lives and
-		 * dies with the render target, independently of camera connect/disconnect. */
-		this->viewMatrices().destroy();
+		 * dies with the render target, independently of camera connect/disconnect.
+		 * ownViewMatrices() is MANDATORY here: SceneRenderTarget delegates viewMatrices()
+		 * to the swap-chain's camera UBO; destroying the delegated resource freed the
+		 * swap-chain's descriptor set/UBO while in use (crash on post-processor toggle). */
+		this->ownViewMatrices().destroy();
 
 		this->onDestroy();
 

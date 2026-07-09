@@ -35,6 +35,8 @@
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Input/Manager.hpp"
 #include "Input/Types.hpp"
+#include "Math/Space3D/Collisions/PointCuboid.hpp"
+#include "Math/Space3D/Collisions/PointSphere.hpp"
 #include "Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Math/Space3D/Intersections/SegmentSphere.hpp"
 #include "Math/Space3D/Sphere.hpp"
@@ -334,6 +336,13 @@ namespace EmEn::Scenes::Editor
 				{
 					const Sphere< float > worldSphere{model->getRadius(), worldFrame.position()};
 
+					/* NOTE: A volume containing the point of view (typically the entity carrying
+					 * the active camera) would catch every click at near-zero distance. */
+					if ( isColliding(cameraPos, worldSphere) )
+					{
+						return;
+					}
+
 					if ( isIntersecting(ray, worldSphere) )
 					{
 						const float distance = (worldFrame.position() - cameraPos).length();
@@ -351,6 +360,13 @@ namespace EmEn::Scenes::Editor
 				case CollisionModelType::Capsule :
 				{
 					const auto worldAABB = model->getAABB(worldFrame);
+
+					/* NOTE: A volume containing the point of view (typically the entity carrying
+					 * the active camera) would catch every click at near-zero distance. */
+					if ( isColliding(cameraPos, worldAABB) )
+					{
+						return;
+					}
 
 					Point< float > hitPoint;
 

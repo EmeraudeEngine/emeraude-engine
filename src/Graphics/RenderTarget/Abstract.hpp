@@ -413,6 +413,23 @@ namespace EmEn::Graphics::RenderTarget
 		protected:
 
 			/**
+			 * @brief Returns the view matrices interface OWNED by this render target.
+			 * @note Lifecycle accessor: createRenderTarget()/destroyRenderTarget() operate on
+			 * this resource exclusively. Targets that delegate their render-time viewMatrices()
+			 * to a shared source (e.g. SceneRenderTarget sharing the swap-chain camera UBO)
+			 * MUST override this to return their own instance, otherwise destroyRenderTarget()
+			 * would destroy the delegated resource still in use by its real owner.
+			 * @return ViewMatricesInterface &
+			 */
+			[[nodiscard]]
+			virtual
+			ViewMatricesInterface &
+			ownViewMatrices () noexcept
+			{
+				return this->viewMatrices();
+			}
+
+			/**
 			 * @brief Constructs an abstract render target.
 			 * @param deviceName A reference to a string for the name of the video device.
 			 * @param precisions The framebuffer precisions.

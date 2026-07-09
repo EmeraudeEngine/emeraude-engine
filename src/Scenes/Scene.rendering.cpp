@@ -45,7 +45,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
 	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+		const std::scoped_lock lock{m_renderToShadowMapAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -82,7 +82,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
 	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, float viewDistance) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+		const std::scoped_lock lock{m_renderToShadowMapAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -118,7 +118,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatricesCascadedUBO > >
 	Scene::createRenderToCascadedShadowMap (const std::string & name, uint32_t resolution, float viewDistance, uint32_t cascadeCount, float lambda) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+		const std::scoped_lock lock{m_renderToShadowMapAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -156,7 +156,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
 	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
+		const std::scoped_lock lock{m_renderToTextureAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -193,7 +193,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
 	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
+		const std::scoped_lock lock{m_renderToTextureAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -230,7 +230,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
 	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
+		const std::scoped_lock lock{m_renderToViewAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -265,7 +265,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
 	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
+		const std::scoped_lock lock{m_renderToViewAccess};
 
 		/* Checks name availability. */
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
@@ -417,7 +417,7 @@ namespace EmEn::Scenes
 							continue;
 						}
 
-						const auto geometry = renderable->geometry(0);
+						const auto * geometry = renderable->geometry(0);
 
 						const bool isSkipped = renderable->isSprite()
 							|| renderBatch.renderableInstance()->isUsingInfinityView()
@@ -526,7 +526,7 @@ namespace EmEn::Scenes
 
 		/* Static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -563,7 +563,7 @@ namespace EmEn::Scenes
 
 		/* Scene node tree. */
 		{
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -700,7 +700,7 @@ namespace EmEn::Scenes
 		 * LODLevel = clamp(MaxLODLevels - screenSize / threshold, 0, MaxLODLevels-1)
 		 * where threshold defines the coverage at which LOD 0 transitions to LOD 1. */
 		const auto screenSize = objectRadius / distance;
-		const auto LODf = static_cast< float >(Renderable::MaxLODLevels) * (static_cast< float >(1) - screenSize / m_LODScreenCoverageThreshold);
+		const auto LODf = static_cast< float >(Renderable::MaxLODLevels) * (static_cast< float >(1) - (screenSize / m_LODScreenCoverageThreshold));
 
 		if ( LODf <= 0.0F )
 		{
@@ -777,7 +777,7 @@ namespace EmEn::Scenes
 
 		/* Sorting renderable objects from scene static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -821,7 +821,7 @@ namespace EmEn::Scenes
 		/* Sorting renderable objects from the scene node tree. */
 		{
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -1027,7 +1027,7 @@ namespace EmEn::Scenes
 
 		/* Sorting renderable objects from scene static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -1100,7 +1100,7 @@ namespace EmEn::Scenes
 		/* Sorting renderable objects from the scene node tree. */
 		{
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -1280,7 +1280,7 @@ namespace EmEn::Scenes
 		/* For all objects. */
 		for ( const auto & renderBatch : renderBatches | std::views::values )
 		{
-			const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
+			const std::scoped_lock lock{m_lightSet.mutex()};
 
 			/* Ambient pass. */
 			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
@@ -1291,7 +1291,7 @@ namespace EmEn::Scenes
 			 * whose range overlaps it, not only by lights reaching its exact center. */
 			const auto * batchCoordinates = renderBatch.worldCoordinates();
 
-			Base::Math::Space3D::Sphere< float > instanceWorldSphere;
+			Space3D::Sphere< float > instanceWorldSphere;
 
 			if ( batchCoordinates != nullptr )
 			{
@@ -1462,7 +1462,7 @@ namespace EmEn::Scenes
 
 		/* Check renderable objects from scene static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -1489,7 +1489,7 @@ namespace EmEn::Scenes
 		/* Check renderable objects from the scene node tree. */
 		{
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -1558,7 +1558,7 @@ namespace EmEn::Scenes
 	StaticVector< RenderPassType, MaxPassCount >
 	Scene::prepareRenderPassTypes (const RenderableInstance::Abstract & renderableInstance) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
+		const std::scoped_lock lock{m_lightSet.mutex()};
 
 		StaticVector< RenderPassType, MaxPassCount > renderPassTypes;
 

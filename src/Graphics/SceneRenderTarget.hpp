@@ -220,6 +220,21 @@ namespace EmEn::Graphics
 				return m_materialPropertiesImage;
 			}
 
+		protected:
+
+			/**
+			 * @copydoc EmEn::Graphics::RenderTarget::Abstract::ownViewMatrices()
+			 * @note Always returns the local instance: viewMatrices() delegates to the
+			 * shared swap-chain camera UBO (setSourceViewMatrices()), which this target
+			 * must never create or destroy.
+			 */
+			[[nodiscard]]
+			ViewMatricesInterface &
+			ownViewMatrices () noexcept override
+			{
+				return m_viewMatrices;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
