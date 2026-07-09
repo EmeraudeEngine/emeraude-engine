@@ -135,13 +135,14 @@ namespace EmEn::Scenes::Editor
 
 			/**
 			 * @brief Activates the editor mode on a scene.
+			 * @note Screen-to-world computations read the main render target extent at
+			 * event time (physical pixels, the pointer event coordinate space), so no
+			 * viewport dimensions are captured here and window resizes are followed.
 			 * @param scene A reference to the scene to edit.
 			 * @param viewMatrices A reference to the view matrices for the main camera.
-			 * @param viewportWidth The width of the viewport in pixels.
-			 * @param viewportHeight The height of the viewport in pixels.
 			 * @return void
 			 */
-			void activate (Scene & scene, const Graphics::ViewMatricesInterface & viewMatrices, float viewportWidth, float viewportHeight) noexcept;
+			void activate (Scene & scene, const Graphics::ViewMatricesInterface & viewMatrices) noexcept;
 
 			/**
 			 * @brief Deactivates the editor mode, clears selection and destroys gizmos.
@@ -268,19 +269,6 @@ namespace EmEn::Scenes::Editor
 				m_moveStep = step;
 			}
 
-			/**
-			 * @brief Updates the viewport dimensions (call when window is resized).
-			 * @param viewportWidth The new width.
-			 * @param viewportHeight The new height.
-			 * @return void
-			 */
-			void
-			updateViewport (float viewportWidth, float viewportHeight) noexcept
-			{
-				m_viewportWidth = viewportWidth;
-				m_viewportHeight = viewportHeight;
-			}
-
 		private:
 
 			/**
@@ -365,8 +353,6 @@ namespace EmEn::Scenes::Editor
 			/* Scene context. */
 			Scene * m_scene{nullptr};
 			const Graphics::ViewMatricesInterface * m_viewMatrices{nullptr};
-			float m_viewportWidth{0.0F};
-			float m_viewportHeight{0.0F};
 
 			/* Selection state. */
 			AbstractEntity * m_selectedEntity{nullptr};

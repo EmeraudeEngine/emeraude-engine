@@ -382,11 +382,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Toggles the scene editor mode on the active scene.
-			 * @param viewportWidth The width of the viewport in pixels.
-			 * @param viewportHeight The height of the viewport in pixels.
-			 * @return bool
+			 * @note The editor works in physical framebuffer pixels and reads the main
+			 * render target extent itself; no viewport dimensions are needed.
+			 * @return void
 			 */
-			void toggleEditorMode (float viewportWidth, float viewportHeight) noexcept;
+			void toggleEditorMode () noexcept;
 
 			/**
 			 * @brief Returns the scene editor manager.

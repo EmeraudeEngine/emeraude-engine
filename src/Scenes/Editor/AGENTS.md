@@ -15,9 +15,9 @@ Standalone editor overlay for real-time scene manipulation. Lives in `Scenes::Ed
 
 ### Activation Flow
 ```
-Core: Shift+F3 → Scenes::Manager::toggleEditorMode(viewportW, viewportH)
+Core: Shift+F3 → Scenes::Manager::toggleEditorMode()
   → Gets active scene + first render-to-view's ViewMatricesInterface
-  → Editor::Manager::activate(scene, viewMatrices, w, h)
+  → Editor::Manager::activate(scene, viewMatrices)
     → Registers as KeyboardListenerInterface + PointerListenerInterface
     → Unlocks pointer (absolute mode for clicking)
     → Pre-creates ALL gizmo GPU resources (translate + rotate + scale)
@@ -48,6 +48,7 @@ Scene (opaque → translucent) → Post-process → Editor Gizmos → Overlay (I
 ## Picking System
 
 - **Method**: CPU raycasting via `screenToWorldRay()` (inverse VP matrix, perspective divide)
+- **Coordinate space (CRITICAL)**: Pointer events are dispatched in **physical framebuffer pixels** on every platform (`Core::updatePointerScaling()` scales Wayland/macOS logical coords). `screenToWorldRay()` therefore reads the **main render target extent at event time** — never the logical window size (off by the content scale on HiDPI: broken picking, regression fixed 2026-07-09) and never a size captured at activation (stale after a window resize)
 - **Targets**: Both `Node` and `StaticEntity` with collision models (AABB or Sphere)
 - **Intersection**: `Segment-Sphere` and `Segment-AABB` from `Base/Math/Space3D/Intersections/`
 - **Selection**: Closest hit by distance to camera

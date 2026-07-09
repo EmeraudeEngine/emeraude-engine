@@ -754,7 +754,7 @@ echo "Core.InputManagerService.mouseClick(1920, 1000)" | nc -q 1 localhost 7777
 echo "Core.InputManagerService.mouseMove(500, 300)" | nc -q 1 localhost 7777
 ```
 
-**Coordinate space:** query `Core.WindowService.getState()` to get `windowWidth`, `framebufferWidth`, and `contentXScale`. GLFW mouse coordinates may differ from framebuffer pixels on HiDPI displays.
+**Coordinate space:** injected coordinates are dispatched to listeners **without pointer scaling** — give them in **physical framebuffer pixels** (`framebufferWidth`/`framebufferHeight` from `Core.WindowService.getState()`). All pointer consumers (overlay hit-testing, scene editor picking) work in that space; real cursor events are scaled to it by `Core::updatePointerScaling()` on Wayland/macOS.
 
 ### The AI interaction loop
 

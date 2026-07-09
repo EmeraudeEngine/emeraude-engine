@@ -1250,14 +1250,8 @@ namespace EmEn
 					return true;
 
 				case KeyF3 :
-				{
-					const auto windowSize = m_window.getSize();
+					m_sceneManager.toggleEditorMode();
 
-					m_sceneManager.toggleEditorMode(
-						static_cast< float >(windowSize[0]),
-						static_cast< float >(windowSize[1])
-					);
-				}
 					return true;
 
 				case KeyF4 :

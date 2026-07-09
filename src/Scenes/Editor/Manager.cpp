@@ -82,7 +82,7 @@ namespace EmEn::Scenes::Editor
 	}
 
 	void
-	Manager::activate (Scene & scene, const Graphics::ViewMatricesInterface & viewMatrices, float viewportWidth, float viewportHeight) noexcept
+	Manager::activate (Scene & scene, const Graphics::ViewMatricesInterface & viewMatrices) noexcept
 	{
 		if ( m_active )
 		{
@@ -91,8 +91,6 @@ namespace EmEn::Scenes::Editor
 
 		m_scene = &scene;
 		m_viewMatrices = &viewMatrices;
-		m_viewportWidth = viewportWidth;
-		m_viewportHeight = viewportHeight;
 		m_active = true;
 
 		/* NOTE: Enable input listening. The editor is permanently registered
@@ -271,8 +269,26 @@ namespace EmEn::Scenes::Editor
 	Segment< float >
 	Manager::screenToWorldRay (float screenX, float screenY) const noexcept
 	{
-		const float ndcX = (2.0F * screenX / m_viewportWidth) - 1.0F;
-		const float ndcY = (2.0F * screenY / m_viewportHeight) - 1.0F;
+		/* NOTE: Pointer events are dispatched in PHYSICAL framebuffer pixels on every platform
+		 * (see Core::updatePointerScaling()), so the NDC conversion must use the render target
+		 * extent — not the logical window size, which differs by the content scale on HiDPI.
+		 * Queried at event time so window resizes are followed. */
+		const auto renderTarget = m_resourceManager.graphicsRenderer().mainRenderTarget();
+
+		if ( renderTarget == nullptr )
+		{
+			return {};
+		}
+
+		const auto & extent = renderTarget->extent();
+
+		if ( extent.width == 0 || extent.height == 0 )
+		{
+			return {};
+		}
+
+		const float ndcX = (2.0F * screenX / static_cast< float >(extent.width)) - 1.0F;
+		const float ndcY = (2.0F * screenY / static_cast< float >(extent.height)) - 1.0F;
 
 		const auto & projMatrix = m_viewMatrices->projectionMatrix();
 		const auto & viewMatrix = m_viewMatrices->viewMatrix(false, 0);

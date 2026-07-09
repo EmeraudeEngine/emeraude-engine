@@ -417,7 +417,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Manager::toggleEditorMode (float viewportWidth, float viewportHeight) noexcept
+	Manager::toggleEditorMode () noexcept
 	{
 		if ( m_editorManager.isActive() )
 		{
@@ -450,6 +450,6 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		m_editorManager.activate(*m_activeScene, *viewMatrices, viewportWidth, viewportHeight);
+		m_editorManager.activate(*m_activeScene, *viewMatrices);
 	}
 }

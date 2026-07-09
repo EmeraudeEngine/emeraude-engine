@@ -211,7 +211,7 @@ static void injectPointerMoveEvent(float positionX, float positionY) noexcept;
 Inject methods copy the listener vector before iterating. Handlers may add/remove listeners during dispatch (e.g., editor activation adds itself as listener), which would invalidate iterators on the original vector. GLFW callbacks don't hit this because press/release arrive in separate `glfwPollEvents()` calls.
 
 ### Coordinate Space
-Mouse coordinates must match GLFW's coordinate space. Query `Core.WindowService.getState()` to get `windowWidth`, `framebufferWidth`, and `contentXScale` to determine the correct range.
+Injected mouse coordinates (`mouseClick`, `mouseMove` console commands, `injectMouseClickEvent`, `injectPointerMoveEvent`) are dispatched to listeners **as-is, without pointer scaling** — they must be given in the **dispatch space**, i.e. **physical framebuffer pixels** (`framebufferWidth`/`framebufferHeight` from `Core.WindowService.getState()`). Consumers (overlay hit-testing, scene editor picking) all work in that space.
 
 ### Pointer scaling (logical → physical)
 `Manager::enablePointerScaling(xScale, yScale)` / `disablePointerScaling()` multiply the raw `glfwGetCursorPos` value before dispatch. The goal: **deliver pointer coordinates in physical framebuffer pixels** so they stay consistent with the framebuffer dimensions used by overlay hit-testing (`Overlay::Surface::isBelowPoint`, which compares against `framebufferProperties().width() * rectangle`, i.e. physical).
