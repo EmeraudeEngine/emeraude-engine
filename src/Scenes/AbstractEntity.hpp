@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <any>
 #include <cstddef>
@@ -197,7 +200,7 @@ namespace EmEn::Scenes
 	 * @see @docs/scene-graph-architecture.md
 	 * @version 0.8.39
 	 */
-	class AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMERAUDE_API AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 

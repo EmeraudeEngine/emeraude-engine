@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <filesystem>
 #include <iostream>
@@ -51,7 +54,7 @@ namespace EmEn
 	 * @brief The file system service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class FileSystem final : public ServiceInterface, public Console::ControllableTrait
+	class EMERAUDE_API FileSystem final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 

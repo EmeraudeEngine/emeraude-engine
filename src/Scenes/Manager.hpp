@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
@@ -144,7 +147,7 @@ namespace EmEn::Scenes
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Console::ControllableTrait The scene manager service is usable from the console.
 	 */
-	class Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
+	class EMERAUDE_API Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 

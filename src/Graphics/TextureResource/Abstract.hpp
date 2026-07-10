@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
@@ -46,7 +49,7 @@ namespace EmEn::Graphics::TextureResource
 	 * @extends EmEn::Vulkan::TextureInterface This provides GPU texture capabilities.
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class Abstract : public Vulkan::TextureInterface, public Resources::ResourceTrait
+	class EMERAUDE_API Abstract : public Vulkan::TextureInterface, public Resources::ResourceTrait
 	{
 		public:
 

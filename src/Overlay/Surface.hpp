@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_config.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <string>
@@ -93,7 +94,7 @@ namespace EmEn::Overlay
 	 * @brief The base class for overlay UIScreen surfaces.
 	 * @extends Base::NameableTrait A surface has a name.
 	 */
-	class Surface : public Base::NameableTrait
+	class EMERAUDE_API Surface : public Base::NameableTrait
 	{
 		public:
 
@@ -1399,5 +1400,5 @@ namespace EmEn::Overlay
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	std::string to_string (const Surface & obj);
+	EMERAUDE_API std::string to_string (const Surface & obj);
 }

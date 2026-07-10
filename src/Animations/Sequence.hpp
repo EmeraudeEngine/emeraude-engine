@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstdint>
@@ -44,7 +47,7 @@ namespace EmEn::Animations
 	 * @brief Define an animation sequence with key frames during a specific time measured in milliseconds.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
-	class Sequence final : public AnimationInterface
+	class EMERAUDE_API Sequence final : public AnimationInterface
 	{
 		public:
 

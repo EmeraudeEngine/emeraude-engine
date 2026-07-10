@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_config.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <ranges>
@@ -43,7 +44,7 @@ namespace EmEn
 	/**
 	 * @brief Describe information about an application.
 	 */
-	class Identification final
+	class EMERAUDE_API Identification final
 	{
 		public:
 

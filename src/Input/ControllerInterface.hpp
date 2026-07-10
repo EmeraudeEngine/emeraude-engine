@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 
@@ -35,7 +38,7 @@ namespace EmEn::Input
 	 * @brief The controller interface class.
 	 * @note This is intended to be used as an object that read the current state of an input device.
 	 */
-	class ControllerInterface
+	class EMERAUDE_API ControllerInterface
 	{
 		public:
 

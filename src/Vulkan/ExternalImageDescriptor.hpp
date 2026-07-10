@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstdint>
@@ -46,7 +49,7 @@ namespace EmEn::Vulkan
 	 * (for CEF it does NOT outlive the OnAcceleratedPaint callback). The import and the GPU copy must
 	 * complete within that window, and the engine never closes the handle.
 	 */
-	struct ExternalImageDescriptor
+	struct EMERAUDE_API ExternalImageDescriptor
 	{
 		/** @brief Maximum number of DMA-BUF planes carried by the descriptor (Linux). */
 		static constexpr size_t MaxPlanes{4};

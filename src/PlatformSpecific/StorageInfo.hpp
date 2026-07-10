@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -36,7 +39,7 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	/**
 	 * @brief Describes a mounted drive/volume on the system.
 	 */
-	struct DriveInfo
+	struct EMERAUDE_API DriveInfo
 	{
 		std::string filesystem;	  /* Device path (e.g., "/dev/sda1") or description (Windows). */
 		std::string mounted;		 /* Mount point (e.g., "/", "/mnt/usb") or drive letter (e.g., "C:"). */
@@ -55,5 +58,5 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	 * @return std::vector< DriveInfo > List of mounted drives (excludes virtual/pseudo filesystems).
 	 */
 	[[nodiscard]]
-	std::vector< DriveInfo > listDrives () noexcept;
+	EMERAUDE_API std::vector< DriveInfo > listDrives () noexcept;
 }

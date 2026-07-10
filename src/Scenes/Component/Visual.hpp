@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <any>
 #include <memory>
@@ -47,7 +50,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Base::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
-	class Visual final : public Abstract, public Base::ObserverTrait
+	class EMERAUDE_API Visual final : public Abstract, public Base::ObserverTrait
 	{
 		public:
 

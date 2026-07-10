@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <array>
@@ -77,7 +78,7 @@ namespace EmEn::Vulkan
 	 * @extends std::enable_shared_from_this Adds the ability to self-replicate the smart pointer.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class Image final : public AbstractDeviceDependentObject
+	class EMERAUDE_API Image final : public AbstractDeviceDependentObject
 	{
 		public:
 

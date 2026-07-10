@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <memory>
 
@@ -41,7 +44,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief The skybox resource class.
 	 * @extends EmEn::Graphics::Renderable::AbstractBackground This is a specialized background.
 	 */
-	class SkyBoxResource final : public AbstractBackground
+	class EMERAUDE_API SkyBoxResource final : public AbstractBackground
 	{
 		friend class Resources::Container< SkyBoxResource >;
 

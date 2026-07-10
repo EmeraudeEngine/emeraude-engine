@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <map>
@@ -37,7 +40,7 @@ namespace EmEn::Net
 	/**
 	 * @brief Represents a single SSDP device response.
 	 */
-	struct SSDPDevice
+	struct EMERAUDE_API SSDPDevice
 	{
 		std::string address;
 		uint16_t port{0};
@@ -50,7 +53,7 @@ namespace EmEn::Net
 	 * Provides both a stateful socket (open/bind/send/receive/close) and a
 	 * self-contained static SSDP discovery method.
 	 */
-	class UDPClient final
+	class EMERAUDE_API UDPClient final
 	{
 		public:
 

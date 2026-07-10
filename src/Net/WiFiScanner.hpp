@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -36,7 +39,7 @@ namespace EmEn::Net::WiFiScanner
 	/**
 	 * @brief Represents a WiFi network (either from a scan or as a current connection).
 	 */
-	struct Network
+	struct EMERAUDE_API Network
 	{
 		std::string ssid;
 		std::string bssid;
@@ -54,7 +57,7 @@ namespace EmEn::Net::WiFiScanner
 	 * @return std::vector< Network > List of discovered networks.
 	 */
 	[[nodiscard]]
-	std::vector< Network > scan () noexcept;
+	EMERAUDE_API std::vector< Network > scan () noexcept;
 
 	/**
 	 * @brief Returns the currently connected WiFi network(s).
@@ -62,5 +65,5 @@ namespace EmEn::Net::WiFiScanner
 	 * @return std::vector< Network > Current connection(s), empty if not connected via WiFi.
 	 */
 	[[nodiscard]]
-	std::vector< Network > getCurrentConnections () noexcept;
+	EMERAUDE_API std::vector< Network > getCurrentConnections () noexcept;
 }

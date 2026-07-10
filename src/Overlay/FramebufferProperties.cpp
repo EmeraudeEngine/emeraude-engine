@@ -65,7 +65,10 @@ namespace EmEn::Overlay
 		m_resolutionY = 0.0F;
 	}
 
-	std::ostream &
+	/* NOTE: The only declaration of this operator is the in-class 'friend' one, which cannot
+	 * carry a DLL linkage attribute without conflicting (C2375). Exporting at the definition
+	 * is the sanctioned MSVC pattern: consumers link through the import-library thunk. */
+	EMERAUDE_API std::ostream &
 	operator<< (std::ostream & out, const FramebufferProperties & obj)
 	{
 		// clang-format off

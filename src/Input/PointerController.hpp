@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <string>
@@ -48,7 +51,7 @@ namespace EmEn::Input
 	 * @brief The pointer controller class.
 	 * @extends EmEn::Input::PointerController This is an input controller.
 	 */
-	class PointerController final : public ControllerInterface
+	class EMERAUDE_API PointerController final : public ControllerInterface
 	{
 		public:
 

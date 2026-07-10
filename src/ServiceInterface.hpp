@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <iostream>
 #include <string>
@@ -41,7 +44,7 @@ namespace EmEn
 	 * @note A service cannot be duplicated and should act like a singleton.
 	 * @extends EmEn::Base::NameableTrait Each service has a name.
 	 */
-	class ServiceInterface : public Base::NameableTrait
+	class EMERAUDE_API ServiceInterface : public Base::NameableTrait
 	{
 		public:
 

@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #if IS_WINDOWS
@@ -69,14 +70,14 @@ namespace EmEn::PlatformSpecific
 	 * @return std::wstring
 	 */
 	[[nodiscard]]
-	std::wstring getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue);
+	EMERAUDE_API std::wstring getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue);
 
 	/**
 	 * @brief Converts a wide string to an ASCII string.
 	 * @param input A reference to a wide string.
 	 * @return std::string
 	 */
-	std::string
+	EMERAUDE_API std::string
 	convertWideToANSI (const std::wstring & input);
 
 	/**
@@ -84,7 +85,7 @@ namespace EmEn::PlatformSpecific
 	 * @param input A reference to a string.
 	 * @return std::string
 	 */
-	std::wstring
+	EMERAUDE_API std::wstring
 	convertANSIToWide (const std::string & input);
 
 	/**
@@ -92,7 +93,7 @@ namespace EmEn::PlatformSpecific
 	 * @param input A reference to a wide string.
 	 * @return std::string
 	 */
-	std::string
+	EMERAUDE_API std::string
 	convertWideToUTF8 (const std::wstring & input);
 
 	/**
@@ -100,7 +101,7 @@ namespace EmEn::PlatformSpecific
 	 * @param input A reference to a string.
 	 * @return std::string
 	 */
-	std::wstring
+	EMERAUDE_API std::wstring
 	convertUTF8ToWide (const std::string & input);
 
 	/**
@@ -109,35 +110,35 @@ namespace EmEn::PlatformSpecific
 	 * @param title A reference to a string.
 	 * @return void
 	 */
-	bool createConsole (const std::string & title);
+	EMERAUDE_API bool createConsole (const std::string & title);
 
 	/**
 	* @brief Attaches to the parent process console.
 	* @warning Used only for Windows OS. Fails if the parent has no console.
 	* @return bool
 	*/
-	bool attachToParentConsole ();
+	EMERAUDE_API bool attachToParentConsole ();
 
 	/**
 	 * @brief Enables ANSI escape sequence processing on stdout and stderr.
 	 * @warning Used only for Windows OS. Requires an already attached console.
 	 * @return void
 	 */
-	void enableConsoleANSI ();
+	EMERAUDE_API void enableConsoleANSI ();
 
 	/**
 	 * @brief Waits for a key press before closing the console.
 	 * @note Displays "Press any key to close this window..." and waits.
 	 * @return void
 	 */
-	void waitBeforeConsoleClose ();
+	EMERAUDE_API void waitBeforeConsoleClose ();
 
 	/**
 	 * @brief Returns the parent process ID on Windows.
 	 * @return int
 	 */
 	[[nodiscard]]
-	int getParentProcessId (DWORD pid) noexcept;
+	EMERAUDE_API int getParentProcessId (DWORD pid) noexcept;
 
 	/**
 	 * @brief Returns a filter list for windows using std::wstring instead of std::string.
@@ -146,7 +147,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::vector< COMDLG_FILTERSPEC >
 	 */
 	[[nodiscard]]
-	std::vector< COMDLG_FILTERSPEC > createExtensionFilter (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters, std::map< std::wstring, std::wstring > & dataHolder);
+	EMERAUDE_API std::vector< COMDLG_FILTERSPEC > createExtensionFilter (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters, std::map< std::wstring, std::wstring > & dataHolder);
 
 	/**
 	 * @brief Runs a native Windows file-dialog body on a DEDICATED STA thread, owned by the real
@@ -183,7 +184,7 @@ namespace EmEn::PlatformSpecific
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND ownerWindow) > & dialogBody) noexcept;
+	EMERAUDE_API bool runFileDialogOnDedicatedThread (Window & window, bool parentToWindow, const std::function< bool (HWND ownerWindow) > & dialogBody) noexcept;
 #endif
 
 #if IS_LINUX
@@ -196,7 +197,7 @@ namespace EmEn::PlatformSpecific
 	 * @return bool True if the program exists.
 	 */
 	[[nodiscard]]
-	bool checkProgram (const std::string & program) noexcept;
+	EMERAUDE_API bool checkProgram (const std::string & program) noexcept;
 
 	/**
 	 * @brief Checks if zenity is available on the system.
@@ -204,7 +205,7 @@ namespace EmEn::PlatformSpecific
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool hasZenity () noexcept;
+	EMERAUDE_API bool hasZenity () noexcept;
 
 	/**
 	 * @brief Checks if kdialog is available on the system.
@@ -212,14 +213,14 @@ namespace EmEn::PlatformSpecific
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool hasKdialog () noexcept;
+	EMERAUDE_API bool hasKdialog () noexcept;
 
 	/**
 	 * @brief Checks if the current desktop environment is KDE.
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool isKdeDesktop () noexcept;
+	EMERAUDE_API bool isKdeDesktop () noexcept;
 
 	/**
 	 * @brief Escapes a string for safe use as a shell argument.
@@ -227,7 +228,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string The escaped argument wrapped in single quotes.
 	 */
 	[[nodiscard]]
-	std::string escapeShellArg (const std::string & arg) noexcept;
+	EMERAUDE_API std::string escapeShellArg (const std::string & arg) noexcept;
 
 	/**
 	 * @brief Wraps a desktop-tool command so it runs with a pristine dynamic-loader environment.
@@ -243,7 +244,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string The command prefixed to clear the dynamic-loader environment variables.
 	 */
 	[[nodiscard]]
-	std::string cleanLoaderEnvCommand (const std::string & command) noexcept;
+	EMERAUDE_API std::string cleanLoaderEnvCommand (const std::string & command) noexcept;
 
 	/**
 	 * @brief Executes a shell command and captures its output.
@@ -252,7 +253,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string The command's stdout output with trailing newlines removed.
 	 */
 	[[nodiscard]]
-	std::string executeCommand (const std::string & command, int & exitCode) noexcept;
+	EMERAUDE_API std::string executeCommand (const std::string & command, int & exitCode) noexcept;
 
 	/**
 	 * @brief Builds zenity file filter arguments from extension filters.
@@ -260,7 +261,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string The zenity --file-filter arguments.
 	 */
 	[[nodiscard]]
-	std::string buildZenityFilters (const ExtensionFilters & filters) noexcept;
+	EMERAUDE_API std::string buildZenityFilters (const ExtensionFilters & filters) noexcept;
 
 	/**
 	 * @brief Builds kdialog file filter arguments from extension filters.
@@ -268,6 +269,6 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string The kdialog filter string.
 	 */
 	[[nodiscard]]
-	std::string buildKdialogFilters (const ExtensionFilters & filters) noexcept;
+	EMERAUDE_API std::string buildKdialogFilters (const ExtensionFilters & filters) noexcept;
 #endif
 }

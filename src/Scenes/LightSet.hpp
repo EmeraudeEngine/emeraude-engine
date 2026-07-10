@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
@@ -68,7 +71,7 @@ namespace EmEn::Scenes
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::Base::ObservableTrait The light set can be observed for light addition or removal.
 	 */
-	class LightSet final : public Base::ObservableTrait
+	class EMERAUDE_API LightSet final : public Base::ObservableTrait
 	{
 		public:
 

@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstdint>
@@ -75,7 +78,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (ButtonLayout value) noexcept;
+	EMERAUDE_API const char * to_cstring (ButtonLayout value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -96,7 +99,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return ButtonLayout
 	 */
 	[[nodiscard]]
-	ButtonLayout to_ButtonLayout (const std::string & value) noexcept;
+	EMERAUDE_API ButtonLayout to_ButtonLayout (const std::string & value) noexcept;
 
 	/**
 	 * @brief The type of message.
@@ -127,7 +130,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (MessageType value) noexcept;
+	EMERAUDE_API const char * to_cstring (MessageType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -148,7 +151,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return MessageType
 	 */
 	[[nodiscard]]
-	MessageType to_MessageType (const std::string & value) noexcept;
+	EMERAUDE_API MessageType to_MessageType (const std::string & value) noexcept;
 
 	/**
 	 * @brief The user answer to dialog enumeration.
@@ -176,7 +179,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (Answer value) noexcept;
+	EMERAUDE_API const char * to_cstring (Answer value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -197,5 +200,5 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return Answer
 	 */
 	[[nodiscard]]
-	Answer to_Answer (const std::string & value) noexcept;
+	EMERAUDE_API Answer to_Answer (const std::string & value) noexcept;
 }

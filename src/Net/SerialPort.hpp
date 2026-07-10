@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -36,7 +39,7 @@ namespace EmEn::Net
 	/**
 	 * @brief Describes a serial port available on the system.
 	 */
-	struct SerialPortInfo
+	struct EMERAUDE_API SerialPortInfo
 	{
 		std::string path;			/* Device path (e.g., "/dev/ttyUSB0", "COM3"). */
 		std::string manufacturer;	/* Manufacturer name (if available). */
@@ -50,7 +53,7 @@ namespace EmEn::Net
 	/**
 	 * @brief Configuration for opening a serial port.
 	 */
-	struct SerialPortConfig
+	struct EMERAUDE_API SerialPortConfig
 	{
 		uint32_t baudRate{9600};
 		uint8_t dataBits{8};		 /* 5, 6, 7, or 8. */
@@ -65,7 +68,7 @@ namespace EmEn::Net
 	 * @brief Cross-platform serial port for reading/writing data.
 	 * @note Uses termios on Linux/macOS, Win32 CreateFile/DCB on Windows.
 	 */
-	class SerialPort final
+	class EMERAUDE_API SerialPort final
 	{
 		public:
 

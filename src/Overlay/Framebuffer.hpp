@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -49,7 +52,7 @@ namespace EmEn::Overlay
 	 * GPU resources (image, image view, descriptor set). Used internally by Surface
 	 * for both single and double buffer modes.
 	 */
-	class Framebuffer final
+	class EMERAUDE_API Framebuffer final
 	{
 		public:
 

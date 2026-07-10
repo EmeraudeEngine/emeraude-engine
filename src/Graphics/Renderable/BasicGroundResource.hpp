@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <memory>
 
@@ -44,7 +47,7 @@ namespace EmEn::Graphics::Renderable
 	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
 	 * @extends EmEn::Scenes::GroundLevelInterface This is the scene ground.
 	 */
-	class BasicGroundResource final : public Abstract, public Scenes::GroundLevelInterface
+	class EMERAUDE_API BasicGroundResource final : public Abstract, public Scenes::GroundLevelInterface
 	{
 		friend class Resources::Container< BasicGroundResource >;
 

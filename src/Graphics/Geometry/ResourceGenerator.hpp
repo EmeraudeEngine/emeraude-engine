@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -48,7 +51,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief Geometry resources generator using threads.
 	 * @note This will use the vertex factory shape builder.
 	 */
-	class ResourceGenerator final
+	class EMERAUDE_API ResourceGenerator final
 	{
 		public:
 

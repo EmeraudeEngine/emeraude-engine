@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
@@ -46,7 +49,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief The physical device class to build a logical vulkan device.
 	 */
-	class PhysicalDevice final
+	class EMERAUDE_API PhysicalDevice final
 	{
 		public:
 

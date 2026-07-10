@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <array>
@@ -85,7 +86,7 @@ namespace EmEn
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 */
-	class Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
+	class EMERAUDE_API Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
 	{
 		public:
 

@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -55,7 +56,7 @@ namespace EmEn
 	 * @brief The application arguments service.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class Arguments final : public ServiceInterface, public Console::ControllableTrait
+	class EMERAUDE_API Arguments final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 

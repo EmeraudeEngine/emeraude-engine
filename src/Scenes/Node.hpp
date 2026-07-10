@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <any>
 #include <array>
@@ -85,7 +88,7 @@ namespace EmEn::Scenes
 	 * @see Scene, AbstractEntity, Component::Abstract
 	 * @version 0.8.35
 	 */
-	class Node final : public std::enable_shared_from_this< Node >, public AbstractEntity, public Physics::MovableTrait, public Animations::AnimatableInterface
+	class EMERAUDE_API Node final : public std::enable_shared_from_this< Node >, public AbstractEntity, public Physics::MovableTrait, public Animations::AnimatableInterface
 	{
 		public:
 

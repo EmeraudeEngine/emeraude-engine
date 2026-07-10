@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
@@ -39,7 +42,7 @@ namespace EmEn::Vulkan
 	 * @brief The device memory wrapper class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class DeviceMemory final : public AbstractDeviceDependentObject
+	class EMERAUDE_API DeviceMemory final : public AbstractDeviceDependentObject
 	{
 		public:
 

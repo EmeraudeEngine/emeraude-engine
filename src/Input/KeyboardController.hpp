@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstdint>
@@ -49,7 +52,7 @@ namespace EmEn::Input
 	 * @brief The keyboard controller class.
 	 * @extends EmEn::Input::ControllerInterface This is an input controller.
 	 */
-	class KeyboardController final : public ControllerInterface
+	class EMERAUDE_API KeyboardController final : public ControllerInterface
 	{
 		public:
 

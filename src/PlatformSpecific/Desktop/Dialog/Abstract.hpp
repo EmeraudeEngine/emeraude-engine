@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 
@@ -40,7 +43,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	/**
 	 * @brief The base class for all dialogs.
 	 */
-	class Abstract
+	class EMERAUDE_API Abstract
 	{
 		public:
 

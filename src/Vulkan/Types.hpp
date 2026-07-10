@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -136,7 +139,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Information about detected hybrid GPU configuration.
 	 */
-	struct HybridGPUConfig
+	struct EMERAUDE_API HybridGPUConfig
 	{
 		/** @brief True if Nvidia Optimus configuration detected (laptop with iGPU + mobile Nvidia dGPU). */
 		bool isOptimusDetected{false};

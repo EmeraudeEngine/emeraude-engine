@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -54,7 +57,7 @@ namespace EmEn::Net
 	 * thread / connection manager. This pattern fits both the WebModule
 	 * polling consumer and a LAN-game accept loop.
 	 */
-	class TCPServer final
+	class EMERAUDE_API TCPServer final
 	{
 		public:
 

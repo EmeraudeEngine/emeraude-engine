@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -35,7 +38,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe the available CPU on the system in order to get/print information.
 	 */
-	struct CPU
+	struct EMERAUDE_API CPU
 	{
 		/* The creator of the device, like AMD, Intel, ARM... */
 		std::string vendorName{"Unknown"};
@@ -58,7 +61,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe the available main memory (RAM) on the system in order to get/print information.
 	 */
-	struct SystemMemory
+	struct EMERAUDE_API SystemMemory
 	{
 		size_t total{0};
 		size_t free{0};
@@ -134,7 +137,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe a GPU device from the system in order to get/print information.
 	 */
-	struct GPUDevice
+	struct EMERAUDE_API GPUDevice
 	{
 		/* The creator of the main part of device, like NVIDIA, AMD, Intel... */
 		std::string vendorName{"Unknown"};
@@ -155,7 +158,7 @@ namespace EmEn::PlatformSpecific
 	};
 
 	/** @brief Describe the operating system. */
-	struct OperatingSystem
+	struct EMERAUDE_API OperatingSystem
 	{
 		std::string systemName;
 		std::string systemVersion;

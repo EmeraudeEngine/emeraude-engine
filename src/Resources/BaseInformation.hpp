@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <filesystem>
 #include <string>
@@ -70,7 +73,7 @@ namespace EmEn::Resources
 	 * @since 0.8.0
 	 * @version 0.8.35
 	 */
-	class BaseInformation final
+	class EMERAUDE_API BaseInformation final
 	{
 		public:
 

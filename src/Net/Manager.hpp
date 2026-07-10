@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <algorithm>
@@ -59,7 +62,7 @@ namespace EmEn::Net
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This service is observable
 	 */
-	class Manager final : public ServiceInterface, public Base::ObservableTrait
+	class EMERAUDE_API Manager final : public ServiceInterface, public Base::ObservableTrait
 	{
 		public:
 

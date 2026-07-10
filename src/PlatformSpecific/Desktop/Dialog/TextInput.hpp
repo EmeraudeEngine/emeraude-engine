@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -49,7 +52,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief The user dialog text input class.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract This is a user dialog box.
 	 */
-	class TextInput final : public Abstract
+	class EMERAUDE_API TextInput final : public Abstract
 	{
 		public:
 

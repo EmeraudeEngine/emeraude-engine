@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
@@ -53,7 +56,7 @@ namespace EmEn::Vulkan
 	 * @brief Defines the base class of all buffers in Vulkan API.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject To allocate memory on a device.
 	 */
-	class Buffer : public AbstractDeviceDependentObject
+	class EMERAUDE_API Buffer : public AbstractDeviceDependentObject
 	{
 		public:
 

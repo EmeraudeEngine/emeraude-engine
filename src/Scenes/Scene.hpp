@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <any>
 #include <array>
@@ -218,7 +221,7 @@ namespace EmEn::Scenes
 	 * @see OctreeSector For spatial partitioning.
 	 * @version 0.8.35
 	 */
-	class Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
+	class EMERAUDE_API Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
 	{
 		public:
 

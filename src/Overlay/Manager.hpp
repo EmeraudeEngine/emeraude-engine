@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_config.hpp" // IMGUI_ENABLED
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <cstdint>
@@ -74,7 +75,7 @@ namespace EmEn::Overlay
 	 * @extends EmEn::Input::KeyboardListenerInterface The manager needs to listen to the keyboard.
 	 * @extends EmEn::Input::PointerListenerInterface The manager needs to listen to the pointer.
 	 */
-	class Manager final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
+	class EMERAUDE_API Manager final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
 	{
 		public:
 

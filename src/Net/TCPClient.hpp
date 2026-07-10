@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -51,7 +54,7 @@ namespace EmEn::Net
 	 * @note Multiple TCPClient instances are fully independent and safe to
 	 * use concurrently from different threads.
 	 */
-	class TCPClient final
+	class EMERAUDE_API TCPClient final
 	{
 		friend class TCPServer;
 

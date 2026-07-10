@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 
@@ -44,7 +47,7 @@ namespace EmEn::Graphics::Material
 	 * @brief The basic material class use only one part.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
 	 */
-	class BasicResource final : public Interface
+	class EMERAUDE_API BasicResource final : public Interface
 	{
 		friend class Resources::Container< BasicResource >;
 

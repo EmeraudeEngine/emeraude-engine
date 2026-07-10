@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cstddef>
@@ -51,7 +54,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
-	class Camera final : public Abstract, public AVConsole::AbstractVirtualDevice
+	class EMERAUDE_API Camera final : public Abstract, public AVConsole::AbstractVirtualDevice
 	{
 		public:
 

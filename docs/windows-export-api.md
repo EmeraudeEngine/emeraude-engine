@@ -1,7 +1,11 @@
 # Windows DLL export API (`EMERAUDE_API`) — migration guide
 
-> Status: **scaffolding in place, migration in progress.** Default build is unchanged
-> (`EMERAUDE_USE_EXPLICIT_EXPORTS=OFF` → `WINDOWS_EXPORT_ALL_SYMBOLS`, macro is a no-op).
+> Status: **migration complete (2026-07).** `EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to **ON**
+> (explicit `EMERAUDE_API` boundary, `WINDOWS_EXPORT_ALL_SYMBOLS` dropped) and
+> `EMERAUDE_ENABLE_PCH` defaults to **ON**. The full MSVC cascade (base → engine → app_kernel →
+> app_system executables) builds and links with the PCH enabled. New public API that a consumer
+> references out-of-line must carry `EMERAUDE_API` — the consumer's linker (`LNK2019` on
+> `__imp_...`) names any omission.
 
 ## 1. Why this exists
 
@@ -52,22 +56,40 @@ a consumer (`projet-alpha`, tests, tools).
   in the consumer — `Math/*`, most of `Base::PixelFactory`), `constexpr`/`inline` helpers, and
   anything purely internal to the engine. Annotating them is harmless but noise.
 
-### C4275 — the base-class cascade (MSVC, `/WX`)
+### C4275 / C4251 — disabled by decision (no base-class cascade)
 
-A dll-interface class whose **base** is not itself `EMERAUDE_API` raises `C4275` — promoted to an
-error here. So annotating a class pulls in its bases. Example: `Core` derives from
-`ObservableTrait`, `ObserverTrait`, `ControllableTrait`, `KeyboardListenerInterface` — each must
-carry `EMERAUDE_API` (or its own export macro for `emeraude-base` types) before the flip. The same
-applies to a `std::` base only when the consumer instantiates it; STL bases are usually fine.
+MSVC raises `C4275` when a dll-interface class derives from a non-dll-interface base, and `C4251`
+when it holds a `std::` data member. Both are **disabled project-wide** (`/wd4275 /wd4251` in
+emeraude-base's `EMERAUDE_COMPILE_OPTIONS`) rather than driving an annotation cascade:
 
-## 4. `emeraude-base`
+- The whole cascade (DLL + every consumer) is built with the **same toolchain and CRT** — the
+  layout/allocator mismatches those warnings guard against cannot occur.
+- `EMERAUDE_API` classes may derive from emeraude-base traits that stay unexported **by design**
+  (see § 4). Annotating the base hierarchy would only serve the warning, not a real need.
 
-`emeraude-base` is a STATIC library whose objects are folded into `Emeraude.dll`, and `projet-alpha`
-uses some of its types **directly**. Those that are out-of-line (e.g. `Logging`, `Tracer`) need their
-own `EMERAUDE_BASE_API` macro (same dllexport/dllimport logic, keyed on the engine build) so they are
-exported from the DLL. Header-only base code (Math, the `PixelFactory` format templates) needs
-nothing. The base export header is added during the iteration when the first unresolved base symbol
-surfaces — keep its name free of any product name (public repo, see the confidentiality rule).
+Consequence: annotating a class does **not** pull in its bases. Annotate only what the linker
+names. The one residual risk C4275 used to flag — a `static` data member in a duplicated base
+whose state could diverge between the DLL copy and the executable copy — must now be caught in
+code review instead.
+
+## 4. `emeraude-base` — decision: no `EMERAUDE_BASE_API` (static copies preserved)
+
+`emeraude-base` is a STATIC library consumed **twice** in the cascade: its objects are folded into
+`Emeraude.dll`, *and* the final executables get their own static copy (propagated through the
+engine's / app_kernel's `PUBLIC` link). Executables therefore resolve every base symbol from
+**their own embedded copy** — they import nothing base-related from the DLL. This duplication is
+the long-standing status quo and works.
+
+**Decision (2026-07, "option 2b"):** keep that model. **No `EMERAUDE_BASE_API` macro is created.**
+Base symbols are neither exported from the DLL nor imported by consumers; the C4275 pressure that
+would have forced base-trait annotation is removed by disabling the warning (see above). Base
+stays completely untouched by this migration.
+
+The alternative (a single source of truth where executables import base symbols from the DLL and
+stop linking base statically) remains possible later as a separate project — it would require the
+dllexport/dllimport macro, a much larger exported surface, and a linkage rework across the cascade
+(app_kernel's `Kernel` and the executables). Do not introduce a no-op `EMERAUDE_BASE_API` in the
+meantime: an inert macro with ambiguous semantics is worse than none.
 
 ## 5. Migration procedure (iterative, build-driven)
 
@@ -76,10 +98,10 @@ build** and draining the linker:
 
 1. Configure a throwaway build with `-DEMERAUDE_USE_EXPLICIT_EXPORTS=ON -DEMERAUDE_ENABLE_PCH=ON` in
    a Claude-owned build dir (never the CLion `cmake-build-*`).
-2. Build the cascade; `projet-alpha`'s link reports `LNK2019` (unresolved import) for every
+2. Build the cascade; the consumer's link reports `LNK2019` (unresolved import) for every
    not-yet-exported symbol it references.
-3. For each, annotate the **owning class/function** with `EMERAUDE_API`, adding its bases as C4275
-   demands.
+3. For each, annotate the **owning class/function** with `EMERAUDE_API` (bases are NOT pulled in —
+   C4275 is disabled, see § 3).
 4. Repeat until the link is green. Then make `EMERAUDE_USE_EXPLICIT_EXPORTS=ON` the default and drop
    this guidance to a short "done" note.
 
@@ -91,6 +113,13 @@ minimal and intentional.
 - [x] `emeraude_export.hpp` reworked for the staged toggle (no-op default).
 - [x] `EMERAUDE_USE_EXPLICIT_EXPORTS` option + `WINDOWS_EXPORT_ALL_SYMBOLS` gating wired.
 - [x] First annotated class: `Core` (pattern example).
-- [ ] Engine public surface referenced by `projet-alpha`.
-- [ ] `emeraude-base` out-of-line surface (`EMERAUDE_BASE_API`).
-- [ ] Flip default to ON; verify the full MSVC cascade links with PCH enabled.
+- [x] Decision "2b": no `EMERAUDE_BASE_API`, static base copies preserved, `/wd4251 /wd4275`
+      added to `EMERAUDE_COMPILE_OPTIONS` (MSVC) in emeraude-base.
+- [x] Engine public surface referenced by app_system (~120 annotations over 2 linker-driven
+      iterations; includes the `FramebufferProperties` friend `operator<<` pattern — the DLL
+      linkage attribute must be on the FIRST namespace-scope declaration, before the class).
+- [x] Flip defaults to ON (`EMERAUDE_USE_EXPLICIT_EXPORTS`, `EMERAUDE_ENABLE_PCH`); full MSVC
+      cascade verified (build + link with PCH).
+- [x] MSVC PCH guard in emeraude-base's `EnablePrecompiledHeaders.cmake`: **kept deliberately**
+      — it now protects the `EMERAUDE_USE_EXPLICIT_EXPORTS=OFF` fallback (anyone reverting to
+      export-all gets the PCH silently disabled instead of `LNK2001`).

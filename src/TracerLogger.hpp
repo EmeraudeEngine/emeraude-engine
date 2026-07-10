@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <atomic>
 #include <chrono>
@@ -58,7 +61,7 @@ namespace EmEn
 	 * @see TracerLogger, Tracer
 	 * @version 0.8.39
 	 */
-	class TracerEntry final
+	class EMERAUDE_API TracerEntry final
 	{
 		public:
 
@@ -190,7 +193,7 @@ namespace EmEn
 	 * @see TracerEntry, Tracer
 	 * @version 0.8.39
 	 */
-	class TracerLogger final
+	class EMERAUDE_API TracerLogger final
 	{
 		public:
 

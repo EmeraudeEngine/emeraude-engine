@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <filesystem>
@@ -94,7 +97,7 @@ namespace EmEn
 	 * @see EmEn::Settings
 	 * @version 0.8.61
 	 */
-	class SettingStore final
+	class EMERAUDE_API SettingStore final
 	{
 		friend class Settings;
 
@@ -346,7 +349,7 @@ namespace EmEn
 	 * @see EmEn::SettingStore, EmEn::SettingValue, EmEn::SettingType
 	 * @version 0.8.61
 	 */
-	class Settings final : public ServiceInterface, public Console::ControllableTrait
+	class EMERAUDE_API Settings final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 

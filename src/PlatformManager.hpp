@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
@@ -40,7 +43,7 @@ namespace EmEn
 	 * @brief The platform manager service class initialize check Vulkan and initialize GLFW with it.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class PlatformManager final : public ServiceInterface
+	class EMERAUDE_API PlatformManager final : public ServiceInterface
 	{
 		public:
 

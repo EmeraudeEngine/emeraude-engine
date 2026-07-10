@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <optional>
 #include <string>
@@ -54,7 +57,7 @@ namespace EmEn
 	 * @note Permission is managed via Settings with key "Notifications/Permission".
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class SystemNotification final : public ServiceInterface
+	class EMERAUDE_API SystemNotification final : public ServiceInterface
 	{
 		public:
 

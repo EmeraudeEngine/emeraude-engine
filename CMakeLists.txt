@@ -74,8 +74,8 @@ option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds 
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 # Explicit DLL export API: drop WINDOWS_EXPORT_ALL_SYMBOLS in favour of the EMERAUDE_API macro
 # (emeraude_export.hpp). Required on MSVC once the PCH is enabled — auto-generated exports.def
-# leaks PCH marker symbols and fails to link. Migration in progress: see docs/windows-export-api.md.
-option(EMERAUDE_USE_EXPLICIT_EXPORTS "Use the explicit EMERAUDE_API export macro instead of WINDOWS_EXPORT_ALL_SYMBOLS (Default Off)." Off)
+# leaks PCH marker symbols and fails to link. See docs/windows-export-api.md.
+option(EMERAUDE_USE_EXPLICIT_EXPORTS "Use the explicit EMERAUDE_API export macro instead of WINDOWS_EXPORT_ALL_SYMBOLS (Default On)." On)
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)

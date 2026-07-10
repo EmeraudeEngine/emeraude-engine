@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <cstddef>
@@ -66,7 +67,7 @@ namespace EmEn::Vulkan
 	 * @brief The Vulkan instance service class.
 	 * @extends EmEn::ServiceInterface This is a service
 	 */
-	class Instance final : public ServiceInterface
+	class EMERAUDE_API Instance final : public ServiceInterface
 	{
 		public:
 

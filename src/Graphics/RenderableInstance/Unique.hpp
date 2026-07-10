@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
@@ -43,7 +46,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @brief This is a renderable object that uses an UBO to determine the location of the renderable object.
 	 * @extends EmEn::Graphics::RenderableInstance::Abstract It needs the base of a renderable instance.
 	 */
-	class Unique final : public Abstract
+	class EMERAUDE_API Unique final : public Abstract
 	{
 		public:
 

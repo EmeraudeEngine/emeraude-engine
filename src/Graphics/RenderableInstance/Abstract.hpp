@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
@@ -167,7 +170,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @see Multiple For GPU-instanced rendering with multiple instances.
 	 * @version 0.8.35
 	 */
-	class Abstract : public std::enable_shared_from_this< Abstract >, public Base::FlagTrait< uint32_t >
+	class EMERAUDE_API Abstract : public std::enable_shared_from_this< Abstract >, public Base::FlagTrait< uint32_t >
 	{
 		public:
 

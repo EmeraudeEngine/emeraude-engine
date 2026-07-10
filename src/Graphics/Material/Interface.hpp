@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <vector>
 
@@ -114,7 +117,7 @@ namespace EmEn::Graphics::Material
 	 * @brief This is the base of all material compatible with the graphic engine.
 	 * @extends EmEn::Resources::ResourceTrait Every material is a resource.
 	 */
-	class Interface : public Resources::ResourceTrait
+	class EMERAUDE_API Interface : public Resources::ResourceTrait
 	{
 		public:
 

@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <filesystem>
 #include <ostream>
@@ -47,7 +50,7 @@ namespace EmEn::PlatformSpecific
 	 * @brief The system info class. This will gather system information.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class SystemInfo final : public ServiceInterface
+	class EMERAUDE_API SystemInfo final : public ServiceInterface
 	{
 		public:
 

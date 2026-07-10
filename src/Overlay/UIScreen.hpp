@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <functional>
@@ -54,7 +57,7 @@ namespace EmEn::Overlay
 	 * @details There are no physical properties. This is just a group of surfaces and dispatch input event to it.
 	 * @exception EmEn::Base::NameableTrait A UI screen has a name.
 	 */
-	class UIScreen final : public Base::NameableTrait
+	class EMERAUDE_API UIScreen final : public Base::NameableTrait
 	{
 		public:
 

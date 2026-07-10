@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_config.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <cstdint>
@@ -87,7 +88,7 @@ namespace EmEn
 	 * @see TracerLogger, TracerEntry, T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class Tracer final
+	class EMERAUDE_API Tracer final
 	{
 		public:
 
@@ -743,7 +744,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class TraceDebug final : public T_TraceHelperBase< TraceDebug, Severity::Debug >
+	class EMERAUDE_API TraceDebug final : public T_TraceHelperBase< TraceDebug, Severity::Debug >
 	{
 		public:
 
@@ -760,7 +761,7 @@ namespace EmEn
 	 * @note This is the Release build version. In Debug builds, full functionality is provided.
 	 * @version 0.8.38
 	 */
-	class TraceDebug final
+	class EMERAUDE_API TraceDebug final
 	{
 		public:
 
@@ -803,7 +804,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class TraceSuccess final : public T_TraceHelperBase< TraceSuccess, Severity::Success >
+	class EMERAUDE_API TraceSuccess final : public T_TraceHelperBase< TraceSuccess, Severity::Success >
 	{
 		public:
 
@@ -824,7 +825,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class TraceInfo final : public T_TraceHelperBase< TraceInfo, Severity::Info >
+	class EMERAUDE_API TraceInfo final : public T_TraceHelperBase< TraceInfo, Severity::Info >
 	{
 		public:
 
@@ -846,7 +847,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class TraceWarning final : public T_TraceHelperBase< TraceWarning, Severity::Warning >
+	class EMERAUDE_API TraceWarning final : public T_TraceHelperBase< TraceWarning, Severity::Warning >
 	{
 		public:
 
@@ -868,7 +869,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class TraceError final : public T_TraceHelperBase< TraceError, Severity::Error >
+	class EMERAUDE_API TraceError final : public T_TraceHelperBase< TraceError, Severity::Error >
 	{
 		public:
 
@@ -898,7 +899,7 @@ namespace EmEn
 	 * @see BlobTrait, Tracer
 	 * @version 0.8.38
 	 */
-	class TraceFatal final : public Base::BlobTrait
+	class EMERAUDE_API TraceFatal final : public Base::BlobTrait
 	{
 		public:
 
@@ -1002,7 +1003,7 @@ namespace EmEn
 	 * @see BlobTrait, Tracer
 	 * @version 0.8.38
 	 */
-	class TraceAPI final : public Base::BlobTrait
+	class EMERAUDE_API TraceAPI final : public Base::BlobTrait
 	{
 		public:
 

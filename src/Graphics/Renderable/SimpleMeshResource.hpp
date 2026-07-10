@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <future>
 #include <memory>
@@ -45,7 +48,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief Simple mesh renderable with only one layer.
 	 * @extends EmEn::Graphics::Renderable::Abstract
 	 */
-	class SimpleMeshResource final : public Abstract, public SkeletalDataTrait
+	class EMERAUDE_API SimpleMeshResource final : public Abstract, public SkeletalDataTrait
 	{
 		friend class Resources::Container< SimpleMeshResource >;
 

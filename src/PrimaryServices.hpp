@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <string>
@@ -48,7 +49,7 @@ namespace EmEn
 	/**
 	 * @brief This class holds the primary services.
 	 */
-	class PrimaryServices final
+	class EMERAUDE_API PrimaryServices final
 	{
 		public:
 
