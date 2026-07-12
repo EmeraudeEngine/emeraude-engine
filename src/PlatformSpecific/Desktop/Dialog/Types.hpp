@@ -49,7 +49,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	/**
 	 * @brief The button layout enumeration.
 	 */
-	enum class ButtonLayout : uint8_t
+	enum class EMEN_API ButtonLayout : uint8_t
 	{
 		NoButton,
 		OK,
@@ -78,7 +78,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	EMERAUDE_API const char * to_cstring (ButtonLayout value) noexcept;
+	EMEN_API const char * to_cstring (ButtonLayout value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -86,7 +86,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (ButtonLayout value)
 	{
@@ -99,12 +99,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return ButtonLayout
 	 */
 	[[nodiscard]]
-	EMERAUDE_API ButtonLayout to_ButtonLayout (const std::string & value) noexcept;
+	EMEN_API ButtonLayout to_ButtonLayout (const std::string & value) noexcept;
 
 	/**
 	 * @brief The type of message.
 	 */
-	enum class MessageType : uint8_t
+	enum class EMEN_API MessageType : uint8_t
 	{
 		Info,
 		Warning,
@@ -130,7 +130,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	EMERAUDE_API const char * to_cstring (MessageType value) noexcept;
+	EMEN_API const char * to_cstring (MessageType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -138,7 +138,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (MessageType value)
 	{
@@ -151,12 +151,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return MessageType
 	 */
 	[[nodiscard]]
-	EMERAUDE_API MessageType to_MessageType (const std::string & value) noexcept;
+	EMEN_API MessageType to_MessageType (const std::string & value) noexcept;
 
 	/**
 	 * @brief The user answer to dialog enumeration.
 	 */
-	enum class Answer : uint8_t
+	enum class EMEN_API Answer : uint8_t
 	{
 		None,
 		OK,
@@ -179,7 +179,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	EMERAUDE_API const char * to_cstring (Answer value) noexcept;
+	EMEN_API const char * to_cstring (Answer value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -187,7 +187,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (Answer value)
 	{
@@ -200,5 +200,5 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return Answer
 	 */
 	[[nodiscard]]
-	EMERAUDE_API Answer to_Answer (const std::string & value) noexcept;
+	EMEN_API Answer to_Answer (const std::string & value) noexcept;
 }

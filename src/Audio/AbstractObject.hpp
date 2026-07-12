@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Third-party inclusions. */
 #include "AL/al.h"
 #include "AL/alc.h"
@@ -38,7 +41,7 @@ namespace EmEn::Audio
 	/**
 	 * @brief Base class for every OpenAL object which must be synced to audio memory.
 	 */
-	class AbstractObject
+	class EMEN_API AbstractObject
 	{
 		public:
 

@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -34,7 +37,7 @@ namespace EmEn::Graphics::Geometry
 {
 	/** @brief Geometry interface flag bits. */
 	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
-	enum GeometryFlagBits : uint32_t
+	enum EMEN_API GeometryFlagBits : uint32_t
 	{
 		None = 0U,
 		/* Vertex attributes present in local data. */
@@ -69,7 +72,7 @@ namespace EmEn::Graphics::Geometry
 
 	/** @brief SubGeometry flag bits. */
 	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
-	enum SubGeometryFlagBits : uint32_t
+	enum EMEN_API SubGeometryFlagBits : uint32_t
 	{
 		Regular = 0U,
 		EnableDoubleSidedFaces = 1U << 1
@@ -81,7 +84,7 @@ namespace EmEn::Graphics::Geometry
 	 * @return uint32_t
 	 */
 	[[nodiscard]]
-	uint32_t getElementCountFromFlags (uint32_t geometryFlagBits) noexcept;
+	EMEN_API uint32_t getElementCountFromFlags (uint32_t geometryFlagBits) noexcept;
 
 	/**
 	 * @brief Returns a printable debug flags string.
@@ -89,5 +92,5 @@ namespace EmEn::Graphics::Geometry
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string getFlagsString (uint32_t geometryFlagBits) noexcept;
+	EMEN_API std::string getFlagsString (uint32_t geometryFlagBits) noexcept;
 }

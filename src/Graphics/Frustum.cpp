@@ -159,4 +159,26 @@ namespace EmEn::Graphics
 
 		return true;
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const Frustum & obj)
+	{
+		return out << "Frustum data :" "\n"
+			"Right " << obj.m_planes[Frustum::Right] <<
+			"Left " << obj.m_planes[Frustum::Left] <<
+			"Bottom " << obj.m_planes[Frustum::Bottom] <<
+			"Top " << obj.m_planes[Frustum::Top] <<
+			"Far " << obj.m_planes[Frustum::Far] <<
+			"Near " << obj.m_planes[Frustum::Near];
+	}
+
+	std::string
+	to_string (const Frustum & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

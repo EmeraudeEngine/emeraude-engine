@@ -68,7 +68,7 @@ namespace EmEn::Graphics::Material
 	 * @brief The standard material resource of the engine.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
 	 */
-	class StandardResource final : public Interface
+	class EMEN_API StandardResource final : public Interface
 	{
 		friend class Resources::Container< StandardResource >;
 
@@ -88,8 +88,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceNormalVector{"SurfaceNormalVector"};
 			static constexpr auto SurfaceReflectionColor{"SurfaceReflectionColor"};
 			static constexpr auto SurfaceRefractionColor{"SurfaceRefractionColor"};
-		static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
-		static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
+			static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
+			static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};

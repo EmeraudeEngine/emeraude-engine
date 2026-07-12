@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * projectors, causing random micro-displacement of the entire image vertically
 	 * on each frame. Especially visible on worn prints.
 	 */
-	class VerticalJitter final : public DirectPostProcessEffect
+	class EMEN_API VerticalJitter final : public DirectPostProcessEffect
 	{
 		public:
 

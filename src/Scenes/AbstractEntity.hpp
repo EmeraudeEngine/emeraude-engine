@@ -49,30 +49,34 @@
 #include "Component/Abstract.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "StaticVector.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 
 /* Forward declarations. */
-namespace EmEn::Physics
+namespace EmEn
 {
-	class MovableTrait;
+	namespace Physics
+	{
+		class MovableTrait;
+	}
+
+	namespace Scenes
+	{
+		class AbstractEntity;
+	}
 }
 
 namespace EmEn::Scenes
 {
 	/** @brief Types of visual debug overlays that can be enabled on entities. */
-	enum class VisualDebugType : std::uint8_t
+	enum class EMEN_API VisualDebugType : std::uint8_t
 	{
 		Axis,			///< Local coordinate system axes (RGB = XYZ).
 		Velocity,		///< Velocity vector visualization for moving entities.
 		BoundingShape,   ///< Collision model shape wireframe (adapts to model type).
 		Camera,		  ///< Camera frustum visualization.
 	};
-
-	/* Forward declaration for ComponentBuilder. */
-	class AbstractEntity;
 
 	/**
 	 * @brief Builder for creating components with a fluent API.
@@ -87,7 +91,7 @@ namespace EmEn::Scenes
 	 * @version 0.8.39
 	 */
 	template< typename component_t >
-	class ComponentBuilder final
+	class EMEN_API ComponentBuilder final
 	{
 		public:
 
@@ -200,7 +204,7 @@ namespace EmEn::Scenes
 	 * @see @docs/scene-graph-architecture.md
 	 * @version 0.8.39
 	 */
-	class EMERAUDE_API AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMEN_API AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -1080,7 +1084,7 @@ namespace EmEn::Scenes
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getAxisVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getAxisVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the velocity debug mesh (directional arrow).
@@ -1091,7 +1095,7 @@ namespace EmEn::Scenes
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getVelocityVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getVelocityVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the bounding sphere debug mesh (geodesic sphere wireframe).
@@ -1102,7 +1106,7 @@ namespace EmEn::Scenes
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the bounding box debug mesh (cube wireframe).
@@ -1113,7 +1117,7 @@ namespace EmEn::Scenes
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the camera debug mesh (frustum wireframe).
@@ -1124,7 +1128,7 @@ namespace EmEn::Scenes
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getCameraVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getCameraVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Derived class notification fallback hook.

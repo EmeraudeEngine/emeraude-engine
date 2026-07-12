@@ -36,22 +36,46 @@ namespace EmEn::Graphics::RenderTarget
 	 * @TODO Work in progress...
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
-	class AbstractFilter : public AVConsole::AbstractVirtualDevice
+	class EMEN_API AbstractFilter : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AbstractFilter (const AbstractFilter & copy) noexcept = delete;
 
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AbstractFilter (AbstractFilter && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AbstractFilter &
+			 */
+			AbstractFilter & operator= (const AbstractFilter & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AbstractFilter &
+			 */
+			AbstractFilter & operator= (AbstractFilter && copy) noexcept = delete;
+
+			/** @brief Defaulted virtual destructor. */
+			~AbstractFilter () override = default;
 
 		protected:
 
 			explicit
 			AbstractFilter (const std::string & deviceName) noexcept
-				: AbstractVirtualDevice{deviceName, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Both}
+				: AbstractVirtualDevice{deviceName, Scenes::AVConsole::DeviceType::Video, Scenes::AVConsole::ConnexionType::Both}
 			{
 
 			}
-
-			/** @brief Defaulted virtual destructor. */
-			~AbstractFilter () override = default;
 	};
 }

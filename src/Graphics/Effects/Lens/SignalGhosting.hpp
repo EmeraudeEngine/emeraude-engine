@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * where a faint duplicate of the image appears offset to the right
 	 * due to reflected antenna signals arriving with a delay.
 	 */
-	class SignalGhosting final : public DirectPostProcessEffect
+	class EMEN_API SignalGhosting final : public DirectPostProcessEffect
 	{
 		public:
 

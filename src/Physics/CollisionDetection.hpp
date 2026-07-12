@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <vector>
 
@@ -56,7 +59,7 @@ namespace EmEn::Physics
 	 * @param outManifolds Vector to store generated manifolds.
 	 * @return bool True if collision detected.
 	 */
-	bool detectCollisionMovableToMovable (Scenes::AbstractEntity & movableEntityA, Scenes::AbstractEntity & movableEntityB, std::vector< ContactManifold > & outManifolds) noexcept;
+	EMEN_API bool detectCollisionMovableToMovable (Scenes::AbstractEntity & movableEntityA, Scenes::AbstractEntity & movableEntityB, std::vector< ContactManifold > & outManifolds) noexcept;
 
 	/**
 	 * @brief Detects collision between a movable entity and a static entity, and creates a contact manifold.
@@ -69,5 +72,5 @@ namespace EmEn::Physics
 	 * @param outManifolds Vector to store generated manifolds.
 	 * @return bool True if collision detected.
 	 */
-	bool detectCollisionMovableToStatic (Scenes::AbstractEntity & movableEntity, const Scenes::AbstractEntity & staticEntity, std::vector< ContactManifold > & outManifolds) noexcept;
+	EMEN_API bool detectCollisionMovableToStatic (Scenes::AbstractEntity & movableEntity, const Scenes::AbstractEntity & staticEntity, std::vector< ContactManifold > & outManifolds) noexcept;
 }

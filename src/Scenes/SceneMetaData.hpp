@@ -43,34 +43,39 @@
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 
 /* Forward declarations. */
-namespace EmEn::Vulkan
+namespace EmEn
 {
-	class DeferredDestructor;
-	class Device;
-	class TextureInterface;
-}
-
-namespace EmEn::Graphics
-{
-	class BindlessTextureManager;
-
-	namespace Material
+	namespace Vulkan
 	{
-		class Interface;
+		class DeferredDestructor;
+		class Device;
+		class TextureInterface;
+	}
+
+	namespace Graphics
+	{
+		class BindlessTextureManager;
+
+		namespace Material
+		{
+			class Interface;
+		}
+	}
+
+	namespace Scenes
+	{
+		class BindlessTextureSet;
 	}
 }
 
 namespace EmEn::Scenes
 {
-	class BindlessTextureSet;
-
 	/**
 	 * @brief Manages scene-level ray tracing metadata: TLAS, mesh metadata, and material data.
 	 * @note When RT is not available on the device, this class is inert (rebuild() is a no-op,
-	 *	   TLAS() returns nullptr). This centralizes all RT resource management that was
-	 *	   previously scattered in Scene.
+	 * TLAS() returns nullptr). This centralizes all RT resource management that was previously scattered in Scene.
 	 */
-	class SceneMetaData final
+	class EMEN_API SceneMetaData final
 	{
 		public:
 

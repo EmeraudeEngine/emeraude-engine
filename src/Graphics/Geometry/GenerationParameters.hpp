@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief Defines parameters to generate a geometry with the resource generator.
 	 * @extends EmEn::Base::FlagTrait Needs FlagTrait to pass it to generated geometries.
 	 */
-	class GenerationParameters final : public Base::FlagTrait< uint32_t >
+	class EMEN_API GenerationParameters final : public Base::FlagTrait< uint32_t >
 	{
 		public:
 

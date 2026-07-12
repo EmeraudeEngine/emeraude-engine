@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief Reverb effect (EAX version).
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class EAXReverb final : public Abstract
+	class EMEN_API EAXReverb final : public Abstract
 	{
 		public:
 
@@ -43,7 +43,7 @@ namespace EmEn::Audio::Effects
 			static constexpr auto ClassId{"EAXReverb"};
 
 			/**
-			 * @brief Constructs a EAX reverb effect.
+			 * @brief Constructs an EAX reverb effect.
 			 */
 			EAXReverb () noexcept;
 

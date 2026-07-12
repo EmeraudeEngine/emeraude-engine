@@ -26,10 +26,12 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
-#include <ostream>
 #include <string>
 
 /* Third-party inclusions. */
@@ -52,7 +54,7 @@ namespace EmEn::Physics
 	 * @note [OBS][SHARED-OBSERVABLE]
 	 * @extends EmEn::Base::ObservableTrait This notifies each physical property changes.
 	 */
-	class BodyPhysicalProperties final : public Base::ObservableTrait
+	class EMEN_API BodyPhysicalProperties final : public Base::ObservableTrait
 	{
 		public:
 
@@ -368,7 +370,7 @@ namespace EmEn::Physics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const BodyPhysicalProperties & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const BodyPhysicalProperties & obj);
 
 			float m_mass{DefaultMass};
 			float m_inverseMass{0.0F};
@@ -380,33 +382,10 @@ namespace EmEn::Physics
 			Base::Math::Matrix< 3, float > m_inertiaTensor;
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const BodyPhysicalProperties & obj)
-	{
-		return out << "Body physical properties :" "\n"
-			"Mass : " << obj.m_mass << " Kg (Inverse: " << obj.m_inverseMass << ")" << "\n"
-			"Surface : " << obj.m_surface << " m²" << "\n"
-			"Drag coefficient : " << obj.m_dragCoefficient << "\n"
-			"Angular drag coefficient : " << obj.m_angularDragCoefficient << "\n"
-			"Bounciness : " << obj.m_bounciness << "\n"
-			"Stickiness : " << obj.m_stickiness << "\n"
-			"Inertia tensor : " << obj.m_inertiaTensor << '\n';
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const BodyPhysicalProperties & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const BodyPhysicalProperties & obj) noexcept;
 }

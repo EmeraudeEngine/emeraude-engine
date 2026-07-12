@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Local inclusions for usages. */
 #include "Variant.hpp"
 
@@ -34,7 +37,7 @@ namespace EmEn::Animations
 	/**
 	 * @brief The AnimationInterface class
 	 */
-	class AnimationInterface
+	class EMEN_API AnimationInterface
 	{
 		public:
 

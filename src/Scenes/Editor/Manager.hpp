@@ -82,7 +82,7 @@ namespace EmEn
 namespace EmEn::Scenes::Editor
 {
 	/** @brief The available gizmo editing modes. */
-	enum class GizmoMode : uint8_t
+	enum class EMEN_API GizmoMode : uint8_t
 	{
 		Translate,
 		Rotate,
@@ -90,7 +90,7 @@ namespace EmEn::Scenes::Editor
 	};
 
 	/** @brief The transform space for gizmo operations. */
-	enum class TransformSpace : uint8_t
+	enum class EMEN_API TransformSpace : uint8_t
 	{
 		Local,
 		World,
@@ -107,7 +107,7 @@ namespace EmEn::Scenes::Editor
 	 * @extends EmEn::Input::KeyboardListenerInterface Listens to keyboard events when active.
 	 * @extends EmEn::Input::PointerListenerInterface Listens to pointer events when active.
 	 */
-	class Manager final : public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
+	class EMEN_API Manager final : public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
 	{
 		public:
 

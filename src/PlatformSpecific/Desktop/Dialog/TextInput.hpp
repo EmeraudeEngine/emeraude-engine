@@ -26,9 +26,6 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_export.hpp"
-
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -41,7 +38,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	/**
 	 * @brief The text input mode enumeration.
 	 */
-	enum class InputMode : uint8_t
+	enum class EMEN_API InputMode : uint8_t
 	{
 		SingleLine,
 		MultiLine,
@@ -52,7 +49,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief The user dialog text input class.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract This is a user dialog box.
 	 */
-	class EMERAUDE_API TextInput final : public Abstract
+	class EMEN_API TextInput final : public Abstract
 	{
 		public:
 

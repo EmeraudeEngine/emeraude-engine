@@ -58,7 +58,7 @@ namespace EmEn::Vulkan
 	 * uses rayQueryGetIntersectionGeometryIndexEXT to identify which sub-geometry
 	 * was hit and look up the right material.
 	 */
-	struct BLASGeometryInput final
+	struct EMEN_API BLASGeometryInput final
 	{
 		VkBuffer vertexBuffer{VK_NULL_HANDLE};
 		uint32_t vertexCount{0};
@@ -78,7 +78,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Describes an instance for TLAS building.
 	 */
-	struct TLASInstanceInput final
+	struct EMEN_API TLASInstanceInput final
 	{
 		VkDeviceAddress blasDeviceAddress{0};
 		VkTransformMatrixKHR transform{};
@@ -92,7 +92,7 @@ namespace EmEn::Vulkan
 	 * @brief Holds the prepared state for a deferred TLAS build.
 	 * @details Created by prepareTLAS(), consumed by recordTLASBuild().
 	 */
-	struct TLASBuildRequest final
+	struct EMEN_API TLASBuildRequest final
 	{
 		std::unique_ptr< AccelerationStructure > tlas;
 		/** @brief Instance and scratch buffers owned by this request, kept alive until the GPU is done. */
@@ -112,7 +112,7 @@ namespace EmEn::Vulkan
 	 * @todo A compute queue variant would further improve performance by overlapping
 	 * TLAS builds with graphics work on separate hardware queues.
 	 */
-	class AccelerationStructureBuilder final
+	class EMEN_API AccelerationStructureBuilder final
 	{
 		public:
 
@@ -125,15 +125,18 @@ namespace EmEn::Vulkan
 			 */
 			explicit AccelerationStructureBuilder (const std::shared_ptr< Device > & device) noexcept;
 
+			AccelerationStructureBuilder (const AccelerationStructureBuilder &) noexcept = delete;
+
+			AccelerationStructureBuilder (AccelerationStructureBuilder &&) noexcept = delete;
+
+			AccelerationStructureBuilder & operator= (const AccelerationStructureBuilder &) noexcept = delete;
+
+			AccelerationStructureBuilder & operator= (AccelerationStructureBuilder &&) noexcept = delete;
+
 			/**
 			 * @brief Destructs the builder.
 			 */
 			~AccelerationStructureBuilder () noexcept;
-
-			AccelerationStructureBuilder (const AccelerationStructureBuilder &) noexcept = delete;
-			AccelerationStructureBuilder (AccelerationStructureBuilder &&) noexcept = delete;
-			AccelerationStructureBuilder & operator= (const AccelerationStructureBuilder &) noexcept = delete;
-			AccelerationStructureBuilder & operator= (AccelerationStructureBuilder &&) noexcept = delete;
 
 			/**
 			 * @brief Initializes the builder (loads function pointers, creates GPU resources).

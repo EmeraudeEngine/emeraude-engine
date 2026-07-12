@@ -36,7 +36,7 @@
 namespace EmEn::Vulkan
 {
 	/** @brief The device work type enumeration. */
-	enum class DeviceWorkType : uint8_t
+	enum class EMEN_API DeviceWorkType : uint8_t
 	{
 		General = 0,
 		Graphics = 1,
@@ -44,7 +44,7 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief The device auto-selection mode enumeration. */
-	enum class DeviceAutoSelectMode : uint8_t
+	enum class EMEN_API DeviceAutoSelectMode : uint8_t
 	{
 		/** @brief DontCare mode: First available. */
 		DontCare = 0,
@@ -55,7 +55,7 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief Known GPU vendor IDs. */
-	enum class Vendor : std::uint16_t
+	enum class EMEN_API Vendor : std::uint16_t
 	{
 		Unknown = 0,
 		AMD = 0x1002,
@@ -139,7 +139,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Information about detected hybrid GPU configuration.
 	 */
-	struct EMERAUDE_API HybridGPUConfig
+	struct EMEN_API HybridGPUConfig
 	{
 		/** @brief True if Nvidia Optimus configuration detected (laptop with iGPU + mobile Nvidia dGPU). */
 		bool isOptimusDetected{false};
@@ -161,7 +161,7 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief This enumeration describes the purpose of a queue from the engine point of view. */
-	enum class QueueFamilyJob : uint8_t
+	enum class EMEN_API QueueFamilyJob : uint8_t
 	{
 		/** @brief The graphics and presentation queues. */
 		GraphicsAndPresentation = 0,
@@ -174,7 +174,7 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief The queue priority enum */
-	enum class QueuePriority : uint8_t
+	enum class EMEN_API QueuePriority : uint8_t
 	{
 		High = 0,
 		Medium = 1,
@@ -182,7 +182,7 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief The swap-chain status enumeration. */
-	enum class Status : uint8_t
+	enum class EMEN_API SwapChainStatus : uint8_t
 	{
 		Uninitialized = 0,
 		Ready = 1,

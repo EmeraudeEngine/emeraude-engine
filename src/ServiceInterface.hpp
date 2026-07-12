@@ -44,7 +44,7 @@ namespace EmEn
 	 * @note A service cannot be duplicated and should act like a singleton.
 	 * @extends EmEn::Base::NameableTrait Each service has a name.
 	 */
-	class EMERAUDE_API ServiceInterface : public Base::NameableTrait
+	class EMEN_API ServiceInterface : public Base::NameableTrait
 	{
 		public:
 

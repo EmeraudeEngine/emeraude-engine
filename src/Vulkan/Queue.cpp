@@ -116,7 +116,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<Status> & swapChainStatus) const noexcept
+	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<SwapChainStatus> & swapChainStatus) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
 		const std::lock_guard< Device > lock{*m_device};
@@ -129,14 +129,14 @@ namespace EmEn::Vulkan
 			case VK_SUBOPTIMAL_KHR :
 				Tracer::debug(ClassId, "vkQueuePresentKHR() detected the swap-chain is 'sub-optimal'! [SWAP-CHAIN-RECREATION-PLANNED]");
 
-				swapChainStatus = Status::Degraded;
+				swapChainStatus = SwapChainStatus::Degraded;
 
 				return true;
 
 			case VK_ERROR_OUT_OF_DATE_KHR :
 				Tracer::debug(ClassId, "vkQueuePresentKHR() detected the swap-chain is 'out of date' by the system! [SWAP-CHAIN-RECREATION-PLANNED]");
 
-				swapChainStatus = Status::Degraded;
+				swapChainStatus = SwapChainStatus::Degraded;
 
 				return false;
 
@@ -151,7 +151,7 @@ namespace EmEn::Vulkan
 					m_device->dumpDeviceLostDiagnostics("Queue::present");
 				}
 
-				swapChainStatus = Status::Failure;
+				swapChainStatus = SwapChainStatus::Failure;
 
 				return false;
 		}

@@ -71,7 +71,7 @@ namespace EmEn::Scenes
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::Base::ObservableTrait The light set can be observed for light addition or removal.
 	 */
-	class EMERAUDE_API LightSet final : public Base::ObservableTrait
+	class EMEN_API LightSet final : public Base::ObservableTrait
 	{
 		public:
 

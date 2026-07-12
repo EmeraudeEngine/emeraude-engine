@@ -891,4 +891,14 @@ namespace EmEn::Overlay
 
 		return out;
 	}
+
+	std::string
+	to_string (const UIScreen & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

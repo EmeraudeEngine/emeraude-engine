@@ -31,7 +31,6 @@
 
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
-#include "Utility.hpp"
 #include "SoundResource.hpp"
 
 namespace EmEn::Audio
@@ -39,7 +38,7 @@ namespace EmEn::Audio
 	/**
 	 * @brief The ambience sound class.
 	 */
-	class AmbienceSound final
+	class EMEN_API AmbienceSound final
 	{
 		public:
 

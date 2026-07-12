@@ -34,7 +34,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief Interface to define a physical and visible floor in a scene.
 	 */
-	class GroundLevelInterface
+	class EMEN_API GroundLevelInterface
 	{
 		public:
 

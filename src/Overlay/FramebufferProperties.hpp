@@ -32,27 +32,14 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstdint>
-#include <sstream>
 #include <string>
 
 namespace EmEn::Overlay
 {
-	class FramebufferProperties;
-
-	/**
-	 * @brief Writes the object into a stream.
-	 * @note This first declaration carries the DLL linkage attribute — MSVC refuses to add it on
-	 * a later declaration/definition (C2375), and the in-class 'friend' declaration cannot be first.
-	 * @param out A reference to the output stream.
-	 * @param obj A reference to the object to print.
-	 * @return std::ostream &
-	 */
-	EMERAUDE_API std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
-
 	/**
 	 * @brief Defines the framebuffer properties. This helps to create surfaces of the overlay according to HDPI usage.
 	 */
-	class EMERAUDE_API FramebufferProperties final
+	class EMEN_API FramebufferProperties final
 	{
 		public:
 
@@ -357,7 +344,7 @@ namespace EmEn::Overlay
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
 
 			uint32_t m_width{0};
 			uint32_t m_height{0};
@@ -374,5 +361,5 @@ namespace EmEn::Overlay
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	EMERAUDE_API std::string to_string (const FramebufferProperties & obj) noexcept;
+	EMEN_API std::string to_string (const FramebufferProperties & obj) noexcept;
 }

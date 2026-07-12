@@ -42,7 +42,7 @@ namespace EmEn::Audio
 	 * @brief The EffectSlot class.
 	 * @extends EmEn::Audio::AbstractObject
 	 */
-	class EffectSlot final : public AbstractObject
+	class EMEN_API EffectSlot final : public AbstractObject
 	{
 		public:
 

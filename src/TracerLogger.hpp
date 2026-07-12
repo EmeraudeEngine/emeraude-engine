@@ -61,7 +61,7 @@ namespace EmEn
 	 * @see TracerLogger, Tracer
 	 * @version 0.8.39
 	 */
-	class EMERAUDE_API TracerEntry final
+	class EMEN_API TracerEntry final
 	{
 		public:
 
@@ -193,7 +193,7 @@ namespace EmEn
 	 * @see TracerEntry, Tracer
 	 * @version 0.8.39
 	 */
-	class EMERAUDE_API TracerLogger final
+	class EMEN_API TracerLogger final
 	{
 		public:
 

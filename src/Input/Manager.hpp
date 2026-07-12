@@ -31,8 +31,8 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 #include <cstddef>
+#include <array>
 #include <set>
 #include <vector>
 
@@ -66,7 +66,7 @@ namespace EmEn::Input
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 */
-	class Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
+	class EMEN_API Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 

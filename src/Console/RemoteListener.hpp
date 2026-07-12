@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <atomic>
 #include <memory>
@@ -50,7 +53,7 @@ namespace EmEn::Console
 	 * Accepts incoming commands (line by line) and stores them in a thread-safe queue.
 	 * Also acts as a hub to broadcast messages back to all connected clients.
 	 */
-	class RemoteListener final
+	class EMEN_API RemoteListener final
 	{
 		friend class Session;
 
@@ -67,6 +70,32 @@ namespace EmEn::Console
 			 * @param port The TCP port to listen on. Default 7777.
 			 */
 			explicit RemoteListener (uint16_t port = DefaultConsoleRemoteListenerPort) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			RemoteListener (const RemoteListener & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			RemoteListener (RemoteListener && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return RemoteListener &
+			 */
+			RemoteListener & operator= (const RemoteListener & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return RemoteListener &
+			 */
+			RemoteListener & operator= (RemoteListener && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the remote listener service.

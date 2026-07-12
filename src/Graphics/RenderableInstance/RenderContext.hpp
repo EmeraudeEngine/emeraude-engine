@@ -61,7 +61,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 *
 	 * @see PushConstantContext For shader-specific push constant configuration.
 	 */
-	struct RenderPassContext final
+	struct EMEN_API RenderPassContext final
 	{
 		/** @brief The command buffer recording commands for this render pass. */
 		const Vulkan::CommandBuffer * commandBuffer{nullptr};
@@ -109,7 +109,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 *
 	 * @see RenderPassContext For render pass-level context.
 	 */
-	struct PushConstantContext final
+	struct EMEN_API PushConstantContext final
 	{
 		/** @brief The pipeline layout defining push constant ranges. */
 		const Vulkan::PipelineLayout * pipelineLayout{nullptr};

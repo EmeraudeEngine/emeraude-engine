@@ -26,9 +26,11 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
-#include <sstream>
 #include <string>
 
 namespace EmEn::Vulkan
@@ -36,7 +38,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief The memory region helper class.
 	 */
-	class MemoryRegion final
+	class EMEN_API MemoryRegion final
 	{
 		public:
 
@@ -95,33 +97,17 @@ namespace EmEn::Vulkan
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const MemoryRegion & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const MemoryRegion & obj);
 
 			const void * m_source{nullptr};
 			size_t m_offset{0};
 			size_t m_bytes{0};
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const MemoryRegion & obj)
-	{
-		return out << "Region of " << obj.m_bytes << " bytes from @" << obj.m_source << " to destination offset : " << obj.m_offset;
-	}
-
 	/**
 	 * @brief Stringify the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const MemoryRegion & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const MemoryRegion & obj) noexcept;
 }

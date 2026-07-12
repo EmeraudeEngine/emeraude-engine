@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief Reverb effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Reverb final : public Abstract
+	class EMEN_API Reverb final : public Abstract
 	{
 		public:
 

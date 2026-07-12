@@ -59,7 +59,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * applies bilateral blur to reduce noise, then composites reflections with the scene color.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class SSR final : public IndirectPostProcessEffect
+	class EMEN_API SSR final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -69,7 +69,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing SSR parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float maxDistance{50.0F};
 				float stride{0.1F};
@@ -84,7 +84,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the SSR trace pass.
 			 */
-			struct TracePushConstants
+			struct EMEN_API TracePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -103,7 +103,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the blur pass.
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -114,7 +114,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the resolve pass (cubemap fallback).
 			 */
-			struct ResolvePushConstants
+			struct EMEN_API ResolvePushConstants
 			{
 				float invViewCol0[4];
 				float invViewCol1[4];
@@ -132,7 +132,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the composite pass.
 			 */
-			struct CompositePushConstants
+			struct EMEN_API CompositePushConstants
 			{
 				float intensity;
 				float padding1;

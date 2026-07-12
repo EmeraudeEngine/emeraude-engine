@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
-#include <ostream>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -50,7 +49,7 @@ namespace EmEn::Vulkan
 	 * @brief The PipelineLayout class. This class describes all external resources used by shaders, UBO, samples, push_constant, except the VBO.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This Vulkan object needs a device.
 	 */
-	class PipelineLayout final : public AbstractDeviceDependentObject
+	class EMEN_API PipelineLayout final : public AbstractDeviceDependentObject
 	{
 		public:
 
@@ -241,7 +240,7 @@ namespace EmEn::Vulkan
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const PipelineLayout & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const PipelineLayout & obj);
 
 			VkPipelineLayout m_handle{VK_NULL_HANDLE};
 			VkPipelineLayoutCreateInfo m_createInfo{};
@@ -255,5 +254,5 @@ namespace EmEn::Vulkan
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	std::string to_string (const PipelineLayout & obj) noexcept;
+	EMEN_API std::string to_string (const PipelineLayout & obj) noexcept;
 }

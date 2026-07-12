@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/MeshResource.cpp
+ * src/Graphics/Renderable/SimpleMeshResource.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -34,10 +34,10 @@
 #include "AssetLoaders/GLTFLoader.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
-#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Renderer.hpp"
 #include "FastJSON.hpp"
 #include "VertexFactory/ShapeDecimator.hpp"
+#include "MultiLayerMeshResource.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
 
@@ -48,42 +48,10 @@ namespace EmEn::Graphics::Renderable
 	using namespace Graphics::Geometry;
 	using namespace Graphics::Material;
 
-	bool
-	MeshResource::isOpaque (uint32_t layerIndex) const noexcept
-	{
-		if ( layerIndex >= static_cast< uint32_t >(m_layers.size()) )
-		{
-			TraceError{ClassId} << "MeshResource::isOpaque(), layer index " << layerIndex << " overflow on '" << this->name() << "' !";
-
-			layerIndex = 0;
-		}
-
-		if ( const auto materialResource = m_layers[layerIndex].material(); materialResource != nullptr )
-		{
-			return materialResource->isOpaque();
-		}
-
-		return true;
-	}
-
-	bool
-	MeshResource::requiresGrabPass (uint32_t layerIndex) const noexcept
-	{
-		if ( layerIndex >= static_cast< uint32_t >(m_layers.size()) )
-		{
-			return false;
-		}
-
-		if ( const auto materialResource = m_layers[layerIndex].material(); materialResource != nullptr )
-		{
-			return materialResource->requiresGrabPass();
-		}
-
-		return false;
-	}
-
+	/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
+	[[nodiscard]]
 	const Geometry::Interface *
-	MeshResource::geometry (uint32_t LODLevel) const noexcept
+	MeshResource::geometry (uint32_t LODIndex) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_geometryMutex};
 
@@ -92,35 +60,9 @@ namespace EmEn::Graphics::Renderable
 			return nullptr;
 		}
 
-		const auto clamped = std::min(LODLevel, static_cast< uint32_t >(m_geometry.size() - 1));
+		const auto clamped = std::min(LODIndex, static_cast< uint32_t >(m_geometry.size() - 1));
 
 		return m_geometry[clamped].get();
-	}
-
-	const Material::Interface *
-	MeshResource::material (uint32_t layerIndex) const noexcept
-	{
-		if ( layerIndex >= static_cast< uint32_t >(m_layers.size()) )
-		{
-			TraceError{ClassId} << "MeshResource::material(), layer index " << layerIndex << " overflow on '" << this->name() << "' !";
-
-			layerIndex = 0;
-		}
-
-		return m_layers[layerIndex].material().get();
-	}
-
-	const RasterizationOptions *
-	MeshResource::layerRasterizationOptions (uint32_t layerIndex) const noexcept
-	{
-		if ( layerIndex >= static_cast< uint32_t >(m_layers.size()) )
-		{
-			TraceError{ClassId} << "MeshResource::layerRasterizationOptions(), layer index " << layerIndex << " overflow on '" << this->name() << "' !";
-
-			return nullptr;
-		}
-
-		return &m_layers[layerIndex].rasterizationOptions();
 	}
 
 	bool
@@ -136,7 +78,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(this->serviceProvider().container< BasicResource >()->getDefaultResource(), {}, 0) )
+		if ( !this->setMaterial(this->serviceProvider().container< BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -184,16 +126,15 @@ namespace EmEn::Graphics::Renderable
 		const auto meshIdx = assetData.nodes[nodeIdx].meshIndex.value();
 		const auto & meshDesc = assetData.meshes[meshIdx];
 
-		/* Attach geometry. */
+		/* Attach geometry + material (same pattern as load(Json)). */
 		if ( !this->setGeometry(meshDesc.geometry) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		/* Attach materials (multi-layer). */
-		for ( const auto & mat : meshDesc.materials )
+		if ( !meshDesc.materials.empty() )
 		{
-			if ( !this->addMaterial(mat, {}, 0) )
+			if ( !this->setMaterial(meshDesc.materials[0]) )
 			{
 				return this->setLoadSuccess(false);
 			}
@@ -215,116 +156,6 @@ namespace EmEn::Graphics::Renderable
 		return this->setLoadSuccess(true);
 	}
 
-	std::shared_ptr< Geometry::Interface >
-	MeshResource::parseGeometry (const Json::Value & data) noexcept
-	{
-		if ( data.isMember(JKUniformScale) )
-		{
-			this->setUniformScale(FastJSON::getValue< float >(data, JKUniformScale).value_or(1.0F));
-		}
-
-		const auto geometryType = FastJSON::getValidatedStringValue(data, JKGeometryType, Geometry::Types).value_or(IndexedVertexResource::ClassId);
-		const auto geometryResourceName = FastJSON::getValue< std::string >(data, JKGeometryName);
-
-		if ( geometryType == VertexResource::ClassId )
-		{
-			if ( !geometryResourceName )
-			{
-				TraceError{ClassId} << "The key '" << JKGeometryType << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
-
-				return this->serviceProvider().container< VertexResource >()->getDefaultResource();
-			}
-
-			return this->serviceProvider().container< VertexResource >()->getResource(geometryResourceName.value());
-		}
-
-		if ( geometryType == IndexedVertexResource::ClassId )
-		{
-			if ( !geometryResourceName )
-			{
-				TraceError{ClassId} << "The key '" << JKGeometryType << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
-
-				return this->serviceProvider().container< IndexedVertexResource >()->getDefaultResource();
-			}
-
-			return this->serviceProvider().container< IndexedVertexResource >()->getResource(geometryResourceName.value());
-		}
-
-		TraceWarning{ClassId} << "Geometry resource type '" << geometryType << "' is not handled !";
-
-		return this->serviceProvider().container< IndexedVertexResource >()->getDefaultResource();
-	}
-
-	std::shared_ptr< Material::Interface >
-	MeshResource::parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
-	{
-		const auto materialType = FastJSON::getValidatedStringValue(data, JKMaterialType, Material::Types).value_or(BasicResource::ClassId);
-		const auto materialResourceName = FastJSON::getValue< std::string >(data, JKMaterialName);
-
-		/* C++20 lambda template to load material from the appropriate container. */
-		auto loadMaterial = [&] < typename ResourceType > () -> std::shared_ptr< Material::Interface >
-		{
-			auto * container = serviceProvider.container< ResourceType >();
-
-			if ( !materialResourceName )
-			{
-				TraceError{ClassId} << "The key '" << JKMaterialName << "' for '" << ResourceType::ClassId << "' is not present or not a string !";
-
-				return container->getDefaultResource();
-			}
-
-			return container->getResource(materialResourceName.value());
-		};
-
-		if ( materialType == PBRResource::ClassId )
-		{
-			return loadMaterial.operator() < PBRResource > ();
-		}
-
-		if ( materialType == StandardResource::ClassId )
-		{
-			return loadMaterial.operator() < StandardResource > ();
-		}
-
-		return loadMaterial.operator() < BasicResource > ();
-	}
-
-	RasterizationOptions
-	MeshResource::parseLayerOptions (const Json::Value & data) noexcept
-	{
-		RasterizationOptions layerRasterizationOptions{};
-
-		if ( data.isMember(JKEnableDoubleSidedFace) && data[JKEnableDoubleSidedFace].isBool() )
-		{
-			if ( data[JKEnableDoubleSidedFace] )
-			{
-				layerRasterizationOptions.setCullingMode(CullingMode::None);
-			}
-			else
-			{
-				layerRasterizationOptions.setCullingMode(CullingMode::Back);
-			}
-		}
-
-		if ( data.isMember(JKDrawingMode) && data[JKDrawingMode].isString() )
-		{
-			if ( data[JKDrawingMode] == "Fill" )
-			{
-				layerRasterizationOptions.setPolygonMode(PolygonMode::Fill);
-			}
-			else if ( data[JKDrawingMode] == "Line" )
-			{
-				layerRasterizationOptions.setPolygonMode(PolygonMode::Line);
-			}
-			else if ( data[JKDrawingMode] == "Point" )
-			{
-				layerRasterizationOptions.setPolygonMode(PolygonMode::Point);
-			}
-		}
-
-		return layerRasterizationOptions;
-	}
-
 	bool
 	MeshResource::load (const Json::Value & data) noexcept
 	{
@@ -333,67 +164,95 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* FIXME: Physics properties from Mesh definitions. */
-		//this->parseOptions(data);
+		/* Parse geometry definition (same as MeshResource). */
+		const auto geometryType = FastJSON::getValidatedStringValue(data, JKGeometryType, Geometry::Types).value_or(IndexedVertexResource::ClassId);
+		const auto geometryResourceName = FastJSON::getValue< std::string >(data, JKGeometryName);
 
-		/* Parse geometry definition. */
-		const auto geometryResource = this->parseGeometry(data);
+		std::shared_ptr< Geometry::Interface > geometryResource;
 
-		if ( geometryResource == nullptr )
+		if ( geometryType == VertexResource::ClassId )
 		{
-			Tracer::error(ClassId, "No suitable geometry resource found !");
-
-			return this->setLoadSuccess(false);
-		}
-
-		this->setGeometry(geometryResource);
-
-		/* Checks layers array presence and content. */
-		if ( !data.isMember(JKLayers) )
-		{
-			TraceError{ClassId} << "'" << JKLayers << "' key doesn't exist !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		const auto & layerRules = data[JKLayers];
-
-		if ( !layerRules.isArray() )
-		{
-			TraceError{ClassId} << "'" << JKLayers << "' key must be a JSON array !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( layerRules.empty() )
-		{
-			TraceError{ClassId} << "'" << JKLayers << "' array is empty !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		m_layers.clear();
-
-		for ( const auto & layerRule : layerRules )
-		{
-			/* Parse material definition and get default if an error occurs. */
-			auto materialResource = MeshResource::parseLayer(this->serviceProvider(), layerRule);
-
-			/* Gets a default material. */
-			if ( materialResource == nullptr )
+			if ( !geometryResourceName )
 			{
-				Tracer::error(ClassId, "No suitable material resource found !");
+				TraceError{ClassId} << "The key '" << JKGeometryName << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
 
 				return this->setLoadSuccess(false);
 			}
 
-			if ( !this->addMaterial(materialResource, MeshResource::parseLayerOptions(layerRule), 0) )
+			geometryResource = this->serviceProvider().container< VertexResource >()->getResource(geometryResourceName.value());
+		}
+		else if ( geometryType == IndexedVertexResource::ClassId )
+		{
+			if ( !geometryResourceName )
 			{
-				Tracer::error(ClassId, "Unable to add material layer !");
+				TraceError{ClassId} << "The key '" << JKGeometryName << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
 
 				return this->setLoadSuccess(false);
 			}
+
+			geometryResource = this->serviceProvider().container< IndexedVertexResource >()->getResource(geometryResourceName.value());
 		}
+		else
+		{
+			TraceWarning{ClassId} << "Geometry resource type '" << geometryType << "' is not handled !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->setGeometry(geometryResource) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		if ( data.isMember(JKUniformScale) )
+		{
+			this->setUniformScale(FastJSON::getValue< float >(data, JKUniformScale).value_or(1.0F));
+		}
+
+		/* Parse material definition.
+		 * Two formats are supported:
+		 * 1. Multi-layer format (MeshResource compatible): "Layers": [ { "MaterialType": "...", ... } ]
+		 *	-> Only the first layer is used.
+		 * 2. Simplified format: "MaterialType": "...", "MaterialName": "..." at root level.
+		 */
+		const Json::Value * layerData = nullptr;
+
+		if ( data.isMember(JKLayers) && data[JKLayers].isArray() && !data[JKLayers].empty() )
+		{
+			/* Multi-layer format: use first layer only. */
+			layerData = &data[JKLayers][0U];
+		}
+		else if ( data.isMember(JKMaterialType) || data.isMember(JKMaterialName) )
+		{
+			/* Simplified format: material info at root level. */
+			layerData = &data;
+		}
+		else
+		{
+			TraceError{ClassId} <<
+				"No material definition found ! Expected '" << JKLayers << "' array "
+				"or '" << JKMaterialType << "'/'" << JKMaterialName << "' keys.";
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Parse material from the layer data. */
+		const auto materialResource = MultiLayerMeshResource::parseLayer(this->serviceProvider(), *layerData);
+
+		if ( materialResource == nullptr )
+		{
+			Tracer::error(ClassId, "No suitable material resource found !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->setMaterial(materialResource) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* Parse rasterization options. */
+		m_rasterizationOptions = MultiLayerMeshResource::parseLayerOptions(*layerData);
 
 		return this->setLoadSuccess(true);
 	}
@@ -406,145 +265,81 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* 1. Check the geometry. */
-		if ( geometry == nullptr )
+		if ( !this->setGeometry(geometry) )
 		{
-			TraceError{ClassId} << "Unable to set geometry for mesh '" << this->name() << "' !";
-
 			return this->setLoadSuccess(false);
 		}
 
-		this->setGeometry(geometry);
-
-		/* 2. Check the materials. */
-		if ( material == nullptr )
+		if ( material != nullptr )
 		{
-			TraceError{ClassId} << "Unable to set material for mesh '" << this->name() << "' !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		this->setMaterial(material, rasterizationOptions, 0);
-
-		return this->setLoadSuccess(true);
-	}
-
-	bool
-	MeshResource::load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions) noexcept
-	{
-		if ( !this->beginLoading() )
-		{
-			return false;
-		}
-
-		/* Check the geometry. */
-		if ( geometry == nullptr )
-		{
-			TraceError{ClassId} << "Unable to set geometry for mesh '" << this->name() << "' !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		this->setGeometry(geometry);
-
-		/* Check the materials. */
-		m_layers.clear();
-
-		for ( size_t index = 0; index < materialList.size(); ++index )
-		{
-			const auto & material = materialList[index];
-
-			if ( material == nullptr )
+			if ( !this->setMaterial(material) )
 			{
-				Tracer::error(ClassId, "One material of the list is empty !");
-
 				return this->setLoadSuccess(false);
 			}
-
-			/* Apply per-layer rasterization options when the caller provides them (e.g. an asset
-			 * loader flagging a double-sided material → CullingMode::None); otherwise defaults. */
-			const RasterizationOptions options = index < rasterizationOptions.size() ? rasterizationOptions[index] : RasterizationOptions{};
-
-			this->addMaterial(material, options, 0);
 		}
+
+		m_rasterizationOptions = rasterizationOptions;
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	MeshResource::setGeometry (const std::shared_ptr< Geometry::Interface > & geometry) noexcept
+	MeshResource::setGeometry (const std::shared_ptr< Geometry::Interface > & geometryResource) noexcept
 	{
-		if ( geometry == nullptr )
+		if ( geometryResource == nullptr )
 		{
-			TraceError{ClassId} << "Geometry pointer tried to be attached to renderable object '" << this->name() << "' " << this << " is null !";
+			TraceError{ClassId} <<
+				"The geometry resource is null ! "
+				"Unable to attach it to the renderable object '" << this->name() << "' " << this << ".";
 
 			return false;
 		}
 
 		this->setReadyForInstantiation(false);
 
-		m_geometry.emplace_back(geometry);
+		m_geometry.emplace_back(geometryResource);
 
-		return this->addDependency(geometry);
+		return this->addDependency(geometryResource);
 	}
 
 	bool
-	MeshResource::addMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t flags) noexcept
+	MeshResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
 	{
-		if ( material == nullptr )
+		if ( materialResource == nullptr )
 		{
-			TraceError{ClassId} << "Material pointer tried to be attached to renderable object '" << this->name() << "' " << this << " is null !";
+			TraceError{ClassId} <<
+				"The material resource is null ! "
+				"Unable to attach it to the renderable object '" << this->name() << "' " << this << ".";
 
 			return false;
 		}
 
 		this->setReadyForInstantiation(false);
 
-		const auto layerName = (std::stringstream{} << "MeshLayer" << m_layers.size()).str();
+		m_material = materialResource;
 
-		m_layers.emplace_back(layerName, material, options, flags);
-
-		return this->addDependency(material);
+		return this->addDependency(m_material);
 	}
 
 	bool
 	MeshResource::onDependenciesLoaded () noexcept
 	{
-		/* NOTE: Check for sub-geometries and layer count coherence. */
-		if ( this->subGeometryCount() != this->layerCount() )
-		{
-			TraceError{ClassId} <<
-				"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
-				"There is " << this->subGeometryCount() << " sub-geometries and " <<  this->layerCount() << " rendering layers!";
-
-			return false;
-		}
-
 		if constexpr ( IsDebug )
 		{
 			/* NOTE: Check the geometry resource. */
 			if ( !this->geometry(0)->isCreated() )
 			{
-				TraceError{ClassId} <<
-					"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
-					"The geometry is not created!";
+				TraceError{ClassId} << "The geometry for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
 
 				return false;
 			}
 
-			/* NOTE: Check material resources. */
-			const auto lCount = this->layerCount();
-
-			for ( uint32_t layerIndex = 0; layerIndex < lCount; layerIndex++ )
+			/* NOTE: Check material resource. */
+			if ( !this->material(0)->isCreated() )
 			{
-				if ( !this->material(layerIndex)->isCreated() )
-				{
-					TraceError{ClassId} <<
-						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
-						"The material #" << layerIndex << " is not created!";
+				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
 
-					return false;
-				}
+				return false;
 			}
 		}
 
@@ -602,7 +397,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	MeshResource::generateLODLevel (const std::shared_ptr< IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept
 	{
-		/* Decimate the source mesh (preserves multi-group structure). */
+		/* Decimate the source mesh. */
 		const VertexFactory::ShapeDecimator decimator{sourceGeometry->localData(), ratio};
 		auto decimatedShape = decimator.decimate();
 
@@ -647,7 +442,6 @@ namespace EmEn::Graphics::Renderable
 				TraceSuccess{ClassId} <<
 					"LOD " << LODLevel << " ready for '" << this->name() << "' "
 					"(" << decimatedShape.triangles().size() << " triangles, "
-					<< decimatedShape.groupCount() << " group(s), "
 					<< static_cast< int >(ratio * 100.0F) << "%).";
 			}
 		}

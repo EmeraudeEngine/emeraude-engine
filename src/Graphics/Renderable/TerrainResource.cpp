@@ -26,17 +26,17 @@
 
 #include "TerrainResource.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <thread>
 
-/* Local inclusions. */
-#include "Graphics/Material/StandardResource.hpp"
-#include "FastJSON.hpp"
+/* Third-party inclusions. */
 #include "magic_enum/magic_enum.hpp"
+
+/* Local inclusions. */
+#include "FastJSON.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

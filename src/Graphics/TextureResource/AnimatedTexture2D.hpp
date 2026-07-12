@@ -39,7 +39,7 @@ namespace EmEn::Graphics::TextureResource
 	 * @brief The animated texture 2D resource class.
 	 * @extends EmEn::Graphics::TextureResource::Abstract This is a loadable texture resource.
 	 */
-	class AnimatedTexture2D final : public Abstract
+	class EMEN_API AnimatedTexture2D final : public Abstract
 	{
 		friend class Resources::Container< AnimatedTexture2D >;
 

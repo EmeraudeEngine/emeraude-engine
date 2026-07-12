@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * Requires hardware ray tracing support (automatically skipped when unavailable).
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class ContactShadows final : public IndirectPostProcessEffect
+	class EMEN_API ContactShadows final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing contact shadows parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float maxDistance{2.0F};
 				float normalBias{0.01F};
@@ -68,7 +68,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the RT shadow pass.
 			 */
-			struct ShadowPushConstants
+			struct EMEN_API ShadowPushConstants
 			{
 				float inverseProjViewMatrix[16];
 				float lightDirWorldX;
@@ -84,7 +84,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the apply pass.
 			 */
-			struct ApplyPushConstants
+			struct EMEN_API ApplyPushConstants
 			{
 				float intensity;
 			};
@@ -92,7 +92,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the blur passes (PCSS-lite).
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float directionX;
 				float directionY;

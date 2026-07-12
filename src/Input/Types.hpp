@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -38,7 +41,7 @@ namespace EmEn::Input
 	constexpr auto JoystickMaxHats{4};
 
 	/** @brief A convenient mapping to GLFW_KEY_xxx key macros. */
-	enum Key : int16_t
+	enum EMEN_API Key : int16_t
 	{
 		KeyUnknown = -1, // GLFW_KEY_UNKNOWN
 		KeySpace = 32, //GLFW_KEY_SPACE
@@ -291,7 +294,7 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (Key type) noexcept;
+	EMEN_API const char * to_cstring (Key type) noexcept;
 
 	/**
 	 * @brief Returns string version of the enum value.
@@ -299,7 +302,7 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (Key type) noexcept
 	{
@@ -312,10 +315,10 @@ namespace EmEn::Input
 	 * @return Key
 	 */
 	[[nodiscard]]
-	Key convertKey (const std::string & type) noexcept;
+	EMEN_API Key convertKey (const std::string & type) noexcept;
 
 	/** @brief A convenient mapping to GLFW_MOD_xxx modifier key macros. */
-	enum ModKey: uint8_t
+	enum EMEN_API ModKey: uint8_t
 	{
 		ModKeyUnknown = 0x0000,
 		ModKeyShift = 0x0001, // GLFW_MOD_SHIFT
@@ -340,7 +343,7 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (ModKey type) noexcept;
+	EMEN_API const char * to_cstring (ModKey type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -348,7 +351,7 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (ModKey type) noexcept
 	{
@@ -361,7 +364,7 @@ namespace EmEn::Input
 	 * @return Key
 	 */
 	[[nodiscard]]
-	ModKey convertModKey (const std::string & type) noexcept;
+	EMEN_API ModKey convertModKey (const std::string & type) noexcept;
 
 	/**
 	 * @brief Converts GLFW key to standard ASCII keycode.
@@ -370,7 +373,7 @@ namespace EmEn::Input
 	 */
 	[[nodiscard]]
 	[[deprecated("Incorrect translation !")]]
-	uint8_t ASCII (int key) noexcept;
+	EMEN_API uint8_t ASCII (int key) noexcept;
 
 	/**
 	 * @brief Returns whether a modifier key is pressed.
@@ -379,7 +382,7 @@ namespace EmEn::Input
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool isKeyboardModifierPressed (ModKey modKey, int modifiers) noexcept;
+	EMEN_API bool isKeyboardModifierPressed (ModKey modKey, int modifiers) noexcept;
 
 	/**
 	 * @brief Returns a list of keyboard modifiers pressed.
@@ -387,10 +390,10 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string getModifierListString (int modifiers) noexcept;
+	EMEN_API std::string getModifierListString (int modifiers) noexcept;
 
 	/** @brief A convenient mapping to GLFW_MOUSE_xxx mouse macros. */
-	enum MouseButton: uint8_t
+	enum EMEN_API MouseButton : uint8_t
 	{
 		Button1Left = 0, //GLFW_MOUSE_BUTTON_1 or GLFW_MOUSE_BUTTON_LEFT,
 		Button2Right = 1, //GLFW_MOUSE_BUTTON_2 or GLFW_MOUSE_BUTTON_RIGHT,
@@ -417,7 +420,7 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (MouseButton type) noexcept;
+	EMEN_API const char * to_cstring (MouseButton type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -425,7 +428,7 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (MouseButton type) noexcept
 	{
@@ -433,7 +436,7 @@ namespace EmEn::Input
 	}
 
 	/** @brief Joystick axis enumeration */
-	enum JoystickAxis: uint8_t
+	enum EMEN_API JoystickAxis: uint8_t
 	{
 		AxisX = 0,
 		AxisY = 1,
@@ -456,7 +459,7 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (JoystickAxis type) noexcept;
+	EMEN_API const char * to_cstring (JoystickAxis type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -464,7 +467,7 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (JoystickAxis type) noexcept
 	{
@@ -472,7 +475,7 @@ namespace EmEn::Input
 	}
 
 	/** @brief Joystick hat direction enumeration. */
-	enum JoystickHatDirection: uint8_t
+	enum EMEN_API JoystickHatDirection: uint8_t
 	{
 		Center = 0,
 		Up = 1,
@@ -501,7 +504,7 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (JoystickHatDirection type) noexcept;
+	EMEN_API const char * to_cstring (JoystickHatDirection type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -509,14 +512,14 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (JoystickHatDirection type) noexcept
 	{
 		return {to_cstring(type)};
 	}
 
-	enum GamepadAxis: uint8_t
+	enum EMEN_API GamepadAxis: uint8_t
 	{
 		AxisLeftX = 0,
 		AxisLeftY = 1,
@@ -539,10 +542,10 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (GamepadAxis type) noexcept;
+	EMEN_API const char * to_cstring (GamepadAxis type) noexcept;
 
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (GamepadAxis type) noexcept
 	{
@@ -550,7 +553,7 @@ namespace EmEn::Input
 	}
 
 	/** @brief A convenient mapping to GLFW_GAMEPAD_xxx gamepad macros. */
-	enum GamepadButton: uint8_t
+	enum EMEN_API GamepadButton: uint8_t
 	{
 		ButtonA = 0, //GLFW_GAMEPAD_BUTTON_A,
 		ButtonB = 1, //GLFW_GAMEPAD_BUTTON_B,
@@ -591,7 +594,7 @@ namespace EmEn::Input
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (GamepadButton type) noexcept;
+	EMEN_API const char * to_cstring (GamepadButton type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -599,7 +602,7 @@ namespace EmEn::Input
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (GamepadButton type) noexcept
 	{

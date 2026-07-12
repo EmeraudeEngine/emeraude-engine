@@ -43,7 +43,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	 *
 	 * @extends EmEn::Scenes::Editor::Gizmo::Abstract
 	 */
-	class Translate final : public Abstract
+	class EMEN_API Translate final : public Abstract
 	{
 		public:
 

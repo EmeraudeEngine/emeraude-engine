@@ -1,5 +1,5 @@
 /*
- * src/Help.cpp
+ * src/Graphics/VertexBufferBinding.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,52 +24,29 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Help.hpp"
+#include "VertexBufferBinding.hpp"
 
-/* STL inclusions. */
-#include <sstream>
-
-namespace EmEn
+namespace EmEn::Graphics
 {
-	std::string
-	Help::argumentDocsString () const noexcept
+	std::ostream &
+	operator<< (std::ostream & out, const VertexBufferBinding & obj)
 	{
-		std::stringstream output;
-
-		output << this->name() << " arguments : " "\n";
-
-		for ( const auto & argumentDoc : m_argumentDocs )
-		{
-			output << '\t' << argumentDoc << '\n';
-		}
-
-		return output.str();
+		return out << VertexBufferBinding::ClassId << ". "
+			"Binding: " << obj.m_binding << ", "
+			"Element count: " << obj.m_elementCount << ", "
+			"Topology: " << to_string(obj.m_topology) << ", "
+			"Per instance: " << ( obj.perInstance() ? "yes" : "no" ) << ", "
+			"Request primitive restart: " << ( obj.requestPrimitiveRestart() ? "yes" : "no" ) << ", "
+			"Is position absolute: " << ( obj.isPositionAbsolute() ? "yes" : "no" ) << ", "
+			"Is dynamic vertex buffer: " << ( obj.isDynamicVertexBuffer() ? "yes" : "no" );
 	}
 
 	std::string
-	Help::shortcutDocsString () const noexcept
+	to_string (const VertexBufferBinding & obj) noexcept
 	{
 		std::stringstream output;
 
-		output << this->name() << " shortcuts : " "\n";
-
-		for ( const auto & shortcutDoc : m_shortcutDocs )
-		{
-			output << '\t' << shortcutDoc << '\n';
-		}
-
-		return output.str();
-	}
-
-	std::string
-	Help::getHelp () const noexcept
-	{
-		std::stringstream output;
-
-		output <<
-				"\n\n" << this->name() << " help." "\n" <<
-				this->argumentDocsString() << '\n' <<
-				this->shortcutDocsString() << '\n';
+		output << obj;
 
 		return output.str();
 	}

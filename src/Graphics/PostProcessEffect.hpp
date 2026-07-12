@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 namespace EmEn::Graphics
 {
 	/**
@@ -34,7 +37,7 @@ namespace EmEn::Graphics
 	 * multi-pass pipeline effects (IndirectPostProcessEffect) or single-pass
 	 * fragment shader effects (DirectPostProcessEffect).
 	 */
-	class PostProcessEffect
+	class EMEN_API PostProcessEffect
 	{
 		public:
 

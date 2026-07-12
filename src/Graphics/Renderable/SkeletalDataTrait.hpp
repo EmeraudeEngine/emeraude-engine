@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <memory>
 #include <vector>
@@ -50,7 +53,7 @@ namespace EmEn::Graphics::Renderable
 	 *
 	 * Inherited by MeshResource and SimpleMeshResource.
 	 */
-	class SkeletalDataTrait
+	class EMEN_API SkeletalDataTrait
 	{
 		public:
 

@@ -58,7 +58,7 @@ namespace EmEn::Graphics
 	 * a texture input (via the TextureInterface).
 	 * @extends EmEn::Vulkan::TextureInterface This is usable as a texture.
 	 */
-	class IntermediateRenderTarget final : public Vulkan::TextureInterface
+	class EMEN_API IntermediateRenderTarget final : public Vulkan::TextureInterface
 	{
 		public:
 
@@ -69,6 +69,32 @@ namespace EmEn::Graphics
 			 * @brief Constructs an intermediate render target.
 			 */
 			IntermediateRenderTarget () noexcept = default;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			IntermediateRenderTarget (const IntermediateRenderTarget & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			IntermediateRenderTarget (IntermediateRenderTarget && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return IntermediateRenderTarget &
+			 */
+			IntermediateRenderTarget & operator= (const IntermediateRenderTarget & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return IntermediateRenderTarget &
+			 */
+			IntermediateRenderTarget & operator= (IntermediateRenderTarget && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the intermediate render target.

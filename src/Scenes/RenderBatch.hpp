@@ -40,7 +40,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief The RenderBatch class.
 	 */
-	class RenderBatch final
+	class EMEN_API RenderBatch final
 	{
 		public :
 

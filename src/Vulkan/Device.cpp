@@ -68,45 +68,8 @@ namespace EmEn::Vulkan
 	using namespace Base;
 	using namespace Graphics;
 
-	Queue *
-	DeviceQueueConfiguration::queue (QueuePriority priority) const noexcept
-	{
-		std::array< uint8_t, 3 > searchOrder{};
-
-		switch ( priority )
-		{
-			/* NOTE: High -> Medium -> Low */
-			case QueuePriority::High:
-				searchOrder = {0, 1, 2};
-				break;
-
-				/* NOTE: Medium -> High -> Low */
-			case QueuePriority::Medium:
-				searchOrder = {1, 0, 2};
-				break;
-
-				/* NOTE: Low -> Medium -> High */
-			case QueuePriority::Low:
-			default:
-				searchOrder = {2, 1, 0};
-				break;
-		}
-
-		for ( const uint8_t priorityIndex : searchOrder )
-		{
-			if ( auto & [nextQueueIndex, queueList] = m_queueByPriorities[priorityIndex]; !queueList.empty() )
-			{
-				const uint32_t index = nextQueueIndex.fetch_add(1) % queueList.size();
-
-				return queueList[index];
-			}
-		}
-
-		return nullptr;
-	}
-
 	bool
-	Device::installQueues (const std::map< uint32_t, StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept
+	Device::installQueues (const std::map< uint32_t, StaticVector< float, 16 > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept
 	{
 		const auto queueFamilyIndex = configuration.queueFamilyIndex();
 
@@ -706,7 +669,7 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_logicalDeviceAccess};
+		const std::scoped_lock lock{m_logicalDeviceAccess};
 
 		if ( const auto result = vkDeviceWaitIdle(m_deviceHandle); result != VK_SUCCESS )
 		{

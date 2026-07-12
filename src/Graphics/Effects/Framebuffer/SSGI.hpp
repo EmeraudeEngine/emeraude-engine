@@ -48,7 +48,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * hardware is not available.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class SSGI final : public IndirectPostProcessEffect
+	class EMEN_API SSGI final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -58,7 +58,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing SSGI parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float maxDistance{5.0F};
 				float intensity{0.8F};
@@ -73,7 +73,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the SSGI trace pass.
 			 */
-			struct TracePushConstants
+			struct EMEN_API TracePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -90,7 +90,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the bilateral blur pass.
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -105,7 +105,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the apply pass.
 			 */
-			struct ApplyPushConstants
+			struct EMEN_API ApplyPushConstants
 			{
 				float intensity;
 				float padding1;

@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief An abstract class to define the far background of a scene.
 	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
 	 */
-	class AbstractBackground : public Abstract
+	class EMEN_API AbstractBackground : public Abstract
 	{
 		public:
 

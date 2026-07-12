@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
+#include <array>
 #include <memory>
 #include <mutex>
 
@@ -46,7 +46,7 @@ namespace EmEn::Graphics
 	 * @brief Specialization of view matrices for cubemap rendering.
 	 * @extends EmEn::Graphics::ViewMatricesInterface
 	 */
-	class ViewMatrices3DUBO final : public ViewMatricesInterface
+	class EMEN_API ViewMatrices3DUBO final : public ViewMatricesInterface
 	{
 		public:
 
@@ -166,7 +166,7 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const ViewMatrices3DUBO & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const ViewMatrices3DUBO & obj);
 
 			/** @brief Total number of elements in the UBO buffer. */
 			static constexpr auto ViewUBOElementCount = (6 * Matrix4Alignment) + Matrix4Alignment + (5 * VectorAlignment);
@@ -273,5 +273,5 @@ namespace EmEn::Graphics
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	std::string to_string (const ViewMatrices3DUBO & obj) noexcept;
+	EMEN_API std::string to_string (const ViewMatrices3DUBO & obj) noexcept;
 }

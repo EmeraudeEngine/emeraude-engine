@@ -26,13 +26,16 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 
 namespace EmEn::Console
 {
 	/**	@brief Type of console argument. */
-	enum class ArgumentType : uint8_t
+	enum class EMEN_API ArgumentType : uint8_t
 	{
 		Undefined,
 		Boolean,

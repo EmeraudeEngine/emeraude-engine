@@ -39,7 +39,7 @@ namespace EmEn::Net::WiFiScanner
 	/**
 	 * @brief Represents a WiFi network (either from a scan or as a current connection).
 	 */
-	struct EMERAUDE_API Network
+	struct EMEN_API Network
 	{
 		std::string ssid;
 		std::string bssid;
@@ -57,7 +57,7 @@ namespace EmEn::Net::WiFiScanner
 	 * @return std::vector< Network > List of discovered networks.
 	 */
 	[[nodiscard]]
-	EMERAUDE_API std::vector< Network > scan () noexcept;
+	EMEN_API std::vector< Network > scan () noexcept;
 
 	/**
 	 * @brief Returns the currently connected WiFi network(s).
@@ -65,5 +65,5 @@ namespace EmEn::Net::WiFiScanner
 	 * @return std::vector< Network > Current connection(s), empty if not connected via WiFi.
 	 */
 	[[nodiscard]]
-	EMERAUDE_API std::vector< Network > getCurrentConnections () noexcept;
+	EMEN_API std::vector< Network > getCurrentConnections () noexcept;
 }

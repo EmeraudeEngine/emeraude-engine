@@ -47,7 +47,7 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 	 * @param duration The animation duration in milliseconds.
 	 * @return std::shared_ptr< Component::PointLight >
 	 */
-	std::shared_ptr< Component::PointLight > createFlashEffect (Node & node, const Base::PixelFactory::Color< float > & color, float radius, float intensity, uint32_t duration) noexcept;
+	EMEN_API std::shared_ptr< Component::PointLight > createFlashEffect (Node & node, const Base::PixelFactory::Color< float > & color, float radius, float intensity, uint32_t duration) noexcept;
 
 	/**
 	 * @brief Creates a temporary spherical push force.
@@ -57,5 +57,5 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 	 * @param duration The animation duration in milliseconds.
 	 * @return std::shared_ptr< Component::SphericalPushModifier >
 	 */
-	std::shared_ptr< Component::SphericalPushModifier > createBlowEffect (Node & node, float radius, float maxMagnitude, uint32_t duration) noexcept;
+	EMEN_API std::shared_ptr< Component::SphericalPushModifier > createBlowEffect (Node & node, float radius, float maxMagnitude, uint32_t duration) noexcept;
 }

@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <atomic>
 #include <cstdint>
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -54,7 +54,7 @@ namespace EmEn::Vulkan
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
 	 */
-	class SwapChain final : public AbstractDeviceDependentObject, public Graphics::RenderTarget::Abstract
+	class EMEN_API SwapChain final : public AbstractDeviceDependentObject, public Graphics::RenderTarget::Abstract
 	{
 		public:
 
@@ -182,7 +182,7 @@ namespace EmEn::Vulkan
 			bool
 			isReadyForRendering () const noexcept override
 			{
-				return this->isCreated() && m_status == Status::Ready;
+				return this->isCreated() && m_status == SwapChainStatus::Ready;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
@@ -280,7 +280,7 @@ namespace EmEn::Vulkan
 			void
 			setDegraded () noexcept
 			{
-				m_status = Status::Degraded;
+				m_status = SwapChainStatus::Degraded;
 			}
 
 			/**
@@ -288,7 +288,7 @@ namespace EmEn::Vulkan
 			 * @return Status
 			 */
 			[[nodiscard]]
-			Status
+			SwapChainStatus
 			status () const noexcept
 			{
 				return m_status;
@@ -509,7 +509,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief swap-chain frame structure.
 			 */
-			struct Frame
+			struct EMEN_API Frame
 			{
 				/* Framebuffer configuration holder. */
 				std::unique_ptr< Framebuffer > framebuffer;
@@ -534,7 +534,7 @@ namespace EmEn::Vulkan
 			Graphics::Renderer & m_renderer;
 			VkSwapchainKHR m_handle{VK_NULL_HANDLE};
 			VkSwapchainCreateInfoKHR m_createInfo{};
-			std::atomic<Status> m_status{Status::Uninitialized};
+			std::atomic<SwapChainStatus> m_status{SwapChainStatus::Uninitialized};
 			uint32_t m_imageCount{0};
 			uint32_t m_acquiredImageIndex{0};
 			Base::StaticVector< Frame, 5 > m_frames;

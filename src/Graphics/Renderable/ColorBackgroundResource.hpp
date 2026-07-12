@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief The ColorBackground class.
 	 * @extends EmEn::Graphics::Renderable::AbstractBackground This is a specialized background.
 	 */
-	class ColorBackgroundResource final : public AbstractBackground
+	class EMEN_API ColorBackgroundResource final : public AbstractBackground
 	{
 		friend class Resources::Container< ColorBackgroundResource >;
 

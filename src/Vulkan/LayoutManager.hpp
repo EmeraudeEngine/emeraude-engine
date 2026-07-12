@@ -56,7 +56,7 @@ namespace EmEn::Vulkan
 	 * @brief The layout manager service. This will save any descriptor set or pipeline layout in use.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class LayoutManager final : public ServiceInterface
+	class EMEN_API LayoutManager final : public ServiceInterface
 	{
 		public:
 

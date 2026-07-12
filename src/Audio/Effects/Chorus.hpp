@@ -35,12 +35,12 @@ namespace EmEn::Audio::Effects
 	 * @brief Chorus effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Chorus final : public Abstract
+	class EMEN_API Chorus final : public Abstract
 	{
 		public:
 
 			/** @brief The wave form enumerations. */
-			enum class WaveForm
+			enum class EMEN_API WaveForm : uint8_t
 			{
 				Sinusoid,
 				Triangle

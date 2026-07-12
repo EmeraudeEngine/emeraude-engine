@@ -39,7 +39,7 @@ namespace EmEn::Vulkan
 	 * @note Host-visible by default for CPU-side writes (map/unmap pattern).
 	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class ShaderStorageBufferObject final : public Buffer
+	class EMEN_API ShaderStorageBufferObject final : public Buffer
 	{
 		public:
 

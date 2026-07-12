@@ -36,7 +36,7 @@ namespace EmEn::Physics
 	 * @brief Represents a collision manifold containing multiple contact points between two bodies.
 	 * @note A manifold groups all contacts from a single collision (e.g., box-box can have up to 4 contacts).
 	 */
-	class ContactManifold final
+	class EMEN_API ContactManifold final
 	{
 		public:
 
@@ -191,50 +191,12 @@ namespace EmEn::Physics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const ContactManifold & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const ContactManifold & obj);
 
 			MovableTrait * m_bodyA{nullptr};
 			MovableTrait * m_bodyB{nullptr};
 			Base::StaticVector< ContactPoint, MaxContactPoints > m_contacts;
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const ContactManifold & obj)
-	{
-		out <<
-			"Contact manifold :" "\n"
-			"Body A : " << ( obj.m_bodyA ? "Present" : "None" ) << "\n"
-			"Body B : " << ( obj.m_bodyB ? "Present" : "None" ) << "\n";
-
-		if ( obj.hasContacts() )
-		{
-			for ( const auto & contact : obj.contacts() )
-			{
-				out << contact << "\n";
-			}
-		}
-		else
-		{
-			out << "No contact !" << "\n";
-		}
-
-		return out;
-	}
-
-	/**
-	 * @brief Stringifies the object.
-	 * @param obj A reference to the object to print.
-	 * @return std::string
-	 */
-	inline
-	std::string
-	to_string (const ContactManifold & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const ContactManifold & obj) noexcept;
 }

@@ -92,7 +92,7 @@ namespace EmEn::Graphics::Material
 {
 	/** @brief Material interface flag bits. */
 	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
-	enum MaterialFlagBits : uint32_t
+	enum EMEN_API MaterialFlagBits : uint32_t
 	{
 		None = 0U,
 		IsCreated = 1U << 0,
@@ -117,7 +117,7 @@ namespace EmEn::Graphics::Material
 	 * @brief This is the base of all material compatible with the graphic engine.
 	 * @extends EmEn::Resources::ResourceTrait Every material is a resource.
 	 */
-	class EMERAUDE_API Interface : public Resources::ResourceTrait
+	class EMEN_API Interface : public Resources::ResourceTrait
 	{
 		public:
 

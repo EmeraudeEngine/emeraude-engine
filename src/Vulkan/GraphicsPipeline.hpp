@@ -70,7 +70,7 @@ namespace EmEn::Vulkan
 	 * @brief The graphics pipeline class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This Vulkan Object needs a device.
 	 */
-	class GraphicsPipeline final : public AbstractDeviceDependentObject
+	class EMEN_API GraphicsPipeline final : public AbstractDeviceDependentObject
 	{
 		public:
 

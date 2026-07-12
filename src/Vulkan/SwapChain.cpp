@@ -143,13 +143,13 @@ namespace EmEn::Vulkan
 
 		TraceDebug{ClassId} << "Application swap-chain creation." "\n" << this->precisions() << '\n';
 
-		m_status = Status::UnderConstruction;
+		m_status = SwapChainStatus::UnderConstruction;
 
 		if ( !this->createBaseSwapChain(window) )
 		{
 			Tracer::error(ClassId, "Unable to create the base of the swap-chain !");
 
-			m_status = Status::Failure;
+			m_status = SwapChainStatus::Failure;
 
 			return false;
 		}
@@ -158,7 +158,7 @@ namespace EmEn::Vulkan
 		{
 			Tracer::error(ClassId, "Unable to prepare data to complete the swap-chain !");
 
-			m_status = Status::Failure;
+			m_status = SwapChainStatus::Failure;
 
 			return false;
 		}
@@ -167,14 +167,14 @@ namespace EmEn::Vulkan
 		{
 			Tracer::error(ClassId, "Unable to complete the framebuffer !");
 
-			m_status = Status::Failure;
+			m_status = SwapChainStatus::Failure;
 
 			return false;
 		}
 
 		this->setCreated();
 
-		m_status = Status::Ready;
+		m_status = SwapChainStatus::Ready;
 
 		return true;
 	}
@@ -189,7 +189,7 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		m_status = Status::Uninitialized;
+		m_status = SwapChainStatus::Uninitialized;
 
 		this->destroyFramebuffer();
 
@@ -205,7 +205,7 @@ namespace EmEn::Vulkan
 		this->resetFramebuffer();
 
 		/* Prepare a new swap-chain. */
-		m_status = Status::UnderConstruction;
+		m_status = SwapChainStatus::UnderConstruction;
 
 		/* The base swap-chain needs to re-analyze the system surface. */
 		if ( !this->createBaseSwapChain(m_renderer.window(), m_handle) )
@@ -226,7 +226,7 @@ namespace EmEn::Vulkan
 		/* This will rework the view-related matrices. */
 		this->updateViewProperties();
 
-		m_status = Status::Ready;
+		m_status = SwapChainStatus::Ready;
 
 		return true;
 	}
@@ -237,7 +237,7 @@ namespace EmEn::Vulkan
 		/* Destroy the old framebuffer. */
 		this->resetFramebuffer();
 
-		m_status = Status::UnderConstruction;
+		m_status = SwapChainStatus::UnderConstruction;
 
 		/* Destroy the current swap-chain completely. */
 		if ( m_handle != VK_NULL_HANDLE )
@@ -285,7 +285,7 @@ namespace EmEn::Vulkan
 		/* Update view-related matrices. */
 		this->updateViewProperties();
 
-		m_status = Status::Ready;
+		m_status = SwapChainStatus::Ready;
 
 		return true;
 	}
@@ -293,7 +293,7 @@ namespace EmEn::Vulkan
 	void
 	SwapChain::resetFramebuffer () noexcept
 	{
-		m_status = Status::Uninitialized;
+		m_status = SwapChainStatus::Uninitialized;
 
 		for ( const auto & frame : m_frames )
 		{
@@ -1156,7 +1156,7 @@ namespace EmEn::Vulkan
 	std::optional< uint32_t >
 	SwapChain::acquireNextImage (const Sync::Semaphore * imageAvailableSemaphore, uint64_t timeout) noexcept
 	{
-		if ( m_status != Status::Ready )
+		if ( m_status != SwapChainStatus::Ready )
 		{
 			return std::nullopt;
 		}
@@ -1179,14 +1179,14 @@ namespace EmEn::Vulkan
 			case VK_NOT_READY :
 				Tracer::warning(ClassId, "The swap-chain is not ready!");
 
-				m_status = Status::Uninitialized;
+				m_status = SwapChainStatus::Uninitialized;
 
 				return std::nullopt;
 
 			case VK_SUBOPTIMAL_KHR :
 				Tracer::debug(ClassId, "vkAcquireNextImageKHR() detected the swap-chain is 'sub-optimal'! [SWAP-CHAIN-RECREATION-PLANNED]");
 
-				m_status = Status::Degraded;
+				m_status = SwapChainStatus::Degraded;
 
 				return m_acquiredImageIndex;
 
@@ -1199,7 +1199,7 @@ namespace EmEn::Vulkan
 			case VK_ERROR_OUT_OF_DATE_KHR :
 				Tracer::debug(ClassId, "vkAcquireNextImageKHR() detected the swap-chain is 'out of date'! [SWAP-CHAIN-RECREATION-PLANNED]");
 
-				m_status = Status::Degraded;
+				m_status = SwapChainStatus::Degraded;
 
 				return std::nullopt;
 
@@ -1213,7 +1213,7 @@ namespace EmEn::Vulkan
 			default:
 				TraceError{ClassId} << "Error from the swap-chain : " << vkResultToCString(result) << " !";
 
-				m_status = Status::Failure;
+				m_status = SwapChainStatus::Failure;
 
 				return std::nullopt;
 		}

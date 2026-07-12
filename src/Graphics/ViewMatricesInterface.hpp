@@ -30,11 +30,19 @@
 #include "Frustum.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "PixelFactory/Color.hpp"
-#include "Vulkan/DescriptorSet.hpp"
 
-namespace EmEn::Graphics
+/* Forward declarations. */
+namespace EmEn
 {
-	class Renderer;
+	namespace Vulkan
+	{
+		class DescriptorSet;
+	}
+
+	namespace Graphics
+	{
+		class Renderer;
+	}
 }
 
 namespace EmEn::Graphics
@@ -42,7 +50,7 @@ namespace EmEn::Graphics
 	/** 
 	 * @brief Defines an abstract way to describe a view with coordinates and matrices to use with Vulkan.
 	 */
-	class ViewMatricesInterface
+	class EMEN_API ViewMatricesInterface
 	{
 		public:
 

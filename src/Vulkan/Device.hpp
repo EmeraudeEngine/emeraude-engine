@@ -27,12 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
-#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <ranges>
 
 /* Third-party inclusions. */
 #include "vk_mem_alloc.h"
@@ -42,9 +39,8 @@
 #include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "StaticVector.hpp"
 #include "PhysicalDevice.hpp"
-#include "Queue.hpp"
+#include "DeviceQueueConfiguration.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -56,112 +52,12 @@ namespace EmEn::Vulkan
 
 namespace EmEn::Vulkan
 {
-	/** @brief Structure to sort queues by priority. */
-	class DeviceQueueConfiguration final
-	{
-		public:
-
-			/** @brief Class identifier. */
-			static constexpr auto ClassId{"VulkanDeviceQueueConfiguration"};
-
-			/**
-			 * @brief Constructs a default queue configuration for a device.
-			 */
-			DeviceQueueConfiguration () noexcept = default;
-
-			/**
-			 * @brief Set the family queue index for this job from the logical device analysis.
-			 * @param queueFamilyIndex An unsigned integer.
-			 * @return void
-			 */
-			void
-			setQueueFamilyIndex (uint32_t queueFamilyIndex) noexcept
-			{
-				m_queueFamilyIndex = queueFamilyIndex;
-			}
-
-			/**
-			 * @brief Returns the queue family index for this job.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			uint32_t
-			queueFamilyIndex () const noexcept
-			{
-				return m_queueFamilyIndex;
-			}
-
-			/**
-			 * @brief Registers a queue to the configuration.
-			 * @param queue A pointer to a queue.
-			 * @param priority The priority of the queue.
-			 * @return void
-			 */
-			void
-			registerQueue (Queue * queue, QueuePriority priority) const noexcept
-			{
-				m_queueByPriorities[static_cast< uint32_t >(priority)].second.emplace_back(queue);
-			}
-
-			/**
-			 * @brief Returns queue priority structure.
-			 * @return const Base::StaticVector< Queue *, 16 > &
-			 */
-			[[nodiscard]]
-			const Base::StaticVector< Queue *, 16 > &
-			queues (QueuePriority priority) const noexcept
-			{
-				return m_queueByPriorities[static_cast< uint32_t >(priority)].second;
-			}
-
-			/**
-			 * @brief Returns a queue by priority.
-			 * @param priority The priority desired. High, Medium or Low.
-			 * @return Queue *
-			 */
-			[[nodiscard]]
-			Queue * queue (QueuePriority priority) const noexcept;
-
-			/**
-			 * @brief Returns whether this configuration is enabled/available in the device.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			enabled () const noexcept
-			{
-				return std::ranges::any_of(m_queueByPriorities, [] (const auto & queueList) {
-					return !queueList.second.empty();
-				});
-			}
-
-			/**
-			 * @brief Clears data and links.
-			 * @return void
-			 */
-			void
-			clear () noexcept
-			{
-				m_queueFamilyIndex = 0;
-
-				for ( auto & queueList : m_queueByPriorities | std::views::values )
-				{
-					queueList.clear();
-				}
-			}
-
-		private:
-
-			uint32_t m_queueFamilyIndex{0};
-			mutable std::array< std::pair< std::atomic< uint32_t >, Base::StaticVector< Queue *, 16 > >, 3 > m_queueByPriorities;
-	};
-
 	/**
 	 * @brief Defines a logical device from a physical device.
 	 * @extends EmEn::Vulkan::AbstractObject This is the device, so a simple object is ok.
 	 * @extends EmEn::Base::NameableTrait To set a name on a device.
 	 */
-	class Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Base::NameableTrait
+	class EMEN_API Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Base::NameableTrait
 	{
 		public:
 
@@ -217,7 +113,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Creates the device.
+			 * @brief Creates a device.
 			 * @param requirements A reference to a device requirement.
 			 * @param extensions A reference to a vector of extensions.
 			 * @param useVMA Use Vulkan Memory Allocator.
@@ -723,7 +619,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool installQueues (const std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept;
+			bool installQueues (const std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept;
 
 			const Instance & m_instance;
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;

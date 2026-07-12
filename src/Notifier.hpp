@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
@@ -39,7 +42,6 @@
 #include "Time/EventTrait.hpp"
 #include "Overlay/Manager.hpp"
 #include "Overlay/Surface.hpp"
-#include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics
 {
@@ -55,7 +57,7 @@ namespace EmEn
 	 * @extends EmEn::Base::ObserverTrait The notifier wants to listen to overlay manager changes.
 	 * @extends EmEn::Base::Time::EventTrait The notifier uses a timer to hide a message.
 	 */
-	class Notifier final : public ServiceInterface, public Base::ObserverTrait, public Base::Time::EventTrait< uint32_t, std::milli >
+	class EMEN_API Notifier final : public ServiceInterface, public Base::ObserverTrait, public Base::Time::EventTrait< uint32_t, std::milli >
 	{
 		public:
 

@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <string>
 
 /* Third-party inclusions. */
@@ -54,7 +54,7 @@ namespace EmEn::Input
 	 * @brief The gamepad controller class.
 	 * @extends EmEn::Input::ControllerInterface This is an input controller.
 	 */
-	class GamepadController final : public ControllerInterface
+	class EMEN_API GamepadController final : public ControllerInterface
 	{
 		public:
 

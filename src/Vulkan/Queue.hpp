@@ -49,7 +49,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Structure for synchronization parameters for a queue submission.
 	 */
-	struct SynchInfo
+	struct EMEN_API SynchInfo
 	{
 		/**
 		 * @brief Adds a wait info structure for semaphores.
@@ -102,7 +102,7 @@ namespace EmEn::Vulkan
 	 * @brief Defines a device working queue.
 	 * @extends EmEn::Vulkan::AbstractObject A queue is directly created by the device, so a simple object is perfect.
 	 */
-	class Queue final : public AbstractObject
+	class EMEN_API Queue final : public AbstractObject
 	{
 		public:
 
@@ -210,7 +210,7 @@ namespace EmEn::Vulkan
 			 * @param swapChainStatus A writable reference to the atomic swap-chain status.
 			 * @return bool
 			 */
-			bool present (const VkPresentInfoKHR * presentInfo, std::atomic<Status> & swapChainStatus) const noexcept;
+			bool present (const VkPresentInfoKHR * presentInfo, std::atomic<SwapChainStatus> & swapChainStatus) const noexcept;
 
 			/**
 			 * @brief Waits for the queue to complete work.

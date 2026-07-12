@@ -40,7 +40,7 @@ namespace EmEn::Tool
 	 * @brief The vulkan information class.
 	 * @extends EmEn::Tool::ToolInterface This is tool interface.
 	 */
-	class ShowVulkanInformation final : public ToolInterface
+	class EMEN_API ShowVulkanInformation final : public ToolInterface
 	{
 		public:
 

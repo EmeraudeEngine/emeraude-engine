@@ -74,7 +74,7 @@ namespace EmEn::Audio
 	 * @see EmEn::ServiceInterface, EmEn::Audio::Manager
 	 * @version 0.8.51
 	 */
-	class Recorder final : public ServiceInterface
+	class EMEN_API Recorder final : public ServiceInterface
 	{
 		public:
 

@@ -49,7 +49,7 @@ namespace EmEn::Vulkan
 	 * could reference it has completed execution and been re-recorded.
 	 * Retiring is thread-safe; tick() and flush() belong to the render thread.
 	 */
-	class DeferredDestructor final
+	class EMEN_API DeferredDestructor final
 	{
 		public:
 
@@ -101,7 +101,7 @@ namespace EmEn::Vulkan
 			void
 			setFramesInFlight (uint32_t framesInFlight) noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_mutex};
+				const std::scoped_lock lock{m_mutex};
 
 				m_delayTicks = std::max(framesInFlight, 1U);
 			}
@@ -119,9 +119,13 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const std::lock_guard< std::mutex > lock{m_mutex};
+				const std::scoped_lock lock{m_mutex};
 
-				m_entries.emplace_back(Entry{m_currentTick, std::move(object), nullptr});
+				m_entries.emplace_back(Entry{
+					.retiredAtTick = m_currentTick,
+					.object = std::move(object),
+					.action = nullptr
+				});
 			}
 
 			/**
@@ -154,9 +158,13 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const std::lock_guard< std::mutex > lock{m_mutex};
+				const std::scoped_lock lock{m_mutex};
 
-				m_entries.emplace_back(Entry{m_currentTick, nullptr, std::move(action)});
+				m_entries.emplace_back(Entry{
+					.retiredAtTick = m_currentTick,
+					.object = nullptr,
+					.action = std::move(action)
+				});
 			}
 
 			/**
@@ -172,7 +180,7 @@ namespace EmEn::Vulkan
 				std::vector< Entry > expired;
 
 				{
-					const std::lock_guard< std::mutex > lock{m_mutex};
+					const std::scoped_lock lock{m_mutex};
 
 					++m_currentTick;
 
@@ -206,7 +214,7 @@ namespace EmEn::Vulkan
 				std::deque< Entry > entries;
 
 				{
-					const std::lock_guard< std::mutex > lock{m_mutex};
+					const std::scoped_lock lock{m_mutex};
 
 					entries.swap(m_entries);
 				}

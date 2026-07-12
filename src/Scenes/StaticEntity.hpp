@@ -31,10 +31,10 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <any>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <any>
+#include <array>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -79,7 +79,7 @@ namespace EmEn::Scenes
 	 *
 	 * @version 0.8.35
 	 */
-	class StaticEntity final : public std::enable_shared_from_this< StaticEntity >, public AbstractEntity, public Animations::AnimatableInterface
+	class EMEN_API StaticEntity final : public std::enable_shared_from_this< StaticEntity >, public AbstractEntity, public Animations::AnimatableInterface
 	{
 		public:
 
@@ -95,7 +95,7 @@ namespace EmEn::Scenes
 			 *
 			 * @see EmEn::Animations::AnimatableInterface
 			 */
-			enum AnimationID : uint8_t
+			enum EMEN_API AnimationID : uint8_t
 			{
 				LocalCoordinates,	 ///< Full local coordinate frame
 				LocalPosition,		///< Local space position (3D vector)

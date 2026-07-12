@@ -50,7 +50,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Base::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
-	class ParticlesEmitter final : public Abstract, public Base::ObserverTrait
+	class EMEN_API ParticlesEmitter final : public Abstract, public Base::ObserverTrait
 	{
 		public:
 

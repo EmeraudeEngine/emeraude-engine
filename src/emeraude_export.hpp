@@ -49,13 +49,13 @@
 #if defined(EMERAUDE_USE_EXPLICIT_EXPORTS)
 	#if defined(_WIN32) || defined(__CYGWIN__)
 		#ifdef Emeraude_EXPORTS
-			#define EMERAUDE_API __declspec(dllexport)
+			#define EMEN_API __declspec(dllexport)
 		#else
-			#define EMERAUDE_API __declspec(dllimport)
+			#define EMEN_API __declspec(dllimport)
 		#endif
 	#else
-		#define EMERAUDE_API __attribute__((visibility("default")))
+		#define EMEN_API __attribute__((visibility("default")))
 	#endif
 #else
-	#define EMERAUDE_API
+	#define EMEN_API
 #endif

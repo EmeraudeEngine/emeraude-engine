@@ -49,7 +49,7 @@ namespace EmEn
 	/**
 	 * @brief This class holds the primary services.
 	 */
-	class EMERAUDE_API PrimaryServices final
+	class EMEN_API PrimaryServices final
 	{
 		public:
 

@@ -177,7 +177,7 @@ namespace EmEn::Graphics
 	 * **Future consideration:** If dynamic pipeline creation is needed during runtime,
 	 * protect cache modifications with std::shared_mutex (read-write lock).
 	 */
-	class Renderer final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Console::ControllableTrait
+	class EMEN_API Renderer final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 
@@ -1211,7 +1211,7 @@ namespace EmEn::Graphics
 			bool
 			isSwapChainDegraded () const noexcept
 			{
-				return m_swapChain->status() == Vulkan::Status::Degraded;
+				return m_swapChain->status() == Vulkan::SwapChainStatus::Degraded;
 			}
 
 			/**

@@ -72,7 +72,7 @@ namespace EmEn::Physics
 	{
 		CollisionDetectionResults results;
 
-		const auto worldPoint = this->toWorldPoint(thisWorldFrame);
+		const auto worldPoint = PointCollisionModel::toWorldPoint(thisWorldFrame);
 		const auto worldSphere = other.toWorldSphere(otherWorldFrame);
 
 		if ( isColliding(worldPoint, worldSphere) )
@@ -107,7 +107,7 @@ namespace EmEn::Physics
 	{
 		CollisionDetectionResults results;
 
-		const auto worldPoint = this->toWorldPoint(thisWorldFrame);
+		const auto worldPoint = PointCollisionModel::toWorldPoint(thisWorldFrame);
 		const auto worldAABB = other.toWorldAABB(otherWorldFrame);
 
 		if ( isColliding(worldPoint, worldAABB) )
@@ -172,7 +172,7 @@ namespace EmEn::Physics
 	{
 		CollisionDetectionResults results;
 
-		const auto worldPoint = this->toWorldPoint(thisWorldFrame);
+		const auto worldPoint = PointCollisionModel::toWorldPoint(thisWorldFrame);
 		const auto worldCapsule = other.toWorldCapsule(otherWorldFrame);
 
 		if ( isColliding(worldPoint, worldCapsule) )

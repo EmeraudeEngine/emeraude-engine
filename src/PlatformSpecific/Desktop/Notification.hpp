@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <optional>
@@ -41,7 +44,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	/**
 	 * @brief The notification icon type enumeration.
 	 */
-	enum class NotificationIcon : uint8_t
+	enum class EMEN_API NotificationIcon : uint8_t
 	{
 		Info,
 		Warning,
@@ -52,7 +55,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @brief The desktop notification class.
 	 * @note This class provides cross-platform OS-level notifications (system tray notifications).
 	 */
-	class Notification final
+	class EMEN_API Notification final
 	{
 		public:
 

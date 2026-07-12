@@ -26,20 +26,23 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <sstream>
 #include <string>
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "../CoreTypes.hpp" // Global types
+#include "CoreTypes.hpp" // Global types
 
 namespace EmEn::Console
 {
 	/**
 	 * @brief Console output class to return command execution info.
 	 */
-	class Output final
+	class EMEN_API Output final
 	{
 		public:
 

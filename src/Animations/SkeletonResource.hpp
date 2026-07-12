@@ -39,7 +39,7 @@ namespace EmEn::Animations
 	 * @brief A managed resource wrapping a skeletal hierarchy.
 	 * @extends EmEn::Resources::ResourceTrait Every skeleton is a named, shared resource.
 	 */
-	class SkeletonResource final : public Resources::ResourceTrait
+	class EMEN_API SkeletonResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< SkeletonResource >;
 
@@ -133,7 +133,7 @@ namespace EmEn::Animations
 				return m_skeleton;
 			}
 
-		private:
+		protected:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
@@ -142,6 +142,8 @@ namespace EmEn::Animations
 			{
 				return true;
 			}
+
+		private:
 
 			Base::Animation::Skeleton< float > m_skeleton;
 	};

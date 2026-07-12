@@ -85,7 +85,7 @@ namespace EmEn::Graphics
 	 * (lensEffects for single-pass). The PostProcessor only executes them.
 	 * @extends EmEn::ServiceInterface The post-processor is a renderer sub-service.
 	 */
-	class PostProcessor final : public ServiceInterface
+	class EMEN_API PostProcessor final : public ServiceInterface
 	{
 		public:
 
@@ -98,7 +98,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Push constants matching the GLSL pcPostProcessing layout.
 			 */
-			struct PushConstants
+			struct EMEN_API PushConstants
 			{
 				float frameWidth;
 				float frameHeight;

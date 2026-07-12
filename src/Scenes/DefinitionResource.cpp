@@ -30,7 +30,7 @@
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "FastJSON.hpp"
 #include "Resources/Manager.hpp"
@@ -473,7 +473,7 @@ namespace EmEn::Scenes
 
 						if ( !meshName.empty() )
 						{
-							auto * meshContainer = this->serviceProvider().container< Renderable::MeshResource >();
+							auto * meshContainer = this->serviceProvider().container< Renderable::MultiLayerMeshResource >();
 
 							if ( meshContainer != nullptr )
 							{
@@ -561,7 +561,7 @@ namespace EmEn::Scenes
 
 						if ( !meshName.empty() )
 						{
-							auto * meshContainer = this->serviceProvider().container< Renderable::MeshResource >();
+							auto * meshContainer = this->serviceProvider().container< Renderable::MultiLayerMeshResource >();
 
 							if ( meshContainer != nullptr )
 							{

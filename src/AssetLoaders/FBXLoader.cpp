@@ -47,8 +47,8 @@
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Animation/AnimationChannel.hpp"
@@ -779,7 +779,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Mesh '" << baseName << "' has no valid triangle faces, using default.";
 
-				auto defaultMesh = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
 
 				MeshDescriptor descriptor;
@@ -982,7 +982,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Generated shape is invalid for mesh '" << baseName << "', using default.";
 
-				auto defaultMesh = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
 
 				MeshDescriptor descriptor;
@@ -1044,7 +1044,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Failed to create geometry for mesh '" << baseName << "', using default.";
 
-				auto defaultMesh = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
 
 				MeshDescriptor descriptor;
@@ -1127,14 +1127,14 @@ namespace EmEn::AssetLoaders
 				auto singleMaterial = materialList[0];
 				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
-				renderable = m_resources.container< Renderable::SimpleMeshResource >()
+				renderable = m_resources.container< Renderable::MeshResource >()
 					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
 						return meshResource.load(geometry, singleMaterial, singleRasterization);
 					});
 			}
 			else
 			{
-				renderable = m_resources.container< Renderable::MeshResource >()
+				renderable = m_resources.container< Renderable::MultiLayerMeshResource >()
 					->getOrCreateResource(meshName, [geometry, materialList, rasterizationList] (auto & meshResource) {
 						return meshResource.load(geometry, materialList, rasterizationList);
 					});
@@ -1144,7 +1144,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Failed to create renderable for mesh '" << baseName << "', using default.";
 
-				renderable = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				renderable = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				allSuccess = false;
 			}
 

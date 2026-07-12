@@ -30,13 +30,14 @@
 #include "emeraude_base_config.hpp"
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/Helpers.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
-#include "FastJSON.hpp"
 #include "VertexFactory/ShapeBuilder.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

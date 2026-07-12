@@ -50,7 +50,7 @@ namespace EmEn::Graphics
 	 * The main resources directory is "./data-stores/CubemapMovies/".
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class CubemapMovieResource final : public Resources::ResourceTrait
+	class EMEN_API CubemapMovieResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< CubemapMovieResource >;
 

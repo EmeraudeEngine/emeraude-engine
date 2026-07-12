@@ -40,7 +40,7 @@ namespace EmEn::Animations
 	/**
 	 * @brief The AnimatableInterface class
 	 */
-	class AnimatableInterface
+	class EMEN_API AnimatableInterface
 	{
 		public:
 

@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <memory>
 
 /* Local inclusions for usages. */
 #include "BodyPhysicalProperties.hpp"
@@ -46,7 +45,7 @@ namespace EmEn::Physics
 	/**
 	 * @brief Identifies the type of surface an entity is grounded on.
 	 */
-	enum class GroundedSource : uint8_t
+	enum class EMEN_API GroundedSource : uint8_t
 	{
 		None,	  ///< Not grounded.
 		Ground,	///< Grounded on terrain/ground.
@@ -56,7 +55,7 @@ namespace EmEn::Physics
 	/**
 	 * @brief Gives the ability to move something in the 3D world with physical properties.
 	 */
-	class MovableTrait
+	class EMEN_API MovableTrait
 	{
 		public:
 

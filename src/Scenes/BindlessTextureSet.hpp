@@ -57,7 +57,7 @@ namespace EmEn::Scenes
 	 * set, two scenes may legitimately reuse the same indices: table capacity is the largest
 	 * scene, not the sum of all scenes.
 	 */
-	class BindlessTextureSet final
+	class EMEN_API BindlessTextureSet final
 	{
 		public:
 
@@ -67,7 +67,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief A single registered texture: the texture kept alive and its global bindless index.
 			 */
-			struct Entry
+			struct EMEN_API Entry
 			{
 				std::shared_ptr< Vulkan::TextureInterface > texture;
 				uint32_t globalIndex;
@@ -77,7 +77,7 @@ namespace EmEn::Scenes
 			 * @brief An immutable copy of the set used by the manager to upload descriptors
 			 * without holding the set's lock during Vulkan calls.
 			 */
-			struct Snapshot
+			struct EMEN_API Snapshot
 			{
 				std::vector< Entry > textures2D;
 				std::vector< Entry > texturesCube;

@@ -42,7 +42,7 @@ namespace EmEn::Vulkan
 	 * @brief The ComputePipeline class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class ComputePipeline final : public AbstractDeviceDependentObject
+	class EMEN_API ComputePipeline final : public AbstractDeviceDependentObject
 	{
 		public:
 

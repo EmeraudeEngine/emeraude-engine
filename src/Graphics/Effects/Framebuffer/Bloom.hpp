@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -46,7 +46,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * followed by an upsample (tent filter) with additive blending, and a final composite.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class Bloom final : public IndirectPostProcessEffect
+	class EMEN_API Bloom final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -59,7 +59,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing bloom parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float threshold{1.0F};
 				float softKnee{0.5F};
@@ -70,7 +70,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants sent to all bloom shader passes.
 			 */
-			struct BloomPushConstants
+			struct EMEN_API BloomPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;

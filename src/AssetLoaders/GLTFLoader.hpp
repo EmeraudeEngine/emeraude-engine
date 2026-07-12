@@ -39,7 +39,6 @@
 
 /* Local inclusions for usages. */
 #include "Animation/Skin.hpp"
-#include "Math/CartesianFrame.hpp"
 #include "VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
 
@@ -82,7 +81,7 @@ namespace EmEn::AssetLoaders
 	 * @note Produces an AssetData with format-agnostic node descriptors.
 	 * No dependency on Scenes/ types (Scene, Node, StaticEntity).
 	 */
-	class GLTFLoader final : public Interface
+	class EMEN_API GLTFLoader final : public Interface
 	{
 		public:
 

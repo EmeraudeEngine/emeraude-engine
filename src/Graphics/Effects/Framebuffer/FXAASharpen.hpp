@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * at the end of the post-process chain, making them ideal candidates for fusion.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a single-pass post-process effect.
 	 */
-	class FXAASharpen final : public IndirectPostProcessEffect
+	class EMEN_API FXAASharpen final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Combined FXAA + CAS parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				/* FXAA parameters. */
 				float subpixelQuality{0.75F};	/**< 0=off, 0.75=default, 1=max subpixel AA */

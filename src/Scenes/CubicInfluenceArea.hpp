@@ -44,7 +44,7 @@ namespace EmEn::Scenes
 	 * @brief Defines a cubic area of influence for a modifier.
 	 * @extends EmEn::Scenes::InfluenceAreaInterface The influence area base class.
 	 */
-	class CubicInfluenceArea final : public InfluenceAreaInterface
+	class EMEN_API CubicInfluenceArea final : public InfluenceAreaInterface
 	{
 		public:
 

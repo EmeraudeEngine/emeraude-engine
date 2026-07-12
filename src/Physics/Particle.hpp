@@ -36,7 +36,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/Frustum.hpp"
 #include "Scenes/Component/Abstract.hpp"
-#include "Scenes/Component/AbstractModifier.hpp"
 
 namespace EmEn::Physics
 {
@@ -46,7 +45,7 @@ namespace EmEn::Physics
 	 * @brief The particle class.
 	 * @extends EmEn::Scenes::LocatableInterface A particle is locatable in the scene.
 	 */
-	class Particle final : public Scenes::LocatableInterface
+	class EMEN_API Particle final : public Scenes::LocatableInterface
 	{
 		public:
 

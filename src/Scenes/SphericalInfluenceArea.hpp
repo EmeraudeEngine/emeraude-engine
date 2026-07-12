@@ -41,7 +41,7 @@ namespace EmEn::Scenes
 	 * @brief Defines a spherical area of influence for a modifier.
 	 * @extends EmEn::Scenes::InfluenceAreaInterface The influence area base class.
 	 */
-	class SphericalInfluenceArea final : public InfluenceAreaInterface
+	class EMEN_API SphericalInfluenceArea final : public InfluenceAreaInterface
 	{
 		public:
 

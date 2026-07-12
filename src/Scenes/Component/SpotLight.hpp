@@ -45,7 +45,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a scene spotlight like an electrical light torch.
 	 * @extends EmEn::Scenes::Component::AbstractLightEmitter The base class for each light type.
 	 */
-	class SpotLight final : public AbstractLightEmitter
+	class EMEN_API SpotLight final : public AbstractLightEmitter
 	{
 		public:
 

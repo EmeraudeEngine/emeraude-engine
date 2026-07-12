@@ -48,7 +48,7 @@ namespace EmEn::Audio
 	 * @note SoundFont files contain instrument samples for high-quality MIDI rendering.
 	 * When no SF2 file is loaded (neutral resource), MIDI rendering falls back to additive synthesis.
 	 */
-	class SoundfontResource final : public Resources::ResourceTrait
+	class EMEN_API SoundfontResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< SoundfontResource >;
 

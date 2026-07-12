@@ -49,7 +49,7 @@ namespace EmEn::Graphics
 	 * @brief The shared uniform buffer class.
 	 * @note This is a higher concept to manage an UBO to store multiple data with a fixed-sized structure.
 	 */
-	class SharedUniformBuffer final
+	class EMEN_API SharedUniformBuffer final
 	{
 		public:
 

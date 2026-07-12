@@ -63,7 +63,7 @@ namespace EmEn::Graphics
 	 * @see Graphics::TextureCubemap
 	 * @version 0.8.35
 	 */
-	class ImageResource final : public Resources::ResourceTrait
+	class EMEN_API ImageResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< ImageResource >;
 

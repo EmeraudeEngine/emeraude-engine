@@ -50,7 +50,7 @@ namespace EmEn::PlatformSpecific
 	 * @brief The system info class. This will gather system information.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class EMERAUDE_API SystemInfo final : public ServiceInterface
+	class EMEN_API SystemInfo final : public ServiceInterface
 	{
 		public:
 

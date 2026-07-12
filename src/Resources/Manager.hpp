@@ -78,7 +78,7 @@ namespace EmEn::Resources
 	 *
 	 * @since 0.8.35
 	 */
-	class Manager final : public ServiceInterface, public Console::ControllableTrait, public AbstractServiceProvider
+	class EMEN_API Manager final : public ServiceInterface, public Console::ControllableTrait, public AbstractServiceProvider
 	{
 		public:
 
@@ -143,7 +143,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			PrimaryServices &
-			primaryServices () const noexcept
+			primaryServices () const noexcept override
 			{
 				return m_primaryServices;
 			}
@@ -448,16 +448,20 @@ namespace EmEn::Resources
 			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > getLocalStore (const std::string & storeName) noexcept;
 
 			/**
-			 * @brief Allows stream output operator to access private members.
+			 * @brief Outputs Manager state to a stream.
 			 *
-			 * Declares the stream insertion operator as a friend to enable printing
-			 * of Manager state including store information.
+			 * Formats and writes the Manager's resource store information to an output stream.
+			 * Lists all stores with their resource counts.
 			 *
-			 * @see operator<<(std::ostream&, const Manager&) For the implementation.
+			 * @param out The output stream to write to.
+			 * @param obj The Manager instance to output.
+			 * @return Reference to the output stream for chaining.
+			 *
+			 * @note Output format: Lists each store name with its resource count.
 			 *
 			 * @since 0.8.35
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Manager & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Manager & obj);
 
 			/**
 			 * @brief Checks if a string contains JSON data.
@@ -519,22 +523,6 @@ namespace EmEn::Resources
 	};
 
 	/**
-	 * @brief Outputs Manager state to a stream.
-	 *
-	 * Formats and writes the Manager's resource store information to an output stream.
-	 * Lists all stores with their resource counts.
-	 *
-	 * @param out The output stream to write to.
-	 * @param obj The Manager instance to output.
-	 * @return Reference to the output stream for chaining.
-	 *
-	 * @note Output format: Lists each store name with its resource count.
-	 *
-	 * @since 0.8.35
-	 */
-	std::ostream & operator<< (std::ostream & out, const Manager & obj);
-
-	/**
 	 * @brief Converts Manager state to a string representation.
 	 *
 	 * Creates a string representation of the Manager by invoking the stream
@@ -547,5 +535,5 @@ namespace EmEn::Resources
 	 *
 	 * @since 0.8.35
 	 */
-	std::string to_string (const Manager & obj) noexcept;
+	EMEN_API std::string to_string (const Manager & obj) noexcept;
 }

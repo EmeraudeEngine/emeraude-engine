@@ -36,7 +36,7 @@ namespace EmEn::Audio::Effects
 	 * @warning  Support broken on OpenAL Software 1.19.1.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class PitchShifter final : public Abstract
+	class EMEN_API PitchShifter final : public Abstract
 	{
 		public:
 

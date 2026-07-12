@@ -38,7 +38,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a scene point light like a lamp bulb.
 	 * @extends EmEn::Scenes::Component::AbstractLightEmitter The base class for each light type.
 	 */
-	class PointLight final : public AbstractLightEmitter
+	class EMEN_API PointLight final : public AbstractLightEmitter
 	{
 		public:
 

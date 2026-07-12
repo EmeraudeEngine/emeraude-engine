@@ -56,7 +56,7 @@ namespace EmEn
 	 * @brief The application arguments service.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class EMERAUDE_API Arguments final : public ServiceInterface, public Console::ControllableTrait
+	class EMEN_API Arguments final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 

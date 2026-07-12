@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <memory>
 
@@ -47,7 +50,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief The LocatableInterface class is used to locate something in the 3D world and set its coordinates.
 	 */
-	class LocatableInterface
+	class EMEN_API LocatableInterface
 	{
 		public:
 

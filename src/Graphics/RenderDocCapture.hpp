@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 #ifdef EMERAUDE_ENABLE_RENDERDOC
 
 /* STL inclusions. */
@@ -157,7 +160,7 @@ namespace EmEn::Graphics
 	 * @details All methods are inline empty — the compiler eliminates them entirely,
 	 * producing zero overhead in builds without RenderDoc support.
 	 */
-	class RenderDocCapture final
+	class EMEN_API RenderDocCapture final
 	{
 		public:
 

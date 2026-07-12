@@ -122,14 +122,10 @@
 #include <any>
 #include <array>
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <string>
 #include <vector>
-
-/* Local inclusions. */
-#include "Constants.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
@@ -138,11 +134,12 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Audio/Manager.hpp"
 #include "Console/Controller.hpp"
 #include "CursorAtlas.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Help.hpp"
+#include "Help/Lexicon.hpp"
 #include "Identification.hpp"
 #include "Input/Manager.hpp"
 #include "Notifier.hpp"
@@ -168,7 +165,7 @@ namespace EmEn
 	 * @extends EmEn::Base::ObservableTrait The core is observable.
 	 * @version 0.8.35
 	 */
-	class EMERAUDE_API Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMEN_API Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 
@@ -451,7 +448,7 @@ namespace EmEn
 			 * @see Help
 			 */
 			[[nodiscard]]
-			const Help &
+			const Help::Lexicon &
 			coreHelp () const noexcept
 			{
 				return m_coreHelp;
@@ -1495,7 +1492,7 @@ namespace EmEn
 			 * @{
 			 */
 			Identification m_identification;										   ///< Application identity (name, version, org).
-			Help m_coreHelp{"Core engine"};											///< Command-line help system.
+			Help::Lexicon m_coreHelp{"Core engine"};							///< Command-line help system.
 			/* Primary Services - Available immediately after construction. */
 			PrimaryServices m_primaryServices;										 ///< Bundled primary service container.
 			Console::Controller m_consoleController{m_primaryServices};				///< Console command processor.

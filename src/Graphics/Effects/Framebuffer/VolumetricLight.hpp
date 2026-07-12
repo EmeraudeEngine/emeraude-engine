@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * centered on the projected sun position, and additively composites the result.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class VolumetricLight final : public IndirectPostProcessEffect
+	class EMEN_API VolumetricLight final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing volumetric light parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float density{1.0F};
 				float decay{0.975F};
@@ -69,7 +69,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the occlusion and radial blur passes.
 			 */
-			struct ScatterPushConstants
+			struct EMEN_API ScatterPushConstants
 			{
 				float lightScreenX;
 				float lightScreenY;
@@ -92,7 +92,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the composite pass.
 			 */
-			struct CompositePushConstants
+			struct EMEN_API CompositePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;

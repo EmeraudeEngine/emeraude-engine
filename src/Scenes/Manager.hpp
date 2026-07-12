@@ -71,7 +71,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief Keeps scene targets for the console.
 	 */
-	class ConsoleMemory final
+	class EMEN_API ConsoleMemory final
 	{
 		public:
 
@@ -147,7 +147,7 @@ namespace EmEn::Scenes
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Console::ControllableTrait The scene manager service is usable from the console.
 	 */
-	class EMERAUDE_API Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
+	class EMEN_API Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 

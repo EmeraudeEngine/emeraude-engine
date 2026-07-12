@@ -37,7 +37,7 @@ namespace EmEn::Audio
 	/**
 	 * @brief Playable interface class.
 	 */
-	class PlayableInterface
+	class EMEN_API PlayableInterface
 	{
 		public:
 

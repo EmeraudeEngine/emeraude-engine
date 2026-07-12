@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <vector>
@@ -43,7 +46,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Represents a single mip level of BC7-compressed texture data.
 	 */
-	struct CompressedMipLevel
+	struct EMEN_API CompressedMipLevel
 	{
 		std::vector< uint8_t > data; ///< BC7 compressed blocks (16 bytes per 4x4 block).
 		uint32_t width{0}; ///< Width of this mip level in pixels.
@@ -63,7 +66,7 @@ namespace EmEn::Graphics
 	 *
 	 * @note This class is stateless. Call initialize() once at engine startup.
 	 */
-	class TextureCompressor final
+	class EMEN_API TextureCompressor final
 	{
 		public:
 
@@ -90,11 +93,7 @@ namespace EmEn::Graphics
 			 * @note Non-multiple-of-4 dimensions are padded by repeating edge pixels.
 			 */
 			[[nodiscard]]
-			static std::vector< CompressedMipLevel > compress (
-				const Base::PixelFactory::Pixmap< uint8_t > & pixmap,
-				uint32_t maxMipLevels,
-				Base::ThreadPool & threadPool
-			) noexcept;
+			static std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & pixmap,uint32_t maxMipLevels,Base::ThreadPool & threadPool) noexcept;
 
 			/**
 			 * @brief Compresses a single RGBA8 pixmap to BC7 (no mipchain).
@@ -103,10 +102,7 @@ namespace EmEn::Graphics
 			 * @return Compressed mip level, empty data on failure.
 			 */
 			[[nodiscard]]
-			static CompressedMipLevel compressSingle (
-				const Base::PixelFactory::Pixmap< uint8_t > & pixmap,
-				Base::ThreadPool & threadPool
-			) noexcept;
+			static CompressedMipLevel compressSingle (const Base::PixelFactory::Pixmap< uint8_t > & pixmap,Base::ThreadPool & threadPool) noexcept;
 
 			/**
 			 * @brief Returns the compressed size in bytes for a given resolution.
@@ -115,7 +111,8 @@ namespace EmEn::Graphics
 			 * @return Size in bytes of the BC7 compressed data.
 			 */
 			[[nodiscard]]
-			static uint32_t
+			static
+			uint32_t
 			compressedSize (uint32_t width, uint32_t height) noexcept
 			{
 				const uint32_t blocksX = (width + BlockSize - 1) / BlockSize;
@@ -134,9 +131,7 @@ namespace EmEn::Graphics
 			 * @return Downscaled pixmap (half width, half height, minimum 1x1).
 			 */
 			[[nodiscard]]
-			static Base::PixelFactory::Pixmap< uint8_t > generateMip (
-				const Base::PixelFactory::Pixmap< uint8_t > & source
-			) noexcept;
+			static Base::PixelFactory::Pixmap< uint8_t > generateMip (const Base::PixelFactory::Pixmap< uint8_t > & source) noexcept;
 
 			/**
 			 * @brief Compresses a single mip level to BC7 blocks.
@@ -145,10 +140,7 @@ namespace EmEn::Graphics
 			 * @return Compressed data for this mip level.
 			 */
 			[[nodiscard]]
-			static CompressedMipLevel compressLevel (
-				const Base::PixelFactory::Pixmap< uint8_t > & pixmap,
-				Base::ThreadPool & threadPool
-			) noexcept;
+			static CompressedMipLevel compressLevel (const Base::PixelFactory::Pixmap< uint8_t > & pixmap,Base::ThreadPool & threadPool) noexcept;
 
 			static bool s_initialized;
 	};

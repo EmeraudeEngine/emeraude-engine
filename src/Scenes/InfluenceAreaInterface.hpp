@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "Math/Space3D/AACuboid.hpp"
@@ -37,7 +40,7 @@ namespace EmEn::Scenes
 	 * @brief The influence area interface.
 	 * It defines en influence area around a scene entity.
 	 */
-	class InfluenceAreaInterface
+	class EMEN_API InfluenceAreaInterface
 	{
 		public:
 

@@ -40,7 +40,7 @@ namespace EmEn::Vulkan::Sync
 	/**
 	 * @brief The fence status.
 	 */
-	enum class FenceStatus : uint8_t
+	enum class EMEN_API FenceStatus : uint8_t
 	{
 		Ready,
 		Busy,
@@ -57,7 +57,7 @@ namespace EmEn::Vulkan::Sync
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (FenceStatus value) noexcept;
+	EMEN_API const char * to_cstring (FenceStatus value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -65,7 +65,7 @@ namespace EmEn::Vulkan::Sync
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (FenceStatus value)
 	{
@@ -76,7 +76,7 @@ namespace EmEn::Vulkan::Sync
 	 * @brief The synchronization fence class. Fences are designed for GPU-to-CPU synchronization.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class Fence final : public AbstractDeviceDependentObject
+	class EMEN_API Fence final : public AbstractDeviceDependentObject
 	{
 		public:
 

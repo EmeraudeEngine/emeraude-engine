@@ -26,14 +26,15 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_platform.hpp"
+
 /* STL inclusions. */
 #include <filesystem>
 #include <utility>
 #include <vector>
 
 /* Local inclusions. */
-#include "emeraude_platform.hpp"
-#include "emeraude_export.hpp"
 #if IS_WINDOWS
 	#include "PlatformSpecific/Helpers.hpp" /* Provides the Win32 HWND type for the Windows-only showDialog(). */
 #endif
@@ -47,7 +48,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief User dialog to select multiple files.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract
 	 */
-	class EMERAUDE_API OpenFile final : public Abstract
+	class EMEN_API OpenFile final : public Abstract
 	{
 		public:
 

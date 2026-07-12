@@ -45,7 +45,7 @@ namespace EmEn::Graphics
 	 * @brief The shared UBO manager class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class SharedUBOManager final : public ServiceInterface
+	class EMEN_API SharedUBOManager final : public ServiceInterface
 	{
 		public:
 

@@ -52,7 +52,7 @@ namespace EmEn::Graphics
 	 * They generate GLSL code that is injected into the post-processing fragment shader.
 	 * @extends EmEn::Graphics::PostProcessEffect This is a post-process effect.
 	 */
-	class DirectPostProcessEffect : public PostProcessEffect
+	class EMEN_API DirectPostProcessEffect : public PostProcessEffect
 	{
 		public:
 

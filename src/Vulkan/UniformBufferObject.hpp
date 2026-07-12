@@ -40,7 +40,7 @@ namespace EmEn::Vulkan
 	 * @note Vulkan guaranteed a minimum size of 16Kb.
 	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class UniformBufferObject final : public Buffer
+	class EMEN_API UniformBufferObject final : public Buffer
 	{
 		public:
 

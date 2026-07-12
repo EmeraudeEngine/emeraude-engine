@@ -58,7 +58,7 @@ namespace EmEn::Vulkan
 	 * @brief The transfer manager service class.
 	 * @extends EmEn::ServiceInterface This class is a service.
 	 */
-	class TransferManager final : public ServiceInterface
+	class EMEN_API TransferManager final : public ServiceInterface
 	{
 		public:
 

@@ -46,7 +46,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @note POD structure, stack-allocated per render pass.
 	 * @note Statistics counters are only active in debug builds.
 	 */
-	struct RenderStateTracker final
+	struct EMEN_API RenderStateTracker final
 	{
 		/** @brief Last bound graphics pipeline handle. */
 		VkPipeline lastPipeline{VK_NULL_HANDLE};

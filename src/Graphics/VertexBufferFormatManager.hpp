@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -59,7 +58,7 @@ namespace EmEn::Graphics
 	 * @brief The vertex buffer format manager service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class VertexBufferFormatManager final : public ServiceInterface
+	class EMEN_API VertexBufferFormatManager final : public ServiceInterface
 	{
 		public:
 

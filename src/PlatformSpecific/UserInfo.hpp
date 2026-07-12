@@ -41,7 +41,7 @@ namespace EmEn::PlatformSpecific
 	 * @brief The user info class. This will gather information on the current user.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class UserInfo final : public ServiceInterface
+	class EMEN_API UserInfo final : public ServiceInterface
 	{
 		public:
 

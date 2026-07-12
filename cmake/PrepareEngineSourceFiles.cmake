@@ -136,6 +136,11 @@ else ()
     endforeach ()
     
     list(APPEND EMERAUDE_HEADER_FILES
+        # Help
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/AbstractDoc.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/ArgumentDoc.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/ShortcutDoc.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/Lexicon.hpp
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Abstract.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/CustomMessage.hpp
@@ -149,13 +154,16 @@ else ()
         # ROOT
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/CursorAtlas.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformManager.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Notifier.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.hpp
     )
 
     list(APPEND EMERAUDE_SOURCE_FILES
+        # Help
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/ArgumentDoc.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/ShortcutDoc.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help/Lexicon.cpp
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Types.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.cpp
@@ -163,7 +171,6 @@ else ()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.console.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/CursorAtlas.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/Help.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformManager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Notifier.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.cpp

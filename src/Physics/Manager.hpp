@@ -63,7 +63,7 @@ namespace EmEn::Physics
 	 * @brief The physics manager service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class Manager final : public ServiceInterface
+	class EMEN_API Manager final : public ServiceInterface
 	{
 		public:
 

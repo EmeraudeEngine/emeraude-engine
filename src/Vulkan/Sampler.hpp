@@ -38,7 +38,7 @@ namespace EmEn::Vulkan
 	 * @brief The sampler class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class Sampler  final : public AbstractDeviceDependentObject
+	class EMEN_API Sampler final : public AbstractDeviceDependentObject
 	{
 		public:
 

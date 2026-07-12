@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * where alternating bright and dark lines create the characteristic
 	 * raster scan pattern.
 	 */
-	class Scanlines final : public DirectPostProcessEffect
+	class EMEN_API Scanlines final : public DirectPostProcessEffect
 	{
 		public:
 

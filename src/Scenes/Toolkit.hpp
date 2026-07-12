@@ -36,8 +36,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
-#include "Graphics/Renderable/SpriteResource.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Physics/SphereCollisionModel.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
@@ -48,7 +48,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief Entity generation policy.
 	 */
-	enum class GenPolicy : uint8_t
+	enum class EMEN_API GenPolicy : uint8_t
 	{
 		/** @brief Simple creation of entity. */
 		Simple,
@@ -68,7 +68,7 @@ namespace EmEn::Scenes
 	 */
 	template< typename entity_t, typename component_t >
 	requires (std::is_base_of_v< AbstractEntity, entity_t >, std::is_base_of_v< Component::Abstract, component_t >)
-	class BuiltEntity final
+	class EMEN_API BuiltEntity final
 	{
 		public:
 
@@ -803,7 +803,7 @@ namespace EmEn::Scenes
 				{
 					resourceName << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
 
-					renderable = m_resourceManager.container< MeshResource >()
+					renderable = m_resourceManager.container< MultiLayerMeshResource >()
 						->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
 							return meshResource.load(geometryResource, materialResource);
 						});
@@ -812,7 +812,7 @@ namespace EmEn::Scenes
 				{
 					resourceName << "SimpleMesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
 
-					renderable = m_resourceManager.container< SimpleMeshResource >()
+					renderable = m_resourceManager.container< MeshResource >()
 						->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
 							return meshResource.load(geometryResource, materialResource);
 						});

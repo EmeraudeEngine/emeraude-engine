@@ -43,7 +43,7 @@ namespace EmEn::Vulkan
 	 * @brief The framebuffer class
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class Framebuffer final : public AbstractDeviceDependentObject
+	class EMEN_API Framebuffer final : public AbstractDeviceDependentObject
 	{
 		public:
 

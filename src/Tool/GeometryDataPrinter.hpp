@@ -26,9 +26,12 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -44,7 +47,7 @@ namespace EmEn::Tool
 	 * @brief The geometry data printer tool.
 	 * @extends EmEn::Tool::ToolInterface This is a tool interface.
 	 */
-	class GeometryDataPrinter final : public ToolInterface
+	class EMEN_API GeometryDataPrinter final : public ToolInterface
 	{
 		public:
 

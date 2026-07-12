@@ -55,7 +55,7 @@ namespace EmEn::Graphics
 	 * to read them via blit or direct sampling.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
 	 */
-	class SceneRenderTarget final : public RenderTarget::Abstract
+	class EMEN_API SceneRenderTarget final : public RenderTarget::Abstract
 	{
 		public:
 

@@ -49,7 +49,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * Falls back to SSR when ray tracing hardware is not available.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class RTR final : public IndirectPostProcessEffect
+	class EMEN_API RTR final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -59,7 +59,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing RTR parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float maxDistance{100.0F};
 				float intensity{0.8F};
@@ -72,7 +72,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the RTR trace pass.
 			 */
-			struct TracePushConstants
+			struct EMEN_API TracePushConstants
 			{
 				float invViewProj[16];
 				float invViewCol0[3];
@@ -90,7 +90,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the blur pass.
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -105,7 +105,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the composite pass.
 			 */
-			struct CompositePushConstants
+			struct EMEN_API CompositePushConstants
 			{
 				float intensity;
 				float padding1;

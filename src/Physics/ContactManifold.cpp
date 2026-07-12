@@ -37,4 +37,37 @@ namespace EmEn::Physics
 			contact.prepare();
 		}
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const ContactManifold & obj)
+	{
+		out <<
+			"Contact manifold :" "\n"
+			"Body A : " << ( obj.m_bodyA ? "Present" : "None" ) << "\n"
+			"Body B : " << ( obj.m_bodyB ? "Present" : "None" ) << "\n";
+
+		if ( obj.hasContacts() )
+		{
+			for ( const auto & contact : obj.contacts() )
+			{
+				out << contact << "\n";
+			}
+		}
+		else
+		{
+			out << "No contact !" << "\n";
+		}
+
+		return out;
+	}
+
+	std::string
+	to_string (const ContactManifold & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

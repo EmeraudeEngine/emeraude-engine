@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configurations. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <string>
@@ -42,7 +45,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief The Frustum class
 	 */
-	class Frustum final
+	class EMEN_API Frustum final
 	{
 		public:
 
@@ -94,37 +97,10 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Frustum & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Frustum & obj);
 
 			std::array< Base::Math::Plane< float >, 6 > m_planes{};
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const Frustum & obj)
-	{
-		return out << "Frustum data :" "\n"
-			"Right " << obj.m_planes[Frustum::Right] <<
-			"Left " << obj.m_planes[Frustum::Left] <<
-			"Bottom " << obj.m_planes[Frustum::Bottom] <<
-			"Top " << obj.m_planes[Frustum::Top] <<
-			"Far " << obj.m_planes[Frustum::Far] <<
-			"Near " << obj.m_planes[Frustum::Near];
-	}
-
-	/**
-	 * @brief Stringifies the object.
-	 * @param obj A reference to the object to print.
-	 * @return std::string
-	 */
-	inline
-	std::string
-	to_string (const Frustum & obj)
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const Frustum & obj);
 }

@@ -39,7 +39,7 @@ namespace EmEn::Animations
 	 * @note ie, This can be used to randomize something each logic cycle.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
-	class RandomValue final : public AnimationInterface
+	class EMEN_API RandomValue final : public AnimationInterface
 	{
 		public:
 
@@ -111,7 +111,7 @@ namespace EmEn::Animations
 
 		private:
 
-			Base::Variant m_minimumValue{};
-			Base::Variant m_maximumValue{};
+			Base::Variant m_minimumValue;
+			Base::Variant m_maximumValue;
 	};
 }

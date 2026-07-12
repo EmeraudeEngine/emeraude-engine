@@ -62,7 +62,7 @@ namespace EmEn::Graphics
 	 * that can be indexed dynamically in shaders using non-uniform indexing.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class BindlessTextureManager final : public ServiceInterface
+	class EMEN_API BindlessTextureManager final : public ServiceInterface
 	{
 		public:
 

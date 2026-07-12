@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief Compressor effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Compressor final : public Abstract
+	class EMEN_API Compressor final : public Abstract
 	{
 		public:
 

@@ -44,7 +44,7 @@ namespace EmEn::Vulkan
 	 * @brief Base of all Vulkan API object dealing with a device.
 	 * @extends EmEn::Vulkan::AbstractObject The vulkan device dependent object is a vulkan object.
 	 */
-	class AbstractDeviceDependentObject : public AbstractObject
+	class EMEN_API AbstractDeviceDependentObject : public AbstractObject
 	{
 		public:
 

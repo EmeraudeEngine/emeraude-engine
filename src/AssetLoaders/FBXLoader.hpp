@@ -82,7 +82,7 @@ namespace EmEn::AssetLoaders
 	 * @note Produces an AssetData with format-agnostic node descriptors.
 	 * Uses ufbx (vendored) for parsing. No dependency on Scenes/ types.
 	 */
-	class FBXLoader final : public Interface
+	class EMEN_API FBXLoader final : public Interface
 	{
 		public:
 
@@ -145,8 +145,7 @@ namespace EmEn::AssetLoaders
 			 * @return std::vector< Base::Animation::AnimationChannel< float > >
 			 */
 			[[nodiscard]]
-			static std::vector< Base::Animation::AnimationChannel< float > >
-			sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept;
+			static std::vector< Base::Animation::AnimationChannel< float > > sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

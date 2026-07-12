@@ -49,7 +49,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief The physical device class to build a logical vulkan device.
 	 */
-	class EMERAUDE_API PhysicalDevice final
+	class EMEN_API PhysicalDevice final
 	{
 		public:
 

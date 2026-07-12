@@ -48,7 +48,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * is not available (separate effect in the stack, not automatic fallback).
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class RTAO final : public IndirectPostProcessEffect
+	class EMEN_API RTAO final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -58,7 +58,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing RTAO parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float maxDistance{2.0F};
 				float intensity{1.5F};
@@ -71,7 +71,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the RTAO ray trace pass.
 			 */
-			struct TracePushConstants
+			struct EMEN_API TracePushConstants
 			{
 				float invViewProj[16];
 				float invViewCol0[3];
@@ -89,7 +89,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the blur pass.
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the apply pass.
 			 */
-			struct ApplyPushConstants
+			struct EMEN_API ApplyPushConstants
 			{
 				float intensity;
 				float padding1;

@@ -71,7 +71,7 @@ namespace EmEn::Audio
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Base::ObserverTrait This service can observe resource loading.
 	 */
-	class TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait, public Base::ObserverTrait
+	class EMEN_API TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait, public Base::ObserverTrait
 	{
 		public:
 

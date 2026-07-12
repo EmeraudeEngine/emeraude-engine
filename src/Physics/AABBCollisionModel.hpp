@@ -35,13 +35,16 @@
 /* Local inclusions for usages. */
 #include "Math/OrientedCuboid.hpp"
 
+/* Forward declarations. */
 namespace EmEn::Physics
 {
-	/* Forward declarations for internal dispatch. */
 	class PointCollisionModel;
 	class SphereCollisionModel;
 	class CapsuleCollisionModel;
+}
 
+namespace EmEn::Physics
+{
 	/**
 	 * @brief Collision model using an axis-aligned bounding box primitive.
 	 *
@@ -54,7 +57,7 @@ namespace EmEn::Physics
 	 *
 	 * @since 0.8.43
 	 */
-	class AABBCollisionModel final : public CollisionModelInterface
+	class EMEN_API AABBCollisionModel final : public CollisionModelInterface
 	{
 		public:
 

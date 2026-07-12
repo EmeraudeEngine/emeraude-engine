@@ -34,7 +34,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief Interface to define a visible and physical sea level in a scene.
 	 */
-	class SeaLevelInterface
+	class EMEN_API SeaLevelInterface
 	{
 		public:
 

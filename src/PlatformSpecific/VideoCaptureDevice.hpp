@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_platform.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <cstdint>
@@ -39,7 +40,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describes a video capture device available on the system.
 	 */
-	struct VideoCaptureDeviceInfo
+	struct EMEN_API VideoCaptureDeviceInfo
 	{
 		std::string devicePath;
 		std::string deviceName;
@@ -50,7 +51,7 @@ namespace EmEn::PlatformSpecific
 	 * @brief Cross-platform video capture device using native APIs.
 	 * @note Linux: V4L2, macOS: AVFoundation (stub), Windows: Media Foundation (stub).
 	 */
-	class VideoCaptureDevice final
+	class EMEN_API VideoCaptureDevice final
 	{
 		public:
 

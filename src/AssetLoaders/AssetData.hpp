@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
@@ -68,7 +71,7 @@ namespace EmEn::AssetLoaders
 	 * @brief Format-agnostic description of a node in the loaded asset.
 	 * @note Contains no Scene/Node/Entity types — purely data.
 	 */
-	struct NodeDescriptor
+	struct EMEN_API NodeDescriptor
 	{
 		std::string name;
 		Base::Math::CartesianFrame< float > localFrame;
@@ -79,7 +82,7 @@ namespace EmEn::AssetLoaders
 	/**
 	 * @brief Describes a loaded mesh with its geometry and materials.
 	 */
-	struct MeshDescriptor
+	struct EMEN_API MeshDescriptor
 	{
 		std::shared_ptr< Graphics::Renderable::Abstract > renderable;
 		std::shared_ptr< Graphics::Geometry::Interface > geometry;
@@ -92,7 +95,7 @@ namespace EmEn::AssetLoaders
 	 * The node hierarchy is described via NodeDescriptors without any
 	 * dependency on the Scenes/ subsystem.
 	 */
-	struct AssetData
+	struct EMEN_API AssetData
 	{
 		/* Resources (already in engine containers). */
 		std::vector< MeshDescriptor > meshes;

@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <memory>
@@ -87,7 +87,7 @@ namespace EmEn::Graphics
 	 * @see EmEn::ServiceInterface
 	 * @version 0.8.51
 	 */
-	class Recorder final : public ServiceInterface
+	class EMEN_API Recorder final : public ServiceInterface
 	{
 		public:
 

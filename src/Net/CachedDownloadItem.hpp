@@ -26,9 +26,11 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
-#include <sstream>
 #include <string>
 
 namespace EmEn::Net
@@ -36,7 +38,7 @@ namespace EmEn::Net
 	/**
 	 * @brief The cached download item class.
 	 */
-	class CachedDownloadItem final
+	class EMEN_API CachedDownloadItem final
 	{
 		public:
 
@@ -95,33 +97,17 @@ namespace EmEn::Net
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const CachedDownloadItem & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const CachedDownloadItem & obj);
 
 			size_t m_cacheId;
 			std::string m_originalFilename;
 			size_t m_filesize;
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const CachedDownloadItem & obj)
-	{
-		return out << "ID: " << obj.cacheId() << ", filename: " << obj.originalFilename() << ", filesize: " << obj.filesize();
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const CachedDownloadItem & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const CachedDownloadItem & obj) noexcept;
 }

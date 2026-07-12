@@ -39,7 +39,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a spherical push modifier to make move physical object.
 	 * @extends EmEn::Scenes::Component::AbstractModifier The base class for modifier.
 	 */
-	class SphericalPushModifier final : public AbstractModifier
+	class EMEN_API SphericalPushModifier final : public AbstractModifier
 	{
 		public:
 

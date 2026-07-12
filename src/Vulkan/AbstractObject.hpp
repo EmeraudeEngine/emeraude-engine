@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_config.hpp"
+#include "emeraude_export.hpp"
 
 /* STL inclusions. */
 #include <iostream>
@@ -46,7 +47,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Debug policy for Vulkan object identification. This will hold a 'std::string' to help keep track of objects.
 	 */
-	class IdentifierDebugPolicy
+	class EMEN_API IdentifierDebugPolicy
 	{
 		public:
 
@@ -86,7 +87,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Release policy for Vulkan object identification. This helps to remove all cost from Vulkan object identification in release with code optimization.
 	 */
-	class IdentifierReleasePolicy
+	class EMEN_API IdentifierReleasePolicy
 	{
 		public:
 
@@ -117,7 +118,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief Base of all Vulkan API objects.
 	 */
-	class AbstractObject
+	class EMEN_API AbstractObject
 	{
 		public:
 

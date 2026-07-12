@@ -42,7 +42,7 @@ namespace EmEn::Graphics
 	 * allowing unified descriptor set layouts across all lights.
 	 * @extends EmEn::Vulkan::TextureInterface This is a texture.
 	 */
-	class DummyShadowTexture final : public Vulkan::TextureInterface
+	class EMEN_API DummyShadowTexture final : public Vulkan::TextureInterface
 	{
 		public:
 
@@ -54,6 +54,32 @@ namespace EmEn::Graphics
 			 * @param isCubemap Whether this is a cubemap (for point lights) or 2D texture.
 			 */
 			explicit DummyShadowTexture (bool isCubemap) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			DummyShadowTexture (const DummyShadowTexture & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			DummyShadowTexture (DummyShadowTexture && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return DummyShadowTexture &
+			 */
+			DummyShadowTexture & operator= (const DummyShadowTexture & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return DummyShadowTexture &
+			 */
+			DummyShadowTexture & operator= (DummyShadowTexture && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the dummy shadow texture.

@@ -35,7 +35,7 @@
 
 namespace EmEn::Vulkan::Sync
 {
-	enum class EventStatus : uint8_t
+	enum class EMEN_API EventStatus : uint8_t
 	{
 		Set,
 		Reset,
@@ -52,7 +52,7 @@ namespace EmEn::Vulkan::Sync
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (EventStatus value) noexcept;
+	EMEN_API const char * to_cstring (EventStatus value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -60,7 +60,7 @@ namespace EmEn::Vulkan::Sync
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (EventStatus value)
 	{
@@ -71,7 +71,7 @@ namespace EmEn::Vulkan::Sync
 	 * @brief The synchronization event class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class Event final : public AbstractDeviceDependentObject
+	class EMEN_API Event final : public AbstractDeviceDependentObject
 	{
 		public:
 

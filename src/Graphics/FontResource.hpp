@@ -40,7 +40,7 @@ namespace EmEn::Graphics
 	 * This is a wrapper around PixelFactory's Font class to make it a loadable resource.
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class FontResource final : public Resources::ResourceTrait
+	class EMEN_API FontResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< FontResource >;
 

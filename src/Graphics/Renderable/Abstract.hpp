@@ -41,7 +41,6 @@
 #include "Math/Space3D/AACuboid.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "ProgramCacheKey.hpp"
-#include "Types.hpp"
 
 namespace EmEn
 {
@@ -70,7 +69,7 @@ namespace EmEn::Graphics::Renderable
 {
 	/** @brief Renderable interface flag bits. */
 	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
-	enum RenderableFlagBits : uint32_t
+	enum EMEN_API RenderableFlagBits : uint32_t
 	{
 		None = 0U,
 		/** @brief This flag is set when the geometry is fully usable by the GPU,
@@ -87,7 +86,7 @@ namespace EmEn::Graphics::Renderable
 	 * @note This holds only what to draw.
 	 * @extends EmEn::Resources::ResourceTrait Every renderable is a resource.
 	 */
-	class Abstract : public Resources::ResourceTrait
+	class EMEN_API Abstract : public Resources::ResourceTrait
 	{
 		public:
 

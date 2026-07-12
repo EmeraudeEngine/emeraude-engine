@@ -41,7 +41,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
-	class Microphone final : public Abstract, public AVConsole::AbstractVirtualDevice
+	class EMEN_API Microphone final : public Abstract, public AVConsole::AbstractVirtualDevice
 	{
 		public:
 

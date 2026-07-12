@@ -45,7 +45,7 @@ namespace EmEn::Vulkan
 	 * @brief The DescriptorSetLayout class
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This is a device dependant vulkan object.
 	 */
-	class DescriptorSetLayout final : public AbstractDeviceDependentObject
+	class EMEN_API DescriptorSetLayout final : public AbstractDeviceDependentObject
 	{
 		public:
 
@@ -462,7 +462,7 @@ namespace EmEn::Vulkan
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const DescriptorSetLayout & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const DescriptorSetLayout & obj);
 
 			VkDescriptorSetLayout m_handle{VK_NULL_HANDLE};
 			VkDescriptorSetLayoutCreateInfo m_createInfo{};
@@ -471,38 +471,10 @@ namespace EmEn::Vulkan
 			Base::StaticVector< VkDescriptorBindingFlags, 16 > m_bindingFlags;
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const DescriptorSetLayout & obj)
-	{
-		out << "Descriptor set layout @" << obj.m_handle << " (" << obj.identifier() << ") :\n";
-
-		for ( const auto & setLayoutBinding : obj.m_setLayoutBindings )
-		{
-			out <<
-				"Set layout binding : " << setLayoutBinding.binding << "\n"
-				"\t" "Descriptor type: " << setLayoutBinding.descriptorType << "\n"
-				"\t" "Descriptor count: " << setLayoutBinding.descriptorCount << "\n"
-				"\t" "Stage flags: " << setLayoutBinding.stageFlags << "\n"
-				"\t" "Immutable Samplers: " << setLayoutBinding.pImmutableSamplers << "\n\n";
-		}
-
-		return out;
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const DescriptorSetLayout & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const DescriptorSetLayout & obj) noexcept;
 }

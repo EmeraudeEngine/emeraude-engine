@@ -58,7 +58,7 @@ namespace EmEn::Graphics::RenderTarget
 	 */
 	template< typename view_matrices_t >
 	requires (std::is_base_of_v< ViewMatricesInterface, view_matrices_t >)
-	class Texture final : public Vulkan::TextureInterface, public Abstract
+	class EMEN_API Texture final : public Vulkan::TextureInterface, public Abstract
 	{
 		public:
 

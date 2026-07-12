@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 #include <vector>
@@ -41,7 +44,7 @@ namespace EmEn::Vulkan
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * vkResultToCString (VkResult code) noexcept;
+	EMEN_API const char * vkResultToCString (VkResult code) noexcept;
 
 	/**
 	 * @brief Gets the validation layers available from Vulkan in a string.
@@ -49,7 +52,7 @@ namespace EmEn::Vulkan
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string getItemListAsString (const std::vector< VkLayerProperties > & validationLayers) noexcept;
+	EMEN_API std::string getItemListAsString (const std::vector< VkLayerProperties > & validationLayers) noexcept;
 
 	/**
 	 * @brief Gets the extensions available from Vulkan in a string.
@@ -58,5 +61,5 @@ namespace EmEn::Vulkan
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string getItemListAsString (const char * type, const std::vector< VkExtensionProperties > & extensions) noexcept;
+	EMEN_API std::string getItemListAsString (const char * type, const std::vector< VkExtensionProperties > & extensions) noexcept;
 }

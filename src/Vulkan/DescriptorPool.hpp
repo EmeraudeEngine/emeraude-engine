@@ -47,7 +47,7 @@ namespace EmEn::Vulkan
 	 * @brief The DescriptorPool class
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This vulkan object needs a device.
 	 */
-	class DescriptorPool final : public AbstractDeviceDependentObject
+	class EMEN_API DescriptorPool final : public AbstractDeviceDependentObject
 	{
 		public:
 

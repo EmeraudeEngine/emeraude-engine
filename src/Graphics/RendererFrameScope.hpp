@@ -51,7 +51,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Declares the scope of one renderer frame.
 	 */
-	class RendererFrameScope final
+	class EMEN_API RendererFrameScope final
 	{
 		public:
 

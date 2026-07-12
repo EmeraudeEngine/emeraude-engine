@@ -43,7 +43,7 @@ namespace EmEn::Audio
 	 * @brief The audio recorder class.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
-	class Listener final : public Scenes::AVConsole::AbstractVirtualDevice
+	class EMEN_API Listener final : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 
@@ -61,8 +61,6 @@ namespace EmEn::Audio
 
 			}
 
-		private:
-
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
 			Base::Math::CartesianFrame< float >
@@ -74,6 +72,8 @@ namespace EmEn::Audio
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			Base::Math::CartesianFrame< float > m_worldCoordinates{};
+		private:
+
+			Base::Math::CartesianFrame< float > m_worldCoordinates;
 	};
 }

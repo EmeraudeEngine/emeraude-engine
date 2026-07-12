@@ -563,4 +563,27 @@ namespace EmEn::Animations
 			}
 		}
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const Sequence & obj)
+	{
+		for ( auto it = obj.m_keyFrames.cbegin(); it != obj.m_keyFrames.cend(); ++it )
+		{
+			out <<
+				"Frame #" << std::distance(obj.m_keyFrames.cbegin(), it) << " (" << it->first << ")\n"
+				"Value : " << it->second.value() << '\n';
+		}
+
+		return out;
+	}
+
+	std::string
+	to_string (const Sequence & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

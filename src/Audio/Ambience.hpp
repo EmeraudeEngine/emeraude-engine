@@ -35,7 +35,6 @@
 /* Local inclusions for usages. */
 #include "AmbienceChannel.hpp"
 #include "AmbienceSound.hpp"
-#include "Utility.hpp"
 #include "Manager.hpp"
 
 namespace EmEn::Audio
@@ -45,7 +44,7 @@ namespace EmEn::Audio
 	 * @note [OBS][STATIC-OBSERVER]
 	 * @extends EmEn::Base::ObserverTrait This component observes sound loading events.
 	 */
-	class Ambience final : public Base::ObserverTrait
+	class EMEN_API Ambience final : public Base::ObserverTrait
 	{
 		public:
 

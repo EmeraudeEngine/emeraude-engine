@@ -32,13 +32,16 @@
 /* Local inclusions for inheritances. */
 #include "CollisionModelInterface.hpp"
 
+/* Forward declarations. */
 namespace EmEn::Physics
 {
-	/* Forward declarations for internal dispatch. */
 	class SphereCollisionModel;
 	class AABBCollisionModel;
 	class CapsuleCollisionModel;
+}
 
+namespace EmEn::Physics
+{
 	/**
 	 * @brief Collision model using a single point (zero-volume).
 	 *
@@ -50,7 +53,7 @@ namespace EmEn::Physics
 	 *
 	 * @since 0.8.43
 	 */
-	class PointCollisionModel final : public CollisionModelInterface
+	class EMEN_API PointCollisionModel final : public CollisionModelInterface
 	{
 		public:
 
@@ -76,7 +79,7 @@ namespace EmEn::Physics
 			Base::Math::Space3D::AACuboid< float >
 			getAABB () const noexcept override
 			{
-				/* Use smallest possible valid AABB. */
+				/* Use the smallest possible valid AABB. */
 				constexpr auto epsilon = std::numeric_limits< float >::epsilon();
 
 				return Base::Math::Space3D::AACuboid< float >{
@@ -113,8 +116,9 @@ namespace EmEn::Physics
 			 * @return Base::Math::Space3D::Point< float >
 			 */
 			[[nodiscard]]
+			static
 			Base::Math::Space3D::Point< float >
-			toWorldPoint (const Base::Math::CartesianFrame< float > & worldFrame) const noexcept
+			toWorldPoint (const Base::Math::CartesianFrame< float > & worldFrame) noexcept
 			{
 				return worldFrame.position();
 			}

@@ -36,7 +36,7 @@
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
@@ -442,7 +442,7 @@ namespace EmEn::Scenes
 			const auto z = arguments[4].asFloat();
 			const auto scale = arguments.size() >= 6 ? arguments[5].asFloat() : 1.0F;
 
-			auto * meshContainer = m_resourceManager.container< Graphics::Renderable::MeshResource >();
+			auto * meshContainer = m_resourceManager.container< Graphics::Renderable::MultiLayerMeshResource >();
 
 			if ( meshContainer == nullptr )
 			{

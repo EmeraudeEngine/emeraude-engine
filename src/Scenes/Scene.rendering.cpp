@@ -26,14 +26,12 @@
 
 #include "Scene.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/Renderable/Types.hpp"
 #include "NodeCrawler.hpp"
 
 namespace EmEn::Scenes

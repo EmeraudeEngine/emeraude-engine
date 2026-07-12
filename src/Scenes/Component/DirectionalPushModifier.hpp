@@ -35,7 +35,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a directional push modifier to make move physical object.
 	 * @extends EmEn::Scenes::Component::AbstractModifier The base class for modifier.
 	 */
-	class DirectionalPushModifier final : public AbstractModifier
+	class EMEN_API DirectionalPushModifier final : public AbstractModifier
 	{
 		public:
 

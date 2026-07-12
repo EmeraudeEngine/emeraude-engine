@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "Math/Space3D/AACuboid.hpp"
@@ -38,7 +41,7 @@ namespace EmEn::Physics
 	 * @brief Enumeration of collision model types for internal dispatch.
 	 * @note This is used internally for double dispatch, not exposed in the public contract.
 	 */
-	enum class CollisionModelType : uint8_t
+	enum class EMEN_API CollisionModelType : uint8_t
 	{
 		Point,
 		Sphere,
@@ -49,7 +52,7 @@ namespace EmEn::Physics
 	/**
 	 * @brief Results of a collision detection test.
 	 */
-	struct CollisionDetectionResults
+	struct EMEN_API CollisionDetectionResults
 	{
 		Base::Math::Vector< 3, float > m_MTV;		  /**< Minimum Translation Vector to separate shapes. */
 		Base::Math::Vector< 3, float > m_contact;	  /**< Absolute contact point in world space. */
@@ -71,7 +74,7 @@ namespace EmEn::Physics
 	 *
 	 * @since 0.8.43
 	 */
-	class CollisionModelInterface
+	class EMEN_API CollisionModelInterface
 	{
 		public:
 

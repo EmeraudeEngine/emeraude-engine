@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * @brief The film grain lens effect class.
 	 * @extends EmEn::Graphics::DirectPostProcessEffect This is a framebuffer effect.
 	 */
-	class FilmGrain final : public DirectPostProcessEffect
+	class EMEN_API FilmGrain final : public DirectPostProcessEffect
 	{
 		public:
 

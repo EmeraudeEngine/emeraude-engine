@@ -38,7 +38,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a scene directional light like the sun.
 	 * @extends EmEn::Scenes::Component::AbstractLightEmitter The base class for each light type.
 	 */
-	class DirectionalLight final : public AbstractLightEmitter
+	class EMEN_API DirectionalLight final : public AbstractLightEmitter
 	{
 		public:
 

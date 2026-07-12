@@ -75,7 +75,7 @@ namespace EmEn::Overlay
 	 * @extends EmEn::Input::KeyboardListenerInterface The manager needs to listen to the keyboard.
 	 * @extends EmEn::Input::PointerListenerInterface The manager needs to listen to the pointer.
 	 */
-	class EMERAUDE_API Manager final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
+	class EMEN_API Manager final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface
 	{
 		public:
 

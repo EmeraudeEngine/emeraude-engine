@@ -73,7 +73,7 @@ namespace EmEn::Graphics::TextureResource
 	 * @see EmEn::Vulkan::TextureInterface
 	 * @version 0.8.35
 	 */
-	class Texture3D final : public Abstract
+	class EMEN_API Texture3D final : public Abstract
 	{
 		friend class Resources::Container< Texture3D >;
 

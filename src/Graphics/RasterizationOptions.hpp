@@ -35,7 +35,7 @@ namespace EmEn::Graphics
 	 * @brief Defines options to rasterize a renderable instance.
 	 * @note These options are dynamic to gain control over the rendering of multiple instance of the same renderable object.
 	 */
-	class RasterizationOptions final
+	class EMEN_API RasterizationOptions final
 	{
 		public:
 
@@ -229,8 +229,8 @@ namespace EmEn::Graphics
 			CullingMode m_cullingMode{CullingMode::Back};
 			
 			bool m_depthBiasEnabled{false};
-			float m_depthBiasSlopeFactor{0.0F};	// Was factor
-			float m_depthBiasConstantFactor{0.0F}; // Was units
+			float m_depthBiasSlopeFactor{0.0F};
+			float m_depthBiasConstantFactor{0.0F};
 			float m_depthBiasClamp{0.0F};
 
 			bool m_triangleClockwise{false};

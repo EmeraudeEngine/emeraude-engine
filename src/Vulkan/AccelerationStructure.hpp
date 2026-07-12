@@ -47,7 +47,7 @@ namespace EmEn::Vulkan
 	 * structures. Building geometry into the structure is handled externally.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject To allocate on a device.
 	 */
-	class AccelerationStructure final : public AbstractDeviceDependentObject
+	class EMEN_API AccelerationStructure final : public AbstractDeviceDependentObject
 	{
 		public:
 
@@ -102,10 +102,10 @@ namespace EmEn::Vulkan
 			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
-			bool createOnHardware () noexcept final;
+			bool createOnHardware () noexcept override;
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::destroyFromHardware() */
-			bool destroyFromHardware () noexcept final;
+			bool destroyFromHardware () noexcept override;
 
 			/**
 			 * @brief Returns the acceleration structure handle.

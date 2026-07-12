@@ -48,7 +48,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @note This version uses its own VBO to store locations.
 	 * @extends EmEn::Graphics::RenderableInstance::Abstract It needs the base of a renderable instance.
 	 */
-	class Multiple final : public Abstract
+	class EMEN_API Multiple final : public Abstract
 	{
 		public:
 

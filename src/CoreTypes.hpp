@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
@@ -52,7 +55,7 @@ namespace EmEn
 	 * @brief Context object containing engine-level services needed by various subsystems.
 	 * @note All references are guaranteed to be valid for the lifetime of the engine.
 	 */
-	struct EngineContext
+	struct EMEN_API EngineContext
 	{
 		Graphics::Renderer & graphicsRenderer;
 		Audio::Manager & audioManager;
@@ -79,7 +82,7 @@ namespace EmEn
 	/**
 	 * @brief Standard cursor handled automatically by GLFW.
 	 */
-	enum class CursorType : uint8_t
+	enum class EMEN_API CursorType : uint8_t
 	{
 		Arrow,
 		TextInput,
@@ -102,7 +105,7 @@ namespace EmEn
 	using Base::FatalString;
 
 	/** @brief Log file format enumeration. */
-	enum class LogFormat : uint8_t
+	enum class EMEN_API LogFormat : uint8_t
 	{
 		Text,
 		JSON,
@@ -119,7 +122,7 @@ namespace EmEn
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	inline
+	inline EMEN_API
 	const char *
 	to_cstring (LogFormat value) noexcept
 	{
@@ -145,7 +148,7 @@ namespace EmEn
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	inline EMEN_API
 	std::string
 	to_string (LogFormat value)
 	{
@@ -158,7 +161,7 @@ namespace EmEn
 	 * @return LogFormat
 	 */
 	[[nodiscard]]
-	inline
+	inline EMEN_API
 	LogFormat
 	to_LogFormat (const std::string & value) noexcept
 	{
@@ -180,7 +183,7 @@ namespace EmEn
 		return LogFormat::Text;
 	}
 
-	enum class ANSIColorCode : uint8_t
+	enum class EMEN_API ANSIColorCode : uint8_t
 	{
 		Black = 30,
 		Red = 31,

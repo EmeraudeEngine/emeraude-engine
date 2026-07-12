@@ -45,7 +45,7 @@ namespace EmEn::Graphics::Renderable
 	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
 	 * @extends EmEn::Scenes::GroundLevelInterface This is the scene ground.
 	 */
-	class TerrainResource final : public Abstract, public Scenes::GroundLevelInterface
+	class EMEN_API TerrainResource final : public Abstract, public Scenes::GroundLevelInterface
 	{
 		friend class Resources::Container< TerrainResource >;
 

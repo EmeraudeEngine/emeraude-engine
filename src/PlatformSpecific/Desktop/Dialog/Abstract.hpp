@@ -43,7 +43,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	/**
 	 * @brief The base class for all dialogs.
 	 */
-	class EMERAUDE_API Abstract
+	class EMEN_API Abstract
 	{
 		public:
 

@@ -39,7 +39,7 @@ namespace EmEn::Vulkan
 	 * @brief Defines a convenient way to build an index buffer object (IBO).
 	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class IndexBufferObject final : public Buffer
+	class EMEN_API IndexBufferObject final : public Buffer
 	{
 		public:
 

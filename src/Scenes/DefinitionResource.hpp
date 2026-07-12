@@ -32,11 +32,15 @@
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
 
+/* Forward declarations. */
 namespace EmEn::Scenes
 {
 	class Scene;
 	class Node;
+}
 
+namespace EmEn::Scenes
+{
 	/**
 	 * @brief The scene definition class. Builds a complete scene from a JSON description.
 	 * @details The JSON format supports:
@@ -50,7 +54,7 @@ namespace EmEn::Scenes
 	 * Each element uses a "Type" field for extensibility.
 	 * @extends EmEn::Resources::ResourceTrait This is a resource
 	 */
-	class DefinitionResource final : public Resources::ResourceTrait
+	class EMEN_API DefinitionResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< DefinitionResource >;
 

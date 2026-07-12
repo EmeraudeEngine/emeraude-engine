@@ -26,8 +26,12 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
+#include <array>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
@@ -50,7 +54,7 @@ namespace EmEn::Scenes
 	 *	   rayQueryGetIntersectionGeometryIndexEXT.
 	 *	   Total size: 48 bytes (3 uvec4) for std430 alignment.
 	 */
-	struct GPUMeshMetaData
+	struct EMEN_API GPUMeshMetaData
 	{
 		/** @brief Device address of the vertex buffer (VBO). */
 		VkDeviceAddress vertexBufferAddress{0};
@@ -66,7 +70,7 @@ namespace EmEn::Scenes
 		uint32_t subGeometryCount{0};
 		/** @brief One material index per sub-geometry. Indexed in the shader by the value
 		 * returned by rayQueryGetIntersectionGeometryIndexEXT (0..subGeometryCount-1). */
-		uint32_t materialIndices[MaxSubGeometriesPerMesh]{};
+		std::array< uint32_t, MaxSubGeometriesPerMesh > materialIndices{};
 	};
 
 	static_assert(sizeof(GPUMeshMetaData) == 48, "GPUMeshMetaData must be 48 bytes for std430.");

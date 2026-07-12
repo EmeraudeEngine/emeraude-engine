@@ -50,7 +50,7 @@ namespace EmEn::Graphics
 	 * @brief Class that define a device to grab video from outside the engine like a webcam.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class ExternalInput final : public ServiceInterface
+	class EMEN_API ExternalInput final : public ServiceInterface
 	{
 		public:
 

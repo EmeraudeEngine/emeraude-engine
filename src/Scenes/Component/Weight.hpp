@@ -42,7 +42,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Dummy entity to add artificial physics properties to a Node.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 */
-	class Weight final : public Abstract
+	class EMEN_API Weight final : public Abstract
 	{
 		public:
 
@@ -50,7 +50,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ClassId{"Weight"};
 
 			/** @brief Animatable Interface key. */
-			enum AnimationID : uint8_t
+			enum EMEN_API AnimationID : uint8_t
 			{
 				Mass,
 				Surface,

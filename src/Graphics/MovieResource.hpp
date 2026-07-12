@@ -38,7 +38,11 @@
 #include "PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 
-namespace EmEn::Base { class ThreadPool; }
+/* Forward declarations. */
+namespace EmEn::Base
+{
+	class ThreadPool;
+}
 
 namespace EmEn::Graphics
 {
@@ -48,7 +52,7 @@ namespace EmEn::Graphics
 	 * The main resources directory is "./data-stores/Movies/".
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class MovieResource final : public Resources::ResourceTrait
+	class EMEN_API MovieResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< MovieResource >;
 

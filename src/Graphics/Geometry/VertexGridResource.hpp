@@ -45,7 +45,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief Defines a geometry using a VBO and an IBO to produce a grid.
 	 * @extends EmEn::Graphics::Geometry::Interface The common base for all geometry types.
 	 */
-	class VertexGridResource final : public Interface
+	class EMEN_API VertexGridResource final : public Interface
 	{
 		friend class Resources::Container< VertexGridResource >;
 

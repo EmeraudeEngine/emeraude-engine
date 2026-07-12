@@ -42,7 +42,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Vertex buffer binding flags.
 	 */
-	enum VertexBufferBindingFlagBits : uint8_t
+	enum EMEN_API VertexBufferBindingFlagBits : uint8_t
 	{
 		PerInstance = 1,
 		RequestPrimitiveRestart = 2,
@@ -54,7 +54,7 @@ namespace EmEn::Graphics
 	 * @brief Describes the data inside a vertex attribute binding. How many elements and the used primitive.
 	 * @extends EmEn::Base::FlagTrait
 	 */
-	class VertexBufferBinding final : public Base::FlagTrait< uint32_t >
+	class EMEN_API VertexBufferBinding final : public Base::FlagTrait< uint32_t >
 	{
 		public:
 
@@ -166,7 +166,7 @@ namespace EmEn::Graphics
 			bool
 			perInstance () const noexcept
 			{
-				return this->isFlagEnabled(PerInstance);
+				return this->isFlagEnabled(VertexBufferBindingFlagBits::PerInstance);
 			}
 
 			/**
@@ -177,7 +177,7 @@ namespace EmEn::Graphics
 			bool
 			requestPrimitiveRestart () const noexcept
 			{
-				return this->isFlagEnabled(RequestPrimitiveRestart);
+				return this->isFlagEnabled(VertexBufferBindingFlagBits::RequestPrimitiveRestart);
 			}
 
 			/**
@@ -188,7 +188,7 @@ namespace EmEn::Graphics
 			bool
 			isPositionAbsolute () const noexcept
 			{
-				return this->isFlagEnabled(IsPositionAbsolute);
+				return this->isFlagEnabled(VertexBufferBindingFlagBits::IsPositionAbsolute);
 			}
 
 			/**
@@ -199,7 +199,7 @@ namespace EmEn::Graphics
 			bool
 			isDynamicVertexBuffer () const noexcept
 			{
-				return this->isFlagEnabled(IsDynamicVertexBuffer);
+				return this->isFlagEnabled(VertexBufferBindingFlagBits::IsDynamicVertexBuffer);
 			}
 
 		private:
@@ -210,40 +210,17 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const VertexBufferBinding & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const VertexBufferBinding & obj);
 
 			uint32_t m_binding;
 			size_t m_elementCount;
 			Topology m_topology;
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const VertexBufferBinding & obj)
-	{
-		return out << VertexBufferBinding::ClassId << ". "
-			"Binding: " << obj.m_binding << ", "
-			"Element count: " << obj.m_elementCount << ", "
-			"Topology: " << to_string(obj.m_topology) << ", "
-			"Per instance: " << ( obj.perInstance() ? "yes" : "no" ) << ", "
-			"Request primitive restart: " << ( obj.requestPrimitiveRestart() ? "yes" : "no" ) << ", "
-			"Is position absolute: " << ( obj.isPositionAbsolute() ? "yes" : "no" ) << ", "
-			"Is dynamic vertex buffer: " << ( obj.isDynamicVertexBuffer() ? "yes" : "no" );
-	}
-
 	/**
 	 * @brief Stringify the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const VertexBufferBinding & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const VertexBufferBinding & obj) noexcept;
 }

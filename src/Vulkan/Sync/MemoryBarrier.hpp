@@ -35,7 +35,7 @@ namespace EmEn::Vulkan::Sync
 	 * @brief The memory barrier class. This is used for synchronize command buffers.
 	 * @extends EmEn::Vulkan::AbstractObject This is a sample Vulkan structure.
 	 */
-	class MemoryBarrier final : public AbstractObject
+	class EMEN_API MemoryBarrier final : public AbstractObject
 	{
 		public:
 

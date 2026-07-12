@@ -35,13 +35,16 @@
 /* Local inclusions for usages. */
 #include "Math/Space3D/Sphere.hpp"
 
+/* Forward declarations. */
 namespace EmEn::Physics
 {
-	/* Forward declarations for internal dispatch. */
 	class PointCollisionModel;
 	class AABBCollisionModel;
 	class CapsuleCollisionModel;
+}
 
+namespace EmEn::Physics
+{
 	/**
 	 * @brief Collision model using a sphere primitive.
 	 *
@@ -50,7 +53,7 @@ namespace EmEn::Physics
 	 *
 	 * @since 0.8.43
 	 */
-	class SphereCollisionModel final : public CollisionModelInterface
+	class EMEN_API SphereCollisionModel final : public CollisionModelInterface
 	{
 		public:
 

@@ -46,7 +46,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * areas while avoiding ringing in high-contrast edges. Inspired by AMD FidelityFX CAS.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a single-pass post-process effect.
 	 */
-	class Sharpen final : public IndirectPostProcessEffect
+	class EMEN_API Sharpen final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -56,7 +56,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing sharpening parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float sharpness{0.5F};   /**< 0.0 = off, 0.5 = moderate, 1.0+ = strong */
 			};

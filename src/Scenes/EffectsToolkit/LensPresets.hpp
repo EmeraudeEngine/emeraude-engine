@@ -36,61 +36,61 @@ namespace EmEn::Scenes::EffectsToolkit::LensPresets
 	 * @note Film grain + high contrast B&W + vignetting.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Hitchcock60s () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Hitchcock60s () noexcept;
 
 	/**
 	 * @brief Creates a warm cinematic golden hour post-processing preset.
 	 * @note Color grading (warm hue, punchy contrast, vibrant saturation) + soft vignetting.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > GoldenHour () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > GoldenHour () noexcept;
 
 	/**
 	 * @brief Creates a cool twilight blue hour post-processing preset.
 	 * @note Color grading (cool blue shift, soft contrast, muted saturation) + deeper vignetting.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > BlueHour () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > BlueHour () noexcept;
 
 	/**
 	 * @brief Creates a clean signal on a CRT television post-processing preset.
 	 * @note Pure CRT display artifacts only (scanlines, phosphor, barrel distortion). No signal degradation.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Analog80s () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Analog80s () noexcept;
 
 	/**
 	 * @brief Creates a VHS signal displayed on a CRT television post-processing preset.
 	 * @note K7 tape artifacts + CRT display (scanlines, phosphor, barrel distortion).
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > VHSToAnalog80s () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > VHSToAnalog80s () noexcept;
 
 	/**
 	 * @brief Creates a poor satellite signal displayed on a CRT television post-processing preset.
 	 * @note Signal ghosting + chroma bleeding + CRT display artifacts. No VHS tape artifacts.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > SatelliteToAnalog80s () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > SatelliteToAnalog80s () noexcept;
 
 	/**
 	 * @brief Creates a VHS signal displayed on a modern screen post-processing preset.
 	 * @note K7 tape artifacts (VHS aberration, chroma bleeding) + washed-out color grading + film grain.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > VHSToPureSignal () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > VHSToPureSignal () noexcept;
 
 	/**
 	 * @brief Creates a poor satellite signal displayed on a modern screen post-processing preset.
 	 * @note Signal ghosting + chroma bleeding. No CRT or VHS artifacts.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > SatelliteToPureSignal () noexcept;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > SatelliteToPureSignal () noexcept;
 
 	/**
 	 * @brief Creates a retro 8-bit post-processing preset.
 	 * @note Pixelation + color quantization + Bayer dithering + scanlines + phosphor bloom + vignetting.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Retro8Bits () noexcept;;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Retro8Bits () noexcept;;
 }

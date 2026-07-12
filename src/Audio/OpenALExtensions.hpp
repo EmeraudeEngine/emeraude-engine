@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Third-party inclusions. */
 #include "AL/al.h"
 #include "AL/alc.h"

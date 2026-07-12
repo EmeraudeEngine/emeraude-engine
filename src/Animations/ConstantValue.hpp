@@ -39,7 +39,7 @@ namespace EmEn::Animations
 	 * @note ie, This can be used to add 1 degree each logic cycle to a rotation.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
-	class ConstantValue final : public AnimationInterface
+	class EMEN_API ConstantValue final : public AnimationInterface
 	{
 		public:
 

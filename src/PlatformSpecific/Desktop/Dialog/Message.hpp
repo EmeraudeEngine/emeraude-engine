@@ -26,9 +26,6 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_export.hpp"
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
@@ -41,7 +38,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief The user dialog message class.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract This is an user dialog box.
 	 */
-	class EMERAUDE_API Message final : public Abstract
+	class EMEN_API Message final : public Abstract
 	{
 		public:
 

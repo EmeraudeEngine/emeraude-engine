@@ -58,7 +58,7 @@ namespace EmEn::Graphics
 	 *	 [4 bytes] Compressed data size
 	 *	 [N bytes] Compressed data
 	 */
-	class TextureCache final
+	class EMEN_API TextureCache final
 	{
 		public:
 
@@ -78,11 +78,7 @@ namespace EmEn::Graphics
 			 * @return Vector of compressed mip levels, empty if cache miss.
 			 */
 			[[nodiscard]]
-			static std::vector< CompressedMipLevel > tryLoad (
-				const std::string & resourceName,
-				uint64_t sourceFileSize,
-				uint64_t sourceModTime
-			) noexcept;
+			static std::vector< CompressedMipLevel > tryLoad (const std::string & resourceName,uint64_t sourceFileSize,uint64_t sourceModTime) noexcept;
 
 			/**
 			 * @brief Stores compressed mip data to the disk cache.
@@ -93,19 +89,11 @@ namespace EmEn::Graphics
 			 * @return True if stored successfully.
 			 */
 			[[nodiscard]]
-			static bool store (
-				const std::string & resourceName,
-				uint64_t sourceFileSize,
-				uint64_t sourceModTime,
-				const std::vector< CompressedMipLevel > & mipLevels
-			) noexcept;
+			static bool store (const std::string & resourceName,uint64_t sourceFileSize,uint64_t sourceModTime,const std::vector< CompressedMipLevel > & mipLevels) noexcept;
 
 		private:
 
 			TextureCache () = delete;
-
-			static constexpr uint32_t Magic = 0x43374342; /* "BC7C" */
-			static constexpr uint32_t Version = 1;
 
 			/**
 			 * @brief Computes the cache file path for a given resource.
@@ -115,11 +103,10 @@ namespace EmEn::Graphics
 			 * @return Full path to the cache file.
 			 */
 			[[nodiscard]]
-			static std::filesystem::path cacheFilePath (
-				const std::string & resourceName,
-				uint64_t sourceFileSize,
-				uint64_t sourceModTime
-			) noexcept;
+			static std::filesystem::path cacheFilePath (const std::string & resourceName,uint64_t sourceFileSize,uint64_t sourceModTime) noexcept;
+
+			static constexpr uint32_t Magic{0x43374342}; /* "BC7C" */
+			static constexpr uint32_t Version{1};
 
 			static std::filesystem::path s_cacheDirectory;
 			static bool s_initialized;

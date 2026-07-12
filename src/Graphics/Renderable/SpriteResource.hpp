@@ -43,7 +43,7 @@ namespace EmEn::Graphics::Renderable
 	 * @note The animation is limited to 120 frames.
 	 * @extends EmEn::Graphics::Renderable::Abstract Adds the ability to be rendered in the 3D world.
 	 */
-	class SpriteResource final : public Abstract
+	class EMEN_API SpriteResource final : public Abstract
 	{
 		friend class Resources::Container< SpriteResource >;
 

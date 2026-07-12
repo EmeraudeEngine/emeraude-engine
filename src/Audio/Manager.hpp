@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <array>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -45,10 +44,8 @@
 #include "Audio/Recorder.hpp"
 #include "Audio/TrackMixer.hpp"
 #include "WaveFactory/Types.hpp"
-#include "OpenALExtensions.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "SettingKeys.hpp"
-#include "SoundResource.hpp"
 #include "Source.hpp"
 #include "Types.hpp"
 
@@ -77,7 +74,7 @@ namespace EmEn::Audio
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Console::ControllableTrait The console can control the audio manager.
 	 */
-	class Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
+	class EMEN_API Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 

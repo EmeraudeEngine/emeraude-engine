@@ -36,12 +36,12 @@ namespace EmEn::Audio::Effects
 	 * @warning  Support broken on OpenAL Software 1.19.1.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class VocalMorpher final : public Abstract
+	class EMEN_API VocalMorpher final : public Abstract
 	{
 		public:
 
 			/** @brief The wave form type enumeration for vocal morpher effect. */
-			enum class WaveForm
+			enum class EMEN_API WaveForm : uint8_t
 			{
 				Sinusoid,
 				Triangle,
@@ -52,7 +52,7 @@ namespace EmEn::Audio::Effects
 			 * @brief The phoneme enumeration.
 			 * @note Do not remove number.
 			 */
-			enum class Phoneme
+			enum class EMEN_API Phoneme : uint8_t
 			{
 				A = 0, // AL_VOCAL_MORPHER_PHONEME_A
 				E = 1, // AL_VOCAL_MORPHER_PHONEME_E,...

@@ -57,7 +57,7 @@ namespace EmEn::Overlay
 	 * @details There are no physical properties. This is just a group of surfaces and dispatch input event to it.
 	 * @exception EmEn::Base::NameableTrait A UI screen has a name.
 	 */
-	class EMERAUDE_API UIScreen final : public Base::NameableTrait
+	class EMEN_API UIScreen final : public Base::NameableTrait
 	{
 		public:
 
@@ -597,7 +597,7 @@ namespace EmEn::Overlay
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const UIScreen & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const UIScreen & obj);
 			
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
@@ -639,14 +639,5 @@ namespace EmEn::Overlay
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const UIScreen & obj)
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const UIScreen & obj);
 }

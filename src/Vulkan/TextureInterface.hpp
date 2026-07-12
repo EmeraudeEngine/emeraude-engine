@@ -44,7 +44,7 @@ namespace EmEn::Vulkan
 	 * @brief Texture type enumeration.
 	 * @todo Adds every type of texture (Multisampling, shadows, non-float, ...)
 	 */
-	enum class TextureType : uint8_t
+	enum class EMEN_API TextureType : uint8_t
 	{
 		Texture1D = 0,
 		Texture2D = 1,
@@ -59,9 +59,35 @@ namespace EmEn::Vulkan
 	 * @brief Pure interface for any object usable as a texture in Vulkan.
 	 * @note This interface guarantees GPU texture capabilities without file loading logic.
 	 */
-	class TextureInterface
+	class EMEN_API TextureInterface
 	{
 		public:
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			TextureInterface (const TextureInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			TextureInterface (TextureInterface && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Core &
+			 */
+			TextureInterface & operator= (const TextureInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Core &
+			 */
+			TextureInterface & operator= (TextureInterface && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the texture interface.

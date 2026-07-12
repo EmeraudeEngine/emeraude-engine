@@ -26,9 +26,12 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
-#include <algorithm>
 #include <cstddef>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -52,7 +55,7 @@ namespace EmEn::Animations
 	/**
 	 * @brief Playback mode for wrap behavior when time exceeds clip duration.
 	 */
-	enum class PlaybackWrap : uint8_t
+	enum class EMEN_API PlaybackWrap : uint8_t
 	{
 		Once,	/**< Play once and stop at the last frame. */
 		Loop,	/**< Loop back to the beginning. */
@@ -70,7 +73,7 @@ namespace EmEn::Animations
 	 *
 	 * Pipeline: Sample keyframes → Local poses → Forward kinematics → Skinning matrices.
 	 */
-	class SkeletalAnimator final
+	class EMEN_API SkeletalAnimator final
 	{
 		public:
 

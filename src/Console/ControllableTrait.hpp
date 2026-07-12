@@ -39,7 +39,7 @@ namespace EmEn::Console
 	/**
 	 * @brief Interface to register an object controllable with the console.
 	 */
-	class ControllableTrait
+	class EMEN_API ControllableTrait
 	{
 		public:
 

@@ -40,7 +40,7 @@ namespace EmEn::Physics
 	 * @brief Sequential Impulse constraint solver for rigid body dynamics.
 	 * @note Implements Erin Catto's iterative impulse-based physics solver.
 	 */
-	class ConstraintSolver final
+	class EMEN_API ConstraintSolver final
 	{
 		public:
 

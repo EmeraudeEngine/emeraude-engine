@@ -45,7 +45,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * then composites sharp and blurred regions.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class DepthOfField final : public IndirectPostProcessEffect
+	class EMEN_API DepthOfField final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -55,7 +55,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing depth of field parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float focusDistance{10.0F};
 				float aperture{2.8F};
@@ -67,7 +67,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the CoC computation pass.
 			 */
-			struct CoCPushConstants
+			struct EMEN_API CoCPushConstants
 			{
 				float nearPlane;
 				float farPlane;
@@ -83,7 +83,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the blur pass.
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -94,7 +94,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the composite pass.
 			 */
-			struct CompositePushConstants
+			struct EMEN_API CompositePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;

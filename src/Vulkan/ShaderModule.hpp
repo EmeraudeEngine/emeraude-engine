@@ -43,7 +43,7 @@ namespace EmEn::Vulkan
 	 * @brief The ShaderModule class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This Vulkan object needs a device.
 	 */
-	class ShaderModule final : public AbstractDeviceDependentObject
+	class EMEN_API ShaderModule final : public AbstractDeviceDependentObject
 	{
 		public:
 

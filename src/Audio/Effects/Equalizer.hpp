@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief Equalizer effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Equalizer final : public Abstract
+	class EMEN_API Equalizer final : public Abstract
 	{
 		public:
 

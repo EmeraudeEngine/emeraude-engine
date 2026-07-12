@@ -39,69 +39,6 @@ namespace EmEn::Vulkan
 {
 	using namespace Base;
 
-	VkSubpassDescription
-	RenderSubPass::generateSubPassDescription () const noexcept
-	{
-		VkSubpassDescription description{};
-		description.flags = m_flags;
-		description.pipelineBindPoint = m_pipelineBindPoint;
-
-		if ( m_inputAttachments.empty() )
-		{
-			description.inputAttachmentCount = 0;
-			description.pInputAttachments = nullptr;
-		}
-		else
-		{
-			description.inputAttachmentCount = static_cast< uint32_t >(m_inputAttachments.size());
-			description.pInputAttachments = m_inputAttachments.data();
-		}
-
-		if ( m_colorAttachments.empty() )
-		{
-			description.colorAttachmentCount = 0;
-			description.pColorAttachments = nullptr;
-		}
-		else
-		{
-			description.colorAttachmentCount = static_cast< uint32_t >(m_colorAttachments.size());
-			description.pColorAttachments = m_colorAttachments.data();
-		}
-
-		if ( m_resolveAttachments.empty() )
-		{
-			description.pResolveAttachments = nullptr;
-		}
-		else
-		{
-			/* FIXME: Check if vulkan authorize resolve attachments without color. */
-			if ( m_colorAttachments.empty() )
-			{
-				description.colorAttachmentCount = static_cast< uint32_t >(m_resolveAttachments.size());
-			}
-
-			description.pResolveAttachments = m_resolveAttachments.data();
-		}
-
-		if ( m_depthStencilAttachmentSet )
-		{
-			description.pDepthStencilAttachment = &m_depthStencilAttachment;
-		}
-
-		if ( m_preserveAttachments.empty() )
-		{
-			description.preserveAttachmentCount = 0;
-			description.pPreserveAttachments = nullptr;
-		}
-		else
-		{
-			description.preserveAttachmentCount = static_cast< uint32_t >(m_preserveAttachments.size());
-			description.pPreserveAttachments = m_preserveAttachments.data();
-		}
-
-		return description;
-	}
-
 	void
 	RenderPass::enableMultiview () noexcept
 	{

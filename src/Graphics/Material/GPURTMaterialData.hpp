@@ -26,10 +26,13 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
-#include <vector>
+#include <array>
 
 namespace EmEn::Vulkan
 {
@@ -39,7 +42,7 @@ namespace EmEn::Vulkan
 namespace EmEn::Graphics::Material
 {
 	/** @brief Texture roles relevant for ray tracing reflections. */
-	enum class RTTextureRole : uint8_t
+	enum class EMEN_API RTTextureRole : uint8_t
 	{
 		Albedo = 0,
 		Normal,
@@ -53,7 +56,7 @@ namespace EmEn::Graphics::Material
 	 * @brief Describes a texture to be registered for RT bindless access.
 	 * @note The texture pointer is non-owning; the material owns the texture lifetime.
 	 */
-	struct RTTextureSlot
+	struct EMEN_API RTTextureSlot
 	{
 		RTTextureRole role;
 		std::shared_ptr< Vulkan::TextureInterface > texture;
@@ -66,20 +69,20 @@ namespace EmEn::Graphics::Material
 	 *	   via Material::Interface::exportRTMaterialData().
 	 *	   Only properties visible/useful in reflections are included.
 	 */
-	struct GPURTMaterialData
+	struct EMEN_API GPURTMaterialData
 	{
 		/* Base PBR properties. */
-		float albedo[4]{0.5F, 0.5F, 0.5F, 1.0F};
+		std::array< float, 4 > albedo{0.5F, 0.5F, 0.5F, 1.0F};
 		float roughness{0.5F};
 		float metalness{0.0F};
 		float ior{1.5F};
 		float specularFactor{1.0F};
 
 		/* Specular color tint (KHR_materials_specular). */
-		float specularColor[4]{1.0F, 1.0F, 1.0F, 1.0F};
+		std::array< float, 4 > specularColor{1.0F, 1.0F, 1.0F, 1.0F};
 
 		/* Emission. */
-		float emissionColor[4]{0.0F, 0.0F, 0.0F, 0.0F};
+		std::array< float, 4 > emissionColor{0.0F, 0.0F, 0.0F, 0.0F};
 		float emissiveStrength{1.0F};
 
 		/* Clear coat. */

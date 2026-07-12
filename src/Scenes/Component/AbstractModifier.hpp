@@ -44,7 +44,7 @@ namespace EmEn::Scenes::Component
 	 * @brief The AbstractModifier class
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 */
-	class AbstractModifier : public Abstract
+	class EMEN_API AbstractModifier : public Abstract
 	{
 		public:
 

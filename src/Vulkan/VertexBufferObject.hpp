@@ -38,7 +38,7 @@ namespace EmEn::Vulkan
 	 * @brief Defines a convenient way to build a vertex buffer object (VBO).
 	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class VertexBufferObject final : public Buffer
+	class EMEN_API VertexBufferObject final : public Buffer
 	{
 		public:
 

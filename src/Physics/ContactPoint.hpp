@@ -36,7 +36,7 @@ namespace EmEn::Physics
 	 * @brief Represents a single contact point between two bodies in a collision.
 	 * @note This structure stores contact geometry and accumulated impulses for iterative solving.
 	 */
-	class ContactPoint final
+	class EMEN_API ContactPoint final
 	{
 		public:
 
@@ -234,7 +234,7 @@ namespace EmEn::Physics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const ContactPoint & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const ContactPoint & obj);
 
 			/* Contact geometry */
 			Base::Math::Vector< 3, float > m_positionWorld;   ///< Contact point in world space
@@ -264,29 +264,10 @@ namespace EmEn::Physics
 			float m_velocityBias{0.0F};					   ///< Baumgarte stabilization bias
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const ContactPoint & obj)
-	{
-		return out <<
-			"Position : " << obj.m_positionWorld << "\n"
-			"Normal : " << obj.m_normal << "\n"
-			"Penetration depth : " << obj.m_penetrationDepth << "\n";
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const ContactPoint & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const ContactPoint & obj) noexcept;
 }

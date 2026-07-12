@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Renderable
 	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
 	 * @extends EmEn::Scenes::SeaLevelInterface This is a sea level.
 	 */
-	class BasicSeaResource : public Abstract, public Scenes::SeaLevelInterface
+	class EMEN_API BasicSeaResource : public Abstract, public Scenes::SeaLevelInterface
 	{
 		friend class Resources::Container< BasicSeaResource >;
 

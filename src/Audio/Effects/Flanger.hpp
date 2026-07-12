@@ -35,12 +35,12 @@ namespace EmEn::Audio::Effects
 	 * @brief Flanger effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Flanger final : public Abstract
+	class EMEN_API Flanger final : public Abstract
 	{
 		public:
 
 			/** @brief The wave form enumerations for flanger effect. */
-			enum class WaveForm
+			enum class EMEN_API WaveForm : uint8_t
 			{
 				Sinusoid,
 				Triangle

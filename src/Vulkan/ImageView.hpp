@@ -41,7 +41,7 @@ namespace EmEn::Vulkan
 	 * @brief The image view class
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class ImageView final : public AbstractDeviceDependentObject
+	class EMEN_API ImageView final : public AbstractDeviceDependentObject
 	{
 		public:
 

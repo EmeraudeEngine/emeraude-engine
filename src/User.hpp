@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 
@@ -46,7 +49,7 @@ namespace EmEn
 	 * @brief The user service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class User final : public ServiceInterface
+	class EMEN_API User final : public ServiceInterface
 	{
 		public:
 

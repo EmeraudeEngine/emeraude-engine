@@ -30,9 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -107,7 +107,7 @@ namespace EmEn::Resources
 	 *
 	 * @version 0.8.45
 	 */
-	class AbstractServiceProvider
+	class EMEN_API AbstractServiceProvider
 	{
 		public:
 
@@ -147,6 +147,7 @@ namespace EmEn::Resources
 			 * @see PrimaryServices
 			 */
 			[[nodiscard]]
+			virtual
 			PrimaryServices &
 			primaryServices () const noexcept
 			{
@@ -388,7 +389,7 @@ namespace EmEn::Resources
 	 * @see AbstractServiceProvider, Container, Manager.
 	 * @version 0.8.45
 	 */
-	class EMERAUDE_API ResourceTrait : public std::enable_shared_from_this< ResourceTrait >, public Base::NameableTrait, public Base::FlagTrait< uint32_t >, public Base::ObservableTrait
+	class EMEN_API ResourceTrait : public std::enable_shared_from_this< ResourceTrait >, public Base::NameableTrait, public Base::FlagTrait< uint32_t >, public Base::ObservableTrait
 	{
 		public:
 

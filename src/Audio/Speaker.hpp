@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 
@@ -38,7 +41,7 @@ namespace EmEn::Audio
 	 * @brief The Speaker class
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
-	class Speaker final : public Scenes::AVConsole::AbstractVirtualDevice
+	class EMEN_API Speaker final : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 

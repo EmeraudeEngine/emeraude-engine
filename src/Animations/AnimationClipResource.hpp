@@ -39,7 +39,7 @@ namespace EmEn::Animations
 	 * @brief A managed resource wrapping a skeletal animation clip (keyframe data).
 	 * @extends EmEn::Resources::ResourceTrait Every animation clip is a named, shared resource.
 	 */
-	class AnimationClipResource final : public Resources::ResourceTrait
+	class EMEN_API AnimationClipResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< AnimationClipResource >;
 
@@ -133,7 +133,7 @@ namespace EmEn::Animations
 				return m_clip;
 			}
 
-		private:
+		protected:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
@@ -142,6 +142,8 @@ namespace EmEn::Animations
 			{
 				return true;
 			}
+
+		private:
 
 			Base::Animation::AnimationClip< float > m_clip;
 	};

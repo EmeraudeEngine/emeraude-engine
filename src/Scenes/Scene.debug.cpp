@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Material/BasicResource.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Resources/Manager.hpp"
 
@@ -69,7 +69,7 @@ namespace EmEn::Scenes
 		{
 			const auto label = String::incrementalLabel(CompassDisplay, count);
 
-			const auto specificMesh = resources.container< Renderable::SimpleMeshResource >()
+			const auto specificMesh = resources.container< Renderable::MeshResource >()
 				->getOrCreateResource(label, [&resources, color, label] (auto & meshResource) {
 					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 					generator.parameters().setGlobalVertexColor(color);
@@ -138,7 +138,7 @@ namespace EmEn::Scenes
 		const auto planeSize = m_boundary * Double< float >;
 		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
-		const auto mesh = resources.container< Renderable::SimpleMeshResource >()
+		const auto mesh = resources.container< Renderable::MeshResource >()
 			->getOrCreateResource(GroundZeroPlaneDisplay, [&resources, planeSize, planeDivision] (auto & meshResource) {
 				Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
 				generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);
@@ -221,7 +221,7 @@ namespace EmEn::Scenes
 		{
 			const auto label = String::incrementalLabel(BoundaryPlanesDisplay, count);
 
-			const auto mesh = resources.container< Renderable::SimpleMeshResource >()
+			const auto mesh = resources.container< Renderable::MeshResource >()
 				->getOrCreateResource(label, [&resources, color, planeSize, planeDivision, label] (auto & meshResource) {
 					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
 					generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);

@@ -75,7 +75,7 @@ namespace EmEn::Graphics::Material
 	 * - Normal mapping (optional)
 	 * - Reflection/IBL via cubemap (optional)
 	 */
-	class PBRResource final : public Interface
+	class EMEN_API PBRResource final : public Interface
 	{
 		friend class Resources::Container< PBRResource >;
 
@@ -97,7 +97,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceAmbientOcclusion{"SurfaceAmbientOcclusion"};
 			static constexpr auto SurfaceClearCoatFactor{"SurfaceClearCoatFactor"};
 			static constexpr auto SurfaceClearCoatRoughness{"SurfaceClearCoatRoughness"};
-		static constexpr auto SurfaceClearCoatNormal{"SurfaceClearCoatNormal"};
+			static constexpr auto SurfaceClearCoatNormal{"SurfaceClearCoatNormal"};
 			static constexpr auto SurfaceSubsurfaceIntensity{"SurfaceSubsurfaceIntensity"};
 			static constexpr auto SurfaceSubsurfaceColor{"SurfaceSubsurfaceColor"};
 			static constexpr auto SurfaceSubsurfaceThickness{"SurfaceSubsurfaceThickness"};
@@ -107,10 +107,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceTransmissionFactor{"SurfaceTransmissionFactor"};
 			static constexpr auto SurfaceTransmissionColor{"SurfaceTransmissionColor"};
 			static constexpr auto SurfaceIridescenceFactor{"SurfaceIridescenceFactor"};
-		static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
-		static constexpr auto SurfaceSpecularFactor{"SurfaceSpecularFactor"};
-		static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
-		static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
+			static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
+			static constexpr auto SurfaceSpecularFactor{"SurfaceSpecularFactor"};
+			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
+			static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};

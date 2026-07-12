@@ -51,7 +51,7 @@ namespace EmEn::Graphics::Geometry
 	/**
 	 * @brief Represents a draw call parameters for a sector at a specific LOD level.
 	 */
-	struct SectorDrawCall final
+	struct EMEN_API SectorDrawCall final
 	{
 		uint32_t indexOffset{0};
 		uint32_t indexCount{0};
@@ -60,7 +60,7 @@ namespace EmEn::Graphics::Geometry
 	/**
 	 * @brief Edge direction for stitching.
 	 */
-	enum class SectorEdge : uint8_t
+	enum class EMEN_API SectorEdge : uint8_t
 	{
 		North = 0, /**< Top edge (Z-) */
 		South = 1, /**< Bottom edge (Z+) */
@@ -71,7 +71,7 @@ namespace EmEn::Graphics::Geometry
 	/**
 	 * @brief Contains all LOD draw calls for a single sector.
 	 */
-	struct SectorLODData final
+	struct EMEN_API SectorLODData final
 	{
 		uint32_t sectorX{0};
 		uint32_t sectorY{0};
@@ -96,7 +96,7 @@ namespace EmEn::Graphics::Geometry
 	 * - Triangle caps fill gaps between sections at different LOD levels
 	 * - Frustum culling skips invisible sections
 	 */
-	class AdaptiveVertexGridResource final : public Interface
+	class EMEN_API AdaptiveVertexGridResource final : public Interface
 	{
 		friend class Resources::Container< AdaptiveVertexGridResource >;
 

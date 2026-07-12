@@ -45,7 +45,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * applies bilateral blur to reduce noise, then multiplies AO with the scene color.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class SSAO final : public IndirectPostProcessEffect
+	class EMEN_API SSAO final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -55,7 +55,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing SSAO parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float radius{0.5F};
 				float intensity{1.5F};
@@ -66,7 +66,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the SSAO computation pass.
 			 */
-			struct SSAOPushConstants
+			struct EMEN_API SSAOPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -83,7 +83,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the blur pass.
 			 */
-			struct BlurPushConstants
+			struct EMEN_API BlurPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -94,7 +94,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the apply pass.
 			 */
-			struct ApplyPushConstants
+			struct EMEN_API ApplyPushConstants
 			{
 				float intensity;
 				float padding1;

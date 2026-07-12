@@ -38,7 +38,7 @@ namespace EmEn::Audio
 	 * @brief The Buffer class.
 	 * @extends EmEn::Audio::AbstractObject
 	 */
-	class Buffer final : public AbstractObject
+	class EMEN_API Buffer final : public AbstractObject
 	{
 		public:
 

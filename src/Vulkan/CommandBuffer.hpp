@@ -30,9 +30,9 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <span>
 #include <vector>
@@ -82,7 +82,7 @@ namespace EmEn::Vulkan
 	 * @brief The command buffer wrapper class
 	 * @extends EmEn::Vulkan::AbstractObject This object will use the command pool to get the device.
 	 */
-	class CommandBuffer final : public AbstractObject
+	class EMEN_API CommandBuffer final : public AbstractObject
 	{
 		public:
 

@@ -30,10 +30,10 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <any>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <any>
+#include <array>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -108,7 +108,7 @@ namespace EmEn::Scenes
 	 * @see OctreeSector For the underlying spatial structure.
 	 * @version 0.8.35
 	 */
-	struct SceneOctreeOptions
+	struct EMEN_API SceneOctreeOptions
 	{
 		/**
 		 * @brief Maximum entities per rendering octree sector before subdivision.
@@ -221,7 +221,7 @@ namespace EmEn::Scenes
 	 * @see OctreeSector For spatial partitioning.
 	 * @version 0.8.35
 	 */
-	class EMERAUDE_API Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
+	class EMEN_API Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
 	{
 		public:
 

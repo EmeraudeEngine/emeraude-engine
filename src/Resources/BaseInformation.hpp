@@ -73,7 +73,7 @@ namespace EmEn::Resources
 	 * @since 0.8.0
 	 * @version 0.8.35
 	 */
-	class EMERAUDE_API BaseInformation final
+	class EMEN_API BaseInformation final
 	{
 		public:
 

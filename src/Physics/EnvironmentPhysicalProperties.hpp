@@ -39,7 +39,7 @@ namespace EmEn::Physics
 	 * @brief The environment physical properties structure.
 	 * It holds the global physical parameters of a scene.
 	 */
-	class EnvironmentPhysicalProperties final
+	class EMEN_API EnvironmentPhysicalProperties final
 	{
 		public:
 
@@ -118,9 +118,10 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			float
-			atmosphericDensity (/*float altitude = 0.0F, float temperature = 20.0F*/) const noexcept
+			atmosphericDensity (float altitude = 0.0F, float temperature = 20.0F) const noexcept
 			{
-				// FIXME: TODO ...
+				(void)altitude;
+				(void)temperature;
 
 				return m_atmosphericDensity;
 			}
@@ -268,7 +269,7 @@ namespace EmEn::Physics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const EnvironmentPhysicalProperties & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const EnvironmentPhysicalProperties & obj);
 
 			float m_surfaceGravity;
 			float m_steppedSurfaceGravity;
@@ -279,33 +280,10 @@ namespace EmEn::Physics
 			Audio::DistanceModel m_distanceModel{Audio::DistanceModel::Exponent};
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const EnvironmentPhysicalProperties & obj)
-	{
-		return out <<
-			"Environment physical properties :" "\n"
-			"Surface gravity : " << obj.m_surfaceGravity << " m/s² (" << obj.m_steppedSurfaceGravity << " m/s² per update)" "\n"
-			"Atmospheric density : " << obj.m_atmosphericDensity << " kg/m³" "\n"
-			"Planet radius : " << obj.m_planetRadius << " m" "\n"
-			"Speed of sound : " << obj.m_speedOfSound << " m/s²" "\n"
-			"Audio doppler factor : " << obj.m_dopplerFactor << "\n"
-			"Audio distance model : " << magic_enum::enum_name(obj.m_distanceModel) << "\n";
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const EnvironmentPhysicalProperties & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const EnvironmentPhysicalProperties & obj) noexcept;
 }

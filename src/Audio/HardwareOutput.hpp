@@ -43,7 +43,7 @@ namespace EmEn::Audio
 	 * @brief The hardware output class.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
-	class HardwareOutput final : public Scenes::AVConsole::AbstractVirtualDevice
+	class EMEN_API HardwareOutput final : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 
@@ -62,8 +62,6 @@ namespace EmEn::Audio
 
 			}
 
-		private:
-
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
 			Base::Math::CartesianFrame< float >
@@ -74,6 +72,8 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept override;
+
+		private:
 
 			Manager * m_audioManager{nullptr};
 			Base::Math::CartesianFrame< float > m_worldCoordinates;

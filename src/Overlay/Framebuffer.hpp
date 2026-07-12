@@ -52,7 +52,7 @@ namespace EmEn::Overlay
 	 * GPU resources (image, image view, descriptor set). Used internally by Surface
 	 * for both single and double buffer modes.
 	 */
-	class EMERAUDE_API Framebuffer final
+	class EMEN_API Framebuffer final
 	{
 		public:
 

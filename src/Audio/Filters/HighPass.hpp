@@ -35,7 +35,7 @@ namespace EmEn::Audio::Filters
 	 * @brief The high pass filter.
 	 * @extends EmEn::Audio::Filters::Abstract This is a filter.
 	 */
-	class HighPass final : public Abstract
+	class EMEN_API HighPass final : public Abstract
 	{
 		public:
 

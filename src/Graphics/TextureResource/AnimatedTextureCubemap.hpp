@@ -40,7 +40,7 @@ namespace EmEn::Graphics::TextureResource
 	 * Uses a cube array to store all frames of a cubemap animation.
 	 * @extends EmEn::Graphics::TextureResource::Abstract This is a loadable texture resource.
 	 */
-	class AnimatedTextureCubemap final : public Abstract
+	class EMEN_API AnimatedTextureCubemap final : public Abstract
 	{
 		friend class Resources::Container< AnimatedTextureCubemap >;
 

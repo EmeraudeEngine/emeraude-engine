@@ -49,7 +49,7 @@ namespace EmEn::Audio
 	 * The playlist name is derived from the resource filename (e.g. `Kyrandia2.json` -> "Kyrandia2").
 	 * Track entries must be valid MusicResource names resolvable via the Musics container.
 	 */
-	class PlaylistResource final : public Resources::ResourceTrait
+	class EMEN_API PlaylistResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< PlaylistResource >;
 

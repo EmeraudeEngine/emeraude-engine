@@ -51,7 +51,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief Geometry resources generator using threads.
 	 * @note This will use the vertex factory shape builder.
 	 */
-	class EMERAUDE_API ResourceGenerator final
+	class EMEN_API ResourceGenerator final
 	{
 		public:
 

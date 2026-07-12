@@ -61,7 +61,7 @@ namespace EmEn::Scenes::AVConsole
 	 * @extends EmEn::Base::ObserverTrait The audio/video manager wants to get notifications from devices.
 	 * @extends EmEn::Base::ObserverTrait The audio/video manager dispatches device configuration changes.
 	 */
-	class Manager final : public Base::NameableTrait, public Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMEN_API Manager final : public Base::NameableTrait, public Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 

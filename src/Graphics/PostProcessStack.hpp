@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -43,7 +46,7 @@ namespace EmEn::Graphics
 	 * @brief Ordered container of multi-pass post-process effects with GPU lifecycle management.
 	 * @note Owned by a Scene to provide per-scene post-processing configuration.
 	 */
-	class PostProcessStack final
+	class EMEN_API PostProcessStack final
 	{
 		public:
 
@@ -107,7 +110,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Creates GPU resources for all effects.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param width The framebuffer width.
 			 * @param height The framebuffer height.
 			 * @return bool

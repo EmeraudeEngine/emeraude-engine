@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief Distortion effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Distortion final : public Abstract
+	class EMEN_API Distortion final : public Abstract
 	{
 		public:
 

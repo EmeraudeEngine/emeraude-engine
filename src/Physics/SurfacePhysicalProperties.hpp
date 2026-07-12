@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cmath>
 
@@ -36,7 +39,7 @@ namespace EmEn::Physics
 	 * @todo Declare the unit metrics for surface density.
 	 * @todo Be sure of what it was intended to.
 	 */
-	class SurfacePhysicalProperties final
+	class EMEN_API SurfacePhysicalProperties final
 	{
 		public:
 
@@ -95,33 +98,15 @@ namespace EmEn::Physics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const SurfacePhysicalProperties & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const SurfacePhysicalProperties & obj);
 
 			float m_density;
 	};
-
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const SurfacePhysicalProperties & obj)
-	{
-		return out <<
-			"Surface physical properties :" "\n"
-			"Density : " << obj.m_density << " ???" "\n";
-	}
 
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const SurfacePhysicalProperties & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const SurfacePhysicalProperties & obj) noexcept;
 }

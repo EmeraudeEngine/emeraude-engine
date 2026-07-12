@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <filesystem>
 #include <string>
@@ -40,7 +43,7 @@ namespace EmEn::Net
 	/**
 	 * @brief The DownloadItem class
 	 */
-	class DownloadItem final
+	class EMEN_API DownloadItem final
 	{
 		public:
 

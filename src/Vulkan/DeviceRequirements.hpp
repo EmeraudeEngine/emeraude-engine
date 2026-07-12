@@ -26,22 +26,27 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
-#include <sstream>
 #include <string>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
-/* Local inclusions for usages. */
-#include "Window.hpp"
+/* Forward declarations. */
+namespace EmEn
+{
+	class Window;
+}
 
 namespace EmEn::Vulkan
 {
 	/**
 	 * @brief This class describes the requirements to create a Vulkan logical device.
 	 */
-	class DeviceRequirements final
+	class EMEN_API DeviceRequirements final
 	{
 		public:
 
@@ -54,34 +59,7 @@ namespace EmEn::Vulkan
 			 * @param window A pointer to the window. This will enable the presentation request.
 			 * @param enableCompute The device will be used for compute.
 			 */
-			explicit
-			DeviceRequirements (bool enableGraphics, Window * window, bool enableCompute) noexcept
-				: m_surface{enableGraphics && window != nullptr ? window->surface()->handle() : VK_NULL_HANDLE},
-				m_enableGraphics{enableGraphics},
-				m_enableCompute{enableCompute}
-			{
-				/* NOTE: Device fault features (EXT extension) — GPU device-lost diagnostics. */
-				m_faultFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
-				m_faultFeatures.pNext = nullptr;
-				/* NOTE: Ray query features (KHR extension). */
-				m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-				m_rayQueryFeatures.pNext = &m_faultFeatures;
-				/* NOTE: Acceleration structure features (KHR extension). */
-				m_accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-				m_accelerationStructureFeatures.pNext = &m_rayQueryFeatures;
-				/* NOTE: Device features from Vulkan 1.3 API. */
-				m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-				m_featuresVK13.pNext = &m_accelerationStructureFeatures;
-				/* NOTE: Device features from Vulkan 1.2 API. */
-				m_featuresVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-				m_featuresVK12.pNext = &m_featuresVK13;
-				/* NOTE: Device features from Vulkan 1.1 API. */
-				m_featuresVK11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-				m_featuresVK11.pNext = &m_featuresVK12;
-				/* NOTE: Device features from Vulkan 1.0 API. */
-				m_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-				m_features.pNext = &m_featuresVK11;
-			}
+			DeviceRequirements (bool enableGraphics, Window * window, bool enableCompute) noexcept;
 
 			/**
 			 * @brief Returns the physical device features.
@@ -289,18 +267,7 @@ namespace EmEn::Vulkan
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend
-			std::ostream &
-			operator<< (std::ostream & out, const DeviceRequirements & obj)
-			{
-				out <<
-					"Device requirements" "\n"
-					" - Request graphics: " << ( obj.needsGraphics() ? "yes" : "no" ) << "\n"
-					" - Request presentation: " << ( obj.needsPresentation() ? "yes" : "no" ) << "\n"
-					" - Request compute: " << ( obj.needsCompute() ? "yes" : "no" ) << "\n";
-
-				return out;
-			}
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const DeviceRequirements & obj);
 
 			VkPhysicalDeviceFeatures2 m_features{};
 			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
@@ -319,14 +286,5 @@ namespace EmEn::Vulkan
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const DeviceRequirements & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const DeviceRequirements & obj) noexcept;
 }

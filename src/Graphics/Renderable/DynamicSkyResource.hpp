@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief The DynamicSkyResource class
 	 * @extends EmEn::Graphics::Renderable::AbstractBackground The is a specialized background.
 	 */
-	class DynamicSkyResource final : public AbstractBackground
+	class EMEN_API DynamicSkyResource final : public AbstractBackground
 	{
 		friend class Resources::Container< DynamicSkyResource >;
 

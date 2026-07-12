@@ -40,7 +40,7 @@ namespace EmEn::Graphics
 	 * @brief The cubemap resource class.
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class CubemapResource final : public Resources::ResourceTrait
+	class EMEN_API CubemapResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< CubemapResource >;
 

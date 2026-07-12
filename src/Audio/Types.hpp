@@ -26,20 +26,23 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 
 namespace EmEn::Audio
 {
 	/** @brief The playing mode enumeration. */
-	enum class PlayMode : uint8_t
+	enum class EMEN_API PlayMode : uint8_t
 	{
 		Once,
 		Loop
 	};
 
 	/** @brief The distance model to use with an audio source for mixing. */
-	enum class DistanceModel : uint8_t
+	enum class EMEN_API DistanceModel : uint8_t
 	{
 		Inverse,
 		InverseClamped,

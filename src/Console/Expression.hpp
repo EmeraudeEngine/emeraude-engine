@@ -39,7 +39,7 @@ namespace EmEn::Console
 	/**
 	 * @brief The console expression class.
 	 */
-	class Expression final
+	class EMEN_API Expression final
 	{
 		public:
 

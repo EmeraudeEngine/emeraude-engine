@@ -40,13 +40,16 @@ struct tsf;
 namespace EmEn::Audio
 {
 	class SoundfontResource;
+}
 
+namespace EmEn::Audio
+{
 	/**
 	 * @brief The music resource class.
 	 * @extends EmEn::Audio::PlayableInterface
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class MusicResource final : public PlayableInterface, public Resources::ResourceTrait
+	class EMEN_API MusicResource final : public PlayableInterface, public Resources::ResourceTrait
 	{
 		friend class Resources::Container< MusicResource >;
 

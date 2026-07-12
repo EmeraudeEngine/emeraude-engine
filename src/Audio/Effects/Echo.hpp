@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief Echo effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class Echo final : public Abstract
+	class EMEN_API Echo final : public Abstract
 	{
 		public:
 

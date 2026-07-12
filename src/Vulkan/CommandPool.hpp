@@ -46,7 +46,7 @@ namespace EmEn::Vulkan
 	 * @brief The CommandPool class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This Vulkan object needs a device.
 	 */
-	class CommandPool final : public AbstractDeviceDependentObject
+	class EMEN_API CommandPool final : public AbstractDeviceDependentObject
 	{
 		public:
 

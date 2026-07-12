@@ -36,12 +36,12 @@ namespace EmEn::Audio::Effects
 	 * @warning Support broken on OpenAL Software 1.19.1.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class FrequencyShifter final : public Abstract
+	class EMEN_API FrequencyShifter final : public Abstract
 	{
 		public:
 
 			/** @brief The direction enumerations. */
-			enum class Direction
+			enum class EMEN_API Direction : uint8_t
 			{
 				Down,
 				Up,

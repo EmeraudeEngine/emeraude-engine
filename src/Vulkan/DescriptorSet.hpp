@@ -26,9 +26,6 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_export.hpp"
-
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -53,7 +50,7 @@ namespace EmEn::Vulkan
 	 * @brief The descriptor set wrapper class.
 	 * @extends EmEn::Vulkan::AbstractObject This object will use the descriptor pool to get the device.
 	 */
-	class EMERAUDE_API DescriptorSet final : public AbstractObject
+	class EMEN_API DescriptorSet final : public AbstractObject
 	{
 		public:
 

@@ -73,7 +73,7 @@ namespace EmEn
 namespace EmEn::Graphics::RenderTarget
 {
 	/** @brief Cubemap render strategy enumeration. */
-	enum class CubemapRenderStrategy : uint8_t
+	enum class EMEN_API CubemapRenderStrategy : uint8_t
 	{
 		/** @brief Render each face of the cubemap in a separate render pass. (6 passes total). */
 		Sequential,
@@ -85,7 +85,7 @@ namespace EmEn::Graphics::RenderTarget
 	 * @brief The base class for all render targets.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
-	class Abstract : public Scenes::AVConsole::AbstractVirtualDevice
+	class EMEN_API Abstract : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 

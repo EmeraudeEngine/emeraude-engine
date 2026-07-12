@@ -39,7 +39,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	 *
 	 * @extends EmEn::Scenes::Editor::Gizmo::Abstract
 	 */
-	class Scale final : public Abstract
+	class EMEN_API Scale final : public Abstract
 	{
 		public:
 

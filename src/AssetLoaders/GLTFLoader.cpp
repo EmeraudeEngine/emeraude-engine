@@ -46,8 +46,8 @@
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Animation/AnimationClip.hpp"
@@ -810,7 +810,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Mesh '" << glTFMesh.name << "' has no valid triangle primitives, using default.";
 
-				m_meshes[meshIndex] = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				m_meshes[meshIndex] = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 
 				allSuccess = false;
 
@@ -981,7 +981,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Generated shape is invalid for mesh '" << glTFMesh.name << "', using default.";
 
-				m_meshes[meshIndex] = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				m_meshes[meshIndex] = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 
 				allSuccess = false;
 
@@ -1022,7 +1022,7 @@ namespace EmEn::AssetLoaders
 			{
 				TraceWarning{ClassId} << "Failed to create geometry for mesh " << meshIndex << ", using default.";
 
-				m_meshes[meshIndex] = m_resources.container< Renderable::SimpleMeshResource >()->getDefaultResource();
+				m_meshes[meshIndex] = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 
 				allSuccess = false;
 
@@ -1086,14 +1086,14 @@ namespace EmEn::AssetLoaders
 
 				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
-				mesh = m_resources.container< Renderable::SimpleMeshResource >()
+				mesh = m_resources.container< Renderable::MeshResource >()
 					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
 						return meshResource.load(geometry, singleMaterial, singleRasterization);
 					});
 			}
 			else
 			{
-				mesh = m_resources.container< Renderable::MeshResource >()
+				mesh = m_resources.container< Renderable::MultiLayerMeshResource >()
 					->getOrCreateResource(meshName, [geometry, materialList = std::move(materialList), rasterizationList = std::move(rasterizationList)] (auto & meshResource) {
 						return meshResource.load(geometry, materialList, rasterizationList);
 					});

@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Scenes/Scene.hpp"
+#include "Scenes/Component/AbstractModifier.hpp"
 
 namespace EmEn::Physics
 {

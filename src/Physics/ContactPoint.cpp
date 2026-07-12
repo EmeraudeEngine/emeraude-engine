@@ -117,4 +117,23 @@ namespace EmEn::Physics
 			m_effectiveMassTangent2 = 1.0F / m_effectiveMassTangent2;
 		}
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const ContactPoint & obj)
+	{
+		return out <<
+			"Position : " << obj.m_positionWorld << "\n"
+			"Normal : " << obj.m_normal << "\n"
+			"Penetration depth : " << obj.m_penetrationDepth << "\n";
+	}
+
+	std::string
+	to_string (const ContactPoint & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

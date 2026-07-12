@@ -42,7 +42,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	 *
 	 * @extends EmEn::Scenes::Editor::Gizmo::Abstract
 	 */
-	class Rotate final : public Abstract
+	class EMEN_API Rotate final : public Abstract
 	{
 		public:
 

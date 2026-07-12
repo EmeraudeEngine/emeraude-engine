@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * Based on Timothy Lottes' FXAA 3.11 (NVIDIA).
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a single-pass post-process effect.
 	 */
-	class FXAA final : public IndirectPostProcessEffect
+	class EMEN_API FXAA final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing FXAA quality parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float subpixelQuality{0.75F};	/**< 0=off, 0.75=default, 1=max subpixel AA */
 				float edgeThreshold{0.166F};	 /**< Lower = more edges detected (0.125-0.333) */

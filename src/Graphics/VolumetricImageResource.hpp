@@ -68,7 +68,7 @@ namespace EmEn::Graphics
 	 * @todo File loading for volumetric data formats (.raw, .vox, DICOM) is not yet implemented.
 	 * @version 0.8.35
 	 */
-	class VolumetricImageResource final : public Resources::ResourceTrait
+	class EMEN_API VolumetricImageResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< VolumetricImageResource >;
 

@@ -41,7 +41,7 @@ namespace EmEn::Graphics::Material::Component
 	 * @note The value is not hold by this object. It exists only to be the counter-part of TypeTexture and TypeColor.
 	 * @extends EmEn::Graphics::Material::Component::Interface This class describe a component type.
 	 */
-	class Value final : public Interface
+	class EMEN_API Value final : public Interface
 	{
 		public:
 
@@ -124,33 +124,15 @@ namespace EmEn::Graphics::Material::Component
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Value & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Value & obj);
 
 			std::string m_variableName;
 	};
-
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const Value & obj)
-	{
-		return
-			out << Value::ClassId << "." "\n"
-			"Variable name: " << obj.m_variableName;
-	}
 
 	/**
 	 * @brief Stringify the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const Value & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const Value & obj) noexcept;
 }

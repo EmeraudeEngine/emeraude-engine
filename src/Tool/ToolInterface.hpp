@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 namespace EmEn
 {
 	class Arguments;
@@ -36,7 +39,7 @@ namespace EmEn::Tool
 	/**
 	 * @brief The tool interface.
 	 */
-	class ToolInterface
+	class EMEN_API ToolInterface
 	{
 		public:
 

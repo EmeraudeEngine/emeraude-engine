@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 
@@ -46,14 +49,16 @@ namespace EmEn::Graphics::MDI
 	 * - padding:	 12 bytes (alignment to 16 bytes)
 	 * Total: 80 bytes per draw
 	 */
-	struct PerDrawData final
+	struct EMEN_API PerDrawData final
 	{
 		/** @brief Model matrix for this draw (world transform). */
 		Base::Math::Matrix< 4, float > modelMatrix;
 		/** @brief Animation frame index for materials with animated textures. */
 		uint32_t frameIndex{0};
 		/** @brief Padding to maintain 16-byte alignment (std430). */
-		uint32_t _padding[3]{0, 0, 0};
+		uint32_t _padding_offset_0{0};
+		uint32_t _padding_offset_1{0};
+		uint32_t _padding_offset_2{0};
 	};
 
 	static_assert(sizeof(PerDrawData) == 80, "PerDrawData must be 80 bytes for std430 alignment");

@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 
@@ -40,7 +43,7 @@ namespace EmEn::Audio
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string alcKeyToLabel (ALCint key) noexcept;
+	EMEN_API std::string alcKeyToLabel (ALCint key) noexcept;
 
 	/**
 	 * brief
@@ -50,13 +53,13 @@ namespace EmEn::Audio
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool alGetErrors (const std::string & lastFunctionCalled = {"NO_AC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
+	EMEN_API bool alGetErrors (const std::string & lastFunctionCalled = {"NO_AC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
 
 	/**
 	 * @brief
 	 * @return void
 	 */
-	void alFlushErrors () noexcept;
+	EMEN_API void alFlushErrors () noexcept;
 
 	/**
 	 * brief
@@ -67,12 +70,12 @@ namespace EmEn::Audio
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool alcGetErrors (ALCdevice * device, const std::string & lastFunctionCalled = {"NO_ALC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
+	EMEN_API bool alcGetErrors (ALCdevice * device, const std::string & lastFunctionCalled = {"NO_ALC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
 
 	/**
 	 * brief
 	 * @param device
 	 * @return void
 	 */
-	void alcFlushErrors (ALCdevice * device) noexcept;
+	EMEN_API void alcFlushErrors (ALCdevice * device) noexcept;
 }

@@ -54,8 +54,8 @@
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/BasicSeaResource.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Renderable/TerrainResource.hpp"
@@ -548,8 +548,8 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Material::BasicResource), std::make_unique< BasicMaterials >("Basic material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Material::StandardResource), std::make_unique< StandardMaterials >("Standard material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Material::PBRResource), std::make_unique< PBRMaterials >("PBR material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
-			m_containers.emplace(typeid(Graphics::Renderable::SimpleMeshResource), std::make_unique< SimpleMeshes >("Simple mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
-			m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< Meshes >("Mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
+			m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< SimpleMeshes >("Simple mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
+			m_containers.emplace(typeid(Graphics::Renderable::MultiLayerMeshResource), std::make_unique< Meshes >("Mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
 			m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >("Sprite manager", m_primaryServices, *this, this->getLocalStore("Sprites")));
 			m_containers.emplace(typeid(Graphics::Renderable::SkyBoxResource), std::make_unique< SkyBoxes >("Skybox manager", m_primaryServices, *this, this->getLocalStore("Backgrounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::DynamicSkyResource), std::make_unique< DynamicSkies >("Dynamic sky manager", m_primaryServices, *this, this->getLocalStore("Backgrounds")));

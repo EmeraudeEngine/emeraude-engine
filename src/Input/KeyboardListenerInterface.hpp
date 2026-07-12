@@ -40,7 +40,7 @@ namespace EmEn::Input
 	/**
 	 * @brief Interface giving the ability to listen to the keyboard events.
 	 */
-	class KeyboardListenerInterface
+	class EMEN_API KeyboardListenerInterface
 	{
 		friend class Manager;
 

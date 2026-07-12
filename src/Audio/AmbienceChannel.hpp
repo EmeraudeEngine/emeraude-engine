@@ -38,7 +38,7 @@ namespace EmEn::Audio
 	/**
 	 * @brief The ambience channel class.
 	 */
-	class AmbienceChannel final
+	class EMEN_API AmbienceChannel final
 	{
 		public:
 

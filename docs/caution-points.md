@@ -915,8 +915,11 @@ during a move-construct.
 - **Correct fix:** make the buffer unambiguously heap-allocated so GCC cannot assume SSO — build the
   string into a local and `reserve()` past 15 bytes before appending. That removes the ambiguity the
   analysis chokes on, with no behavioural change.
-- **Only one site in the whole cascade** trips this today (274/275 TUs compile clean under PCH); do
-  not pre-emptively rewrite other concatenations — fix sites as the compiler actually flags them.
+- **Do not pre-emptively rewrite** other concatenations — fix sites as the compiler actually flags them.
+- **Sibling variant in emeraude-base:** the same GCC bug family surfaces as `-Wstringop-overflow`
+  (write, not read) under `_FORTIFY_SOURCE=2` rather than PCH, and there the `+=`-on-a-named-local
+  rewrite *is* enough (no `reserve` needed). Full comparison of both triggers and fixes:
+  [`dependencies/emeraude-base/docs/caution-points.md`](../dependencies/emeraude-base/docs/caution-points.md).
 
 ## Platform-Specific
 

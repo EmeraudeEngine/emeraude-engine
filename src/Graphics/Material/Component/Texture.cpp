@@ -228,4 +228,28 @@ namespace EmEn::Graphics::Material::Component
 
 		return nullptr;
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const Texture & obj)
+	{
+		return out << Texture::ClassId << "." "\n"
+			"Texture uniform name: " << obj.m_samplerName << "\n"
+			"Variable name: " << obj.m_variableName << "\n"
+			"Texture type (component level): " << obj.textureType() << "\n"
+			"Is volumetric texture ? (component level): " << ( obj.isVolumetricTexture() ? "yes" : "no" ) << "\n"
+			"Texture resource name: " << ( obj.m_textureResource != nullptr ? obj.m_textureResource->name() : "N/A (TextureInterface)" ) << "\n"
+			"UVW scale: " << obj.m_UVWScale << "\n"
+			"Alpha channel enabled: " << ( obj.m_alphaEnabled ? "yes" : "no" ) << "\n"
+			"Binding point : " << obj.m_binding << "\n";
+	}
+
+	std::string
+	to_string (const Texture & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

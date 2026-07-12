@@ -31,8 +31,8 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <algorithm>
 #include <cstddef>
+#include <algorithm>
 #include <map>
 #include <numeric>
 #include <string>
@@ -62,7 +62,7 @@ namespace EmEn::Net
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This service is observable
 	 */
-	class EMERAUDE_API Manager final : public ServiceInterface, public Base::ObservableTrait
+	class EMEN_API Manager final : public ServiceInterface, public Base::ObservableTrait
 	{
 		public:
 

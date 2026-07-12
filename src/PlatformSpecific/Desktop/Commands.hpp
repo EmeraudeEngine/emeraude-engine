@@ -43,7 +43,7 @@ namespace EmEn
 namespace EmEn::PlatformSpecific::Desktop
 {
 	/** @brief The progress mode enumeration for Windows. */
-	enum class ProgressMode: uint8_t
+	enum class EMEN_API ProgressMode: uint8_t
 	{
 		None,
 		Normal,
@@ -58,28 +58,28 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @return ProgressMode
 	 */
 	[[nodiscard]]
-	EMERAUDE_API ProgressMode to_ProgressMode (const std::string & string) noexcept;
+	EMEN_API ProgressMode to_ProgressMode (const std::string & string) noexcept;
 
 	/**
 	 * @brief Tries to open a URL in an external web browser.
 	 * @param url A reference to a string.
 	 * @return bool
 	 */
-	EMERAUDE_API bool openURL (const std::string & url) noexcept;
+	EMEN_API bool openURL (const std::string & url) noexcept;
 
 	/**
 	 * @brief Tries to open a file with an external program.
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMERAUDE_API bool openFile (const std::filesystem::path & filepath) noexcept;
+	EMEN_API bool openFile (const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Tries to open a folder in an external program.
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMERAUDE_API bool openFolder (const std::filesystem::path & filepath) noexcept;
+	EMEN_API bool openFolder (const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Tries to open a file with an external text editor.
@@ -87,14 +87,14 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMERAUDE_API bool openTextFile (Settings & settings, const std::filesystem::path & filepath) noexcept;
+	EMEN_API bool openTextFile (Settings & settings, const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Tries to open the directory of a file in an external file browser.
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMERAUDE_API bool showInFolder (const std::filesystem::path & filepath) noexcept;
+	EMEN_API bool showInFolder (const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Runs a desktop application with arguments.
@@ -103,7 +103,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param argument A reference to a string.
 	 * @return bool
 	 */
-	EMERAUDE_API bool runDesktopApplication (const std::string & executable, const std::string & argument) noexcept;
+	EMEN_API bool runDesktopApplication (const std::string & executable, const std::string & argument) noexcept;
 
 	/**
 	 * @brief Tries to open a file using the default desktop application.
@@ -111,7 +111,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param argument A reference to a string.
 	 * @return bool
 	 */
-	EMERAUDE_API bool runDefaultDesktopApplication (const std::string & argument) noexcept;
+	EMEN_API bool runDefaultDesktopApplication (const std::string & argument) noexcept;
 
 	/**
 	 * @brief Makes the taskbar icon of the application flashing to alert the user.
@@ -119,7 +119,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param state The flashing state.
 	 * @return void
 	 */
-	EMERAUDE_API void flashTaskbarIcon (const Window & window, bool state) noexcept;
+	EMEN_API void flashTaskbarIcon (const Window & window, bool state) noexcept;
 
 	/**
 	 * @brief Sets a progression inside the taskbar icon of the application.
@@ -128,5 +128,5 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param mode The progression mode. Only for Windows.
 	 * @return void
 	 */
-	EMERAUDE_API void setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept;
+	EMEN_API void setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept;
 }

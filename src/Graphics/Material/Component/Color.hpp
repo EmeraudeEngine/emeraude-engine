@@ -43,7 +43,7 @@ namespace EmEn::Graphics::Material::Component
 	 * @brief The color component type.
 	 * @extends EmEn::Graphics::Material::Component::Interface This class describe a component type.
 	 */
-	class Color : public Interface
+	class EMEN_API Color : public Interface
 	{
 		public:
 
@@ -182,34 +182,16 @@ namespace EmEn::Graphics::Material::Component
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Color & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Color & obj);
 
 			std::string m_variableName;
 			Base::PixelFactory::Color< float > m_color;
 	};
-
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const Color & obj)
-	{
-		return out << Color::ClassId << "." "\n"
-			"Variable name: " << obj.m_variableName << "\n"
-			"Color: " << obj.m_color;
-	}
 
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const Color & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const Color & obj) noexcept;
 }

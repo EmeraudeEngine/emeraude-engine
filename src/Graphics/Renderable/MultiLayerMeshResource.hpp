@@ -1,0 +1,353 @@
+/*
+ * src/Graphics/Renderable/MeshResource.hpp
+ * This file is part of Emeraude-Engine
+ *
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ *
+ * Emeraude-Engine is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Emeraude-Engine is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Emeraude-Engine; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * Complete project and additional information can be found at :
+ * https://github.com/EmeraudeEngine/emeraude-engine
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
+
+#pragma once
+
+/* STL inclusions. */
+#include <memory>
+#include <mutex>
+#include <vector>
+
+/* Local inclusions for inheritances. */
+#include "Abstract.hpp"
+#include "SkeletalDataTrait.hpp"
+
+/* Local inclusions for usages. */
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Resources/Container.hpp"
+#include "Types.hpp"
+
+namespace EmEn::Resources
+{
+	class Manager;
+}
+
+namespace EmEn::Graphics::Renderable
+{
+	/**
+	 * @brief The mesh layer class.
+	 */
+	class EMEN_API MeshLayer final : public Base::NameableTrait
+	{
+		public:
+
+			/**
+			 * @brief Constructs a mesh layer.
+			 * @param layerName A string for the layer name [std::move].
+			 * @param material A reference to a material for this layer.
+			 * @param options A reference to rasterization options.
+			 * @param renderableFlags The renderable level flags.
+			 */
+			MeshLayer (std::string layerName, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t renderableFlags) noexcept
+				: NameableTrait{std::move(layerName)},
+				m_material{material},
+				m_rasterizationOptions{options},
+				m_renderableFlags{renderableFlags}
+			{
+
+			}
+
+			/**
+			 * @brief Returns the material resource of the layer.
+			 * @return shared_ptr< Material::Interface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Material::Interface >
+			material () const noexcept
+			{
+				return m_material;
+			}
+
+			/**
+			 * @brief Returns the rasterization options for this layer.
+			 * @return const RasterizationOptions &
+			 */
+			[[nodiscard]]
+			const RasterizationOptions &
+			rasterizationOptions () const noexcept
+			{
+				return m_rasterizationOptions;
+			}
+
+			/**
+			 * @brief Returns renderable level flags.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			flags () const noexcept
+			{
+				return m_renderableFlags;
+			}
+
+		private:
+
+			std::shared_ptr< Material::Interface > m_material;
+			RasterizationOptions m_rasterizationOptions;
+			uint32_t m_renderableFlags;
+	};
+
+	/**
+	 * @brief This class provides a high-level object to describe a physical object in the 3D world.
+	 * @extends EmEn::Graphics::Renderable::Abstract Adds the ability to be rendered in the 3D world.
+	 */
+	class MultiLayerMeshResource final : public Abstract, public SkeletalDataTrait
+	{
+		friend class Resources::Container< MultiLayerMeshResource >;
+
+		using ResourceTrait::load;
+
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"MeshResource"};
+
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Complex};
+
+			/**
+			 * @brief Construct a mesh resource.
+			 * @param serviceProvider A reference to the service provider.
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none.
+			 */
+			MultiLayerMeshResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+				: Abstract{serviceProvider, std::move(name), resourceFlags}
+			{
+
+			}
+
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				return Base::Hash::FNV1a(ClassId);
+			}
+
+			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
+			[[nodiscard]]
+			size_t
+			classUID () const noexcept override
+			{
+				return getClassUID();
+			}
+
+			/** @copydoc EmEn::Base::ObservableTrait::is() const */
+			[[nodiscard]]
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == getClassUID();
+			}
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
+			[[nodiscard]]
+			uint32_t
+			subGeometryCount () const noexcept override
+			{
+				return !m_geometry.empty() && m_geometry[0] != nullptr ? m_geometry[0]->subGeometryCount() : 0;
+			}
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
+			[[nodiscard]]
+			uint32_t
+			layerCount () const noexcept override
+			{
+				return static_cast< uint32_t >(m_layers.size());
+			}
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
+			[[nodiscard]]
+			bool isOpaque (uint32_t layerIndex) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
+			[[nodiscard]]
+			bool requiresGrabPass (uint32_t layerIndex) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
+			[[nodiscard]]
+			const Geometry::Interface * geometry (uint32_t LODLevel) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
+			[[nodiscard]]
+			const Material::Interface * material (uint32_t layerIndex) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
+			[[nodiscard]]
+			const RasterizationOptions * layerRasterizationOptions (uint32_t layerIndex) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
+			[[nodiscard]]
+			const Base::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept override
+			{
+				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+					m_geometry[0]->boundingBox() :
+					NullBoundingBox;
+			}
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
+			[[nodiscard]]
+			const Base::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept override
+			{
+				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+					m_geometry[0]->boundingSphere() :
+					NullBoundingSphere;
+			}
+
+			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
+			[[nodiscard]]
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
+
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			bool load () noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			bool load (const std::filesystem::path & filepath) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
+
+			/**
+			 * @brief Loads a mesh resource from a geometry and a material. This will produce a single layer mesh.
+			 * @param geometry A reference to a geometry resource smart pointer.
+			 * @param material A reference to a material resource smart pointer.
+			 * @param rasterizationOptions A reference to rasterization options. Defaults.
+			 * @return bool
+			 */
+			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & rasterizationOptions = {}) noexcept;
+
+			/**
+			 * @brief Loads a mesh resource from a geometry and a materials list. This will produce a mesh with multiple layers.
+			 * @param geometry A reference to a geometry resource smart pointer.
+			 * @param materialList A reference to a list of a material resource smart pointer.
+			 * @param rasterizationOptions A reference to a list of rasterization options. Defaults.
+			 * @return bool
+			 */
+			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions = {}) noexcept;
+
+			/**
+			 * @brief Parses a JSON stream to get the material information.
+			 * @note This method is public to allow SimpleMeshResource to reuse it.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @param data A reference to a JSON node.
+			 * @return std::shared_ptr< Material::Interface >
+			 */
+			static std::shared_ptr< Material::Interface > parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+
+			/**
+			 * @brief Parses a JSON stream to get the mesh options.
+			 * @note This method is public to allow SimpleMeshResource to reuse it.
+			 * @param data A reference to a JSON node.
+			 * @return RasterizationOptions
+			 */
+			static RasterizationOptions parseLayerOptions (const Json::Value & data) noexcept;
+
+		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
+
+			/**
+			 * @brief Sets the geometry resource.
+			 * @param geometry A reference to a geometry resource smart pointer.
+			 * @return bool
+			 */
+			bool setGeometry (const std::shared_ptr< Geometry::Interface > & geometry) noexcept;
+
+			/**
+			 * @brief Sets the material resource.
+			 * @param material A reference to a material resource smart pointer.
+			 * @param options A reference to rasterization options.
+			 * @param flags The renderable level flags.
+			 * @return bool
+			 */
+			bool
+			setMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t flags) noexcept
+			{
+				m_layers.clear();
+
+				return this->addMaterial(material, options, flags);
+			}
+
+			/**
+			 * @brief Adds a layer with a material and rasterization options.
+			 * @param material A reference to a material resource smart pointer.
+			 * @param options A reference to rasterization options.
+			 * @param flags The renderable level flags.
+			 * @return bool
+			 */
+			bool addMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t flags) noexcept;
+
+			/**
+			 * @brief Parses a JSON stream to get the geometry information.
+			 * @param data A reference to a JSON node.
+			 * @return std::shared_ptr< Geometry::Interface >
+			 */
+			std::shared_ptr< Geometry::Interface > parseGeometry (const Json::Value & data) noexcept;
+
+			/**
+			 * @brief Generates a single LOD level from the source geometry via mesh decimation.
+			 * @param sourceGeometry The LOD 0 indexed geometry with local data.
+			 * @param LODLevel The target LOD level (1-3).
+			 * @param ratio The decimation ratio (0.0 = max reduction, 1.0 = no reduction).
+			 * @return void
+			 */
+			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
+
+			/* Flag names. */
+			static constexpr auto IsReadyToSetupGPU{0UL};
+			static constexpr auto IsBroken{1UL};
+
+			Base::StaticVector< std::shared_ptr< Geometry::Interface >, MaxLODLevels > m_geometry;
+			std::vector< MeshLayer > m_layers;
+			mutable std::mutex m_geometryMutex;
+	};
+}
+
+/* Expose the resource manager as a convenient type. */
+namespace EmEn::Resources
+{
+	using Meshes = Container< Graphics::Renderable::MultiLayerMeshResource >;
+}

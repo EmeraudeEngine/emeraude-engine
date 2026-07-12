@@ -35,12 +35,12 @@ namespace EmEn::Audio::Effects
 	 * @brief Ring Modulator effect.
 	 * @extends EmEn::Audio::Effects::Abstract This is an effect.
 	 */
-	class RingModulator final : public Abstract
+	class EMEN_API RingModulator final : public Abstract
 	{
 		public:
 
 			/** @brief The wave form enumerations for ring modulator. */
-			enum class WaveForm
+			enum class EMEN_API WaveForm : uint8_t
 			{
 				Sinusoid,
 				SawTooth,

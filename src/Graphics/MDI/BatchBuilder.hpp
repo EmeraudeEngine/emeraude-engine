@@ -64,7 +64,7 @@ namespace EmEn::Graphics::MDI
 	 * Objects within a batch can be drawn with a single vkCmdDrawIndexedIndirect call
 	 * instead of N separate vkCmdDrawIndexed calls.
 	 */
-	struct MDIBatch final
+	struct EMEN_API MDIBatch final
 	{
 		/** @brief Offset into the indirect command buffer (in bytes). */
 		VkDeviceSize indirectOffset{0};
@@ -88,7 +88,7 @@ namespace EmEn::Graphics::MDI
 	 * Falls back to individual draw calls for groups smaller than 2 or when MDI is not
 	 * supported by the device.
 	 */
-	class BatchBuilder final
+	class EMEN_API BatchBuilder final
 	{
 		public:
 

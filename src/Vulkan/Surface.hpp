@@ -34,15 +34,13 @@
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
-/* Local inclusions for usages. */
-#include "Instance.hpp"
-
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
+	class Instance;
 	class PhysicalDevice;
 	class Device;
-};
+}
 
 namespace EmEn::Vulkan
 {
@@ -50,7 +48,7 @@ namespace EmEn::Vulkan
 	 * @brief Defines the surface where the final image will be drawn and presented to the screen.
 	 * @extends EmEn::Vulkan::AbstractObject This is a Vulkan API object.
 	 */
-	class Surface final : public AbstractObject
+	class EMEN_API Surface final : public AbstractObject
 	{
 		public:
 

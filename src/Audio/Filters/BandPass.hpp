@@ -35,7 +35,7 @@ namespace EmEn::Audio::Filters
 	 * @brief The band pass filter.
 	 * @extends EmEn::Audio::Filters::Abstract This is a filter.
 	 */
-	class BandPass final : public Abstract
+	class EMEN_API BandPass final : public Abstract
 	{
 		public:
 

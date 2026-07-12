@@ -30,7 +30,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <ostream>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -50,7 +49,7 @@ namespace EmEn::Audio
 	 * @brief The Source class
 	 * @extends EmEn::Audio::AbstractObject
 	 */
-	class Source final : public AbstractObject
+	class EMEN_API Source final : public AbstractObject
 	{
 		public:
 
@@ -658,14 +657,7 @@ namespace EmEn::Audio
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Source & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Source & obj) noexcept;
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Source & obj);
 
 		private:
 
@@ -766,6 +758,13 @@ namespace EmEn::Audio
 			std::shared_ptr< PlayableInterface > m_currentPlayableInterface;
 			float m_previousGain{1.0F};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	EMEN_API std::string to_string (const Source & obj) noexcept;
 
 	using SourceRequest = std::unique_ptr< Source, std::function< void( Source * ) > >;
 }

@@ -43,7 +43,7 @@ namespace EmEn::Vulkan
 	 *
 	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class IndirectBuffer final : public Buffer
+	class EMEN_API IndirectBuffer final : public Buffer
 	{
 		public:
 

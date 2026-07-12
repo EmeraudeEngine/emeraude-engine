@@ -48,7 +48,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Base::ObserverTrait This component observes sound loading events.
 	 */
-	class SoundEmitter final : public Abstract, public Base::ObserverTrait
+	class EMEN_API SoundEmitter final : public Abstract, public Base::ObserverTrait
 	{
 		public:
 

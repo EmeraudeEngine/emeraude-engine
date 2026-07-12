@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <sstream>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -41,7 +40,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief The framebuffer precisions class.
 	 */
-	class FramebufferPrecisions
+	class EMEN_API FramebufferPrecisions final
 	{
 		public:
 
@@ -205,7 +204,7 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const FramebufferPrecisions & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const FramebufferPrecisions & obj);
 
 			uint32_t m_redBits{DefaultVideoFramebufferRedBits};
 			uint32_t m_greenBits{DefaultVideoFramebufferGreenBits};
@@ -216,30 +215,10 @@ namespace EmEn::Graphics
 			uint32_t m_samples{DefaultVideoFramebufferSamples};
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const FramebufferPrecisions & obj)
-	{
-		return out << "Framebuffer precisions data :" "\n"
-			"Color buffer bits : " << obj.m_redBits << ", " << obj.m_greenBits << ", " << obj.m_blueBits << ", " << obj.m_alphaBits << "\n"
-			"Depth buffer bits : " << obj.m_depthBits << "\n"
-			"Stencil buffer bits : " << obj.m_stencilBits << "\n"
-			"Samples : " << obj.m_samples;
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const FramebufferPrecisions & obj)
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const FramebufferPrecisions & obj);
 }

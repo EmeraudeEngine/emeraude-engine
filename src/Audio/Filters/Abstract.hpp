@@ -35,7 +35,7 @@ namespace EmEn::Audio::Filters
 	 * @brief The base class for all OpenAL filters.
 	 * @extends EmEn::Audio::AbstractObject This is a base OpenAL object.
 	 */
-	class Abstract : public AbstractObject
+	class EMEN_API Abstract : public AbstractObject
 	{
 		public:
 

@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Material
 	 * @brief The basic material class use only one part.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
 	 */
-	class EMERAUDE_API BasicResource final : public Interface
+	class EMEN_API BasicResource final : public Interface
 	{
 		friend class Resources::Container< BasicResource >;
 

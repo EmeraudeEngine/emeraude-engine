@@ -44,7 +44,7 @@ namespace EmEn
 	/**
 	 * @brief Describe information about an application.
 	 */
-	class EMERAUDE_API Identification final
+	class EMEN_API Identification final
 	{
 		public:
 

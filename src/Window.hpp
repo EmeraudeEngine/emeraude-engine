@@ -31,9 +31,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -86,7 +86,7 @@ namespace EmEn
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 */
-	class EMERAUDE_API Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
+	class EMEN_API Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
 	{
 		public:
 

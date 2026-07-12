@@ -30,8 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -52,7 +52,7 @@ namespace EmEn::Input
 	 * @brief The keyboard controller class.
 	 * @extends EmEn::Input::ControllerInterface This is an input controller.
 	 */
-	class EMERAUDE_API KeyboardController final : public ControllerInterface
+	class EMEN_API KeyboardController final : public ControllerInterface
 	{
 		public:
 

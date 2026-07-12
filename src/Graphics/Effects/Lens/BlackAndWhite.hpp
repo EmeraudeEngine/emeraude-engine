@@ -39,7 +39,7 @@ namespace EmEn::Graphics::Effects::Lens
 	 * @brief The black and white lens effect class.
 	 * @extends EmEn::Graphics::DirectPostProcessEffect This is a framebuffer effect.
 	 */
-	class BlackAndWhite final : public DirectPostProcessEffect
+	class EMEN_API BlackAndWhite final : public DirectPostProcessEffect
 	{
 		public:
 
@@ -49,7 +49,7 @@ namespace EmEn::Graphics::Effects::Lens
 			/**
 			 * @brief Luminance calculation mode enumeration.
 			 */
-			enum class Mode : std::uint8_t
+			enum class EMEN_API Mode : std::uint8_t
 			{
 				/** @brief Luma Rec.709 : 0.2126R + 0.7152G + 0.0722B (HD/sRGB standard). */
 				LumaRec709,

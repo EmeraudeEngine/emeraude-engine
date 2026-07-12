@@ -186,4 +186,32 @@ namespace EmEn::Vulkan
 
 		return hashValue;
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const DescriptorSetLayout & obj)
+	{
+		out << "Descriptor set layout @" << obj.m_handle << " (" << obj.identifier() << ") :\n";
+
+		for ( const auto & setLayoutBinding : obj.m_setLayoutBindings )
+		{
+			out <<
+				"Set layout binding : " << setLayoutBinding.binding << "\n"
+				"\t" "Descriptor type: " << setLayoutBinding.descriptorType << "\n"
+				"\t" "Descriptor count: " << setLayoutBinding.descriptorCount << "\n"
+				"\t" "Stage flags: " << setLayoutBinding.stageFlags << "\n"
+				"\t" "Immutable Samplers: " << setLayoutBinding.pImmutableSamplers << "\n\n";
+		}
+
+		return out;
+	}
+
+	std::string
+	to_string (const DescriptorSetLayout & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

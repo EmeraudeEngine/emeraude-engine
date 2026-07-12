@@ -94,7 +94,7 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr bool MergePushConstants{true};
 
 	/** @brief Renderable instance flag bits. */
-	enum RenderableInstanceFlagBits : uint32_t // NOLINT(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
+	enum EMEN_API RenderableInstanceFlagBits : uint32_t // NOLINT(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	{
 		None = 0U,
 		/**
@@ -170,7 +170,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @see Multiple For GPU-instanced rendering with multiple instances.
 	 * @version 0.8.35
 	 */
-	class EMERAUDE_API Abstract : public std::enable_shared_from_this< Abstract >, public Base::FlagTrait< uint32_t >
+	class EMEN_API Abstract : public std::enable_shared_from_this< Abstract >, public Base::FlagTrait< uint32_t >
 	{
 		public:
 

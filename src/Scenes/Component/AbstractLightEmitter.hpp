@@ -80,7 +80,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This can act as a virtual video device.
 	 * @extends EmEn::Base::ObserverTrait Observes color projection textures for async loading completion.
 	 */
-	class AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice, public Base::ObserverTrait
+	class EMEN_API AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice, public Base::ObserverTrait
 	{
 		public:
 

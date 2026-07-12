@@ -38,7 +38,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief This class is responsible for sending an image on the GPU.
 	 */
-	class ImageTransferOperation final
+	class EMEN_API ImageTransferOperation final
 	{
 		public:
 

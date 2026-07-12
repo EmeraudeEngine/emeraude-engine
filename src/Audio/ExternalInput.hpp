@@ -61,7 +61,7 @@ namespace EmEn::Audio
 	 * @brief Class that define a device to grab audio from outside the engine like a real microphone.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class ExternalInput final : public ServiceInterface
+	class EMEN_API ExternalInput final : public ServiceInterface
 	{
 		public:
 

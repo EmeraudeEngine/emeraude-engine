@@ -50,7 +50,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief This is the base of all geometry compatible with the graphic engine.
 	 * @extends EmEn::Resources::ResourceTrait Every material is a resource.
 	 */
-	class Interface : public Resources::ResourceTrait
+	class EMEN_API Interface : public Resources::ResourceTrait
 	{
 		public:
 

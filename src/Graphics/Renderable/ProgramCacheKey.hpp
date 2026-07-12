@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Renderable
 	/**
 	 * @brief Defines the type of program to cache.
 	 */
-	enum class ProgramType : uint8_t
+	enum class EMEN_API ProgramType : uint8_t
 	{
 		/** @brief Standard scene rendering program. */
 		Rendering = 0,
@@ -61,7 +61,7 @@ namespace EmEn::Graphics::Renderable
 	 * Two RenderableInstances sharing the same Renderable and having the same
 	 * configuration will use the same cached program.
 	 */
-	struct ProgramCacheKey final
+	struct EMEN_API ProgramCacheKey final
 	{
 		/** @brief The type of program. */
 		ProgramType programType{ProgramType::Rendering};
@@ -146,7 +146,7 @@ namespace EmEn::Graphics::Renderable
 
 /* Hash specialization for std::unordered_map. */
 template<>
-struct std::hash< EmEn::Graphics::Renderable::ProgramCacheKey >
+struct EMEN_API std::hash< EmEn::Graphics::Renderable::ProgramCacheKey >
 {
 	[[nodiscard]]
 	size_t

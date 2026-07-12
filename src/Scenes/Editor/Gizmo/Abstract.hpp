@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -72,7 +75,7 @@ namespace EmEn
 namespace EmEn::Scenes::Editor::Gizmo
 {
 	/** @brief Identifies which axis of a gizmo was hit by a pick ray. */
-	enum class AxisID : uint8_t
+	enum class EMEN_API AxisID : uint8_t
 	{
 		None,
 		X,
@@ -88,7 +91,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	 * at constant screen size regardless of camera distance. It manages its own geometry,
 	 * shader program, and hit-test zones. It does NOT live in the scene graph.
 	 */
-	class Abstract
+	class EMEN_API Abstract
 	{
 		public:
 

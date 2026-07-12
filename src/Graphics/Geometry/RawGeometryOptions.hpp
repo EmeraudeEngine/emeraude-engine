@@ -40,7 +40,7 @@ namespace EmEn::Graphics::Geometry
 	 * @note Provides optional topology override and explicit bounding box specification.
 	 * When bounding box min/max are not provided, they are auto-computed from vertex positions.
 	 */
-	struct RawGeometryOptions
+	struct EMEN_API RawGeometryOptions
 	{
 		/** @brief The primitive topology for this geometry. Default: TriangleList. */
 		Topology topology{Topology::TriangleList};

@@ -43,7 +43,7 @@ namespace EmEn::Console
 	/**
 	 * @brief Container for a specific command.
 	 */
-	class Command final
+	class EMEN_API Command final
 	{
 		public:
 

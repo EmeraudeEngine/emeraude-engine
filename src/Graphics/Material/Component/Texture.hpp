@@ -54,7 +54,7 @@ namespace EmEn::Graphics::Material::Component
 	 * @brief The texture component type.
 	 * @extends EmEn::Graphics::Material::Component::Interface This class describes a component type.
 	 */
-	class Texture final : public Interface
+	class EMEN_API Texture final : public Interface
 	{
 		public:
 
@@ -319,7 +319,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Texture & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Texture & obj);
 
 			/* JSON key. */
 			static constexpr auto JKResourceName{"Name"};
@@ -337,34 +337,10 @@ namespace EmEn::Graphics::Material::Component
 			bool m_alphaEnabled{false};
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const Texture & obj)
-	{
-		return out << Texture::ClassId << "." "\n"
-			"Texture uniform name: " << obj.m_samplerName << "\n"
-			"Variable name: " << obj.m_variableName << "\n"
-			"Texture type (component level): " << obj.textureType() << "\n"
-			"Is volumetric texture ? (component level): " << ( obj.isVolumetricTexture() ? "yes" : "no" ) << "\n"
-			"Texture resource name: " << ( obj.m_textureResource != nullptr ? obj.m_textureResource->name() : "N/A (TextureInterface)" ) << "\n"
-			"UVW scale: " << obj.m_UVWScale << "\n"
-			"Alpha channel enabled: " << ( obj.m_alphaEnabled ? "yes" : "no" ) << "\n"
-			"Binding point : " << obj.m_binding << "\n";
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const Texture & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const Texture & obj) noexcept;
 }

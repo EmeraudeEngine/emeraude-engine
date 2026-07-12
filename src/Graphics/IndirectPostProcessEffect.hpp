@@ -73,7 +73,7 @@ namespace EmEn::Graphics
 	 * pass recording, vertex shader, descriptor set layouts) to eliminate duplication.
 	 * @extends EmEn::Graphics::PostProcessEffect This is a post-process effect.
 	 */
-	class IndirectPostProcessEffect : public PostProcessEffect
+	class EMEN_API IndirectPostProcessEffect : public PostProcessEffect
 	{
 		public:
 
@@ -81,13 +81,13 @@ namespace EmEn::Graphics
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			IndirectPostProcessEffect (const IndirectPostProcessEffect & copy) noexcept = default;
+			IndirectPostProcessEffect (const IndirectPostProcessEffect & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			IndirectPostProcessEffect (IndirectPostProcessEffect && copy) noexcept = default;
+			IndirectPostProcessEffect (IndirectPostProcessEffect && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.

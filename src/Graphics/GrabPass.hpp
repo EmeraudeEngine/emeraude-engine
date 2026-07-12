@@ -59,7 +59,7 @@ namespace EmEn::Graphics
 	 * Typical use case: refraction effects on transparent objects.
 	 * @extends EmEn::Vulkan::TextureInterface This is a texture (color).
 	 */
-	class GrabPass final : public Vulkan::TextureInterface
+	class EMEN_API GrabPass final : public Vulkan::TextureInterface
 	{
 		public:
 
@@ -70,6 +70,32 @@ namespace EmEn::Graphics
 			 * @brief Constructs a grab pass texture.
 			 */
 			GrabPass () noexcept = default;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			GrabPass (const GrabPass & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			GrabPass (GrabPass && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return GrabPass &
+			 */
+			GrabPass & operator= (const GrabPass & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return GrabPass &
+			 */
+			GrabPass & operator= (GrabPass && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the grab pass texture.

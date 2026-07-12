@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 	 * @brief The base class for all OpenAL effects.
 	 * @extends EmEn::Audio::AbstractObject This is a base OpenAL object.
 	 */
-	class Abstract : public AbstractObject
+	class EMEN_API Abstract : public AbstractObject
 	{
 		public:
 

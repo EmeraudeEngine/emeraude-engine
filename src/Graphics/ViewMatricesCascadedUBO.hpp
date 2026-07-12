@@ -54,7 +54,7 @@ namespace EmEn::Graphics
 	 *	   Each cascade covers a different depth range of the camera frustum, providing
 	 *	   higher shadow resolution near the camera and lower resolution far away.
 	 */
-	class ViewMatricesCascadedUBO final : public ViewMatricesInterface
+	class EMEN_API ViewMatricesCascadedUBO final : public ViewMatricesInterface
 	{
 		public:
 
@@ -270,7 +270,7 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const ViewMatricesCascadedUBO & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const ViewMatricesCascadedUBO & obj);
 
 			/**
 			 * @brief Computes a tight-fit orthographic projection for a cascade.
@@ -393,5 +393,5 @@ namespace EmEn::Graphics
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	std::string to_string (const ViewMatricesCascadedUBO & obj) noexcept;
+	EMEN_API std::string to_string (const ViewMatricesCascadedUBO & obj) noexcept;
 }

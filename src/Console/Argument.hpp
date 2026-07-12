@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 #include <variant>
@@ -42,7 +45,7 @@ namespace EmEn::Console
 	/**
 	 * @brief The console argument class.
 	 */
-	class Argument final
+	class EMEN_API Argument final
 	{
 		public:
 

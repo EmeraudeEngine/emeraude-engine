@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * with the scene.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class LensFlare final : public IndirectPostProcessEffect
+	class EMEN_API LensFlare final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing lens flare parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float threshold{0.8F};
 				float softKnee{0.5F};
@@ -72,7 +72,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the threshold pass.
 			 */
-			struct ThresholdPushConstants
+			struct EMEN_API ThresholdPushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -83,7 +83,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the ghost + halo pass.
 			 */
-			struct GhostHaloPushConstants
+			struct EMEN_API GhostHaloPushConstants
 			{
 				float lightScreenX;
 				float lightScreenY;
@@ -98,7 +98,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the composite pass.
 			 */
-			struct CompositePushConstants
+			struct EMEN_API CompositePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;

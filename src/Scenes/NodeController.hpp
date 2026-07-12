@@ -43,7 +43,7 @@ namespace EmEn::Scenes
 	 * @brief The NodeController class
 	 * @extends EmEn::Input::KeyboardListenerInterface
 	 */
-	class NodeController final : public Input::KeyboardListenerInterface
+	class EMEN_API NodeController final : public Input::KeyboardListenerInterface
 	{
 		public:
 

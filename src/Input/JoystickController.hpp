@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -46,7 +46,7 @@ namespace EmEn
 namespace EmEn::Input
 {
 	/** @brief Structure to copy the joystick state.  */
-	struct JoystickState
+	struct EMEN_API JoystickState
 	{
 		std::array< float, 6 > axes{0.0F};
 		std::array< bool, JoystickMaxButtons > buttons{false};
@@ -57,7 +57,7 @@ namespace EmEn::Input
 	 * @brief The joystick controller class.
 	 * @extends EmEn::Input::ControllerInterface This is an input controller.
 	 */
-	class JoystickController final : public ControllerInterface
+	class EMEN_API JoystickController final : public ControllerInterface
 	{
 		public:
 

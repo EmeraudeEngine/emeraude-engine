@@ -39,7 +39,7 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	/**
 	 * @brief Describes a mounted drive/volume on the system.
 	 */
-	struct EMERAUDE_API DriveInfo
+	struct EMEN_API DriveInfo
 	{
 		std::string filesystem;	  /* Device path (e.g., "/dev/sda1") or description (Windows). */
 		std::string mounted;		 /* Mount point (e.g., "/", "/mnt/usb") or drive letter (e.g., "C:"). */
@@ -58,5 +58,5 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	 * @return std::vector< DriveInfo > List of mounted drives (excludes virtual/pseudo filesystems).
 	 */
 	[[nodiscard]]
-	EMERAUDE_API std::vector< DriveInfo > listDrives () noexcept;
+	EMEN_API std::vector< DriveInfo > listDrives () noexcept;
 }

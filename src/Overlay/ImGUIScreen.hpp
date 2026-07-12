@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_config.hpp"
+#include "emeraude_export.hpp"
 
 #ifdef IMGUI_ENABLED
 
@@ -45,7 +46,7 @@ namespace EmEn::Overlay
 	 * @brief The ImGUI screen specific class.
 	 * @exception EmEn::Base::NameableTrait A UI screen have a name.
 	 */
-	class ImGUIScreen final : public Base::NameableTrait
+	class EMEN_API ImGUIScreen final : public Base::NameableTrait
 	{
 		public:
 

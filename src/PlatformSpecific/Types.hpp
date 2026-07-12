@@ -38,7 +38,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe the available CPU on the system in order to get/print information.
 	 */
-	struct EMERAUDE_API CPU
+	struct EMEN_API CPU
 	{
 		/* The creator of the device, like AMD, Intel, ARM... */
 		std::string vendorName{"Unknown"};
@@ -61,7 +61,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe the available main memory (RAM) on the system in order to get/print information.
 	 */
-	struct EMERAUDE_API SystemMemory
+	struct EMEN_API SystemMemory
 	{
 		size_t total{0};
 		size_t free{0};
@@ -74,7 +74,7 @@ namespace EmEn::PlatformSpecific
 	 * @brief The type of GPU device.
 	 * @note This follows the Vulkan convention to describe a device.
 	 */
-	enum class GPUDeviceType : uint8_t
+	enum class EMEN_API GPUDeviceType : uint8_t
 	{
 		Other,
 		IntegratedGPU,
@@ -95,7 +95,7 @@ namespace EmEn::PlatformSpecific
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	const char *
 	to_cstring (GPUDeviceType value) noexcept
 	{
@@ -127,7 +127,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (GPUDeviceType value)
 	{
@@ -137,7 +137,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe a GPU device from the system in order to get/print information.
 	 */
-	struct EMERAUDE_API GPUDevice
+	struct EMEN_API GPUDevice
 	{
 		/* The creator of the main part of device, like NVIDIA, AMD, Intel... */
 		std::string vendorName{"Unknown"};
@@ -158,7 +158,7 @@ namespace EmEn::PlatformSpecific
 	};
 
 	/** @brief Describe the operating system. */
-	struct EMERAUDE_API OperatingSystem
+	struct EMEN_API OperatingSystem
 	{
 		std::string systemName;
 		std::string systemVersion;

@@ -359,4 +359,27 @@ namespace EmEn::Physics
 
 		return true;
 	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const BodyPhysicalProperties & obj)
+	{
+		return out << "Body physical properties :" "\n"
+			"Mass : " << obj.m_mass << " Kg (Inverse: " << obj.m_inverseMass << ")" << "\n"
+			"Surface : " << obj.m_surface << " m²" << "\n"
+			"Drag coefficient : " << obj.m_dragCoefficient << "\n"
+			"Angular drag coefficient : " << obj.m_angularDragCoefficient << "\n"
+			"Bounciness : " << obj.m_bounciness << "\n"
+			"Stickiness : " << obj.m_stickiness << "\n"
+			"Inertia tensor : " << obj.m_inertiaTensor << '\n';
+	}
+
+	std::string
+	to_string (const BodyPhysicalProperties & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

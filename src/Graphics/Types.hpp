@@ -26,10 +26,13 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <limits>
 #include <string>
 
@@ -45,7 +48,7 @@ namespace EmEn::Graphics
 	constexpr auto InvalidString{"Invalid"};
 
 	/** @brief The type of rendering to sort a graphics pipeline. */
-	enum class RenderTargetType : uint8_t
+	enum class EMEN_API RenderTargetType : uint8_t
 	{
 		View,
 		CubicView,
@@ -68,7 +71,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (RenderTargetType value) noexcept;
+	EMEN_API const char * to_cstring (RenderTargetType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -76,7 +79,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (RenderTargetType value)
 	{
@@ -84,7 +87,7 @@ namespace EmEn::Graphics
 	}
 
 	/** @brief Defines the render type to sort out what involves the rendering. */
-	enum class RenderPassType : uint8_t
+	enum class EMEN_API RenderPassType : uint8_t
 	{
 		/* No light code. */
 		SimplePass = 0,
@@ -133,7 +136,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (RenderPassType value) noexcept;
+	EMEN_API const char * to_cstring (RenderPassType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -141,7 +144,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (RenderPassType value)
 	{
@@ -154,7 +157,7 @@ namespace EmEn::Graphics
 	 * @return RenderPassType
 	 */
 	[[nodiscard]]
-	RenderPassType to_RenderPassType (const std::string & value) noexcept;
+	EMEN_API RenderPassType to_RenderPassType (const std::string & value) noexcept;
 
 	/**
 	 * @brief Returns whether a render pass type uses shadow mapping.
@@ -253,7 +256,7 @@ namespace EmEn::Graphics
 	}
 
 	/** @brief Defines the model matrices buffer type in video memory. */
-	enum class ModelMatrixType : uint32_t
+	enum class EMEN_API ModelMatrixType : uint32_t
 	{
 		UniformBufferObject = 1,
 		VertexBufferObject = 2,
@@ -269,7 +272,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (ModelMatrixType value) noexcept;
+	EMEN_API const char * to_cstring (ModelMatrixType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -277,7 +280,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (ModelMatrixType value)
 	{
@@ -290,10 +293,10 @@ namespace EmEn::Graphics
 	 * @return ModelMatrixType
 	 */
 	[[nodiscard]]
-	ModelMatrixType to_ModelMatrixType (const std::string & value) noexcept;
+	EMEN_API ModelMatrixType to_ModelMatrixType (const std::string & value) noexcept;
 
 	/** @brief Defines a filling type for a material surface. */
-	enum class FillingType : uint32_t
+	enum class EMEN_API FillingType : uint32_t
 	{
 		Value = 0,
 		Color = 1,
@@ -323,7 +326,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (FillingType value) noexcept;
+	EMEN_API const char * to_cstring (FillingType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -331,7 +334,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (FillingType value)
 	{
@@ -344,10 +347,10 @@ namespace EmEn::Graphics
 	 * @return FillingType
 	 */
 	[[nodiscard]]
-	FillingType to_FillingType (const std::string & value) noexcept;
+	EMEN_API FillingType to_FillingType (const std::string & value) noexcept;
 
 	/** @brief Defines a blending operation mode. */
-	enum class BlendingMode : uint32_t
+	enum class EMEN_API BlendingMode : uint32_t
 	{
 		Normal = 0,
 		Add = 1,
@@ -367,7 +370,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (BlendingMode value) noexcept;
+	EMEN_API const char * to_cstring (BlendingMode value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -375,7 +378,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (BlendingMode value)
 	{
@@ -388,10 +391,10 @@ namespace EmEn::Graphics
 	 * @return BlendingMode
 	 */
 	[[nodiscard]]
-	BlendingMode to_BlendingMode (const std::string & value) noexcept;
+	EMEN_API BlendingMode to_BlendingMode (const std::string & value) noexcept;
 
 	/** @brief Defines component type for material. */
-	enum class ComponentType : uint32_t
+	enum class EMEN_API ComponentType : uint32_t
 	{
 		Ambient = 0,
 		Diffuse = 1,
@@ -453,7 +456,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (ComponentType value) noexcept;
+	EMEN_API const char * to_cstring (ComponentType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -461,7 +464,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (ComponentType value)
 	{
@@ -474,10 +477,10 @@ namespace EmEn::Graphics
 	 * @return ComponentType
 	 */
 	[[nodiscard]]
-	ComponentType to_ComponentType (const std::string & value) noexcept;
+	EMEN_API ComponentType to_ComponentType (const std::string & value) noexcept;
 
 	/** @brief Defines the way the data are structured inside the VBO/IBO. */
-	enum class Topology : uint32_t
+	enum class EMEN_API Topology : uint32_t
 	{
 		PointList = 0,
 		LineLine = 1,
@@ -513,7 +516,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (Topology value) noexcept;
+	EMEN_API const char * to_cstring (Topology value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -521,7 +524,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (Topology value)
 	{
@@ -534,10 +537,10 @@ namespace EmEn::Graphics
 	 * @return Topology
 	 */
 	[[nodiscard]]
-	Topology to_TopologyType (const std::string & value) noexcept;
+	EMEN_API Topology to_TopologyType (const std::string & value) noexcept;
 
 	/** @brief Defines the way the geometry will be displayed on screen. */
-	enum class PolygonMode : uint32_t
+	enum class EMEN_API PolygonMode : uint32_t
 	{
 		Fill = 0,
 		Line = 1,
@@ -557,7 +560,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (PolygonMode value) noexcept;
+	EMEN_API const char * to_cstring (PolygonMode value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -565,7 +568,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (PolygonMode value)
 	{
@@ -578,10 +581,10 @@ namespace EmEn::Graphics
 	 * @return PolygonMode
 	 */
 	[[nodiscard]]
-	PolygonMode to_PolygonMode (const std::string & value) noexcept;
+	EMEN_API PolygonMode to_PolygonMode (const std::string & value) noexcept;
 
 	/** @brief Defines the culling face method. */
-	enum class CullingMode : uint32_t
+	enum class EMEN_API CullingMode : uint32_t
 	{
 		None = 0U,
 		Back = 1U,
@@ -602,7 +605,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (CullingMode value) noexcept;
+	EMEN_API const char * to_cstring (CullingMode value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -610,7 +613,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (CullingMode value)
 	{
@@ -623,10 +626,10 @@ namespace EmEn::Graphics
 	 * @return CullingMode
 	 */
 	[[nodiscard]]
-	CullingMode to_CullingMode (const std::string & value) noexcept;
+	EMEN_API CullingMode to_CullingMode (const std::string & value) noexcept;
 
 	/** @brief Defines a buffer type in a framebuffer. */
-	enum class BufferType : uint32_t
+	enum class EMEN_API BufferType : uint32_t
 	{
 		ColorBuffer = 0,
 		DepthBuffer = 1,
@@ -644,7 +647,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (BufferType value) noexcept;
+	EMEN_API const char * to_cstring (BufferType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -652,7 +655,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (BufferType value)
 	{
@@ -665,7 +668,7 @@ namespace EmEn::Graphics
 	 * @return BufferType
 	 */
 	[[nodiscard]]
-	BufferType to_BufferType (const std::string & value) noexcept;
+	EMEN_API BufferType to_BufferType (const std::string & value) noexcept;
 
 	/** @brief UBO alignment for matrix. */
 	constexpr auto Matrix4Alignment{16UL};
@@ -673,7 +676,7 @@ namespace EmEn::Graphics
 	constexpr auto VectorAlignment{4UL};
 
 	/** @brief Defines vertex attribute types. */
-	enum class VertexAttributeType : std::uint8_t
+	enum class EMEN_API VertexAttributeType : std::uint8_t
 	{
 		Position = 0U,
 		Tangent = 1U,
@@ -719,7 +722,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (VertexAttributeType value) noexcept;
+	EMEN_API const char * to_cstring (VertexAttributeType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -727,7 +730,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (VertexAttributeType value)
 	{
@@ -740,7 +743,7 @@ namespace EmEn::Graphics
 	 * @return VertexAttributeType
 	 */
 	[[nodiscard]]
-	VertexAttributeType to_VertexAttributeType (const std::string & value) noexcept;
+	EMEN_API VertexAttributeType to_VertexAttributeType (const std::string & value) noexcept;
 
 	/**
 	 * @brief Returns the attribute type size (number of element).
@@ -788,7 +791,7 @@ namespace EmEn::Graphics
 	}
 
 	/** @brief Defines cubemap faces. */
-	enum class CubemapFace : std::uint8_t
+	enum class EMEN_API CubemapFace : std::uint8_t
 	{
 		PositiveX = 0,
 		NegativeX = 1,
@@ -821,7 +824,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (CubemapFace value) noexcept;
+	EMEN_API const char * to_cstring (CubemapFace value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -829,7 +832,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (CubemapFace value)
 	{
@@ -842,7 +845,7 @@ namespace EmEn::Graphics
 	 * @return CubemapFace
 	 */
 	[[nodiscard]]
-	CubemapFace to_CubemapFace (const std::string & value) noexcept;
+	EMEN_API CubemapFace to_CubemapFace (const std::string & value) noexcept;
 
 	static constexpr std::array< CubemapFace, 6 > CubemapFaceIndexes = {{
 		CubemapFace::PositiveX, CubemapFace::NegativeX,
@@ -851,7 +854,7 @@ namespace EmEn::Graphics
 	}};
 
 	/** @brief Defines sampler filter quality. */
-	enum class FilterQuality : uint8_t
+	enum class EMEN_API FilterQuality : uint8_t
 	{
 		None,
 		Custom,
@@ -871,7 +874,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (FilterQuality value) noexcept;
+	EMEN_API const char * to_cstring (FilterQuality value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -879,7 +882,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (FilterQuality value)
 	{
@@ -892,12 +895,12 @@ namespace EmEn::Graphics
 	 * @return FilterQuality
 	 */
 	[[nodiscard]]
-	FilterQuality to_FilterQuality (const std::string & value) noexcept;
+	EMEN_API FilterQuality to_FilterQuality (const std::string & value) noexcept;
 
 	/**
 	 * @brief The "point to" enumeration following the Vulkan default world axis.
 	 */
-	enum class PointTo : uint8_t
+	enum class EMEN_API PointTo : uint8_t
 	{
 		/** @brief Point to following the X+ axis (right) = {1, 0, 0}. */
 		PositiveX = 0,
@@ -916,7 +919,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief The Shape enum.
 	 */
-	enum class ShapeType : uint8_t
+	enum class EMEN_API ShapeType : uint8_t
 	{
 		Custom,
 		Triangle,
@@ -961,7 +964,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (ShapeType value) noexcept;
+	EMEN_API const char * to_cstring (ShapeType value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -969,7 +972,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (ShapeType value)
 	{
@@ -982,12 +985,12 @@ namespace EmEn::Graphics
 	 * @return FilterQuality
 	 */
 	[[nodiscard]]
-	ShapeType to_ShapeType (const std::string & value) noexcept;
+	EMEN_API ShapeType to_ShapeType (const std::string & value) noexcept;
 
 	/**
 	 * @brief Light type enumeration.
 	 */
-	enum class LightType : uint8_t
+	enum class EMEN_API LightType : uint8_t
 	{
 		Directional = 0,
 		Point = 1,
@@ -1004,7 +1007,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (LightType type) noexcept;
+	EMEN_API const char * to_cstring (LightType type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -1012,7 +1015,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (LightType type) noexcept
 	{
@@ -1022,7 +1025,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Light type enumeration.
 	 */
-	enum class AntiAliasingType : uint8_t
+	enum class EMEN_API AntiAliasingType : uint8_t
 	{
 		/** @brief Multi-Sample Anti-Aliasing.
 		 * @note Slow */
@@ -1057,7 +1060,7 @@ namespace EmEn::Graphics
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (AntiAliasingType type) noexcept;
+	EMEN_API const char * to_cstring (AntiAliasingType type) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -1065,7 +1068,7 @@ namespace EmEn::Graphics
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	inline
+	EMEN_API inline
 	std::string
 	to_string (AntiAliasingType type) noexcept
 	{
@@ -1075,7 +1078,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Vertex color generation mode.
 	 */
-	enum class VertexColorGenMode : uint8_t
+	enum class EMEN_API VertexColorGenMode : uint8_t
 	{
 		UseGlobalColor = 0,
 		UseColorMap = 1,
@@ -1086,7 +1089,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Custom screen resolution.
 	 */
-	enum class ScreenResolutionCustom : uint8_t
+	enum class EMEN_API ScreenResolutionCustom : uint8_t
 	{
 		/** @brief 352x288 (?:?). */
 		CIF,
@@ -1111,7 +1114,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Standard 4:3 screen resolution.
 	 */
-	enum class ScreenResolution4_3: uint8_t
+	enum class EMEN_API ScreenResolution4_3: uint8_t
 	{
 		/** @brief 320x240. */
 		QVGA,
@@ -1142,7 +1145,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Standard 16:10 screen resolution.
 	 */
-	enum class ScreenResolution16_10 : uint8_t
+	enum class EMEN_API ScreenResolution16_10 : uint8_t
 	{
 		/** @brief 320x200. */
 		CGA,
@@ -1163,7 +1166,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Standard 16:9 screen resolution.
 	 */
-	enum class ScreenResolution16_9 : uint8_t
+	enum class EMEN_API ScreenResolution16_9 : uint8_t
 	{
 		/** @brief 854x480 (NTSC, 480p) */
 		FWVGA,
@@ -1192,7 +1195,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Standard 17:9 screen resolution.
 	 */
-	enum class ScreenResolution17_9 : uint8_t
+	enum class EMEN_API ScreenResolution17_9 : uint8_t
 	{
 		/** @brief 2048x1080. */
 		DCI2K,
@@ -1205,7 +1208,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Standard 21:9 (7:3) screen resolution.
 	 */
-	enum class ScreenResolution21_9 : uint8_t
+	enum class EMEN_API ScreenResolution21_9 : uint8_t
 	{
 		/** @brief 2560x1080. */
 		UWFHD,

@@ -72,9 +72,35 @@ namespace EmEn::Resources
 	 * @see EmEn::Base::ObservableTrait Base class providing observer pattern functionality
 	 * @version 0.8.35
 	 */
-	class ContainerInterface : public Base::NameableTrait, public Base::ObservableTrait
+	class EMEN_API ContainerInterface : public Base::NameableTrait, public Base::ObservableTrait
 	{
 		public:
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ContainerInterface (const ContainerInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ContainerInterface (ContainerInterface && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ContainerInterface &
+			 */
+			ContainerInterface & operator= (const ContainerInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ContainerInterface &
+			 */
+			ContainerInterface & operator= (ContainerInterface && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the container interface.
@@ -248,7 +274,7 @@ namespace EmEn::Resources
 	 */
 	template< typename resource_t >
 	requires (std::is_base_of_v< ResourceTrait, resource_t >)
-	class LoadingRequest final
+	class EMEN_API LoadingRequest final
 	{
 		public:
 
@@ -583,7 +609,7 @@ namespace EmEn::Resources
 	 * @version 0.8.35
 	 */
 	template< typename resource_t >
-	class Container final : public ContainerInterface, public Base::ObserverTrait
+	class EMEN_API Container final : public ContainerInterface, public Base::ObserverTrait
 	{
 		public:
 
@@ -665,6 +691,47 @@ namespace EmEn::Resources
 				return classUID == getClassUID();
 			}
 
+			/** @copydoc EmEn::Resources::ContainerInterface::initialize() noexcept */
+			bool
+			initialize () noexcept override
+			{
+				if ( m_localStore == nullptr )
+				{
+					return true;
+				}
+
+				if ( m_verboseEnabled )
+				{
+					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() <<" entries in the local store available.";
+				}
+
+				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::terminate() noexcept */
+			bool
+			terminate () noexcept override
+			{
+				if ( m_localStore == nullptr )
+				{
+					return true;
+				}
+
+				if ( m_verboseEnabled )
+				{
+					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() << " entries in the local store to check for unload.";
+				}
+
+				{
+					const std::scoped_lock scopeLock{m_resourcesAccess};
+
+					m_externalResources.clear();
+					m_resources.clear();
+				}
+
+				return true;
+			}
+
 			/** @copydoc EmEn::Resources::ContainerInterface::setVerbosity(bool) noexcept */
 			void
 			setVerbosity (bool state) noexcept override
@@ -677,7 +744,7 @@ namespace EmEn::Resources
 			size_t
 			resourceCount () const noexcept override
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				return m_resources.size();
 			}
@@ -716,7 +783,7 @@ namespace EmEn::Resources
 			std::vector< std::string >
 			loadedResourceNames () const noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				std::vector< std::string > names;
 				names.reserve(m_resources.size());
@@ -739,7 +806,7 @@ namespace EmEn::Resources
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				size_t bytes = 0;
 
@@ -756,7 +823,7 @@ namespace EmEn::Resources
 			size_t
 			unusedMemoryOccupied () const noexcept override
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				size_t bytes = 0;
 
@@ -775,7 +842,7 @@ namespace EmEn::Resources
 			size_t
 			unloadUnusedResources () noexcept override
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				if ( m_resources.empty() )
 				{
@@ -831,7 +898,7 @@ namespace EmEn::Resources
 			bool
 			isResourceLoaded (const std::string & resourceName) const noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				return m_resources.contains(resourceName);
 			}
@@ -858,7 +925,7 @@ namespace EmEn::Resources
 					return false;
 				}
 
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				/* First, check in live resources.
 				 * NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
@@ -955,7 +1022,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			createResource (const std::string & resourceName, uint32_t resourceFlags = 0) noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				return this->createResourceUnlocked(resourceName, resourceFlags);
 			}
@@ -979,7 +1046,7 @@ namespace EmEn::Resources
 			bool
 			addResource (const std::shared_ptr< resource_t > & resource) noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				if ( m_resources.contains(resource->name()) ) [[unlikely]]
 				{
@@ -1012,7 +1079,7 @@ namespace EmEn::Resources
 			bool
 			preloadResource (const std::string & resourceName, bool asyncLoad = true)
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				/* NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
 				if ( m_resources.contains(resourceName) )
@@ -1080,7 +1147,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getDefaultResource () noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				return this->getDefaultResourceUnlocked();
 			}
@@ -1119,7 +1186,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getResource (const std::string & resourceName, bool asyncLoad = true) noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				if ( resourceName == Default )
 				{
@@ -1182,7 +1249,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getOrCreateUnloadedResource (const std::string & resourceName, uint32_t resourceFlags = 0, bool asyncLoad = true) noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, asyncLoad);
 
@@ -1220,7 +1287,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getOrCreateResourceSync (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, false);
 
@@ -1290,7 +1357,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getOrCreateResource (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
-				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, true);
 
@@ -1369,47 +1436,6 @@ namespace EmEn::Resources
 
 		private:
 
-			/** @copydoc EmEn::Resources::ContainerInterface::initialize() noexcept */
-			bool
-			initialize () noexcept override
-			{
-				if ( m_localStore == nullptr )
-				{
-					return true;
-				}
-
-				if ( m_verboseEnabled )
-				{
-					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() <<" entries in the local store available.";
-				}
-
-				return true;
-			}
-
-			/** @copydoc EmEn::Resources::ContainerInterface::terminate() noexcept */
-			bool
-			terminate () noexcept override
-			{
-				if ( m_localStore == nullptr )
-				{
-					return true;
-				}
-
-				if ( m_verboseEnabled )
-				{
-					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() << " entries in the local store to check for unload.";
-				}
-
-				{
-					const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
-
-					m_externalResources.clear();
-					m_resources.clear();
-				}
-
-				return true;
-			}
-
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			bool
 			onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
@@ -1418,7 +1444,7 @@ namespace EmEn::Resources
 				{
 					if ( notificationCode == Net::Manager::FileDownloaded )
 					{
-						const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+						const std::scoped_lock scopeLock{m_resourcesAccess};
 
 						const auto downloadTicket = std::any_cast< int >(data);
 

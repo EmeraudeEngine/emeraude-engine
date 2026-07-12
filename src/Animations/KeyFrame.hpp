@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <map>
 
@@ -38,7 +41,7 @@ namespace EmEn::Animations
 	/**
 	 * @brief The Keyframe definition.
 	 */
-	class KeyFrame final
+	class EMEN_API KeyFrame final
 	{
 		public:
 
@@ -48,7 +51,7 @@ namespace EmEn::Animations
 			 * @param interpolation The type of interpolation.
 			 */
 			KeyFrame (Base::Variant value, Base::Math::InterpolationType interpolation) noexcept
-				: m_value{std::move(value)},
+				: m_value{value},
 				m_interpolation{interpolation}
 			{
 

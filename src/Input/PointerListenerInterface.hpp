@@ -41,7 +41,7 @@ namespace EmEn::Input
 	 * @brief Interface giving the ability to listen to the pointer (like the mouse) events.
 	 * @note By default, a pointer listener will use the absolute mode to be used like a mouse on screen.
 	 */
-	class PointerListenerInterface
+	class EMEN_API PointerListenerInterface
 	{
 		friend class Manager;
 

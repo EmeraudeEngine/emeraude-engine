@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
@@ -55,7 +58,7 @@ namespace EmEn
 namespace EmEn::Graphics::Material::Component
 {
 	/** @brief The component type enumeration. */
-	enum class Type : uint8_t
+	enum class EMEN_API Type : uint8_t
 	{
 		Value,
 		Color,
@@ -66,7 +69,7 @@ namespace EmEn::Graphics::Material::Component
 	/**
 	 * @brief The component interface for material.
 	 */
-	class Interface
+	class EMEN_API Interface
 	{
 		public:
 

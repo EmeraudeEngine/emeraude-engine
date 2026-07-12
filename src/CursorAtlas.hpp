@@ -26,9 +26,12 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -72,7 +75,7 @@ namespace EmEn
 	 * @see Window, CursorType
 	 * @version 0.8.35
 	 */
-	class CursorAtlas final
+	class EMEN_API CursorAtlas final
 	{
 		public:
 

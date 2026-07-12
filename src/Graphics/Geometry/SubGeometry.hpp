@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief Defines how to use an IBO or a VBO to draw a specific geometry or sub-geometry.
 	 * @extends EmEn::Base::FlagTrait
 	 */
-	class SubGeometry final : public Base::FlagTrait< uint32_t >
+	class EMEN_API SubGeometry final : public Base::FlagTrait< uint32_t >
 	{
 		public:
 
@@ -50,7 +50,7 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Constructs a sub geometry.
 			 * @param offset Sets where to execute in the VBO or IBO.
 			 * @param length Sets the length in VBO or IBO.
-			 * @param enableDoubleSidedFaces Enable double sided faces. Default false.
+			 * @param enableDoubleSidedFaces Enable double-sided faces. Default false.
 			 */
 			explicit
 			SubGeometry (uint32_t offset, uint32_t length, bool enableDoubleSidedFaces = false) noexcept

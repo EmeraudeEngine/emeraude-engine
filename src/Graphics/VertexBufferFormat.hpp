@@ -45,7 +45,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Declares the data format of a vertex buffer object (VBO).
 	 */
-	class VertexBufferFormat final
+	class EMEN_API VertexBufferFormat final
 	{
 		public:
 
@@ -202,7 +202,7 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const VertexBufferFormat & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const VertexBufferFormat & obj);
 
 			std::vector< VkVertexInputBindingDescription > m_bindings;
 			std::vector< VkVertexInputAttributeDescription > m_attributes;
@@ -214,14 +214,5 @@ namespace EmEn::Graphics
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const VertexBufferFormat & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const VertexBufferFormat & obj) noexcept;
 }

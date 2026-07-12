@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <memory>
 
@@ -33,22 +36,28 @@
 #include "Math/CartesianFrame.hpp"
 
 /* Forward declarations. */
-namespace EmEn::AssetLoaders
+namespace EmEn
 {
-	struct AssetData;
+	namespace AssetLoaders
+	{
+		struct AssetData;
+	}
+
+	namespace Scenes
+	{
+		class Node;
+		class Scene;
+	}
 }
 
 namespace EmEn::Scenes
 {
-	class Node;
-	class Scene;
-
 	/**
 	 * @brief Consumes an AssetData to build Scene node hierarchies or static entities.
 	 * @note This is the Scene-level counterpart of AssetLoaders::Interface.
 	 * It takes format-agnostic AssetData and creates engine Scene objects.
 	 */
-	class AssetDataConsumer final
+	class EMEN_API AssetDataConsumer final
 	{
 		public:
 

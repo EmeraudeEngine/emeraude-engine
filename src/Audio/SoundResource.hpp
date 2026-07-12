@@ -37,7 +37,7 @@
 
 namespace EmEn::Audio
 {
-	class SoundResource final : public PlayableInterface, public Resources::ResourceTrait
+	class EMEN_API SoundResource final : public PlayableInterface, public Resources::ResourceTrait
 	{
 		friend class Resources::Container< SoundResource >;
 

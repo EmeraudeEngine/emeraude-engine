@@ -30,8 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
@@ -49,13 +49,13 @@ namespace EmEn::Vulkan
 	 * (for CEF it does NOT outlive the OnAcceleratedPaint callback). The import and the GPU copy must
 	 * complete within that window, and the engine never closes the handle.
 	 */
-	struct EMERAUDE_API ExternalImageDescriptor
+	struct EMEN_API ExternalImageDescriptor
 	{
 		/** @brief Maximum number of DMA-BUF planes carried by the descriptor (Linux). */
 		static constexpr size_t MaxPlanes{4};
 
 		/** @brief The kind of platform handle carried by this descriptor. */
-		enum class HandleType : uint32_t
+		enum class EMEN_API HandleType : uint8_t
 		{
 			None = 0,
 			/** @brief Windows: DXGI shared HANDLE of a D3D11 texture (VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT). */
@@ -67,7 +67,7 @@ namespace EmEn::Vulkan
 		};
 
 		/** @brief One DMA-BUF plane (Linux only). */
-		struct Plane
+		struct EMEN_API Plane
 		{
 			int fd{-1};
 			uint32_t stride{0};

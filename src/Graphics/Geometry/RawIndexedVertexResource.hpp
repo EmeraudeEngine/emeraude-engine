@@ -51,7 +51,7 @@ namespace EmEn::Graphics::Geometry
 	 * The caller retains ownership of its data. No local CPU copy is kept.
 	 * @extends EmEn::Graphics::Geometry::Interface The common base for all geometry types.
 	 */
-	class RawIndexedVertexResource final : public Interface
+	class EMEN_API RawIndexedVertexResource final : public Interface
 	{
 		friend class Resources::Container< RawIndexedVertexResource >;
 

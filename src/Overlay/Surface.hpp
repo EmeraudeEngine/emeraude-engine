@@ -64,7 +64,7 @@ namespace EmEn::Overlay
 	 * @details Used to coordinate resize operations with asynchronous content providers
 	 * like CEF browsers, video decoders, or streaming sources.
 	 */
-	enum class TransitionBufferStatus : uint8_t
+	enum class EMEN_API TransitionBufferStatus : uint8_t
 	{
 		/** Transition buffer is ready. Drawing and committing are allowed. */
 		Ready,
@@ -80,7 +80,7 @@ namespace EmEn::Overlay
 	 * @details Used by async content providers to determine where to write
 	 * frame data based on the frame dimensions and current buffer states.
 	 */
-	enum class TargetBuffer : uint8_t
+	enum class EMEN_API TargetBuffer : uint8_t
 	{
 		/** Frame dimensions don't match any buffer - skip the frame. */
 		None,
@@ -94,7 +94,7 @@ namespace EmEn::Overlay
 	 * @brief The base class for overlay UIScreen surfaces.
 	 * @extends Base::NameableTrait A surface has a name.
 	 */
-	class EMERAUDE_API Surface : public Base::NameableTrait
+	class EMEN_API Surface : public Base::NameableTrait
 	{
 		public:
 
@@ -1400,5 +1400,5 @@ namespace EmEn::Overlay
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	EMERAUDE_API std::string to_string (const Surface & obj);
+	EMEN_API std::string to_string (const Surface & obj);
 }

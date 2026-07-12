@@ -36,7 +36,7 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief This class is responsible for sending a buffer on the GPU.
 	 */
-	class BufferTransferOperation final
+	class EMEN_API BufferTransferOperation final
 	{
 		public:
 

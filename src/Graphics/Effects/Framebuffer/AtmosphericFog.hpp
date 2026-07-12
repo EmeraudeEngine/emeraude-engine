@@ -48,7 +48,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * single fullscreen pass). Style inspired by UE5 exponential height fog.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a single-pass post-process effect.
 	 */
-	class AtmosphericFog final : public IndirectPostProcessEffect
+	class EMEN_API AtmosphericFog final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -58,7 +58,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing atmospheric fog parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				float density{0.02F};
 				float heightFalloff{0.2F};
@@ -73,7 +73,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the atmospheric fog pass (116 bytes).
 			 */
-			struct FogPushConstants
+			struct EMEN_API FogPushConstants
 			{
 				/* Camera basis — extracted from view matrix in execute(). */
 				float cameraPosX;

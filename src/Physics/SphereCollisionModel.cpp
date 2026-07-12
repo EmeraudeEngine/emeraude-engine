@@ -67,7 +67,7 @@ namespace EmEn::Physics
 		CollisionDetectionResults results;
 
 		const auto worldSphere = this->toWorldSphere(thisWorldFrame);
-		const auto worldPoint = other.toWorldPoint(otherWorldFrame);
+		const auto worldPoint = PointCollisionModel::toWorldPoint(otherWorldFrame);
 
 		if ( isColliding(worldPoint, worldSphere) )
 		{

@@ -39,7 +39,7 @@ namespace EmEn::Graphics::TextureResource
 	 * @brief The texture cubemap resource class.
 	 * @extends EmEn::Graphics::TextureResource::Abstract This is a loadable texture resource.
 	 */
-	class TextureCubemap final : public Abstract
+	class EMEN_API TextureCubemap final : public Abstract
 	{
 		friend class Resources::Container< TextureCubemap >;
 

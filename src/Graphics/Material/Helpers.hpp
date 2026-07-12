@@ -90,7 +90,7 @@ namespace EmEn::Graphics::Material
 	 * @return std::optional< FillingType >
 	 */
 	[[nodiscard]]
-	std::optional< FillingType > getFillingTypeFromJSON (const Json::Value & data) noexcept;
+	EMEN_API std::optional< FillingType > getFillingTypeFromJSON (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Returns the blending mode token from a JSON value.
@@ -98,7 +98,7 @@ namespace EmEn::Graphics::Material
 	 * @return std::optional< BlendingMode >
 	 */
 	[[nodiscard]]
-	std::optional< BlendingMode > getBlendingModeFromJSON (const Json::Value & data) noexcept;
+	EMEN_API std::optional< BlendingMode > getBlendingModeFromJSON (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Checks primary texture coordinates linkage between the material and the geometry.
@@ -109,7 +109,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool checkPrimaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
+	EMEN_API bool checkPrimaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Checks secondary texture coordinates linkage between the material and the geometry.
@@ -120,7 +120,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool checkSecondaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
+	EMEN_API bool checkSecondaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Adds a 3D texture coordinate fallback for volumetric textures when geometry only has 2D UVs.
@@ -131,7 +131,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool addVolumetricTextureFallback (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept;
+	EMEN_API bool addVolumetricTextureFallback (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Parses the base of a component structure from JSON data.
@@ -143,7 +143,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool parseComponentBase (const Json::Value & data, const char * componentName, FillingType & fillingType, Json::Value & componentData, bool optional = false) noexcept;
+	EMEN_API bool parseComponentBase (const Json::Value & data, const char * componentName, FillingType & fillingType, Json::Value & componentData, bool optional = false) noexcept;
 
 	/**
 	 * @brief Parses from an identified color component JSON data.
@@ -151,7 +151,7 @@ namespace EmEn::Graphics::Material
 	 * @return Libraries::PixelFactory::Color< float >
 	 */
 	[[nodiscard]]
-	Base::PixelFactory::Color< float > parseColorComponent (const Json::Value & data) noexcept;
+	EMEN_API Base::PixelFactory::Color< float > parseColorComponent (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Parses from an identified color component JSON data.
@@ -159,7 +159,7 @@ namespace EmEn::Graphics::Material
 	 * @return float
 	 */
 	[[nodiscard]]
-	float parseValueComponent (const Json::Value & data) noexcept;
+	EMEN_API float parseValueComponent (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Parses a component as a value.
@@ -169,5 +169,5 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool getComponentAsValue (const Json::Value & data, const char * componentType, float & value) noexcept;
+	EMEN_API bool getComponentAsValue (const Json::Value & data, const char * componentType, float & value) noexcept;
 }

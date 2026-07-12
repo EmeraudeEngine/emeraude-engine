@@ -26,12 +26,13 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <string>
-#include <vector>
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
@@ -55,7 +56,7 @@ namespace EmEn::Graphics::Compute
 	 * @note Produces 2D slice images (like CT scans) at given depths through shapes.
 	 * White = inside a shape, black = outside.
 	 */
-	class XRayAnalyzer final
+	class EMEN_API XRayAnalyzer final
 	{
 		public:
 
@@ -69,14 +70,17 @@ namespace EmEn::Graphics::Compute
 			 */
 			XRayAnalyzer (const std::shared_ptr< Vulkan::Device > & device, Saphir::ShaderManager & shaderManager) noexcept;
 
-			/** @brief Destructor. */
-			~XRayAnalyzer () noexcept;
-
 			/** @brief Non-copyable. */
 			XRayAnalyzer (const XRayAnalyzer &) = delete;
+
 			XRayAnalyzer & operator= (const XRayAnalyzer &) = delete;
+
 			XRayAnalyzer (XRayAnalyzer &&) = delete;
+
 			XRayAnalyzer & operator= (XRayAnalyzer &&) = delete;
+
+			/** @brief Destructor. */
+			~XRayAnalyzer () noexcept;
 
 			/**
 			 * @brief Adds a shape to the scene.

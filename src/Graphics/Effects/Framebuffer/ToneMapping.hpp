@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * temporal exponential moving average.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class ToneMapping final : public IndirectPostProcessEffect
+	class EMEN_API ToneMapping final : public IndirectPostProcessEffect
 	{
 		public:
 
@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Available tone mapping operators.
 			 */
-			enum class Operator : std::uint8_t
+			enum class EMEN_API Operator : std::uint8_t
 			{
 				ACESFilmic = 0,
 				Reinhard = 1,
@@ -67,7 +67,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing tone mapping parameters.
 			 */
-			struct Parameters
+			struct EMEN_API Parameters
 			{
 				Operator tonemapOperator{Operator::ACESFilmic};
 				float exposure{1.0F};
@@ -83,7 +83,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants sent to the tone mapping shader (no auto-exposure).
 			 */
-			struct ToneMappingPushConstants
+			struct EMEN_API ToneMappingPushConstants
 			{
 				float exposure;
 				float gamma;

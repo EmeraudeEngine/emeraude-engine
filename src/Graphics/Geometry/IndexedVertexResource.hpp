@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Geometry
 	 * @brief Defines an arbitrary geometry using a VBO and an IBO.
 	 * @extends EmEn::Graphics::Geometry::Interface The common base for all geometry types.
 	 */
-	class IndexedVertexResource final : public Interface
+	class EMEN_API IndexedVertexResource final : public Interface
 	{
 		friend class Resources::Container< IndexedVertexResource >;
 

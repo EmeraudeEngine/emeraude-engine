@@ -26,12 +26,9 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_export.hpp"
-
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <map>
 #include <string>
 
@@ -47,7 +44,7 @@ namespace EmEn::Animations
 	 * @brief Define an animation sequence with key frames during a specific time measured in milliseconds.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
-	class EMERAUDE_API Sequence final : public AnimationInterface
+	class EMEN_API Sequence final : public AnimationInterface
 	{
 		public:
 
@@ -186,7 +183,7 @@ namespace EmEn::Animations
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Sequence & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Sequence & obj);
 
 			/* Flag names. */
 			static constexpr auto IsPlaying{0UL};
@@ -199,33 +196,10 @@ namespace EmEn::Animations
 			bool m_isPlaying{false};
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const Sequence & obj)
-	{
-		for ( auto it = obj.m_keyFrames.cbegin(); it != obj.m_keyFrames.cend(); ++it )
-		{
-			out <<
-				"Frame #" << std::distance(obj.m_keyFrames.cbegin(), it) << " (" << it->first << ")\n"
-				"Value : " << it->second.value() << '\n';
-		}
-
-		return out;
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const Sequence & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const Sequence & obj) noexcept;
 }

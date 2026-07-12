@@ -41,7 +41,7 @@ namespace EmEn::Vulkan
 	 * @brief Holds the debug messenger extension from the Vulkan API.
 	 * @extends EmEn::Vulkan::AbstractObject Do not need a device to works.
 	 */
-	class DebugMessenger final : public AbstractObject
+	class EMEN_API DebugMessenger final : public AbstractObject
 	{
 		public:
 
@@ -89,7 +89,7 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			VkDebugUtilsMessengerEXT
-			handle () noexcept
+			handle () const noexcept
 			{
 				return m_handle;
 			}

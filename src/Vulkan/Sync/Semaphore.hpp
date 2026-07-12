@@ -38,7 +38,7 @@ namespace EmEn::Vulkan::Sync
 	 * @brief The synchronization semaphore class. Semaphores are designed for GPU tasks synchronization.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class Semaphore final : public AbstractDeviceDependentObject
+	class EMEN_API Semaphore final : public AbstractDeviceDependentObject
 	{
 		public:
 
