@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"

@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstring>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Graphics/Geometry/Interface.hpp"

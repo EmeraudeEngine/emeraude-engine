@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <ranges>
 #include <utility>
 
 /* Third-party inclusions. */

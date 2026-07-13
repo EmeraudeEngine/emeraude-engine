@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <iostream>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Controller.hpp"

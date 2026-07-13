@@ -26,6 +26,9 @@
 
 #include "Controller.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "String.hpp"
 #include "PrimaryServices.hpp"

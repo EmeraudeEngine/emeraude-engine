@@ -34,6 +34,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Graphics/TextureResource/Abstract.hpp"

@@ -26,6 +26,9 @@
 
 #include "SharedUniformBuffer.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "Math/Base.hpp"
 #include "Renderer.hpp"

@@ -26,6 +26,9 @@
 
 #include "AnimatedTexture2D.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/Image.hpp"

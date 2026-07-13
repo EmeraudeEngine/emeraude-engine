@@ -34,6 +34,7 @@
 #include <limits>
 #include <numeric>
 #include <random>
+#include <ranges>
 #include <set>
 
 /* Local inclusions. */

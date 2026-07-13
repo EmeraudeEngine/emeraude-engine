@@ -27,6 +27,7 @@
 #include "AbstractVirtualDevice.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */

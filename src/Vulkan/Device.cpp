@@ -51,6 +51,7 @@
 #include "Device.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 #include <vector>
 

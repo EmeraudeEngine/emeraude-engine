@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstring>
 #include <iostream>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Math/Base.hpp"

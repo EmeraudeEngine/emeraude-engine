@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstdint>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Device.hpp"

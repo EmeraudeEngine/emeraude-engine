@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #if !IS_MACOS
 #include <format>
+#include <ranges>
 #endif
 
 /* Local inclusions. */

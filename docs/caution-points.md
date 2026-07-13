@@ -921,6 +921,23 @@ during a move-construct.
   rewrite *is* enough (no `reserve` needed). Full comparison of both triggers and fixes:
   [`dependencies/emeraude-base/docs/caution-points.md`](../dependencies/emeraude-base/docs/caution-points.md).
 
+### PCH masks missing STL includes → build PCH-OFF to catch them
+
+The cascade-wide STL precompiled header (`emeraude-base/src/STLPrecompiledHeaders.hpp`) force-includes
+the whole STL hot-set (`<ranges>`, `<string>`, `<ostream>`, `<sstream>`, …) into every translation
+unit. With `EMERAUDE_ENABLE_PCH=ON` this silently hides any TU or header that uses `std::…` without
+including the right header — it compiles only because the PCH already pulled that header in. Flip the
+PCH off and the same code fails: `'std::views' has not been declared`, `'ostream' in namespace 'std'
+does not name a type`, `'std::stringstream' has incomplete type`, etc.
+
+- The PCH is an **optimisation, not an include provider**. Every TU and header must `#include` what
+  it uses, independently of the PCH hot-set.
+- Build `-DEMERAUDE_ENABLE_PCH=OFF` periodically (a CI lane, or locally before a release) to catch
+  these — **both configs must stay green**. A PCH-ON-only habit lets the debt accumulate invisibly.
+- 2026-07-13 audit fixed 45 such files: 42 × missing `<ranges>` (`std::views`/`std::ranges`),
+  `Physics/SurfacePhysicalProperties.hpp` × `<iosfwd>`+`<string>`, and `Help/ArgumentDoc.cpp` /
+  `Help/ShortcutDoc.cpp` × `<sstream>`. The engine now compiles clean with and without the PCH.
+
 ## Platform-Specific
 
 ### String Conversions on Windows

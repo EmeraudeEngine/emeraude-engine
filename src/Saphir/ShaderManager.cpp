@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <charconv>
+#include <ranges>
 #include <string>
 
 /* Third-party inclusions. */

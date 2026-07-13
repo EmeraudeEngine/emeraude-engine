@@ -27,6 +27,7 @@
 #include "SceneMetaData.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <unordered_map>
 
 /* Local inclusions. */

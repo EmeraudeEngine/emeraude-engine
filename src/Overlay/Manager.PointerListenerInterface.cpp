@@ -29,6 +29,9 @@
 /* Project configuration. */
 #include "emeraude_config.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 namespace EmEn::Overlay
 {
 	bool

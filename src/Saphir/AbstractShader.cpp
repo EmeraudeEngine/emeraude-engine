@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <functional>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Generator/Abstract.hpp"

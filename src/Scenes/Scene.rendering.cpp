@@ -26,6 +26,9 @@
 
 #include "Scene.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"

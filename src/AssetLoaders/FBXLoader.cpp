@@ -30,6 +30,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <vector>

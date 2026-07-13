@@ -26,6 +26,9 @@
 
 #include "Buffer.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Tracer.hpp"

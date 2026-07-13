@@ -26,6 +26,9 @@
 
 #include "ArgumentDoc.hpp"
 
+/* STL inclusions. */
+#include <sstream>
+
 namespace EmEn::Help
 {
 	std::ostream &

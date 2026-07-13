@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Audio/Manager.hpp"

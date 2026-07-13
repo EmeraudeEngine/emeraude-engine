@@ -34,6 +34,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <ranges>
 #include <sstream>
 #include <utility>
 

@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <ranges>
 
 /* Local inclusions. */
 #include "FastJSON.hpp"

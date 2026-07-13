@@ -26,6 +26,9 @@
 
 #include "DeviceQueueConfiguration.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 namespace EmEn::Vulkan
 {
 	Queue *

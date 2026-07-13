@@ -31,6 +31,8 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <iosfwd>
+#include <string>
 
 namespace EmEn::Physics
 {

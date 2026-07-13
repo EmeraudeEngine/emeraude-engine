@@ -26,6 +26,9 @@
 
 #include "ExternalInput.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "WaveFactory/FileIO.hpp"
 #include "WaveFactory/Wave.hpp"
