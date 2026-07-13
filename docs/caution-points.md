@@ -932,8 +932,9 @@ does not name a type`, `'std::stringstream' has incomplete type`, etc.
 
 - The PCH is an **optimisation, not an include provider**. Every TU and header must `#include` what
   it uses, independently of the PCH hot-set.
-- Build `-DEMERAUDE_ENABLE_PCH=OFF` periodically (a CI lane, or locally before a release) to catch
-  these — **both configs must stay green**. A PCH-ON-only habit lets the debt accumulate invisibly.
+- Build `-DEMERAUDE_ENABLE_PCH=OFF` periodically to catch these — **both configs must stay green**. A
+  PCH-ON-only habit lets the debt accumulate invisibly. A CI lane enforces it:
+  [`.github/workflows/pch-off.yml`](../.github/workflows/pch-off.yml) (engine, Release, PCH OFF, ubuntu-latest).
 - 2026-07-13 audit fixed 45 such files: 42 × missing `<ranges>` (`std::views`/`std::ranges`),
   `Physics/SurfacePhysicalProperties.hpp` × `<iosfwd>`+`<string>`, and `Help/ArgumentDoc.cpp` /
   `Help/ShortcutDoc.cpp` × `<sstream>`. The engine now compiles clean with and without the PCH.

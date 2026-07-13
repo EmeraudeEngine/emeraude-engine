@@ -1,0 +1,53 @@
+name: PCH-OFF build (Linux)
+
+# The cascade-wide STL precompiled header (emeraude-base/src/STLPrecompiledHeaders.hpp)
+# force-includes the STL hot-set into every translation unit. With the PCH enabled this
+# silently hides any TU or header that uses std::... without including the right header —
+# it compiles only because the PCH already pulled that header in. This lane builds the
+# engine with EMERAUDE_ENABLE_PCH=OFF so those missing includes surface as hard errors
+# instead of accumulating invisibly. Both configs must stay green.
+# See docs/caution-points.md § Build/Compiler.
+
+on:
+  push:
+    branches: [main, 'lnf/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push on the same ref cancels the in-flight run — no point finishing a build
+# for a commit that has already been superseded.
+concurrency:
+  group: pch-off-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-pch-off:
+    name: Engine · Release · PCH OFF (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Linux build dependencies, mirrored from README.md. emeraude-base is cloned
+      # automatically by the CMake configure step (InstallEmeraudeBase), and the
+      # prebuilt external-dependencies archive is downloaded from the public releases
+      # (the glibc floor fallback resolves the runner's glibc to the published tag).
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake python3 ninja-build \
+            libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev \
+            libfontconfig-dev libwayland-dev libxkbcommon-dev xorg-dev
+
+      - name: Configure (PCH OFF)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DEMERAUDE_ENABLE_PCH=OFF
+
+      - name: Build the engine library
+        run: cmake --build build --parallel
