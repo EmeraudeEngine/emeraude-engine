@@ -56,6 +56,11 @@ namespace EmEn::Graphics
 
 	}
 
+	/* NOTE: Out-of-line so the std::unique_ptr< Vulkan::DescriptorSet > deleter sees the complete
+	 * type (included above). Cannot be implicit in the EMEN_API-exported header — see the
+	 * destructor declaration in BindlessTextureManager.hpp. */
+	BindlessTextureManager::~BindlessTextureManager () = default;
+
 	void
 	BindlessTextureManager::setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept
 	{

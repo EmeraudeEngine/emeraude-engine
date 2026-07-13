@@ -42,7 +42,7 @@ namespace EmEn::Scenes
 	 */
 	template< typename node_t >
 	requires (std::is_class_v< Node >)
-	class EMEN_API NodeCrawler final
+	class NodeCrawler final
 	{
 		public:
 

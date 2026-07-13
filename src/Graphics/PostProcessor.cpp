@@ -294,6 +294,11 @@ namespace EmEn::Graphics
 
 	}
 
+	/* NOTE: Out-of-line so the std::unique_ptr< GrabPass > deleter sees the complete type
+	 * (included above). Cannot be implicit in the EMEN_API-exported header — see the destructor
+	 * declaration in PostProcessor.hpp. */
+	PostProcessor::~PostProcessor () = default;
+
 	bool
 	PostProcessor::onInitialize () noexcept
 	{

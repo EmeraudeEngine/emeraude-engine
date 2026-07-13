@@ -615,7 +615,7 @@ namespace EmEn::Scenes
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const LightSet & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const LightSet & obj);
 
 			std::set< std::shared_ptr< Component::AbstractLightEmitter > > m_lights;
 			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
@@ -644,14 +644,5 @@ namespace EmEn::Scenes
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const LightSet & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	EMEN_API std::string to_string (const LightSet & obj) noexcept;
 }

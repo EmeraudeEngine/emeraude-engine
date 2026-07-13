@@ -319,7 +319,7 @@ namespace EmEn::Scenes::Component
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const SpotLight & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const SpotLight & obj);
 
 			/* Uniform buffer object offset to write data (std140 layout).
 			 * Layer 0 (base):

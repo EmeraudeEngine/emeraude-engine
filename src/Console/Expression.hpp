@@ -132,7 +132,7 @@ namespace EmEn::Console
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Expression & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Expression & obj);
 
 			/**
 			 * @brief Stringifies the object.

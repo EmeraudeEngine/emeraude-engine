@@ -274,7 +274,7 @@ namespace EmEn::Resources
 	 */
 	template< typename resource_t >
 	requires (std::is_base_of_v< ResourceTrait, resource_t >)
-	class EMEN_API LoadingRequest final
+	class LoadingRequest final
 	{
 		public:
 
@@ -609,7 +609,7 @@ namespace EmEn::Resources
 	 * @version 0.8.35
 	 */
 	template< typename resource_t >
-	class EMEN_API Container final : public ContainerInterface, public Base::ObserverTrait
+	class Container final : public ContainerInterface, public Base::ObserverTrait
 	{
 		public:
 

@@ -104,7 +104,7 @@ namespace EmEn::PlatformSpecific
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const UserInfo & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const UserInfo & obj);
 
 			std::string m_username;
 			std::string m_accountName;

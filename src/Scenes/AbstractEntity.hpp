@@ -91,7 +91,7 @@ namespace EmEn::Scenes
 	 * @version 0.8.39
 	 */
 	template< typename component_t >
-	class EMEN_API ComponentBuilder final
+	class ComponentBuilder final
 	{
 		public:
 

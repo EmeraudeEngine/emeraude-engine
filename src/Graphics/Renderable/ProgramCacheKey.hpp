@@ -146,7 +146,7 @@ namespace EmEn::Graphics::Renderable
 
 /* Hash specialization for std::unordered_map. */
 template<>
-struct EMEN_API std::hash< EmEn::Graphics::Renderable::ProgramCacheKey >
+struct std::hash< EmEn::Graphics::Renderable::ProgramCacheKey >
 {
 	[[nodiscard]]
 	size_t

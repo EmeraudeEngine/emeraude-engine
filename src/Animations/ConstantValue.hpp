@@ -26,6 +26,7 @@
 
 #pragma once
 
+
 /* Local inclusions for inheritances. */
 #include "AnimationInterface.hpp"
 
@@ -39,7 +40,7 @@ namespace EmEn::Animations
 	 * @note ie, This can be used to add 1 degree each logic cycle to a rotation.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
-	class EMEN_API ConstantValue final : public AnimationInterface
+	class ConstantValue final : public AnimationInterface
 	{
 		public:
 

@@ -233,8 +233,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destructs the graphics renderer.
+			 * @note Defined out-of-line in the .cpp (not '= default' here): the class is exported
+			 * (EMEN_API), which forces MSVC to instantiate the destructor at the class definition
+			 * point in every TU. It destroys a std::unique_ptr< AccelerationStructureBuilder > held
+			 * by pointer to a forward-declared (incomplete) type, so the deleter needs the complete
+			 * type — only visible in Renderer.cpp. See docs/windows-export-api.md § "exported pimpl".
 			 */
-			~Renderer () override = default;
+			~Renderer () override;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].

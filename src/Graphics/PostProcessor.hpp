@@ -118,6 +118,16 @@ namespace EmEn::Graphics
 			PostProcessor (PrimaryServices & primaryServices, Resources::Manager & resourcesManager) noexcept;
 
 			/**
+			 * @brief Destructs the post-processor service.
+			 * @note Declared here and defined out-of-line (not implicit): the class is exported
+			 * (EMEN_API), which forces MSVC to instantiate the destructor at the class definition
+			 * point in every TU. It destroys a std::unique_ptr< GrabPass > held by pointer to a
+			 * forward-declared (incomplete) type, so the deleter needs the complete type — only
+			 * visible in PostProcessor.cpp. See docs/windows-export-api.md § "exported pimpl".
+			 */
+			~PostProcessor () override;
+
+			/**
 			 * @brief Configures the post-processor over a render-target with explicit requirements.
 			 * @param renderTarget A reference to a render-target.
 			 * @param requiresHDR Whether the scene effects require HDR.

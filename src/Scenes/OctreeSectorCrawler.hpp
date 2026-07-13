@@ -37,7 +37,7 @@ namespace EmEn::Scenes
 	 * @tparam octree_t The type of octree. FIXME: Find the right syntax to use "enable_if" with a template...
 	 */
 	template< typename octree_t >
-	class EMEN_API OctreeSectorCrawler final
+	class OctreeSectorCrawler final
 	{
 		public:
 

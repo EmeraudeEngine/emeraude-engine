@@ -1330,7 +1330,7 @@ namespace EmEn::Overlay
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Surface & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Surface & obj);
 
 			/**
 			 * @brief Lazily creates the one-shot GPU resources (command pool/buffer + fence) used by importAcceleratedFrame().

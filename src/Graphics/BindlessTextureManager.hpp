@@ -99,6 +99,17 @@ namespace EmEn::Graphics
 			explicit BindlessTextureManager (Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Destructs the bindless textures manager service.
+			 * @note Declared here and defined out-of-line (not implicit): the class is exported
+			 * (EMEN_API), which forces MSVC to instantiate the destructor at the class definition
+			 * point in every TU. It destroys a std::unique_ptr< Vulkan::DescriptorSet > held by
+			 * pointer to a forward-declared (incomplete) type, so the deleter needs the complete
+			 * type — only visible in BindlessTextureManager.cpp. See docs/windows-export-api.md
+			 * § "exported pimpl".
+			 */
+			~BindlessTextureManager () override;
+
+			/**
 			 * @brief Sets the device that will be used with this manager.
 			 * @param device A reference to a device smart pointer.
 			 * @return void

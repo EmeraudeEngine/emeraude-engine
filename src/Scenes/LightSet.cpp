@@ -386,60 +386,6 @@ namespace EmEn::Scenes
 		m_lightPercentToAmbient = DefaultLightPercentToAmbient;
 	}
 
-	std::ostream &
-	operator<< (std::ostream & out, const LightSet & obj)
-	{
-		const std::lock_guard< std::mutex > lock{obj.m_lightsAccess};
-
-		out <<
-			"Ambient light color : " << obj.m_ambientLightColor << "\n"
-			"Ambient light intensity : " << obj.m_ambientLightIntensity << "\n";
-
-		if ( obj.m_directionalLights.empty() )
-		{
-			out << "No directional light." << "\n";
-		}
-		else
-		{
-			out << "Directional lights : " << obj.m_directionalLights.size() << "\n";
-
-			for ( const auto & light : obj.m_directionalLights )
-			{
-				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
-			}
-		}
-
-		if ( obj.m_pointLights.empty() )
-		{
-			out << "No point light." << "\n";
-		}
-		else
-		{
-			out << "Point lights : " << obj.m_pointLights.size() << "\n";
-
-			for ( const auto & light : obj.m_pointLights )
-			{
-				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
-			}
-		}
-
-		if ( obj.m_spotLights.empty() )
-		{
-			out << "No spotlight." << "\n";
-		}
-		else
-		{
-			out << "Spot lights : " << obj.m_spotLights.size() << "\n";
-
-			for ( const auto & light : obj.m_spotLights )
-			{
-				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
-			}
-		}
-
-		return out;
-	}
-
 	std::shared_ptr< DescriptorSetLayout >
 	LightSet::getDescriptorSetLayout (LayoutManager & layoutManager) noexcept
 	{
@@ -685,5 +631,69 @@ namespace EmEn::Scenes
 		}
 
 		return errors == 0;
+	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const LightSet & obj)
+	{
+		const std::lock_guard< std::mutex > lock{obj.m_lightsAccess};
+
+		out <<
+			"Ambient light color : " << obj.m_ambientLightColor << "\n"
+			"Ambient light intensity : " << obj.m_ambientLightIntensity << "\n";
+
+		if ( obj.m_directionalLights.empty() )
+		{
+			out << "No directional light." << "\n";
+		}
+		else
+		{
+			out << "Directional lights : " << obj.m_directionalLights.size() << "\n";
+
+			for ( const auto & light : obj.m_directionalLights )
+			{
+				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
+			}
+		}
+
+		if ( obj.m_pointLights.empty() )
+		{
+			out << "No point light." << "\n";
+		}
+		else
+		{
+			out << "Point lights : " << obj.m_pointLights.size() << "\n";
+
+			for ( const auto & light : obj.m_pointLights )
+			{
+				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
+			}
+		}
+
+		if ( obj.m_spotLights.empty() )
+		{
+			out << "No spotlight." << "\n";
+		}
+		else
+		{
+			out << "Spot lights : " << obj.m_spotLights.size() << "\n";
+
+			for ( const auto & light : obj.m_spotLights )
+			{
+				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
+			}
+		}
+
+		return out;
+	}
+
+	std::string
+	to_string (const LightSet & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
 	}
 }

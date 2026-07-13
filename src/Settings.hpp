@@ -1339,7 +1339,7 @@ namespace EmEn
 			 * @param obj The @ref Settings instance to serialize.
 			 * @return A reference to @p out for chaining.
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Settings & obj);
+			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Settings & obj);
 
 			const Arguments & m_arguments;
 			const FileSystem & m_fileSystem;

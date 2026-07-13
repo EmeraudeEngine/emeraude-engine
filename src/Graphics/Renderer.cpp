@@ -68,6 +68,11 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 	using namespace Saphir;
 
+	/* NOTE: Out-of-line so the std::unique_ptr< AccelerationStructureBuilder > deleter sees the
+	 * complete type (included above). Cannot be '= default' in the EMEN_API-exported header —
+	 * see the destructor declaration in Renderer.hpp. */
+	Renderer::~Renderer () = default;
+
 	Renderer::Renderer (PrimaryServices & primaryServices, Resources::Manager & resourcesManager, Instance & instance, Window & window) noexcept
 		: ServiceInterface{ClassId},
 		ControllableTrait{ClassId},

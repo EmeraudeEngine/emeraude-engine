@@ -224,7 +224,13 @@ namespace EmEn::Input
 			[[nodiscard]]
 			bool usable () const noexcept;
 
-			inline static std::array< JoystickState, DeviceCount > s_devicesState{};
+			/* NOTE: Defined out-of-line in the .cpp, NOT 'inline static' here. On MSVC an inline
+			 * static member with a dynamic initializer, held by an EMEN_API-exported class, emits an
+			 * unreferenced internal-linkage initializer in every consumer TU (C4505, fatal under
+			 * /WX) and risks a per-module copy diverging from the DLL's. A single out-of-line
+			 * definition lives only in the DLL; consumers import it. See docs/windows-export-api.md
+			 * § "exported static data member". */
+			static std::array< JoystickState, DeviceCount > s_devicesState;
 
 			int32_t m_deviceID{-1};
 			float m_threshold{0.15F};

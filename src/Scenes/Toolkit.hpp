@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
@@ -68,7 +71,7 @@ namespace EmEn::Scenes
 	 */
 	template< typename entity_t, typename component_t >
 	requires (std::is_base_of_v< AbstractEntity, entity_t >, std::is_base_of_v< Component::Abstract, component_t >)
-	class EMEN_API BuiltEntity final
+	class BuiltEntity final
 	{
 		public:
 
@@ -134,7 +137,7 @@ namespace EmEn::Scenes
 	/**
 	 * @brief This class eases the build of a scene.
 	 */
-	class Toolkit final
+	class EMEN_API Toolkit final
 	{
 		public:
 

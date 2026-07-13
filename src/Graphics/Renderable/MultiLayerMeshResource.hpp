@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <memory>
 #include <mutex>
@@ -114,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief This class provides a high-level object to describe a physical object in the 3D world.
 	 * @extends EmEn::Graphics::Renderable::Abstract Adds the ability to be rendered in the 3D world.
 	 */
-	class MultiLayerMeshResource final : public Abstract, public SkeletalDataTrait
+	class EMEN_API MultiLayerMeshResource final : public Abstract, public SkeletalDataTrait
 	{
 		friend class Resources::Container< MultiLayerMeshResource >;
 

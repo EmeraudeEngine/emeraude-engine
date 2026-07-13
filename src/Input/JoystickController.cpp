@@ -46,6 +46,9 @@
 
 namespace EmEn::Input
 {
+	/* Out-of-line definition (single instance in the DLL) — see the declaration in the header. */
+	std::array< JoystickState, DeviceCount > JoystickController::s_devicesState{};
+
 	bool
 	JoystickController::usable () const noexcept
 	{
