@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <cstdint>
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 

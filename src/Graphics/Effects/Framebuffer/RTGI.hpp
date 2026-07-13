@@ -73,12 +73,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			struct EMEN_API TracePushConstants
 			{
-				float invViewProj[16];
-				float invViewCol0[3];
+				std::array< float, 16 > invViewProj;
+				std::array< float, 3 > invViewCol0;
 				float viewPosX;
-				float invViewCol1[3];
+				std::array< float, 3 > invViewCol1;
 				float viewPosY;
-				float invViewCol2[3];
+				std::array< float, 3 > invViewCol2;
 				float viewPosZ;
 				float maxDistance;
 				float intensity;

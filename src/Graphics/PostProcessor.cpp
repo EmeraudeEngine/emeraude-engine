@@ -859,12 +859,12 @@ namespace EmEn::Graphics
 		}
 	}
 
-	void
+	bool
 	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
-			return;
+			return false;
 		}
 
 		/* Build push constants for the effect chain. */
@@ -877,12 +877,12 @@ namespace EmEn::Graphics
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
 
 		const PushConstants pc{
-			static_cast< float >(extent.width),
-			static_cast< float >(extent.height),
-			elapsedTime,
-			m_nearPlane,
-			m_farPlane,
-			tanHalfFovY
+			.frameWidth = static_cast< float >(extent.width),
+			.frameHeight = static_cast< float >(extent.height),
+			.time = elapsedTime,
+			.nearPlane = m_nearPlane,
+			.farPlane = m_farPlane,
+			.tanHalfFovY = tanHalfFovY
 		};
 
 		/* Execute each enabled effect in the chain.
@@ -891,13 +891,13 @@ namespace EmEn::Graphics
 		 * For depth, we use a lightweight adapter that exposes the depth resources. */
 		const Vulkan::TextureInterface * currentTexture = m_grabPass.get();
 
-		GrabPassDepthAdapter depthAdapter{*m_grabPass};
+		const GrabPassDepthAdapter depthAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * depthTexture = m_grabPass->hasDepth() ? &depthAdapter : nullptr;
 
-		GrabPassNormalsAdapter normalsAdapter{*m_grabPass};
+		const GrabPassNormalsAdapter normalsAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * normalsTexture = m_grabPass->hasNormals() ? &normalsAdapter : nullptr;
 
-		GrabPassMaterialPropertiesAdapter materialPropertiesAdapter{*m_grabPass};
+		const GrabPassMaterialPropertiesAdapter materialPropertiesAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * materialPropertiesTexture = m_grabPass->hasMaterialProperties() ? &materialPropertiesAdapter : nullptr;
 
 		for ( const auto & effect : stack.effects() )
@@ -950,32 +950,30 @@ namespace EmEn::Graphics
 		 * instead of the raw grab pass, so the single-pass render uses the processed texture.
 		 * Each frame-in-flight has its own descriptor set, avoiding conflicts with pending frames. */
 		const auto frameIndex = m_renderer.currentFrameIndex();
-		auto & descriptorSet = m_descriptorSets[frameIndex];
+		const auto & descriptorSet = m_descriptorSets[frameIndex];
 
 		if ( currentTexture != m_grabPass.get() && currentTexture != nullptr )
 		{
-			static_cast< void >(descriptorSet->writeCombinedImageSampler(
+			return descriptorSet->writeCombinedImageSampler(
 				0,
 				*currentTexture->image(),
 				*currentTexture->imageView(),
 				*currentTexture->sampler()
-			));
+			);
 		}
-		else
-		{
-			/* No effects ran, restore descriptor to grab pass. */
-			static_cast< void >(descriptorSet->writeCombinedImageSampler(
-				0,
-				*m_grabPass->image(),
-				*m_grabPass->imageView(),
-				*m_grabPass->sampler()
-			));
-		}
+
+		/* No effects ran, restore descriptor to grab pass. */
+		return descriptorSet->writeCombinedImageSampler(
+			0,
+			*m_grabPass->image(),
+			*m_grabPass->imageView(),
+			*m_grabPass->sampler()
+		);
 	}
 
 	/* GPU execution — single-pass camera lens effects. */
 
-	void
+	bool
 	PostProcessor::executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept
 	{
 		/* Generate or retrieve the shader program via the PostProcessing generator.
@@ -998,14 +996,14 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Unable to generate the post-processing shader program !";
 
-			return;
+			return false;
 		}
 
 		const auto program = generator.shaderProgram();
 
 		if ( program == nullptr )
 		{
-			return;
+			return false;
 		}
 
 		/* Bind the graphics pipeline. */
@@ -1026,8 +1024,14 @@ namespace EmEn::Graphics
 			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
 
 			const VkRect2D scissor{
-				.offset = {0, 0},
-				.extent = {extent.width, extent.height}
+				.offset = {
+					.x = 0,
+					.y = 0
+				},
+				.extent = {
+					.width = extent.width,
+					.height = extent.height
+				}
 			};
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
@@ -1038,12 +1042,12 @@ namespace EmEn::Graphics
 			const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
 
 			const PushConstants pc{
-				static_cast< float >(extent.width),
-				static_cast< float >(extent.height),
-				elapsedTime,
-				m_nearPlane,
-				m_farPlane,
-				tanHalfFovY
+				.frameWidth = static_cast< float >(extent.width),
+				.frameHeight = static_cast< float >(extent.height),
+				.time = elapsedTime,
+				.nearPlane = m_nearPlane,
+				.farPlane = m_farPlane,
+				.tanHalfFovY = tanHalfFovY
 			};
 
 			vkCmdPushConstants(
@@ -1067,6 +1071,8 @@ namespace EmEn::Graphics
 		/* Bind and draw the fullscreen quad. */
 		commandBuffer.bind(*m_quadGeometry, 0);
 		commandBuffer.draw(*m_quadGeometry, 0, 1);
+
+		return true;
 	}
 
 	/* Static. */

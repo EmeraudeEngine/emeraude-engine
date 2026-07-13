@@ -59,7 +59,7 @@ namespace
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
 	 */
-	static constexpr auto RTGITraceFragmentShader = R"GLSL(
+	constexpr auto RTGITraceFragmentShader = R"GLSL(
 #version 460
 #extension GL_EXT_ray_query : require
 #extension GL_EXT_buffer_reference2 : require
@@ -420,7 +420,7 @@ void main()
 	/* Bilateral blur shader — depth/normal-aware separable filter.
 	 * Preserves edges by weighting samples based on depth and normal similarity.
 	 * Binding 0: GI input, Binding 1: depth, Binding 2: normals. */
-	static constexpr auto RTGIBlurFragmentShader = R"GLSL(
+	constexpr auto RTGIBlurFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -503,7 +503,7 @@ void main()
 	/* Apply pass: additive blend of indirect light onto the scene,
 	 * modulated by the material properties G-buffer (emissive surfaces
 	 * should not receive GI — they emit their own light). */
-	static constexpr auto RTGIApplyFragmentShader = R"GLSL(
+	constexpr auto RTGIApplyFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -647,7 +647,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(bindlessLayout);
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(TracePushConstants)}
 			});
 		}
 
@@ -656,7 +659,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(blurInputLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(BlurPushConstants)}
 			});
 		}
 
@@ -665,7 +671,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(applyLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(ApplyPushConstants)}
 			});
 		}
 
@@ -718,7 +727,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( auto & ds : m_blurHPerFrame )
+		for ( const auto & ds : m_blurHPerFrame )
 		{
 			if ( !ds->writeCombinedImageSampler(0, m_traceTarget) )
 			{
@@ -734,7 +743,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( auto & ds : m_blurVPerFrame )
+		for ( const auto & ds : m_blurVPerFrame )
 		{
 			if ( !ds->writeCombinedImageSampler(0, m_blurHTarget) )
 			{
@@ -750,7 +759,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( auto & ds : m_applyPerFrame )
+		for ( const auto & ds : m_applyPerFrame )
 		{
 			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
@@ -783,7 +792,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -856,8 +865,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
 
 			const VkRect2D scissor{
-				.offset = {0, 0},
-				.extent = {m_traceTarget.width(), m_traceTarget.height()}
+				.offset = {
+					.x = 0,
+					.y = 0
+				},
+				.extent = {
+					.width = m_traceTarget.width(),
+					.height = m_traceTarget.height()
+				}
 			};
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 

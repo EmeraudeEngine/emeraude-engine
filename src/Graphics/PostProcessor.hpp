@@ -118,6 +118,32 @@ namespace EmEn::Graphics
 			PostProcessor (PrimaryServices & primaryServices, Resources::Manager & resourcesManager) noexcept;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			PostProcessor (const PostProcessor & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			PostProcessor (PostProcessor && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return PostProcessor &
+			 */
+			PostProcessor & operator= (const PostProcessor & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return PostProcessor &
+			 */
+			PostProcessor & operator= (PostProcessor && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the post-processor service.
 			 * @note Declared here and defined out-of-line (not implicit): the class is exported
 			 * (EMEN_API), which forces MSVC to instantiate the destructor at the class definition
@@ -258,10 +284,10 @@ namespace EmEn::Graphics
 			 * After execution, the descriptor set is updated to point to the chain output.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param stack The scene's post-process stack.
-			 * @param lightSet
-			 * @return void
+			 * @param lightSet A reference to the scene light set.
+			 * @return bool
 			 */
-			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.
@@ -270,9 +296,9 @@ namespace EmEn::Graphics
 			 * then renders a fullscreen quad with that program.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param lensEffects The camera's lens effects list (maybe empty for passthrough).
-			 * @return void
+			 * @return bool
 			 */
-			void executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept;
+			bool executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept;
 
 			/* Static. */
 
