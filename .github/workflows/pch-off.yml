@@ -49,11 +49,15 @@ jobs:
             libvulkan-dev \
             libfontconfig-dev libwayland-dev libxkbcommon-dev xorg-dev
 
+      # Clone emeraude-base from 'develop': the external-dependencies glibc download
+      # fallback (needed for this runner's glibc, which has no exact-match archive) lives
+      # there until it reaches base 'main'. Drop this override once main carries it.
       - name: Configure (PCH OFF)
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DEMERAUDE_ENABLE_PCH=OFF
+          -DEMERAUDE_BASE_GIT_BRANCH=develop
 
       - name: Build the engine library
         run: cmake --build build --parallel
