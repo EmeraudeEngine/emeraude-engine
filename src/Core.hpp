@@ -123,6 +123,7 @@
 #include <array>
 #include <atomic>
 #include <condition_variable>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -332,6 +333,24 @@ namespace EmEn
 			 * @see NotificationCode::ExecutionResumed
 			 */
 			void resume () noexcept;
+
+			/**
+			 * @brief Requests a main-loop cycle to run within a given delay (thread-safe).
+			 * @details Generic integration contract for external subsystems hooked into the main
+			 * loop through onCoreMainLoopCycle(), e.g., an external message pump such as CEF's
+			 * CefBrowserProcessHandler::OnScheduleMessagePumpWork(). Guarantees that a main-loop
+			 * cycle runs within the requested delay: the wait timeout of the next iteration is
+			 * bounded by the pending deadline (including while paused), and an immediate request
+			 * wakes the loop if it is blocked in Input::Manager::waitSystemEvents(). A new request
+			 * replaces any pending one (last call wins). The regular cadence (mainLoopFrequencyHz())
+			 * acts as a floor; this call only tightens the next wake-up, never delays it.
+			 * @note Callable from any thread.
+			 * @param delayMS The requested delay in milliseconds. A value <= 0 means "as soon as possible".
+			 * @return void
+			 * @see onCoreMainLoopCycle()
+			 * @see mainLoopFrequencyHz()
+			 */
+			void scheduleMainLoopCycle (int64_t delayMS) noexcept;
 
 			/**
 			 * @brief Stops the engine and initiates shutdown.
@@ -1235,6 +1254,28 @@ namespace EmEn
 			void onWindowChanged () noexcept;
 
 			/**
+			 * @brief Executes the body of one main-loop cycle.
+			 * @details Single definition shared by the running and paused loops: polls the
+			 * console controller, consumes a pending scheduleMainLoopCycle() request when due,
+			 * then calls the onCoreMainLoopCycle() application hook.
+			 * @return void
+			 * @see scheduleMainLoopCycle()
+			 * @see onCoreMainLoopCycle()
+			 */
+			void executeMainLoopCycle () noexcept;
+
+			/**
+			 * @brief Computes the wait timeout for the next main-loop iteration, in seconds.
+			 * @details Returns the fallback timeout bounded by the deadline of a pending
+			 * scheduleMainLoopCycle() request, so the request is honored even when the fallback
+			 * is longer, or infinite as in the pause loop.
+			 * @param fallbackSeconds The regular timeout in seconds, 0.0 meaning "wait indefinitely".
+			 * @return double
+			 * @see scheduleMainLoopCycle()
+			 */
+			[[nodiscard]] double mainLoopWaitTimeout (double fallbackSeconds) const noexcept;
+
+			/**
 			 * @brief Refreshes the pointer-coordinate scaling according to the current surface content scale.
 			 * @details Some windowing systems report the cursor position in logical/DIP coordinates instead
 			 * of physical pixels (macOS screen points; Linux/Wayland logical surface coordinates). On those,
@@ -1529,6 +1570,9 @@ namespace EmEn
 			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
 			uint32_t m_mainLoopFrequency{DefaultMainLoopFrequencyHz< uint32_t >}; ///< Main event-loop tick ceiling (Hz), set at construction. @see mainLoopFrequencyHz()
 			double m_mainLoopEventTimeoutSeconds{1.0 / DefaultMainLoopFrequencyHz< double >}; ///< Precomputed 1/Hz wait timeout passed to waitSystemEvents().
+			/* External main-loop cycle scheduling. @see scheduleMainLoopCycle() */
+			static constexpr auto MainLoopCycleNotScheduled{std::numeric_limits< int64_t >::max()}; ///< Sentinel for m_scheduledCycleDueTimeMS when no external cycle request is pending.
+			std::atomic< int64_t > m_scheduledCycleDueTimeMS{MainLoopCycleNotScheduled}; ///< Monotonic deadline (ms, Base::Time::elapsedMilliseconds() clock) of the next main-loop cycle requested via scheduleMainLoopCycle(). Written from any thread, consumed by the main loop.
 			/* On-demand rendering (used only in RenderingMode::OnDemand). @see setRenderingMode(), requestRedraw() */
 			std::mutex m_redrawMutex; ///< Guards the redraw condition variable / pending-frame budget against lost wakeups.
 			std::condition_variable m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested.

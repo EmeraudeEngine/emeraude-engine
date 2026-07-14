@@ -426,8 +426,9 @@ namespace EmEn
 		while ( m_isMainLoopRunning )
 		{
 			/* EventInput: Update user events.
-			 * DirectInput: Copy the state of every input device to use it in the engine cycle. */
-			m_inputManager.waitSystemEvents(m_mainLoopEventTimeoutSeconds);
+			 * DirectInput: Copy the state of every input device to use it in the engine cycle.
+			 * NOTE: The regular timeout is bounded by a pending scheduleMainLoopCycle() deadline. */
+			m_inputManager.waitSystemEvents(this->mainLoopWaitTimeout(m_mainLoopEventTimeoutSeconds));
 
 			/* NOTE: Check if the graphics render do not have a problem. */
 			if ( m_graphicsRenderer.usable() )
@@ -444,9 +445,7 @@ namespace EmEn
 				this->stop();
 			}
 
-			/* Let the child class get the call event from the main loop. */
-			m_consoleController.poll();
-			this->onCoreMainLoopCycle();
+			this->executeMainLoopCycle();
 
 			/* NOTE: Checks whether the engine is running or paused.
 			 * If not, we wait for a wake-up event with a blocking function. */
@@ -460,11 +459,11 @@ namespace EmEn
 				/* Wait until an event release the pause state. */
 				while ( m_paused )
 				{
-					/* Let the child class get the call event from the main loop. */
-					m_consoleController.poll();
-					this->onCoreMainLoopCycle();
+					this->executeMainLoopCycle();
 
-					m_inputManager.waitSystemEvents();
+					/* NOTE: The indefinite wait is bounded by a pending scheduleMainLoopCycle()
+					 * deadline, so external pumps (e.g., CEF UI) stay serviced while paused. */
+					m_inputManager.waitSystemEvents(this->mainLoopWaitTimeout(0.0));
 				}
 
 				/* Restart all timers of the active scene. */
@@ -986,6 +985,69 @@ namespace EmEn
 		 * first by sending the event,
 		 * then directly to the sub application. */
 		this->notify(ExecutionResumed);
+	}
+
+	void
+	Core::scheduleMainLoopCycle (int64_t delayMS) noexcept
+	{
+		const auto dueTimeMS = Base::Time::elapsedMilliseconds() + std::max< int64_t >(delayMS, 0);
+
+		/* NOTE: Contract — a new request replaces any pending one (last call wins). */
+		m_scheduledCycleDueTimeMS.store(dueTimeMS, std::memory_order_release);
+
+		if ( delayMS <= 0 )
+		{
+			/* NOTE: Immediate request — wake the main loop, which may be blocked in
+			 * waitSystemEvents() for up to 1/mainLoopFrequencyHz() seconds, or
+			 * indefinitely while paused. */
+			Input::Manager::wakeUpEventsLoop();
+		}
+	}
+
+	void
+	Core::executeMainLoopCycle () noexcept
+	{
+		/* Let the console execute pending remote commands. */
+		m_consoleController.poll();
+
+		/* NOTE: External cycle-scheduling contract (scheduleMainLoopCycle()): the cycle
+		 * about to run satisfies a due request. CAS — if a fresher request landed
+		 * concurrently, keep its deadline. */
+		auto dueTimeMS = m_scheduledCycleDueTimeMS.load(std::memory_order_acquire);
+
+		if ( dueTimeMS != MainLoopCycleNotScheduled && Base::Time::elapsedMilliseconds() >= dueTimeMS )
+		{
+			m_scheduledCycleDueTimeMS.compare_exchange_strong(dueTimeMS, MainLoopCycleNotScheduled, std::memory_order_acq_rel);
+		}
+
+		/* Let the child class get the call event from the main loop. */
+		this->onCoreMainLoopCycle();
+	}
+
+	double
+	Core::mainLoopWaitTimeout (double fallbackSeconds) const noexcept
+	{
+		const auto dueTimeMS = m_scheduledCycleDueTimeMS.load(std::memory_order_acquire);
+
+		if ( dueTimeMS == MainLoopCycleNotScheduled )
+		{
+			return fallbackSeconds;
+		}
+
+		/* NOTE: glfwWaitEventsTimeout() requires a strictly positive timeout; an already
+		 * due deadline degenerates to a minimal wait so the loop keeps draining OS events. */
+		constexpr auto MinimalWaitSeconds{0.001};
+
+		const auto remainingSeconds = std::max(static_cast< double >(dueTimeMS - Base::Time::elapsedMilliseconds()) * 0.001, MinimalWaitSeconds);
+
+		/* NOTE: A fallback of 0.0 means "wait indefinitely" (pause loop): the pending
+		 * deadline becomes the timeout, otherwise the tightest of the two wins. */
+		if ( fallbackSeconds <= 0.0 )
+		{
+			return remainingSeconds;
+		}
+
+		return std::min(fallbackSeconds, remainingSeconds);
 	}
 
 	void

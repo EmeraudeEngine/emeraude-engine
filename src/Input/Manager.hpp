@@ -413,6 +413,13 @@ namespace EmEn::Input
 			void waitSystemEvents (double until = 0.0) const noexcept;
 
 			/**
+			 * @brief Wakes up the thread blocked in waitSystemEvents() by posting an empty event.
+			 * @note Thread-safe, this method can be called from any thread (glfwPostEmptyEvent() contract).
+			 * @return void
+			 */
+			static void wakeUpEventsLoop () noexcept;
+
+			/**
 			 * @brief Adds an object the keyboard can control, like a player.
 			 * @param listener A pointer to a keyboard listener interfaced object.
 			 * @return void

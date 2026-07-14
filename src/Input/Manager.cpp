@@ -853,6 +853,15 @@ namespace EmEn::Input
 	}
 
 	void
+	Manager::wakeUpEventsLoop () noexcept
+	{
+		/* NOTE: Documented callable from any thread. Before GLFW initialization (or after
+		 * termination), GLFW reports GLFW_NOT_INITIALIZED through the error callback and
+		 * the call is a harmless no-op. */
+		glfwPostEmptyEvent();
+	}
+
+	void
 	Manager::addKeyboardListener (KeyboardListenerInterface * listener) noexcept
 	{
 		if ( std::ranges::binary_search(std::as_const(m_keyboardListeners), listener) )

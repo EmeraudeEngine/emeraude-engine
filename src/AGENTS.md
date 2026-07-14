@@ -16,7 +16,7 @@ Fundamental framework components located directly in `src/`. These files constit
 **Responsibilities**:
 - **Orchestration**: Coordinates all engine subsystems
 - **Main loops**: Manages three execution loops
-  - Main loop (input/events + `onCoreMainLoopCycle`; idle tick ceiling configurable via the `Core` constructor's `mainLoopFrequencyHz` parameter, default `DefaultMainLoopFrequencyHz` = 100 Hz)
+  - Main loop (input/events + `onCoreMainLoopCycle`; idle tick ceiling configurable via the `Core` constructor's `mainLoopFrequencyHz` parameter, default `DefaultMainLoopFrequencyHz` = 100 Hz; external subsystems can tighten the next wake-up via `scheduleMainLoopCycle()` — see § Core - External Main-Loop Cycle Scheduling)
   - Logic loop (separate thread; fixed timestep at `WorldPhysicsUpdateFrequency` = 60 Hz)
   - Render loop (separate thread; uncapped in `RenderingMode::Continuous`, sleeps when idle in `RenderingMode::OnDemand` — see § Core - On-Demand Rendering)
 - **Lifecycle**: Entry point for overriding application behavior
@@ -58,6 +58,35 @@ private:
 - `onCoreNotification()` - Observer pattern
 - `onCoreOpenFiles()` - File drag & drop
 - `onCoreSurfaceRefreshed()` - Window resize
+
+### Core - External Main-Loop Cycle Scheduling
+
+`onCoreMainLoopCycle()` runs at the loop's own cadence (100 Hz ceiling when active, **only on OS
+events while paused**). Subsystems integrated into that hook whose work is scheduled from other
+threads (typical case: an external message pump such as CEF's
+`CefBrowserProcessHandler::OnScheduleMessagePumpWork()` with `external_message_pump = 1`) need a
+way to control *when* the next cycle runs. That is `scheduleMainLoopCycle()`:
+
+```cpp
+/* Thread-safe, callable from any thread. */
+void Core::scheduleMainLoopCycle (int64_t delayMS) noexcept;
+```
+
+**Contract**:
+- Guarantees a main-loop cycle (thus `onCoreMainLoopCycle()`) runs within `delayMS` milliseconds.
+- `delayMS <= 0` = "as soon as possible": wakes the main loop immediately via
+  `Input::Manager::wakeUpEventsLoop()` (`glfwPostEmptyEvent()`, documented thread-safe).
+- A new request **replaces** any pending one (last call wins) — matches the CEF
+  `OnScheduleMessagePumpWork` contract.
+- Only tightens the next wake-up, never delays it: the regular cadence stays the floor.
+- **Works while paused**: the pause loop's indefinite `waitSystemEvents()` is bounded by the
+  pending deadline, so an external pump (e.g., CEF UI) stays serviced during engine pause.
+
+**Implementation**: atomic monotonic deadline (`m_scheduledCycleDueTimeMS`, sentinel
+`MainLoopCycleNotScheduled`). The cycle body is defined once in the private, non-virtual
+`executeMainLoopCycle()` (console poll → CAS-consume a due request → `onCoreMainLoopCycle()`
+hook), called by both the running and paused loops; both wait sites compute their timeout
+through `mainLoopWaitTimeout()`. Clock: `Base::Time::elapsedMilliseconds()` (steady).
 
 ### Core - On-Demand Rendering
 
