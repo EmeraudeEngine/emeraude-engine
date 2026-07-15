@@ -271,6 +271,14 @@ elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 
 	# Compile definitions/options come from emeraude-base (EMERAUDE_COMPILE_*).
+	# INSTALL_RPATH: without it, CMake bakes the ABSOLUTE build-machine path of the
+	# ext-deps lib directory into the shared library's DT_RUNPATH. That directory only
+	# holds static archives (every runtime dependency of libEmeraude is a system lib),
+	# so the entry is vestigial at runtime — but it leaks the build tree into shipped
+	# binaries and trips the consumers' packaging portability checks (app_system
+	# deploy/package.py fails on any absolute RPATH/RUNPATH since the AppImage field
+	# incident where the same pattern made a library unresolvable). "$ORIGIN" keeps
+	# resolution relative to wherever the library is installed.
 	set_target_properties(${PROJECT_NAME} PROPERTIES
 		C_STANDARD ${EMERAUDE_C_VERSION}
 		C_STANDARD_REQUIRED On
@@ -280,6 +288,8 @@ elseif ( UNIX )
 		CXX_EXTENSIONS Off
 		VERSION ${PROJECT_VERSION}
 		SOVERSION ${PROJECT_VERSION_MAJOR}
+		INSTALL_RPATH "$ORIGIN"
+		BUILD_WITH_INSTALL_RPATH TRUE
 	)
 
 	# Linux-only sanitizer options.
