@@ -202,11 +202,11 @@ namespace EmEn::Graphics
 				return false;
 			}
 
-			TraceSuccess{ClassId} << "Grab pass textures created (" << width << "x" << height << ") with depth.";
+			TraceDebug{ClassId} << "Grab pass textures created (" << width << "x" << height << ") with depth.";
 		}
 		else
 		{
-			TraceSuccess{ClassId} << "Grab pass texture created (" << width << "x" << height << ") without depth.";
+			TraceDebug{ClassId} << "Grab pass texture created (" << width << "x" << height << ") without depth.";
 		}
 
 		/* Create the normals grab pass image if a normals format is specified. */
