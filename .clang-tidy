@@ -31,6 +31,7 @@ Checks: >
   -readability-magic-numbers,
   -readability-suspicious-call-argument,
   -readability-function-cognitive-complexity,
+  -readability-trailing-comma,
   -clang-diagnostic-unreachable-code
 WarningsAsErrors: ''
 HeaderFilterRegex: 'src/.*'
