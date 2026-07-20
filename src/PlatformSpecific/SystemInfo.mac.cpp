@@ -118,8 +118,22 @@ namespace EmEn::PlatformSpecific
 	size_t
 	SystemInfo::getFreeMemory () noexcept
 	{
-		/* FIXME: _SC_AVPHYS_PAGES do not exists on MacOS. */
-		return 0;//sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
+		/* NOTE: _SC_AVPHYS_PAGES does not exist on macOS — query the Mach VM statistics
+		 * instead. "Available" memory counts the free pages plus the inactive ones
+		 * (cached pages the kernel reclaims on demand), matching what Activity Monitor
+		 * reports as available. */
+		vm_statistics64_data_t vmStats{};
+		mach_msg_type_number_t infoCount = HOST_VM_INFO64_COUNT;
+
+		if ( host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast< host_info64_t >(&vmStats), &infoCount) != KERN_SUCCESS )
+		{
+			/* Can't access? Callers treat 0 as "probe unavailable". */
+			return 0;
+		}
+
+		const auto pageSize = static_cast< size_t >(sysconf(_SC_PAGE_SIZE));
+
+		return (static_cast< size_t >(vmStats.free_count) + static_cast< size_t >(vmStats.inactive_count)) * pageSize;
 	}
 
 	size_t
