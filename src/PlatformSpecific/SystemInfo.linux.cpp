@@ -27,6 +27,7 @@
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -141,6 +142,25 @@ namespace EmEn::PlatformSpecific
 	size_t
 	SystemInfo::getFreeMemory () noexcept
 	{
+		/* NOTE: _SC_AVPHYS_PAGES only counts truly-free pages — the reclaimable page
+		 * cache is reported as "used", overestimating the memory load by tens of
+		 * percents on a busy desktop. Prefer MemAvailable from /proc/meminfo
+		 * (kernel >= 3.14): the kernel's own estimate of allocatable memory. */
+		std::ifstream meminfo{"/proc/meminfo"};
+		std::string line;
+
+		while ( std::getline(meminfo, line) )
+		{
+			if ( line.starts_with("MemAvailable:") )
+			{
+				/* Format: "MemAvailable:   12345678 kB" */
+				const auto kibibytes = std::strtoull(line.c_str() + line.find(':') + 1, nullptr, 10);
+
+				return static_cast< size_t >(kibibytes) * 1024;
+			}
+		}
+
+		/* Fallback (pre-3.14 kernel): truly-free pages. */
 		return sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
 	}
 
