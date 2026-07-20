@@ -1064,7 +1064,8 @@ namespace EmEn
 		{
 			const auto scale = this->getContentScale();
 			const auto scaledWidth = std::floor(static_cast< float >(widthPx) / scale.at(0));
-			const auto scaledHeight = std::floor(static_cast< float >(heightPx) / scale.at(0));
+			/* NOTE: Per-axis scale — the height uses the Y scale (was scale.at(0)). */
+			const auto scaledHeight = std::floor(static_cast< float >(heightPx) / scale.at(1));
 
 			return {
 				static_cast< uint32_t >(scaledWidth),
