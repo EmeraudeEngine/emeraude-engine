@@ -99,6 +99,21 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 - `Surface.hpp:isTransitionBufferReady()` - Check if transition buffer awaits content
 - `Surface.cpp:requestTransitionBufferResize()` - Provider-thread setter recording the authoritative painted size
 - `Surface.cpp:recreateTransitionBufferToRequestedSize()` - Render-thread dedicated recreation path (called from `processUpdates()` Step 1.b)
+
+### Framebuffer-properties latch (asynchronous-provider surfaces)
+
+`Surface` exposes two views of the framebuffer properties:
+
+- **`framebufferProperties()`** — the *live*, shared `FramebufferProperties` (a `const&` chain up to the overlay manager). It mutates the instant the OS content scale/size flips (cross-monitor move, fractional-scale change). Engine-facing sizing reads this.
+- **`latchedProperties()`** — a *value-copy snapshot* that only advances when the surface calls **`syncPropertiesLatch()`** (protected). Seeded to the live properties in the ctor.
+
+**Why the latch exists.** An asynchronous / out-of-process content provider (an OSR web-view is the archetype) answers scale/size queries and submits frames on its own schedule. If it read the live properties, it could observe a *half-applied* transition — a new `device_scale_factor` with the old view size — and submit a `CompositorFrame` whose scale mismatches the last surface resync (the `cc/mojo_embedder` `last_submitted_device_scale_factor_ != frame.device_scale_factor()` DCHECK / renderer death). Reading `latchedProperties()` guarantees a **coherent (scale, size) tuple** that only moves in lock-step with the provider's own buffer transition, when it calls `syncPropertiesLatch()`.
+
+This is the generic engine primitive; the CEF-specific ordering (which notifications fire around the sync) lives in the consumer. projet-alpha's `WebView::refreshFramebuffer()` calls `syncPropertiesLatch()` then pushes `NotifyScreenInfoChanged()`/`WasResized()`/`Invalidate()` in a strict order. See `projet-alpha/src/UI/AGENTS.md` § Scale transition contract.
+
+**Code references:**
+- `Surface.hpp:latchedProperties()` - Provider-facing coherent snapshot
+- `Surface.hpp:syncPropertiesLatch()` - Advances the snapshot to the live properties (protected; provider decides *when*)
 - Consumer side: `app_system/src/UI/WebView.CefRenderHandler.cpp:directPaint()/indirectPaint()` request the resize on a size mismatch instead of dropping the frame
 
 ### Sampler ownership (shared cache)
@@ -278,6 +293,15 @@ source of "the screen changed, re-render" signals.
 >
 > **ImGUI screens are NOT wired** (immediate-mode, separate `m_ImGUIScreens`): an animating ImGUI overlay
 > needs an explicit `Manager::requestRedraw()` or `Continuous` mode.
+
+### Resize & scale notifications
+
+`Manager::onWindowResized()` (driven by `Core::onWindowChanged()` after the renderer recreates the swap-chain) re-reads the window state, invalidates every surface, then emits:
+
+- **`Manager::OverlayResized`** — always, on any settled window change. Payload `std::array< uint32_t, 2 >{framebufferWidth, framebufferHeight}` (physical pixels). Use it for size-driven work.
+- **`Manager::OverlayScaleChanged`** — *in addition*, only when the HiDPI content scale actually changed (cross-monitor move / fractional-scale change; diff tolerance `0.001`). Payload `std::array< float, 2 >{contentXScale, contentYScale}`. The manager owns the previous-scale comparison, so observers no longer cache and diff the scale themselves — they key on this signal to react to scale specifically (e.g. an OSR-provider surface promptly re-latching + re-notifying its provider, without waiting a debounce).
+
+Both fire from the manager under `m_physicalRepresentationUpdateMutex`. `contentXScale/Y` is the fractional window content scale (`glfwGetWindowContentScale`, e.g. 1.5 at 150%), never the integer-rounded per-monitor scale.
 
 ### Input Integration
 - **OverlayManager is InputManager client**: Receives mouse/keyboard events

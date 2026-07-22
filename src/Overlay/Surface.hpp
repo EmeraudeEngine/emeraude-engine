@@ -116,6 +116,7 @@ namespace EmEn::Overlay
 			Surface (const FramebufferProperties & framebufferProperties, std::string name, const Base::Math::Space2D::AARectangle< float > & rectangle, bool visible) noexcept
 				: NameableTrait{std::move(name)},
 				m_framebufferProperties{framebufferProperties},
+				m_latchedProperties{framebufferProperties},
 				m_rectangle{rectangle},
 				m_isVisible{visible}
 			{
@@ -305,6 +306,22 @@ namespace EmEn::Overlay
 			framebufferProperties () const noexcept
 			{
 				return m_framebufferProperties;
+			}
+
+			/**
+			 * @brief Returns the latched framebuffer-properties snapshot for asynchronous-provider surfaces.
+			 * @details Unlike framebufferProperties() (the live, shared properties that mutate the instant
+			 * the OS scale/size flips), this is a value copy that only advances when the provider calls
+			 * syncPropertiesLatch(). A provider whose content is produced off the render thread / in another
+			 * process (e.g. an OSR web-view) reads THIS so it always observes a coherent (scale, size) tuple,
+			 * never a half-applied transition. Seeded to the live properties at construction.
+			 * @return const FramebufferProperties &
+			 */
+			[[nodiscard]]
+			const FramebufferProperties &
+			latchedProperties () const noexcept
+			{
+				return m_latchedProperties;
 			}
 
 			/**
@@ -1191,6 +1208,22 @@ namespace EmEn::Overlay
 				return this->isBlockingEvent();
 			}
 
+		protected:
+
+			/**
+			 * @brief Advances the latched framebuffer-properties snapshot to the current live properties.
+			 * @details For asynchronous-provider surfaces (see latchedProperties()): call when it is safe to
+			 * move to a new (scale, size) — typically together with the buffer transition the provider drives
+			 * and its own resize/scale notification — so every provider-facing read observes a coherent
+			 * snapshot rather than a scale that changed mid-flight.
+			 * @return void
+			 */
+			void
+			syncPropertiesLatch () noexcept
+			{
+				m_latchedProperties = m_framebufferProperties;
+			}
+
 		private:
 
 			/* NOTE: UIScreen owns the stack ordering. It is the only entity allowed to
@@ -1353,6 +1386,7 @@ namespace EmEn::Overlay
 			 * reach the renderer from their own thread. The renderer outlives every overlay surface. */
 			Graphics::Renderer * m_renderer{nullptr};
 			const FramebufferProperties & m_framebufferProperties;
+			FramebufferProperties m_latchedProperties; ///< Provider-facing latched snapshot — see latchedProperties()/syncPropertiesLatch().
 			Base::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
 			Base::Math::Matrix< 4, float > m_modelMatrix;
 			Framebuffer m_activeBuffer;

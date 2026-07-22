@@ -89,6 +89,7 @@ namespace EmEn::Overlay
 				UIScreenDestroyed,
 				OverlayResized,
 				RedrawRequested, ///< The overlay changed visually (content, layout, visibility, order) and must be re-rendered.
+				OverlayScaleChanged, ///< The HiDPI content scale changed (cross-monitor move / fractional-scale change). Payload: std::array< float, 2 >{scaleX, scaleY}. Fires in addition to OverlayResized.
 				MaxEnum
 			};
 

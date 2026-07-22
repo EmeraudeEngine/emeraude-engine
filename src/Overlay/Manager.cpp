@@ -31,6 +31,8 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <iterator>
 #include <ranges>
 
@@ -499,7 +501,13 @@ namespace EmEn::Overlay
 		/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
 		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
 
-		/* Step 1: Update shared framebuffer properties with new window dimensions. */
+		/* Step 1: Update shared framebuffer properties with new window dimensions.
+		 * Capture the previous content scale first so we can emit OverlayScaleChanged only on a real
+		 * HiDPI-scale transition (cross-monitor move / fractional-scale change), separately from the
+		 * always-emitted OverlayResized (which fires on any size change). */
+		const auto previousScaleX = m_framebufferProperties.screenScaleX();
+		const auto previousScaleY = m_framebufferProperties.screenScaleY();
+
 		this->updateFramebufferProperties();
 
 		/* Step 2: Force ALL screens (visible or not) to recalculate their pixel dimensions.
@@ -530,6 +538,18 @@ namespace EmEn::Overlay
 		   windowState.framebufferWidth,
 		   windowState.framebufferHeight
 		});
+
+		/* Step 4: On a real HiDPI content-scale transition, emit OverlayScaleChanged in addition to
+		 * OverlayResized. Observers that must react to scale specifically (e.g. an OSR web-view latch)
+		 * can key on this single signal instead of caching and diffing the scale themselves. */
+		if ( std::abs(windowState.contentXScale - previousScaleX) > 0.001F ||
+			 std::abs(windowState.contentYScale - previousScaleY) > 0.001F )
+		{
+			this->notify(OverlayScaleChanged, std::array< float, 2 >{
+			   windowState.contentXScale,
+			   windowState.contentYScale
+			});
+		}
 
 		TraceDebug{ClassId} <<
 			"The overlay manager received last windows properties. " "\n"
