@@ -64,11 +64,12 @@ namespace EmEn
 	using namespace Input;
 	using namespace Resources;
 
-	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
+	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain, bool resetSettingsOnNewVersion) noexcept
 		: KeyboardListenerInterface{false, false},
 		ControllableTrait{ClassId},
 		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
-		m_primaryServices{argc, argv, m_identification}
+		m_primaryServices{argc, argv, m_identification},
+		m_resetSettingsOnNewVersion{resetSettingsOnNewVersion}
 	{
 		if ( !this->initializeBaseLevel() )
 		{
@@ -81,11 +82,12 @@ namespace EmEn
 	}
 
 #if IS_WINDOWS
-	Core::Core (int argc, wchar_t * * wargv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
+	Core::Core (int argc, wchar_t * * wargv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain, bool resetSettingsOnNewVersion) noexcept
 		: KeyboardListenerInterface{false, false},
 		ControllableTrait{ClassId},
 		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
-		m_primaryServices{argc, wargv, m_identification}
+		m_primaryServices{argc, wargv, m_identification},
+		m_resetSettingsOnNewVersion{resetSettingsOnNewVersion}
 	{
 		if ( !this->initializeBaseLevel() )
 		{
@@ -649,6 +651,15 @@ namespace EmEn
 			m_willNotRun = true;
 
 			return true;
+		}
+
+		/* NOTE: Per-project settings version guard. The settings file has just been loaded by
+		 * m_primaryServices.initialize(); if the project opted in and the file predates the current
+		 * engine version, back it up and clear the in-memory store so we keep running on a clean base
+		 * (no restart needed, unlike --reset-settings which exits). */
+		if ( m_resetSettingsOnNewVersion )
+		{
+			this->resetSettingsIfOutdated();
 		}
 
 		/* Initialize the console. */
@@ -2174,6 +2185,79 @@ namespace EmEn
 			"\n"
 			"----------------------------------------------------------------------" "\n"
 			"Restart the application without --reset-settings to generate fresh settings." "\n"
+			"======================================================================";
+	}
+
+	void
+	Core::resetSettingsIfOutdated () noexcept
+	{
+		auto & settings = m_primaryServices.settings();
+		const auto & settingsPath = settings.filepath();
+
+		/* Fresh install (no file yet): nothing to reset. */
+		if ( settingsPath.empty() || !std::filesystem::exists(settingsPath) )
+		{
+			return;
+		}
+
+		/* Reset when the file predates the current build — checked in order, any hit wins:
+		 *  1. either version stamp is missing/unparsable (a file written before these keys existed);
+		 *  2. the engine version increased (stored WrittenByEngineVersion < current engine version);
+		 *  3. the application version increased (stored WrittenByApplicationVersion < Core's applicationVersion).
+		 * An exact match, or a downgrade (stored newer than current), keeps the settings. */
+		const auto storedEngineVersion = Version::FromString(settings.get< std::string >(Settings::EngineVersionKey, std::string{}));
+		const auto storedApplicationVersion = Version::FromString(settings.get< std::string >(Settings::ApplicationVersionKey, std::string{}));
+
+		std::string reason;
+
+		if ( !storedEngineVersion || !storedApplicationVersion )
+		{
+			reason = "missing version stamp (file predates the version keys)";
+		}
+		else if ( storedEngineVersion.value() < Identification::EngineVersion )
+		{
+			reason = "engine version " + Base::to_string(storedEngineVersion.value()) + " older than " + Base::to_string(Identification::EngineVersion);
+		}
+		else if ( storedApplicationVersion.value() < m_identification.applicationVersion() )
+		{
+			reason = "application version " + Base::to_string(storedApplicationVersion.value()) + " older than " + Base::to_string(m_identification.applicationVersion());
+		}
+
+		/* Up to date (or a downgrade): keep the settings. */
+		if ( reason.empty() )
+		{
+			return;
+		}
+
+		const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+		const auto backupPath = std::filesystem::path{settingsPath.string() + "." + std::to_string(timestamp) + "-bck"};
+
+		std::error_code errorCode;
+		std::filesystem::rename(settingsPath, backupPath, errorCode);
+
+		if ( errorCode )
+		{
+			/* Backup failed: leave the settings untouched — better an outdated file than clearing the
+			 * store and overwriting the user's settings with empties at save-at-exit (data loss). */
+			TraceError{ClassId} << "Settings version guard: failed to back up '" << settingsPath.string() << "': " << errorCode.message() << " - keeping the current settings.";
+
+			return;
+		}
+
+		/* Clear the loaded store: the application keeps running on a clean base, every service
+		 * re-generates its defaults lazily, and the fresh file is written at save-at-exit with the
+		 * current version. */
+		settings.clear();
+
+		TraceWarning{ClassId} <<
+			"\n"
+			"======================================================================" "\n"
+			"  SETTINGS RESET (version guard)" "\n"
+			"======================================================================" "\n"
+			"Reset reason: " << reason << "." "\n"
+			"The settings file has been backed up to:" "\n"
+			"  " << backupPath.string() << "\n"
+			"The application starts on fresh settings." "\n"
 			"======================================================================";
 	}
 }

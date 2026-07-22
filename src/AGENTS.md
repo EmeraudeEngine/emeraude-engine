@@ -59,6 +59,39 @@ private:
 - `onCoreOpenFiles()` - File drag & drop
 - `onCoreSurfaceRefreshed()` - Window resize
 
+### Core - Automatic Settings Reset on Version Change
+
+Opt-in per project via the **last `Core` constructor parameter** `bool resetSettingsOnNewVersion`
+(default `false`, after `applicationDomain`). When `true`, `Core::resetSettingsIfOutdated()` runs
+**early** in `initializeBaseLevel()` — right after `m_primaryServices.initialize()` has loaded the
+settings file, before the console/video services come up, so **no restart is needed**.
+
+The settings header carries two version stamps, written by `Settings::writeFile()`:
+`Settings::EngineVersionKey` (`WrittenByEngineVersion`, the engine `VersionString`) and
+`Settings::ApplicationVersionKey` (`WrittenByApplicationVersion`, the `applicationVersion` passed to
+`Core` — `PrimaryServices` injects it into `Settings` as a pre-formatted string). Both are compared
+via `Base::Version` (`FromString` + `operator<=>`).
+
+- Resets — checked in this order, any hit wins:
+  1. **either stamp missing/unparsable** (a file written before these keys existed — e.g. the legacy
+     `WrittenByAppVersion` files, or the very first launch after this feature);
+  2. **engine version increased** (stored `WrittenByEngineVersion` < `Identification::EngineVersion`);
+  3. **application version increased** (stored `WrittenByApplicationVersion` < `applicationVersion`).
+- On a hit → backup `settings.json.<timestamp>-bck` (same rename as `executeResetSettings()`) **and**
+  `Settings::clear()` the in-memory store, then continue. Services re-generate defaults lazily; the
+  fresh file is written at save-at-exit with the current stamps. An exact match or a **downgrade**
+  (stored newer than current) → kept.
+- No settings file (fresh install) → no-op. Backup failure → store left untouched (no clear, no data loss).
+
+> [!NOTE]
+> The legacy single key was `WrittenByAppVersion` (recorded the engine version despite its name).
+> It was split (2026-07) into `WrittenByEngineVersion` + `WrittenByApplicationVersion`; old files
+> lacking the new keys are migrated by the missing-stamp reset above (one reset on first launch).
+
+Contrast with `--reset-settings` (the `ResetSettingsArg` flag), which backs up then **exits**
+(`willNotRun()`). This feature backs up and **keeps running**. Consumers (e.g. app_system) pass
+`true`; the default keeps existing behaviour unchanged.
+
 ### Core - External Main-Loop Cycle Scheduling
 
 `onCoreMainLoopCycle()` runs at the loop's own cadence (100 Hz ceiling when active, **only on OS

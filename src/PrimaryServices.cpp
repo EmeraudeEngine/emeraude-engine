@@ -46,7 +46,7 @@ namespace EmEn
 		: m_processName{"main"},
 		m_arguments{argc, argv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
-		m_settings{m_arguments, m_fileSystem, false}
+		m_settings{m_arguments, m_fileSystem, Base::to_string(identification.applicationVersion()), false}
 	{
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
@@ -66,7 +66,7 @@ namespace EmEn
 		: m_processName{std::move(processName)},
 		m_arguments{argc, argv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
-		m_settings{m_arguments, m_fileSystem, true},
+		m_settings{m_arguments, m_fileSystem, Base::to_string(identification.applicationVersion()), true},
 		m_childProcess{true}
 	{
 		/* NOTE: This must be done immediately! */
@@ -100,7 +100,7 @@ namespace EmEn
 		: m_processName{"main"},
 		m_arguments{argc, wargv, false},
 		m_fileSystem{m_arguments, m_userInfo, identification, false},
-		m_settings{m_arguments, m_fileSystem, false}
+		m_settings{m_arguments, m_fileSystem, Base::to_string(identification.applicationVersion()), false}
 	{
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
@@ -120,7 +120,7 @@ namespace EmEn
 		: m_processName{std::move(processName)},
 		m_arguments{argc, wargv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
-		m_settings{m_arguments, m_fileSystem, true},
+		m_settings{m_arguments, m_fileSystem, Base::to_string(identification.applicationVersion()), true},
 		m_childProcess{true}
 	{
 		/* NOTE: This must be done immediately! */

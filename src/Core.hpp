@@ -966,9 +966,13 @@ namespace EmEn
 			 * @param applicationVersion Semantic version for the application. Default 0.0.0.
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "localhost".
+			 * @param resetSettingsOnNewVersion When true, the settings file is backed up and reset if it
+			 * was written by an older engine version than the current one (the @c WrittenByAppVersion key,
+			 * which records the engine @c VersionString). Done early, so the application starts on a clean
+			 * settings base without needing a restart. Default false (per-project opt-in).
 			 * @see Identification
 			 */
-			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost") noexcept;
+			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost", bool resetSettingsOnNewVersion = false) noexcept;
 
 #if IS_WINDOWS
 			/**
@@ -981,8 +985,10 @@ namespace EmEn
 			 * @param applicationVersion Semantic version for the application. Default 0.0.0.
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "unknown.org".
+			 * @param resetSettingsOnNewVersion When true, the settings file is backed up and reset if it
+			 * was written by an older engine version than the current one. Default false (per-project opt-in).
 			 */
-			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org") noexcept;
+			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org", bool resetSettingsOnNewVersion = false) noexcept;
 #endif
 
 			/**
@@ -1319,6 +1325,25 @@ namespace EmEn
 			void executeResetSettings () noexcept;
 
 			/**
+			 * @brief Backs up and resets the settings file when it predates the current build.
+			 * @details Enabled per-project via the @c resetSettingsOnNewVersion constructor flag. Runs early
+			 * in @ref initializeBaseLevel() (right after the settings are loaded), so the application keeps
+			 * running on a clean settings base without a restart. Resets — checked in this order, any hit
+			 * wins — when:
+			 *  -# either version stamp is missing/unparsable (@c Settings::EngineVersionKey /
+			 *     @c Settings::ApplicationVersionKey — a file written before these keys existed);
+			 *  -# the engine version increased (stored @c WrittenByEngineVersion < @c Identification::EngineVersion);
+			 *  -# the application version increased (stored @c WrittenByApplicationVersion < the
+			 *     @c applicationVersion passed to the @c Core constructor).
+			 * On a hit the file is renamed to settings.json.[timestamp]-bck (like @ref executeResetSettings())
+			 * and the in-memory store is cleared. An exact match or a downgrade keeps the settings. Does
+			 * nothing if no settings file exists (fresh install). On a backup failure it leaves the settings
+			 * untouched (no data loss, no reset).
+			 * @return void
+			 */
+			void resetSettingsIfOutdated () noexcept;
+
+			/**
 			 * @brief Processes and displays queued core messages.
 			 * @details Shows error dialogs and shader compilation failures.
 			 */
@@ -1584,6 +1609,7 @@ namespace EmEn
 			std::atomic< bool > m_isRenderingLoopRunning{true}; ///< Render thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_paused{false}; ///< Current pause state (atomic for thread-safe access).
 			bool m_willNotRun{false};
+			bool m_resetSettingsOnNewVersion{false}; ///< Reset settings when the file was written by an older engine version. @see resetSettingsIfOutdated()
 			bool m_pausable{false}; ///< Whether pause is currently allowed.
 			bool m_showHelp{false}; ///< Help display requested via --help.
 			bool m_preventDefaultKeyBehaviors{false}; ///< Disable Core's default key handling.

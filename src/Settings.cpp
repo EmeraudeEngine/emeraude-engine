@@ -326,7 +326,8 @@ namespace EmEn
 		Json::Value root;
 
 		/* 1. JSON File header. */
-		root[VersionKey] = VersionString;
+		root[EngineVersionKey] = VersionString;
+		root[ApplicationVersionKey] = m_applicationVersion;
 
 		{
 			const auto timestamp = time(nullptr);

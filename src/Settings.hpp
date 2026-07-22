@@ -359,8 +359,11 @@ namespace EmEn
 			/** @brief Default filename for the settings JSON file on disk. */
 			static constexpr auto Filename{"settings.json"};
 
-			/** @brief JSON key that records the engine version that wrote the file. */
-			static constexpr auto VersionKey{"WrittenByAppVersion"};
+			/** @brief JSON key that records the engine version (VersionString) that wrote the file. */
+			static constexpr auto EngineVersionKey{"WrittenByEngineVersion"};
+
+			/** @brief JSON key that records the application version (Core's applicationVersion) that wrote the file. */
+			static constexpr auto ApplicationVersionKey{"WrittenByApplicationVersion"};
 
 			/** @brief JSON key that records the calendar date the file was written. */
 			static constexpr auto DateKey{"WrittenAtDate"};
@@ -377,23 +380,52 @@ namespace EmEn
 			 *		resolve the settings file path and control verbosity / autosave.
 			 * @param fileSystem A reference to the engine file-system service, used to
 			 *		resolve the default settings file path inside the config directory.
+			 * @param applicationVersion The application version string (from Core's
+			 *		applicationVersion) recorded under @ref ApplicationVersionKey when the file
+			 *		is written. Pass the pre-formatted "major.minor.revision" string.
 			 * @param childProcess Pass @c true when this instance is a read-only proxy
 			 *		running inside a child process (e.g. the CEF browser process). Child
 			 *		instances never write the file on termination.
 			 */
-			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
+			Settings (const Arguments & arguments, const FileSystem & fileSystem, std::string applicationVersion, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
 				ControllableTrait{ClassId},
 				m_arguments{arguments},
-				m_fileSystem{fileSystem}
+				m_fileSystem{fileSystem},
+				m_applicationVersion{std::move(applicationVersion)},
+				m_childProcess{childProcess}
 			{
-				m_childProcess = childProcess;
-
 				if ( !m_childProcess )
 				{
 					m_saveAtExit = true;
 				}
 			}
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Settings (const Settings & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Settings (Settings && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Settings &
+			 */
+			Settings & operator= (const Settings & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Settings &
+			 */
+			Settings & operator= (Settings && copy) noexcept = delete;
 
 			/**
 			 * @brief Destroys the settings service.
@@ -1316,7 +1348,7 @@ namespace EmEn
 			/**
 			 * @brief Serializes all stores to a JSON settings file at @p filepath.
 			 *
-			 * Writes a JSON file with a header section (@ref VersionKey, @ref DateKey)
+			 * Writes a JSON file with a header section (@ref EngineVersionKey, @ref ApplicationVersionKey, @ref DateKey)
 			 * followed by the nested store content. The file is formatted with tab
 			 * indentation for human readability. Caller is responsible for holding an
 			 * appropriate lock before calling this method.
@@ -1343,6 +1375,7 @@ namespace EmEn
 
 			const Arguments & m_arguments;
 			const FileSystem & m_fileSystem;
+			std::string m_applicationVersion; ///< Application version string recorded under @ref ApplicationVersionKey when writing the file.
 			std::map< std::string, SettingStore, std::less<> > m_stores; ///< Map of store-key to SettingStore; the key is the slash-delimited path prefix (empty string for the root store).
 			std::filesystem::path m_filepath;
 			mutable std::shared_mutex m_storeAccess; ///< Reader-writer mutex protecting @c m_stores; shared for reads, exclusive for writes.
