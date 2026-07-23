@@ -515,6 +515,21 @@ if ( materialType == PBRResource::ClassId )
 > clamp-to-edge depth sampler recycled border depth → false full occlusion (ragged solid
 > black strip at the bottom of the frame on close grazing floors). **Fix:** out-of-frame
 > samples are skipped (treated as unoccluded).
+>
+> **4. RTAO had the SAME double-intensity defect as SSAO (§2):** trace pass multiplied
+> `occlusion × intensity` AND the apply pass ran an unclamped extrapolating
+> `mix(1.0, ao, intensity)` — with the 1.5 default, more than double the physical
+> darkening ("violent" AO). **Fix:** trace stores the pure visibility term; intensity
+> applied once at apply, clamped. Both AO defaults dropped **1.5 → 1.0** (pure
+> visibility; owner decision — raise via settings if a stronger look is wanted).
+>
+> **New settings keys (override the Parameters structs in `create()`, like the GI group):**
+> - `Core/Graphics/RayTracing/AmbientOcclusion/` gained `Intensity` (1.0), `Bias` (0.005),
+>   `MaxDistance` (2.0), `BlurRadius` (4), `NormalSigma` (0.5).
+> - **First screen-space group** `Core/Graphics/ScreenSpace/AmbientOcclusion/`:
+>   `Radius` (0.5), `Intensity` (1.0), `Bias` (0.025), `SampleCount` (32) — read by
+>   `SSAO::create()` (which previously read no settings at all). Future SSGI keys should
+>   join this `ScreenSpace/` group (prerequisite for the RT/SS effect-pair factory idea).
 
 ### Known Issue: MRT Normal Blend for Translucent Materials
 

@@ -61,7 +61,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			struct EMEN_API Parameters
 			{
 				float maxDistance{2.0F};
-				float intensity{1.5F};
+				float intensity{1.0F};
 				float bias{0.005F};
 				uint32_t sampleCount{8};
 				uint32_t blurRadius{4};

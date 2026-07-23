@@ -58,7 +58,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			struct EMEN_API Parameters
 			{
 				float radius{0.5F};
-				float intensity{1.5F};
+				float intensity{1.0F};
 				float bias{0.025F};
 				uint32_t sampleCount{32};
 			};

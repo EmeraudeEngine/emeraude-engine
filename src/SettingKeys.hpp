@@ -368,6 +368,21 @@ namespace EmEn
 			/* Compute ambient occlusion at half resolution (pixel doubling) to save performance. */
 			constexpr auto GraphicsRayTracingAOPixelDoublingKey{"Core/Graphics/RayTracing/AmbientOcclusion/PixelDoubling"};
 			constexpr auto DefaultGraphicsRayTracingAOPixelDoubling{true};
+			/* AO darkening intensity multiplier (applied once, clamped; 1.0 = pure visibility term). */
+			constexpr auto GraphicsRayTracingAOIntensityKey{"Core/Graphics/RayTracing/AmbientOcclusion/Intensity"};
+			constexpr auto DefaultGraphicsRayTracingAOIntensity{1.0F};
+			/* AO ray origin offset to prevent self-intersection, in world units. */
+			constexpr auto GraphicsRayTracingAOBiasKey{"Core/Graphics/RayTracing/AmbientOcclusion/Bias"};
+			constexpr auto DefaultGraphicsRayTracingAOBias{0.005F};
+			/* Maximum AO occluder search distance, in world units (near-field effect). */
+			constexpr auto GraphicsRayTracingAOMaxDistanceKey{"Core/Graphics/RayTracing/AmbientOcclusion/MaxDistance"};
+			constexpr auto DefaultGraphicsRayTracingAOMaxDistance{2.0F};
+			/* Bilateral denoising blur radius for AO, in pixels. */
+			constexpr auto GraphicsRayTracingAOBlurRadiusKey{"Core/Graphics/RayTracing/AmbientOcclusion/BlurRadius"};
+			constexpr auto DefaultGraphicsRayTracingAOBlurRadius{4U};
+			/* Normal edge-stopping sigma for the AO bilateral blur. */
+			constexpr auto GraphicsRayTracingAONormalSigmaKey{"Core/Graphics/RayTracing/AmbientOcclusion/NormalSigma"};
+			constexpr auto DefaultGraphicsRayTracingAONormalSigma{0.5F};
 
 			/* Ray Tracing > Contact Shadows */
 			constexpr auto GraphicsRayTracingContactShadowsEnabledKey{"Core/Graphics/RayTracing/ContactShadows/Enabled"};
@@ -402,6 +417,20 @@ namespace EmEn
 			/* Normal edge-stopping sigma for the GI bilateral blur. */
 			constexpr auto GraphicsRayTracingGINormalSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/NormalSigma"};
 			constexpr auto DefaultGraphicsRayTracingGINormalSigma{0.5F};
+
+			/* Screen Space > Ambient Occlusion (first screen-space effect group — SSGI keys will join it). */
+			/* Hemisphere sampling radius, in world units. */
+			constexpr auto GraphicsScreenSpaceAORadiusKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Radius"};
+			constexpr auto DefaultGraphicsScreenSpaceAORadius{0.5F};
+			/* AO darkening intensity multiplier (applied once, clamped; 1.0 = pure visibility term). */
+			constexpr auto GraphicsScreenSpaceAOIntensityKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Intensity"};
+			constexpr auto DefaultGraphicsScreenSpaceAOIntensity{1.0F};
+			/* Depth comparison bias to prevent self-occlusion, in view-space units. */
+			constexpr auto GraphicsScreenSpaceAOBiasKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Bias"};
+			constexpr auto DefaultGraphicsScreenSpaceAOBias{0.025F};
+			/* Samples per pixel for screen-space ambient occlusion. */
+			constexpr auto GraphicsScreenSpaceAOSampleCountKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/SampleCount"};
+			constexpr auto DefaultGraphicsScreenSpaceAOSampleCount{32U};
 
 			/* Level of Detail */
 			/* Automatically generate levels of detail for meshes. */

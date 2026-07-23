@@ -253,6 +253,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
+		auto & settings = renderer.primaryServices().settings();
+
+		/* User-facing parameters, engine-wide and persisted in the settings file.
+		 * These override any constructor-provided values. */
+		m_parameters.radius = settings.getOrSetDefault< float >(GraphicsScreenSpaceAORadiusKey, DefaultGraphicsScreenSpaceAORadius);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsScreenSpaceAOIntensityKey, DefaultGraphicsScreenSpaceAOIntensity);
+		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsScreenSpaceAOBiasKey, DefaultGraphicsScreenSpaceAOBias);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceAOSampleCountKey, DefaultGraphicsScreenSpaceAOSampleCount);
+
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 

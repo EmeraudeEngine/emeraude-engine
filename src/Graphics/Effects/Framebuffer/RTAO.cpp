@@ -193,8 +193,10 @@ void main()
 		}
 	}
 
-	/* Normalize and apply intensity, then fade out at distance. */
-	occlusion = (occlusion / float(sampleCount)) * intensity;
+	/* Pure visibility term — the user-facing intensity is applied ONCE, in the apply pass.
+	 * It used to be multiplied here AND fed to an extrapolating mix() there (t > 1), a
+	 * double application that made default RTAO far too dark (same defect as SSAO). */
+	occlusion = occlusion / float(sampleCount);
 	float ao = clamp(1.0 - occlusion, 0.0, 1.0);
 	outAO = vec2(mix(ao, 1.0, aoFade), depth);
 }
@@ -297,8 +299,10 @@ void main()
 	uint bPacked = uint(mp.b * 255.0);
 	float emissiveMask = float(bPacked & 0xFu) / 15.0;
 
-	/* Mix towards full AO based on intensity. */
-	ao = mix(1.0, ao, intensity);
+	/* Single application of the user-facing intensity (the trace pass stores the pure
+	 * visibility term). Clamped: an intensity above 1 must saturate the darkening, not
+	 * extrapolate the mix below the computed AO. */
+	ao = clamp(mix(1.0, ao, intensity), 0.0, 1.0);
 
 	/* Modulate AO by material aoResponse; emissive surfaces reject AO darkening. */
 	ao = mix(1.0, ao, aoResponse * (1.0 - emissiveMask));
@@ -319,12 +323,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
-		/* Rays per pixel, engine-wide and persisted in the settings file.
-		 * This overrides any constructor-provided value. */
-		m_parameters.sampleCount = renderer.primaryServices().settings().getOrSetDefault< uint32_t >(GraphicsRayTracingAOSampleCountKey, DefaultGraphicsRayTracingAOSampleCount);
+		auto & settings = renderer.primaryServices().settings();
+
+		/* User-facing parameters, engine-wide and persisted in the settings file.
+		 * These override any constructor-provided values. */
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingAOSampleCountKey, DefaultGraphicsRayTracingAOSampleCount);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsRayTracingAOIntensityKey, DefaultGraphicsRayTracingAOIntensity);
+		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsRayTracingAOBiasKey, DefaultGraphicsRayTracingAOBias);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsRayTracingAOMaxDistanceKey, DefaultGraphicsRayTracingAOMaxDistance);
+		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingAOBlurRadiusKey, DefaultGraphicsRayTracingAOBlurRadius);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingAONormalSigmaKey, DefaultGraphicsRayTracingAONormalSigma);
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
-		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsRayTracingAOPixelDoublingKey, DefaultGraphicsRayTracingAOPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingAOPixelDoublingKey, DefaultGraphicsRayTracingAOPixelDoubling);
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 

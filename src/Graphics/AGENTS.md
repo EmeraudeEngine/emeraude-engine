@@ -34,6 +34,13 @@
 1.  **Thread Safety**: `TransferManager` handles CPU->GPU. Main thread for Logic.
 2.  **Y-DOWN**: Strictly Y-down coordinate system.
 3.  **Fail-Safe**: Resources must never be null. Use neutral fallbacks.
+4.  **G-Buffer MRT (fixed order)**: scene target color attachments are
+    `[0]=color, [1]=normals, [2]=materialProperties, [3]=albedo` (+ depth last), allocated
+    ON DEMAND from the enabled post-process effects' `requires*()` flags — each attachment
+    forces every one before it, and the shader generator detects the layout **by color
+    attachment count**. Full contract + pitfalls (clear-value indices, blend-state counts,
+    GrabPass copies): `docs/caution-points.md` § "SSGI Indirect Light Ignored Receiver
+    Albedo — New Albedo G-Buffer Attachment".
 
 ## 4. Caching Architecture
 

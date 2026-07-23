@@ -33,10 +33,29 @@
 
 ## Post-Processing Pipeline (Effects/Framebuffer + Effects/Lens)
 
-- [ ] **Screen-Space GI (SSGI)** — Illumination indirecte approximée (lumière rebondie).
+- [x] **Screen-Space GI (SSGI)** — DONE (validated 2026-07-23 in the `global-illumination`
+  demo bench, incl. receiver-albedo modulation via the new albedo G-buffer attachment).
 - [ ] **Motion Blur** — Flou de mouvement caméra/objets. Sensation de poids et d'inertie.
 - [ ] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
+
+### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)
+
+- [ ] **RTR: port the shadow-ray occlusion fix** — `RTR.cpp`'s `computeDirectLighting()`
+  still has NO occlusion test toward the lights (same leak fixed in RTGI: bounce/reflection
+  hit points receive light through walls). Subtle in reflections (only shows in reflections
+  OF shadowed regions), but physically wrong. Validate before/after in a reflection-heavy
+  demo (owner request: NOT in the GI demo).
+- [ ] **RTGI: read receiver albedo from the albedo G-buffer attachment** instead of the
+  per-pixel primary ray (−1 ray/pixel). Measured A/B (RenderDoc / frame time) required.
+- [ ] **GI second bounce** — one-bounce leaves fully-occluded floors/ceilings near lit
+  walls black (bounce hits on shadowed surfaces contribute zero direct light). Radiance
+  cache or recursive bounce; budget-gated (RTX 3070 Ti / 8 GB).
+- [ ] **GI temporal accumulation** — declined at step 1 (2026-07-05), still the best
+  noise-vs-cost lever at low spp.
+- [ ] **`GBufferInputs` struct refactor** — `IndirectPostProcessEffect::execute()` now
+  carries 6 texture/context params (albedo param added 2026-07-23 across all 16 effects);
+  group them in a struct in a dedicated mechanical pass.
 
 ## Rendering
 
