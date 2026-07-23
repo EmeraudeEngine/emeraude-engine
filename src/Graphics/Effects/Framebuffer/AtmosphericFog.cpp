@@ -271,7 +271,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	AtmosphericFog::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	AtmosphericFog::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 

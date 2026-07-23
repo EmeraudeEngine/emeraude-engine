@@ -69,6 +69,22 @@ namespace EmEn::Saphir
 	}
 
 	std::string
+	LightGenerator::albedoShaderExpression () const noexcept
+	{
+		if ( !m_surfaceAlbedo.empty() )
+		{
+			return m_surfaceAlbedo;
+		}
+
+		if ( !m_surfaceDiffuseColor.empty() )
+		{
+			return m_surfaceDiffuseColor;
+		}
+
+		return "vec4(1.0, 1.0, 1.0, 1.0)";
+	}
+
+	std::string
 	LightGenerator::finalNormalViewSpaceExpression () const noexcept
 	{
 		/* When normal mapping is active, the PBR lighting code declares

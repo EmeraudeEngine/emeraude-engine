@@ -112,7 +112,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Destroys the grab pass textures from the GPU.
@@ -130,7 +130,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Records the blit/copy commands from the swapchain images to this grab pass.
@@ -295,6 +295,57 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			VkDescriptorImageInfo materialPropertiesDescriptorInfo () const noexcept;
 
+			/**
+			 * @brief Returns whether the albedo texture is available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasAlbedo () const noexcept
+			{
+				return m_albedoImage != nullptr && m_albedoImage->isCreated();
+			}
+
+			/**
+			 * @brief Returns the albedo image.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			albedoImage () const noexcept
+			{
+				return m_albedoImage;
+			}
+
+			/**
+			 * @brief Returns the albedo image view.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			albedoImageView () const noexcept
+			{
+				return m_albedoImageView;
+			}
+
+			/**
+			 * @brief Returns the albedo sampler.
+			 * @return std::shared_ptr< Vulkan::Sampler >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			albedoSampler () const noexcept
+			{
+				return m_albedoSampler;
+			}
+
+			/**
+			 * @brief Builds a VkDescriptorImageInfo from the albedo components.
+			 * @return VkDescriptorImageInfo
+			 */
+			[[nodiscard]]
+			VkDescriptorImageInfo albedoDescriptorInfo () const noexcept;
+
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
 			[[nodiscard]]
 			bool isCreated () const noexcept override;
@@ -348,5 +399,9 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_materialPropertiesImage;
 			std::shared_ptr< Vulkan::ImageView > m_materialPropertiesImageView;
 			std::shared_ptr< Vulkan::Sampler > m_materialPropertiesSampler;
+
+			std::shared_ptr< Vulkan::Image > m_albedoImage;
+			std::shared_ptr< Vulkan::ImageView > m_albedoImageView;
+			std::shared_ptr< Vulkan::Sampler > m_albedoSampler;
 	};
 }

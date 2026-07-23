@@ -431,7 +431,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	LensFlare::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
+	LensFlare::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 

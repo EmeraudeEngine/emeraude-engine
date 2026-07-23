@@ -593,7 +593,7 @@ namespace EmEn::Graphics
 		 * At this point no scene is loaded yet, so requirements are all false (passthrough). */
 		if ( m_swapChain != nullptr && m_postProcessor.usable() )
 		{
-			if ( !m_postProcessor.configure(m_swapChain, false, false, false, false) )
+			if ( !m_postProcessor.configure(m_swapChain, false, false, false, false, false) )
 			{
 				TraceError{ClassId} << "Unable to configure the post-processor !";
 			}
@@ -814,6 +814,17 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSceneAlbedoImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->albedoImage();
+		}
+
+		return nullptr;
+	}
+
 	bool
 	Renderer::recreateSceneTarget () noexcept
 	{
@@ -857,9 +868,12 @@ namespace EmEn::Graphics
 			height = m_window.state().windowHeight;
 		}
 
-		/* Material properties require normals (same effects need both, and the shader generator
-		 * uses colorAttachmentCount to detect MRT layout: normals is always before materialProperties). */
-		const auto needsNormals = m_postProcessor.cachedRequiresNormals() || m_postProcessor.cachedRequiresMaterialProperties();
+		/* The shader generator uses colorAttachmentCount to detect the MRT layout with a FIXED
+		 * order (color, normals, materialProperties, albedo), so each attachment forces every
+		 * attachment before it: materialProperties requires normals, albedo requires both. */
+		const auto needsAlbedo = m_postProcessor.cachedRequiresAlbedo();
+		const auto needsMaterialProperties = m_postProcessor.cachedRequiresMaterialProperties() || needsAlbedo;
+		const auto needsNormals = m_postProcessor.cachedRequiresNormals() || needsMaterialProperties;
 
 		/* Normals buffer format for MRT: view-space normals for SSAO and SSR.
 		 * Only allocated when the effect chain actually needs normals. */
@@ -869,14 +883,20 @@ namespace EmEn::Graphics
 
 		/* Material properties buffer format for MRT: per-pixel surface properties for post-process modulation.
 		 * Only allocated when the effect chain actually needs material properties. */
-		const auto materialPropertiesFormat = m_postProcessor.cachedRequiresMaterialProperties()
+		const auto materialPropertiesFormat = needsMaterialProperties
 			? VK_FORMAT_R8G8B8A8_UNORM
+			: VK_FORMAT_UNDEFINED;
+
+		/* Albedo buffer format for MRT: surface base color for indirect-light modulation (SSGI).
+		 * sRGB: written linear by the fragment shader, encoded on store, decoded on sample. */
+		const auto albedoFormat = needsAlbedo
+			? VK_FORMAT_R8G8B8A8_SRGB
 			: VK_FORMAT_UNDEFINED;
 
 		m_sceneTarget = std::make_shared< SceneRenderTarget >(
 			"SceneRenderTarget",
 			width, height,
-			colorFormat, normalsFormat, materialPropertiesFormat, depthFormat,
+			colorFormat, normalsFormat, materialPropertiesFormat, albedoFormat, depthFormat,
 			m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance)
 		);
 
@@ -1297,7 +1317,8 @@ namespace EmEn::Graphics
 				stack->requiresHDR(),
 				stack->requiresDepth(),
 				stack->requiresNormals(),
-				stack->requiresMaterialProperties());
+				stack->requiresMaterialProperties(),
+				stack->requiresAlbedo());
 
 			if ( this->recreateSceneTarget() )
 			{
@@ -1306,7 +1327,8 @@ namespace EmEn::Graphics
 					stack->requiresHDR(),
 					stack->requiresDepth(),
 					stack->requiresNormals(),
-					stack->requiresMaterialProperties()) )
+					stack->requiresMaterialProperties(),
+					stack->requiresAlbedo()) )
 				{
 					TraceError{ClassId} << "Unable to reconfigure the post-processor with the scene target!";
 				}
@@ -1507,22 +1529,29 @@ namespace EmEn::Graphics
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
 		 * Clear values must match the actual attachment layout which depends on which
 		 * MRT attachments are present. m_clearColors layout: [0]=color, [1]=normals,
-		 * [2]=materialProperties, [3]=depth. Build the matching subset for beginRenderPass. */
+		 * [2]=materialProperties, [3]=albedo, [4]=depth. Build the matching subset for
+		 * beginRenderPass. Albedo implies normals+materialProperties (fixed MRT order). */
 		const bool sceneTargetHasNormals = m_sceneTarget->normalsFormat() != VK_FORMAT_UNDEFINED;
 		const bool sceneTargetHasMaterialProperties = m_sceneTarget->materialPropertiesFormat() != VK_FORMAT_UNDEFINED;
+		const bool sceneTargetHasAlbedo = m_sceneTarget->albedoFormat() != VK_FORMAT_UNDEFINED;
 
-		if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
+		if ( sceneTargetHasAlbedo )
 		{
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 		}
+		else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
+		{
+			const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[4]};
+			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
+		}
 		else if ( sceneTargetHasNormals )
 		{
-			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[3]};
+			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[4]};
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		else if ( sceneTargetHasMaterialProperties )
 		{
-			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[3]};
+			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[4]};
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		else
@@ -1556,18 +1585,23 @@ namespace EmEn::Graphics
 		 * so they can sample the captured scene for refraction effects. */
 		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
-			if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
+			if ( sceneTargetHasAlbedo )
 			{
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 			}
+			else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
+			{
+				const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[4]};
+				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
+			}
 			else if ( sceneTargetHasNormals )
 			{
-				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[3]};
+				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[4]};
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else if ( sceneTargetHasMaterialProperties )
 			{
-				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[3]};
+				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[4]};
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else
@@ -1907,7 +1941,8 @@ namespace EmEn::Graphics
 				m_postProcessor.cachedRequiresHDR(),
 				m_postProcessor.cachedRequiresDepth(),
 				m_postProcessor.cachedRequiresNormals(),
-				m_postProcessor.cachedRequiresMaterialProperties()) )
+				m_postProcessor.cachedRequiresMaterialProperties(),
+				m_postProcessor.cachedRequiresAlbedo()) )
 			{
 				TraceError{ClassId} << "Unable to reconfigure the post-processor on resize!";
 			}

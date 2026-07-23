@@ -645,6 +645,16 @@ namespace EmEn::Saphir
 			std::string finalNormalViewSpaceExpression () const noexcept;
 
 			/**
+			 * @brief Returns a GLSL vec4 expression for the surface albedo (base color).
+			 * @note For PBR materials, returns the albedo variable (texture sample or uniform).
+			 * For Standard/Basic materials, returns the diffuse color variable.
+			 * Falls back to white (neutral for indirect-light modulation).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string albedoShaderExpression () const noexcept;
+
+			/**
 			 * @brief Returns a GLSL vec4 expression for the material properties G-buffer output.
 			 * @note Encodes reflectivity, AO response, emissive mask and other properties
 			 * as nibble-packed values based on the declared surface properties.

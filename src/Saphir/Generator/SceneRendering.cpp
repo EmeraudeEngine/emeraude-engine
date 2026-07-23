@@ -392,6 +392,12 @@ namespace EmEn::Saphir::Generator
 			fragmentShader->declare(Declaration::OutputFragment{2, Keys::GLSL::FloatVector4, Keys::ShaderVariable::OutputMaterialProperties});
 		}
 
+		/* Declare the MRT albedo output only when the render target has the attachment. */
+		if ( m_hasAlbedoAttachment )
+		{
+			fragmentShader->declare(Declaration::OutputFragment{3, Keys::GLSL::FloatVector4, Keys::ShaderVariable::OutputAlbedo});
+		}
+
 		/* If a material is present, generate the shader code (optional). */
 		if ( this->materialEnabled() && !this->getMaterialInterface()->generateFragmentShaderCode(*this, m_lightGenerator, *fragmentShader) )
 		{
@@ -464,6 +470,21 @@ namespace EmEn::Saphir::Generator
 					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 0.0, 0.0, 1.0);";
 				}
 			}
+
+			if ( m_hasAlbedoAttachment )
+			{
+				/* Write the surface base color to MRT attachment 3 for indirect-light modulation
+				 * (SSGI). Only the ambient/simple pass writes it; light passes have their write
+				 * mask zeroed on the G-buffer attachments (see onGraphicsPipelineConfiguration). */
+				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << m_lightGenerator.albedoShaderExpression() << ").rgb, 1.0);";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4(0.0);";
+				}
+			}
 		}
 		else if ( this->materialEnabled() )
 		{
@@ -478,6 +499,12 @@ namespace EmEn::Saphir::Generator
 			{
 				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 1.0, 240.0 / 255.0, 1.0);";
 			}
+
+			if ( m_hasAlbedoAttachment )
+			{
+				/* Unlit material: its displayed color IS its albedo. */
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << this->getMaterialInterface()->fragmentColor() << ").rgb, 1.0);";
+			}
 		}
 		else
 		{
@@ -491,6 +518,12 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasMaterialPropertiesAttachment )
 			{
 				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 1.0, 240.0 / 255.0, 1.0);";
+			}
+
+			if ( m_hasAlbedoAttachment )
+			{
+				/* No material: neutral white albedo (identity for indirect-light modulation). */
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4(1.0);";
 			}
 		}
 
@@ -557,7 +590,7 @@ namespace EmEn::Saphir::Generator
 		 *   instead of the visible one (flat water reflections).
 		 * - Light passes (additive): the G-buffer must never be modified — write
 		 *   mask zero (previously they relied on shaders emitting vec4(0.0)). */
-		if ( m_hasNormalsAttachment || m_hasMaterialPropertiesAttachment )
+		if ( m_hasNormalsAttachment || m_hasMaterialPropertiesAttachment || m_hasAlbedoAttachment )
 		{
 			auto gBufferState = graphicsPipeline.colorBlendAttachments()[0];
 
@@ -582,6 +615,11 @@ namespace EmEn::Saphir::Generator
 			}
 
 			if ( m_hasMaterialPropertiesAttachment )
+			{
+				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+			}
+
+			if ( m_hasAlbedoAttachment )
 			{
 				graphicsPipeline.appendColorBlendAttachment(gBufferState);
 			}

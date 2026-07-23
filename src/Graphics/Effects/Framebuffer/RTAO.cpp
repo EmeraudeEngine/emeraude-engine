@@ -166,13 +166,19 @@ void main()
 			sampleDir = -sampleDir;
 		}
 
-		/* Trace a short ray in the sampled direction. */
+		/* Trace a short ray in the sampled direction.
+		 * tMin is a tiny CONSTANT, decoupled from the adaptive origin offset: the offset
+		 * alone prevents self-intersection (hemisphere directions never descend below the
+		 * surface), while a tMin equal to the adaptive bias SKIPS real occluders closer
+		 * than it — at wall/floor creases this erased the occlusion entirely and drew a
+		 * bright line exactly where the AO must be darkest (worse with distance/grazing,
+		 * the adaptive bias can exceed a metre). */
 		rayQueryEXT rayQuery;
 		rayQueryInitializeEXT(
 			rayQuery, topLevelAS,
 			gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
 			0xFF,
-			rayOrigin, adaptiveBias, sampleDir, maxDistance
+			rayOrigin, 0.001, sampleDir, maxDistance
 		);
 
 		while (rayQueryProceedEXT(rayQuery)) {}
@@ -523,7 +529,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	RTAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 

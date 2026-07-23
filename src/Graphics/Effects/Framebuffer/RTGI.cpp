@@ -427,11 +427,14 @@ void main()
 			sampleDir = -sampleDir;
 		}
 
-		/* Trace a diffuse bounce ray. */
+		/* Trace a diffuse bounce ray.
+		 * tMin is a tiny CONSTANT, decoupled from the adaptive origin offset (same fix as
+		 * RTAO): a tMin equal to the adaptive bias skips real geometry closer than it and
+		 * leaks light at wall/floor creases. */
 		rayQueryEXT rayQuery;
 		rayQueryInitializeEXT(
 			rayQuery, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF,
-			rayOrigin, adaptiveBias, sampleDir, maxDistance
+			rayOrigin, 0.001, sampleDir, maxDistance
 		);
 
 		while (rayQueryProceedEXT(rayQuery)) {}
@@ -874,7 +877,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
+	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 

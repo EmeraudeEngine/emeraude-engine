@@ -277,6 +277,82 @@ namespace
 
 			const EmEn::Graphics::GrabPass & m_grabPass;
 	};
+
+	/**
+	 * @brief Adapter exposing the grab pass albedo texture as a TextureInterface.
+	 * @note Stack-allocated in executeIndirectPostProcessEffects(); lives for the duration of the chain.
+	 */
+	class GrabPassAlbedoAdapter final : public EmEn::Vulkan::TextureInterface
+	{
+		public:
+
+			explicit
+			GrabPassAlbedoAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+				: m_grabPass{grabPass}
+			{
+
+			}
+
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept override
+			{
+				return m_grabPass.hasAlbedo();
+			}
+
+			[[nodiscard]]
+			EmEn::Vulkan::TextureType
+			type () const noexcept override
+			{
+				return EmEn::Vulkan::TextureType::Texture2D;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 2;
+			}
+
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return false;
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_grabPass.albedoImage();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_grabPass.albedoImageView();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_grabPass.albedoSampler();
+			}
+
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				return false;
+			}
+
+		private:
+
+			const EmEn::Graphics::GrabPass & m_grabPass;
+	};
 }
 
 namespace EmEn::Graphics
@@ -346,13 +422,14 @@ namespace EmEn::Graphics
 	/* Configuration. */
 
 	bool
-	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties) noexcept
+	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo) noexcept
 	{
 		/* Cache the requirements for later use (recordBlit, recreateSceneTarget). */
 		m_cachedRequiresHDR = requiresHDR;
 		m_cachedRequiresDepth = requiresDepth;
 		m_cachedRequiresNormals = requiresNormals;
 		m_cachedRequiresMaterialProperties = requiresMaterialProperties;
+		m_cachedRequiresAlbedo = requiresAlbedo;
 
 		const auto & extent = renderTarget->extent();
 		const auto swapChainColorFormat = m_renderer.swapChainColorFormat();
@@ -380,6 +457,11 @@ namespace EmEn::Graphics
 			? m_renderer.sceneTarget()->materialPropertiesFormat()
 			: VK_FORMAT_UNDEFINED;
 
+		/* Albedo format: matches the scene render target's albedo MRT attachment. */
+		const auto albedoFormat = m_renderer.sceneTarget() != nullptr
+			? m_renderer.sceneTarget()->albedoFormat()
+			: VK_FORMAT_UNDEFINED;
+
 		/* Retire the previous grab pass: in-flight command buffers may still reference
 		 * its images; the deferred destructor destroys it once every frame in flight
 		 * has completed — no device stall, no use-after-free. */
@@ -390,7 +472,7 @@ namespace EmEn::Graphics
 
 		m_grabPass = std::make_unique< GrabPass >();
 
-		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat, materialPropertiesFormat) )
+		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat, materialPropertiesFormat, albedoFormat) )
 		{
 			TraceError{ClassId} << "Unable to create the post-processor grab pass !";
 
@@ -857,6 +939,89 @@ namespace EmEn::Graphics
 				);
 			}
 		}
+
+		/* === Albedo copy === */
+		const auto srcAlbedoImage = m_renderer.currentSceneAlbedoImage();
+
+		if ( srcAlbedoImage != nullptr && m_grabPass->hasAlbedo() )
+		{
+			const auto dstAlbedoImage = m_grabPass->albedoImage();
+
+			/* 21. Transition scene albedo: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcAlbedoImage,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 22. Transition grab pass albedo: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstAlbedoImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 23. Copy scene albedo -> grab pass albedo (same format). */
+			commandBuffer.copyImage(
+				*srcAlbedoImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*dstAlbedoImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+
+			/* 24. Transition grab pass albedo: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstAlbedoImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 25. Transition scene albedo: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcAlbedoImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				);
+			}
+		}
 	}
 
 	bool
@@ -900,6 +1065,9 @@ namespace EmEn::Graphics
 		const GrabPassMaterialPropertiesAdapter materialPropertiesAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * materialPropertiesTexture = m_grabPass->hasMaterialProperties() ? &materialPropertiesAdapter : nullptr;
 
+		const GrabPassAlbedoAdapter albedoAdapter{*m_grabPass};
+		const Vulkan::TextureInterface * albedoTexture = m_grabPass->hasAlbedo() ? &albedoAdapter : nullptr;
+
 		for ( const auto & effect : stack.effects() )
 		{
 			if ( effect == nullptr || !effect->isEnabled() )
@@ -931,6 +1099,12 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* Skip albedo-requiring effects if no albedo is available. */
+			if ( effect->requiresAlbedo() && albedoTexture == nullptr )
+			{
+				continue;
+			}
+
 			/* Skip ray tracing effects if RT is not available or disabled via settings. */
 			if ( effect->requiresRayTracing() && (!m_renderer.device()->rayTracingEnabled() || !m_renderer.isRayTracingSettingEnabled()) )
 			{
@@ -943,7 +1117,7 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, materialPropertiesTexture, lightSet, pc);
+			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, materialPropertiesTexture, albedoTexture, lightSet, pc);
 		}
 
 		/* Update only the current frame's descriptor set to point to the effect chain output

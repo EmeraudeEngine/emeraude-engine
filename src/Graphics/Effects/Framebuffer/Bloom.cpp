@@ -604,7 +604,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	Bloom::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
+	Bloom::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
 	{
 		/* Update the per-frame descriptor sets to point to the external input.
 		 * Each frame-in-flight has its own copy to avoid updating a descriptor

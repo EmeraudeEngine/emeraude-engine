@@ -441,7 +441,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	DepthOfField::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	DepthOfField::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		/* Update per-frame descriptor sets to avoid conflicts with pending command buffers. */
 		const auto frameIndex = this->renderer().currentFrameIndex();

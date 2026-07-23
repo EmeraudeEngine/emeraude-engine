@@ -159,11 +159,12 @@ namespace EmEn::Graphics
 			 * @param requiresHDR Whether the scene effects require HDR.
 			 * @param requiresDepth Whether the scene effects require depth.
 			 * @param requiresNormals Whether the scene effects require normals.
-			 * @param requiresMaterialProperties
+			 * @param requiresMaterialProperties Whether the scene effects require material properties.
+			 * @param requiresAlbedo Whether the scene effects require albedo.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties) noexcept;
+			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo) noexcept;
 
 			/* Shared state. */
 
@@ -237,21 +238,34 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the cached albedo requirement.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			cachedRequiresAlbedo () const noexcept
+			{
+				return m_cachedRequiresAlbedo;
+			}
+
+			/**
 			 * @brief Updates the cached requirements without reconfiguring GPU resources.
 			 * @note Call this before recreateSceneTarget() so it picks up correct formats.
 			 * @param requiresHDR Whether the scene effects require HDR.
 			 * @param requiresDepth Whether the scene effects require depth.
 			 * @param requiresNormals Whether the scene effects require normals.
 			 * @param requiresMaterialProperties Whether the scene effects require material properties.
+			 * @param requiresAlbedo Whether the scene effects require albedo.
 			 * @return void
 			 */
 			void
-			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties) noexcept
+			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo) noexcept
 			{
 				m_cachedRequiresHDR = requiresHDR;
 				m_cachedRequiresDepth = requiresDepth;
 				m_cachedRequiresNormals = requiresNormals;
 				m_cachedRequiresMaterialProperties = requiresMaterialProperties;
+				m_cachedRequiresAlbedo = requiresAlbedo;
 			}
 
 			/**
@@ -332,5 +346,6 @@ namespace EmEn::Graphics
 			bool m_cachedRequiresDepth{false};
 			bool m_cachedRequiresNormals{false};
 			bool m_cachedRequiresMaterialProperties{false};
+			bool m_cachedRequiresAlbedo{false};
 	};
 }

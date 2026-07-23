@@ -149,6 +149,14 @@ namespace EmEn::Graphics
 	}
 
 	bool
+	PostProcessStack::requiresAlbedo () const noexcept
+	{
+		return std::ranges::any_of(m_effects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->requiresAlbedo();
+		});
+	}
+
+	bool
 	PostProcessStack::requiresLightSet () const noexcept
 	{
 		return std::ranges::any_of(m_effects, [] (const auto & effect) {

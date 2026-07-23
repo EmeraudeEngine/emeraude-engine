@@ -904,6 +904,7 @@ namespace EmEn::Saphir
 			constexpr auto OutputFragment{"svOutputFragment"};
 			constexpr auto OutputNormal{"svOutputNormal"};
 			constexpr auto OutputMaterialProperties{"svOutputMaterialProperties"};
+			constexpr auto OutputAlbedo{"svOutputAlbedo"};
 			constexpr auto FragCoord{"svFragCoord"};
 			constexpr auto Light{"svLight"};
 			constexpr auto PositionLightSpace{"PositionLightSpace"};

@@ -161,6 +161,14 @@ namespace EmEn::Graphics
 			bool requiresMaterialProperties () const noexcept;
 
 			/**
+			 * @brief Returns whether any effect in the stack requires albedo input.
+			 * @note Albedo implies normals and material properties (fixed MRT order).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool requiresAlbedo () const noexcept;
+
+			/**
 			 * @brief Returns whether any effect in the stack requires the scene light set.
 			 * @return bool
 			 */

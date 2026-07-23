@@ -372,8 +372,12 @@ void main()
 
 	/* Apply pass: additive blend of indirect light onto the scene,
 	 * modulated by the material properties G-buffer (emissive surfaces
-	 * should not receive GI — they emit their own light).
-	 * Identical to the RTGI apply pass. */
+	 * should not receive GI — they emit their own light) and by the
+	 * receiver's albedo from the albedo G-buffer: the indirect diffuse is
+	 * albedo * irradiance. Without it, a coloured surface lit only by
+	 * indirect light showed the raw incoming (grey) light — e.g. a green
+	 * column rendered grey in shadow (RTGI recovers the same term via a
+	 * primary ray + material SSBO; SSGI reads the G-buffer). */
 	constexpr auto SSGIApplyFragmentShader = R"GLSL(
 #version 450
 
@@ -383,6 +387,7 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D giTex;
 layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
+layout(set = 0, binding = 3) uniform sampler2D albedoTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -404,6 +409,9 @@ void main()
 	uint bPacked = uint(mp.b * 255.0);
 	float emissiveMask = float(bPacked & 0xFu) / 15.0;
 	gi *= (1.0 - emissiveMask);
+
+	/* Modulate by the receiver's albedo (sRGB view: sampled linear). */
+	gi *= texture(albedoTex, vUV).rgb;
 
 	/* Additive blend: indirect light adds to the scene. */
 	color.rgb += gi * intensity;
@@ -461,7 +469,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts (shared) ---- */
 		auto tripleLayout = this->getInputLayout(3);
 
-		if ( tripleLayout == nullptr )
+		/* Apply input: color + GI + material properties + albedo. */
+		auto applyInputLayout = this->getInputLayout(4);
+
+		if ( tripleLayout == nullptr || applyInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -493,7 +504,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
-			sets.emplace_back(tripleLayout);
+			sets.emplace_back(applyInputLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
 				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -576,7 +587,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Apply: reads color (per-frame) + blurred GI (fixed) + material properties (per-frame). */
-		m_applyPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "Apply_DescSet");
+		m_applyPerFrame = this->createPerFrameDescriptorSets(applyInputLayout, ClassId, "Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
 		{
@@ -616,7 +627,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	SSGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	SSGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -640,6 +651,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputMaterialProperties != nullptr )
 		{
 			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
+		}
+
+		/* Update albedo descriptor for apply pass (receiver albedo modulation).
+		 * Always present: the effect declares requiresAlbedo(), the PostProcessor
+		 * skips it when the albedo G-buffer is unavailable. */
+		if ( inputAlbedo != nullptr )
+		{
+			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(3, *inputAlbedo));
 		}
 
 		/* ---- Pass 1: Screen-Space GI Trace ---- */

@@ -37,7 +37,7 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	bool
-	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat) noexcept
+	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -369,12 +369,95 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Create the albedo grab pass image (optional). */
+		if ( albedoFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_albedoImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				albedoFormat,
+				VkExtent3D{width, height, 1},
+				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_albedoImage->setIdentifier(ClassId, "Albedo", "Image");
+
+			if ( !m_albedoImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass albedo image !";
+
+				return false;
+			}
+
+			/* Transition albedo to shader read layout. */
+			{
+				const auto & transferManager = renderer.transferManager();
+
+				if ( !transferManager.transitionImageLayout(
+					*m_albedoImage,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				) )
+				{
+					TraceError{ClassId} << "Unable to transition grab pass albedo image to shader read layout !";
+
+					return false;
+				}
+			}
+
+			m_albedoImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			/* Create the albedo image view. */
+			m_albedoImageView = std::make_shared< ImageView >(
+				m_albedoImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_albedoImageView->setIdentifier(ClassId, "Albedo", "ImageView");
+
+			if ( !m_albedoImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass albedo image view !";
+
+				return false;
+			}
+
+			/* Get or create the albedo sampler: nearest filtering, clamp-to-edge. */
+			m_albedoSampler = renderer.getSampler("GrabPassAlbedo", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				createInfo.magFilter = VK_FILTER_NEAREST;
+				createInfo.minFilter = VK_FILTER_NEAREST;
+				createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.compareEnable = VK_FALSE;
+				createInfo.minLod = 0.0F;
+				createInfo.maxLod = 1.0F;
+			});
+
+			if ( m_albedoSampler == nullptr )
+			{
+				TraceError{ClassId} << "Unable to get the sampler for grab pass albedo !";
+
+				return false;
+			}
+		}
+
 		return true;
 	}
 
 	void
 	GrabPass::destroy () noexcept
 	{
+		m_albedoSampler.reset();
+		m_albedoImageView.reset();
+		m_albedoImage.reset();
 		m_materialPropertiesSampler.reset();
 		m_materialPropertiesImageView.reset();
 		m_materialPropertiesImage.reset();
@@ -390,11 +473,11 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat) noexcept
+	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat) noexcept
 	{
 		this->destroy();
 
-		return this->create(renderer, width, height, colorFormat, depthFormat, normalsFormat, materialPropertiesFormat);
+		return this->create(renderer, width, height, colorFormat, depthFormat, normalsFormat, materialPropertiesFormat, albedoFormat);
 	}
 
 	void
@@ -746,6 +829,17 @@ namespace EmEn::Graphics
 		info.sampler = m_materialPropertiesSampler ? m_materialPropertiesSampler->handle() : VK_NULL_HANDLE;
 		info.imageView = m_materialPropertiesImageView ? m_materialPropertiesImageView->handle() : VK_NULL_HANDLE;
 		info.imageLayout = m_materialPropertiesImage ? m_materialPropertiesImage->currentImageLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
+
+		return info;
+	}
+
+	VkDescriptorImageInfo
+	GrabPass::albedoDescriptorInfo () const noexcept
+	{
+		VkDescriptorImageInfo info{};
+		info.sampler = m_albedoSampler ? m_albedoSampler->handle() : VK_NULL_HANDLE;
+		info.imageView = m_albedoImageView ? m_albedoImageView->handle() : VK_NULL_HANDLE;
+		info.imageLayout = m_albedoImage ? m_albedoImage->currentImageLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
 
 		return info;
 	}

@@ -157,6 +157,21 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether this effect requires an albedo buffer input.
+			 * @note Requiring albedo implies normals AND material properties: the shader generator
+			 * infers the MRT layout from the color attachment count with a fixed order
+			 * (color, normals, material properties, albedo).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresAlbedo () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Returns whether this effect requires a velocity buffer input.
 			 * @return bool
 			 */
@@ -228,12 +243,13 @@ namespace EmEn::Graphics
 			 * @param inputDepth The input depth texture (maybe nullptr if not available).
 			 * @param inputNormals The input normals texture (maybe nullptr if not available).
 			 * @param inputMaterialProperties The input material properties texture (maybe nullptr if not available).
+			 * @param inputAlbedo The input albedo texture (maybe nullptr if not available).
 			 * @param lightSet The scene light set for lighting queries (maybe nullptr if not available).
 			 * @param constants The current post-processing push constants.
 			 * @return const Vulkan::TextureInterface & The output texture to pass to the next effect.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept = 0;
+			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Vulkan::TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept = 0;
 
 		protected:
 

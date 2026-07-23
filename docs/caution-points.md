@@ -452,6 +452,70 @@ if ( materialType == PBRResource::ClassId )
 > - `Graphics/Effects/Framebuffer/RTGI.cpp` — `shadowRayVisibility()` + gated
 >   contribution in `computeDirectLighting()` (trace shader)
 
+### Fixed: SSGI Indirect Light Ignored Receiver Albedo — New Albedo G-Buffer Attachment (Jul 2026)
+
+> [!WARNING]
+> **Symptom:** a coloured surface lit ONLY by indirect light rendered grey in SSGI (a green
+> column in shadow lost its colour entirely; a blue one washed to lavender). RTGI was correct:
+> it recovers the receiver's albedo via a primary ray + the RT material SSBO. SSGI, screen-space,
+> had no albedo source — its apply pass did `color += gi` with no receiver modulation
+> (indirect diffuse must be `albedo × irradiance`).
+>
+> **Fix:** a fourth MRT attachment on the scene render target — **albedo,
+> `VK_FORMAT_R8G8B8A8_SRGB`** (written linear, encoded on store, decoded on sample), written by
+> the ambient/simple pass from `LightGenerator::albedoShaderExpression()` (PBR albedo /
+> Standard-Basic diffuse / white fallback), and consumed by SSGI's apply pass
+> (`gi *= texture(albedoTex, vUV).rgb`).
+>
+> **Contract points (MUST stay consistent when touching any of this):**
+> - **Fixed MRT order:** `[0]=color, [1]=normals, [2]=materialProperties, [3]=albedo`, depth
+>   last. The shader generator detects the layout **by color attachment count**
+>   (`SceneRendering.hpp`: `>1`, `>2`, `>3`) — each attachment forces every one before it
+>   (`Renderer::recreateSceneTarget()`: albedo ⇒ matprops ⇒ normals).
+> - **Clear values:** `Renderer::m_clearColors` is now `std::array<VkClearValue, 5>` with
+>   **`[4]` = depth** (was `[3]`); the per-combination subset arrays in `Renderer.cpp`
+>   (both CLEAR and LOAD dispatch blocks) must cover every attachment combination.
+> - **Blend states:** one `appendColorBlendAttachment()` per present MRT attachment
+>   (`SceneRendering::onGraphicsPipelineConfiguration()`) — count must equal the subpass
+>   color attachment count.
+> - **Requirements plumbing:** `IndirectPostProcessEffect::requiresAlbedo()` →
+>   `PostProcessStack::requiresAlbedo()` → `PostProcessor::updateCachedRequirements()/configure()`
+>   (now 5 bool params) → scene target formats → GrabPass (albedo image + copy in
+>   `PostProcessor::recordBlit()`) → `GrabPassAlbedoAdapter` → effect
+>   `execute(..., inputMaterialProperties, inputAlbedo, lightSet, ...)` (signature grew by
+>   one param across ALL 16 effects).
+> - Allocation is **on demand**: no stack effect requires albedo → no attachment, zero cost.
+>
+> **Files involved:** `Graphics/{Renderer,SceneRenderTarget,GrabPass,PostProcessor,PostProcessStack}.{hpp,cpp}`,
+> `Graphics/IndirectPostProcessEffect.hpp`, `Saphir/Keys.hpp` (`OutputAlbedo`),
+> `Saphir/LightGenerator.{hpp,cpp}` (`albedoShaderExpression()`),
+> `Saphir/Generator/SceneRendering.{hpp,cpp}`, `Graphics/Effects/Framebuffer/*.{hpp,cpp}`
+> (signature), `SSGI.{hpp,cpp}` (consumer).
+
+### Fixed: RTAO/RTGI tMin Skipped Near Occluders + SSAO Double Intensity & Screen-Edge Band (Jul 2026)
+
+> [!WARNING]
+> Three AO/GI defects caught by the GlobalIllumination demo's symmetric mode bench:
+>
+> **1. RTAO bright crease line (`RTAO.cpp`):** the ray query used `tMin = adaptiveBias`
+> (`bias × max(1, cameraDist) × grazingFactor≤10` — can exceed a metre). tMin skips REAL
+> geometry closer than it, so at wall/floor creases the adjacent surface was never hit →
+> a bright line exactly where AO must be darkest, wider with distance/grazing. **Fix:**
+> tMin is a tiny constant (0.001); the adaptive origin offset alone prevents
+> self-intersection (hemisphere directions never descend below the surface). Same fix
+> applied to `RTGI.cpp` bounce rays (same pattern → light leak at creases).
+>
+> **2. SSAO applied its intensity TWICE (`SSAO.cpp`):** once in the compute pass
+> (`occ × intensity`) and once in the apply pass via an EXTRAPOLATING `mix(1.0, ao,
+> intensity)` (t = 1.5 by default → overshoots below the computed AO). Default SSAO was
+> far too dark ("violent"). **Fix:** compute pass stores the pure visibility term;
+> intensity applied once in the apply pass, clamped.
+>
+> **3. SSAO black band at screen edges:** projected sample UVs were never validated; the
+> clamp-to-edge depth sampler recycled border depth → false full occlusion (ragged solid
+> black strip at the bottom of the frame on close grazing floors). **Fix:** out-of-frame
+> samples are skipped (treated as unoccluded).
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]

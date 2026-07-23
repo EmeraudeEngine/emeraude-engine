@@ -142,6 +142,15 @@ void main()
 		float t = abs(tanHalfFovY);
 		vec2 sampleUV = samplePos.xy / (samplePos.z * vec2(t * aspectRatio, t)) * 0.5 + 0.5;
 
+		/* Samples projected outside the frame have no depth information: treat them as
+		 * unoccluded. The clamp-to-edge sampler used to recycle the border depth, turning
+		 * every screen edge into a false full-occlusion band (solid black strip at the
+		 * bottom of the frame on close grazing floors). */
+		if (any(lessThan(sampleUV, vec2(0.0))) || any(greaterThan(sampleUV, vec2(1.0))))
+		{
+			continue;
+		}
+
 		/* Sample depth at projected position. */
 		float sampleDepth = linearizeDepth(texture(depthTex, sampleUV).r);
 
@@ -150,7 +159,10 @@ void main()
 		occlusion += (sampleDepth <= samplePos.z - bias ? 1.0 : 0.0) * rangeCheck;
 	}
 
-	occlusion = 1.0 - (occlusion / float(sampleCount)) * intensity;
+	/* Pure visibility term — the user-facing intensity is applied ONCE, in the apply pass.
+	 * It used to be multiplied here AND fed to an extrapolating mix() there (t > 1), a
+	 * double application that made default SSAO far too dark. */
+	occlusion = 1.0 - (occlusion / float(sampleCount));
 	outAO = clamp(occlusion, 0.0, 1.0);
 }
 )GLSL";
@@ -217,8 +229,10 @@ void main()
 	uint bPacked = uint(mp.b * 255.0);
 	float emissiveMask = float(bPacked & 0xFu) / 15.0;
 
-	/* Mix towards full AO based on intensity. */
-	ao = mix(1.0, ao, intensity);
+	/* Single application of the user-facing intensity (the compute pass stores the pure
+	 * visibility term). Clamped: an intensity above 1 must saturate the darkening, not
+	 * extrapolate the mix below the computed AO. */
+	ao = clamp(mix(1.0, ao, intensity), 0.0, 1.0);
 
 	/* Modulate AO by material aoResponse; emissive surfaces reject AO darkening. */
 	ao = mix(1.0, ao, aoResponse * (1.0 - emissiveMask));
@@ -425,7 +439,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	SSAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	SSAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
