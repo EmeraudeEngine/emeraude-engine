@@ -297,8 +297,16 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 			continue;
 		}
 
-		vec3 shadowOrigin = hitPos + hitNormal * max(bias, 0.001);
-		float visibility = shadowRayVisibility(shadowOrigin, L, shadowDistance);
+		float visibility = 1.0;
+
+		/* Only shadow-ray the lights that cast shadows in the raster passes (flag in the
+		 * 4th SSBO vec4): a light without a shadow map deliberately shines through geometry
+		 * on screen, and the indirect bounce must match the rendered scene. */
+		if (lightSSBO.lights[base + 3u].z > 0.5)
+		{
+			vec3 shadowOrigin = hitPos + hitNormal * max(bias, 0.001);
+			visibility = shadowRayVisibility(shadowOrigin, L, shadowDistance);
+		}
 
 		totalLight += lightColor * NdotL * attenuation * visibility;
 	}

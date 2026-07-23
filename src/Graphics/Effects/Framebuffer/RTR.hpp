@@ -85,6 +85,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float intensity;
 				float fadeScreenEdge;
 				uint32_t lightCount;
+				/* Scene ambient term (color × intensity), added at reflection hit points so
+				 * the reflected surfaces match the raster look (which includes ambient). */
+				float ambientR;
+				float ambientG;
+				float ambientB;
+				float ambientPad;
 			};
 
 			/**

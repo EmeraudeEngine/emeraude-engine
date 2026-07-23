@@ -41,11 +41,11 @@
 
 ### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)
 
-- [ ] **RTR: port the shadow-ray occlusion fix** — `RTR.cpp`'s `computeDirectLighting()`
-  still has NO occlusion test toward the lights (same leak fixed in RTGI: bounce/reflection
-  hit points receive light through walls). Subtle in reflections (only shows in reflections
-  OF shadowed regions), but physically wrong. Validate before/after in a reflection-heavy
-  demo (owner request: NOT in the GI demo).
+- [x] **RTR: port the shadow-ray occlusion fix** — DONE (validated 2026-07-23 in a
+  reflection-heavy indoor scene). The naive port regressed (phantom shadows, dead tile
+  reflections) and produced the "reflections must match the raster" contract: shadow rays
+  only for shadow-casting lights (per-light SSBO flag) + real scene ambient at hit points.
+  See caution-points § "RTR Shadow Rays + The Reflections Must Match The Raster Contract".
 - [ ] **RTGI: read receiver albedo from the albedo G-buffer attachment** instead of the
   per-pixel primary ray (−1 ray/pixel). Measured A/B (RenderDoc / frame time) required.
 - [ ] **GI second bounce** — one-bounce leaves fully-occluded floors/ceilings near lit

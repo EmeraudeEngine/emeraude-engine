@@ -548,7 +548,9 @@ namespace EmEn::Scenes
 					entry.type = 0.0F;
 					entry.innerCosAngle = 0.0F;
 					entry.outerCosAngle = 0.0F;
-					entry.pad0 = 0.0F;
+					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
+					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
+					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
 					entry.pad1 = 0.0F;
 
 					lightIndex++;
@@ -581,7 +583,9 @@ namespace EmEn::Scenes
 					entry.type = 1.0F;
 					entry.innerCosAngle = 0.0F;
 					entry.outerCosAngle = 0.0F;
-					entry.pad0 = 0.0F;
+					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
+					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
+					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
 					entry.pad1 = 0.0F;
 
 					lightIndex++;
@@ -615,7 +619,9 @@ namespace EmEn::Scenes
 					entry.type = 2.0F;
 					entry.innerCosAngle = std::cos(Radian(light->innerAngle()));
 					entry.outerCosAngle = std::cos(Radian(light->outerAngle()));
-					entry.pad0 = 0.0F;
+					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
+					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
+					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
 					entry.pad1 = 0.0F;
 
 					lightIndex++;

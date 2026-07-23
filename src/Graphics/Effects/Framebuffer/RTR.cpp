@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -119,6 +120,7 @@ layout(push_constant) uniform PushConstants
 	float intensity;
 	float fadeScreenEdge;
 	uint lightCount;
+	vec4 ambientLight;
 };
 
 /* Material flag bits (must match GPURTMaterialData). */
@@ -227,8 +229,31 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 }
 
 /* Compute direct lighting at hit point (simple Lambert diffuse). */
+/* Shadow ray: returns 1.0 when the path from the surface toward the light is unoccluded,
+ * 0.0 otherwise. TerminateOnFirstHit: any-hit is enough for a visibility test. */
+float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
+{
+	rayQueryEXT shadowQuery;
+	rayQueryInitializeEXT(
+		shadowQuery, topLevelAS,
+		gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF,
+		origin, 0.0, direction, maxT
+	);
+
+	while (rayQueryProceedEXT(shadowQuery)) {}
+
+	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+}
+
+/* Compute direct lighting at the reflection hit point (Lambert diffuse over all scene lights).
+ * Each contribution is gated by a shadow ray: without the occlusion test, every hit point
+ * received the light straight through walls — shadows simply did not exist INSIDE the
+ * reflections (a reflected shadowed area looked fully lit). Same fix as RTGI. */
 vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 {
+	/* Shadow ray origin offset along the hit normal (no bias push constant in RTR). */
+	const float ShadowRayBias = 0.01;
+
 	vec3 totalLight = vec3(0.0);
 
 	for (uint i = 0u; i < lightCount; i++)
@@ -243,6 +268,8 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 
 		vec3 L;
 		float attenuation = 1.0;
+		/* Directional lights: any hit toward the light occludes, whatever the distance. */
+		float shadowDistance = 10000.0;
 
 		if (type < 0.5)
 		{
@@ -255,6 +282,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 			vec3 toLight = posRadius.xyz - hitPos;
 			float dist = length(toLight);
 			L = toLight / max(dist, 0.0001);
+			shadowDistance = dist;
 
 			/* Distance attenuation with radius falloff. */
 			float radius = posRadius.w;
@@ -283,7 +311,26 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 
 		/* Lambert diffuse. */
 		float NdotL = max(dot(hitNormal, L), 0.0);
-		totalLight += lightColor * NdotL * attenuation;
+
+		/* Skip the shadow ray when the light cannot contribute anyway. */
+		if (NdotL * attenuation <= 0.0)
+		{
+			continue;
+		}
+
+		float visibility = 1.0;
+
+		/* Only shadow-ray the lights that cast shadows in the raster passes (flag in the
+		 * 4th SSBO vec4): a light without a shadow map deliberately shines through geometry
+		 * on screen, and the reflection must match the rendered scene — otherwise the
+		 * reflections show shadows that do not exist in the image. */
+		if (lightSSBO.lights[base + 3u].z > 0.5)
+		{
+			vec3 shadowOrigin = hitPos + hitNormal * ShadowRayBias;
+			visibility = shadowRayVisibility(shadowOrigin, L, shadowDistance);
+		}
+
+		totalLight += lightColor * NdotL * attenuation * visibility;
 	}
 
 	return totalLight;
@@ -477,9 +524,11 @@ void main()
 			return;
 		}
 
-		/* Compute direct lighting at hit point (Lambert diffuse over all scene lights). */
+		/* Compute direct lighting at hit point (Lambert diffuse over all scene lights),
+		 * plus the actual scene ambient (raster surfaces receive it too — a hardcoded
+		 * vec3(0.15) used to stand in for it and desynced reflections from the image). */
 		vec3 lighting = computeDirectLighting(hitPos, hitNormal);
-		lighting += vec3(0.15); /* Minimal ambient so shadowed faces aren't pure black. */
+		lighting += ambientLight.rgb;
 
 		vec3 litColor = albedo * lighting;
 
@@ -897,7 +946,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTR::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	RTR::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -952,6 +1001,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const auto invView = viewMat.inverse();
 			const auto * inv = invView.data();
 
+			/* Scene ambient (color × intensity), matching what the raster surfaces receive.
+			 * Falls back to the previous neutral 0.15 grey when no light set is available. */
+			const auto ambientColor = lightSet != nullptr ? lightSet->ambientLightColor() : Base::PixelFactory::Color< float >{0.15F, 0.15F, 0.15F, 1.0F};
+			const auto ambientIntensity = lightSet != nullptr ? lightSet->ambientLightIntensity() : 1.0F;
+
 			const TracePushConstants pc{
 				.invViewProj = {
 					ivp[0], ivp[1], ivp[2], ivp[3],
@@ -968,7 +1022,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.maxDistance = m_parameters.maxDistance,
 				.intensity = m_parameters.intensity,
 				.fadeScreenEdge = m_parameters.fadeScreenEdge,
-				.lightCount = this->renderer().rtLightCount()
+				.lightCount = this->renderer().rtLightCount(),
+				.ambientR = ambientColor.red() * ambientIntensity,
+				.ambientG = ambientColor.green() * ambientIntensity,
+				.ambientB = ambientColor.blue() * ambientIntensity,
+				.ambientPad = 0.0F
 			};
 
 			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures) per-frame. */

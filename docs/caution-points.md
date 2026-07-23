@@ -535,6 +535,32 @@ if ( materialType == PBRResource::ClassId )
 >   demos construct SSGI bare. The `ScreenSpace/` group mirroring `RayTracing/` is the
 >   prerequisite for the RT/SS effect-pair factory idea.
 
+### Fixed: RTR Shadow Rays + The "Reflections Must Match The Raster" Contract (Jul 2026)
+
+> [!WARNING]
+> **Porting the RTGI shadow-ray fix to RTR naively caused two REGRESSIONS** (caught in a
+> reflection-heavy indoor scene): floor-tile reflections vanished, and reflections showed a
+> phantom dark shape that did not exist on screen.
+>
+> **Root cause of both:** the shadow ray disagreed with the raster's shadowing model.
+> 1. In raster, **a light without a shadow map deliberately shines through geometry**.
+>    Shadow-raying ALL lights made reflected surfaces darker than the surfaces themselves,
+>    and painted exact ray-traced shadows (of real occluders) that the raster never draws —
+>    the phantom shape.
+> 2. `computeDirectLighting()` had no ambient term (a hardcoded `vec3(0.15)` stood in),
+>    so once the unshadowed leak was gone, ambient-lit reflected surfaces went black.
+>
+> **The contract (applies to every RT effect evaluating direct light at hit points):**
+> **reflections/bounces must reproduce what the raster shows — no more, no less.**
+> - Shadow rays are traced ONLY for lights that cast shadows in raster. The flag is
+>   carried per light in the RT light SSBO's 4th vec4, slot `.z` (`LightSet.cpp` fill:
+>   `isShadowCastingEnabled()`); both `RTR.cpp` and `RTGI.cpp` gate on it.
+> - The reflection hit lighting includes the ACTUAL scene ambient
+>   (`LightSet::ambientLightColor() × ambientLightIntensity()`, via RTR push constants).
+>
+> **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
+> (shadowRayVisibility + gating + ambient push constants), `RTGI.cpp` (gating).
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]
