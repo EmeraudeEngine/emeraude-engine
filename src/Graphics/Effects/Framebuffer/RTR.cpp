@@ -335,6 +335,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 
 	return totalLight;
 }
+)GLSL" R"GLSL(
 
 void main()
 {

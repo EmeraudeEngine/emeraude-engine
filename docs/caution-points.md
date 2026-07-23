@@ -1100,6 +1100,38 @@ does not name a type`, `'std::stringstream' has incomplete type`, etc.
   `Physics/SurfacePhysicalProperties.hpp` × `<iosfwd>`+`<string>`, and `Help/ArgumentDoc.cpp` /
   `Help/ShortcutDoc.cpp` × `<sstream>`. The engine now compiles clean with and without the PCH.
 
+### MSVC caps a single string literal at ~16 KB → split embedded shaders into adjacent literals
+
+Embedded GLSL shaders are stored as raw string literals (`static constexpr auto … = R"GLSL( … )GLSL"`).
+MSVC enforces a hard limit of **16380 bytes per string literal** (C++ implementations are only
+required to support 65536, and MSVC picks the low end). GCC/Clang/MinGW impose no practical limit,
+so an oversized shader compiles everywhere *except* MSVC — the breakage is Windows-only and looks
+misleading.
+
+- **Symptom (MSVC only):** `error C2026: string too big, trailing characters truncated` (FR:
+  *« chaîne trop grande, caractères de fin tronqués »*). The reported line is where the byte counter
+  overflows mid-literal, **not** where the code is actually wrong — do not go looking for a bug there.
+- **Seen in:** `Graphics/Effects/Framebuffer/RTR.cpp` — `RTRTraceFragmentShader` grew to ~18 KB
+  (fixed Jul 2026).
+- **Wrong fixes:** there is no warning to silence — C2026 is a hard **error**, and the project never
+  disables diagnostics anyway. Do **not** move the shader to an external file just to dodge this
+  (embedded shaders are the engine convention).
+- **Correct fix (zero runtime cost):** split the literal into **adjacent** string literals — the C++
+  standard concatenates them at translation time into one identical string. Close and reopen the raw
+  literal at a clean boundary (between two GLSL functions):
+  ```cpp
+  static constexpr auto Shader = R"GLSL(
+  … first half (< 16 KB) …
+  )GLSL" R"GLSL(
+  … second half (< 16 KB) …
+  )GLSL";
+  ```
+  Pick the boundary so the concatenation reproduces the original bytes exactly (mind the newline that
+  precedes `)GLSL"` and follows the reopening `R"GLSL(`).
+- **Preventive:** when an embedded shader approaches ~16 KB, split it *before* it crosses the line —
+  the other RTR shaders (`RTRBlurFragmentShader`, `RTRCompositeFragmentShader`) are still small but any
+  shader that keeps growing will re-trigger this on the next Windows build.
+
 ## Platform-Specific
 
 ### String Conversions on Windows

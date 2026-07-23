@@ -27,10 +27,10 @@
 #include "WADLoader.hpp"
 
 /* STL inclusions. */
+#include <cstring>
+#include <cmath>
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <cstring>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -38,16 +38,15 @@
 #include <unordered_map>
 
 /* Local inclusions. */
+#include "VertexFactory/Shape.hpp"
 #include "AssetData.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
-#include "VertexFactory/Shape.hpp"
 
 namespace
 {
@@ -180,8 +179,6 @@ namespace
 	Polygon2D
 	clipPolygon (const Polygon2D & polygon, float ax, float ay, float dx, float dy, bool keepRight) noexcept
 	{
-		constexpr auto Epsilon{0.01F};
-
 		Polygon2D result;
 		result.reserve(polygon.size() + 2);
 
@@ -193,6 +190,8 @@ namespace
 
 		for ( size_t index = 0; index < polygon.size(); ++index )
 		{
+			constexpr auto Epsilon{0.01F};
+
 			const auto & current = polygon[index];
 			const auto & next = polygon[(index + 1) % polygon.size()];
 
@@ -260,7 +259,7 @@ namespace
 		}
 
 		const auto patchWidth = readUInt16(patch);
-		const auto patchHeight = readUInt16(patch + 2);
+		//const auto patchHeight = readUInt16(patch + 2);
 
 		for ( uint16_t column = 0; column < patchWidth; ++column )
 		{
@@ -379,7 +378,11 @@ namespace EmEn::AssetLoaders
 		{
 			const auto * entry = wad.data() + directoryOffset + (static_cast< size_t >(index) * 16);
 
-			lumps.emplace_back(Lump{readName8(entry + 8), readUInt32(entry), readUInt32(entry + 4)});
+			lumps.emplace_back(Lump{
+				.name = readName8(entry + 8),
+				.offset = readUInt32(entry),
+				.size = readUInt32(entry + 4)
+			});
 		}
 
 		const auto findLump = [&lumps] (const std::string & name, size_t from = 0, size_t upTo = 0) -> const Lump * {
@@ -407,7 +410,7 @@ namespace EmEn::AssetLoaders
 				return true;
 			}
 
-			return name.size() == 5 && name.rfind("MAP", 0) == 0 && (std::isdigit(name[3]) != 0) && (std::isdigit(name[4]) != 0);
+			return name.size() == 5 && name.starts_with("MAP") && (std::isdigit(name[3]) != 0) && (std::isdigit(name[4]) != 0);
 		};
 
 		size_t mapMarkerIndex = lumps.size();
@@ -594,7 +597,11 @@ namespace EmEn::AssetLoaders
 				{
 					const auto * patchEntry = entry + 22 + (static_cast< size_t >(patchIdx) * 10);
 
-					definition.patches.emplace_back(TexturePatch{readInt16(patchEntry), readInt16(patchEntry + 2), readUInt16(patchEntry + 4)});
+					definition.patches.emplace_back(TexturePatch{
+						.originX = readInt16(patchEntry),
+						.originY = readInt16(patchEntry + 2),
+						.patchIndex = readUInt16(patchEntry + 4)
+					});
 				}
 
 				textureDefinitions[readName8(entry)] = std::move(definition);
@@ -719,13 +726,13 @@ namespace EmEn::AssetLoaders
 		{
 			skyTextureName = std::string{"SKY"} + m_loadedMapName[1];
 		}
-		else if ( m_loadedMapName.rfind("MAP", 0) == 0 )
+		else if ( m_loadedMapName.starts_with("MAP") )
 		{
 			const auto mapNumber = std::atoi(m_loadedMapName.c_str() + 3);
 			skyTextureName = mapNumber <= 11 ? "RSKY1" : (mapNumber <= 20 ? "RSKY2" : "RSKY3");
 		}
 
-		if ( textureDefinitions.find(skyTextureName) == textureDefinitions.end() )
+		if ( !textureDefinitions.contains(skyTextureName) )
 		{
 			skyTextureName.clear();
 		}
@@ -761,10 +768,53 @@ namespace EmEn::AssetLoaders
 
 			auto & bucket = buckets[textureName];
 
-			const Corner bottomLeft{from.x, from.y, bottom, u0, v1, normalX, normalY, 0.0F, light};
-			const Corner bottomRight{to.x, to.y, bottom, u1, v1, normalX, normalY, 0.0F, light};
-			const Corner topLeft{from.x, from.y, top, u0, v0, normalX, normalY, 0.0F, light};
-			const Corner topRight{to.x, to.y, top, u1, v0, normalX, normalY, 0.0F, light};
+			const Corner bottomLeft{
+				.x = from.x,
+				.y = from.y,
+				.z = bottom,
+				.u = u0,
+				.v = v1,
+				.nx = normalX,
+				.ny = normalY,
+				.nz = 0.0F,
+				.light = light
+			};
+
+			const Corner bottomRight{
+				.x = to.x,
+				.y = to.y,
+				.z = bottom,
+				.u = u1,
+				.v = v1,
+				.nx = normalX,
+				.ny = normalY,
+				.nz = 0.0F,
+				.light = light
+			};
+
+			const Corner topLeft{
+				.x = from.x,
+				.y = from.y,
+				.z = top,
+				.u = u0,
+				.v = v0,
+				.nx = normalX,
+				.ny = normalY,
+				.nz = 0.0F,
+				.light = light
+			};
+
+			const Corner topRight{
+				.x = to.x,
+				.y = to.y,
+				.z = top,
+				.u = u1,
+				.v = v0,
+				.nx = normalX,
+				.ny = normalY,
+				.nz = 0.0F,
+				.light = light
+			};
 
 			bucket.push_back(topLeft);
 			bucket.push_back(topRight);
@@ -1020,7 +1070,17 @@ namespace EmEn::AssetLoaders
 				const auto & point = polygon[pointIndex];
 
 				/* Flats are 64×64, world-aligned. */
-				return Corner{point.first, point.second, height, point.first / 64.0F, -point.second / 64.0F, 0.0F, 0.0F, normalZ, light};
+				return Corner{
+					.x = point.first,
+					.y = point.second,
+					.z = height,
+					.u = point.first / 64.0F,
+					.v = -point.second / 64.0F,
+					.nx = 0.0F,
+					.ny = 0.0F,
+					.nz = normalZ,
+					.light = light
+				};
 			};
 
 			for ( size_t fanIdx = 1; fanIdx + 1 < polygon.size(); ++fanIdx )
@@ -1198,7 +1258,7 @@ namespace EmEn::AssetLoaders
 						const auto & corner = corners[(triangle * 3) + cornerIdx];
 
 						/* Doom map space → loader space (Y-up, right-handed): X = x, Y = height, Z = y. */
-						ShapeVertex< float > vertex{
+						const ShapeVertex< float > vertex{
 							Vector< 3, float >{corner.x * scale, corner.z * scale, corner.y * scale},
 							Vector< 3, float >{corner.nx, corner.nz, corner.ny},
 							Vector< 3, float >{corner.u, corner.v, 0.0F}
@@ -1257,7 +1317,10 @@ namespace EmEn::AssetLoaders
 		{
 			const auto texture = resolveTexture(textureName);
 
-			auto material = m_resources.container< Material::BasicResource >()->getOrCreateResource("WAD:" + wadStem + "/Material/" + textureName, [texture] (Material::BasicResource & materialResource) {
+			std::stringstream materialName;
+			materialName << "WAD:" << wadStem << "/Material/" << textureName;
+
+			auto material = m_resources.container< Material::BasicResource >()->getOrCreateResource(materialName.str(), [texture] (Material::BasicResource & materialResource) {
 				materialResource.enableVertexColor();
 
 				if ( texture != nullptr )
