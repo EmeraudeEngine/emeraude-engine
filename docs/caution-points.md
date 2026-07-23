@@ -528,8 +528,12 @@ if ( materialType == PBRResource::ClassId )
 >   `MaxDistance` (2.0), `BlurRadius` (4), `NormalSigma` (0.5).
 > - **First screen-space group** `Core/Graphics/ScreenSpace/AmbientOcclusion/`:
 >   `Radius` (0.5), `Intensity` (1.0), `Bias` (0.025), `SampleCount` (32) — read by
->   `SSAO::create()` (which previously read no settings at all). Future SSGI keys should
->   join this `ScreenSpace/` group (prerequisite for the RT/SS effect-pair factory idea).
+>   `SSAO::create()` (which previously read no settings at all).
+> - `Core/Graphics/ScreenSpace/GlobalIllumination/` (same day): `MaxDistance` (5.0),
+>   `Intensity` (0.8), `Thickness` (0.5), `SampleCount` (8), `StepCount` (16),
+>   `BlurRadius` (4), `DepthSigma` (1.0), `NormalSigma` (0.5) — read by `SSGI::create()`;
+>   demos construct SSGI bare. The `ScreenSpace/` group mirroring `RayTracing/` is the
+>   prerequisite for the RT/SS effect-pair factory idea.
 
 ### Known Issue: MRT Normal Blend for Translucent Materials
 

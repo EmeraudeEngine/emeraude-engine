@@ -432,6 +432,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
+		auto & settings = renderer.primaryServices().settings();
+
+		/* User-facing parameters, engine-wide and persisted in the settings file.
+		 * These override any constructor-provided values. */
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIMaxDistanceKey, DefaultGraphicsScreenSpaceGIMaxDistance);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIIntensityKey, DefaultGraphicsScreenSpaceGIIntensity);
+		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIThicknessKey, DefaultGraphicsScreenSpaceGIThickness);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGISampleCountKey, DefaultGraphicsScreenSpaceGISampleCount);
+		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIStepCountKey, DefaultGraphicsScreenSpaceGIStepCount);
+		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIBlurRadiusKey, DefaultGraphicsScreenSpaceGIBlurRadius);
+		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIDepthSigmaKey, DefaultGraphicsScreenSpaceGIDepthSigma);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGINormalSigmaKey, DefaultGraphicsScreenSpaceGINormalSigma);
+
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 

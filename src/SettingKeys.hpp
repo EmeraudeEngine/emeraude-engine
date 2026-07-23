@@ -432,6 +432,32 @@ namespace EmEn
 			constexpr auto GraphicsScreenSpaceAOSampleCountKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/SampleCount"};
 			constexpr auto DefaultGraphicsScreenSpaceAOSampleCount{32U};
 
+			/* Screen Space > Global Illumination */
+			/* Maximum GI ray-march distance, in world units. */
+			constexpr auto GraphicsScreenSpaceGIMaxDistanceKey{"Core/Graphics/ScreenSpace/GlobalIllumination/MaxDistance"};
+			constexpr auto DefaultGraphicsScreenSpaceGIMaxDistance{5.0F};
+			/* Indirect lighting intensity multiplier. */
+			constexpr auto GraphicsScreenSpaceGIIntensityKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Intensity"};
+			constexpr auto DefaultGraphicsScreenSpaceGIIntensity{0.8F};
+			/* Depth thickness assumed behind each depth sample, in view-space units. */
+			constexpr auto GraphicsScreenSpaceGIThicknessKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Thickness"};
+			constexpr auto DefaultGraphicsScreenSpaceGIThickness{0.5F};
+			/* Rays per pixel for screen-space global illumination. */
+			constexpr auto GraphicsScreenSpaceGISampleCountKey{"Core/Graphics/ScreenSpace/GlobalIllumination/SampleCount"};
+			constexpr auto DefaultGraphicsScreenSpaceGISampleCount{8U};
+			/* Ray-march steps per ray. */
+			constexpr auto GraphicsScreenSpaceGIStepCountKey{"Core/Graphics/ScreenSpace/GlobalIllumination/StepCount"};
+			constexpr auto DefaultGraphicsScreenSpaceGIStepCount{16U};
+			/* Bilateral denoising blur radius for GI, in pixels. */
+			constexpr auto GraphicsScreenSpaceGIBlurRadiusKey{"Core/Graphics/ScreenSpace/GlobalIllumination/BlurRadius"};
+			constexpr auto DefaultGraphicsScreenSpaceGIBlurRadius{4U};
+			/* Depth edge-stopping sigma for the GI bilateral blur. */
+			constexpr auto GraphicsScreenSpaceGIDepthSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/DepthSigma"};
+			constexpr auto DefaultGraphicsScreenSpaceGIDepthSigma{1.0F};
+			/* Normal edge-stopping sigma for the GI bilateral blur. */
+			constexpr auto GraphicsScreenSpaceGINormalSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/NormalSigma"};
+			constexpr auto DefaultGraphicsScreenSpaceGINormalSigma{0.5F};
+
 			/* Level of Detail */
 			/* Automatically generate levels of detail for meshes. */
 			constexpr auto GraphicsLODEnableAutomaticGenerationKey{"Core/Graphics/LOD/EnableAutomaticGeneration"};
