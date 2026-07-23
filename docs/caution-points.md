@@ -411,6 +411,47 @@ if ( materialType == PBRResource::ClassId )
 > - `Saphir/LightGenerator.ShadowMap.cpp` — `generateVertexShaderShadowMapCode()`
 >   billboard branch for both `PositionLightSpace` and `DirectionWorldSpace`
 
+### Fixed: RTGI Bounce Lighting Leaked Through Walls — Missing Shadow Rays (Jul 2026)
+
+> [!WARNING]
+> **Symptom:** in an enclosed scene (GlobalIllumination demo, S-shaped Cornell box,
+> single shadow-casting omni light), RTGI flooded fully occluded rooms with bright
+> indirect light. Surfaces with no line of sight to the light (back faces of columns,
+> shadow zones behind occluders) glowed **brighter** than directly exposed ones,
+> reading like a "ray inversion". Color bleeding direction was correct — only the
+> injected energy was wrong.
+>
+> **Root cause:** the trace pass' `computeDirectLighting()` (direct Lambert lighting
+> evaluated at every bounce hit point) had **no occlusion test toward the lights**.
+> Every hit point received full `color × intensity × NdotL × attenuation` straight
+> through any wall. The raster direct pass is shadow-mapped, so the final image mixed
+> correct direct shadows with unoccluded indirect fill — worst exactly where the
+> scene should be darkest.
+>
+> **Fix:** one shadow ray per light per bounce hit (`shadowRayVisibility()` in
+> `RTGI.cpp`'s trace shader): ray query with `gl_RayFlagsTerminateOnFirstHitEXT |
+> gl_RayFlagsOpaqueEXT` from `hitPos + hitNormal × max(bias, 0.001)` toward the light
+> (`tMax` = distance to a point/spot light, 10000 for directionals), contribution
+> zeroed when occluded. Early-out skips the ray when `NdotL × attenuation ≤ 0`.
+>
+> **Expected behavior after the fix (NOT bugs):**
+> - Occluded floors/ceilings adjacent to lit walls can stay near-black: this is
+>   **one-bounce** GI — a surface that only "sees" shadowed geometry gets nothing,
+>   because bounce hit points on shadowed surfaces contribute zero direct light.
+>   Filling those areas requires a second bounce (future axis), not a bug fix.
+> - A wall facing a bright opening lights up while the floor/ceiling of the same
+>   corridor stay dark: cosine weighting — the wall faces the lit surfaces head-on,
+>   floor/ceiling see them at grazing angles. SSGI shows the same structure.
+>
+> **Known gap:** `RTR.cpp` has the same unshadowed `computeDirectLighting()` — the
+> error only shows in reflections OF shadowed regions (too bright), masked by
+> Fresnel/roughness/distance fade. Porting the shadow ray to RTR is pending
+> (validate against a reflection-heavy demo before/after).
+>
+> **Files involved:**
+> - `Graphics/Effects/Framebuffer/RTGI.cpp` — `shadowRayVisibility()` + gated
+>   contribution in `computeDirectLighting()` (trace shader)
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]

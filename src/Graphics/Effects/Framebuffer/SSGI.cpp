@@ -150,8 +150,15 @@ void main()
 	/* Per-pixel random rotation to break banding. */
 	vec2 noiseVec = vec2(hash(vUV), hash(vUV * 2.37));
 
-	/* Build a tangent-space basis around the view-space normal. */
-	vec3 tangent = normalize(vec3(noiseVec.x, noiseVec.y, 0.0) - normal * dot(vec3(noiseVec.x, noiseVec.y, 0.0), normal));
+	/* Build a tangent-space basis around the view-space normal.
+	 * Robust construction: pick an up vector not parallel to the normal, then cross (same method
+	 * as RTGI). The previous noise-based Gram-Schmidt degenerated to normalize(0) = NaN whenever the
+	 * noise vector aligned with the normal (side walls seen edge-on) — the NaN then propagated
+	 * through the apply pass (color += NaN) and blacked out whole surfaces. The per-sample random
+	 * rotation is already provided by hemispherePoint() via noiseVec, so a deterministic basis here
+	 * is fine. */
+	vec3 up = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+	vec3 tangent = normalize(cross(up, normal));
 	vec3 bitangent = cross(normal, tangent);
 	mat3 TBN = mat3(tangent, bitangent, normal);
 
@@ -174,10 +181,17 @@ void main()
 			sampleDir = -sampleDir;
 		}
 
-		/* Ray march through the depth buffer. */
+		/* Ray march through the depth buffer. Instead of requiring the ray to LAND inside a thin
+		 * thickness window (which a coarse march over-steps — the reason SSGI missed adjacent visible
+		 * light while SSR, with 128 fine steps, did not), we detect the FRONT->BEHIND crossing
+		 * (prevDiff < 0, diff > 0) and binary-refine the intersection. This catches surfaces the
+		 * step size would otherwise skip, at a fraction of SSR's per-ray budget. */
 		bool hit = false;
 		vec2 hitUV = vec2(0.0);
 		float hitDist = 0.0;
+
+		float prevDiff = -1.0;
+		vec3 prevRayPos = centerPos;
 
 		for (uint s = 1u; s <= stepCount; ++s)
 		{
@@ -199,13 +213,44 @@ void main()
 			/* Adaptive thickness based on distance (distant surfaces need larger threshold). */
 			float adaptiveThick = thickness * max(1.0, sampleDepth * 0.05);
 
-			if (diff > 0.0 && diff < adaptiveThick)
+			/* Crossing: the ray went from in front of the surface to behind it. */
+			if (prevDiff < 0.0 && diff > 0.0)
 			{
-				hitUV = sampleUV;
-				hitDist = length(rayPos - centerPos);
-				hit = true;
-				break;
+				/* Binary-refine the intersection between the last two samples. */
+				vec3 lo = prevRayPos;
+				vec3 hi = rayPos;
+
+				for (uint b = 0u; b < 8u; ++b)
+				{
+					vec3 mid = 0.5 * (lo + hi);
+					float midDepth = linearizeDepth(texture(depthTex, projectToUV(mid)).r);
+
+					if (mid.z - midDepth > 0.0)
+					{
+						hi = mid;
+					}
+					else
+					{
+						lo = mid;
+					}
+				}
+
+				vec2 refUV = projectToUV(hi);
+				float refDepth = linearizeDepth(texture(depthTex, refUV).r);
+
+				/* Reject false crossings (silhouette / background gap): after refinement the ray
+				 * must sit just behind the surface, not far behind it. */
+				if ((hi.z - refDepth) < adaptiveThick)
+				{
+					hitUV = refUV;
+					hitDist = length(hi - centerPos);
+					hit = true;
+					break;
+				}
 			}
+
+			prevDiff = diff;
+			prevRayPos = rayPos;
 		}
 
 		if (hit)
@@ -219,14 +264,25 @@ void main()
 			/* Screen edge fade at hit point to avoid artifacts at screen borders. */
 			float edgeFade = screenEdgeFade(hitUV);
 
-			/* Lambert BRDF energy conservation: divide by PI.
-			 * Cosine weighting is implicit in the hemisphere distribution. */
-			indirectLight += (hitColor / 3.14159265) * distFade * edgeFade;
+			/* hitColor is already the hit surface's outgoing radiance (the lit colour buffer),
+			 * i.e. L_i. With cosine-weighted sampling the diffuse estimate is albedo * mean(L_i)
+			 * (the receiver albedo is applied in the apply pass / omitted for white surfaces);
+			 * there must be NO extra 1/PI here — dividing by PI made SSGI ~3.14x too dark. */
+			indirectLight += hitColor * distFade * edgeFade;
 		}
 	}
 
 	/* Normalize by sample count. Intensity is applied in the apply pass. */
 	indirectLight = indirectLight / float(sampleCount);
+
+	/* Safety net: never let a NaN/Inf or negative value reach the apply pass (color += gi would
+	 * otherwise black out or blow up the pixel). */
+	if (any(isnan(indirectLight)) || any(isinf(indirectLight)))
+	{
+		indirectLight = vec3(0.0);
+	}
+
+	indirectLight = max(indirectLight, vec3(0.0));
 
 	outIndirect = vec4(indirectLight, 1.0);
 }

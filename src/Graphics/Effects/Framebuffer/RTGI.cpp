@@ -212,9 +212,28 @@ vec3 hemispherePoint (uint i, vec2 noise)
 	return vec3(cos(angle) * r, sin(angle) * r, z);
 }
 
+/* Shadow ray: returns 1.0 when the path from the surface toward the light is unoccluded,
+ * 0.0 otherwise. TerminateOnFirstHit: any-hit is enough for a visibility test. */
+float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
+{
+	rayQueryEXT shadowQuery;
+	rayQueryInitializeEXT(
+		shadowQuery, topLevelAS,
+		gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF,
+		origin, 0.0, direction, maxT
+	);
+
+	while (rayQueryProceedEXT(shadowQuery)) {}
+
+	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+}
+
 /* Compute direct lighting at hit point (Lambert diffuse over all scene lights).
  * lightCount is derived from push constants but stored in the SSBO header.
- * We pass it via the last push constant field (sampleCount shares the uint slot). */
+ * We pass it via the last push constant field (sampleCount shares the uint slot).
+ * Each contribution is gated by a shadow ray: without the occlusion test, every hit
+ * point receives the light straight through walls and the indirect pass floods
+ * shadowed areas (the raster direct pass is shadow-mapped, the GI must match). */
 vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 {
 	vec3 totalLight = vec3(0.0);
@@ -231,6 +250,8 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 
 		vec3 L;
 		float attenuation = 1.0;
+		/* Directional lights: any hit toward the light occludes, whatever the distance. */
+		float shadowDistance = 10000.0;
 
 		if (type < 0.5)
 		{
@@ -243,6 +264,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 			vec3 toLight = posRadius.xyz - hitPos;
 			float dist = length(toLight);
 			L = toLight / max(dist, 0.0001);
+			shadowDistance = dist;
 
 			float radius = posRadius.w;
 
@@ -268,7 +290,17 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 		}
 
 		float NdotL = max(dot(hitNormal, L), 0.0);
-		totalLight += lightColor * NdotL * attenuation;
+
+		/* Skip the shadow ray when the light cannot contribute anyway. */
+		if (NdotL * attenuation <= 0.0)
+		{
+			continue;
+		}
+
+		vec3 shadowOrigin = hitPos + hitNormal * max(bias, 0.001);
+		float visibility = shadowRayVisibility(shadowOrigin, L, shadowDistance);
+
+		totalLight += lightColor * NdotL * attenuation * visibility;
 	}
 
 	return totalLight;
@@ -332,6 +364,55 @@ void main()
 	 * we read the total number of lights from the SSBO length heuristic.
 	 * For simplicity, we hard-limit to 16 lights for GI bounces. */
 	uint lightCount = min(uint(lightSSBO.lights.length()) / 4u, 16u);
+
+	/* Receiver albedo, fetched via a primary ray from the camera to this pixel's surface.
+	 * This engine has no albedo G-buffer (only the lit colour), so we recover the receiver's
+	 * base colour from the same RT material SSBO the bounces use. Without it, the indirect diffuse
+	 * is added un-modulated: a coloured surface lit only by (white) indirect light shows the raw
+	 * incoming colour instead of albedo * irradiance — e.g. a yellow column looked grey/white. */
+	vec3 receiverAlbedo = vec3(1.0);
+	{
+		vec3 camPos = vec3(viewPosX, viewPosY, viewPosZ);
+		vec3 toPixel = worldPos - camPos;
+		float pixelDist = length(toPixel);
+		vec3 primDir = toPixel / max(pixelDist, 0.0001);
+
+		rayQueryEXT primQuery;
+		rayQueryInitializeEXT(
+			primQuery, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF,
+			camPos, 0.0, primDir, pixelDist * 1.02
+		);
+
+		while (rayQueryProceedEXT(primQuery)) {}
+
+		if (rayQueryGetIntersectionTypeEXT(primQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
+		{
+			uint pInst = rayQueryGetIntersectionInstanceCustomIndexEXT(primQuery, true);
+			uint pPrim = rayQueryGetIntersectionPrimitiveIndexEXT(primQuery, true);
+			vec2 pBary = rayQueryGetIntersectionBarycentricsEXT(primQuery, true);
+
+			uint pGeom = rayQueryGetIntersectionGeometryIndexEXT(primQuery, true);
+			uint pSubGeoCount = meshSSBO.meshEntries[pInst * 3u + 1u].w;
+			uint pEffGeom = (pGeom < pSubGeoCount) ? pGeom : 0u;
+			uint pMatIndex = meshSSBO.meshEntries[pInst * 3u + 2u][pEffGeom];
+			uint pMatBase = pMatIndex * 7u;
+
+			receiverAlbedo = materialSSBO.materials[pMatBase].rgb;
+			uint pFlags = floatBitsToUint(materialSSBO.materials[pMatBase + 4u].w);
+
+			if ((pFlags & HasAlbedoTexture) != 0u)
+			{
+				int pTexIndex = floatBitsToInt(materialSSBO.materials[pMatBase + 5u].x);
+
+				if (pTexIndex >= 0)
+				{
+					MeshAccessor pMesh = getMeshAccessor(pInst, pPrim);
+					vec2 pUV = getHitUV(pMesh, pBary);
+					receiverAlbedo = texture(textures2D[nonuniformEXT(pTexIndex)], pUV).rgb;
+				}
+			}
+		}
+	}
 
 	/* Accumulate indirect radiance. */
 	vec3 indirectLight = vec3(0.0);
@@ -410,8 +491,9 @@ void main()
 		}
 	}
 
-	/* Normalize by sample count only. Intensity is applied in the apply pass. */
-	indirectLight = indirectLight / float(sampleCount);
+	/* Normalize by sample count, then modulate by the receiver's albedo so the indirect diffuse
+	 * is albedo * irradiance (Intensity is applied in the apply pass). */
+	indirectLight = indirectLight / float(sampleCount) * receiverAlbedo;
 
 	outIndirect = vec4(indirectLight, 1.0);
 }
