@@ -288,6 +288,56 @@ Maya's USD → FBX converter drops all texture connections. The material still e
 - **Option 1 — Intel Knight** (`data/data-stores/FBX/Knight/...`): Maya USD Preview Surface quirk (textures stripped). Skinning guard filters it out → renders as clean static T-pose.
 - **Option 2 — Paladin** (`data/data-stores/FBX/Paladin/`): full split-animation workflow. `base_model.fbx` (rig + skin + bind pose) + 48 per-action `.fbx` files in the same folder, loaded via `loadAnimationClipsOnly` and bound to the rig by joint name. `slash_1` is placed at index 0 and auto-loops at lazy-init time. **Animation pipeline validated end-to-end** (no dislocation). **UV bug resolved** (V-flip on read, see *Mesh loading specifics* above). **Dark-render investigation closed**: turned out to be the expected PBR rendering with the default opt-out IBL — PBR materials must explicitly call `setReflectionComponentFromEnvironmentCubemap()` to consume the scene's environment cubemap, otherwise they render markedly darker than `StandardResource` for the same direct lighting. The `projet-alpha` demo wires this via the `onMeshLoaded` hook (see `src/Builtin/FBXLoader.cpp`).
 
+### WADLoader (level MATERIALIZER — Jul 2026)
+
+Loads a classic Doom-engine WAD (IWAD/PWAD) and materializes **one map** as static textured
+geometry. Deliberately NOT a game loader: no things, no sprites, no mechanics — walls,
+floors, ceilings, original textures, sector light levels baked as vertex colors.
+
+**API:** `setMapIndex(n)` (1-based, WAD directory order — works across both naming schemes
+ExMy and MAPxx) or `setMapName("E1M1")`. After `load()`: `loadedMapName()`,
+`playerStartPosition()` / `playerStartDirection()` — already in ENGINE WORLD space (Y-down,
+post-consumer), at the sector floor (eye height up to the caller). Scale: 32 map units per
+meter (`MapUnitsPerMeter`), multiplied by `LoaderOptions::uniformScale`.
+
+**Pipeline:**
+1. Whole-file read → directory (name/offset/size per lump), map marker lookup (`ExMy`/`MAPxx`
+   followed by `THINGS`).
+2. Map lumps: `VERTEXES`, `LINEDEFS`, `SIDEDEFS`, `SECTORS`, `SEGS`, `SSECTORS`, `NODES`, `THINGS`.
+3. **Walls** from linedefs: one-sided → full quad; two-sided → lower/upper step quads seen from
+   each side (sky-hack: no upper quad between two `F_SKY1` ceilings). UVs in texel space from
+   sidedef offsets (pegging flags NOT honored in v1).
+4. **Floors/ceilings**: per-subsector convex polygons reconstructed EXACTLY by
+   **Sutherland-Hodgman clipping of the level bbox through the BSP node planes** down to each
+   leaf, then by the leaf's segs (their right side faces the subsector — Doom convention).
+   ⚠️ Neither fanning the seg vertices nor angular-sorting them works: subsector corners
+   created by two partition lines carry no seg vertex → holes. The BSP clipping is the only
+   correct source.
+5. **Textures**: `PLAYPAL` palette → flats (raw 64×64) and composite wall textures
+   (`TEXTURE1/2` + `PNAMES` + picture-format patch blitting, transparent texels alpha 0).
+   `F_SKY1` ceilings get the episode sky (`SKY<e>` / `RSKY1-3`), fullbright.
+6. One multi-material mesh: `VertexFactory::Shape` groups (one per texture, triangle
+   offset/count, winding swap i1↔i2 like GLTF/FBX) → `IndexedVertexResource`
+   (`EnableNormal|EnablePrimaryTextureCoordinates|EnableVertexColor`) →
+   `MultiLayerMeshResource` with per-layer `CullingMode::None` (double-sided on purpose).
+7. Materials: unlit `BasicResource` per texture, `setTextureResource()` + `enableVertexColor()`.
+
+**Critical lessons (engine-wide):**
+- ⚠️ **Resource lambdas run on the resource-manager loading threads** — capture every local
+  buffer BY VALUE (`[pixels = std::move(rgba)]`), never by reference. By-ref captures caused
+  intermittent load failures AND a segfault (use-after-free of the stack).
+- **Perceptual color chain for unlit retro content**: textures are loaded with
+  `enableSRGB(false)` and sector light stays raw — the direct swap-chain path does not
+  re-encode, so keeping everything perceptual (texel × light) reproduces the original
+  renderer's look. Decoding to linear darkened the whole map.
+
+**V1 limitations (future work):** two-sided middle textures (grates) skipped; pegging flags
+and fine texture alignment ignored; no collision (the demo flies through); sky rendered as a
+regular fullbright ceiling plane (no skybox).
+
+**Resource naming:** `WAD:{stem}/Texture/{NAME}` (shared per WAD), `WAD:{stem}/{MAP}/...`
+(per map: geometry, mesh).
+
 ## Consumers
 
 ### Scenes::AssetDataConsumer (`Scenes/AssetDataConsumer.hpp`)

@@ -633,6 +633,17 @@ if ( materialType == PBRResource::ClassId )
 
 ---
 
+### Critical: Resource getOrCreateResource Lambdas Run on Loading Threads — Capture By VALUE
+
+> [!CRITICAL]
+> The loader lambdas passed to `Resources::Container::getOrCreateResource()` may execute
+> **asynchronously on the resource manager's loading threads**, after the calling scope has
+> returned. Capturing a local buffer by reference is a use-after-free: symptoms range from
+> "The manual loading function has return an error !" spam (garbage data failing validation)
+> to hard segfaults. **Move buffers into the lambda** (`[pixels = std::move(rgba)]`,
+> `[shape]`, `[geometry, materialList, ...]`). Caught while writing `AssetLoaders::WADLoader`
+> (Jul 2026); GLTFLoader/FBXLoader already follow the rule — keep it that way.
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)
