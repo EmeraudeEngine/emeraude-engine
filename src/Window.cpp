@@ -50,16 +50,17 @@ namespace EmEn
 	bool
 	Window::showInformation () const noexcept
 	{
-		const auto & arguments = m_primaryServices.arguments();
-
-		if ( arguments.isSwitchPresent("--show-all-infos") || arguments.isSwitchPresent("--show-video-infos") )
+		if ( m_primaryServices.arguments().isSwitchPresent("--show-all-infos") )
 		{
 			return true;
 		}
 
-		auto & settings = m_primaryServices.settings();
+		if ( m_primaryServices.arguments().isSwitchPresent("--show-video-infos") )
+		{
+			return true;
+		}
 
-		return settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
+		return m_primaryServices.settings().getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 	}
 
 	bool
@@ -343,22 +344,10 @@ namespace EmEn
 			}
 			else
 			{
-				if constexpr ( IsMacOS )
-				{
-					const auto scaledWidth = static_cast< float >(m_state.framebufferWidth) / m_state.contentXScale;
-					const auto scaledHeight = static_cast< float >(m_state.framebufferHeight) / m_state.contentYScale;
-
-					m_primaryServices.settings().set(WindowWidthKey, static_cast< uint32_t >(scaledWidth));
-					m_primaryServices.settings().set(WindowHeightKey, static_cast< uint32_t >(scaledHeight));
-				}
-				else
-				{
-					m_primaryServices.settings().set(WindowWidthKey, m_state.framebufferWidth);
-					m_primaryServices.settings().set(WindowHeightKey, m_state.framebufferHeight);
-				}
-
 				m_primaryServices.settings().set(WindowXPositionKey, m_state.windowXPosition);
 				m_primaryServices.settings().set(WindowYPositionKey, m_state.windowYPosition);
+				m_primaryServices.settings().set(WindowWidthKey, m_state.windowWidth);
+				m_primaryServices.settings().set(WindowHeightKey, m_state.windowHeight);
 			}
 		}
 
@@ -682,9 +671,7 @@ namespace EmEn
 			return;
 		}
 
-		auto * monitor = Window::getMonitor(desiredMonitor);
-
-		if ( monitor != nullptr )
+		if ( auto * monitor = Window::getMonitor(desiredMonitor); monitor != nullptr )
 		{
 			glfwSetGamma(monitor, value);
 		}
@@ -706,8 +693,9 @@ namespace EmEn
 		/* Save the current window size. */
 		{
 			const auto currentSize = this->getFramebufferSize();
-			settings.set<uint32_t>(WindowWidthKey, currentSize[0]);
-			settings.set<uint32_t>(WindowHeightKey, currentSize[1]);
+
+			settings.set< uint32_t >(WindowWidthKey, currentSize[0]);
+			settings.set< uint32_t >(WindowHeightKey, currentSize[1]);
 		}
 
 		const auto refreshRate = settings.getOrSetDefault< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
@@ -739,13 +727,7 @@ namespace EmEn
 				settings.set< uint32_t >(VideoFullscreenHeightKey, height);
 			}
 
-			glfwSetWindowMonitor(
-				m_handle.get(),
-				monitor,
-				0, 0,
-				width, height,
-				refreshRate
-			);
+			glfwSetWindowMonitor(m_handle.get(), monitor, 0, 0, width, height, refreshRate);
 		}
 	}
 
@@ -764,13 +746,7 @@ namespace EmEn
 		const auto XPosition = settings.getOrSetDefault< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
 		const auto YPosition = settings.getOrSetDefault< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
 
-		glfwSetWindowMonitor(
-			m_handle.get(),
-			nullptr,
-			XPosition, YPosition,
-			windowWidth, windowHeight,
-			GLFW_DONT_CARE
-		);
+		glfwSetWindowMonitor(m_handle.get(), nullptr, XPosition, YPosition, windowWidth, windowHeight, GLFW_DONT_CARE);
 	}
 
 	bool
@@ -1140,6 +1116,8 @@ namespace EmEn
 	std::string
 	Window::getWindowStateString (bool directData) const noexcept
 	{
+		std::stringstream output;
+
 		if ( directData )
 		{
 			const auto position = this->getPosition();
@@ -1148,7 +1126,7 @@ namespace EmEn
 			const auto scale = this->getContentScale();
 			const auto framebufferSize = this->getFramebufferSize();
 
-			return (std::stringstream{} <<
+			output <<
 				"Desktop direct info :" "\n"
 				" - Window X position : " << position[0] << "\n"
 				" - Window Y position : " << position[1] << "\n"
@@ -1165,29 +1143,31 @@ namespace EmEn
 
 				"Framebuffer direct info :" "\n"
 				" - Width : " << framebufferSize[0] << "px" "\n"
-				" - Height : " << framebufferSize[1] << "px" "\n"
-			).str();
+				" - Height : " << framebufferSize[1] << "px" "\n";
+		}
+		else
+		{
+			output <<
+				"Desktop info :" "\n"
+				" - Window X position : " << m_state.windowXPosition << "\n"
+				" - Window Y position : " << m_state.windowYPosition << "\n"
+
+				"Window info :" "\n"
+				" - Width : " << m_state.windowWidth << "pt" "\n"
+				" - Height : " << m_state.windowHeight << "pt" "\n"
+				" - Left border size : " << m_state.borderLeftSize << "pt" "\n"
+				" - Top border size : " << m_state.borderTopSize << "pt" "\n"
+				" - Right border size : " << m_state.borderRightSize << "pt" "\n"
+				" - Bottom border size : " << m_state.borderBottomSize << "pt" "\n"
+				" - Content scale on X axis : " << m_state.contentXScale << "\n"
+				" - Content scale on Y axis : " << m_state.contentYScale << "\n"
+
+				"Framebuffer info :" "\n"
+				" - Width : " << m_state.framebufferWidth << "px" "\n"
+				" - Height : " << m_state.framebufferHeight << "px" "\n";
 		}
 
-		return (std::stringstream{} <<
-			"Desktop info :" "\n"
-			" - Window X position : " << m_state.windowXPosition << "\n"
-			" - Window Y position : " << m_state.windowYPosition << "\n"
-
-			"Window info :" "\n"
-			" - Width : " << m_state.windowWidth << "pt" "\n"
-			" - Height : " << m_state.windowHeight << "pt" "\n"
-			" - Left border size : " << m_state.borderLeftSize << "pt" "\n"
-			" - Top border size : " << m_state.borderTopSize << "pt" "\n"
-			" - Right border size : " << m_state.borderRightSize << "pt" "\n"
-			" - Bottom border size : " << m_state.borderBottomSize << "pt" "\n"
-			" - Content scale on X axis : " << m_state.contentXScale << "\n"
-			" - Content scale on Y axis : " << m_state.contentYScale << "\n"
-
-			"Framebuffer info :" "\n"
-			" - Width : " << m_state.framebufferWidth << "px" "\n"
-			" - Height : " << m_state.framebufferHeight << "px" "\n"
-		).str();
+		return output.str();
 	}
 
 	std::string
@@ -1198,7 +1178,9 @@ namespace EmEn
 			return "Windowless mode!";
 		}
 
-		return (std::stringstream{} <<
+		std::stringstream output;
+
+		output <<
 			"Window related attributes :" "\n"
 			" - GLFW_FOCUSED : " << glfwGetWindowAttrib(m_handle.get(), GLFW_FOCUSED) << "\n"
 			" - GLFW_ICONIFIED : " << glfwGetWindowAttrib(m_handle.get(), GLFW_ICONIFIED) << "\n"
@@ -1223,8 +1205,9 @@ namespace EmEn
 			" - GLFW_OPENGL_PROFILE : " << glfwGetWindowAttrib(m_handle.get(), GLFW_OPENGL_PROFILE) << "\n"
 			" - GLFW_CONTEXT_RELEASE_BEHAVIOR : " << glfwGetWindowAttrib(m_handle.get(), GLFW_CONTEXT_RELEASE_BEHAVIOR) << "\n"
 			" - GLFW_CONTEXT_NO_ERROR : " << glfwGetWindowAttrib(m_handle.get(), GLFW_CONTEXT_NO_ERROR) << "\n"
-			" - GLFW_CONTEXT_ROBUSTNESS : " << glfwGetWindowAttrib(m_handle.get(), GLFW_CONTEXT_ROBUSTNESS) << '\n'
-		).str();
+			" - GLFW_CONTEXT_ROBUSTNESS : " << glfwGetWindowAttrib(m_handle.get(), GLFW_CONTEXT_ROBUSTNESS) << '\n';
+
+		return output.str();
 	}
 
 	bool
@@ -1283,11 +1266,6 @@ namespace EmEn
 		glfwSetWindowMaximizeCallback(m_handle.get(), windowMaximizeCallback);
 		glfwSetFramebufferSizeCallback(m_handle.get(), framebufferSizeCallback);
 		glfwSetWindowContentScaleCallback(m_handle.get(), windowContentScaleCallback);
-
-#if IS_WINDOWS
-		// TODO: Make this feature global on all system an optional. For now disabled.
-		//this->setupWindowsResizeHandling();
-#endif
 
 		return true;
 	}
@@ -1406,7 +1384,7 @@ namespace EmEn
 
 		int count = 0;
 
-		GLFWmonitor * * monitors = glfwGetMonitors(&count);
+		GLFWmonitor *  const * monitors = glfwGetMonitors(&count);
 
 		if ( count > 0 && monitors != nullptr )
 		{
