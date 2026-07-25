@@ -112,8 +112,12 @@
   (header read), RTGI temporal pass consumes the velocity with 3x3 depth-nearest DILATION
   instead of the camera-only reprojection (`requiresVelocity() == true` forces the full MRT
   chain). Validated: GI (bit-clean render, active chain), basic-scenery (instanced+set),
-  doom-loader (unlit). PENDING NEXT SESSION: RenderDoc inspection of the velocity buffer
-  in motion + animated-actor anti-ghosting A/B. Next: B4 (double skinning), then TAA
+  doom-loader (unlit). ANTI-GHOSTING VALIDATED LIVE 2026-07-25 by the owner (GI demo +
+  walking Paladin, pre-B3 vs B3 binaries): pre-B3 showed no gross trail — the disocclusion
+  tests + neighborhood clamp already BOUNDED the wrong reprojection by REJECTING history on
+  the moving actor (visible as GI grain/shimmer on him); B3 reuses the history through
+  per-object velocity → visibly more stable GI on the moving actor (owner confirmed).
+  Optional future evidence: RenderDoc velocity-buffer capture. Next: B4 (double skinning), then TAA
   (jitter + history, `runsAfterToneMapping()` contract) and motion blur (camera effect,
   shutter speed — state-of-the-art research first: McGuire tile-based reconstruction).
   See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and
