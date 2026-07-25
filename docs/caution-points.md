@@ -1064,10 +1064,14 @@ generated GLSL for declaration-vs-use is the cheap exhaustive check (see
 `ShowSourceCode` in the measurement doc).
 
 **Residual after the fix** (same protocol, Sponza, static camera): `0.29` mean / `12.9` p99.9
-with TAA on, against a `0.11` / `2.4` baseline — a factor ~8 better than the broken state but
-not yet at the baseline. The remaining term shows the same gradient-correlated signature
-(corr(p2p, |∇I|) ≈ 0.43) and is attributed to the resolve's single bilinear source unjitter
-(defect 2 in `TODO.md` § "TAA").
+with TAA on, against `0.11` / `2.4` with TAA off — a factor ~8 better than the broken state.
+Follow-up measurement corrected the reading of that gap: with ray tracing disabled the raster
+is **bit-stable** (peak-to-peak exactly `0.000` with TAA off), so the `0.11` was the RT
+effects' own temporal noise, not a floor. On that clean bench the TAA residual is `0.195` on
+Sponza and `0.021` on a plain box room — **content-driven**, not a leftover of this race. See
+`TODO.md` § "TAA" for the state of the art applied to the resolve (measurement-neutral at the
+8-bit capture floor) and for the next suspect (the variance clip's neighbourhood is itself a
+jittered sampling).
 
 > **Takeaway:** a value that becomes frame-varying silently promotes its container to
 > Rule 1 (per-frame copies). The jitter did not break TAA by being wrong — it broke TAA by

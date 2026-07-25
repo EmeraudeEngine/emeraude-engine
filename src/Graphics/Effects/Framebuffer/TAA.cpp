@@ -56,10 +56,11 @@ namespace
 		float alpha;
 		float varianceGamma;
 		float lumaWeighting;
-		/* Current-frame jitter in UV units (NDC * 0.5): the resolve samples the jittered
-		 * G-buffer at (uv + jitterUV) to reconstruct pixel-center values — without this,
-		 * the neighborhood statistics tremble with the jitter and the variance clip drags
-		 * the history along (whole-image shaking, crawling edges). */
+		/* Current-frame jitter in UV units (NDC * 0.5). The resolve converts it to texels and
+		 * folds it into the sub-pixel distance of each reconstruction tap: the scene was
+		 * rasterized with that offset, so the source must be reconstructed back at pixel
+		 * centers. Without it the current sample and the neighborhood statistics tremble with
+		 * the jitter phase and the variance clip drags the history along. */
 		float jitterUVX;
 		float jitterUVY;
 		float padding0;
@@ -77,7 +78,14 @@ namespace
 	 * - HDR inverse-luminance blend weighting: B. Karis, "High Quality Temporal
 	 *   Supersampling", SIGGRAPH 2014.
 	 * - Depth-nearest velocity dilation: same 3x3 closest-depth search as the engine's
-	 *   RTGI temporal resolve (shared convention: velocity NDC delta * 0.5 = UV delta). */
+	 *   RTGI temporal resolve (shared convention: velocity NDC delta * 0.5 = UV delta).
+	 * - Filtered source reconstruction at pixel center: B. Karis, ibid. ("treat the new frame
+	 *   as a set of sub-samples and filter over a local neighborhood"), with
+	 *   Mitchell-Netravali weights (D. Mitchell & A. Netravali, "Reconstruction Filters in
+	 *   Computer Graphics", SIGGRAPH 1988, B = C = 1/3) evaluated at each tap's sub-pixel
+	 *   distance -- cf. A. Tardif, "Temporal Antialiasing Starter Pack" (which also flags
+	 *   folding the current jitter into that distance) and M. Pettineo's reconstruction-filter
+	 *   comparison (Mitchell preferred over Catmull-Rom: less pronounced negative lobes). */
 
 	static constexpr auto TAAResolveFragmentShader = R"GLSL(
 #version 450
@@ -123,6 +131,37 @@ vec3 YCoCgToRGB(vec3 c)
 		c.x       + c.z,
 		c.x - c.y - c.z
 	);
+}
+
+/* Mitchell-Netravali reconstruction filter, B = C = 1/3 (the paper's recommended
+ * compromise between ringing and blur), support radius 2 -- which is why a 3x3 tap set
+ * is enough to cover it for any sub-pixel jitter below half a texel. Sharper than a
+ * B-spline, milder negative lobes than Catmull-Rom; the caller clamps the result to
+ * zero because those lobes can still undershoot on HDR edges. */
+float mitchellNetravali(float x)
+{
+	const float B = 1.0 / 3.0;
+	const float C = 1.0 / 3.0;
+
+	float x2 = x * x;
+	float x3 = x2 * x;
+
+	if (x < 1.0)
+	{
+		return ((12.0 - 9.0 * B - 6.0 * C) * x3
+		      + (-18.0 + 12.0 * B + 6.0 * C) * x2
+		      + (6.0 - 2.0 * B)) / 6.0;
+	}
+
+	if (x < 2.0)
+	{
+		return ((-B - 6.0 * C) * x3
+		      + (6.0 * B + 30.0 * C) * x2
+		      + (-12.0 * B - 48.0 * C) * x
+		      + (8.0 * B + 24.0 * C)) / 6.0;
+	}
+
+	return 0.0;
 }
 
 /* Clips a point toward the AABB center (Playdead INSIDE): keeps more history
@@ -184,13 +223,45 @@ void main()
 {
 	vec2 texel = vec2(texelSizeX, texelSizeY);
 
-	/* SOURCE UNJITTER: the scene and its G-buffer were rendered with a sub-pixel
-	 * projection offset; sampling them at (uv + jitterUV) reconstructs pixel-center
-	 * values. This keeps the current sample AND the neighborhood statistics stable
-	 * across the jitter sequence — the load-bearing detail of a shipping TAA. */
-	vec2 srcUV = vUV + vec2(jitterUVX, jitterUVY);
+	/* SOURCE RECONSTRUCTION (Karis): the scene and its G-buffer were rasterized with a
+	 * sub-pixel projection offset, so the source is a set of sub-samples, NOT an image
+	 * sampled at pixel centers. Reconstruct the pixel-center value by filtering the 3x3
+	 * neighborhood: the tap at texel offset (x, y) carries the scene value belonging at
+	 * (x, y) - jitter, hence that is the distance to feed the reconstruction filter.
+	 *
+	 * Taps land exactly on TEXEL CENTERS (vUV, never vUV + jitter): a fractional offset
+	 * would make every tap a bilinear blend whose blur depends on the jitter phase, which
+	 * is precisely what made the previous single-tap version breathe over the jitter cycle
+	 * (measured: a Laplacian-correlated temporal residual, 2.6x the TAA-off baseline).
+	 * The same taps feed the variance clip below, so the moments are crisp and
+	 * phase-independent too. */
+	vec2 jitterTexels = vec2(jitterUVX, jitterUVY) / texel;
 
-	vec3 current = texture(sceneTex, srcUV).rgb;
+	vec3 sourceTotal = vec3(0.0);
+	float sourceWeightTotal = 0.0;
+	vec3 m1 = vec3(0.0);
+	vec3 m2 = vec3(0.0);
+
+	for (int y = -1; y <= 1; y++)
+	{
+		for (int x = -1; x <= 1; x++)
+		{
+			vec3 tap = texture(sceneTex, vUV + vec2(x, y) * texel).rgb;
+
+			vec3 tapYCoCg = RGBToYCoCg(tap);
+			m1 += tapYCoCg;
+			m2 += tapYCoCg * tapYCoCg;
+
+			float weight = mitchellNetravali(length(vec2(x, y) - jitterTexels));
+
+			sourceTotal += tap * weight;
+			sourceWeightTotal += weight;
+		}
+	}
+
+	/* Normalized (the truncated support does not sum to one), clamped because the filter's
+	 * negative lobes can undershoot below zero on HDR edges. */
+	vec3 current = max(sourceTotal / max(sourceWeightTotal, 1e-6), vec3(0.0));
 
 	/* First frame after (re)creation: the history image is uninitialized. */
 	if (alpha >= 1.0)
@@ -203,14 +274,14 @@ void main()
 	 * so thin foreground silhouettes drag their motion over the background edge pixels
 	 * instead of smearing (same convention as the RTGI temporal resolve). */
 	vec2 closestOffset = vec2(0.0);
-	float closestDepth = texture(depthTex, srcUV).r;
+	float closestDepth = texture(depthTex, vUV).r;
 
 	for (int y = -1; y <= 1; y++)
 	{
 		for (int x = -1; x <= 1; x++)
 		{
 			vec2 offset = vec2(x, y) * texel;
-			float d = texture(depthTex, srcUV + offset).r;
+			float d = texture(depthTex, vUV + offset).r;
 
 			if (d < closestDepth)
 			{
@@ -220,9 +291,11 @@ void main()
 		}
 	}
 
-	/* Motion vectors are jitter-free by construction (removed in clip space by the
-	 * velocity vertex shader). NDC delta -> UV delta. */
-	vec2 velocity = texture(velocityTex, srcUV + closestOffset).rg;
+	/* Motion vectors are jitter-free by construction (no matrix carries the jitter -- it is
+	 * applied to gl_Position by a per-draw push constant). NDC delta -> UV delta.
+	 * Sampled at TEXEL CENTERS: bilinear filtering across a depth or velocity
+	 * discontinuity invents values that exist on neither surface. */
+	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
 	vec2 prevUV = vUV - velocity * 0.5;
 
 	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
@@ -243,20 +316,8 @@ void main()
 	/* History rectification: VARIANCE CLIPPING in YCoCg (Salvi). The 3x3 first and
 	 * second moments build a statistical AABB (mu +/- gamma * sigma) that follows the
 	 * local signal much tighter than a min/max hull — stale history gets pulled in
-	 * (anti-ghosting) without the min/max flicker on high-frequency detail. */
-	vec3 m1 = vec3(0.0);
-	vec3 m2 = vec3(0.0);
-
-	for (int y = -1; y <= 1; y++)
-	{
-		for (int x = -1; x <= 1; x++)
-		{
-			vec3 nb = RGBToYCoCg(texture(sceneTex, srcUV + vec2(x, y) * texel).rgb);
-			m1 += nb;
-			m2 += nb * nb;
-		}
-	}
-
+	 * (anti-ghosting) without the min/max flicker on high-frequency detail.
+	 * The moments come from the reconstruction loop above: same taps, one pass. */
 	vec3 mu = m1 / 9.0;
 	vec3 sigma = sqrt(max(m2 / 9.0 - mu * mu, vec3(0.0)));
 

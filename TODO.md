@@ -80,16 +80,56 @@
   instead of `[4]`, which became the velocity slot; the layout comment in
   `renderFrameWithInternal()` now lists all six entries.
 
-  **TODO — defect 2: the resolve deviates from the state of the art.** The canonical unjitter
-  is a filtered 3x3 reconstruction (Mitchell-Netravali weights evaluated at each tap's
-  sub-pixel distance — Karis 2014, cf. Tardif's "Temporal Antialiasing Starter Pack");
-  `TAA.cpp` uses a single bilinear tap. And the variance-clip neighbourhood must be sampled on
-  the **unjittered** pixel grid, not the shifted one. This is now the PRIME SUSPECT for the
-  0.29-vs-0.11 residual: its signature matches (residual correlated with the image gradient,
-  corr(p2p, |∇I|) ≈ 0.43, brightest on high-contrast silhouettes), and a single bilinear tap
-  is exact only to first order, so its reconstruction error varies with the jitter phase —
-  exactly a converged image that "breathes" over the 8-sample Halton cycle. Research the state
-  of the art first, then re-measure with the same protocol.
+  **DONE (state of the art) but MEASUREMENT-NEUTRAL — defect 2: the resolve reconstruction.**
+  The single bilinear tap is replaced by the canonical filtered 3x3 reconstruction:
+  Mitchell-Netravali weights (B = C = 1/3, support radius 2, so 3x3 covers it) evaluated at
+  each tap's sub-pixel distance `|(x, y) - jitterTexels|` — the jitter MUST enter that
+  distance, otherwise the kernel is symmetric and merely blurs instead of unjittering
+  (Karis 2014; A. Tardif's "Temporal Antialiasing Starter Pack" flags the same; Mitchell
+  preferred over Catmull-Rom for milder negative lobes, cf. M. Pettineo's filter comparison —
+  the result is clamped to zero because those lobes still undershoot on HDR edges).
+  The taps now land on TEXEL CENTERS (`vUV`, not `vUV + jitter`): a fractional offset made
+  every tap a bilinear blend whose blur depends on the jitter phase. The same taps feed the
+  variance clip (one 3x3 pass for both, 19 texture fetches instead of 20), so the moments are
+  crisp and phase-independent. Depth and velocity are read at texel centers too — bilinear
+  filtering across a depth or velocity discontinuity invents values that exist on neither
+  surface.
+  ⚠️ **HONEST RESULT: no measurable improvement.** Old resolve 0.027 / 0.030, new resolve
+  0.021 / 0.022 / 0.027 (three runs) — overlapping ranges on the clean bench below. At a mean
+  of 0.02-0.03 the metric sits at the 8-bit quantization floor of PNG screenshots (a few
+  percent of pixels differing by exactly 1 LSB), so the bench CANNOT resolve reconstruction
+  quality. Kept on principle (state of the art, one fetch cheaper, and the texel-center reads
+  are a correctness fix independent of amplitude), NOT on evidence. Resolving it would need a
+  float/HDR capture path or a deliberately harsher scene (thin geometry, high-frequency normal
+  maps).
+
+  **A MUCH CLEANER BENCH (found 2026-07-25, use it from now on).** With
+  `Core/Graphics/RayTracing/Enabled` = false the raster is BIT-STABLE on a static camera:
+  temporal peak-to-peak mean is **exactly 0.000** with TAA off, on both `gltf-loader` and
+  `global-illumination`. The `0.11` figure long treated as the measurement baseline was in fact
+  the RT effects' own temporal noise (RTGI/RTAO/RTR half-res accumulation). With RT off, every
+  unit of residual is 1:1 attributable to TAA.
+
+  Measured on that bench (mean / p99.9 / share of pixels moving >= 1 unit):
+
+  | scene | TAA off | TAA alone | TAA + Sharpen |
+  |---|---|---|---|
+  | `gltf-loader` (Sponza) | 0.000 | 0.195 / 11.3 / 3.3% | 0.244 / 12.1 / 6.4% |
+  | `global-illumination` (box room) | 0.000 | 0.021 / 3.0 / 0.3% | n/a (no Sharpen) |
+
+  Two conclusions: (a) the residual is **content-driven** — a factor ~10 between a
+  high-frequency scene and a plain one, with the same code; (b) the `Sharpen` pass after the
+  resolve costs only x1.25 in amplitude but **doubles the affected area** (3.3% -> 6.4% of
+  pixels moving at least one unit), which is what reads as shimmer. An earlier x12 claim was a
+  scene confound (two different demos) and is retracted.
+
+  **Next suspect for the content-driven part (NOT yet tested): the variance clip itself.** Its
+  neighbourhood is a *jittered sampling* of the scene, so on high-contrast detail mu and sigma
+  change every frame even with taps on fixed texel centers — the AABB breathes and drags the
+  converged history with it, proportionally to local contrast. That matches the content
+  dependence above. The state-of-the-art answer is to build the clip statistics from
+  reconstructed (unjittered) neighbours rather than raw taps, which costs a 5x5 tap footprint;
+  cheaper knobs first: `VarianceGamma`, and Karis' luma weighting (already available).
 
   **TODO — defect 3: the translucent pass writes a garbage velocity** — visualising the buffer
   shows the translucent skylight glass with a smooth NDC-position-like gradient up to ~0.3 NDC,
