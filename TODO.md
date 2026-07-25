@@ -48,8 +48,13 @@
 - [x] **Screen-Space GI (SSGI)** — DONE (validated 2026-07-23 in the `global-illumination`
   demo bench, incl. receiver-albedo modulation via the new albedo G-buffer attachment).
 - [ ] **Motion Blur** — Flou de mouvement caméra/objets. Sensation de poids et d'inertie.
-- [ ] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
-  **STATUS 2026-07-25: root cause FIXED and measured; 2 secondary defects remain.**
+- [x] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
+  **DONE 2026-07-25 — VALIDATED VISUALLY BY THE OWNER.** The remaining static-camera residual
+  (`0.195` mean / `11.3` p99.9 on Sponza, ray tracing off, see the bench below) was inspected
+  and judged **acceptable to the eye**. That number is therefore the ACCEPTED baseline, not an
+  open defect: do NOT reopen it without a new visible symptom. The variance-clip lead below
+  stays documented for the day a harsher scene (thin geometry, high-frequency normal maps)
+  actually shows something.
   `Graphics/Effects/Framebuffer/TAA.{hpp,cpp}` (single-pass HDR resolve: YCoCg variance
   clipping, Catmull-Rom history, Karis inverse-luminance weighting) + the jitter contract
   (`requiresJitter()`, `ViewMatricesInterface::setProjectionJitter()`, `Renderer::prepareFrameJitter()`
@@ -123,7 +128,7 @@
   pixels moving at least one unit), which is what reads as shimmer. An earlier x12 claim was a
   scene confound (two different demos) and is retracted.
 
-  **Next suspect for the content-driven part (NOT yet tested): the variance clip itself.** Its
+  **Lead kept for later (NOT a defect — the residual is owner-accepted): the variance clip.** Its
   neighbourhood is a *jittered sampling* of the scene, so on high-contrast detail mu and sigma
   change every frame even with taps on fixed texel centers — the AABB breathes and drags the
   converged history with it, proportionally to local contrast. That matches the content
@@ -131,11 +136,13 @@
   reconstructed (unjittered) neighbours rather than raw taps, which costs a 5x5 tap footprint;
   cheaper knobs first: `VarianceGamma`, and Karis' luma weighting (already available).
 
-  **TODO — defect 3: the translucent pass writes a garbage velocity** — visualising the buffer
-  shows the translucent skylight glass with a smooth NDC-position-like gradient up to ~0.3 NDC,
-  the signature of a null previous clip position. Pre-existing, independent of TAA, affects
-  every velocity consumer (Sponza HAS such glass, so it may contribute to the residual above).
-
+- [ ] **Translucent pass writes a garbage velocity** — visualising the velocity buffer shows the
+  translucent skylight glass of Sponza with a smooth NDC-position-like gradient up to ~0.3 NDC,
+  the signature of a null previous clip position. Found during the TAA debugging session of
+  2026-07-25 (it was "defect 3" of the TAA item, moved here: it is a VELOCITY defect, pre-existing
+  and independent of TAA, and it affects EVERY velocity consumer — RTGI reprojection included).
+  The translucent scene program must synthesize its velocity clip positions like the opaque one
+  (`VertexShader::synthesizeVelocityClipPositions()`), or explicitly write a zero velocity.
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 
 ### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)

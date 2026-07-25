@@ -1070,8 +1070,9 @@ is **bit-stable** (peak-to-peak exactly `0.000` with TAA off), so the `0.11` was
 effects' own temporal noise, not a floor. On that clean bench the TAA residual is `0.195` on
 Sponza and `0.021` on a plain box room — **content-driven**, not a leftover of this race. See
 `TODO.md` § "TAA" for the state of the art applied to the resolve (measurement-neutral at the
-8-bit capture floor) and for the next suspect (the variance clip's neighbourhood is itself a
-jittered sampling).
+8-bit capture floor). That `0.195` was inspected and judged acceptable to the eye by the owner
+on 2026-07-25 — it is the ACCEPTED baseline of a converged TAA on this content, not an open
+defect.
 
 > **Takeaway:** a value that becomes frame-varying silently promotes its container to
 > Rule 1 (per-frame copies). The jitter did not break TAA by being wrong — it broke TAA by
