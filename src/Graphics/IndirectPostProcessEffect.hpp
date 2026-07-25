@@ -269,6 +269,7 @@ namespace EmEn::Graphics
 				const Vulkan::TextureInterface * normals{nullptr};
 				const Vulkan::TextureInterface * materialProperties{nullptr};
 				const Vulkan::TextureInterface * albedo{nullptr};
+				const Vulkan::TextureInterface * velocity{nullptr};
 				const Scenes::LightSet * lightSet{nullptr};
 				const Scenes::Component::Camera * camera{nullptr};
 				PostProcessor::PushConstants constants{};

@@ -825,6 +825,17 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSceneVelocityImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->velocityImage();
+		}
+
+		return nullptr;
+	}
+
 	bool
 	Renderer::recreateSceneTarget () noexcept
 	{

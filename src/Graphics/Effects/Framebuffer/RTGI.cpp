@@ -624,7 +624,8 @@ void main()
 	 *   binding 2: normals texture (view space)
 	 *   binding 3: GI history texture (previous resolved frame)
 	 *   binding 4: world-normal history texture (previous frame)
-	 *   binding 5: frame UBO (shared with the trace pass)
+	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
+	 *   binding 6: frame UBO (shared with the trace pass)
 	 */
 	constexpr auto RTGITemporalFragmentShader = R"GLSL(
 #version 450
@@ -637,8 +638,9 @@ layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D normalTex;
 layout(set = 0, binding = 3) uniform sampler2D historyTex;
 layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
+layout(set = 0, binding = 5) uniform sampler2D velocityTex;
 
-layout(set = 0, binding = 5, std140) uniform FrameData
+layout(set = 0, binding = 6, std140) uniform FrameData
 {
 	mat4 invViewProj;
 	mat4 prevViewProj;
@@ -679,16 +681,31 @@ void main()
 
 	float alpha = temporalParams.x;
 
-	/* Reproject into the previous frame. */
-	vec4 prevClip = prevViewProj * vec4(worldPos, 1.0);
+	/* Reproject into the previous frame through the velocity buffer (per-object motion
+	 * vectors, NDC delta = current - previous). Velocity DILATION: use the velocity of
+	 * the 3x3 neighbour closest to the camera, so thin foreground silhouettes drag their
+	 * motion over the background edge pixels instead of smearing. */
+	vec2 texelD = 1.0 / vec2(textureSize(depthTex, 0));
+	vec2 closestOffset = vec2(0.0);
+	float closestDepth = depth;
 
-	if (prevClip.w <= 0.0)
+	for (int y = -1; y <= 1; y++)
 	{
-		outResolved = vec4(current, cameraDistance);
-		return;
+		for (int x = -1; x <= 1; x++)
+		{
+			vec2 offset = vec2(x, y) * texelD;
+			float d = texture(depthTex, vUV + offset).r;
+
+			if (d < closestDepth)
+			{
+				closestDepth = d;
+				closestOffset = offset;
+			}
+		}
 	}
 
-	vec2 prevUV = (prevClip.xy / prevClip.w) * 0.5 + 0.5;
+	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
+	vec2 prevUV = vUV - velocity * 0.5;
 
 	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
 	{
@@ -933,7 +950,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto blurInputLayout = this->getInputLayout(3);
 
 		/* Temporal resolve input: GI + depth + normals + history + normal history, plus the frame UBO. */
-		auto temporalInputLayout = this->getInputLayout(5, 1);
+		auto temporalInputLayout = this->getInputLayout(6, 1);
 
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
@@ -1159,7 +1176,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					return false;
 				}
 
-				if ( !m_temporalPerFrame[f]->writeUniformBufferObject(5, *m_frameUBOs[f]) )
+				if ( !m_temporalPerFrame[f]->writeUniformBufferObject(6, *m_frameUBOs[f]) )
 				{
 					return false;
 				}
@@ -1283,6 +1300,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			{
 				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
 				static_cast< void >(m_normalCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputNormals));
+			}
+
+			if ( context.velocity != nullptr )
+			{
+				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
 			}
 
 			/* The apply pass consumes the freshly resolved history. */

@@ -195,6 +195,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresVelocity() */
+			[[nodiscard]]
+			bool
+			requiresVelocity () const noexcept override
+			{
+				return true;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresRayTracing() */
 			[[nodiscard]]
 			bool

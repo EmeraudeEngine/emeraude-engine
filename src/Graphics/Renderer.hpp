@@ -886,6 +886,13 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > currentSceneAlbedoImage () const noexcept;
 
 			/**
+			 * @brief Returns the scene render target velocity image (motion vectors), or nullptr.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSceneVelocityImage () const noexcept;
+
+			/**
 			 * @brief Returns the current frame-in-flight index.
 			 * @return uint32_t
 			 */

@@ -96,9 +96,21 @@
   `EnableInstanceMotionHistory` creation flag (+4 vec4/instance VBO slot, full chain
   generator→VertexShader→VertexBufferFormat→ProgramCacheKey — no demo content uses it yet).
   Zero-behavior-change A/B validated (⚠️ identical capture timing required — RTGI
-  reconvergence residual pollutes the diff otherwise). Next: B3 (RG16F velocity 5th MRT
-  attachment — OWNER DECISION — consume the SSBO header + prev matrices), B4 (double
-  skinning). See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and
+  reconvergence residual pollutes the diff otherwise). B3 DONE (2026-07-25): RG16F velocity
+  5th MRT attachment (owner decision) — SceneRenderTarget/GrabPass/PostProcessor velocity
+  chain (`requiresVelocity()` aggregate, blit, `GrabPassVelocityAdapter`,
+  `FrameContext::velocity`), shader generation (VS `synthesizeVelocityClipPositions()`:
+  prev clip = SSBO header prevVP × {SSBO entry | PreviousModelMatrix attribute |
+  current-matrix camera fallback for billboards/MDI/pre-B4 skinned}; FS writes the NDC
+  delta on location 4, jitter-ready), PerSceneTransforms set extended to instanced programs
+  (header read), RTGI temporal pass consumes the velocity with 3x3 depth-nearest DILATION
+  instead of the camera-only reprojection (`requiresVelocity() == true` forces the full MRT
+  chain). Validated: GI (bit-clean render, active chain), basic-scenery (instanced+set),
+  doom-loader (unlit). PENDING NEXT SESSION: RenderDoc inspection of the velocity buffer
+  in motion + animated-actor anti-ghosting A/B. Next: B4 (double skinning), then TAA
+  (jitter + history, `runsAfterToneMapping()` contract) and motion blur (camera effect,
+  shutter speed — state-of-the-art research first: McGuire tile-based reconstruction).
+  See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and
   `src/Scenes/AGENTS.md` § "Instance Transforms".
 - [ ] **Push constant min-spec violation (132 B)** — `RenderableInstance/Unique.cpp`
   `pushMatricesForRendering()`, `useAdvancedMatrices` path: view(64)+model(64)+frameIndex(4)

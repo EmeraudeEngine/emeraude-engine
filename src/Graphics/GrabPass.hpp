@@ -112,7 +112,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED, VkFormat velocityFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Destroys the grab pass textures from the GPU.
@@ -130,7 +130,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED, VkFormat velocityFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Records the blit/copy commands from the swapchain images to this grab pass.
@@ -346,6 +346,57 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			VkDescriptorImageInfo albedoDescriptorInfo () const noexcept;
 
+			/**
+			 * @brief Returns whether the velocity texture is available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasVelocity () const noexcept
+			{
+				return m_velocityImage != nullptr && m_velocityImage->isCreated();
+			}
+
+			/**
+			 * @brief Returns the velocity image.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			velocityImage () const noexcept
+			{
+				return m_velocityImage;
+			}
+
+			/**
+			 * @brief Returns the velocity image view.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			velocityImageView () const noexcept
+			{
+				return m_velocityImageView;
+			}
+
+			/**
+			 * @brief Returns the velocity sampler.
+			 * @return std::shared_ptr< Vulkan::Sampler >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			velocitySampler () const noexcept
+			{
+				return m_velocitySampler;
+			}
+
+			/**
+			 * @brief Builds a VkDescriptorImageInfo from the velocity components.
+			 * @return VkDescriptorImageInfo
+			 */
+			[[nodiscard]]
+			VkDescriptorImageInfo velocityDescriptorInfo () const noexcept;
+
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
 			[[nodiscard]]
 			bool isCreated () const noexcept override;
@@ -403,5 +454,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_albedoImage;
 			std::shared_ptr< Vulkan::ImageView > m_albedoImageView;
 			std::shared_ptr< Vulkan::Sampler > m_albedoSampler;
+			std::shared_ptr< Vulkan::Image > m_velocityImage;
+			std::shared_ptr< Vulkan::ImageView > m_velocityImageView;
+			std::shared_ptr< Vulkan::Sampler > m_velocitySampler;
 	};
 }

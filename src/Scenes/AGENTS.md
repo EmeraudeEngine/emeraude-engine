@@ -624,7 +624,9 @@ The descriptor set is passed from `Scene::prepareRender()`'s cached
 SSBO Path". Advanced/lighted, cubemap/CSM and shadow paths still push their matrices
 (milestone 4).
 
-**Status:** B1 milestones 1-5 DONE (2026-07-25, committed e080399e) — classic AND advanced
+**Status:** B1 (e080399e) + B2 (4d500626) + B3 (velocity MRT + RTGI dilation consumption)
+DONE 2026-07-25 — the header {VP, previousVP} is now CONSUMED by the velocity vertex
+shaders and the entries' previousModel by the same path. B1 details: — classic AND advanced
 paths consume the SSBO (advanced pushes V + frameIndex = 68 B, killing the historical 132 B
 min-spec violation). Cubemap/shadow/CSM paths stay on push constants (owner decision —
 min-spec clean, no motion data needed). Validated: `doom-loader` (unlit classic path),

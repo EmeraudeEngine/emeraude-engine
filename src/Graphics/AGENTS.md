@@ -35,10 +35,12 @@
 2.  **Y-DOWN**: Strictly Y-down coordinate system.
 3.  **Fail-Safe**: Resources must never be null. Use neutral fallbacks.
 4.  **G-Buffer MRT (fixed order)**: scene target color attachments are
-    `[0]=color, [1]=normals, [2]=materialProperties, [3]=albedo` (+ depth last), allocated
-    ON DEMAND from the enabled post-process effects' `requires*()` flags — each attachment
-    forces every one before it, and the shader generator detects the layout **by color
-    attachment count**. Full contract + pitfalls (clear-value indices, blend-state counts,
+    `[0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity` (+ depth
+    last), allocated ON DEMAND from the enabled post-process effects' `requires*()` flags —
+    each attachment forces every one before it, and the shader generator detects the layout
+    **by color attachment count**. Velocity is RG16F (NDC-delta motion vectors), written by
+    the ambient/simple passes only (light passes have a zeroed write mask), consumed with a
+    3x3 depth-nearest dilation (RTGI temporal; TAA/motion blur later). Full contract + pitfalls (clear-value indices, blend-state counts,
     GrabPass copies): `docs/caution-points.md` § "SSGI Indirect Light Ignored Receiver
     Albedo — New Albedo G-Buffer Attachment".
 5.  **Instance transforms (motion vectors B1)**: every visible NON-instanced
