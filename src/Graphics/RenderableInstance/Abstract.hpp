@@ -140,7 +140,15 @@ namespace EmEn::Graphics::RenderableInstance
 		/** @brief This flag tells the renderable instance to need an extra transformation matrix to be applied. */
 		ApplyTransformationMatrix = 1U << 11,
 		/** @brief This flag tells disabling the light distance check. */
-		DisableLightDistanceCheck = 1U << 12
+		DisableLightDistanceCheck = 1U << 12,
+		/**
+		 * @brief This flag extends the instanced (Multiple) mesh VBO with the previous model
+		 * matrix per instance (+4 vec4), for motion vectors on DYNAMIC instanced renderables.
+		 * @note Must be set at construction (it fixes the VBO stride). updateLocalData() copies
+		 * the current model matrix into the previous slot before overwriting it (one history
+		 * step per logic update). Meaningless on Unique and on sprites.
+		 */
+		EnableInstanceMotionHistory = 1U << 13
 	};
 
 	/**
@@ -640,9 +648,13 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param instanceTransforms A reference to the scene instance transforms manager.
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
+			 * @param advanceHistory Whether this staging advances the model matrix history
+			 * (motion vectors). Only the PRIMARY view target staging advances it — one advance
+			 * per rendered frame, so previousModel is the matrix of the previous rendered frame.
+			 * Render-to-texture stagings must pass false.
 			 * @return void
 			 */
-			void stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const Base::Math::CartesianFrame< float > * worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
+			void stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const Base::Math::CartesianFrame< float > * worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept;
 
 			/**
 			 * @brief Returns the instance transforms SSBO slot staged for the current render pass.
@@ -939,6 +951,8 @@ namespace EmEn::Graphics::RenderableInstance
 
 			const std::shared_ptr< Renderable::Abstract > m_renderable;
 			Base::Math::Matrix< 4, float > m_transformationMatrix;
+			/** @brief Model matrix staged at the previous rendered frame (primary view), for motion vectors. */
+			Base::Math::Matrix< 4, float > m_lastModelMatrix;
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_frameIndex{0};
@@ -948,5 +962,7 @@ namespace EmEn::Graphics::RenderableInstance
 			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_skinningDescriptorSet;
+			/** @brief Whether m_lastModelMatrix holds a valid previous-frame matrix (false until the first primary staging). */
+			bool m_hasModelHistory{false};
 	};
 }

@@ -107,6 +107,12 @@ namespace EmEn::Saphir::Generator
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
+		/* Instanced motion history: fixes the per-instance VBO stride (previous model matrix). */
+		if ( this->isInstanceMotionHistoryEnabled() )
+		{
+			vertexShader->enableInstanceMotionHistory();
+		}
+
 		/* Input declarations. */
 		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position});
 		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Tangent});

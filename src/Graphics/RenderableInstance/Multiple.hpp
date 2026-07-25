@@ -239,6 +239,20 @@ namespace EmEn::Graphics::RenderableInstance
 			static constexpr uint32_t SpriteVBOElementCount{3U + 3U};
 			/* Model matrix 4x4 + normal matrix 3x3 */
 			static constexpr uint32_t MeshVBOElementCount{16U + 9U};
+			/* Model matrix 4x4 + normal matrix 3x3 + previous model matrix 4x4 (motion history) */
+			static constexpr uint32_t MeshVBOWithHistoryElementCount{16U + 9U + 16U};
+
+			/**
+			 * @brief Returns the per-instance element count of the mesh VBO layout.
+			 * @note Depends on the EnableInstanceMotionHistory creation flag.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			meshVBOElementCount () const noexcept
+			{
+				return this->isFlagEnabled(EnableInstanceMotionHistory) ? MeshVBOWithHistoryElementCount : MeshVBOElementCount;
+			}
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::vector< float > m_localData;

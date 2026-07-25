@@ -87,6 +87,8 @@ namespace EmEn::Graphics::Renderable
 		bool isMDIEnabled{false};
 		/** @brief Whether skeletal animation is enabled (adds bone SSBO descriptor set). */
 		bool isSkeletalAnimationEnabled{false};
+		/** @brief Whether the instanced VBO carries the previous model matrix (motion history stride). */
+		bool isInstanceMotionHistory{false};
 
 		/**
 		 * @brief Computes a hash value for this key.
@@ -115,6 +117,7 @@ namespace EmEn::Graphics::Renderable
 			hashCombine(static_cast< size_t >(isBindlessEnabled));
 			hashCombine(static_cast< size_t >(isMDIEnabled));
 			hashCombine(static_cast< size_t >(isSkeletalAnimationEnabled));
+			hashCombine(static_cast< size_t >(isInstanceMotionHistory));
 
 			return h;
 		}
@@ -139,7 +142,8 @@ namespace EmEn::Graphics::Renderable
 				materialLayoutHash == other.materialLayoutHash &&
 				isBindlessEnabled == other.isBindlessEnabled &&
 				isMDIEnabled == other.isMDIEnabled &&
-				isSkeletalAnimationEnabled == other.isSkeletalAnimationEnabled;
+				isSkeletalAnimationEnabled == other.isSkeletalAnimationEnabled &&
+				isInstanceMotionHistory == other.isInstanceMotionHistory;
 		}
 	};
 }

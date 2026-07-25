@@ -78,7 +78,9 @@ namespace EmEn::Saphir::Generator
 		/** @brief Multi-Draw Indirect enabled: model matrix from SSBO via BDA + gl_DrawID instead of push constants. */
 		IsMultiDrawIndirectEnabled = 1U << 6,
 		/** @brief Skeletal animation enabled: bone matrix SSBO and vertex skinning in shaders. */
-		IsSkeletalAnimationEnabled = 1U << 7
+		IsSkeletalAnimationEnabled = 1U << 7,
+		/** @brief Instanced motion history: the per-instance VBO carries the previous model matrix (+4 vec4). */
+		IsInstanceMotionHistoryEnabled = 1U << 8
 	};
 
 	/**
@@ -195,6 +197,17 @@ namespace EmEn::Saphir::Generator
 			isInstancingEnabled () const noexcept
 			{
 				return this->isFlagEnabled(IsInstancingEnabled);
+			}
+
+			/**
+			 * @brief Returns whether the instanced VBO carries the previous model matrix (motion vectors).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isInstanceMotionHistoryEnabled () const noexcept
+			{
+				return this->isFlagEnabled(IsInstanceMotionHistoryEnabled);
 			}
 
 			/**
@@ -520,6 +533,13 @@ namespace EmEn::Saphir::Generator
 				if ( renderableInstance->useModelVertexBufferObject() )
 				{
 					this->enableFlag(IsInstancingEnabled);
+
+					/* Motion history extends the per-instance VBO stride — the shader and
+					 * the vertex buffer format must both know it. */
+					if ( renderableInstance->isFlagEnabled(Graphics::RenderableInstance::EnableInstanceMotionHistory) )
+					{
+						this->enableFlag(IsInstanceMotionHistoryEnabled);
+					}
 				}
 
 				if ( renderableInstance->renderable()->isSprite() )

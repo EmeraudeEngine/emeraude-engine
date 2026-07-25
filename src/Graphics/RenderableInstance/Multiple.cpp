@@ -66,11 +66,26 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			m_localData.resize(m_instanceCount * MeshVBOElementCount);
+			m_localData.resize(m_instanceCount * this->meshVBOElementCount());
 		}
 
 		if ( this->updateLocalData(instanceLocations, 0) )
 		{
+			/* Motion history: the initial update archived the pristine (zeroed) buffer into
+			 * the previous-model slots. Re-seed them with the initial model matrices so the
+			 * first rendered frame carries zero object velocity instead of a bogus one. */
+			if ( this->isFlagEnabled(EnableInstanceMotionHistory) && !this->renderable()->isSprite() )
+			{
+				const auto elementCount = this->meshVBOElementCount();
+
+				for ( uint32_t instanceIndex = 0; instanceIndex < m_instanceCount; instanceIndex++ )
+				{
+					const auto elementOffset = static_cast< size_t >(instanceIndex) * elementCount;
+
+					std::memcpy(m_localData.data() + elementOffset + MeshVBOElementCount, m_localData.data() + elementOffset, 16UL * sizeof(float));
+				}
+			}
+
 			/* Create a vertex buffer object to hold locations in video memory
 			 * according to the size of local data. */
 			if ( !this->createOnHardware(device) )
@@ -102,7 +117,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			m_localData.resize(m_instanceCount * MeshVBOElementCount);
+			m_localData.resize(m_instanceCount * this->meshVBOElementCount());
 		}
 
 		this->resetLocalData();
@@ -155,7 +170,14 @@ namespace EmEn::Graphics::RenderableInstance
 		else
 		{
 			/* Starting offset to write matrices */
-			size_t elementOffset = instanceIndex * MeshVBOElementCount;
+			size_t elementOffset = instanceIndex * this->meshVBOElementCount();
+
+			/* Motion history: archive the current model matrix into the previous-model slot
+			 * BEFORE overwriting it (one history step per logic update). */
+			if ( this->isFlagEnabled(EnableInstanceMotionHistory) )
+			{
+				std::memcpy(m_localData.data() + elementOffset + MeshVBOElementCount, m_localData.data() + elementOffset, 16UL * sizeof(float));
+			}
 
 			/* Write model matrix for this instance. */
 			const auto modelMatrix = instanceLocation.getModelMatrix();
@@ -221,10 +243,19 @@ namespace EmEn::Graphics::RenderableInstance
 		else
 		{
 			/* Starting offset to write matrices */
-			auto elementOffset = instanceOffset * MeshVBOElementCount;
+			const auto elementCount = this->meshVBOElementCount();
+			const bool motionHistory = this->isFlagEnabled(EnableInstanceMotionHistory);
+			auto elementOffset = instanceOffset * elementCount;
 
 			for ( const auto & instanceLocation : instanceLocations )
 			{
+				/* Motion history: archive the current model matrix into the previous-model
+				 * slot BEFORE overwriting it (one history step per logic update). */
+				if ( motionHistory )
+				{
+					std::memcpy(m_localData.data() + elementOffset + MeshVBOElementCount, m_localData.data() + elementOffset, 16UL * sizeof(float));
+				}
+
 				/* Write model matrix for this instance. */
 				const auto modelMatrix = instanceLocation.getModelMatrix();
 				modelMatrix.copy(m_localData.data() + elementOffset);
@@ -236,8 +267,14 @@ namespace EmEn::Graphics::RenderableInstance
 				const auto normalModelMatrix = modelMatrix.inverse().transpose().toMatrix3();
 				normalModelMatrix.copy(m_localData.data() + elementOffset);
 
-				/* Advance offset for the next instance model matrix (9 floats). */
+				/* Advance offset for the next instance model matrix (9 floats),
+				 * skipping the previous-model slot when motion history is enabled. */
 				elementOffset += 3U * getAttributeSize(VertexAttributeType::NormalModelMatrixR0);
+
+				if ( motionHistory )
+				{
+					elementOffset += 16U;
+				}
 			}
 		}
 
@@ -277,6 +314,8 @@ namespace EmEn::Graphics::RenderableInstance
 			/* The offset in video memory */
 			size_t elementOffset = 0;
 
+			const bool motionHistory = this->isFlagEnabled(EnableInstanceMotionHistory);
+
 			for ( size_t instanceIndex = 0; instanceIndex < limit; instanceIndex++ )
 			{
 				identity4.copy(m_localData.data() + elementOffset);
@@ -288,6 +327,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 				/* Advance offset for the next instance model matrix (9 floats). */
 				elementOffset += 3UL * getAttributeSize(VertexAttributeType::NormalModelMatrixR0);
+
+				/* Motion history: the previous-model slot starts as identity too. */
+				if ( motionHistory )
+				{
+					identity4.copy(m_localData.data() + elementOffset);
+
+					elementOffset += 16UL;
+				}
 			}
 		}
 
@@ -305,7 +352,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return true;
 		}
 
-		const auto vertexElementCount = this->renderable()->isSprite() ? SpriteVBOElementCount : MeshVBOElementCount;
+		const auto vertexElementCount = this->renderable()->isSprite() ? SpriteVBOElementCount : this->meshVBOElementCount();
 		const auto vertexCount = static_cast< uint32_t >(m_localData.size() / vertexElementCount);
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(device, vertexCount, vertexElementCount, true);

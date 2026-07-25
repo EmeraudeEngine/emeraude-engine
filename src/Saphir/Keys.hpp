@@ -675,6 +675,7 @@ namespace EmEn::Saphir
 			constexpr auto Secondary3DTextureCoordinates{"va3DTexCoord1"};
 			constexpr auto ModelMatrix{"vaModelMatrix"};
 			constexpr auto NormalModelMatrix{"vaNormalModelMatrix"};
+			constexpr auto PreviousModelMatrix{"vaPreviousModelMatrix"};
 			constexpr auto ModelPosition{"vaModelPosition"};
 			constexpr auto ModelScaling{"vaModelScaling"};
 			constexpr auto BoneInfluence{"vaBoneInfluence"};

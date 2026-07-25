@@ -1005,6 +1005,10 @@ namespace EmEn::Scenes
 		 * Mirrors pushMatricesForRendering() which reads position(readStateIndex). */
 		const auto & renderCameraPosition = renderTarget->viewMatrices().position(readStateIndex);
 
+		/* NOTE: Only the primary view target advances the per-instance model matrix history
+		 * (motion vectors) — once per rendered frame, render-to-textures excluded. */
+		const bool advanceModelHistory = renderTarget->renderType() == RenderTargetType::View;
+
 		/* Store view distance for LOD computation in insertIntoRenderLists(). */
 		m_currentViewDistance = viewDistance;
 
@@ -1062,7 +1066,7 @@ namespace EmEn::Scenes
 				}
 			}
 
-			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, renderCameraPosition);
+			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, renderCameraPosition, advanceModelHistory);
 		}
 
 		/* Sorting renderable objects from scene static entities. */
@@ -1132,7 +1136,7 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition);
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition, advanceModelHistory);
 				});
 			}
 		}
@@ -1217,7 +1221,7 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition);
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition, advanceModelHistory);
 				});
 			}
 		}
@@ -1231,7 +1235,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::insertIntoRenderLists (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance, const Vector< 3, float > & cameraPosition) noexcept
+	Scene::insertIntoRenderLists (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance, const Vector< 3, float > & cameraPosition, bool advanceModelHistory) noexcept
 	{
 		/* This is a raw pointer to the renderable interface. */
 		const auto * renderable = renderableInstance->renderable();
@@ -1261,7 +1265,7 @@ namespace EmEn::Scenes
 		 * frame-linear slot for the draws recorded until the next prepareRender(). */
 		if ( !renderableInstance->useModelVertexBufferObject() )
 		{
-			renderableInstance->stageInstanceTransforms(m_instanceTransforms, worldCoordinates, cameraPosition);
+			renderableInstance->stageInstanceTransforms(m_instanceTransforms, worldCoordinates, cameraPosition, advanceModelHistory);
 		}
 
 		/* Compute LOD level from screen-space coverage (distance + object size).

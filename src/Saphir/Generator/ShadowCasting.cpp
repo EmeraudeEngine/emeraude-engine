@@ -233,6 +233,12 @@ namespace EmEn::Saphir::Generator
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
+		/* Instanced motion history: fixes the per-instance VBO stride (previous model matrix). */
+		if ( this->isInstanceMotionHistoryEnabled() )
+		{
+			vertexShader->enableInstanceMotionHistory();
+		}
+
 		/* Enable CSM mode for cascaded shadow maps (different UBO layout than cubemap). */
 		if ( isCSM )
 		{

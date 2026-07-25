@@ -461,6 +461,27 @@ namespace EmEn::Graphics
 						this->declareJump(VertexAttributeType::NormalModelMatrixR1);
 						this->declareJump(VertexAttributeType::NormalModelMatrixR2);
 					}
+
+					/* Motion history: the previous model matrix (4 x vec4) extends the
+					 * per-instance layout — declared or jumped, the stride must match the
+					 * Multiple VBO built with EnableInstanceMotionHistory. */
+					if ( vertexShader.isInstanceMotionHistoryEnabled() )
+					{
+						if ( requestedVertexAttributes.contains(VertexAttributeType::PreviousModelMatrixR0) )
+						{
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR0);
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR1);
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR2);
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR3);
+						}
+						else
+						{
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR0);
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR1);
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR2);
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR3);
+						}
+					}
 				}
 
 				if ( !this->endBinding(Topology::CustomData, PerInstance | IsDynamicVertexBuffer) )
@@ -801,6 +822,27 @@ namespace EmEn::Graphics
 						this->declareJump(VertexAttributeType::NormalModelMatrixR0);
 						this->declareJump(VertexAttributeType::NormalModelMatrixR1);
 						this->declareJump(VertexAttributeType::NormalModelMatrixR2);
+					}
+
+					/* Motion history: the previous model matrix (4 x vec4) extends the
+					 * per-instance layout — declared or jumped, the stride must match the
+					 * Multiple VBO built with EnableInstanceMotionHistory. */
+					if ( vertexShader.isInstanceMotionHistoryEnabled() )
+					{
+						if ( requestedVertexAttributes.contains(VertexAttributeType::PreviousModelMatrixR0) )
+						{
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR0);
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR1);
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR2);
+							this->declareAttribute(VertexAttributeType::PreviousModelMatrixR3);
+						}
+						else
+						{
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR0);
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR1);
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR2);
+							this->declareJump(VertexAttributeType::PreviousModelMatrixR3);
+						}
 					}
 				}
 

@@ -697,7 +697,11 @@ namespace EmEn::Graphics
 		ModelPosition = 16U,
 		ModelScaling = 17U,
 		BoneInfluence = 18U,
-		BoneWeight = 19U
+		BoneWeight = 19U,
+		PreviousModelMatrixR0 = 20U,
+		PreviousModelMatrixR1 = 21U,
+		PreviousModelMatrixR2 = 22U,
+		PreviousModelMatrixR3 = 23U
 	};
 
 	constexpr auto PositionString{"Position"};
@@ -711,6 +715,7 @@ namespace EmEn::Graphics
 	constexpr auto Secondary3DTextureCoordinatesString{"Secondary3DTextureCoordinates"};
 	constexpr auto ModelMatrixString{"ModelMatrix"};
 	constexpr auto NormalModelMatrixString{"NormalModelMatrix"};
+	constexpr auto PreviousModelMatrixString{"PreviousModelMatrix"};
 	constexpr auto ModelPositionString{"ModelPosition"};
 	constexpr auto ModelScalingString{"ModelScaling"};
 	constexpr auto BoneInfluenceString{"BoneInfluence"};
@@ -763,6 +768,10 @@ namespace EmEn::Graphics
 			case VertexAttributeType::ModelMatrixR1 :
 			case VertexAttributeType::ModelMatrixR2 :
 			case VertexAttributeType::ModelMatrixR3 :
+			case VertexAttributeType::PreviousModelMatrixR0 :
+			case VertexAttributeType::PreviousModelMatrixR1 :
+			case VertexAttributeType::PreviousModelMatrixR2 :
+			case VertexAttributeType::PreviousModelMatrixR3 :
 			case VertexAttributeType::BoneInfluence :
 			case VertexAttributeType::BoneWeight :
 				return 4;

@@ -937,6 +937,12 @@ namespace EmEn::Graphics
 			case VertexAttributeType::NormalModelMatrixR2 :
 				return NormalModelMatrixString;
 
+			case VertexAttributeType::PreviousModelMatrixR0 :
+			case VertexAttributeType::PreviousModelMatrixR1 :
+			case VertexAttributeType::PreviousModelMatrixR2 :
+			case VertexAttributeType::PreviousModelMatrixR3 :
+				return PreviousModelMatrixString;
+
 			case VertexAttributeType::ModelPosition :
 				return ModelPositionString;
 
@@ -1009,6 +1015,11 @@ namespace EmEn::Graphics
 		if ( value == NormalModelMatrixString )
 		{
 			return VertexAttributeType::NormalModelMatrixR0;
+		}
+
+		if ( value == PreviousModelMatrixString )
+		{
+			return VertexAttributeType::PreviousModelMatrixR0;
 		}
 
 		if ( value == BoneInfluenceString )

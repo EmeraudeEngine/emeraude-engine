@@ -2099,7 +2099,7 @@ namespace EmEn::Scenes
 			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
 			 * @return void
 			 */
-			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
+			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance, const Base::Math::Vector< 3, float > & cameraPosition, bool advanceModelHistory) noexcept;
 
 			/**
 			 * @brief Renders a list of objects Z-sorted that uses lighting.

@@ -624,13 +624,32 @@ The descriptor set is passed from `Scene::prepareRender()`'s cached
 SSBO Path". Advanced/lighted, cubemap/CSM and shadow paths still push their matrices
 (milestone 4).
 
-**Status:** milestones 1-4 DONE (2026-07-25) — classic AND advanced paths consume the SSBO
-(advanced pushes V + frameIndex = 68 B, killing the historical 132 B min-spec violation).
-Cubemap/shadow/CSM paths stay on push constants (owner decision — min-spec clean, no motion
-data needed). Until per-object motion tracking (B2), `previousModel == model` for every
-entry. Validated: `doom-loader` (unlit classic path), `global-illumination` A/B pixel diff
-vs pre-B1 baseline within the stochastic noise floor + M4 BIT-IDENTICAL to M3 (deterministic
-console camera), `basic-scenery` (skybox infinity view + sprites + instanced + shadow-receiving).
+**Status:** B1 milestones 1-5 DONE (2026-07-25, committed e080399e) — classic AND advanced
+paths consume the SSBO (advanced pushes V + frameIndex = 68 B, killing the historical 132 B
+min-spec violation). Cubemap/shadow/CSM paths stay on push constants (owner decision —
+min-spec clean, no motion data needed). Validated: `doom-loader` (unlit classic path),
+`global-illumination` A/B pixel diff vs pre-B1 baseline within the stochastic noise floor +
+M4 BIT-IDENTICAL to M3 (deterministic console camera), `basic-scenery` (skybox infinity view
++ sprites + instanced + shadow-receiving).
+
+**Previous model matrices (motion vectors B2, 2026-07-25):**
+- **Unique (non-instanced)**: `previousModel` is REAL — `Abstract::m_lastModelMatrix` holds
+  the matrix staged at the previous rendered frame; only the PRIMARY view staging advances
+  it (`advanceHistory` parameter, gated on `RenderTargetType::View` in
+  `insertIntoRenderLists()`). First staging (and post-culling reappearance) falls back to
+  `previousModel == model` (zero object velocity beats a bogus one).
+- **Multiple (instanced)**: opt-in `RenderableInstanceFlagBits::EnableInstanceMotionHistory`
+  (MUST be set at construction — it fixes the VBO stride at
+  `MeshVBOWithHistoryElementCount` = 16+9+16 floats). `updateLocalData()` archives the
+  current model matrix into the previous slot before overwriting (one history step per
+  logic update); ⚠️ the flag rides the whole chain: generator flag
+  `IsInstanceMotionHistoryEnabled` → `VertexShader::enableInstanceMotionHistory()` →
+  `VertexBufferFormatManager` (declare-or-jump `PreviousModelMatrixR0..R3`) →
+  `ProgramCacheKey::isInstanceMotionHistory`. Breaking ANY link desynchronizes the pipeline
+  vertex input stride from the actual VBO. No demo content uses it yet.
+- ⚠️ **A/B capture protocol**: the RTGI accumulation converges asymptotically after a
+  camera move — A/B pixel diffs are only valid at IDENTICAL post-placement timing
+  (a 0.5-1 s window difference showed up as ~3/255 RMSE of pure reconvergence residual).
 
 ## Ray Tracing Architecture (SceneMetaData)
 

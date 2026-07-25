@@ -334,6 +334,12 @@ namespace EmEn::Saphir::Generator
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
+		/* Instanced motion history: fixes the per-instance VBO stride (previous model matrix). */
+		if ( this->isInstanceMotionHistoryEnabled() )
+		{
+			vertexShader->enableInstanceMotionHistory();
+		}
+
 		/* NOTE: Cubemap rendering requires multiview extension for gl_ViewIndex. */
 		if ( isCubemapTarget )
 		{

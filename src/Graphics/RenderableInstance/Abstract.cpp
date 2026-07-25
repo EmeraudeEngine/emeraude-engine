@@ -57,7 +57,7 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr auto TracerTag{"RenderableInstance"};
 
 	void
-	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition) noexcept
+	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept
 	{
 		/* Prepare the model matrix (M).
 		 * NOTE: Mirror of Unique::pushMatricesForRendering() — the staged matrix must be
@@ -77,9 +77,19 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix *= this->transformationMatrix();
 		}
 
-		/* NOTE: Until per-object motion tracking exists, the previous model matrix is the
-		 * current one (zero per-object velocity, camera reprojection covers the static world). */
-		m_instanceTransformsSlot = instanceTransforms.stageEntry(modelMatrix, modelMatrix);
+		/* Previous model matrix: the matrix staged at the previous rendered frame by the
+		 * primary view. Before the first primary staging (or after a long culling gap, an
+		 * accepted approximation), fall back to the current matrix — zero object velocity
+		 * beats a bogus one on the first visible frame. */
+		m_instanceTransformsSlot = instanceTransforms.stageEntry(modelMatrix, m_hasModelHistory ? m_lastModelMatrix : modelMatrix);
+
+		/* NOTE: Only the primary view staging advances the history (once per rendered
+		 * frame); render-to-texture stagings would otherwise zero the motion. */
+		if ( advanceHistory )
+		{
+			m_lastModelMatrix = modelMatrix;
+			m_hasModelHistory = true;
+		}
 	}
 
 	bool
@@ -225,7 +235,8 @@ namespace EmEn::Graphics::RenderableInstance
 			.isDepthWriteDisabled = this->isDepthWriteDisabled(),
 			.isBindlessEnabled = isBindlessEnabled,
 			.isMDIEnabled = isMDIEnabled,
-			.isSkeletalAnimationEnabled = isSkeletalAnimationEnabled
+			.isSkeletalAnimationEnabled = isSkeletalAnimationEnabled,
+			.isInstanceMotionHistory = this->isFlagEnabled(EnableInstanceMotionHistory)
 		};
 	}
 

@@ -329,6 +329,30 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Enables the instanced motion history mode: the per-instance VBO carries
+			 * the previous model matrix (+4 vec4 attribute slots after the normal matrix).
+			 * @note Affects the vertex buffer format stride even when the shader does not
+			 * consume the attribute (jumped over).
+			 * @return void
+			 */
+			void
+			enableInstanceMotionHistory () noexcept
+			{
+				m_instanceMotionHistoryEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the instanced motion history mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isInstanceMotionHistoryEnabled () const noexcept
+			{
+				return m_instanceMotionHistoryEnabled;
+			}
+
+			/**
 			 * @brief Enables skeletal skinning in this vertex shader.
 			 * @return void
 			 */
@@ -565,5 +589,6 @@ namespace EmEn::Saphir
 			bool m_MDIEnabled{false};
 			bool m_skinningEnabled{false};
 			bool m_instanceTransformsEnabled{false};
+			bool m_instanceMotionHistoryEnabled{false};
 	};
 }

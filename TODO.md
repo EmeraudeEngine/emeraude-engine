@@ -91,9 +91,15 @@
   the view UBO projection — scene AND shadow variants; validated on the sprite and
   basic-scenery demos, zero min-spec warnings engine-wide). Bench: perf-neutral (GI demo,
   deterministic camera: 230 FPS B1 vs 225-235 baseline; doom-loader ~7.6k vs ~7.2k).
-  ==> B1 COMPLETE. Next: B2 (per-object previous model matrices), B3 (RG16F velocity
-  attachment — consume the SSBO header), B4 (double skinning).
-  See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path".
+  ==> B1 COMPLETE (committed e080399e). B2 DONE TOO (2026-07-25): Unique previousModel is
+  real (per-instance history advanced by the primary-view staging only) + Multiple opt-in
+  `EnableInstanceMotionHistory` creation flag (+4 vec4/instance VBO slot, full chain
+  generator→VertexShader→VertexBufferFormat→ProgramCacheKey — no demo content uses it yet).
+  Zero-behavior-change A/B validated (⚠️ identical capture timing required — RTGI
+  reconvergence residual pollutes the diff otherwise). Next: B3 (RG16F velocity 5th MRT
+  attachment — OWNER DECISION — consume the SSBO header + prev matrices), B4 (double
+  skinning). See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and
+  `src/Scenes/AGENTS.md` § "Instance Transforms".
 - [ ] **Push constant min-spec violation (132 B)** — `RenderableInstance/Unique.cpp`
   `pushMatricesForRendering()`, `useAdvancedMatrices` path: view(64)+model(64)+frameIndex(4)
   = 132 B > the 128 B Vulkan minimum guarantee → main pipelines would fail to build on

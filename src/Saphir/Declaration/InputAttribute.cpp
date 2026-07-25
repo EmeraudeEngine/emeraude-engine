@@ -58,6 +58,10 @@ namespace EmEn::Saphir::Declaration
 			case VertexAttributeType::ModelMatrixR1 :
 			case VertexAttributeType::ModelMatrixR2 :
 			case VertexAttributeType::ModelMatrixR3 :
+			case VertexAttributeType::PreviousModelMatrixR0 :
+			case VertexAttributeType::PreviousModelMatrixR1 :
+			case VertexAttributeType::PreviousModelMatrixR2 :
+			case VertexAttributeType::PreviousModelMatrixR3 :
 				return GLSL::Matrix4;
 
 			case VertexAttributeType::NormalModelMatrixR0 :
@@ -115,6 +119,12 @@ namespace EmEn::Saphir::Declaration
 			case VertexAttributeType::ModelMatrixR2 :
 			case VertexAttributeType::ModelMatrixR3 :
 				return Attribute::ModelMatrix;
+
+			case VertexAttributeType::PreviousModelMatrixR0 :
+			case VertexAttributeType::PreviousModelMatrixR1 :
+			case VertexAttributeType::PreviousModelMatrixR2 :
+			case VertexAttributeType::PreviousModelMatrixR3 :
+				return Attribute::PreviousModelMatrix;
 
 			case VertexAttributeType::NormalModelMatrixR0 :
 			case VertexAttributeType::NormalModelMatrixR1 :
