@@ -78,6 +78,22 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::previousViewMatrix() const */
+			[[nodiscard]]
+			const Base::Math::Matrix< 4, float > &
+			previousViewMatrix () const noexcept override
+			{
+				return m_previousState.view;
+			}
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::previousProjectionMatrix() const */
+			[[nodiscard]]
+			const Base::Math::Matrix< 4, float > &
+			previousProjectionMatrix () const noexcept override
+			{
+				return m_previousState.projection;
+			}
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position() const */
 			[[nodiscard]]
 			const Base::Math::Vector< 3, float > &
@@ -152,6 +168,9 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::publishStateForRendering(uint32_t) */
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::archiveStateAfterRendering(uint32_t) */
+			void archiveStateAfterRendering (uint32_t readStateIndex) noexcept override;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateVideoMemory(uint32_t) const */
 			bool updateVideoMemory (uint32_t readStateIndex) const noexcept override;
 
@@ -223,8 +242,23 @@ namespace EmEn::Graphics
 				};
 			};
 
+			/**
+			 * @brief Minimal view state of the previously RENDERED frame, for temporal effects.
+			 * @note Written by archiveStateAfterRendering() and read by the previous*Matrix()
+			 * getters, both on the render thread — no locking required. Distinct from the
+			 * logic/render double-buffer: state indices track logic ticks, not rendered frames.
+			 * Identity matrices until the first frame has been archived (consumers handle
+			 * their own first-frame invalidation).
+			 */
+			struct PreviousFrameState
+			{
+				Base::Math::Matrix< 4, float > view; /**< View matrix of the previous rendered frame. */
+				Base::Math::Matrix< 4, float > projection; /**< Projection matrix of the previous rendered frame. */
+			};
+
 			DataState m_logicState; /**< Current logic state (write). */
 			std::array< DataState, 2 > m_renderState; /**< Double-buffered render states (read). */
+			PreviousFrameState m_previousState; /**< View state of the previous rendered frame (render thread only). */
 			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet; /**< Vulkan descriptor set. */
 			mutable std::mutex m_GPUBufferAccessLock; /**< Mutex for GPU buffer access synchronization. */

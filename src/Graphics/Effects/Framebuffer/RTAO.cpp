@@ -540,8 +540,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	RTAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	RTAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		const auto * inputDepth = context.depth;
+		const auto * inputNormals = context.normals;
+		const auto * inputMaterialProperties = context.materialProperties;
+
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update depth + normals descriptors for this frame's trace pass. */

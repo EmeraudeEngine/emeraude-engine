@@ -31,8 +31,13 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Effects/Framebuffer/DepthOfField.hpp"
+#include "Effects/Framebuffer/ToneMapping.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "Renderer.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 namespace EmEn::Graphics
 {
@@ -60,6 +65,108 @@ namespace EmEn::Graphics
 	PostProcessStack::clearEffects () noexcept
 	{
 		m_effects.clear();
+	}
+
+	bool
+	PostProcessStack::syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept
+	{
+		const bool wantDepthOfField = camera != nullptr && camera->isDepthOfFieldEnabled();
+		const bool wantHDR = camera != nullptr && camera->isHDREnabled();
+
+		const bool hasDepthOfField = m_cameraDepthOfField != nullptr;
+		const bool hasHDR = m_cameraToneMapping != nullptr;
+
+		if ( wantDepthOfField == hasDepthOfField && wantHDR == hasHDR )
+		{
+			return false;
+		}
+
+		const auto mainRenderTarget = renderer.mainRenderTarget();
+
+		if ( mainRenderTarget == nullptr )
+		{
+			return false;
+		}
+
+		const auto & extent = mainRenderTarget->extent();
+
+		/* Detach the current camera effects: they are re-appended below in canonical
+		 * order (DepthOfField, then ToneMapping LAST — HDR resolve closes the chain). */
+		if ( m_cameraDepthOfField != nullptr )
+		{
+			std::erase(m_effects, m_cameraDepthOfField);
+		}
+
+		if ( m_cameraToneMapping != nullptr )
+		{
+			std::erase(m_effects, m_cameraToneMapping);
+		}
+
+		/* Depth of field materialization. */
+		if ( wantDepthOfField && m_cameraDepthOfField == nullptr )
+		{
+			auto effect = std::make_shared< Effects::Framebuffer::DepthOfField >(renderer);
+
+			if ( effect->create(extent.width, extent.height) )
+			{
+				m_cameraDepthOfField = std::move(effect);
+			}
+			else
+			{
+				TraceError{ClassId} << "Failed to materialize the camera depth of field effect !";
+			}
+		}
+		else if ( !wantDepthOfField && m_cameraDepthOfField != nullptr )
+		{
+			/* Retire GPU resources once every in-flight frame is done with them. */
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraDepthOfField)] () {
+				effect->destroy();
+			});
+
+			m_cameraDepthOfField.reset();
+		}
+
+		/* HDR (tone mapping) materialization. */
+		if ( wantHDR && m_cameraToneMapping == nullptr )
+		{
+			auto effect = std::make_shared< Effects::Framebuffer::ToneMapping >(renderer);
+
+			if ( effect->create(extent.width, extent.height) )
+			{
+				m_cameraToneMapping = std::move(effect);
+			}
+			else
+			{
+				TraceError{ClassId} << "Failed to materialize the camera tone mapping effect !";
+			}
+		}
+		else if ( !wantHDR && m_cameraToneMapping != nullptr )
+		{
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraToneMapping)] () {
+				effect->destroy();
+			});
+
+			m_cameraToneMapping.reset();
+		}
+
+		/* Re-insert the surviving camera effects after the scene (HDR) effects but BEFORE
+		 * the first post-tonemap (LDR) effect: antialiasing/sharpening operate on
+		 * display-referred values and misbehave on linear HDR input. */
+		auto insertIt = std::find_if(m_effects.begin(), m_effects.end(), [] (const auto & effect) {
+			return effect != nullptr && effect->runsAfterToneMapping();
+		});
+
+		if ( m_cameraDepthOfField != nullptr )
+		{
+			insertIt = std::next(m_effects.insert(insertIt, m_cameraDepthOfField));
+		}
+
+		if ( m_cameraToneMapping != nullptr )
+		{
+			m_effects.insert(insertIt, m_cameraToneMapping);
+		}
+
+		return true;
 	}
 
 	bool

@@ -62,6 +62,9 @@ namespace EmEn::Scenes::Component
 			enum NotificationCode : std::uint8_t
 			{
 				LensEffectsChanged,
+				/* The enableDepthOfField()/enableHDR() state changed: the scene post-process
+				 * chain must (de)materialize the camera-driven photographic effects. */
+				PhysicalEffectsToggled,
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -70,7 +73,11 @@ namespace EmEn::Scenes::Component
 			enum AnimationID : uint8_t
 			{
 				FieldOfView,
-				Distance
+				Distance,
+				Aperture,
+				FocalLength,
+				FocusDistance,
+				ExposureCompensation
 			};
 
 			/** @brief Class identifier. */
@@ -87,6 +94,11 @@ namespace EmEn::Scenes::Component
 				AbstractVirtualDevice{componentName, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output}
 			{
 				this->setFlag(PerspectiveProjection, perspective);
+
+				/* Physical camera: the automatic modes are the default behaviour;
+				 * manual control (focus distance, exposure bias) is the opt-out. */
+				this->enableFlag(AutoFocusEnabled);
+				this->enableFlag(AutoExposureEnabled);
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
@@ -256,6 +268,195 @@ namespace EmEn::Scenes::Component
 				return m_far;
 			}
 
+			/* ---- Physical camera (photographic) options ----
+			 * The camera is the single source of truth for the photographic behaviour of the
+			 * rendered image, like a real camera body: optics (aperture, focal length, focus)
+			 * and exposure. The engine materializes the matching post-process effects
+			 * (DepthOfField, ToneMapping) in the scene chain when enabled here; when disabled,
+			 * these options are retained but have no effect (no-op contract). Every property is
+			 * readable by the effects each frame: changes apply immediately, no rebuild. */
+
+			/**
+			 * @brief Enables the depth of field for this camera.
+			 * @note Materializes the DepthOfField effect in the scene post-process chain.
+			 * Auto-focus is enabled by default (see setFocusDistance() to go manual).
+			 * @param state The state.
+			 * @return void
+			 */
+			void enableDepthOfField (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the depth of field is enabled for this camera.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDepthOfFieldEnabled () const noexcept
+			{
+				return this->isFlagEnabled(DepthOfFieldEnabled);
+			}
+
+			/**
+			 * @brief Enables the HDR rendering (tone mapping) for this camera.
+			 * @note Materializes the ToneMapping effect in the scene post-process chain.
+			 * Auto-exposure is enabled by default (see setExposureCompensation() to bias it).
+			 * @param state The state.
+			 * @return void
+			 */
+			void enableHDR (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the HDR rendering is enabled for this camera.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHDREnabled () const noexcept
+			{
+				return this->isFlagEnabled(HDREnabled);
+			}
+
+			/**
+			 * @brief Sets the lens aperture (f-stop).
+			 * @note Lower f-stop = shallower depth of field (stronger blur). Typical range f/1.4 - f/22.
+			 * @param fStop The aperture as an f-number.
+			 * @return void
+			 */
+			void
+			setAperture (float fStop) noexcept
+			{
+				m_aperture = std::max(fStop, 0.5F);
+			}
+
+			/**
+			 * @brief Returns the lens aperture (f-stop).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			aperture () const noexcept
+			{
+				return m_aperture;
+			}
+
+			/**
+			 * @brief Sets the lens focal length in millimeters.
+			 * @note Longer focal length = thinner in-focus plane. Does NOT drive the field of
+			 * view in this version (decoupled optics).
+			 * @param millimeters The focal length.
+			 * @return void
+			 */
+			void
+			setFocalLength (float millimeters) noexcept
+			{
+				m_focalLength = std::max(millimeters, 1.0F);
+			}
+
+			/**
+			 * @brief Returns the lens focal length in millimeters.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			focalLength () const noexcept
+			{
+				return m_focalLength;
+			}
+
+			/**
+			 * @brief Sets a manual focus distance in meters.
+			 * @note Like tapping to focus on a real camera: this DISABLES the auto-focus.
+			 * Re-enable it with setAutoFocus(true).
+			 * @param meters The distance of the focus plane.
+			 * @return void
+			 */
+			void
+			setFocusDistance (float meters) noexcept
+			{
+				m_focusDistance = std::max(meters, 0.01F);
+
+				this->disableFlag(AutoFocusEnabled);
+			}
+
+			/**
+			 * @brief Returns the manual focus distance in meters.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			focusDistance () const noexcept
+			{
+				return m_focusDistance;
+			}
+
+			/**
+			 * @brief Enables or disables the auto-focus (enabled by default).
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			setAutoFocus (bool state) noexcept
+			{
+				this->setFlag(AutoFocusEnabled, state);
+			}
+
+			/**
+			 * @brief Returns whether the auto-focus is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAutoFocusEnabled () const noexcept
+			{
+				return this->isFlagEnabled(AutoFocusEnabled);
+			}
+
+			/**
+			 * @brief Sets the exposure compensation in EV (exposure bias).
+			 * @note 0 = neutral, +1 EV = twice the light, -1 EV = half. Applies on top of the
+			 * auto-exposure when it is enabled, or on the manual exposure otherwise.
+			 * @param exposureValue The bias in EV.
+			 * @return void
+			 */
+			void
+			setExposureCompensation (float exposureValue) noexcept
+			{
+				m_exposureCompensation = exposureValue;
+			}
+
+			/**
+			 * @brief Returns the exposure compensation in EV.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			exposureCompensation () const noexcept
+			{
+				return m_exposureCompensation;
+			}
+
+			/**
+			 * @brief Enables or disables the auto-exposure (enabled by default).
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			setAutoExposure (bool state) noexcept
+			{
+				this->setFlag(AutoExposureEnabled, state);
+			}
+
+			/**
+			 * @brief Returns whether the auto-exposure is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAutoExposureEnabled () const noexcept
+			{
+				return this->isFlagEnabled(AutoExposureEnabled);
+			}
+
 			/**
 			 * @brief Returns the lens effect list.
 			 * @return const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > &
@@ -341,12 +542,22 @@ namespace EmEn::Scenes::Component
 
 			/* Flag names */
 			static constexpr auto PerspectiveProjection{UnusedFlag + 0UL};
-		
+			static constexpr auto DepthOfFieldEnabled{UnusedFlag + 1UL};
+			static constexpr auto HDREnabled{UnusedFlag + 2UL};
+			static constexpr auto AutoFocusEnabled{UnusedFlag + 3UL};
+			static constexpr auto AutoExposureEnabled{UnusedFlag + 4UL};
+
 			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_lensEffects;
 			float m_fov{DefaultGraphicsFieldOfView};
 			float m_distance{DefaultGraphicsViewDistance};
 			float m_near{0.0F};
 			float m_far{DefaultGraphicsViewDistance};
+			/* Physical camera options (photographic model, consumed by the post-process
+			 * effects materialized through enableDepthOfField()/enableHDR()). */
+			float m_aperture{2.8F}; /**< Lens aperture, as an f-number. */
+			float m_focalLength{50.0F}; /**< Lens focal length, in millimeters. */
+			float m_focusDistance{10.0F}; /**< Manual focus plane distance, in meters. */
+			float m_exposureCompensation{0.0F}; /**< Exposure bias, in EV. */
 	};
 
 	inline

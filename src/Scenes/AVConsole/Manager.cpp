@@ -392,6 +392,63 @@ namespace EmEn::Scenes::AVConsole
 	}
 
 	bool
+	Manager::switchPrimaryVideoSource (const std::string & sourceDeviceId) noexcept
+	{
+		std::shared_ptr< AbstractVirtualDevice > targetDevice;
+		std::vector< std::shared_ptr< AbstractVirtualDevice > > previousSources;
+		std::string targetDeviceId;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+			if ( m_primaryOutputVideoDeviceId.empty() )
+			{
+				Tracer::error(ClassId, "There is no output primary video device declared !");
+
+				return false;
+			}
+
+			const auto sourceDevice = this->getVideoDeviceNoLock(sourceDeviceId);
+
+			if ( sourceDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to find virtual video device '" << sourceDeviceId << "' to switch to !";
+
+				return false;
+			}
+
+			targetDeviceId = m_primaryOutputVideoDeviceId;
+			targetDevice = this->getVideoDeviceNoLock(targetDeviceId);
+
+			if ( targetDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to find the primary output video device '" << targetDeviceId << "' !";
+
+				return false;
+			}
+
+			/* Collect every OTHER source currently feeding the primary output:
+			 * a render target must have a single point of view. */
+			for ( const auto & device : this->getVideoDeviceSourcesNoLock() )
+			{
+				if ( device != sourceDevice && device->isConnectedWith(targetDevice, ConnexionType::Output) )
+				{
+					previousSources.emplace_back(device);
+				}
+			}
+
+			m_primaryInputVideoDeviceId = sourceDeviceId;
+		}
+
+		for ( const auto & device : previousSources )
+		{
+			device->disconnect(m_engineContext, targetDevice, true);
+		}
+
+		return this->connectVideoDevices(sourceDeviceId, targetDeviceId);
+	}
+
+	bool
 	Manager::autoConnectPrimaryAudioDevices () noexcept
 	{
 		std::string sourceId;

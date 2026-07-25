@@ -1309,6 +1309,21 @@ namespace EmEn::Graphics
 		 * Creating the scene target without the stack leads to wrong formats (no HDR/depth/normals). */
 		const auto * stack = scene != nullptr ? scene->postProcessStack() : nullptr;
 
+		/* Physical camera contract: the ACTIVE camera declares its photographic effects
+		 * (enableDepthOfField()/enableHDR()); the stack (de)materializes them here, once
+		 * per frame on the render thread. When the effect set changes, the scene target is
+		 * retired so the lazy block below reconfigures the pipeline with the fresh
+		 * requirements (HDR may appear or disappear with the tone mapping). */
+		if ( scene != nullptr && stack != nullptr )
+		{
+			if ( scene->postProcessStack()->syncCameraEffects(scene->activeCamera(), *this) && m_sceneTarget != nullptr )
+			{
+				m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
+					target->destroyRenderTarget();
+				});
+			}
+		}
+
 		if ( m_postProcessor.isEnabled() && m_sceneTarget == nullptr && stack != nullptr )
 		{
 			/* Pre-update cached requirements so recreateSceneTarget() picks up
@@ -1360,6 +1375,15 @@ namespace EmEn::Graphics
 		else
 		{
 			this->renderFrameDirect(scene, overlayManager, editorManager, currentFrameScope, commandBuffer);
+		}
+
+		/* Archive the view state consumed by this frame (frame-history contract).
+		 * MUST happen after the frame's command buffer is recorded: during the recording of
+		 * frame N, temporal effects (RTGI reprojection) read the archive holding frame N-1.
+		 * m_currentReadStateIndex was set by the rendering strategy above. */
+		if ( scene != nullptr )
+		{
+			this->mainRenderTarget()->viewMatrices().archiveStateAfterRendering(m_currentReadStateIndex);
 		}
 
 		if ( !commandBuffer->end() )
@@ -1484,7 +1508,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet());
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera());
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -1636,10 +1660,11 @@ namespace EmEn::Graphics
 			m_currentTLAS = nullptr;
 		}
 
-		/* Process scene effects (multi-pass). */
+		/* Process scene effects (multi-pass). The active camera provides the photographic
+		 * context (physical camera model: optics, exposure) to the effect chain. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet());
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera());
 		}
 
 		/* Establish swap-chain image layouts by running RP1 (CLEAR) with no draw calls.

@@ -375,6 +375,17 @@ namespace EmEn::Scenes::AVConsole
 			bool autoConnectPrimaryVideoDevices () noexcept;
 
 			/**
+			 * @brief Switches the PRIMARY video output to another source device (camera cut).
+			 * @note Disconnects every source currently feeding the primary output, then
+			 * connects the requested one. The physical camera contract completes the cut:
+			 * see Scene::switchToCamera() which also transfers the active-camera authority.
+			 * @param sourceDeviceId The identifier of the new source video device.
+			 * @return bool Whether the switch succeeded.
+			 */
+			[[nodiscard]]
+			bool switchPrimaryVideoSource (const std::string & sourceDeviceId) noexcept;
+
+			/**
 			 * @brief Auto-connects the primary audio devices.
 			 * @return bool
 			 */

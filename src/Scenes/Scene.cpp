@@ -193,6 +193,23 @@ namespace EmEn::Scenes
 	}
 
 	bool
+	Scene::switchToCamera (Component::Camera & camera) noexcept
+	{
+		/* Camera cut (physical camera contract): the camera becomes the RENDERED point
+		 * of view (primary video source reroute through the AVConsole) AND the
+		 * photographic authority (active camera) — its DoF/HDR/lens setup reshapes the
+		 * post-process pipeline within a frame. */
+		if ( !m_AVConsoleManager.switchPrimaryVideoSource(camera.id()) )
+		{
+			return false;
+		}
+
+		m_activeCamera = &camera;
+
+		return true;
+	}
+
+	bool
 	Scene::enable (Input::Manager & inputManager, Settings & /*settings*/) noexcept
 	{
 		/* NOTE: First initialization. */

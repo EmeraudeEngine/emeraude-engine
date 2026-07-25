@@ -93,7 +93,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Vulkan::TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/**
 			 * @brief Sets the sharpening parameters.
@@ -115,6 +115,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			parameters () const noexcept
 			{
 				return m_parameters;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::runsAfterToneMapping() */
+			[[nodiscard]]
+			bool
+			runsAfterToneMapping () const noexcept override
+			{
+				return true;
 			}
 
 		private:

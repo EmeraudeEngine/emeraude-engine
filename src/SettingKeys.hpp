@@ -418,6 +418,57 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingGINormalSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/NormalSigma"};
 			constexpr auto DefaultGraphicsRayTracingGINormalSigma{0.5F};
 
+			/* Ray Tracing > Global Illumination > Temporal accumulation.
+			 * Exponential moving average over reprojected history: effective sample count
+			 * becomes SampleCount / Alpha (8 spp @ 0.1 ≈ 80 effective samples). */
+			constexpr auto GraphicsRayTracingGITemporalEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalEnabled{true};
+			/* Blend weight of the CURRENT frame (lower = smoother, more history lag). */
+			constexpr auto GraphicsRayTracingGITemporalAlphaKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/Alpha"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalAlpha{0.1F};
+			/* Relative camera-distance tolerance for history rejection (disocclusion test). */
+			constexpr auto GraphicsRayTracingGITemporalDepthToleranceKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/DepthTolerance"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalDepthTolerance{0.05F};
+			/* Minimum cosine between current and history normals to accept history. */
+			constexpr auto GraphicsRayTracingGITemporalNormalThresholdKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NormalThreshold"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalNormalThreshold{0.8F};
+			/* Clamp the reprojected history to the current 3x3 neighbourhood range (anti-ghosting). */
+			constexpr auto GraphicsRayTracingGITemporalNeighborhoodClampKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NeighborhoodClamp"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalNeighborhoodClamp{true};
+
+			/* Ray Tracing > Global Illumination > Multi-bounce feedback.
+			 * Bounce rays landing on a surface visible last frame pick up its accumulated
+			 * indirect radiance: the geometric series converges to the multi-bounce solution
+			 * (one traced bounce per frame, energy 1/(1-albedo*strength) at steady state).
+			 * Requires the temporal accumulation to be enabled. */
+			constexpr auto GraphicsRayTracingGIMultiBounceEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingGIMultiBounceEnabled{true};
+			/* Damping of the feedback series: 0 = single bounce, 1 = full geometric series. */
+			constexpr auto GraphicsRayTracingGIMultiBounceStrengthKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Strength"};
+			constexpr auto DefaultGraphicsRayTracingGIMultiBounceStrength{1.0F};
+			/* Upper bound on the radiance re-injected per bounce (anti-firefly, divergence guard). */
+			constexpr auto GraphicsRayTracingGIMultiBounceClampKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Clamp"};
+			constexpr auto DefaultGraphicsRayTracingGIMultiBounceClamp{4.0F};
+
+			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
+			 * focal length, focus) belong to the active camera (physical camera model,
+			 * Scenes::Component::Camera), NOT to the settings. */
+			/* CoC sensitivity: scales the thin-lens circle of confusion before clamping. */
+			constexpr auto GraphicsDepthOfFieldCoCScaleKey{"Core/Graphics/DepthOfField/CoCScale"};
+			constexpr auto DefaultGraphicsDepthOfFieldCoCScale{10.0F};
+			/* Blur ceiling: maximum gather radius in half-res pixels. */
+			constexpr auto GraphicsDepthOfFieldMaxRadiusKey{"Core/Graphics/DepthOfField/MaxRadius"};
+			constexpr auto DefaultGraphicsDepthOfFieldMaxRadius{12.0F};
+			/* Golden-spiral gather taps per pixel (bokeh quality). */
+			constexpr auto GraphicsDepthOfFieldSampleCountKey{"Core/Graphics/DepthOfField/SampleCount"};
+			constexpr auto DefaultGraphicsDepthOfFieldSampleCount{48U};
+			/* Auto-focus adaptation speed (rack focus), in 1/seconds. */
+			constexpr auto GraphicsDepthOfFieldAutoFocusSpeedKey{"Core/Graphics/DepthOfField/AutoFocusSpeed"};
+			constexpr auto DefaultGraphicsDepthOfFieldAutoFocusSpeed{3.0F};
+			/* Near-field (foreground) blur with silhouette bleeding. */
+			constexpr auto GraphicsDepthOfFieldNearFieldKey{"Core/Graphics/DepthOfField/NearField"};
+			constexpr auto DefaultGraphicsDepthOfFieldNearField{true};
+
 			/* Screen Space > Ambient Occlusion (first screen-space effect group — SSGI keys will join it). */
 			/* Hemisphere sampling radius, in world units. */
 			constexpr auto GraphicsScreenSpaceAORadiusKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Radius"};

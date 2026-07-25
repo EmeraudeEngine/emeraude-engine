@@ -855,11 +855,14 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
 | **SSAO** | `Effects/Framebuffer/SSAO.hpp/cpp` | Multi-pass | Depth, Normals |
 | **SSR** | `Effects/Framebuffer/SSR.hpp/cpp` | 5-pass (Trace→Resolve→BlurH→BlurV→Composite) | Depth, Normals, HDR |
 | **Bloom** | `Effects/Framebuffer/Bloom.hpp/cpp` | Multi-pass | HDR |
-| **DepthOfField** | `Effects/Framebuffer/DepthOfField.hpp/cpp` | Multi-pass | Depth |
-| **ToneMapping** | `Effects/Framebuffer/ToneMapping.hpp/cpp` | 1-pass | HDR |
+| **DepthOfField** | `Effects/Framebuffer/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
+| **ToneMapping** | `Effects/Framebuffer/ToneMapping.hpp/cpp` | Multi-pass (auto-exposure chain) | HDR, **camera-materialized** |
 | **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | Multi-pass | Depth, HDR |
 | **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
 | **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
+| **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | 6-pass (Trace→BlurH→BlurV→Temporal→NormalHistory→Apply) | Depth, Normals, MaterialProps, Albedo, RT (TLAS+SSBOs) |
+| **RTAO** | `Effects/Framebuffer/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
+| **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | Multi-pass | Depth, Normals, MaterialProps, Albedo |
 | **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals |
 | **LensFlare** | `Effects/Framebuffer/LensFlare.hpp/cpp` | Multi-pass | Depth, HDR |
 | **FogEnvironment** | `Effects/Framebuffer/FogEnvironment.hpp/cpp` | 1-pass | Depth |
@@ -941,14 +944,197 @@ from reflecting themselves (e.g. floor reflecting floor).
 - `Scenes/SceneMetaData.hpp` — TLAS, mesh metadata, material data management
 - `Scenes/GPUMeshMetaData.hpp` — GPU-side mesh metadata struct layout
 
-### Effect Chain Order
+### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 
-Recommended order (used in LightAndShadowDebug):
+6-pass pipeline: one traced diffuse bounce per frame, temporally accumulated, with a
+multi-bounce feedback loop through the history buffer.
+
+1. **Trace** (half-res): cosine-weighted hemisphere rays via TLAS ray queries; at each hit,
+   direct lighting (with shadow rays gated on the raster shadow-casting flag) PLUS the hit
+   surface's accumulated indirect radiance from the previous resolved frame (multi-bounce
+   feedback). Receiver albedo read from the **albedo G-buffer** (no primary ray).
+2/3. **Blur H/V** (half-res): bilateral, depth+normal edge-stopping.
+4. **Temporal resolve** (half-res): reprojects the pixel's world position through the
+   PREVIOUS frame's view-projection, validates history (camera-distance in history alpha +
+   world-normal history), optional 3x3 neighborhood clamp, then EMA (`Temporal/Alpha`).
+   Output → history ping-pong `[writeIdx]`, also consumed by the apply pass.
+5. **Normal history** (half-res): current view-space normals → world space, retained for
+   the next frame's validation (the normals MRT is rewritten every frame).
+6. **Apply** (full-res): additive blend, emissive-masked via material properties G-buffer.
+
+**Frame UBO instead of push constants:** the trace parameters (invViewProj + prevViewProj +
+camera data) exceed the **128-byte Vulkan push constant minimum guarantee**
+(`maxPushConstantsSize`). A per-frame UBO (`FrameUBOData`, std140) is shared by the
+trace/temporal/normal-history passes — created via
+`IndirectPostProcessEffect::createPerFrameUniformBuffers()`, bound through
+`getInputLayout(samplerCount, uniformBufferCount)` (samplers first, then UBOs).
+
+**Multi-bounce energy algebra:** the history stores OUTGOING indirect radiance (receiver
+albedo applied at trace time), so the feedback is NOT re-multiplied by the hit albedo —
+the geometric series `1/(1-albedo*strength)` is naturally damped by physical albedo (< 1)
+and converges. `MultiBounce/Clamp` bounds the re-injected radiance (anti-firefly).
+`MultiBounce/Strength` is a continuous bounce-depth dial: 0 = single bounce, 1 = full series.
+
+**History ping-pong correctness:** 2 half-res RGBA16F history targets (+2 normal history).
+Frame N reads `[1-w]`, writes `[w]`; safe on a single queue thanks to the IRT's full
+(non-by-region) external subpass dependencies. `m_historyValid` forces alpha=1 and
+strength=0 on the first frame after (re)creation — the ping-pong images load DONT_CARE.
+The temporal/normal-copy pipelines are created against the `[0]` targets and record into
+`[1]` via render pass compatibility (same trick as the shared blur pipeline).
+
+**Structural limitation (screen-space feedback):** bounce rays only pick up feedback from
+surfaces visible ON SCREEN in the previous frame. Light does not propagate around corners
+that are never co-visible with lit surfaces (validated in the `global-illumination` demo:
++21% median brightness where lit+penumbra are co-visible, zero effect in the fully
+occluded bend). Going further requires a world-space cache (probes / surface cache).
+
+**Static-geometry reprojection (v1):** the temporal reprojection uses `prevViewProj` +
+current world position — exact for camera motion over static geometry, wrong for moving
+objects (bounded by history validation + neighborhood clamp). Per-object motion vectors
+(5th MRT attachment) are a planned follow-up; they require moving scene-pass transforms
+out of push constants first (see `docs/caution-points.md`, 128-byte entry).
+
+**Settings** (`Core/Graphics/RayTracing/GlobalIllumination/`): `Temporal/Enabled|Alpha|
+DepthTolerance|NormalThreshold|NeighborhoodClamp`, `MultiBounce/Enabled|Strength|Clamp`
+(see `SettingKeys.hpp` for defaults and rationale). `Temporal/Enabled=false` skips the
+temporal chain entirely (no history VRAM, apply reads blur V — the pre-Jul-2026 flow).
+
+**Code references:**
+- `Effects/Framebuffer/RTGI.hpp` — Parameters, `FrameUBOData` (std140), history members
+- `Effects/Framebuffer/RTGI.cpp` — 5 GLSL shaders (inline), ping-pong recording
+- `Graphics/ViewMatricesInterface.hpp` — frame-history contract (previous view/projection)
+
+### Physical Camera — Camera-Driven Photographic Pipeline (Jul 2026)
+
+The `Scenes::Component::Camera` is the **single source of truth for the photographic
+behaviour** of the rendered image, like a real camera body. Owner vision: ultimately ALL
+image-rendering effects are camera-manageable (lens effects already are).
+
+**Camera presets** (`Scenes/EffectsToolkit/CameraPresets.{hpp,cpp}`): full photographic
+packages — optics + exposure + DoF/HDR materialization + lens effects in one call.
+`Neutral` (reset), `HighQuality` (f/2.8 50mm clean), `HumanEye` (f/8 17mm, soft peripheral
+vignette), `VintageBlackAndWhite` (f/5.6 40mm + LensPresets::Hitchcock60s stack),
+`Super8` (f/1.9 25mm, +0.3 EV, coarse grain/jitter/flicker/dust). Applying a preset
+REPLACES the camera's photographic setup; two cameras can carry different presets
+(active-camera switch = full look switch). Validated on Sponza (Jul 2026).
+
+**EXTENSION CONTRACT — consumer-defined styles** (`EffectsToolkit::CameraStyle`): an
+engine consumer declares its own photographic style as a DATA block (optics, exposure,
+DoF/HDR flags, and a lens-stack FACTORY — fresh effect instances per application, no
+state sharing between cameras). Usable two ways: `CameraPresets::Apply(camera, style)`
+directly (unlimited ad-hoc styles), or registered once behind the `CameraPreset::Custom`
+token via `CameraPresets::setCustomStyle(style)` (then usable at Toolkit creation and in
+runtime cycles; unset token falls back to Neutral with a warning). The factory may return
+effect classes OWNED BY THE APPLICATION (subclass `DirectPostProcessEffect`, override
+`generateFragmentShaderCode()` — the whole surface is public/EMEN_API): validated with
+projet-alpha's `BitmapMonochromeEffect` (1-bit ordered-dither, its own GLSL — the engine
+never knows the type). NOTE: a style with no HDR feeds RAW LINEAR values to the lens
+effects — threshold-like effects usually want `HDR = true` so the auto-exposure
+normalizes their input.
+
+**Preset TOKEN at creation** (owner-decided idiom): the preset is part of the camera
+DEFINITION — `enum class EffectsToolkit::CameraPreset` (13 values: Normal, HighQuality,
+HumanEye, VintageBlackAndWhite, Super8, plus the PROMOTED LensPresets catalog —
+Analog80s, VHSAnalog80s, SatelliteAnalog80s, VHSPureSignal, SatellitePureSignal,
+GoldenHour, BlueHour, Retro8Bits — each with era-consistent optics: video/broadcast =
+deep focus, cinema grades = photographic DoF, Retro8Bits = no photometry). Taken by
+`Toolkit::generatePerspectiveCamera(..., preset = CameraPreset::Normal)` (perspective
+only: the thin-lens DoF model is meaningless under orthographic projection; cubemap
+capture cameras are never graded). Runtime re-application goes through
+`CameraPresets::Apply(camera, token)` — demo cycle order IS the enum order.
+LensPresets:: functions remain the lens-stack building blocks.
+
+**Camera API** (all no-op when the matching effect is absent — the options are retained):
+- `enableDepthOfField(bool)` / `enableHDR(bool)` — MATERIALIZES the DepthOfField /
+  ToneMapping effect in the scene chain (and removes it when disabled).
+- Optics: `setAperture(fStop)`, `setFocalLength(mm)`, `setFocusDistance(m)` (implies
+  manual focus, like tapping to focus), `setAutoFocus(bool)`.
+- Exposure: `setExposureCompensation(EV)`, `setAutoExposure(bool)`.
+- **Automatic modes are the default** (auto-focus + auto-exposure ON at construction).
+- All optics are ANIMATABLE (`AnimationID::Aperture/FocalLength/FocusDistance/
+  ExposureCompensation`) — focus pulls and exposure ramps via the animation system.
+- Single-pass lens effects (VHS, grain, B&W...) were ALREADY per-camera via
+  `addLensEffect()`; the physical camera extends the model to multi-pass effects.
+
+**Camera cut** (`Scene::switchToCamera(Component::Camera &)`): performs a full cut — the
+camera becomes the RENDERED point of view (primary video source reroute through
+`AVConsole::Manager::switchPrimaryVideoSource()`, which disconnects every other source
+feeding the primary output) AND the photographic authority (active camera). One call:
+image + look together. Validated on Sponza with two fixed showcase cameras carrying
+different presets (KeyPad8 cycle in the projet-alpha demos).
+
+**Materialization mechanics** (no observer, no cross-thread races):
+- `Renderer::renderFrame*()` calls `PostProcessStack::syncCameraEffects(activeCamera,
+  renderer)` once per frame on the render thread — a two-boolean comparison when nothing
+  changed. Camera switches (`Scene::setActiveCamera`) are therefore handled automatically:
+  **each camera keeps its own photographic setup; the active one shapes the pipeline.**
+- On change: new effects are created render-side; removed effects retire through
+  `Renderer::deferredDestructor()` (frames-in-flight safety); the scene target is retired
+  so the lazy configure path rebuilds the pipeline with the new requirements (HDR may
+  appear/disappear with the tone mapping).
+- The effects READ the camera each frame via `FrameContext::camera` — parameter changes
+  (aperture, EV...) apply immediately, zero rebuild. Fallback to the effect's local
+  `Parameters` when no camera exists.
+- Demos/apps DO NOT add DepthOfField/ToneMapping to their stack anymore — they enable
+  them on the camera (see `projet-alpha` `GLTFLoader::onEnabled()`).
+
+### Effect Chain Order & Phase Contract (Jul 2026)
+
+The chain has THREE phases, enforced structurally:
+
+1. **Scene effects (HDR, linear)** — declared by the application/demo stack: GI, AO,
+   reflections, fog, volumetric light, bloom...
+2. **Photographic effects (HDR resolve)** — materialized by the ACTIVE CAMERA
+   (`enableDepthOfField()`/`enableHDR()`, see "Physical Camera" below): DepthOfField,
+   then ToneMapping (HDR→LDR).
+3. **Post-tonemap effects (LDR, display-referred)** — effects overriding
+   `IndirectPostProcessEffect::runsAfterToneMapping()` (FXAA, FXAASharpen, Sharpen).
+
+> [!CRITICAL]
+> `PostProcessStack::syncCameraEffects()` inserts the camera effects BEFORE the first
+> `runsAfterToneMapping()` effect. Running AA/sharpen on linear HDR input produces severe
+> posterization and halo streaks (observed live on Sponza, Jul 2026) — any new LDR effect
+> MUST override `runsAfterToneMapping()`.
+
+Recommended scene-effect order (used in the demos):
 ```
-RTR → SSR → ContactShadows → SSAO → AtmosphericFog → VolumetricLight → LensFlare → Bloom → DoF → ToneMapping (always last: HDR→LDR)
+RTR → SSR → ContactShadows → SSAO → AtmosphericFog → VolumetricLight → LensFlare → Bloom
+[camera: DoF → ToneMapping] [LDR: FXAASharpen]
 ```
 
 **Rationale:** RTR first (hardware ray tracing, highest quality reflections). SSR as fallback where RTR is unavailable. ContactShadows adds fine-detail shadowing from depth. SSAO then darkens the image globally including reflections, which is acceptable — this matches UE4's approach where AO is applied as a global multiplier after reflection composition. AtmosphericFog before VolumetricLight so god rays bloom through the fog. LensFlare from bright light sources. Bloom before DoF extracts bright pixels from sharp image (avoids runaway glow from DoF blur spreading HDR values).
+
+### DepthOfField — Production-Grade Gather DoF (Jul 2026)
+
+7-pass physical camera DoF (technique refs: Jimenez, "Next Generation Post Processing
+in COD:AW", SIGGRAPH 2014):
+
+1. **Focus** (1x1 RG32F ping-pong): auto-focus measurement (5x5 Gaussian around screen
+   center) + exponential rack focus EMA (R = focus distance, G = timestamp for the frame
+   delta; manual focus pulls are smoothed too). First-frame reset flag (DONT_CARE images).
+2. **Setup** (half-res RGBA16F): downsampled color + SIGNED thin-lens CoC in alpha
+   (positive = far field, negative = near field; sky lands in the far field naturally).
+3/4. **Near-CoC dilation** (H/V max filter, R16F): spreads the near coverage BEYOND the
+   silhouettes — the foreground blur must bleed over the sharp background.
+5. **Far gather** (half-res): golden-angle spiral disc (circular bokeh), scatter-as-gather
+   weighting (a sample contributes when its own CoC reaches the shaded pixel), near-field
+   samples excluded.
+6. **Near gather** (half-res): same spiral driven by the DILATED near CoC, no occlusion
+   rejection (foreground freely covers the background). Coverage in alpha.
+7. **Composite** (full-res): sharp base → far blend by CoC factor → near OVER (bleed),
+   modulated by the per-pixel material DoF mask (matprops A low nibble, HUD exemption).
+
+Optics come from the ACTIVE CAMERA (`FrameContext::camera`); quality knobs from
+`Core/Graphics/DepthOfField/` settings (`CoCScale`, `MaxRadius`, `SampleCount`,
+`AutoFocusSpeed`, `NearField`). `NearField=false` skips passes 3/4/6 entirely.
+
+### FrameContext — Effect Chain Context (Jul 2026)
+
+`IndirectPostProcessEffect::execute()` takes `(commandBuffer, inputColor, const
+FrameContext &)` — the context groups the G-buffer inputs (depth/normals/matProps/albedo),
+the LightSet, the ACTIVE CAMERA and the frame PushConstants. This replaced the former
+8-parameter signature across all 16 effects (the GBufferInputs refactor). Any new
+per-frame data belongs in FrameContext, NOT in a new parameter.
 
 ### Coding Conventions for Effects
 
@@ -1208,11 +1394,29 @@ use `Renderer::currentReadStateIndex()` when calling `viewMatrix(readStateIndex,
 The default `viewMatrix(false, 0)` reads `m_logicState` which may have already advanced
 to the next logic tick → **matrix/depth mismatch → flickering**. See `RTR.cpp:execute()`.
 
+### Rule 3: Frame History ≠ State Indices (Temporal Effects)
+
+The logic/render double-buffer (`readStateIndex`/`writeStateIndex`) tracks **logic ticks**,
+NOT rendered frames — if the logic thread ticks twice between two frames, "the other index"
+is NOT the previous frame. Temporal effects (RTGI reprojection, future TAA) must use the
+**frame-history contract** instead:
+
+- `ViewMatricesInterface::previousViewMatrix()` / `previousProjectionMatrix()` — the state
+  consumed by the previously RENDERED frame (identity until first archive; consumers handle
+  their own first-frame invalidation).
+- `archiveStateAfterRendering(readStateIndex)` — called by `Renderer::renderFrame()` ONCE
+  per rendered frame, on the render thread, AFTER the command buffer is recorded (so during
+  the recording of frame N the archive still holds frame N-1). Real implementation in
+  `ViewMatrices2DUBO` (the swap-chain camera UBO, which `SceneRenderTarget` delegates to);
+  cubemap/CSM views keep the no-history default.
+
 **Code references:**
 - `Renderer.hpp:m_currentFrameIndex` — Current frame-in-flight index
 - `Renderer.hpp:m_currentReadStateIndex` — Double-buffer read state index for current frame
 - `Renderer.hpp:framesInFlight()` — Number of frames-in-flight
 - `Scenes/SceneMetaData.hpp:initializePerFrameBuffers()` — Reference implementation
+- `ViewMatricesInterface.hpp` — frame-history contract (previous view/projection + archive)
+- `Renderer.cpp:renderFrame()` — the single `archiveStateAfterRendering()` call site
 
 ## 17. Multi-Draw Indirect (MDI) — GPU-Driven Rendering
 

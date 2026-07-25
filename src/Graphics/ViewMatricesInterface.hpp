@@ -120,6 +120,39 @@ namespace EmEn::Graphics
 			virtual const Base::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t viewIndex) const noexcept = 0;
 
 			/**
+			 * @brief Returns the view matrix used by the previously rendered frame.
+			 * @note Frame-history contract for temporal effects (reprojection, accumulation).
+			 * Only meaningful after archiveStateAfterRendering() has been called at least once;
+			 * views that do not keep a history return an identity matrix. Consumers MUST handle
+			 * their own first-frame invalidation (this contract does not signal validity).
+			 * @return const Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Matrix< 4, float > &
+			previousViewMatrix () const noexcept
+			{
+				static const Base::Math::Matrix< 4, float > noHistory{};
+
+				return noHistory;
+			}
+
+			/**
+			 * @brief Returns the projection matrix used by the previously rendered frame.
+			 * @note Frame-history contract for temporal effects. See previousViewMatrix().
+			 * @return const Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Matrix< 4, float > &
+			previousProjectionMatrix () const noexcept
+			{
+				static const Base::Math::Matrix< 4, float > noHistory{};
+
+				return noHistory;
+			}
+
+			/**
 			 * @brief Returns the position of the point of view.
 			 * @return const Base::Math::Vector< 3, float > &
 			 */
@@ -239,6 +272,24 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			virtual void publishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
+
+			/**
+			 * @brief Archives the view state consumed by the frame that was just recorded.
+			 * @note Frame-history contract for temporal effects. Called by the Renderer ONCE per
+			 * rendered frame, on the render thread, AFTER the frame's command buffer is recorded —
+			 * so that during the recording of frame N, previousViewMatrix()/previousProjectionMatrix()
+			 * still expose the state of frame N-1. This is distinct from the logic/render
+			 * double-buffering (publishStateForRendering): state indices track logic ticks,
+			 * NOT rendered frames. Default implementation keeps no history.
+			 * @param readStateIndex The render state-valid index the frame was rendered with.
+			 * @return void
+			 */
+			virtual
+			void
+			archiveStateAfterRendering (uint32_t /*readStateIndex*/) noexcept
+			{
+				/* Default: this view keeps no frame history. */
+			}
 
 			/**
 			 * @brief Updates the video memory.

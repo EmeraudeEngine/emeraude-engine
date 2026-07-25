@@ -56,6 +56,11 @@ namespace EmEn
 	namespace Scenes
 	{
 		class LightSet;
+
+		namespace Component
+		{
+			class Camera;
+		}
 	}
 
 	namespace Graphics
@@ -301,7 +306,7 @@ namespace EmEn::Graphics
 			 * @param lightSet A reference to the scene light set.
 			 * @return bool
 			 */
-			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.

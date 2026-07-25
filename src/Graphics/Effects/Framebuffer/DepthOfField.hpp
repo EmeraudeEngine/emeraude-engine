@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -40,9 +41,17 @@
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**
-	 * @brief Depth of Field post-processing effect.
-	 * @note Computes Circle of Confusion from depth, applies a separable blur weighted by CoC,
-	 * then composites sharp and blurred regions.
+	 * @brief Depth of Field post-processing effect (physical camera model).
+	 * @note Production-grade gather DoF: signed circle of confusion (thin lens model),
+	 * near/far field separation with foreground silhouette bleeding (dilated near CoC),
+	 * golden-angle spiral disc gather (circular bokeh), and a smoothed auto-focus
+	 * (1x1 ping-pong history, exponential rack focus).
+	 * The OPTICAL parameters (aperture, focal length, focus distance, auto-focus) come
+	 * from the scene's ACTIVE CAMERA when one is present in the frame context — the
+	 * camera is the single source of truth of the photographic behaviour. The local
+	 * Parameters only act as a fallback without a camera, plus the effect-quality knobs.
+	 * Technique references: "Next Generation Post Processing in Call of Duty: Advanced
+	 * Warfare", J. Jimenez, SIGGRAPH 2014 (scatter-as-gather, near-field dilation).
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
 	class EMEN_API DepthOfField final : public IndirectPostProcessEffect
@@ -54,41 +63,79 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief User-facing depth of field parameters.
+			 * @note The first block mirrors the physical camera options and is ONLY used
+			 * when no active camera is provided by the frame context. The second block
+			 * holds the effect-quality knobs (overridden by settings keys at creation).
 			 */
 			struct EMEN_API Parameters
 			{
+				/* Optics fallback (the active camera overrides these). */
 				float focusDistance{10.0F};
 				float aperture{2.8F};
 				float focalLength{50.0F};
+				/* Effect-quality knobs (settings-driven). */
 				float cocScale{10.0F};
+				float maxCoCRadius{12.0F};
+				float autoFocusSpeed{3.0F};
+				uint32_t sampleCount{48};
 				bool autoFocus{true};
+				bool nearFieldEnabled{true};
 			};
 
 			/**
-			 * @brief Push constants for the CoC computation pass.
+			 * @brief Push constants for the auto-focus pass (1x1).
 			 */
-			struct EMEN_API CoCPushConstants
+			struct EMEN_API FocusPushConstants
 			{
 				float nearPlane;
 				float farPlane;
 				float focusDistance;
-				float aperture;
-				float focalLength;
-				float cocScale;
+				float autoFocusSpeed;
+				float time;
 				float texelSizeX;
 				float texelSizeY;
-				uint32_t autoFocus;
+				/* Bit 0 = auto-focus enabled, bit 1 = reset history (first frame). */
+				uint32_t flags;
 			};
 
 			/**
-			 * @brief Push constants for the blur pass.
+			 * @brief Push constants for the CoC setup pass.
 			 */
-			struct EMEN_API BlurPushConstants
+			struct EMEN_API SetupPushConstants
+			{
+				float nearPlane;
+				float farPlane;
+				float aperture;
+				float focalLength;
+				float cocScale;
+				float padding1;
+				float padding2;
+				float padding3;
+			};
+
+			/**
+			 * @brief Push constants for the near-CoC dilation passes.
+			 */
+			struct EMEN_API DilatePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
 				float directionX;
 				float directionY;
+				int32_t radius;
+				/* 1 = read the signed CoC from the source alpha (first pass), 0 = read R (second pass). */
+				uint32_t extractFromAlpha;
+			};
+
+			/**
+			 * @brief Push constants for the gather passes (far and near fields).
+			 */
+			struct EMEN_API GatherPushConstants
+			{
+				float texelSizeX;
+				float texelSizeY;
+				float maxCoCRadius;
+				uint32_t sampleCount;
 			};
 
 			/**
@@ -98,8 +145,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			{
 				float texelSizeX;
 				float texelSizeY;
-				float padding1;
-				float padding2;
+				uint32_t nearFieldEnabled;
+				float padding;
 			};
 
 			/**
@@ -134,7 +181,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Vulkan::TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -154,6 +201,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Sets the depth of field parameters.
+			 * @note The optical block only applies without an active camera in the frame
+			 * context; the effect-quality knobs apply at the next (re)creation.
 			 * @param parameters The new parameters.
 			 * @return void
 			 */
@@ -177,26 +226,41 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			Parameters m_parameters;
-			/* IRTs: CoC (half-res R16), blur H (half-res), blur V (half-res), composite (full-res). */
-			IntermediateRenderTarget m_cocTarget;
-			IntermediateRenderTarget m_blurHTarget;
-			IntermediateRenderTarget m_blurVTarget;
+			/* IRTs. Half-res working set; auto-focus history is a 1x1 RG32F ping-pong
+			 * (R = focus distance, G = timestamp for the rack-focus EMA); output full-res. */
+			std::array< IntermediateRenderTarget, 2 > m_focusTargets;
+			IntermediateRenderTarget m_setupTarget;
+			IntermediateRenderTarget m_dilateHTarget;
+			IntermediateRenderTarget m_dilateVTarget;
+			IntermediateRenderTarget m_farGatherTarget;
+			IntermediateRenderTarget m_nearGatherTarget;
 			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_cocPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_focusPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_setupPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_dilatePipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_farGatherPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_nearGatherPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
 			/* Pipeline layouts. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_cocLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_focusLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_setupLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_dilateLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_farGatherLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_nearGatherLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
-			/* Descriptor sets.
-			 * NOTE: m_cocPerFrame and m_compositePerFrame are updated every frame
-			 * in execute(), so they need per-frame-in-flight copies to avoid updating
-			 * a descriptor set still referenced by a pending command buffer. */
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_cocPerFrame;
+			/* Descriptor sets. Per-frame sets have their bindings rewritten in execute()
+			 * (input textures and the focus ping-pong), static sets are wired at creation. */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_focusPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_setupPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
+			std::unique_ptr< Vulkan::DescriptorSet > m_dilateHDescSet;
+			std::unique_ptr< Vulkan::DescriptorSet > m_dilateVDescSet;
+			std::unique_ptr< Vulkan::DescriptorSet > m_farGatherDescSet;
+			std::unique_ptr< Vulkan::DescriptorSet > m_nearGatherDescSet;
+			/* Ping-pong index of the focus history written THIS frame. */
+			uint32_t m_focusWriteIndex{0};
+			/* False until the focus history holds a valid value (forces a reset). */
+			bool m_focusValid{false};
 	};
 }

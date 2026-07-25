@@ -34,6 +34,7 @@
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -690,14 +691,28 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	ToneMapping::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, [[maybe_unused]] const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	ToneMapping::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		const auto & constants = context.constants;
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
+
+		/* Effective exposure: the ACTIVE CAMERA drives the photographic behaviour when
+		 * present (physical camera model). The exposure compensation is an EV bias:
+		 * each EV doubles/halves the light gathered. */
+		float exposure = m_parameters.exposure;
+		bool autoExposureEnabled = m_parameters.autoExposureEnabled;
+
+		if ( context.camera != nullptr )
+		{
+			exposure = m_parameters.exposure * std::exp2(context.camera->exposureCompensation());
+			autoExposureEnabled = context.camera->isAutoExposureEnabled();
+		}
 
 		/* Update the per-frame descriptor set for the HDR input. */
 		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
-		if ( m_parameters.autoExposureEnabled && !m_lumTargets.empty() )
+		if ( autoExposureEnabled && !m_lumTargets.empty() )
 		{
 			/* ---- Compute deltaTime ---- */
 			float deltaTime;
@@ -796,7 +811,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				static_cast< void >(m_autoExpDescPerFrame[frameIndex]->writeCombinedImageSampler(1, m_adaptTargets[m_currentAdaptIndex]));
 
 				const AutoExposurePushConstants pc{
-					.exposure = m_parameters.exposure,
+					.exposure = exposure,
 					.gamma = m_parameters.gamma,
 					.tonemapOperator = static_cast< uint32_t >(m_parameters.tonemapOperator),
 					.keyValue = m_parameters.keyValue,
@@ -826,7 +841,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_previousTime = constants.time;
 
 			const ToneMappingPushConstants pc{
-				.exposure = m_parameters.exposure,
+				.exposure = exposure,
 				.gamma = m_parameters.gamma,
 				.tonemapOperator = static_cast< uint32_t >(m_parameters.tonemapOperator),
 				.padding = 0.0F

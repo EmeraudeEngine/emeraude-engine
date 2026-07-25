@@ -72,11 +72,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				Operator tonemapOperator{Operator::ACESFilmic};
 				float exposure{1.0F};
 				float gamma{2.2F};
-				float keyValue{0.18F};
+				/* NOTE: Defaults calibrated for sRGB-correct textures (lower linear values
+				 * need a higher exposure target) — the values validated in the demo benches.
+				 * These are the values used by the camera-materialized instance (enableHDR()). */
+				float keyValue{0.5F};
 				float adaptSpeedUp{1.5F};
-				float adaptSpeedDown{3.0F};
+				float adaptSpeedDown{2.0F};
 				float minExposure{0.1F};
-				float maxExposure{10.0F};
+				float maxExposure{4.0F};
 				bool autoExposureEnabled{true};
 			};
 
@@ -123,7 +126,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Vulkan::TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/**
 			 * @brief Sets the tone mapping parameters.

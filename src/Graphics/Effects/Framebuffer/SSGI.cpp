@@ -640,8 +640,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	SSGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	SSGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		const auto * inputDepth = context.depth;
+		const auto * inputNormals = context.normals;
+		const auto * inputMaterialProperties = context.materialProperties;
+		const auto * inputAlbedo = context.albedo;
+		const auto & constants = context.constants;
+
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update depth + normals + scene color descriptors for this frame's trace pass. */

@@ -44,6 +44,7 @@
 #include "Physics/SphereCollisionModel.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
+#include "Scenes/EffectsToolkit/CameraPresets.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Scenes
@@ -434,11 +435,15 @@ namespace EmEn::Scenes
 			 * @param lookAt A position where the camera should initially look at. Default, [0,0,0].
 			 * @param primaryDevice Set the camera as the primary device. Default, 'false'.
 			 * @param showModel Enables a model to visualize the camera. Default, 'false'.
+			 * @param preset The photographic preset token (physical camera model): optics,
+			 * exposure, DoF/HDR materialization and lens effects in one word. Default, 'Normal'
+			 * (bare camera). NOTE: perspective cameras only — the thin-lens DoF model is
+			 * meaningless under an orthographic projection.
 			 * @return BuiltEntity< entity_t, Component::Camera >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Base::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept
+			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Base::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false, EffectsToolkit::CameraPreset preset = EffectsToolkit::CameraPreset::Normal) noexcept
 				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
@@ -462,6 +467,13 @@ namespace EmEn::Scenes
 				auto component = builder.setup([fov, distance] (auto & camera) {
 					camera.setPerspectiveProjection(fov, distance);
 				}).build();
+
+				/* Photographic preset (physical camera model). 'Normal' is a no-op on a
+				 * freshly built camera. */
+				if ( component != nullptr && preset != EffectsToolkit::CameraPreset::Normal )
+				{
+					EffectsToolkit::CameraPresets::Apply(*component, preset);
+				}
 
 				if ( showModel )
 				{

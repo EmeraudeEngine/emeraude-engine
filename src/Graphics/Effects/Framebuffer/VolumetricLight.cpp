@@ -382,8 +382,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	const TextureInterface &
-	VolumetricLight::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, [[maybe_unused]] const TextureInterface * inputNormals, [[maybe_unused]] const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept
+	VolumetricLight::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		const auto * inputDepth = context.depth;
+		const auto * lightSet = context.lightSet;
+		const auto & constants = context.constants;
+
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* 1. Project light direction to screen space.

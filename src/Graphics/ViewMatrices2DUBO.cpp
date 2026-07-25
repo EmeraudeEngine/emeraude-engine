@@ -294,6 +294,27 @@ namespace EmEn::Graphics
 		m_renderState[writeStateIndex] = m_logicState;
 	}
 
+	void
+	ViewMatrices2DUBO::archiveStateAfterRendering (uint32_t readStateIndex) noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return;
+			}
+		}
+
+		/* NOTE: The render state at this index is stable for the whole frame (the logic
+		 * thread publishes to the other index), so a plain copy on the render thread is safe. */
+		const auto & renderedState = m_renderState[readStateIndex];
+
+		m_previousState.view = renderedState.view;
+		m_previousState.projection = renderedState.projection;
+	}
+
 	bool
 	ViewMatrices2DUBO::updateVideoMemory (uint32_t readStateIndex) const noexcept
 	{

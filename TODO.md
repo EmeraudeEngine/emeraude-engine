@@ -46,16 +46,42 @@
   reflections) and produced the "reflections must match the raster" contract: shadow rays
   only for shadow-casting lights (per-light SSBO flag) + real scene ambient at hit points.
   See caution-points § "RTR Shadow Rays + The Reflections Must Match The Raster Contract".
-- [ ] **RTGI: read receiver albedo from the albedo G-buffer attachment** instead of the
-  per-pixel primary ray (−1 ray/pixel). Measured A/B (RenderDoc / frame time) required.
-- [ ] **GI second bounce** — one-bounce leaves fully-occluded floors/ceilings near lit
-  walls black (bounce hits on shadowed surfaces contribute zero direct light). Radiance
-  cache or recursive bounce; budget-gated (RTX 3070 Ti / 8 GB).
-- [ ] **GI temporal accumulation** — declined at step 1 (2026-07-05), still the best
-  noise-vs-cost lever at low spp.
-- [ ] **`GBufferInputs` struct refactor** — `IndirectPostProcessEffect::execute()` now
-  carries 6 texture/context params (albedo param added 2026-07-23 across all 16 effects);
-  group them in a struct in a dedicated mechanical pass.
+- [x] **RTGI: read receiver albedo from the albedo G-buffer attachment** — DONE 2026-07-24
+  (part of the temporal/multi-bounce work; the primary ray is gone, −1 ray/pixel).
+- [x] **GI second bounce** — DONE 2026-07-24 via the multi-bounce temporal feedback
+  (screen-space geometric series, `MultiBounce/Strength` = continuous bounce dial).
+  Validated in the `global-illumination` demo: +21% median where lit+penumbra co-visible.
+  KNOWN LIMIT: screen-space only — no propagation around never-co-visible corners; the
+  full fix remains a world-space cache (probes / surface cache), budget-gated.
+- [x] **GI temporal accumulation** — DONE 2026-07-24 (RTGI passes 4/5: temporal resolve +
+  world-normal history, camera-distance + normal validation, neighborhood clamp).
+  Static-geometry reprojection only (v1) — see motion vectors item below.
+- [ ] **Motion vectors (5th MRT attachment)** — required for correct temporal reprojection
+  of MOVING geometry (RTGI v1 ghosts on animated actors, bounded by history validation).
+  Chain: (B1) move scene-pass transforms from push constants to a per-instance SSBO —
+  ALSO fixes the 132-byte min-spec violation below; (B2) per-renderable previous model
+  matrix (Unique member; Multiple: +4 vec4/instance in the VBO); (B3) RG16F MRT attachment
+  (watch the depth clear index shift, same trap as the albedo attachment); (B4) skeletal:
+  previous pose retained + double skinning in the VS (permanent VS cost on humanoids).
+- [ ] **Push constant min-spec violation (132 B)** — `RenderableInstance/Unique.cpp`
+  `pushMatricesForRendering()`, `useAdvancedMatrices` path: view(64)+model(64)+frameIndex(4)
+  = 132 B > the 128 B Vulkan minimum guarantee → main pipelines would fail to build on
+  128 B devices (part of the AMD/Intel fleet). No engine-wide `maxPushConstantsSize`
+  validation exists either. Fixed by B1 above; add a creation-time validation regardless.
+  See caution-points § "Push Constants: the 128-Byte Minimum Guarantee".
+- [x] **`GBufferInputs` struct refactor** — DONE 2026-07-25 as
+  `IndirectPostProcessEffect::FrameContext` (G-buffers + lightSet + ACTIVE CAMERA +
+  push constants), mechanical pass across all 16 effects. Motivated by the physical
+  camera model (camera data had to reach the effects each frame).
+- [x] **Camera presets** — DONE 2026-07-25: `Scenes/EffectsToolkit/CameraPresets`
+  (Neutral, HighQuality, HumanEye, VintageBlackAndWhite, Super8), cycled with KeyPad7
+  in the projet-alpha demos. Validated on Sponza.
+- [ ] **Physical camera follow-ups** — (a) console commands for the camera optics
+  (`prévoir les possibilités`: the setters exist, the bindings don't); (b) focal length
+  → FOV coupling as an opt-in physical mode (sensorWidth); (c) full exposure triangle
+  (ISO/shutter) — requires scene luminance calibration; (d) bokeh aperture blades
+  (polygonal sample distribution in the DoF gather); (e) more presets (the LensPresets
+  catalog — GoldenHour, Analog80s... — can each become a full camera preset).
 
 ## Rendering
 

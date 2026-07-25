@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -36,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -66,24 +68,39 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				uint32_t blurRadius{4};
 				float depthSigma{1.0F};
 				float normalSigma{0.5F};
+				float temporalAlpha{0.1F};
+				float temporalDepthTolerance{0.05F};
+				float temporalNormalThreshold{0.8F};
+				float multiBounceStrength{1.0F};
+				float multiBounceClamp{4.0F};
+				bool temporalEnabled{true};
+				bool temporalNeighborhoodClamp{true};
+				bool multiBounceEnabled{true};
 			};
 
 			/**
-			 * @brief Push constants for the RTGI trace pass.
+			 * @brief Per-frame UBO shared by the trace, temporal-resolve and normal-history passes.
+			 * @note Replaces the former trace push constants: with the previous-frame matrices the
+			 * data exceeds the 128-byte Vulkan push constant minimum guarantee (maxPushConstantsSize).
+			 * Layout is std140-compatible (mat4 and vec4 members only).
 			 */
-			struct EMEN_API TracePushConstants
+			struct EMEN_API FrameUBOData
 			{
 				std::array< float, 16 > invViewProj;
+				std::array< float, 16 > prevViewProj;
 				std::array< float, 3 > invViewCol0;
 				float viewPosX;
 				std::array< float, 3 > invViewCol1;
 				float viewPosY;
 				std::array< float, 3 > invViewCol2;
 				float viewPosZ;
-				float maxDistance;
-				float intensity;
-				float bias;
-				uint32_t sampleCount;
+				std::array< float, 4 > prevCamPos;
+				/* maxDistance, bias, sampleCount (as float), unused. */
+				std::array< float, 4 > traceParams;
+				/* alpha, depthTolerance, normalThreshold, flags (bit 0 = neighborhood clamp). */
+				std::array< float, 4 > temporalParams;
+				/* strength, clamp, unused, unused. */
+				std::array< float, 4 > bounceParams;
 			};
 
 			/**
@@ -144,7 +161,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Vulkan::TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept override;
+			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -166,6 +183,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			[[nodiscard]]
 			bool
 			requiresMaterialProperties () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresAlbedo() */
+			[[nodiscard]]
+			bool
+			requiresAlbedo () const noexcept override
 			{
 				return true;
 			}
@@ -208,18 +233,35 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
 			IntermediateRenderTarget m_outputTarget;
+			/* Temporal history (half-res, ping-pong): RGB = resolved indirect radiance,
+			 * A = camera distance of the pixel (0 = invalid/sky). Plus the world-space
+			 * normal history used for disocclusion rejection. */
+			std::array< IntermediateRenderTarget, 2 > m_historyTargets;
+			std::array< IntermediateRenderTarget, 2 > m_normalHistoryTargets;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_applyPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_normalCopyLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_temporalPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_normalCopyPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
+			/* Per-frame UBOs shared by trace/temporal/normal-copy passes. */
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_frameUBOs;
+			/* Ping-pong index of the history buffer written THIS frame. */
+			uint32_t m_historyWriteIndex{0};
+			/* False until a first frame filled the history (forces alpha=1, no feedback). */
+			bool m_historyValid{false};
 	};
 }

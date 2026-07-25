@@ -986,6 +986,30 @@ if ( materialType == PBRResource::ClassId )
 
 ## Shader/GLSL Pitfalls
 
+### Push Constants: the 128-Byte Minimum Guarantee (Jul 2026)
+
+> [!CRITICAL]
+> The Vulkan spec only guarantees **128 bytes** for `maxPushConstantsSize`. NVIDIA exposes
+> 256, but part of the AMD/Intel fleet exposes exactly 128 — a pipeline layout declaring a
+> larger range fails to create there (`vkCreatePipelineLayout` rejects it). The engine
+> currently has **NO validation** of this limit anywhere.
+
+**Known state:**
+- RTGI's former trace push constants were exactly 128 B; adding the previous-frame matrix
+  for temporal reprojection forced the migration to a **per-frame UBO** (`FrameUBOData`).
+  Use the same pattern for any effect whose per-frame data outgrows 128 B:
+  `IndirectPostProcessEffect::getInputLayout(samplerCount, uniformBufferCount)` +
+  `createPerFrameUniformBuffers()` + `updateUniformBufferData()`.
+- **OPEN ISSUE:** the scene-pass `useAdvancedMatrices` path pushes **132 bytes**
+  (view 64 + model 64 + frameIndex 4 — `RenderableInstance/Unique.cpp`,
+  `pushMatricesForRendering()`). This exceeds the min-spec TODAY: on a 128-byte device the
+  main rendering pipelines would not build. Fix = move scene-pass transforms to a
+  per-instance SSBO (also the prerequisite for motion vectors). Tracked in projet-alpha
+  `TODO.md`.
+
+**Rule:** before adding ANY field to a push constant block, sum the struct size; at
+> 128 B, migrate to a UBO/SSBO instead. Never rely on the 256 B NVIDIA limit.
+
 ### GLSL smoothstep Undefined Behavior
 
 > [!CRITICAL]

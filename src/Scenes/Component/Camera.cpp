@@ -172,6 +172,34 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	Camera::enableDepthOfField (bool state) noexcept
+	{
+		if ( this->isFlagEnabled(DepthOfFieldEnabled) == state )
+		{
+			return;
+		}
+
+		this->setFlag(DepthOfFieldEnabled, state);
+
+		/* The scene observes its active camera and (de)materializes the effect. */
+		this->notify(PhysicalEffectsToggled);
+	}
+
+	void
+	Camera::enableHDR (bool state) noexcept
+	{
+		if ( this->isFlagEnabled(HDREnabled) == state )
+		{
+			return;
+		}
+
+		this->setFlag(HDREnabled, state);
+
+		/* The scene observes its active camera and (de)materializes the effect. */
+		this->notify(PhysicalEffectsToggled);
+	}
+
+	void
 	Camera::addLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
 		/* We don't want to notify an effect twice. */
@@ -224,6 +252,23 @@ namespace EmEn::Scenes::Component
 
 			case Distance  :
 				this->setDistance(value.asFloat());
+				return true;
+
+			case Aperture :
+				this->setAperture(value.asFloat());
+				return true;
+
+			case FocalLength :
+				this->setFocalLength(value.asFloat());
+				return true;
+
+			/* NOTE: Animating the focus = a focus pull; it implies manual focus. */
+			case FocusDistance :
+				this->setFocusDistance(value.asFloat());
+				return true;
+
+			case ExposureCompensation :
+				this->setExposureCompensation(value.asFloat());
 				return true;
 
 			default:

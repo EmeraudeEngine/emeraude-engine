@@ -27,6 +27,7 @@
 #include "IndirectPostProcessEffect.hpp"
 
 /* STL inclusions. */
+#include <cstring>
 #include <string>
 
 /* Local inclusions. */
@@ -42,6 +43,7 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 static constexpr auto TracerTag{"IndirectPostProcessEffect"};
 /* NOLINTEND(cert-err58-cpp) */
@@ -196,14 +198,18 @@ namespace EmEn::Graphics
 		};
 		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
-		vkCmdPushConstants(
-			commandBuffer.handle(),
-			pipelineLayout.handle(),
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-			0,
-			pushConstantsSize,
-			pushConstants
-		);
+		/* NOTE: Passes using a per-frame UBO instead of push constants pass nullptr/0. */
+		if ( pushConstants != nullptr && pushConstantsSize > 0 )
+		{
+			vkCmdPushConstants(
+				commandBuffer.handle(),
+				pipelineLayout.handle(),
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				pushConstantsSize,
+				pushConstants
+			);
+		}
 
 		commandBuffer.bind(descriptorSet, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 
@@ -215,11 +221,18 @@ namespace EmEn::Graphics
 	/* ---- Shared descriptor set layout helpers ---- */
 
 	std::shared_ptr< DescriptorSetLayout >
-	IndirectPostProcessEffect::getInputLayout (uint32_t samplerCount) const noexcept
+	IndirectPostProcessEffect::getInputLayout (uint32_t samplerCount, uint32_t uniformBufferCount) const noexcept
 	{
 		auto & layoutManager = m_renderer.layoutManager();
 
-		const auto layoutId = "PostProcess_" + std::to_string(samplerCount) + "Sampler";
+		/* NOTE: The historical "PostProcess_NSampler" identifier is kept unchanged for
+		 * sampler-only layouts, so every pre-existing shared layout stays cache-compatible. */
+		auto layoutId = "PostProcess_" + std::to_string(samplerCount) + "Sampler";
+
+		if ( uniformBufferCount > 0 )
+		{
+			layoutId += "_" + std::to_string(uniformBufferCount) + "UBO";
+		}
 
 		auto layout = layoutManager.getDescriptorSetLayout(layoutId);
 
@@ -233,6 +246,12 @@ namespace EmEn::Graphics
 				layout->declareCombinedImageSampler(bindingIndex, VK_SHADER_STAGE_FRAGMENT_BIT);
 			}
 
+			/* Uniform buffers are laid out after the samplers. */
+			for ( uint32_t bufferIndex = 0; bufferIndex < uniformBufferCount; ++bufferIndex )
+			{
+				layout->declareUniformBuffer(samplerCount + bufferIndex, VK_SHADER_STAGE_FRAGMENT_BIT);
+			}
+
 			if ( !layoutManager.createDescriptorSetLayout(layout) )
 			{
 				return nullptr;
@@ -240,6 +259,51 @@ namespace EmEn::Graphics
 		}
 
 		return layout;
+	}
+
+	/* ---- Shared per-frame uniform buffer allocation ---- */
+
+	std::vector< std::unique_ptr< UniformBufferObject > >
+	IndirectPostProcessEffect::createPerFrameUniformBuffers (VkDeviceSize size, const char * classId, const std::string & baseName) const noexcept
+	{
+		const auto frameCount = m_renderer.framesInFlight();
+
+		std::vector< std::unique_ptr< UniformBufferObject > > result;
+		result.reserve(frameCount);
+
+		for ( uint32_t f = 0; f < frameCount; ++f )
+		{
+			auto ubo = std::make_unique< UniformBufferObject >(m_renderer.device(), size);
+			ubo->setIdentifier(classId, baseName + "-F" + std::to_string(f), "UniformBufferObject");
+
+			if ( !ubo->createOnHardware() )
+			{
+				TraceError{TracerTag} << "Failed to create uniform buffer '" << baseName << "' for frame " << f << " !";
+
+				return {};
+			}
+
+			result.emplace_back(std::move(ubo));
+		}
+
+		return result;
+	}
+
+	bool
+	IndirectPostProcessEffect::updateUniformBufferData (const UniformBufferObject & uniformBufferObject, const void * data, size_t size) noexcept
+	{
+		auto * pointer = uniformBufferObject.mapMemoryAs< uint8_t >(0, VK_WHOLE_SIZE);
+
+		if ( pointer == nullptr )
+		{
+			return false;
+		}
+
+		std::memcpy(pointer, data, size);
+
+		uniformBufferObject.unmapMemory();
+
+		return true;
 	}
 
 	/* ---- Shared per-frame descriptor set allocation ---- */

@@ -49,11 +49,17 @@ namespace EmEn
 		class PipelineLayout;
 		class ShaderModule;
 		class TextureInterface;
+		class UniformBufferObject;
 	}
 
 	namespace Scenes
 	{
 		class LightSet;
+
+		namespace Component
+		{
+			class Camera;
+		}
 	}
 
 	namespace Graphics
@@ -236,20 +242,48 @@ namespace EmEn::Graphics
 			virtual bool resize (uint32_t width, uint32_t height) noexcept;
 
 			/**
+			 * @brief Returns whether this effect must execute AFTER the tone mapping (HDR resolve).
+			 * @note Phase contract for the chain ordering: LDR effects (antialiasing, sharpening)
+			 * operate on display-referred values and misbehave on linear HDR input (posterization,
+			 * halo streaks). The camera-driven photographic effects (DepthOfField, ToneMapping)
+			 * are inserted BEFORE the first effect returning true. Default: false (scene/HDR effect).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			runsAfterToneMapping () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Per-frame context shared by the whole effect chain.
+			 * @note Groups the G-buffer inputs, the scene lighting, the ACTIVE CAMERA (single
+			 * source of truth for the photographic options — physical camera model) and the
+			 * frame push constants. Texture/scene pointers may be null when unavailable.
+			 */
+			struct EMEN_API FrameContext
+			{
+				const Vulkan::TextureInterface * depth{nullptr};
+				const Vulkan::TextureInterface * normals{nullptr};
+				const Vulkan::TextureInterface * materialProperties{nullptr};
+				const Vulkan::TextureInterface * albedo{nullptr};
+				const Scenes::LightSet * lightSet{nullptr};
+				const Scenes::Component::Camera * camera{nullptr};
+				PostProcessor::PushConstants constants{};
+			};
+
+			/**
 			 * @brief Executes the effect for the current frame.
 			 * @note Called outside any active render pass. The effect manages its own render passes.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param inputColor The input color texture to process.
-			 * @param inputDepth The input depth texture (maybe nullptr if not available).
-			 * @param inputNormals The input normals texture (maybe nullptr if not available).
-			 * @param inputMaterialProperties The input material properties texture (maybe nullptr if not available).
-			 * @param inputAlbedo The input albedo texture (maybe nullptr if not available).
-			 * @param lightSet The scene light set for lighting queries (maybe nullptr if not available).
-			 * @param constants The current post-processing push constants.
+			 * @param context The per-frame chain context (G-buffers, light set, active camera, constants).
 			 * @return const Vulkan::TextureInterface & The output texture to pass to the next effect.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const Vulkan::TextureInterface * inputDepth, const Vulkan::TextureInterface * inputNormals, const Vulkan::TextureInterface * inputMaterialProperties, const Vulkan::TextureInterface * inputAlbedo, const Scenes::LightSet * lightSet, const PostProcessor::PushConstants & constants) noexcept = 0;
+			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept = 0;
 
 		protected:
 
@@ -336,12 +370,40 @@ void main()
 			/* ---- Shared descriptor set layout helpers ---- */
 
 			/**
-			 * @brief Returns a shared descriptor set layout with N combined image samplers.
+			 * @brief Returns a shared descriptor set layout with N combined image samplers and M uniform buffers.
+			 * @note Bindings are laid out samplers first: samplers at [0 .. samplerCount-1],
+			 * then uniform buffers at [samplerCount .. samplerCount+uniformBufferCount-1].
+			 * Effects whose per-frame parameters exceed the 128-byte Vulkan push constant
+			 * minimum guarantee (maxPushConstantsSize) MUST use a uniform buffer instead.
 			 * @param samplerCount The number of combined image samplers (1, 2, 3, etc.).
+			 * @param uniformBufferCount The number of uniform buffers. Default 0 (samplers only).
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::DescriptorSetLayout > getInputLayout (uint32_t samplerCount) const noexcept;
+			std::shared_ptr< Vulkan::DescriptorSetLayout > getInputLayout (uint32_t samplerCount, uint32_t uniformBufferCount = 0) const noexcept;
+
+			/**
+			 * @brief Allocates per-frame uniform buffers (one per frame-in-flight).
+			 * @note Host-visible buffers intended for parameters rewritten every frame;
+			 * pair each buffer with the matching per-frame descriptor set. Returns an
+			 * empty vector on failure.
+			 * @param size The size of one buffer in bytes.
+			 * @param classId The class identifier for debug tracing.
+			 * @param baseName The base name for buffer identification.
+			 * @return std::vector< std::unique_ptr< Vulkan::UniformBufferObject > >
+			 */
+			[[nodiscard]]
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > createPerFrameUniformBuffers (VkDeviceSize size, const char * classId, const std::string & baseName) const noexcept;
+
+			/**
+			 * @brief Writes CPU data into a host-visible uniform buffer.
+			 * @param uniformBufferObject A reference to the uniform buffer.
+			 * @param data Pointer to the source data.
+			 * @param size Size of the data in bytes.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool updateUniformBufferData (const Vulkan::UniformBufferObject & uniformBufferObject, const void * data, size_t size) noexcept;
 
 			/**
 			 * @brief Allocates per-frame descriptor sets (one per frame-in-flight).

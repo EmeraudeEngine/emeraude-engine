@@ -1025,7 +1025,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -1040,15 +1040,6 @@ namespace EmEn::Graphics
 		const auto & extent = mainRT->extent();
 		const auto fovDeg = mainRT->viewMatrices().fieldOfView();
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
-
-		const PushConstants pc{
-			.frameWidth = static_cast< float >(extent.width),
-			.frameHeight = static_cast< float >(extent.height),
-			.time = elapsedTime,
-			.nearPlane = m_nearPlane,
-			.farPlane = m_farPlane,
-			.tanHalfFovY = tanHalfFovY
-		};
 
 		/* Execute each enabled effect in the chain.
 		 * Each effect receives the output of the previous one.
@@ -1067,6 +1058,25 @@ namespace EmEn::Graphics
 
 		const GrabPassAlbedoAdapter albedoAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * albedoTexture = m_grabPass->hasAlbedo() ? &albedoAdapter : nullptr;
+
+		/* Per-frame chain context: G-buffers, scene lighting, the active camera (single
+		 * source of truth for the photographic options) and the frame push constants. */
+		const IndirectPostProcessEffect::FrameContext context{
+			.depth = depthTexture,
+			.normals = normalsTexture,
+			.materialProperties = materialPropertiesTexture,
+			.albedo = albedoTexture,
+			.lightSet = lightSet,
+			.camera = activeCamera,
+			.constants = PushConstants{
+				.frameWidth = static_cast< float >(extent.width),
+				.frameHeight = static_cast< float >(extent.height),
+				.time = elapsedTime,
+				.nearPlane = m_nearPlane,
+				.farPlane = m_farPlane,
+				.tanHalfFovY = tanHalfFovY
+			}
+		};
 
 		for ( const auto & effect : stack.effects() )
 		{
@@ -1117,7 +1127,7 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, materialPropertiesTexture, albedoTexture, lightSet, pc);
+			currentTexture = &effect->execute(commandBuffer, *currentTexture, context);
 		}
 
 		/* Update only the current frame's descriptor set to point to the effect chain output

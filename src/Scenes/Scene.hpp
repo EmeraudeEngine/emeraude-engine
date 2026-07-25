@@ -748,6 +748,18 @@ namespace EmEn::Scenes
 			Component::Camera * activeCamera () noexcept;
 
 			/**
+			 * @brief Performs a camera cut: the camera becomes the rendered point of view
+			 * AND the photographic authority (physical camera model).
+			 * @note Reroutes the primary video source through the AVConsole, then transfers
+			 * the active-camera role. Each camera keeps its own photographic setup
+			 * (optics, exposure, DoF/HDR, lens effects): cutting swaps the whole look.
+			 * @param camera A reference to the camera to cut to.
+			 * @return bool Whether the cut succeeded.
+			 */
+			[[nodiscard]]
+			bool switchToCamera (Component::Camera & camera) noexcept;
+
+			/**
 			 * @brief Manually sets the active camera for this scene.
 			 * @param camera Pointer to the camera component, or nullptr to clear.
 			 */

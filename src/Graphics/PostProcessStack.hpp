@@ -40,6 +40,11 @@ namespace EmEn::Graphics
 	class Renderer;
 }
 
+namespace EmEn::Scenes::Component
+{
+	class Camera;
+}
+
 namespace EmEn::Graphics
 {
 	/**
@@ -79,6 +84,21 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void removeEffect (const std::shared_ptr< IndirectPostProcessEffect > & effect) noexcept;
+
+			/**
+			 * @brief Synchronizes the CAMERA-DRIVEN photographic effects with the active camera.
+			 * @note Physical camera contract: the camera declares its photographic behaviour
+			 * (enableDepthOfField()/enableHDR()); this call (de)materializes the matching effects
+			 * at the END of the chain, in canonical order (DepthOfField then ToneMapping last).
+			 * Scene effects (GI, AO, fog...) added by the application are left untouched.
+			 * Called by the Renderer once per frame, on the render thread; removed effects are
+			 * retired through the deferred destructor (frames-in-flight safety).
+			 * @param camera The scene's active camera (nullptr = no photographic effects).
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool Whether the effect set changed (the pipeline must be reconfigured).
+			 */
+			[[nodiscard]]
+			bool syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Clears the entire effect chain.
@@ -178,5 +198,9 @@ namespace EmEn::Graphics
 		private:
 
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_effects;
+			/* Camera-driven photographic effects (physical camera contract). Kept aside to
+			 * distinguish them from the application/scene effects inside m_effects. */
+			std::shared_ptr< IndirectPostProcessEffect > m_cameraDepthOfField;
+			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
 	};
 }

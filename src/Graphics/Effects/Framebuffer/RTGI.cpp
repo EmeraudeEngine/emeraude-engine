@@ -40,11 +40,11 @@ namespace
 {
 	using namespace EmEn;
 
-	/* RTGI trace pass: one-bounce diffuse indirect lighting.
-	 * For each pixel, casts hemisphere rays against the TLAS. On hit,
-	 * samples the surface albedo (bindless texture or scalar) and computes
-	 * direct lighting at the hit point. The result is indirect radiance
-	 * that produces color bleeding effects.
+	/* RTGI trace pass: one traced diffuse bounce per frame, plus the multi-bounce
+	 * temporal feedback. For each pixel, casts hemisphere rays against the TLAS. On hit,
+	 * samples the surface albedo (bindless texture or scalar), computes direct lighting
+	 * at the hit point, and re-injects the hit surface's accumulated indirect radiance
+	 * from the previous frame's history (geometric series → multi-bounce at steady state).
 	 *
 	 * Descriptor set 0 (RT data — bound from Renderer::rtDescriptorSet()):
 	 *   binding 0: accelerationStructureEXT (TLAS)
@@ -52,9 +52,12 @@ namespace
 	 *   binding 2: RTMaterialData SSBO
 	 *   binding 3: RTLightData SSBO
 	 *
-	 * Descriptor set 1 (input textures — per-frame):
+	 * Descriptor set 1 (input textures + frame UBO — per-frame):
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
+	 *   binding 2: albedo G-buffer texture
+	 *   binding 3: GI history texture (previous resolved frame)
+	 *   binding 4: frame UBO (matrices + parameters — exceeds the 128-byte push constant minimum)
 	 *
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
@@ -92,24 +95,30 @@ layout(set = 0, binding = 3) readonly buffer LightData
 	vec4 lights[];
 } lightSSBO;
 
-/* Input textures (set 1). */
+/* Input textures + frame UBO (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
+layout(set = 1, binding = 2) uniform sampler2D albedoTex;
+layout(set = 1, binding = 3) uniform sampler2D historyTex;
+
+layout(set = 1, binding = 4, std140) uniform FrameData
+{
+	mat4 invViewProj;
+	mat4 prevViewProj;
+	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
+	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
+	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
+	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+};
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array. */
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
 
-layout(push_constant) uniform PushConstants
-{
-	mat4 invViewProj;
-	vec3 invViewCol0; float viewPosX;
-	vec3 invViewCol1; float viewPosY;
-	vec3 invViewCol2; float viewPosZ;
-	float maxDistance;
-	float intensity;
-	float bias;
-	uint sampleCount;
-};
+/* NOTE: GLSL has no built-in PI constant. */
+const float PI = 3.14159265;
 
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture = 1u;
@@ -203,13 +212,53 @@ vec2 hash2 (uvec2 p)
 }
 
 /* Generate a cosine-weighted hemisphere sample direction. */
-vec3 hemispherePoint (uint i, vec2 noise)
+vec3 hemispherePoint (uint i, uint sampleCount, vec2 noise)
 {
 	float fi = float(i);
 	float angle = fi * 2.399963 + noise.x * 6.283185;
 	float r = sqrt((fi + 0.5) / float(sampleCount));
 	float z = sqrt(1.0 - r * r);
 	return vec3(cos(angle) * r, sin(angle) * r, z);
+}
+
+/* Multi-bounce feedback: fetch the accumulated indirect radiance the hit surface had in the
+ * previous resolved frame. The history stores OUTGOING indirect radiance (receiver albedo
+ * already applied), so the geometric series is naturally damped by the surface albedo and
+ * converges as long as the albedo is physical (< 1). Validated against the camera distance
+ * stored in the history alpha channel (0 = invalid/sky), clamped against fireflies. */
+vec3 historyFeedback (vec3 hitPos)
+{
+	if (bounceParams.x <= 0.0)
+	{
+		return vec3(0.0);
+	}
+
+	vec4 prevClip = prevViewProj * vec4(hitPos, 1.0);
+
+	if (prevClip.w <= 0.0)
+	{
+		return vec3(0.0);
+	}
+
+	vec2 prevUV = (prevClip.xy / prevClip.w) * 0.5 + 0.5;
+
+	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
+	{
+		return vec3(0.0);
+	}
+
+	vec4 history = texture(historyTex, prevUV);
+
+	/* Disocclusion test: the camera distance is rotation-invariant, so a simple relative
+	 * comparison rejects histories belonging to another surface. */
+	float expectedDistance = length(hitPos - prevCamPos.xyz);
+
+	if (history.a <= 0.0 || abs(history.a - expectedDistance) > temporalParams.y * expectedDistance)
+	{
+		return vec3(0.0);
+	}
+
+	return min(history.rgb, vec3(bounceParams.y)) * bounceParams.x;
 }
 
 /* Shadow ray: returns 1.0 when the path from the surface toward the light is unoccluded,
@@ -304,7 +353,8 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 		 * on screen, and the indirect bounce must match the rendered scene. */
 		if (lightSSBO.lights[base + 3u].z > 0.5)
 		{
-			vec3 shadowOrigin = hitPos + hitNormal * max(bias, 0.001);
+			/* traceParams.y = bias (frame UBO). */
+			vec3 shadowOrigin = hitPos + hitNormal * max(traceParams.y, 0.001);
 			visibility = shadowRayVisibility(shadowOrigin, L, shadowDistance);
 		}
 
@@ -341,8 +391,14 @@ void main()
 	vec4 wp = invViewProj * clipPos;
 	vec3 worldPos = wp.xyz / wp.w;
 
+	/* Unpack the frame UBO scalars. */
+	float maxDistance = traceParams.x;
+	float bias = traceParams.y;
+	uint sampleCount = uint(traceParams.z);
+	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
+
 	/* Transform view-space normal to world space. */
-	mat3 invViewRot = mat3(invViewCol0, invViewCol1, invViewCol2);
+	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
 	vec3 worldNormal = normalize(invViewRot * normalize(rawN));
 
 	/* Build a tangent frame (TBN) around the world normal for hemisphere sampling. */
@@ -357,8 +413,8 @@ void main()
 	/* Adaptive bias: scale with camera distance AND grazing angle.
 	 * Distance: pixel footprint grows → needs larger offset.
 	 * NdotV: at grazing angles, rays easily clip the surface → needs extra offset. */
-	vec3 viewDir = normalize(worldPos - vec3(viewPosX, viewPosY, viewPosZ));
-	float cameraDist = length(worldPos - vec3(viewPosX, viewPosY, viewPosZ));
+	vec3 viewDir = normalize(worldPos - viewPos);
+	float cameraDist = length(worldPos - viewPos);
 	float NdotV = max(abs(dot(worldNormal, -viewDir)), 0.001);
 	float grazingFactor = 1.0 / NdotV;
 	float adaptiveBias = bias * max(1.0, cameraDist) * min(grazingFactor, 10.0);
@@ -373,61 +429,19 @@ void main()
 	 * For simplicity, we hard-limit to 16 lights for GI bounces. */
 	uint lightCount = min(uint(lightSSBO.lights.length()) / 4u, 16u);
 
-	/* Receiver albedo, fetched via a primary ray from the camera to this pixel's surface.
-	 * This engine has no albedo G-buffer (only the lit colour), so we recover the receiver's
-	 * base colour from the same RT material SSBO the bounces use. Without it, the indirect diffuse
-	 * is added un-modulated: a coloured surface lit only by (white) indirect light shows the raw
-	 * incoming colour instead of albedo * irradiance — e.g. a yellow column looked grey/white. */
-	vec3 receiverAlbedo = vec3(1.0);
-	{
-		vec3 camPos = vec3(viewPosX, viewPosY, viewPosZ);
-		vec3 toPixel = worldPos - camPos;
-		float pixelDist = length(toPixel);
-		vec3 primDir = toPixel / max(pixelDist, 0.0001);
-
-		rayQueryEXT primQuery;
-		rayQueryInitializeEXT(
-			primQuery, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF,
-			camPos, 0.0, primDir, pixelDist * 1.02
-		);
-
-		while (rayQueryProceedEXT(primQuery)) {}
-
-		if (rayQueryGetIntersectionTypeEXT(primQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
-		{
-			uint pInst = rayQueryGetIntersectionInstanceCustomIndexEXT(primQuery, true);
-			uint pPrim = rayQueryGetIntersectionPrimitiveIndexEXT(primQuery, true);
-			vec2 pBary = rayQueryGetIntersectionBarycentricsEXT(primQuery, true);
-
-			uint pGeom = rayQueryGetIntersectionGeometryIndexEXT(primQuery, true);
-			uint pSubGeoCount = meshSSBO.meshEntries[pInst * 3u + 1u].w;
-			uint pEffGeom = (pGeom < pSubGeoCount) ? pGeom : 0u;
-			uint pMatIndex = meshSSBO.meshEntries[pInst * 3u + 2u][pEffGeom];
-			uint pMatBase = pMatIndex * 7u;
-
-			receiverAlbedo = materialSSBO.materials[pMatBase].rgb;
-			uint pFlags = floatBitsToUint(materialSSBO.materials[pMatBase + 4u].w);
-
-			if ((pFlags & HasAlbedoTexture) != 0u)
-			{
-				int pTexIndex = floatBitsToInt(materialSSBO.materials[pMatBase + 5u].x);
-
-				if (pTexIndex >= 0)
-				{
-					MeshAccessor pMesh = getMeshAccessor(pInst, pPrim);
-					vec2 pUV = getHitUV(pMesh, pBary);
-					receiverAlbedo = texture(textures2D[nonuniformEXT(pTexIndex)], pUV).rgb;
-				}
-			}
-		}
-	}
+	/* Receiver albedo from the albedo G-buffer (sRGB attachment → linear on sample).
+	 * Without it, the indirect diffuse is added un-modulated: a coloured surface lit only
+	 * by (white) indirect light shows the raw incoming colour instead of albedo * irradiance.
+	 * NOTE: This replaced a per-pixel primary ray (camera → surface) that recovered the
+	 * albedo from the RT material SSBO before the albedo MRT attachment existed. */
+	vec3 receiverAlbedo = texture(albedoTex, vUV).rgb;
 
 	/* Accumulate indirect radiance. */
 	vec3 indirectLight = vec3(0.0);
 
 	for (uint i = 0u; i < sampleCount; ++i)
 	{
-		vec3 sampleDir = TBN * hemispherePoint(i, noiseVec);
+		vec3 sampleDir = TBN * hemispherePoint(i, sampleCount, noiseVec);
 
 		/* Ensure the sample direction is in the hemisphere of the normal. */
 		if (dot(sampleDir, worldNormal) < 0.0)
@@ -491,14 +505,17 @@ void main()
 			/* Compute direct lighting at the hit point. */
 			vec3 lighting = computeDirectLighting(hitPos, hitNormal, lightCount);
 
-			/* The indirect radiance is the hit surface's albedo lit by direct light.
-			 * This is the one-bounce diffuse GI contribution.
+			/* The indirect radiance is the hit surface's albedo lit by direct light
+			 * (one traced bounce), PLUS the indirect radiance the hit surface itself
+			 * accumulated in the previous resolved frame (multi-bounce feedback).
+			 * The feedback is NOT multiplied by the hit albedo: the history already
+			 * stores outgoing radiance (receiver albedo applied at resolve time).
 			 * Cosine-weighted by the hemisphere sampling (implicit in the distribution).
 			 * Distance attenuation: closer bounces contribute more. */
 			float distFade = 1.0 - clamp(hitT / maxDistance, 0.0, 1.0);
 
 			/* Lambert BRDF energy conservation: divide by PI. */
-			indirectLight += (albedo / 3.14159265) * lighting * distFade;
+			indirectLight += ((albedo / PI) * lighting + historyFeedback(hitPos)) * distFade;
 		}
 	}
 
@@ -593,6 +610,180 @@ void main()
 }
 )GLSL";
 
+	/* Temporal resolve pass: exponential moving average between the current blurred GI and
+	 * the reprojected history. The history UV is found by projecting the pixel's world
+	 * position through the PREVIOUS frame's view-projection (static-geometry reprojection —
+	 * per-object motion vectors come later with the dedicated MRT attachment). History is
+	 * rejected on disocclusion (camera-distance mismatch, normal mismatch) and optionally
+	 * clamped to the current 3x3 neighbourhood range (anti-ghosting).
+	 * Output: RGB = resolved indirect radiance, A = camera distance (0 = invalid/sky).
+	 *
+	 * Descriptor set 0:
+	 *   binding 0: current blurred GI (blur V output)
+	 *   binding 1: depth texture
+	 *   binding 2: normals texture (view space)
+	 *   binding 3: GI history texture (previous resolved frame)
+	 *   binding 4: world-normal history texture (previous frame)
+	 *   binding 5: frame UBO (shared with the trace pass)
+	 */
+	constexpr auto RTGITemporalFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outResolved;
+
+layout(set = 0, binding = 0) uniform sampler2D giTex;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2) uniform sampler2D normalTex;
+layout(set = 0, binding = 3) uniform sampler2D historyTex;
+layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
+
+layout(set = 0, binding = 5, std140) uniform FrameData
+{
+	mat4 invViewProj;
+	mat4 prevViewProj;
+	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
+	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
+	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
+	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+};
+
+void main()
+{
+	float depth = texture(depthTex, vUV).r;
+
+	/* Sky/far-plane: no surface, invalid history marker (a = 0). */
+	if (depth >= 1.0)
+	{
+		outResolved = vec4(0.0);
+		return;
+	}
+
+	vec3 current = texture(giTex, vUV).rgb;
+
+	/* Reconstruct world-space position from NDC + depth via inverse VP. */
+	vec2 ndc = vUV * 2.0 - 1.0;
+	vec4 clipPos = vec4(ndc, depth, 1.0);
+	vec4 wp = invViewProj * clipPos;
+	vec3 worldPos = wp.xyz / wp.w;
+
+	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
+	float cameraDistance = length(worldPos - viewPos);
+
+	/* Current world-space normal, for the history normal comparison. */
+	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
+	vec3 worldNormal = normalize(invViewRot * normalize(texture(normalTex, vUV).rgb));
+
+	float alpha = temporalParams.x;
+
+	/* Reproject into the previous frame. */
+	vec4 prevClip = prevViewProj * vec4(worldPos, 1.0);
+
+	if (prevClip.w <= 0.0)
+	{
+		outResolved = vec4(current, cameraDistance);
+		return;
+	}
+
+	vec2 prevUV = (prevClip.xy / prevClip.w) * 0.5 + 0.5;
+
+	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
+	{
+		/* Off-screen: no history, full weight on the current estimate. */
+		outResolved = vec4(current, cameraDistance);
+		return;
+	}
+
+	vec4 history = texture(historyTex, prevUV);
+
+	/* Disocclusion test 1: camera-distance mismatch (rotation-invariant). */
+	float expectedDistance = length(worldPos - prevCamPos.xyz);
+	bool distanceValid = history.a > 0.0 && abs(history.a - expectedDistance) <= temporalParams.y * expectedDistance;
+
+	/* Disocclusion test 2: world-normal mismatch (silhouettes, grazing surfaces). */
+	vec3 prevNormal = texture(historyNormalTex, prevUV).xyz;
+	bool normalValid = dot(prevNormal, worldNormal) >= temporalParams.z;
+
+	if (!distanceValid || !normalValid)
+	{
+		outResolved = vec4(current, cameraDistance);
+		return;
+	}
+
+	/* Neighborhood clamp (flag bit 0): bound the history to the current 3x3 range so a
+	 * stale-but-plausible history cannot drag the result far from what is observed now. */
+	if ((uint(temporalParams.w) & 1u) != 0u)
+	{
+		vec2 texel = 1.0 / vec2(textureSize(giTex, 0));
+		vec3 nbMin = current;
+		vec3 nbMax = current;
+
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				vec3 nb = texture(giTex, vUV + vec2(x, y) * texel).rgb;
+				nbMin = min(nbMin, nb);
+				nbMax = max(nbMax, nb);
+			}
+		}
+
+		history.rgb = clamp(history.rgb, nbMin, nbMax);
+	}
+
+	outResolved = vec4(mix(history.rgb, current, alpha), cameraDistance);
+}
+)GLSL";
+
+	/* Normal history pass: converts the current view-space normals G-buffer to world space
+	 * (camera-rotation invariant) and stores it at history resolution for the NEXT frame's
+	 * temporal validation. The normals MRT attachment is rewritten every frame, so the
+	 * previous frame's normals must be explicitly retained.
+	 *
+	 * Descriptor set 0:
+	 *   binding 0: normals texture (view space, current frame)
+	 *   binding 1: frame UBO (shared with the trace pass)
+	 */
+	constexpr auto RTGINormalCopyFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outWorldNormal;
+
+layout(set = 0, binding = 0) uniform sampler2D normalTex;
+
+layout(set = 0, binding = 1, std140) uniform FrameData
+{
+	mat4 invViewProj;
+	mat4 prevViewProj;
+	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
+	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
+	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
+	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+};
+
+void main()
+{
+	vec3 rawN = texture(normalTex, vUV).rgb;
+
+	if (dot(rawN, rawN) < 0.0001)
+	{
+		outWorldNormal = vec4(0.0);
+		return;
+	}
+
+	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
+
+	outWorldNormal = vec4(normalize(invViewRot * normalize(rawN)), 1.0);
+}
+)GLSL";
+
 	/* Apply pass: additive blend of indirect light onto the scene,
 	 * modulated by the material properties G-buffer (emissive surfaces
 	 * should not receive GI — they emit their own light). */
@@ -662,6 +853,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIBlurRadiusKey, DefaultGraphicsRayTracingGIBlurRadius);
 		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDepthSigmaKey, DefaultGraphicsRayTracingGIDepthSigma);
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGINormalSigmaKey, DefaultGraphicsRayTracingGINormalSigma);
+		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalAlphaKey, DefaultGraphicsRayTracingGITemporalAlpha);
+		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalDepthToleranceKey, DefaultGraphicsRayTracingGITemporalDepthTolerance);
+		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalNormalThresholdKey, DefaultGraphicsRayTracingGITemporalNormalThreshold);
+		m_parameters.multiBounceStrength = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceStrengthKey, DefaultGraphicsRayTracingGIMultiBounceStrength);
+		m_parameters.multiBounceClamp = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceClampKey, DefaultGraphicsRayTracingGIMultiBounceClamp);
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalEnabledKey, DefaultGraphicsRayTracingGITemporalEnabled);
+		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalNeighborhoodClampKey, DefaultGraphicsRayTracingGITemporalNeighborhoodClamp);
+		m_parameters.multiBounceEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGIMultiBounceEnabledKey, DefaultGraphicsRayTracingGIMultiBounceEnabled);
+
+		/* History starts invalid: the first frame after (re)creation must not read the
+		 * uninitialized ping-pong images (alpha forced to 1, no multi-bounce feedback). */
+		m_historyValid = false;
+		m_historyWriteIndex = 0;
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )
@@ -694,19 +898,50 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* Temporal history targets (half-res, ping-pong). Only allocated when the temporal
+		 * accumulation is enabled, so the disabled path costs no VRAM. */
+		if ( m_parameters.temporalEnabled )
+		{
+			for ( size_t index = 0; index < 2; ++index )
+			{
+				const auto suffix = std::to_string(index);
+
+				if ( !m_historyTargets[index].create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_History" + suffix) )
+				{
+					TraceError{ClassId} << "Failed to create RTGI history target #" << index << " !";
+
+					return false;
+				}
+
+				if ( !m_normalHistoryTargets[index].create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_NormalHistory" + suffix) )
+				{
+					TraceError{ClassId} << "Failed to create RTGI normal history target #" << index << " !";
+
+					return false;
+				}
+			}
+		}
+
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
-		auto traceInputLayout = this->getInputLayout( 2);
+		/* Trace input (set 1): depth + normals + albedo + GI history samplers, plus the
+		 * frame UBO (the per-frame data outgrew the 128-byte push constant minimum). */
+		auto traceInputLayout = this->getInputLayout(4, 1);
 
 		/* Blur input: 3 combined image samplers (GI + depth + normals). */
 		auto blurInputLayout = this->getInputLayout(3);
 
-		/* Apply input (color + blurred GI + material properties): 3 combined image samplers. */
+		/* Temporal resolve input: GI + depth + normals + history + normal history, plus the frame UBO. */
+		auto temporalInputLayout = this->getInputLayout(5, 1);
+
+		/* Normal history input: normals, plus the frame UBO. */
+		auto normalCopyInputLayout = this->getInputLayout(1, 1);
+
+		/* Apply input (color + resolved GI + material properties): 3 combined image samplers. */
 		auto applyLayout = this->getInputLayout(3);
 
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || applyLayout == nullptr )
+		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || temporalInputLayout == nullptr || normalCopyInputLayout == nullptr || applyLayout == nullptr )
 		{
 			return false;
 		}
@@ -733,18 +968,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures. */
+			/* Trace: set 0 = RT data, set 1 = input textures + frame UBO, set 2 = bindless textures.
+			 * No push constants: the per-frame data lives in the UBO. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
 
-			m_traceLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(TracePushConstants)}
-			});
+			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
 		{
@@ -760,6 +991,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
+			/* Temporal resolve: single set, no push constants (frame UBO). */
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			sets.emplace_back(temporalInputLayout);
+
+			m_temporalLayout = layoutManager.getPipelineLayout(sets, {});
+		}
+
+		{
+			/* Normal history: single set, no push constants (frame UBO). */
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			sets.emplace_back(normalCopyInputLayout);
+
+			m_normalCopyLayout = layoutManager.getPipelineLayout(sets, {});
+		}
+
+		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
 			sets.emplace_back(applyLayout);
 
@@ -771,7 +1018,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_temporalLayout == nullptr || m_normalCopyLayout == nullptr || m_applyLayout == nullptr )
 		{
 			return false;
 		}
@@ -802,14 +1049,63 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		if ( m_parameters.temporalEnabled )
+		{
+			const auto temporalFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Temporal_FS", ShaderType::FragmentShader, RTGITemporalFragmentShader);
+			const auto normalCopyFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_NormalCopy_FS", ShaderType::FragmentShader, RTGINormalCopyFragmentShader);
+
+			if ( temporalFragment == nullptr || normalCopyFragment == nullptr )
+			{
+				TraceError{ClassId} << "Failed to compile RTGI temporal shaders !";
+
+				return false;
+			}
+
+			m_temporalPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Temporal", vertexModule, temporalFragment, m_temporalLayout, m_historyTargets[0]);
+			m_normalCopyPipeline = this->createFullscreenPipeline(ClassId, "RTGI_NormalCopy", vertexModule, normalCopyFragment, m_normalCopyLayout, m_normalHistoryTargets[0]);
+
+			if ( m_temporalPipeline == nullptr || m_normalCopyPipeline == nullptr )
+			{
+				return false;
+			}
+		}
+
+		/* ---- Per-frame UBOs (shared by trace/temporal/normal-copy passes) ---- */
+		m_frameUBOs = this->createPerFrameUniformBuffers(sizeof(FrameUBOData), ClassId, "Frame_UBO");
+
+		if ( m_frameUBOs.empty() )
+		{
+			return false;
+		}
+
 		/* ---- Create descriptor sets ---- */
 
-		/* Trace: set 1 reads depth + normals (updated per-frame). */
+		/* Trace: set 1 reads depth + normals + albedo + history (updated per-frame),
+		 * plus the frame UBO (written once here, rewritten CPU-side every frame). */
 		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
 		if ( m_tracePerFrame.empty() )
 		{
 			return false;
+		}
+
+		for ( size_t f = 0; f < m_tracePerFrame.size(); ++f )
+		{
+			if ( !m_tracePerFrame[f]->writeUniformBufferObject(4, *m_frameUBOs[f]) )
+			{
+				return false;
+			}
+
+			/* The history binding must always hold a VALID descriptor (the shader statically
+			 * uses it even when the feedback is disabled at runtime). When the temporal chain
+			 * is off, bind the trace target as an inert placeholder (strength is 0). */
+			if ( !m_parameters.temporalEnabled )
+			{
+				if ( !m_tracePerFrame[f]->writeCombinedImageSampler(3, m_traceTarget) )
+				{
+					return false;
+				}
+			}
 		}
 
 		/* Blur H: reads trace result + depth + normals (per-frame for depth/normals). */
@@ -844,7 +1140,39 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Apply: reads color (per-frame) + blurred GI (fixed). */
+		/* Temporal resolve + normal history sets (per-frame; texture bindings are
+		 * rewritten every frame because of the history ping-pong). */
+		if ( m_parameters.temporalEnabled )
+		{
+			m_temporalPerFrame = this->createPerFrameDescriptorSets(temporalInputLayout, ClassId, "Temporal_DescSet");
+			m_normalCopyPerFrame = this->createPerFrameDescriptorSets(normalCopyInputLayout, ClassId, "NormalCopy_DescSet");
+
+			if ( m_temporalPerFrame.empty() || m_normalCopyPerFrame.empty() )
+			{
+				return false;
+			}
+
+			for ( size_t f = 0; f < m_temporalPerFrame.size(); ++f )
+			{
+				if ( !m_temporalPerFrame[f]->writeCombinedImageSampler(0, m_blurVTarget) )
+				{
+					return false;
+				}
+
+				if ( !m_temporalPerFrame[f]->writeUniformBufferObject(5, *m_frameUBOs[f]) )
+				{
+					return false;
+				}
+
+				if ( !m_normalCopyPerFrame[f]->writeUniformBufferObject(1, *m_frameUBOs[f]) )
+				{
+					return false;
+				}
+			}
+		}
+
+		/* Apply: reads color (per-frame) + resolved GI (per-frame with temporal ping-pong,
+		 * fixed to the blur V output otherwise). */
 		m_applyPerFrame = this->createPerFrameDescriptorSets(applyLayout, ClassId, "Apply_DescSet");
 
 		if ( m_applyPerFrame.empty() )
@@ -852,11 +1180,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		for ( const auto & ds : m_applyPerFrame )
+		if ( !m_parameters.temporalEnabled )
 		{
-			if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+			for ( const auto & ds : m_applyPerFrame )
 			{
-				return false;
+				if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
+				{
+					return false;
+				}
 			}
 		}
 
@@ -867,29 +1198,61 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	RTGI::destroy () noexcept
 	{
 		m_applyPerFrame.clear();
+		m_normalCopyPerFrame.clear();
+		m_temporalPerFrame.clear();
 		m_blurVPerFrame.clear();
 		m_blurHPerFrame.clear();
 		m_tracePerFrame.clear();
 
+		m_frameUBOs.clear();
+
 		m_applyPipeline.reset();
+		m_normalCopyPipeline.reset();
+		m_temporalPipeline.reset();
 		m_blurPipeline.reset();
 		m_tracePipeline.reset();
 		m_applyLayout.reset();
+		m_normalCopyLayout.reset();
+		m_temporalLayout.reset();
 		m_blurLayout.reset();
 		m_traceLayout.reset();
+
+		for ( auto & target : m_normalHistoryTargets )
+		{
+			target.destroy();
+		}
+
+		for ( auto & target : m_historyTargets )
+		{
+			target.destroy();
+		}
 
 		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
+
+		m_historyValid = false;
+		m_historyWriteIndex = 0;
 	}
 
 	const TextureInterface &
-	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const TextureInterface * inputDepth, const TextureInterface * inputNormals, const TextureInterface * inputMaterialProperties, [[maybe_unused]] const TextureInterface * inputAlbedo, [[maybe_unused]] const Scenes::LightSet * lightSet, [[maybe_unused]] const PostProcessor::PushConstants & constants) noexcept
+	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		const auto * inputDepth = context.depth;
+		const auto * inputNormals = context.normals;
+		const auto * inputMaterialProperties = context.materialProperties;
+		const auto * inputAlbedo = context.albedo;
+
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		/* Update depth + normals descriptors for this frame's trace pass. */
+		const bool temporalActive = m_parameters.temporalEnabled && m_temporalPipeline != nullptr;
+		const uint32_t writeIdx = m_historyWriteIndex;
+		const uint32_t readIdx = 1U - writeIdx;
+
+		/* ---- Per-frame descriptor updates ---- */
+
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(0, *inputDepth));
@@ -898,6 +1261,32 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputNormals != nullptr )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
+		}
+
+		/* Receiver albedo from the G-buffer. The binding must always be valid (statically
+		 * used by the shader): fall back to the scene color if the attachment is missing. */
+		static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, inputAlbedo != nullptr ? *inputAlbedo : inputColor));
+
+		if ( temporalActive )
+		{
+			/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
+			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
+			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
+
+			if ( inputDepth != nullptr )
+			{
+				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+			}
+
+			if ( inputNormals != nullptr )
+			{
+				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
+				static_cast< void >(m_normalCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputNormals));
+			}
+
+			/* The apply pass consumes the freshly resolved history. */
+			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(1, m_historyTargets[writeIdx]));
 		}
 
 		/* Update color descriptor for apply pass. */
@@ -909,7 +1298,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
-		/* ---- Pass 1: Ray Trace GI ---- */
+		/* ---- Frame UBO (shared by trace/temporal/normal-copy passes) ---- */
 		{
 			/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
 			const auto readStateIndex = this->renderer().currentReadStateIndex();
@@ -923,12 +1312,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const auto invView = viewMat.inverse();
 			const auto * inv = invView.data();
 
-			const TracePushConstants pc{
+			/* Previous rendered frame (ViewMatrices frame-history contract). Identity
+			 * until the first frame is archived — irrelevant then, since the history is
+			 * flagged invalid (alpha forced to 1, feedback strength forced to 0). */
+			const auto & prevViewMat = viewMatrices.previousViewMatrix();
+			const auto prevViewProj = viewMatrices.previousProjectionMatrix() * prevViewMat;
+			const auto * pvp = prevViewProj.data();
+
+			const auto prevInvView = prevViewMat.inverse();
+			const auto * pinv = prevInvView.data();
+
+			const bool historyUsable = temporalActive && m_historyValid;
+
+			const FrameUBOData ubo{
 				.invViewProj = {
 					ivp[0], ivp[1], ivp[2], ivp[3],
 					ivp[4], ivp[5], ivp[6], ivp[7],
 					ivp[8], ivp[9], ivp[10], ivp[11],
 					ivp[12], ivp[13], ivp[14], ivp[15]
+				},
+				.prevViewProj = {
+					pvp[0], pvp[1], pvp[2], pvp[3],
+					pvp[4], pvp[5], pvp[6], pvp[7],
+					pvp[8], pvp[9], pvp[10], pvp[11],
+					pvp[12], pvp[13], pvp[14], pvp[15]
 				},
 				.invViewCol0 = {inv[0], inv[1], inv[2]},
 				.viewPosX = inv[12],
@@ -936,13 +1343,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.viewPosY = inv[13],
 				.invViewCol2 = {inv[8], inv[9], inv[10]},
 				.viewPosZ = inv[14],
-				.maxDistance = m_parameters.maxDistance,
-				.intensity = m_parameters.intensity,
-				.bias = m_parameters.bias,
-				.sampleCount = m_parameters.sampleCount
+				.prevCamPos = {pinv[12], pinv[13], pinv[14], 0.0F},
+				.traceParams = {m_parameters.maxDistance, m_parameters.bias, static_cast< float >(m_parameters.sampleCount), 0.0F},
+				.temporalParams = {
+					historyUsable ? m_parameters.temporalAlpha : 1.0F,
+					m_parameters.temporalDepthTolerance,
+					m_parameters.temporalNormalThreshold,
+					m_parameters.temporalNeighborhoodClamp ? 1.0F : 0.0F
+				},
+				.bounceParams = {
+					historyUsable && m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
+					m_parameters.multiBounceClamp,
+					0.0F,
+					0.0F
+				}
 			};
 
-			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures) per-frame. */
+			if ( !IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData)) )
+			{
+				TraceError{ClassId} << "Failed to update the RTGI frame UBO !";
+			}
+		}
+
+		/* ---- Pass 1: Ray Trace GI ---- */
+		{
+			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures + UBO) per-frame. */
 			m_traceTarget.beginRenderPass(commandBuffer);
 
 			commandBuffer.bind(*m_tracePipeline);
@@ -969,22 +1394,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				m_traceLayout->handle(),
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				sizeof(TracePushConstants),
-				&pc
-			);
-
 			/* Bind set 0: RT descriptor set (TLAS + SSBOs). */
 			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
 			{
 				commandBuffer.bind(*rtDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 			}
 
-			/* Bind set 1: Input textures (depth + normals). */
+			/* Bind set 1: Input textures + frame UBO. */
 			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
 
 			/* Bind set 2: Bindless textures. */
@@ -1059,7 +1475,34 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			);
 		}
 
-		/* ---- Pass 4: Apply GI to scene color ---- */
+		/* ---- Pass 4: Temporal resolve + Pass 5: Normal history ---- */
+		if ( temporalActive )
+		{
+			/* NOTE: The pipelines were created against the [0] targets; recording into [1]
+			 * relies on Vulkan render pass compatibility (identical format/ops), exactly
+			 * like the shared blur pipeline recording into both blur targets. */
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_historyTargets[writeIdx],
+				*m_temporalPipeline,
+				*m_temporalLayout,
+				*m_temporalPerFrame[frameIndex],
+				nullptr,
+				0
+			);
+
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_normalHistoryTargets[writeIdx],
+				*m_normalCopyPipeline,
+				*m_normalCopyLayout,
+				*m_normalCopyPerFrame[frameIndex],
+				nullptr,
+				0
+			);
+		}
+
+		/* ---- Final pass: Apply GI to scene color ---- */
 		{
 			const ApplyPushConstants apply{
 				.intensity = m_parameters.intensity,
@@ -1077,6 +1520,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				&apply,
 				sizeof(ApplyPushConstants)
 			);
+		}
+
+		/* Flip the history ping-pong for the next frame. */
+		if ( temporalActive )
+		{
+			m_historyWriteIndex = readIdx;
+			m_historyValid = true;
 		}
 
 		return m_outputTarget;
