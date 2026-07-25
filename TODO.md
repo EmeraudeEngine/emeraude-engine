@@ -49,6 +49,25 @@
   Whichever is chosen, decide it against a MEASUREMENT of the phantom's actual contribution (a
   boolean probe on the RT effect output, cf. projet-alpha
   `docs/temporal-stability-measurement.md` § "the boolean probe draws a SHAPE"), not on principle.
+- ⚠️ **RAY TRACING: intermittent DEVICE_LOST in the `game-logic` demo (found 2026-07-26).**
+  The demo itself is FINE — it renders correctly (night city, statue, fire/smoke particles,
+  animated actors) and runs indefinitely most of the time. But it dies with
+  `VK_ERROR_DEVICE_LOST` on roughly one run in four: **2/8 runs with `RayTracing/Enabled` true,
+  0/3 with it false** (plausible attribution, NOT established — the no-RT arm needs ~10 runs).
+  The engine's own diagnostics name the region: `device_fault` reports a
+  `READ_INVALID` at a low address plus an `INSTRUCTION_POINTER_FAULT`, and the per-queue
+  checkpoints show the last GPU markers reached to be a MIX of `AS-build:end` (acceleration
+  structure builds) and `transfer:image-layout-transition`. That is the exact signature of the
+  SECOND root cause of the Sponza DEVICE_LOST fixed on 2026-07-05 (BLAS builds racing uploads
+  across the round-robined transfer queues, fixed with `Device::waitTransferQueuesIdle()`), so
+  that fix does not cover this case — `game-logic` has many dynamic actors, hence many more
+  AS builds interleaved with texture uploads than Sponza.
+  Reproduce: `cd .claude-build-release/Release && for i in $(seq 1 8); do timeout 40
+  ./projet-alpha --load-demo game-logic --disable-cef > /tmp/gl_$i.log 2>&1; grep -c DEVICE_LOST
+  /tmp/gl_$i.log; done`. Next step: confirm the attribution with a larger no-RT arm, then look at
+  what serializes AS builds against transfers when actors are created/destroyed at runtime.
+  NOTE: `[Error][UIManagerService] No default page found !` appears in EVERY demo, including the
+  ones that never fail — it is not related.
 - RENDERING SYSTEM: Hi-Z Occlusion
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
 - RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
