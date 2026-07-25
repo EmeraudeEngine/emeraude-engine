@@ -94,11 +94,31 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the projection matrix.
+			 * @note When a sub-pixel jitter is active (TAA), this returns the JITTERED matrix, i.e.
+			 * the one the frame is actually rasterized with. Anything feeding a velocity clip
+			 * position must use unjitteredProjectionMatrix() instead.
 			 * @param readStateIndex The render state-valid index to read data.
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
 			virtual const Base::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
+			 * @brief Returns the projection matrix without any sub-pixel jitter (TAA).
+			 * @note The TAA jitter is applied to gl_Position through a per-draw push constant, never
+			 * through a matrix: any matrix a velocity consumer reads (the InstanceTransforms SSBO
+			 * header, the pushed view projection of the paths that jitter in the shader) MUST come
+			 * from here. Views that do not support jitter serve the same matrix as projectionMatrix().
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return const Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Matrix< 4, float > &
+			unjitteredProjectionMatrix (uint32_t readStateIndex) const noexcept
+			{
+				return this->projectionMatrix(readStateIndex);
+			}
 
 			/**
 			 * @brief Returns the view matrix.
@@ -150,6 +170,50 @@ namespace EmEn::Graphics
 				static const Base::Math::Matrix< 4, float > noHistory{};
 
 				return noHistory;
+			}
+
+			/**
+			 * @brief Sets the sub-pixel projection jitter for the frame being rendered (temporal anti-aliasing).
+			 * @note Called by the Renderer ONCE per rendered frame, on the render thread, BEFORE the
+			 * view UBO upload and before any consumer reads projectionMatrix(readStateIndex). The offset
+			 * is expressed in NDC units (2 * pixelOffset / viewportSize). Only the main view keeps and
+			 * applies a jitter; the default implementation ignores it (shadow maps, cubemaps and
+			 * render-to-texture targets must NEVER be jittered).
+			 * @param ndcOffset The jitter offset in normalized device coordinates.
+			 * @return void
+			 */
+			virtual
+			void
+			setProjectionJitter (const Base::Math::Vector< 2, float > & /*ndcOffset*/) noexcept
+			{
+				/* Default: this view does not support projection jitter. */
+			}
+
+			/**
+			 * @brief Disables the projection jitter (temporal anti-aliasing inactive).
+			 * @note Restores the clean projection path at zero per-draw cost. Default implementation is a no-op.
+			 * @return void
+			 */
+			virtual
+			void
+			disableProjectionJitter () noexcept
+			{
+				/* Default: this view does not support projection jitter. */
+			}
+
+			/**
+			 * @brief Returns the projection jitter applied to the frame being rendered.
+			 * @note Zero when jitter is disabled or unsupported.
+			 * @return const Base::Math::Vector< 2, float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Vector< 2, float > &
+			projectionJitter () const noexcept
+			{
+				static const Base::Math::Vector< 2, float > noJitter{};
+
+				return noJitter;
 			}
 
 			/**

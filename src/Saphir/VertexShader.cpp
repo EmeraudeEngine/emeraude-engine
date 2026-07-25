@@ -406,6 +406,15 @@ namespace EmEn::Saphir
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionPrevious << " = ubInstanceTransforms.previousViewProjection * " << previousModelMatrix << " * vec4(" << prevPosExpr << ", 1.0);";
 
+		/* NOTE: Both clip positions are jitter-free BY CONSTRUCTION — no matrix ever carries
+		 * the TAA sub-pixel jitter (neither the view UBO projection, nor the pushed view
+		 * projection, nor the SSBO header). The jitter is a per-draw push constant applied to
+		 * gl_Position alone (synthesizeVertexPositionInScreenSpace), so nothing has to be
+		 * subtracted back here. Do NOT reintroduce a jitter term: the previous version
+		 * subtracted a jitter read per-frame from the SSBO while the raster used the jitter
+		 * baked in the SINGLE-buffered view UBO, and that mismatch produced a constant
+		 * ~1-2 px bogus velocity on a static camera. */
+
 		emitted = true;
 
 		return true;
@@ -725,6 +734,11 @@ namespace EmEn::Saphir
 
 		if ( asGLStandardPosition )
 		{
+			/* NOTE: gl_Position receives a WORLD-space position here (a later stage is expected to
+			 * project it). Reachable only through ShaderVariable::GLPositionWorldSpace, which NO
+			 * generator requests today — verified 2026-07-25. Should it ever be used for a real
+			 * render pass, the TAA sub-pixel jitter would have to be applied by whichever stage
+			 * produces the clip position (see isProjectionJitterPushed()). */
 			code << "gl_Position = ";
 		}
 		else
@@ -865,6 +879,17 @@ namespace EmEn::Saphir
 		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
 
 		outputInstructions.append((std::stringstream{} << "\t" "gl_Position = "  << MVPMatrix << " * vec4(" << posExpr << ", 1.0);" "\n").str());
+
+		/* TAA sub-pixel jitter: applied HERE and nowhere else. Offsetting the clip position by
+		 * jitter * W is exactly an NDC translation after the perspective division. Keeping it
+		 * out of every matrix is what makes the velocity outputs jitter-free and, above all,
+		 * keeps the frame-varying value out of the SINGLE-buffered view UBO (a push constant is
+		 * recorded per draw, hence per-frame AND per-render-target by construction: only the
+		 * main view sets a jitter, shadow maps / RTT / cubemaps push zero). */
+		if ( this->isProjectionJitterPushed() )
+		{
+			outputInstructions.append((std::stringstream{} << "\t" "gl_Position.xy += " << MatrixPC(PushConstant::Component::ProjectionJitter) << " * gl_Position.w;" "\n").str());
+		}
 
 		return true;
 	}

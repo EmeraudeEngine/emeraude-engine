@@ -98,15 +98,19 @@ namespace EmEn::Graphics::RenderableInstance
 		/* InstanceTransforms SSBO paths: the model matrix is read from the per-instance
 		 * SSBO entry selected by the firstInstance draw parameter (the slot staged at
 		 * Scene::prepareRender()), so its CPU-side computation is skipped entirely.
-		 * Classic: push VP + frameIndex (68 B). Advanced: push V + frameIndex (68 B, the
-		 * projection comes from the view UBO) — this replaces the V+M+frameIndex fallback
-		 * (132 B) that violates the 128 B Vulkan minimum guarantee.
+		 * Classic: push VP + jitter + frameIndex (76 B). Advanced: push V + jitter + frameIndex
+		 * (76 B, the projection comes from the view UBO) — this replaces the V+M+frameIndex
+		 * fallback (132 B) that violates the 128 B Vulkan minimum guarantee.
+		 * The pushed matrices are UNJITTERED: the sub-pixel TAA offset is applied to
+		 * gl_Position by the vertex shader from the jitter member, so the velocity clip
+		 * positions stay jitter-free. Layout MUST match
+		 * Saphir::Generator::Abstract::declareMatrixPushConstantBlock().
 		 * NOTE: The generator only sets this flag on non-cubemap programs. */
 		if ( pushContext.useInstanceTransforms )
 		{
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 
-			std::array< float, Matrix4Alignment + 1 > buffer{};
+			std::array< float, Matrix4Alignment + 3 > buffer{};
 
 			if ( pushContext.useAdvancedMatrices )
 			{
@@ -114,15 +118,19 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 			else
 			{
-				const auto & projectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex);
+				const auto & projectionMatrix = passContext.viewMatrices->unjitteredProjectionMatrix(passContext.readStateIndex);
 				const auto viewProjectionMatrix = projectionMatrix * viewMatrix;
 
 				std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
 			}
 
-			buffer[Matrix4Alignment] = static_cast< float >(this->frameIndex());
+			const auto & projectionJitter = passContext.viewMatrices->projectionJitter();
 
-			vkCmdPushConstants(passContext.commandBuffer->handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, 0, MatrixBytes + sizeof(float), buffer.data());
+			buffer[Matrix4Alignment] = projectionJitter.x();
+			buffer[Matrix4Alignment + 1] = projectionJitter.y();
+			buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndex());
+
+			vkCmdPushConstants(passContext.commandBuffer->handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, 0, MatrixBytes + (3 * sizeof(float)), buffer.data());
 
 			return;
 		}
@@ -161,7 +169,13 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else if ( pushContext.useAdvancedMatrices )
 		{
-			/* Classic 2D with advanced matrices: push View, Model, and frameIndex. */
+			/* Classic 2D with advanced matrices: push View, Model, and frameIndex.
+			 * ASSUMED LIMIT: this fallback (reachable only when the scene provides no
+			 * InstanceTransforms SSBO) carries NO jitter member — the block is already at 132 B,
+			 * above the 128 B Vulkan minimum guarantee, and must not grow. Its projection comes
+			 * from the view UBO, which is now always clean, so these renderables are rasterized
+			 * unjittered while TAA is active: they simply do not benefit from the temporal AA
+			 * (stable, no artifact — their velocity output is zero anyway). */
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 
 			std::array< float, (Matrix4Alignment * 2) + 1 > buffer{};
@@ -173,7 +187,10 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			/* Classic 2D simple: compute and push MVP + frameIndex. */
+			/* Classic 2D simple: compute and push MVP + frameIndex.
+			 * NOTE: projectionMatrix() serves the JITTERED matrix while TAA is active — wanted
+			 * here: a CPU-computed MVP is this path's only way to jitter, and it emits no
+			 * velocity (no previous-matrix source), so nothing has to undo the offset. */
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 			const auto & projectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex);
 			const auto modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;

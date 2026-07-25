@@ -203,6 +203,14 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool requiresLightSet () const noexcept;
 
+			/**
+			 * @brief Returns whether any effect in the stack requires the sub-pixel projection jitter (TAA).
+			 * @note The Renderer polls this once per rendered frame to drive the Halton jitter sequence.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool requiresJitter () const noexcept;
+
 		private:
 
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_effects;

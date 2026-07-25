@@ -450,6 +450,23 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingGIMultiBounceClampKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Clamp"};
 			constexpr auto DefaultGraphicsRayTracingGIMultiBounceClamp{4.0F};
 
+			/* Anti-Aliasing > Temporal (TAA). HDR resolve BEFORE DoF/tone mapping (the only
+			 * AA effect not bound by the runsAfterToneMapping contract — the Karis luminance
+			 * weighting below is what makes HDR accumulation safe). Requires the velocity
+			 * G-buffer and drives the Halton (2,3) projection jitter (requiresJitter). */
+			constexpr auto GraphicsTAAEnabledKey{"Core/Graphics/AntiAliasing/Temporal/Enabled"};
+			constexpr auto DefaultGraphicsTAAEnabled{false};
+			/* Blend weight of the CURRENT frame (0.1 = 90% history: strong AA, slower response). */
+			constexpr auto GraphicsTAAAlphaKey{"Core/Graphics/AntiAliasing/Temporal/Alpha"};
+			constexpr auto DefaultGraphicsTAAAlpha{0.1F};
+			/* Variance clipping gamma: half-size of the YCoCg statistical AABB in standard
+			 * deviations (lower = less ghosting, more flicker). */
+			constexpr auto GraphicsTAAVarianceGammaKey{"Core/Graphics/AntiAliasing/Temporal/VarianceGamma"};
+			constexpr auto DefaultGraphicsTAAVarianceGamma{1.0F};
+			/* Karis inverse-luminance blend weighting (HDR anti-firefly / anti-flicker). */
+			constexpr auto GraphicsTAALumaWeightingKey{"Core/Graphics/AntiAliasing/Temporal/LumaWeighting"};
+			constexpr auto DefaultGraphicsTAALumaWeighting{true};
+
 			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
 			 * focal length, focus) belong to the active camera (physical camera model,
 			 * Scenes::Component::Camera), NOT to the settings. */

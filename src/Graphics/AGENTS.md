@@ -851,6 +851,19 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
 - `requiresHDR()` / `requiresDepth()` / `requiresNormals()` / `requiresVelocity()`
 - The Renderer queries these methods to decide scene target format, MRT attachments, etc.
 - No manual toggle (the old `enableHDR()` has been removed). Requirements are inferred from the active effect chain.
+- `requiresJitter()` (temporal anti-aliasing) — when any effect in the active stack declares
+  it, `Renderer::prepareFrameJitter()` advances a Halton (2,3) sub-pixel sequence and applies
+  it to the MAIN view only, once per rendered frame, before the video-memory update. Implies
+  `requiresVelocity()` in practice: a temporal effect without motion vectors smears.
+  ⚠️ The jitter reaches the shaders through **per-draw push constants**, never through the
+  view UBO — see § 16 Rule 4 for the data race that design cost, and
+  `src/Saphir/AGENTS.md` § "TAA Sub-Pixel Jitter" for the three-site lockstep contract.
+  `ViewMatricesInterface` exposes both forms and they are NOT interchangeable:
+  `projectionMatrix(readStateIndex)` serves the **jittered** matrix (what the frame was
+  rasterized with — post-process depth unprojection, CPU-computed MVP paths), while
+  `unjitteredProjectionMatrix(readStateIndex)` serves the clean one and MUST be used by
+  anything feeding a velocity clip position (the InstanceTransforms SSBO header, the pushed
+  view-projection of the paths that jitter in the shader).
 
 **Interface** (`PostProcessEffect.hpp`):
 - `create(renderer, width, height)` — Allocate GPU resources (IRTs, pipelines, descriptors)
@@ -1428,6 +1441,45 @@ is NOT the previous frame. Temporal effects (RTGI reprojection, future TAA) must
 - `Scenes/SceneMetaData.hpp:initializePerFrameBuffers()` — Reference implementation
 - `ViewMatricesInterface.hpp` — frame-history contract (previous view/projection + archive)
 - `Renderer.cpp:renderFrame()` — the single `archiveStateAfterRendering()` call site
+
+### Rule 4: The View UBO Is Single-Buffered — Never Put Frame-Varying Data In It
+
+`ViewMatrices2DUBO` (and its 3D/Cascaded siblings) own **ONE** `UniformBufferObject`
+(`ViewUBOSize`, one descriptor set) — **NOT** `framesInFlight()` copies. `updateVideoMemory()`
+rewrites it once per cycle, on the render thread, while the GPU may still be reading it for
+a frame that is still in flight.
+
+This is safe **only** because everything the UBO holds is *view state*, which is identical
+for every frame that observes the same camera. The instant a value inside it varies **per
+rendered frame**, Rule 1 applies and the single buffer becomes a data race.
+
+> [!CAUTION]
+> **Lived example (Jul 2026).** The TAA sub-pixel projection jitter was written into this
+> UBO's projection matrix. Scene vertex shaders on the advanced-matrices path build their
+> MVP as `ubView.projectionMatrix * pcMatrices.viewMatrix * model`, so the raster read a
+> jitter that could belong to frame N±1, while the jitter *removed* from the velocity
+> outputs came from the per-frame `InstanceTransforms` SSBO — correctly frame N. Residual =
+> `j_{N±1} - j_N`: a **constant in NDC space**, hence a velocity that is uniform across
+> every depth in the frame (a real camera motion is depth-dependent through parallax — that
+> uniformity is the diagnostic signature). Consequences: motion vectors wrong on a static
+> camera, TAA history rejected by its variance clip (accumulation collapsed → the image
+> vibrated at full jitter amplitude, from the very first frame), and RTGI reprojecting off
+> by ~1 px with its history validation silently masking the error. The CPU-side matrices
+> were exact the whole time — a CPU trace showed `maxAbs(A - B) == 0` over 683 consecutive
+> frames — which is why static code review kept concluding "velocity must be zero".
+>
+> **Resolution (applied 2026-07-25):** frame-varying jitter belongs in a **per-draw push
+> constant**, never in the shared UBO. Push constants are recorded per draw, so they are
+> per-frame AND per-target by construction — shadow maps, cubemaps and render-to-texture
+> targets push zero because only the main view ever has a jitter enabled.
+> `updateVideoMemory()` now uploads the clean projection unconditionally and carries a
+> `[CAUTION]` marker at the exact spot where the jittered write used to be. Measured effect
+> on the static-camera protocol: temporal peak-to-peak mean `2.1`-`3.8` → `0.29`
+> (baseline `0.11`). See `docs/caution-points.md` § "Sub-pixel projection jitter raced the
+> single-buffered view UBO" and `src/Saphir/AGENTS.md` § "TAA Sub-Pixel Jitter".
+
+**Checklist before adding a member to a view UBO:** does this value differ between two
+frames that share the same camera state? If yes, it does not belong here.
 
 ## 17. Multi-Draw Indirect (MDI) — GPU-Driven Rendering
 

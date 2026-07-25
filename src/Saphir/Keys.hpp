@@ -858,6 +858,10 @@ namespace EmEn::Saphir
 				constexpr auto ModelMatrix{"modelMatrix"};
 				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
 				constexpr auto ModelViewProjectionMatrix{"modelViewProjectionMatrix"};
+				/* NOTE : TAA sub-pixel projection jitter (NDC offset applied to gl_Position).
+				 * Pushed per-draw so it is per-frame AND per-render-target by construction:
+				 * only the main view jitters, shadow maps/RTT/cubemaps push zero. */
+				constexpr auto ProjectionJitter{"projectionJitter"};
 				/* NOTE : MDI (Multi-Draw Indirect) BDA address for per-draw SSBO. */
 				constexpr auto PerDrawAddrLo{"perDrawAddrLo"};
 				constexpr auto PerDrawAddrHi{"perDrawAddrHi"};

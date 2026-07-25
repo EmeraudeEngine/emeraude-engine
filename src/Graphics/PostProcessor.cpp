@@ -1237,6 +1237,7 @@ namespace EmEn::Graphics
 			.velocity = velocityTexture,
 			.lightSet = lightSet,
 			.camera = activeCamera,
+			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.constants = PushConstants{
 				.frameWidth = static_cast< float >(extent.width),
 				.frameHeight = static_cast< float >(extent.height),

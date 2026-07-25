@@ -650,6 +650,58 @@ The classic non-instanced scene path reads its model matrix from the per-scene
   plus the non-instanced shadow-receiving reads in `LightGenerator.ShadowMap.cpp`.
 - **Assumed limit (owner decision)**: cubemap scene, shadow 2D, CSM and shadow-cubemap
   paths STAY on push constants (64-68 B, min-spec clean — no motion data needed there).
+- **Velocity clip positions** — `VertexShader::synthesizeVelocityClipPositions()` emits
+  `svClipPositionCurrent` (recomputed from the MVP, deliberately **independent** of the
+  `gl_Position` instruction so output ordering cannot break it) and `svClipPositionPrevious`
+  (`previousViewProjection` × the odd-slot previous model, or the previous skinned pose).
+  The fragment side outputs the plain NDC delta. Both endpoints are expressed in the
+  **same, jitter-free** projection by construction (see the jitter contract below) — no
+  subtraction is performed, and reintroducing one would be a regression.
+
+### TAA Sub-Pixel Jitter — The Per-Draw Push Constant Contract (fixed 2026-07-25)
+
+**Invariant: NO matrix ever carries the sub-pixel jitter.** It is applied to the clip position
+and nowhere else, from a per-draw push constant:
+
+```glsl
+gl_Position = svModelViewProjectionMatrix * vec4(vaVertex, 1.0);
+gl_Position.xy += pcMatrices.projectionJitter * gl_Position.w;   /* NDC translation */
+```
+
+Three sites MUST stay in lockstep — the layout is declared, read and written in different
+files:
+
+| role | location | rule |
+|---|---|---|
+| declares the `vec2` member | `Generator/Abstract.cpp::declareMatrixPushConstantBlock()` | after the pushed V/VP matrix; `FrameIndex` stays appended last, so the vec2 lands at offset 64 with no padding (76 B total) |
+| emits the read | `VertexShader::isProjectionJitterPushed()` → `synthesizeVertexPositionInScreenSpace()` | mirrors the predicate above |
+| writes the value | `RenderableInstance::Unique`/`Multiple` (rendering **and** shadow casting) | floats 16-17, push size 76 B |
+
+Blocks that carry the jitter: instanced (advanced/billboard → V, classic → VP) and the
+non-instanced InstanceTransforms paths (advanced → V, classic → VP). Blocks that do NOT:
+MDI, cubemap/CSM (nothing is pushed for them), the MVP fallback and the 132 B advanced
+fallback. Those last three bake the jitter into their CPU-computed matrix instead — legal
+**only** because none of them outputs a velocity (the 132 B fallback simply rasterizes
+unjittered: no room for the member, assumed limit).
+
+> [!CAUTION]
+> Adding the member to one branch and forgetting another fails in two different ways:
+> a shader reading a member the generator did not declare is a **hard glslang error**
+> (`'projectionJitter' : no such field in structure 'pcMatrices'` — this is how the classic
+> `RenderableInstanceSimplePassVertexShader` path was caught), while a CPU push that is
+> shorter than the declared block is **silent** — the shader offsets `gl_Position` by
+> uninitialized memory with no validation warning. Cheap exhaustive check: enable
+> `Core/Graphics/Shader/ShowSourceCode` and grep the generated GLSL for
+> declaration-versus-use across every program.
+
+> [!CAUTION]
+> **Sub-pixel jitter must NEVER travel through the view UBO.** The first TAA implementation
+> wrote the jitter into `ubView.projectionMatrix`, which the advanced path multiplies by the
+> pushed view matrix to rebuild its MVP. That UBO is single-buffered, so the raster could read
+> frame N±1's jitter while the velocity subtracted frame N's → motion vectors polluted by an
+> NDC-constant offset on a perfectly static camera. Mechanism in `docs/caution-points.md` §
+> "Sub-pixel projection jitter raced the single-buffered view UBO" and
+> `src/Graphics/AGENTS.md` § 16 Rule 4.
 
 ### Push Constant Min-Spec (128 B) — Engine-Wide Rules
 

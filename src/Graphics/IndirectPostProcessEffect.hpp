@@ -36,6 +36,7 @@
 #include "PostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Math/Vector.hpp"
 #include "PostProcessor.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
@@ -190,6 +191,22 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether this effect requires the sub-pixel projection jitter (temporal anti-aliasing).
+			 * @note When any effect in the active stack returns true, the Renderer advances a Halton (2,3)
+			 * jitter sequence once per rendered frame and applies it to the main view projection
+			 * (ViewMatricesInterface::setProjectionJitter()). Implies requiresVelocity() in practice —
+			 * a temporal effect without motion vectors would smear.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresJitter () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Returns whether this effect requires ray tracing (TLAS) to function.
 			 * @note Effects returning true are skipped when RT is not available on the device.
 			 * @return bool
@@ -272,6 +289,11 @@ namespace EmEn::Graphics
 				const Vulkan::TextureInterface * velocity{nullptr};
 				const Scenes::LightSet * lightSet{nullptr};
 				const Scenes::Component::Camera * camera{nullptr};
+				/* Sub-pixel projection jitter of the frame being rendered, in NDC units. Zero when
+				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
+				 * centers; no history counterpart is exposed because nothing in the chain has to
+				 * undo a previous-frame offset (the jitter never travels through a matrix). */
+				Base::Math::Vector< 2, float > projectionJitter{};
 				PostProcessor::PushConstants constants{};
 			};
 

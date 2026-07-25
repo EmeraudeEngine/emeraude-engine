@@ -779,7 +779,7 @@ namespace EmEn::Graphics
 			float
 			getClearDepthValue () const noexcept
 			{
-				return m_clearColors[4].depthStencil.depth;
+				return m_clearColors[5].depthStencil.depth;
 			}
 
 			/**
@@ -790,7 +790,7 @@ namespace EmEn::Graphics
 			uint32_t
 			getClearStencilValue () const noexcept
 			{
-				return m_clearColors[4].depthStencil.stencil;
+				return m_clearColors[5].depthStencil.stencil;
 			}
 
 			/**
@@ -1184,6 +1184,17 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Sampler > getSampler (std::string_view identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
+			 * @brief Advances and applies the sub-pixel projection jitter for the frame about to be rendered (TAA).
+			 * @note MUST be called on the render thread BEFORE the scene's video memory update (the view
+			 * UBO upload must carry the jittered projection) and before any frame recording. Applies a
+			 * Halton (2,3) NDC offset to the main view when the active scene's post-process stack
+			 * requires jitter; disables it otherwise. No-op without a main render target.
+			 * @param scene A pointer to the active scene, or nullptr.
+			 * @return void
+			 */
+			void prepareFrameJitter (const Scenes::Scene * scene) noexcept;
+
+			/**
 			 * @brief Render a new offscreen frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
@@ -1483,6 +1494,8 @@ namespace EmEn::Graphics
 			};
 			uint32_t m_currentFrameIndex{0};
 			uint32_t m_currentReadStateIndex{0};
+			/** @brief Position in the Halton (2,3) projection jitter sequence (TAA), advanced once per rendered frame. */
+			uint32_t m_temporalJitterIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
 			std::chrono::high_resolution_clock::time_point m_frameStartTime;
 			std::chrono::nanoseconds m_frameDuration{0}; // 0 = frame limiter disabled

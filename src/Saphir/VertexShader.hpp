@@ -329,6 +329,29 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Returns whether the matrix push constant block carries the TAA sub-pixel
+			 * projection jitter, i.e. whether gl_Position must be offset by it in this shader.
+			 * @note MUST mirror Generator::Abstract::declareMatrixPushConstantBlock(): the
+			 * ProjectionJitter member exists in the instanced and InstanceTransforms blocks only.
+			 * Cubemap/CSM targets are excluded because nothing is pushed for them (their
+			 * view-projection comes from the view UBO indexed by gl_ViewIndex), and MDI plus the
+			 * push-constant-only fallbacks are excluded because they keep the jitter baked in
+			 * their CPU-computed matrices — none of them outputs a velocity.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isProjectionJitterPushed () const noexcept
+			{
+				if ( m_MDIEnabled || m_cubemapModeEnabled || m_csmModeEnabled )
+				{
+					return false;
+				}
+
+				return m_instancingEnabled || m_instanceTransformsEnabled;
+			}
+
+			/**
 			 * @brief Enables the instanced motion history mode: the per-instance VBO carries
 			 * the previous model matrix (+4 vec4 attribute slots after the normal matrix).
 			 * @note Affects the vertex buffer format stride even when the shader does not

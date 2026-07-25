@@ -278,4 +278,12 @@ namespace EmEn::Graphics
 			return effect != nullptr && effect->isEnabled() && effect->requiresLightSet();
 		});
 	}
+
+	bool
+	PostProcessStack::requiresJitter () const noexcept
+	{
+		return std::ranges::any_of(m_effects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->requiresJitter();
+		});
+	}
 }

@@ -1230,6 +1230,60 @@ namespace EmEn::Graphics
 	}
 
 	void
+	Renderer::prepareFrameJitter (const Scenes::Scene * scene) noexcept
+	{
+		const auto mainTarget = this->mainRenderTarget();
+
+		if ( mainTarget == nullptr )
+		{
+			return;
+		}
+
+		auto & viewMatrices = mainTarget->viewMatrices();
+
+		const auto * stack = scene != nullptr ? scene->postProcessStack() : nullptr;
+
+		if ( !m_postProcessor.isEnabled() || stack == nullptr || !stack->requiresJitter() )
+		{
+			viewMatrices.disableProjectionJitter();
+
+			return;
+		}
+
+		const auto & extent = mainTarget->extent();
+
+		if ( extent.width == 0 || extent.height == 0 )
+		{
+			viewMatrices.disableProjectionJitter();
+
+			return;
+		}
+
+		/* Halton (2,3) sequence (indices 1..8), centered on zero: the canonical low-discrepancy
+		 * sub-pixel offsets for temporal anti-aliasing (even coverage of the pixel footprint
+		 * over 8 frames). Expressed in pixels, converted to NDC against the target extent. */
+		static constexpr std::array< std::array< float, 2 >, 8 > HaltonJitterSequence{{
+			{1.0F / 2.0F - 0.5F, 1.0F / 3.0F - 0.5F},
+			{1.0F / 4.0F - 0.5F, 2.0F / 3.0F - 0.5F},
+			{3.0F / 4.0F - 0.5F, 1.0F / 9.0F - 0.5F},
+			{1.0F / 8.0F - 0.5F, 4.0F / 9.0F - 0.5F},
+			{5.0F / 8.0F - 0.5F, 7.0F / 9.0F - 0.5F},
+			{3.0F / 8.0F - 0.5F, 2.0F / 9.0F - 0.5F},
+			{7.0F / 8.0F - 0.5F, 5.0F / 9.0F - 0.5F},
+			{1.0F / 16.0F - 0.5F, 8.0F / 9.0F - 0.5F}
+		}};
+
+		const auto & pixelOffset = HaltonJitterSequence[m_temporalJitterIndex % HaltonJitterSequence.size()];
+
+		m_temporalJitterIndex++;
+
+		viewMatrices.setProjectionJitter({
+			2.0F * pixelOffset[0] / static_cast< float >(extent.width),
+			2.0F * pixelOffset[1] / static_cast< float >(extent.height)
+		});
+	}
+
+	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
 	{
 		/* NOTE: Record frame start time for the optional frame limiter. */
@@ -1582,8 +1636,9 @@ namespace EmEn::Graphics
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
 		 * Clear values must match the actual attachment layout which depends on which
 		 * MRT attachments are present. m_clearColors layout: [0]=color, [1]=normals,
-		 * [2]=materialProperties, [3]=albedo, [4]=depth. Build the matching subset for
-		 * beginRenderPass. Albedo implies normals+materialProperties (fixed MRT order). */
+		 * [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth/stencil. Build the matching
+		 * subset for beginRenderPass. Albedo implies normals+materialProperties (fixed MRT
+		 * order), and the depth/stencil clear value is ALWAYS the last element of the subset. */
 		const bool sceneTargetHasNormals = m_sceneTarget->normalsFormat() != VK_FORMAT_UNDEFINED;
 		const bool sceneTargetHasMaterialProperties = m_sceneTarget->materialPropertiesFormat() != VK_FORMAT_UNDEFINED;
 		const bool sceneTargetHasAlbedo = m_sceneTarget->albedoFormat() != VK_FORMAT_UNDEFINED;

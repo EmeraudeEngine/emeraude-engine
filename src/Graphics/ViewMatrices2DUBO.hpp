@@ -70,6 +70,10 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::unjitteredProjectionMatrix(uint32_t) const */
+			[[nodiscard]]
+			const Base::Math::Matrix< 4, float > & unjitteredProjectionMatrix (uint32_t readStateIndex) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(bool, size_t) const */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept override;
@@ -92,6 +96,30 @@ namespace EmEn::Graphics
 			previousProjectionMatrix () const noexcept override
 			{
 				return m_previousState.projection;
+			}
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::setProjectionJitter() */
+			void
+			setProjectionJitter (const Base::Math::Vector< 2, float > & ndcOffset) noexcept override
+			{
+				m_currentJitter = ndcOffset;
+				m_projectionJitterEnabled = true;
+			}
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::disableProjectionJitter() */
+			void
+			disableProjectionJitter () noexcept override
+			{
+				m_currentJitter = {};
+				m_projectionJitterEnabled = false;
+			}
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionJitter() */
+			[[nodiscard]]
+			const Base::Math::Vector< 2, float > &
+			projectionJitter () const noexcept override
+			{
+				return m_currentJitter;
 			}
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position() const */
@@ -253,15 +281,27 @@ namespace EmEn::Graphics
 			struct PreviousFrameState
 			{
 				Base::Math::Matrix< 4, float > view; /**< View matrix of the previous rendered frame. */
-				Base::Math::Matrix< 4, float > projection; /**< Projection matrix of the previous rendered frame. */
+				Base::Math::Matrix< 4, float > projection; /**< Projection matrix of the previous rendered frame (NEVER jittered: the TAA jitter is a per-draw push constant, see archiveStateAfterRendering()). */
 			};
+
+			/**
+			 * @brief Returns a copy of a projection matrix translated by an NDC offset (sub-pixel jitter).
+			 * @param projection A reference to the clean projection matrix.
+			 * @param ndcOffset The jitter offset in normalized device coordinates.
+			 * @return Base::Math::Matrix< 4, float >
+			 */
+			[[nodiscard]]
+			static Base::Math::Matrix< 4, float > getJitteredProjection (const Base::Math::Matrix< 4, float > & projection, const Base::Math::Vector< 2, float > & ndcOffset) noexcept;
 
 			DataState m_logicState; /**< Current logic state (write). */
 			std::array< DataState, 2 > m_renderState; /**< Double-buffered render states (read). */
 			PreviousFrameState m_previousState; /**< View state of the previous rendered frame (render thread only). */
+			Base::Math::Vector< 2, float > m_currentJitter; /**< NDC projection jitter of the frame being rendered (render thread only). */
+			mutable Base::Math::Matrix< 4, float > m_jitteredProjection; /**< Jittered projection served by projectionMatrix(readStateIndex) while jitter is enabled (render thread only). */
 			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet; /**< Vulkan descriptor set. */
 			mutable std::mutex m_GPUBufferAccessLock; /**< Mutex for GPU buffer access synchronization. */
+			bool m_projectionJitterEnabled{false}; /**< Whether the sub-pixel projection jitter is active (TAA). */
 	};
 
 	/**

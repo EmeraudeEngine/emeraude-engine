@@ -399,8 +399,11 @@ namespace EmEn::Scenes
 		{
 			const auto & viewMatrices = renderTarget->viewMatrices();
 
+			/* NOTE: UNJITTERED matrices — the velocity clip positions are built from this header
+			 * and must stay jitter-free (the TAA sub-pixel offset is a per-draw push constant
+			 * applied to gl_Position only). */
 			m_instanceTransforms.setViewProjectionMatrices(
-				viewMatrices.projectionMatrix(m_preparedReadStateIndex) * viewMatrices.viewMatrix(m_preparedReadStateIndex, false, 0),
+				viewMatrices.unjitteredProjectionMatrix(m_preparedReadStateIndex) * viewMatrices.viewMatrix(m_preparedReadStateIndex, false, 0),
 				viewMatrices.previousProjectionMatrix() * viewMatrices.previousViewMatrix()
 			);
 		}

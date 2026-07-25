@@ -49,6 +49,53 @@
   demo bench, incl. receiver-albedo modulation via the new albedo G-buffer attachment).
 - [ ] **Motion Blur** — Flou de mouvement caméra/objets. Sensation de poids et d'inertie.
 - [ ] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
+  **STATUS 2026-07-25: root cause FIXED and measured; 2 secondary defects remain.**
+  `Graphics/Effects/Framebuffer/TAA.{hpp,cpp}` (single-pass HDR resolve: YCoCg variance
+  clipping, Catmull-Rom history, Karis inverse-luminance weighting) + the jitter contract
+  (`requiresJitter()`, `ViewMatricesInterface::setProjectionJitter()`, `Renderer::prepareFrameJitter()`
+  driving a Halton (2,3) sequence). Settings under `Core/Graphics/AntiAliasing/Temporal/*`.
+
+  **DONE — defect 1 (root cause): the jitter is now a per-draw push constant.**
+  `PushConstant::Component::ProjectionJitter`, a `vec2` after the pushed V/VP matrix (block
+  76 B), applied to `gl_Position` alone; NO matrix carries the jitter anymore (view UBO
+  uploads the clean projection, `archiveStateAfterRendering()` archives the clean one, the
+  `InstanceTransforms` header is back to 128 B, the velocity clip positions need no
+  subtraction). New accessor `ViewMatricesInterface::unjitteredProjectionMatrix()` for every
+  velocity-feeding consumer; `previousProjectionJitter()` removed (dead).
+  OWNER DECISION (extension of the original plan): the two CLASSIC VP-pushed paths (instanced
+  non-advanced, and non-instanced InstanceTransforms non-advanced) were switched too — they
+  push an UNJITTERED VP + the jitter member, so velocity is correct on unlit/non-advanced
+  geometry as well (`doom-loader`, mixed scenes). Only MDI, the MVP fallback and the 132 B
+  advanced fallback still bake the jitter in their CPU-computed matrix — none outputs a
+  velocity (the 132 B one rasterizes unjittered: assumed limit, no room for the member).
+  Validated: 14 generated vertex shaders read the jitter and all 14 declare it (zero
+  mismatch, `ShowSourceCode` sweep), zero min-spec warnings, cascade builds `-Werror`.
+  Static-camera A/B (Sponza, `gltf-loader`, protocol in projet-alpha
+  `docs/temporal-stability-measurement.md`): temporal peak-to-peak mean **2.1-3.8 → 0.29**,
+  p99.9 **56-99 → 12.9**, against a TAA-off baseline of 0.11 / 2.4. Two TAA runs agreed to
+  1.03x, so the remaining gap is signal, not noise.
+
+  **DONE — defect 4: `Renderer.hpp` clear-value getters.**
+  `getClearDepthValue()`/`getClearStencilValue()` read `m_clearColors[5]` (the setter's index)
+  instead of `[4]`, which became the velocity slot; the layout comment in
+  `renderFrameWithInternal()` now lists all six entries.
+
+  **TODO — defect 2: the resolve deviates from the state of the art.** The canonical unjitter
+  is a filtered 3x3 reconstruction (Mitchell-Netravali weights evaluated at each tap's
+  sub-pixel distance — Karis 2014, cf. Tardif's "Temporal Antialiasing Starter Pack");
+  `TAA.cpp` uses a single bilinear tap. And the variance-clip neighbourhood must be sampled on
+  the **unjittered** pixel grid, not the shifted one. This is now the PRIME SUSPECT for the
+  0.29-vs-0.11 residual: its signature matches (residual correlated with the image gradient,
+  corr(p2p, |∇I|) ≈ 0.43, brightest on high-contrast silhouettes), and a single bilinear tap
+  is exact only to first order, so its reconstruction error varies with the jitter phase —
+  exactly a converged image that "breathes" over the 8-sample Halton cycle. Research the state
+  of the art first, then re-measure with the same protocol.
+
+  **TODO — defect 3: the translucent pass writes a garbage velocity** — visualising the buffer
+  shows the translucent skylight glass with a smooth NDC-position-like gradient up to ~0.3 NDC,
+  the signature of a null previous clip position. Pre-existing, independent of TAA, affects
+  every velocity consumer (Sponza HAS such glass, so it may contribute to the residual above).
+
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 
 ### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)
@@ -123,9 +170,17 @@
   init both slots); the vertex shader blends the previous pose (odd slots) into
   `previousSkinnedPosition` when the velocity outputs are emitted — LIMB motion now
   produces real per-pixel velocity. Skinning regression-checked (fbx-loader animated
-  Paladin incl. skinned shadow). Next: TAA
-  (jitter + history, `runsAfterToneMapping()` contract) and motion blur (camera effect,
-  shutter speed — state-of-the-art research first: McGuire tile-based reconstruction).
+  Paladin incl. skinned shadow).
+  **⚠️ 2026-07-25: static-camera correctness — FIXED (defect 1 of the TAA item above).** The
+  TAA debugging session proved the velocity buffer was non-zero (~1-2 px, uniform across all
+  depths) when nothing moved: the B1-B4 validation only ever exercised MOVING geometry, where
+  a constant offset is invisible next to real motion, and RTGI had been reprojecting off by
+  that amount since 2026-07-24 with its own history validation masking the error. The jitter
+  no longer travels through any matrix, so the velocity is zero on a static camera by
+  construction. **Keep a static-camera zero-velocity check in any future motion-vector work.**
+  Defect 3 (translucent pass) remains open and is a velocity bug of the same family.
+  Next: TAA (blocked, see above) and motion blur (camera effect, shutter speed —
+  state-of-the-art research first: McGuire tile-based reconstruction).
   See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and
   `src/Scenes/AGENTS.md` § "Instance Transforms".
 - [ ] **Push constant min-spec violation (132 B)** — `RenderableInstance/Unique.cpp`

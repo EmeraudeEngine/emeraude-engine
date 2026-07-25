@@ -984,6 +984,99 @@ if ( materialType == PBRResource::ClassId )
 
 ---
 
+### RESOLVED: Sub-pixel projection jitter raced the single-buffered view UBO (Jul 2026)
+
+**Symptom.** With TAA enabled, a **perfectly static camera** produced a visibly vibrating
+image — in a static interior scene (Sponza), starting on the very **first** rendered frame,
+before any temporal history existed.
+
+**Why code review could not find it.** Every verifiable path read correct: jitter sign, the
+`prepareFrameJitter` → UBO/SSBO upload → record → `archiveStateAfterRendering` ordering, the
+scene/swap-chain view sharing (`setSourceViewMatrices`), the SSBO staging *and* upload inside
+the same `prepareRender`, `ClipPositionCurrent` deliberately independent from `gl_Position`,
+and `stageEntry()` falling back to the current model matrix on the first frame. A CPU trace
+of the two view-projection matrices, each stripped of its own frame's jitter, reported
+`maxAbs(A - B) == 0` on **683 consecutive frames**. Static reasoning therefore concluded
+"the velocity must be exactly zero" — and it was wrong, because the race is between a CPU
+write and a GPU read of the **same** memory, which no amount of source reading reveals.
+
+**Root cause.** The jitter was written into the projection matrix of the **single-buffered**
+view UBO (see `src/Graphics/AGENTS.md` § 16 Rule 4). Scene shaders on the advanced-matrices
+path build `MVP = ubView.projectionMatrix * pcMatrices.viewMatrix * model`, so the raster
+could use frame N±1's jitter while the velocity outputs subtracted frame N's jitter (read
+from the correctly per-frame `InstanceTransforms` SSBO header).
+
+**Diagnostic signatures — reuse these.**
+- **Residual proportional to the image gradient** `|∇I|` (a gradient-magnitude-looking
+  difference map) means the image is being **displaced** sub-pixel, not noised. Noise does
+  not correlate with gradients; ghosting is confined to silhouettes.
+- **Velocity uniform across every depth** in the frame ⇒ it is a **constant in NDC space**,
+  so it cannot be camera motion (which is depth-dependent through parallax). For a static
+  camera the only NDC constant available is a jitter delta.
+- A **single bilinear tap** used to "unjitter" the current frame is correct only to first
+  order — its barycentre is exact (`(1-d)(n-d) + d(n+1-d) = n`), so its error is a
+  phase-varying *blur* (∝ Laplacian), never a displacement. If you measure a displacement,
+  the unjitter tap is not your culprit.
+
+**Measurement method (works without RenderDoc).** Park the camera, take N screenshots
+several seconds apart, and compute the **per-pixel temporal peak-to-peak** over the series;
+compare A/B with the feature off. Amplitudes measured here, in 8-bit luma units:
+TAA off `0.11` mean / `2.4` p99.9 → TAA on `2.1`–`3.8` mean / `56`–`99` p99.9. **Always run
+the same configuration twice** — two identical runs differed by ×1.85 here, and any
+conclusion inside that envelope is noise. Isolate terms by forcing them out one at a time
+(`prevUV = vUV` kills the reprojection; `alpha = 1` kills history and reprojection entirely,
+leaving only the current-frame term — that is the configuration that reproduces a
+first-frame vibration). Emitting a buffer *as the resolved colour* turns a screenshot into a
+buffer visualisation; a channel carrying a boolean (`isnan`, `> epsilon`) survives tone
+mapping intact, raw magnitudes do not.
+
+**Resolution (applied 2026-07-25).** The jitter is now a **per-draw push constant**
+(`PushConstant::Component::ProjectionJitter`, a `vec2` after the pushed view/view-projection
+matrix) applied to `gl_Position` alone:
+
+```glsl
+gl_Position = MVP * vec4(position, 1.0);          /* every matrix is UNJITTERED */
+gl_Position.xy += pcMatrices.projectionJitter * gl_Position.w;
+```
+
+A push constant is recorded per draw, hence per-frame **and** per-render-target by
+construction — shadow maps, RTT and cubemaps push zero because only the main view sets a
+jitter. Nothing else changed conceptually: `ViewMatrices2DUBO::updateVideoMemory()` no longer
+writes a jittered projection, `archiveStateAfterRendering()` archives the **clean** one, the
+`InstanceTransforms` SSBO header lost its `projectionJitters` member (144 → 128 B), and the
+velocity clip positions need no subtraction at all.
+
+**The invariant to preserve: NO matrix ever carries the jitter.** It is the whole reason the
+velocity outputs are correct, and it is easy to break — three code paths bake a CPU-computed
+matrix into their push constants and must therefore stay jitter-consumers only (they output
+no velocity): MDI, the MVP fallback, and the 132 B advanced fallback (which, having no room
+for a jitter member, is simply rasterized unjittered — assumed limit).
+
+**Lockstep is not optional.** The push block layout is declared in
+`Saphir::Generator::Abstract::declareMatrixPushConstantBlock()`, read in
+`VertexShader::isProjectionJitterPushed()`, and written in `RenderableInstance::Unique`/
+`Multiple`. Adding the member to a branch without updating the two others is a *silent*
+defect when the shader reads uninitialized push memory (no validation error), and a hard
+`glslang` error (`'projectionJitter' : no such field`) when the shader reads a member the
+generator did not declare — that second failure mode is how the miss got caught here, on the
+`RenderableInstanceSimplePassVertexShader` (the classic VP-pushed path). Grepping the
+generated GLSL for declaration-vs-use is the cheap exhaustive check (see
+`ShowSourceCode` in the measurement doc).
+
+**Residual after the fix** (same protocol, Sponza, static camera): `0.29` mean / `12.9` p99.9
+with TAA on, against a `0.11` / `2.4` baseline — a factor ~8 better than the broken state but
+not yet at the baseline. The remaining term shows the same gradient-correlated signature
+(corr(p2p, |∇I|) ≈ 0.43) and is attributed to the resolve's single bilinear source unjitter
+(defect 2 in `TODO.md` § "TAA").
+
+> **Takeaway:** a value that becomes frame-varying silently promotes its container to
+> Rule 1 (per-frame copies). The jitter did not break TAA by being wrong — it broke TAA by
+> being *new frame-varying data in an old shared buffer*, and it took the rest of the
+> motion-vector chain down with it, including consumers (RTGI) whose own history validation
+> hid the damage instead of reporting it.
+
+---
+
 ## Shader/GLSL Pitfalls
 
 ### Push Constants: the 128-Byte Minimum Guarantee (Jul 2026)

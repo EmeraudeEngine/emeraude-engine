@@ -582,11 +582,20 @@ the motion-vectors chain (see engine `TODO.md`): move the non-instanced model ma
 push constants into a per-instance SSBO indexed by `gl_BaseInstance`, and carry
 `{model, previousModel}` per entry for temporal effects (TAA, RTGI reprojection, motion blur).
 
-**GPU layout** (std430): `Header {mat4 viewProjection; mat4 previousViewProjection;}` followed
-by `Entry {mat4 model; mat4 previousModel;}[]`. The header is reserved for the motion-vector
-pass and written **only** by the primary view target (`RenderTargetType::View`); the regular
-matrix path keeps pushing the view-projection matrix through push constants (MDI precedent)
-and only reads the entries.
+**GPU layout** (std430, header `static_assert`-ed at 128 B): `Header {mat4 viewProjection;
+mat4 previousViewProjection;}` followed by `Entry {mat4 model; mat4 previousModel;}[]`. The
+header is reserved for the motion-vector pass and written **only** by the primary view target
+(`RenderTargetType::View`); the regular matrix path keeps pushing the view-projection matrix
+through push constants (MDI precedent) and only reads the entries.
+
+⚠️ **Both header matrices MUST be UNJITTERED** — stage them from
+`ViewMatricesInterface::unjitteredProjectionMatrix()`, never from `projectionMatrix()`, which
+serves the jittered form while TAA is active. The velocity clip positions are built from this
+header, and the TAA sub-pixel offset is applied to `gl_Position` alone through a per-draw push
+constant. A short-lived revision carried the current/previous jitters in a third `vec4` member
+(header at 144 B) so the vertex shader could subtract them back — that design required the
+jitter to also sit in the single-buffered view UBO, which raced the GPU; see engine
+`docs/caution-points.md` § "Sub-pixel projection jitter raced the single-buffered view UBO".
 
 **Frame contract (frame-linear slots):**
 1. The **Renderer** calls `Scene::beginRenderFrame()` once per rendered frame (both windowed
@@ -614,7 +623,8 @@ the current frame's set is rewritten in place (legal: the frame fence guarantees
 reference).
 
 **Consumption (milestone 3):** the classic non-instanced scene path (non-MDI, non-cubemap,
-non-advanced) READS the SSBO: push constants shrink to VP + frameIndex (68 B), the model
+non-advanced) READS the SSBO: push constants shrink to VP + jitter + frameIndex (76 B, or
+68 B before the TAA jitter member), the model
 matrix comes from `instanceMatrices[gl_InstanceIndex * 2]`, the slot travels through the
 `firstInstance` draw parameter (`CommandBuffer::drawWithFirstInstance()` — instanceCount
 is 1, so `gl_InstanceIndex == firstInstance`, no shaderDrawParameters feature needed).

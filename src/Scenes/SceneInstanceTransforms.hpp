@@ -86,6 +86,9 @@ namespace EmEn::Scenes
 			 * @brief GPU layout of the buffer header (std430).
 			 * @note Reserved for the motion-vector pass: current and previous view-projection
 			 * matrices of the primary view target. Matrices are column-major, matching GLSL mat4.
+			 * @note Both matrices are UNJITTERED: the TAA sub-pixel jitter never travels through a
+			 * matrix, it is a per-draw push constant applied to gl_Position only. This is what keeps
+			 * the velocity outputs jitter-free without any subtraction in the vertex shader.
 			 */
 			struct Header
 			{
@@ -175,6 +178,8 @@ namespace EmEn::Scenes
 			 * @brief Stages the header matrices for the primary view target.
 			 * @note Reserved for the velocity/motion-vector pass. Only the primary view target
 			 * (RenderTargetType::View) writes it; render-to-texture targets must not.
+			 * @warning Both matrices MUST be unjittered (see the Header note): the TAA jitter is a
+			 * per-draw push constant, it must never be baked in a matrix a velocity consumer reads.
 			 * @param viewProjectionMatrix The current view-projection matrix.
 			 * @param previousViewProjectionMatrix The previous frame view-projection matrix.
 			 */

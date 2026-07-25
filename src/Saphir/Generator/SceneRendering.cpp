@@ -369,8 +369,11 @@ namespace EmEn::Saphir::Generator
 			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
 
 			/* NOTE: {model, previousModel} interleaved (stride 2), preceded by the
-			 * {viewProjection, previousViewProjection} header reserved for the
-			 * motion-vector pass. Must match Scenes::SceneInstanceTransforms GPU layout. */
+			 * {viewProjection, previousViewProjection} header reserved for the motion-vector
+			 * pass. Both header matrices are UNJITTERED — the TAA sub-pixel jitter is a
+			 * per-draw push constant applied to gl_Position only, so the velocity clip
+			 * positions computed from this header need no jitter correction.
+			 * Must match Scenes::SceneInstanceTransforms GPU layout. */
 			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
 			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
 			ssbo.addMember(Declaration::VariableType::Matrix4, "viewProjection");
@@ -589,8 +592,9 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasVelocityAttachment )
 			{
 				/* Write the NDC-delta motion vector to MRT attachment 4 (temporal effects).
-				 * NOTE: Jitter-ready — when TAA introduces a projection jitter, subtract the
-				 * current and previous jitters from the respective NDC positions here.
+				 * NOTE: Jitter-free by construction — no matrix used to build the clip positions
+				 * carries the TAA sub-pixel jitter (it is a per-draw push constant applied to
+				 * gl_Position alone), so the plain NDC delta below needs no jitter terms.
 				 * Light passes have their write mask zeroed (see onGraphicsPipelineConfiguration). */
 				if ( m_velocityOutputsEmitted && (m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass) )
 				{

@@ -250,6 +250,12 @@ namespace EmEn
 					return;
 				}
 
+				/* Temporal anti-aliasing contract: advance and apply the sub-pixel projection
+				 * jitter BEFORE the view UBO upload below — every consumer of the frame
+				 * (UBO projection, push-constant MVPs, instance transforms header) must see
+				 * the same jittered matrix. */
+				m_graphicsRenderer.prepareFrameJitter(activeScene.get());
+
 				if ( activeScene != nullptr )
 				{
 					/* This should only synchronize UBOs for the scene. */

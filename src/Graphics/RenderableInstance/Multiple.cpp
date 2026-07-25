@@ -418,36 +418,44 @@ namespace EmEn::Graphics::RenderableInstance
 			return;
 		}
 
-		/* Classic 2D rendering (Model is in VBO). */
+		/* Classic 2D rendering (Model is in VBO).
+		 * Layout: V|VP + jitter + frameIndex = 76 B, matching the instanced block declared by
+		 * Saphir::Generator::Abstract::declareMatrixPushConstantBlock(). A shadow map view never
+		 * jitters (only the main view calls setProjectionJitter()), so the jitter pushed here is
+		 * always zero — but it MUST be pushed: the vertex shader reads it (a 2D shadow map is
+		 * neither a cubemap nor a CSM target) and would otherwise offset gl_Position by
+		 * uninitialized push-constant memory. */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
+		const auto & projectionJitter = passContext.viewMatrices->projectionJitter();
+
+		std::array< float, Matrix4Alignment + 3 > buffer{};
 
 		if ( pushContext.useBillboarding )
 		{
 			/* Push the view matrix (V) ONLY — the shader recomposes VP from the view UBO
 			 * projection × V (the V + VP push block was above the 128 B minimum guarantee). */
-			vkCmdPushConstants(
-				passContext.commandBuffer->handle(),
-				pushContext.pipelineLayout->handle(),
-				pushContext.stageFlags,
-				0,
-				MatrixBytes,
-				viewMatrix.data()
-			);
+			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
 		}
 		else
 		{
 			/* Push the view projection matrix (VP). */
-			const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
+			const auto viewProjectionMatrix = passContext.viewMatrices->unjitteredProjectionMatrix(passContext.readStateIndex) * viewMatrix;
 
-			vkCmdPushConstants(
-				passContext.commandBuffer->handle(),
-				pushContext.pipelineLayout->handle(),
-				pushContext.stageFlags,
-				0,
-				MatrixBytes,
-				viewProjectionMatrix.data()
-			);
+			std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
 		}
+
+		buffer[Matrix4Alignment] = projectionJitter.x();
+		buffer[Matrix4Alignment + 1] = projectionJitter.y();
+		buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndex());
+
+		vkCmdPushConstants(
+			passContext.commandBuffer->handle(),
+			pushContext.pipelineLayout->handle(),
+			pushContext.stageFlags,
+			0,
+			MatrixBytes + (3 * sizeof(float)),
+			buffer.data()
+		);
 	}
 
 	void
@@ -469,28 +477,34 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Classic 2D rendering (Model is in VBO). */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 
+		/* Layout: V|VP + jitter + frameIndex = 76 B. The pushed matrix is UNJITTERED — the
+		 * sub-pixel TAA offset is applied to gl_Position by the vertex shader from the jitter
+		 * member, keeping the velocity clip positions jitter-free. MUST match
+		 * Saphir::Generator::Abstract::declareMatrixPushConstantBlock(). */
+		const auto & projectionJitter = passContext.viewMatrices->projectionJitter();
+
+		std::array< float, Matrix4Alignment + 3 > buffer{};
+
 		if ( pushContext.useAdvancedMatrices || pushContext.useBillboarding )
 		{
-			/* Push the view matrix (V) + frameIndex ONLY — the shader recomposes VP from
-			 * the view UBO projection × V (the V + VP + frameIndex push block was 132 B,
-			 * above the 128 B Vulkan minimum guarantee for maxPushConstantsSize). */
-			std::array< float, Matrix4Alignment + 1 > buffer{};
+			/* Push the view matrix (V) ONLY — the shader recomposes VP from the view UBO
+			 * projection × V (the V + VP + frameIndex push block was 132 B, above the 128 B
+			 * Vulkan minimum guarantee for maxPushConstantsSize). */
 			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
-			buffer[Matrix4Alignment] = frameIndex;
-
-			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes + sizeof(float), buffer.data());
 		}
 		else
 		{
-			/* Push the view projection matrix (VP) + frameIndex. */
-			const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
+			/* Push the view projection matrix (VP). */
+			const auto viewProjectionMatrix = passContext.viewMatrices->unjitteredProjectionMatrix(passContext.readStateIndex) * viewMatrix;
 
-			std::array< float, Matrix4Alignment + 1 > buffer{};
 			std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
-			buffer[Matrix4Alignment] = frameIndex;
-
-			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes + sizeof(float), buffer.data());
 		}
+
+		buffer[Matrix4Alignment] = projectionJitter.x();
+		buffer[Matrix4Alignment + 1] = projectionJitter.y();
+		buffer[Matrix4Alignment + 2] = frameIndex;
+
+		vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes + (3 * sizeof(float)), buffer.data());
 	}
 
 	void

@@ -432,11 +432,21 @@ namespace EmEn::Saphir::Generator
 				 * view UBO projection × V. Pushing V + VP + frameIndex was 132 B, above
 				 * the 128 B Vulkan minimum guarantee for maxPushConstantsSize. */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
+
+				/* NOTE: The TAA sub-pixel jitter travels per-draw because the view UBO
+				 * projection it would otherwise perturb is SINGLE-buffered: a frame-varying
+				 * value in there races the GPU and corrupts the velocity buffer.
+				 * V + jitter + frameIndex = 76 B. */
+				pushConstantBlock.addMember(Declaration::VariableType::FloatVector2, PushConstant::Component::ProjectionJitter);
 			}
 			else
 			{
-				/* NOTE: Push the view projection matrix (VP). */
+				/* NOTE: Push the view projection matrix (VP), UNJITTERED, + the TAA jitter (see
+				 * the branch above): baking the jitter in the pushed VP would make the velocity
+				 * clip positions carry it while the SSBO history matrix does not.
+				 * VP + jitter + frameIndex = 76 B. */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewProjectionMatrix);
+				pushConstantBlock.addMember(Declaration::VariableType::FloatVector2, PushConstant::Component::ProjectionJitter);
 			}
 		}
 		else
@@ -454,10 +464,19 @@ namespace EmEn::Saphir::Generator
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
 
 				/* NOTE: On the InstanceTransforms SSBO, the model matrix comes from the
-				 * per-instance entry (indexed by gl_InstanceIndex) — V + frameIndex = 68 B.
-				 * The V+M+frameIndex fallback (132 B) VIOLATES the 128 B Vulkan minimum
-				 * guarantee and only remains for scenes without instance transforms. */
-				if ( !m_shaderProgram->wasInstanceTransformsEnabled() )
+				 * per-instance entry (indexed by gl_InstanceIndex) — V + jitter + frameIndex
+				 * = 76 B. The V+M+frameIndex fallback (132 B) VIOLATES the 128 B Vulkan
+				 * minimum guarantee and only remains for scenes without instance transforms. */
+				if ( m_shaderProgram->wasInstanceTransformsEnabled() )
+				{
+					/* NOTE: The TAA sub-pixel jitter travels per-draw (see the instanced branch
+					 * above): the view UBO projection is single-buffered and must stay clean.
+					 * V + jitter + frameIndex = 76 B. NOT added to the V+M+frameIndex fallback
+					 * below, already at 132 B — and jittering requires velocity, which requires
+					 * the instance transforms SSBO anyway. */
+					pushConstantBlock.addMember(Declaration::VariableType::FloatVector2, PushConstant::Component::ProjectionJitter);
+				}
+				else
 				{
 					pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ModelMatrix);
 				}
@@ -466,8 +485,11 @@ namespace EmEn::Saphir::Generator
 			{
 				/* NOTE: Classic path on the InstanceTransforms SSBO: push the view projection
 				 * matrix (VP) only (MDI precedent) — the model matrix is read from the
-				 * per-instance SSBO entry indexed by gl_InstanceIndex. */
+				 * per-instance SSBO entry indexed by gl_InstanceIndex. The VP is UNJITTERED and
+				 * the TAA jitter travels next to it (see the instanced branches above):
+				 * VP + jitter + frameIndex = 76 B. */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewProjectionMatrix);
+				pushConstantBlock.addMember(Declaration::VariableType::FloatVector2, PushConstant::Component::ProjectionJitter);
 			}
 			else
 			{
