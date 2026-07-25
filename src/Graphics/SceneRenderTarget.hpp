@@ -71,10 +71,11 @@ namespace EmEn::Graphics
 			 * @param normalsFormat The Vulkan format for the normals MRT attachment. VK_FORMAT_UNDEFINED to skip.
 			 * @param materialPropertiesFormat The Vulkan format for the material properties MRT attachment. VK_FORMAT_UNDEFINED to skip.
 			 * @param albedoFormat The Vulkan format for the albedo MRT attachment. VK_FORMAT_UNDEFINED to skip.
+			 * @param velocityFormat The Vulkan format for the velocity MRT attachment (motion vectors). VK_FORMAT_UNDEFINED to skip.
 			 * @param depthFormat The Vulkan depth format (e.g. VK_FORMAT_D24_UNORM_S8_UINT).
 			 * @param viewDistance The max viewable distance in meters.
 			 */
-			SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat depthFormat, float viewDistance) noexcept;
+			SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat depthFormat, float viewDistance) noexcept;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
 			void setViewDistance (float meters) noexcept override;
@@ -243,6 +244,39 @@ namespace EmEn::Graphics
 				return m_albedoImage;
 			}
 
+			/**
+			 * @brief Returns the velocity format used by this render target.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat
+			velocityFormat () const noexcept
+			{
+				return m_velocityFormat;
+			}
+
+			/**
+			 * @brief Returns the velocity image for sampling operations (motion vectors).
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			velocityImage () const noexcept
+			{
+				return m_velocityImage;
+			}
+
+			/**
+			 * @brief Returns the velocity image view for sampling operations (motion vectors).
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			velocityImageView () const noexcept
+			{
+				return m_velocityImageView;
+			}
+
 		protected:
 
 			/**
@@ -321,6 +355,7 @@ namespace EmEn::Graphics
 			VkFormat m_normalsFormat;
 			VkFormat m_materialPropertiesFormat;
 			VkFormat m_albedoFormat;
+			VkFormat m_velocityFormat;
 			VkFormat m_depthFormat;
 			std::shared_ptr< Vulkan::Image > m_colorImage;
 			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
@@ -330,6 +365,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::ImageView > m_materialPropertiesImageView;
 			std::shared_ptr< Vulkan::Image > m_albedoImage;
 			std::shared_ptr< Vulkan::ImageView > m_albedoImageView;
+			std::shared_ptr< Vulkan::Image > m_velocityImage;
+			std::shared_ptr< Vulkan::ImageView > m_velocityImageView;
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;

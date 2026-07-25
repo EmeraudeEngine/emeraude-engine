@@ -173,12 +173,20 @@ namespace EmEn::Saphir::Generator
 	bool
 	SceneRendering::useInstanceTransformsSet () const noexcept
 	{
-		if ( this->isFlagEnabled(IsInstancingEnabled) || this->isMultiDrawIndirectEnabled() )
+		if ( this->isMultiDrawIndirectEnabled() )
 		{
 			return false;
 		}
 
 		if ( this->renderTarget()->isCubemap() )
+		{
+			return false;
+		}
+
+		/* NOTE: Instanced programs carry their model matrices in a VBO — they only need
+		 * the set for the {viewProjection, previousViewProjection} HEADER, read by the
+		 * velocity pass. Without a velocity attachment, no set. */
+		if ( this->isFlagEnabled(IsInstancingEnabled) && !m_hasVelocityAttachment )
 		{
 			return false;
 		}
@@ -347,11 +355,16 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Scene instance transforms SSBO: the model matrix source of the non-instanced
-		 * path (classic AND advanced). The flag MUST be set before
-		 * declareMatrixPushConstantBlock() (it selects the VP-only or V-only push block). */
+		 * path (classic AND advanced), and the {VP, previousVP} header source of the
+		 * velocity pass (instanced programs included). The matrix-source flag MUST be set
+		 * before declareMatrixPushConstantBlock() (it selects the VP/V-only push block)
+		 * and NEVER applies to instanced programs (their matrices live in a VBO). */
 		if ( program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
 		{
-			vertexShader->enableInstanceTransforms();
+			if ( !this->isFlagEnabled(IsInstancingEnabled) )
+			{
+				vertexShader->enableInstanceTransforms();
+			}
 
 			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
 
@@ -397,6 +410,19 @@ namespace EmEn::Saphir::Generator
 		if ( !vertexShader->requestSynthesizeInstruction(ShaderVariable::PositionScreenSpace) )
 		{
 			return false;
+		}
+
+		/* Velocity outputs (motion vectors): current and previous clip-space positions,
+		 * turned into an NDC delta by the fragment shader. Requires the InstanceTransforms
+		 * SSBO header (previousViewProjection). */
+		m_velocityOutputsEmitted = false;
+
+		if ( m_hasVelocityAttachment && program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
+		{
+			if ( !vertexShader->synthesizeVelocityClipPositions(*this, m_velocityOutputsEmitted) )
+			{
+				return false;
+			}
 		}
 
 		/* If present, generate the material shader code. */
@@ -464,6 +490,12 @@ namespace EmEn::Saphir::Generator
 		if ( m_hasAlbedoAttachment )
 		{
 			fragmentShader->declare(Declaration::OutputFragment{3, Keys::GLSL::FloatVector4, Keys::ShaderVariable::OutputAlbedo});
+		}
+
+		/* Declare the MRT velocity output only when the render target has the attachment. */
+		if ( m_hasVelocityAttachment )
+		{
+			fragmentShader->declare(Declaration::OutputFragment{4, Keys::GLSL::FloatVector2, Keys::ShaderVariable::OutputVelocity});
 		}
 
 		/* If a material is present, generate the shader code (optional). */
@@ -553,6 +585,22 @@ namespace EmEn::Saphir::Generator
 					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4(0.0);";
 				}
 			}
+
+			if ( m_hasVelocityAttachment )
+			{
+				/* Write the NDC-delta motion vector to MRT attachment 4 (temporal effects).
+				 * NOTE: Jitter-ready — when TAA introduces a projection jitter, subtract the
+				 * current and previous jitters from the respective NDC positions here.
+				 * Light passes have their write mask zeroed (see onGraphicsPipelineConfiguration). */
+				if ( m_velocityOutputsEmitted && (m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass) )
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputVelocity << " = (" << ShaderVariable::ClipPositionCurrent << ".xy / " << ShaderVariable::ClipPositionCurrent << ".w) - (" << ShaderVariable::ClipPositionPrevious << ".xy / " << ShaderVariable::ClipPositionPrevious << ".w);";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputVelocity << " = vec2(0.0);";
+				}
+			}
 		}
 		else if ( this->materialEnabled() )
 		{
@@ -573,6 +621,18 @@ namespace EmEn::Saphir::Generator
 				/* Unlit material: its displayed color IS its albedo. */
 				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << this->getMaterialInterface()->fragmentColor() << ").rgb, 1.0);";
 			}
+
+			if ( m_hasVelocityAttachment )
+			{
+				if ( m_velocityOutputsEmitted )
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputVelocity << " = (" << ShaderVariable::ClipPositionCurrent << ".xy / " << ShaderVariable::ClipPositionCurrent << ".w) - (" << ShaderVariable::ClipPositionPrevious << ".xy / " << ShaderVariable::ClipPositionPrevious << ".w);";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputVelocity << " = vec2(0.0);";
+				}
+			}
 		}
 		else
 		{
@@ -592,6 +652,18 @@ namespace EmEn::Saphir::Generator
 			{
 				/* No material: neutral white albedo (identity for indirect-light modulation). */
 				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4(1.0);";
+			}
+
+			if ( m_hasVelocityAttachment )
+			{
+				if ( m_velocityOutputsEmitted )
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputVelocity << " = (" << ShaderVariable::ClipPositionCurrent << ".xy / " << ShaderVariable::ClipPositionCurrent << ".w) - (" << ShaderVariable::ClipPositionPrevious << ".xy / " << ShaderVariable::ClipPositionPrevious << ".w);";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputVelocity << " = vec2(0.0);";
+				}
 			}
 		}
 
@@ -658,7 +730,7 @@ namespace EmEn::Saphir::Generator
 		 *   instead of the visible one (flat water reflections).
 		 * - Light passes (additive): the G-buffer must never be modified — write
 		 *   mask zero (previously they relied on shaders emitting vec4(0.0)). */
-		if ( m_hasNormalsAttachment || m_hasMaterialPropertiesAttachment || m_hasAlbedoAttachment )
+		if ( m_hasNormalsAttachment || m_hasMaterialPropertiesAttachment || m_hasAlbedoAttachment || m_hasVelocityAttachment )
 		{
 			auto gBufferState = graphicsPipeline.colorBlendAttachments()[0];
 
@@ -688,6 +760,11 @@ namespace EmEn::Saphir::Generator
 			}
 
 			if ( m_hasAlbedoAttachment )
+			{
+				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+			}
+
+			if ( m_hasVelocityAttachment )
 			{
 				graphicsPipeline.appendColorBlendAttachment(gBufferState);
 			}

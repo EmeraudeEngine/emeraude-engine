@@ -593,7 +593,7 @@ namespace EmEn::Graphics
 		 * At this point no scene is loaded yet, so requirements are all false (passthrough). */
 		if ( m_swapChain != nullptr && m_postProcessor.usable() )
 		{
-			if ( !m_postProcessor.configure(m_swapChain, false, false, false, false, false) )
+			if ( !m_postProcessor.configure(m_swapChain, false, false, false, false, false, false) )
 			{
 				TraceError{ClassId} << "Unable to configure the post-processor !";
 			}
@@ -869,9 +869,11 @@ namespace EmEn::Graphics
 		}
 
 		/* The shader generator uses colorAttachmentCount to detect the MRT layout with a FIXED
-		 * order (color, normals, materialProperties, albedo), so each attachment forces every
-		 * attachment before it: materialProperties requires normals, albedo requires both. */
-		const auto needsAlbedo = m_postProcessor.cachedRequiresAlbedo();
+		 * order (color, normals, materialProperties, albedo, velocity), so each attachment
+		 * forces every attachment before it: materialProperties requires normals, albedo
+		 * requires both, velocity requires the full chain. */
+		const auto needsVelocity = m_postProcessor.cachedRequiresVelocity();
+		const auto needsAlbedo = m_postProcessor.cachedRequiresAlbedo() || needsVelocity;
 		const auto needsMaterialProperties = m_postProcessor.cachedRequiresMaterialProperties() || needsAlbedo;
 		const auto needsNormals = m_postProcessor.cachedRequiresNormals() || needsMaterialProperties;
 
@@ -893,10 +895,16 @@ namespace EmEn::Graphics
 			? VK_FORMAT_R8G8B8A8_SRGB
 			: VK_FORMAT_UNDEFINED;
 
+		/* Velocity buffer format for MRT: screen-space motion vectors (NDC delta) for
+		 * temporal effects (TAA, RTGI reprojection, motion blur). */
+		const auto velocityFormat = needsVelocity
+			? VK_FORMAT_R16G16_SFLOAT
+			: VK_FORMAT_UNDEFINED;
+
 		m_sceneTarget = std::make_shared< SceneRenderTarget >(
 			"SceneRenderTarget",
 			width, height,
-			colorFormat, normalsFormat, materialPropertiesFormat, albedoFormat, depthFormat,
+			colorFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat, depthFormat,
 			m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance)
 		);
 
@@ -1341,7 +1349,8 @@ namespace EmEn::Graphics
 				stack->requiresDepth(),
 				stack->requiresNormals(),
 				stack->requiresMaterialProperties(),
-				stack->requiresAlbedo());
+				stack->requiresAlbedo(),
+				stack->requiresVelocity());
 
 			if ( this->recreateSceneTarget() )
 			{
@@ -1351,7 +1360,8 @@ namespace EmEn::Graphics
 					stack->requiresDepth(),
 					stack->requiresNormals(),
 					stack->requiresMaterialProperties(),
-					stack->requiresAlbedo()) )
+					stack->requiresAlbedo(),
+					stack->requiresVelocity()) )
 				{
 					TraceError{ClassId} << "Unable to reconfigure the post-processor with the scene target!";
 				}
@@ -1566,24 +1576,30 @@ namespace EmEn::Graphics
 		const bool sceneTargetHasNormals = m_sceneTarget->normalsFormat() != VK_FORMAT_UNDEFINED;
 		const bool sceneTargetHasMaterialProperties = m_sceneTarget->materialPropertiesFormat() != VK_FORMAT_UNDEFINED;
 		const bool sceneTargetHasAlbedo = m_sceneTarget->albedoFormat() != VK_FORMAT_UNDEFINED;
+		const bool sceneTargetHasVelocity = m_sceneTarget->velocityFormat() != VK_FORMAT_UNDEFINED;
 
-		if ( sceneTargetHasAlbedo )
+		if ( sceneTargetHasAlbedo && sceneTargetHasVelocity )
 		{
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 		}
+		else if ( sceneTargetHasAlbedo )
+		{
+			const std::array< VkClearValue, 5 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[3], m_clearColors[5]};
+			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
+		}
 		else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
 		{
-			const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[4]};
+			const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[5]};
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		else if ( sceneTargetHasNormals )
 		{
-			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[4]};
+			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[5]};
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		else if ( sceneTargetHasMaterialProperties )
 		{
-			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[4]};
+			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[5]};
 			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 		}
 		else
@@ -1617,23 +1633,28 @@ namespace EmEn::Graphics
 		 * so they can sample the captured scene for refraction effects. */
 		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
-			if ( sceneTargetHasAlbedo )
+			if ( sceneTargetHasAlbedo && sceneTargetHasVelocity )
 			{
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 			}
+			else if ( sceneTargetHasAlbedo )
+			{
+				const std::array< VkClearValue, 5 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[3], m_clearColors[5]};
+				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
+			}
 			else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
 			{
-				const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[4]};
+				const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[5]};
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else if ( sceneTargetHasNormals )
 			{
-				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[4]};
+				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[5]};
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else if ( sceneTargetHasMaterialProperties )
 			{
-				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[4]};
+				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[5]};
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else
@@ -1975,7 +1996,8 @@ namespace EmEn::Graphics
 				m_postProcessor.cachedRequiresDepth(),
 				m_postProcessor.cachedRequiresNormals(),
 				m_postProcessor.cachedRequiresMaterialProperties(),
-				m_postProcessor.cachedRequiresAlbedo()) )
+				m_postProcessor.cachedRequiresAlbedo(),
+				m_postProcessor.cachedRequiresVelocity()) )
 			{
 				TraceError{ClassId} << "Unable to reconfigure the post-processor on resize!";
 			}

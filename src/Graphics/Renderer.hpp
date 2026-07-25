@@ -749,8 +749,8 @@ namespace EmEn::Graphics
 			void
 			setClearDepthStencilValues (float depth, uint32_t stencil) noexcept
 			{
-				m_clearColors[4].depthStencil.depth = depth;
-				m_clearColors[4].depthStencil.stencil = stencil;
+				m_clearColors[5].depthStencil.depth = depth;
+				m_clearColors[5].depthStencil.stencil = stencil;
 				m_swapChainClearColors[1].depthStencil.depth = depth;
 				m_swapChainClearColors[1].depthStencil.stencil = stencil;
 			}
@@ -1452,11 +1452,12 @@ namespace EmEn::Graphics
 			};
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler >, TransparentStringHash, std::equal_to<> > m_samplers;
 			Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
-			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=depth. */
-			std::array< VkClearValue, 5 > m_clearColors{
+			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth. */
+			std::array< VkClearValue, 6 > m_clearColors{
 				VkClearValue{},
 				VkClearValue{},
 				VkClearValue{.color = {.float32 = {0.0F, 1.0F, 240.0F / 255.0F, 1.0F}}},
+				VkClearValue{},
 				VkClearValue{},
 				VkClearValue{}
 			};

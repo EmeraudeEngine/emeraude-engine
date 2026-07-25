@@ -408,6 +408,25 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			bool prepareInstanceModelMatrix () noexcept;
 
+		public:
+
+			/**
+			 * @brief Synthesizes the current/previous clip-space position outputs for the velocity pass.
+			 * @note The previous view-projection matrix comes from the InstanceTransforms SSBO header;
+			 * the previous model matrix comes from the SSBO entry (non-instanced), from the
+			 * PreviousModelMatrix attribute (instanced with motion history) or falls back to the
+			 * current model matrix (instanced without history, billboards — camera-only velocity;
+			 * skinned meshes use the CURRENT pose until double skinning exists).
+			 * Requires the InstanceTransforms SSBO GLSL block to be declared. Not available for MDI.
+			 * @param generator A reference to the shader generator (output locations).
+			 * @param emitted Set to true when the outputs were emitted, false when unavailable.
+			 * @return bool False on a declaration error only.
+			 */
+			[[nodiscard]]
+			bool synthesizeVelocityClipPositions (Generator::Abstract & generator, bool & emitted) noexcept;
+
+		private:
+
 			/**
 			 * @brief Creates a local variable for modelView matrix with VBO.
 			 * @return bool

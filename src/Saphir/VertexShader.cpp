@@ -38,6 +38,7 @@
 
 /* Local inclusions. */
 #include "AbstractShader.hpp"
+#include "Code.hpp"
 #include "Declaration/InputAttribute.hpp"
 #include "Declaration/OutputBlock.hpp"
 #include "Declaration/StageOutput.hpp"
@@ -308,6 +309,97 @@ namespace EmEn::Saphir
 		code << "\t" "const mat4 " << ShaderVariable::InstanceModelMatrix << " = ubInstanceTransforms.instanceMatrices[gl_InstanceIndex * 2];" "\n\n";
 
 		m_uniquePreparations.emplace_back(ShaderVariable::InstanceModelMatrix, code.str());
+
+		return true;
+	}
+
+	bool
+	VertexShader::synthesizeVelocityClipPositions (Generator::Abstract & generator, bool & emitted) noexcept
+	{
+		emitted = false;
+
+		/* NOTE: MDI has no previous matrix source; cubemap/CSM targets never carry a
+		 * velocity attachment. The fragment shader writes a zero velocity instead. */
+		if ( this->isMDIEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
+		{
+			return true;
+		}
+
+		/* Previous model matrix source — resolved FIRST: the push-constant fallback path
+		 * has no source and must bail out before any declaration/preparation happens. */
+		std::string previousModelMatrix;
+
+		if ( this->isInstancingEnabled() )
+		{
+			if ( this->isBillBoardingEnabled() )
+			{
+				/* NOTE: Billboards face the CURRENT camera — the previous sprite matrix is
+				 * unknown, fall back to the current one (camera-only velocity, assumed limit). */
+				if ( !this->prepareSpriteModelMatrix() )
+				{
+					return false;
+				}
+
+				previousModelMatrix = ShaderVariable::SpriteModelMatrix;
+			}
+			else if ( this->isInstanceMotionHistoryEnabled() )
+			{
+				if ( !this->declare(InputAttribute{VertexAttributeType::PreviousModelMatrixR0}) )
+				{
+					return false;
+				}
+
+				previousModelMatrix = Attribute::PreviousModelMatrix;
+			}
+			else
+			{
+				/* NOTE: Instanced without motion history: static instances, the current
+				 * model matrix IS the previous one (camera-only velocity for movers). */
+				if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
+				{
+					return false;
+				}
+
+				previousModelMatrix = Attribute::ModelMatrix;
+			}
+		}
+		else if ( this->isInstanceTransformsEnabled() )
+		{
+			/* Non-instanced: the previous model matrix lives in the SSBO entry (odd index). */
+			previousModelMatrix = "ubInstanceTransforms.instanceMatrices[gl_InstanceIndex * 2 + 1]";
+		}
+		else
+		{
+			/* NOTE: Push-constant fallback path (instance transforms unavailable):
+			 * no previous matrix source. */
+			return true;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::ClipPositionCurrent, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::ClipPositionPrevious, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		/* Current clip position: the same MVP as gl_Position (recomputed to stay
+		 * independent from the output instruction ordering). */
+		if ( !this->prepareModelViewProjectionMatrix() )
+		{
+			return false;
+		}
+
+		/* NOTE: Skinned meshes use the CURRENT pose for both positions until double
+		 * skinning exists (B4) — object velocity comes from the transform delta only. */
+		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
+		Code{*this, Location::Output} << ShaderVariable::ClipPositionPrevious << " = ubInstanceTransforms.previousViewProjection * " << previousModelMatrix << " * vec4(" << posExpr << ", 1.0);";
+
+		emitted = true;
 
 		return true;
 	}

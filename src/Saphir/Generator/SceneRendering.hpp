@@ -95,6 +95,7 @@ namespace EmEn::Saphir::Generator
 						m_hasNormalsAttachment = colorCount > 1;
 						m_hasMaterialPropertiesAttachment = colorCount > 2;
 						m_hasAlbedoAttachment = colorCount > 3;
+						m_hasVelocityAttachment = colorCount > 4;
 					}
 				}
 			}
@@ -169,5 +170,8 @@ namespace EmEn::Saphir::Generator
 			bool m_hasNormalsAttachment{false};
 			bool m_hasMaterialPropertiesAttachment{false};
 			bool m_hasAlbedoAttachment{false};
+			bool m_hasVelocityAttachment{false};
+			/** @brief Whether the vertex shader emitted the velocity clip-position outputs. */
+			bool m_velocityOutputsEmitted{false};
 	};
 }

@@ -37,7 +37,7 @@
 
 namespace EmEn::Graphics
 {
-	SceneRenderTarget::SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat depthFormat, float viewDistance) noexcept
+	SceneRenderTarget::SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat depthFormat, float viewDistance) noexcept
 		: Abstract{
 			name,
 			FramebufferPrecisions{8, 8, 8, 8, 24, 0, 1},
@@ -52,6 +52,7 @@ namespace EmEn::Graphics
 		m_normalsFormat{normalsFormat},
 		m_materialPropertiesFormat{materialPropertiesFormat},
 		m_albedoFormat{albedoFormat},
+		m_velocityFormat{velocityFormat},
 		m_depthFormat{depthFormat}
 	{
 
@@ -308,6 +309,25 @@ namespace EmEn::Graphics
 			++nextAttachment;
 		}
 
+		/* Attachment N: Velocity buffer (MRT, motion vectors). */
+		if ( m_velocityFormat != VK_FORMAT_UNDEFINED )
+		{
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = m_velocityFormat,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			});
+
+			subPass.addColorAttachment(nextAttachment, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			++nextAttachment;
+		}
+
 		/* Attachment N: Depth buffer. */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
@@ -420,6 +440,25 @@ namespace EmEn::Graphics
 			++nextAttachment;
 		}
 
+		/* Attachment N: Velocity buffer with LOAD_OP_LOAD to preserve the motion vectors. */
+		if ( m_velocityFormat != VK_FORMAT_UNDEFINED )
+		{
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = m_velocityFormat,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			});
+
+			subPass.addColorAttachment(nextAttachment, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			++nextAttachment;
+		}
+
 		/* Attachment N: Depth buffer with LOAD_OP_LOAD for depth testing. */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
@@ -494,6 +533,11 @@ namespace EmEn::Graphics
 			m_postProcessFramebuffer->addAttachment(m_albedoImageView->handle());
 		}
 
+		if ( m_velocityImageView != nullptr )
+		{
+			m_postProcessFramebuffer->addAttachment(m_velocityImageView->handle());
+		}
+
 		if ( m_depthImageView != nullptr )
 		{
 			m_postProcessFramebuffer->addAttachment(m_depthImageView->handle());
@@ -554,6 +598,8 @@ namespace EmEn::Graphics
 		m_framebuffer.reset();
 		m_depthImageView.reset();
 		m_depthStencilImage.reset();
+		m_velocityImageView.reset();
+		m_velocityImage.reset();
 		m_albedoImageView.reset();
 		m_albedoImage.reset();
 		m_materialPropertiesImageView.reset();
@@ -718,6 +764,44 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Velocity image: color attachment + sampleable (motion vectors for temporal effects). */
+		if ( m_velocityFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_velocityImage = std::make_shared< Vulkan::Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				m_velocityFormat,
+				this->extent(),
+				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_velocityImage->setIdentifier(ClassId, this->id(), "VelocityImage");
+
+			if ( !m_velocityImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the velocity image for '" << this->id() << "' !";
+				return false;
+			}
+
+			m_velocityImageView = std::make_shared< Vulkan::ImageView >(
+				m_velocityImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_velocityImageView->setIdentifier(ClassId, this->id(), "VelocityImageView");
+
+			if ( !m_velocityImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the velocity image view for '" << this->id() << "' !";
+				return false;
+			}
+		}
+
 		/* Depth image: depth attachment + transfer source (for depth blit to grab pass). */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
@@ -780,6 +864,11 @@ namespace EmEn::Graphics
 		if ( m_albedoImageView != nullptr )
 		{
 			m_framebuffer->addAttachment(m_albedoImageView->handle());
+		}
+
+		if ( m_velocityImageView != nullptr )
+		{
+			m_framebuffer->addAttachment(m_velocityImageView->handle());
 		}
 
 		if ( m_depthImageView != nullptr )

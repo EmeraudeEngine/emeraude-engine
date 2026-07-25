@@ -169,7 +169,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo) noexcept;
+			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo, bool requiresVelocity) noexcept;
 
 			/* Shared state. */
 
@@ -254,6 +254,17 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the cached velocity requirement (motion vectors).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			cachedRequiresVelocity () const noexcept
+			{
+				return m_cachedRequiresVelocity;
+			}
+
+			/**
 			 * @brief Updates the cached requirements without reconfiguring GPU resources.
 			 * @note Call this before recreateSceneTarget() so it picks up correct formats.
 			 * @param requiresHDR Whether the scene effects require HDR.
@@ -264,13 +275,14 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void
-			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo) noexcept
+			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo, bool requiresVelocity) noexcept
 			{
 				m_cachedRequiresHDR = requiresHDR;
 				m_cachedRequiresDepth = requiresDepth;
 				m_cachedRequiresNormals = requiresNormals;
 				m_cachedRequiresMaterialProperties = requiresMaterialProperties;
 				m_cachedRequiresAlbedo = requiresAlbedo;
+				m_cachedRequiresVelocity = requiresVelocity;
 			}
 
 			/**
@@ -352,5 +364,6 @@ namespace EmEn::Graphics
 			bool m_cachedRequiresNormals{false};
 			bool m_cachedRequiresMaterialProperties{false};
 			bool m_cachedRequiresAlbedo{false};
+			bool m_cachedRequiresVelocity{false};
 	};
 }

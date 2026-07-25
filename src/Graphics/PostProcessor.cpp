@@ -422,7 +422,7 @@ namespace EmEn::Graphics
 	/* Configuration. */
 
 	bool
-	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo) noexcept
+	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo, bool requiresVelocity) noexcept
 	{
 		/* Cache the requirements for later use (recordBlit, recreateSceneTarget). */
 		m_cachedRequiresHDR = requiresHDR;
@@ -430,6 +430,7 @@ namespace EmEn::Graphics
 		m_cachedRequiresNormals = requiresNormals;
 		m_cachedRequiresMaterialProperties = requiresMaterialProperties;
 		m_cachedRequiresAlbedo = requiresAlbedo;
+		m_cachedRequiresVelocity = requiresVelocity;
 
 		const auto & extent = renderTarget->extent();
 		const auto swapChainColorFormat = m_renderer.swapChainColorFormat();

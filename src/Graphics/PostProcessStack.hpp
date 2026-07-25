@@ -189,6 +189,14 @@ namespace EmEn::Graphics
 			bool requiresAlbedo () const noexcept;
 
 			/**
+			 * @brief Returns whether any effect in the stack requires the velocity buffer (motion vectors).
+			 * @note Velocity implies the full MRT chain before it (fixed MRT order).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool requiresVelocity () const noexcept;
+
+			/**
 			 * @brief Returns whether any effect in the stack requires the scene light set.
 			 * @return bool
 			 */
