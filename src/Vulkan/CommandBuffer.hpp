@@ -596,13 +596,36 @@ namespace EmEn::Vulkan
 			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept;
 
 			/**
+			 * @brief Draws a geometry with an explicit firstInstance value.
+			 * @note Used by the non-instanced InstanceTransforms path: the SSBO slot is
+			 * encoded in firstInstance and read back as gl_InstanceIndex (instanceCount == 1).
+			 * A distinct method name — an overload of draw() with a trailing firstInstance
+			 * would be ambiguous against the subGeometryIndex form (identical uint32_t tails).
+			 * @param geometry A reference to the geometry.
+			 * @param firstInstance The firstInstance draw parameter (InstanceTransforms slot).
+			 * @param instanceCount The number of instances.
+			 * @return void
+			 */
+			void drawWithFirstInstance (const Graphics::Geometry::Interface & geometry, uint32_t firstInstance, uint32_t instanceCount) const noexcept;
+
+			/**
+			 * @brief Draws a sub-geometry with an explicit firstInstance value.
+			 * @param geometry A reference to the geometry.
+			 * @param firstInstance The firstInstance draw parameter (InstanceTransforms slot).
+			 * @param subGeometryIndex The sub-geometry index (layer or animation frame).
+			 * @param instanceCount The number of instances.
+			 * @return void
+			 */
+			void drawWithFirstInstance (const Graphics::Geometry::Interface & geometry, uint32_t firstInstance, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept;
+
+			/**
 			 * @brief Registers an indexed draw command with explicit range.
 			 * @param indexOffset The starting index in the index buffer.
 			 * @param indexCount The number of indices to draw.
 			 * @param instanceCount The number of instances.
 			 * @return void
 			 */
-			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount) const noexcept;
+			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount, uint32_t firstInstance = 0) const noexcept;
 
 			/**
 			 * @brief Registers a non-indexed draw command without geometry binding.

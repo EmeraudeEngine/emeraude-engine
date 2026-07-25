@@ -448,7 +448,7 @@ void main()
 
 		d.pipelineLayout = std::make_shared< Vulkan::PipelineLayout >(
 			d.device, "XRayPipelineLayout",
-			Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 5 >{d.descriptorSetLayout},
+			Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 6 >{d.descriptorSetLayout},
 			Base::StaticVector< VkPushConstantRange, 4 >{pushConstantRange}
 		);
 

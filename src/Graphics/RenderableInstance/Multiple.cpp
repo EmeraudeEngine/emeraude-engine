@@ -371,55 +371,27 @@ namespace EmEn::Graphics::RenderableInstance
 			return;
 		}
 
-		/* Classic 2D rendering: compute and push VP (Model is in VBO). */
+		/* Classic 2D rendering (Model is in VBO). */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
-		const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
 
 		if ( pushContext.useBillboarding )
 		{
-			if constexpr ( MergePushConstants )
-			{
-				/* Create a single buffer for 2x mat4x4. */
-				std::array< float, 32 > buffer{};
-				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
-				std::memcpy(&buffer[Matrix4Alignment], viewProjectionMatrix.data(), MatrixBytes);
-
-				/* Push the view matrix (V) and the view projection matrix (VP) in a single call. */
-				vkCmdPushConstants(
-					passContext.commandBuffer->handle(),
-					pushContext.pipelineLayout->handle(),
-					pushContext.stageFlags,
-					0,
-					MatrixBytes * 2,
-					buffer.data()
-				);
-			}
-			else
-			{
-				/* Push the view matrix (V). */
-				vkCmdPushConstants(
-					passContext.commandBuffer->handle(),
-					pushContext.pipelineLayout->handle(),
-					pushContext.stageFlags,
-					0,
-					MatrixBytes,
-					viewMatrix.data()
-				);
-
-				/* Push the view projection matrix (VP). */
-				vkCmdPushConstants(
-					passContext.commandBuffer->handle(),
-					pushContext.pipelineLayout->handle(),
-					pushContext.stageFlags,
-					MatrixBytes,
-					MatrixBytes,
-					viewProjectionMatrix.data()
-				);
-			}
+			/* Push the view matrix (V) ONLY — the shader recomposes VP from the view UBO
+			 * projection × V (the V + VP push block was above the 128 B minimum guarantee). */
+			vkCmdPushConstants(
+				passContext.commandBuffer->handle(),
+				pushContext.pipelineLayout->handle(),
+				pushContext.stageFlags,
+				0,
+				MatrixBytes,
+				viewMatrix.data()
+			);
 		}
 		else
 		{
 			/* Push the view projection matrix (VP). */
+			const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
+
 			vkCmdPushConstants(
 				passContext.commandBuffer->handle(),
 				pushContext.pipelineLayout->handle(),
@@ -447,23 +419,25 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto flags = pushContext.stageFlags;
 		const auto frameIndex = static_cast< float >(this->frameIndex());
 
-		/* Classic 2D rendering: compute and push VP (Model is in VBO). */
+		/* Classic 2D rendering (Model is in VBO). */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
-		const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
 
 		if ( pushContext.useAdvancedMatrices || pushContext.useBillboarding )
 		{
-			/* Push the view matrix (V), the view projection matrix (VP), and frameIndex. */
-			std::array< float, Matrix4Alignment * 2 + 1 > buffer{};
+			/* Push the view matrix (V) + frameIndex ONLY — the shader recomposes VP from
+			 * the view UBO projection × V (the V + VP + frameIndex push block was 132 B,
+			 * above the 128 B Vulkan minimum guarantee for maxPushConstantsSize). */
+			std::array< float, Matrix4Alignment + 1 > buffer{};
 			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
-			std::memcpy(&buffer[Matrix4Alignment], viewProjectionMatrix.data(), MatrixBytes);
-			buffer[Matrix4Alignment * 2] = frameIndex;
+			buffer[Matrix4Alignment] = frameIndex;
 
-			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes * 2 + sizeof(float), buffer.data());
+			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes + sizeof(float), buffer.data());
 		}
 		else
 		{
 			/* Push the view projection matrix (VP) + frameIndex. */
+			const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
+
 			std::array< float, Matrix4Alignment + 1 > buffer{};
 			std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
 			buffer[Matrix4Alignment] = frameIndex;

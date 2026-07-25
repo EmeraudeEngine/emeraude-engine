@@ -1507,7 +1507,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount) const noexcept
+	CommandBuffer::drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount, uint32_t firstInstance) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -1534,7 +1534,6 @@ namespace EmEn::Vulkan
 		}
 
 		constexpr int32_t vertexOffset{0};
-		constexpr uint32_t firstInstance{0};
 
 		vkCmdDrawIndexed(
 			m_handle,
@@ -1544,6 +1543,117 @@ namespace EmEn::Vulkan
 			vertexOffset,
 			firstInstance
 		);
+	}
+
+	void
+	CommandBuffer::drawWithFirstInstance (const Graphics::Geometry::Interface & geometry, uint32_t firstInstance, uint32_t instanceCount) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} << "The command buffer is not created for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( instanceCount == 0 )
+			{
+				TraceError{ClassId} << "No instance count for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( !geometry.isCreated() )
+			{
+				TraceError{ClassId} << "The geometry '" << geometry.name() << "' is not created !";
+
+				return;
+			}
+		}
+
+		if ( geometry.useIndexBuffer() )
+		{
+			constexpr uint32_t firstIndex{0};
+			constexpr int32_t vertexOffset{0};
+
+			vkCmdDrawIndexed(
+				m_handle,
+				geometry.indexBufferObject()->indexCount(),
+				instanceCount,
+				firstIndex,
+				vertexOffset,
+				firstInstance
+			);
+		}
+		else
+		{
+			constexpr uint32_t firstVertex{0};
+
+			vkCmdDraw(
+				m_handle,
+				geometry.vertexBufferObject()->vertexCount(),
+				instanceCount,
+				firstVertex,
+				firstInstance
+			);
+		}
+	}
+
+	void
+	CommandBuffer::drawWithFirstInstance (const Graphics::Geometry::Interface & geometry, uint32_t firstInstance, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} << "The command buffer is not created for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( instanceCount == 0 )
+			{
+				TraceError{ClassId} << "No instance count for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( !geometry.isCreated() )
+			{
+				TraceError{ClassId} << "The geometry '" << geometry.name() << "' is not created !";
+
+				return;
+			}
+		}
+
+		const auto range = geometry.subGeometryRange(subGeometryIndex);
+
+		if ( geometry.useIndexBuffer() )
+		{
+			constexpr int32_t vertexOffset{0};
+
+			vkCmdDrawIndexed(
+				m_handle,
+				range[1],
+				instanceCount,
+				range[0],
+				vertexOffset,
+				firstInstance
+			);
+		}
+		else
+		{
+			constexpr uint32_t firstVertex{0};
+
+			vkCmdDraw(
+				m_handle,
+				range[1],
+				instanceCount,
+				firstVertex,
+				firstInstance
+			);
+		}
 	}
 
 	void

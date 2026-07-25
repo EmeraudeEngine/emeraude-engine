@@ -485,7 +485,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Focus: depth + previous focus. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualLayout);
 
 			m_focusLayout = layoutManager.getPipelineLayout(sets, {
@@ -495,7 +495,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Setup: color + depth + focus. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(tripleLayout);
 
 			m_setupLayout = layoutManager.getPipelineLayout(sets, {
@@ -505,7 +505,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Dilate: one input. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(singleLayout);
 
 			m_dilateLayout = layoutManager.getPipelineLayout(sets, {
@@ -515,7 +515,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Far gather: setup only. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(singleLayout);
 
 			m_farGatherLayout = layoutManager.getPipelineLayout(sets, {
@@ -525,7 +525,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Near gather: setup + dilated near CoC. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualLayout);
 
 			m_nearGatherLayout = layoutManager.getPipelineLayout(sets, {
@@ -535,7 +535,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Composite: original + far + near + material properties. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(quadLayout);
 
 			m_compositeLayout = layoutManager.getPipelineLayout(sets, {

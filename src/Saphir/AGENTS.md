@@ -600,9 +600,15 @@ When rendering to a cubemap (e.g., environment probes, reflection captures), the
 The push constant structure changes based on render target type. See: `Generator/Abstract.cpp:declareMatrixPushConstantBlock()`
 
 ```cpp
-// Standard mode (non-cubemap, non-instanced, no advanced matrices)
+// Standard mode (non-cubemap, non-instanced, no advanced matrices) —
+// ONLY when the InstanceTransforms SSBO path is unavailable (fallback):
 layout(push_constant) uniform Matrices {
     mat4 modelViewProjectionMatrix;  // Pre-combined MVP
+} pcMatrices;
+
+// Standard mode on the InstanceTransforms SSBO (the DEFAULT scene path since B1):
+layout(push_constant) uniform Matrices {
+    mat4 viewProjectionMatrix;  // VP only — model matrix from the SSBO
 } pcMatrices;
 
 // Cubemap mode (non-instanced)
@@ -610,6 +616,52 @@ layout(push_constant) uniform Matrices {
     mat4 modelMatrix;  // Model only - View/Projection from UBO
 } pcMatrices;
 ```
+
+### InstanceTransforms SSBO Path (motion vectors B1)
+
+The classic non-instanced scene path reads its model matrix from the per-scene
+`InstanceTransforms` SSBO instead of push constants:
+
+- **SetType::PerSceneTransforms** — dedicated set (dynamic index, enabled right after
+  PerView by `SceneRendering::prepareUniformSets()` via `useInstanceTransformsSet()`:
+  non-instanced, non-MDI, non-cubemap, scene transforms initialized — classic AND advanced).
+- **GLSL**: `readonly buffer InstanceTransforms { mat4 viewProjection; mat4
+  previousViewProjection; mat4 instanceMatrices[]; } ubInstanceTransforms;` — entries
+  interleave `{model, previousModel}` (stride 2). The header is reserved for the
+  motion-vector pass.
+- **Indexing**: `gl_InstanceIndex * 2` — the slot is encoded in the `firstInstance`
+  draw parameter (`CommandBuffer::drawWithFirstInstance()`); with `instanceCount == 1`,
+  `gl_InstanceIndex == firstInstance` and NO `shaderDrawParameters` feature is required
+  (contrary to `gl_BaseInstance`). Min-spec safe.
+- **Push blocks**: classic = VP + frameIndex, advanced = V + frameIndex (projection from
+  the view UBO) — both 68 B, declared by `declareMatrixPushConstantBlock()`. The advanced
+  V+M+frameIndex fallback (132 B, min-spec VIOLATION) only survives for scenes whose
+  instance transforms failed to initialize.
+- ⚠️ **Two-condition contract**: the descriptor SET (pipeline layout) follows
+  `setIndexes.isSetEnabled(PerSceneTransforms)` — sealed at `prepareUniformSets()` time —
+  while the MATRIX SOURCE follows `Program::wasInstanceTransformsEnabled()` (the vertex
+  shader flag). The CPU binding in `RenderableInstance::Abstract::render()` follows
+  setIndexes; the push constants and `firstInstance` follow the shader flag. NEVER mix
+  the two conditions (a bound-but-unreferenced set is legal; a missing set in the sealed
+  layout order corrupts every subsequent set index).
+- **VertexShader preparations**: `prepareInstanceModelMatrix()` (the template), with
+  branches in `prepareModelViewMatrix()`, `prepareModelViewProjectionMatrix()`,
+  `synthesizeVertexPositionInWorldSpace()`, world-space normal and world TBN fallbacks,
+  plus the non-instanced shadow-receiving reads in `LightGenerator.ShadowMap.cpp`.
+- **Assumed limit (owner decision)**: cubemap scene, shadow 2D, CSM and shadow-cubemap
+  paths STAY on push constants (64-68 B, min-spec clean — no motion data needed there).
+
+### Push Constant Min-Spec (128 B) — Engine-Wide Rules
+
+- `Vulkan::PipelineLayout::createOnHardware()` VALIDATES every push constant range:
+  hard error above the device `maxPushConstantsSize`, warning above the 128-byte Vulkan
+  minimum guarantee. A min-spec warning in the logs is a portability defect to fix.
+- The INSTANCED advanced/billboard block pushes **V only** (+ frameIndex); the shader
+  recomposes VP from the view UBO projection × V (`prepareModelViewProjectionMatrix()`
+  instanced branches). The former V + VP + frameIndex block was 132 B. This applies to
+  shadow casting too: the ShadowCasting vertex shader declares the view uniform block for
+  EVERY instanced program (the PerView set was already enabled/bound for instancing).
+- Plain (non-advanced, non-billboard) instanced still pushes VP; MDI pushes BDA + VP.
 
 ### View Matrix Access Pattern
 

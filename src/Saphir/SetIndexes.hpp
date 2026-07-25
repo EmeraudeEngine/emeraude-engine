@@ -40,6 +40,8 @@ namespace EmEn::Saphir
 	{
 		/* Everything used by the whole frame. */
 		PerView,
+		/* Scene-level per-frame transforms (InstanceTransforms SSBO, non-instanced model matrices). */
+		PerSceneTransforms,
 		/* Everything used by the same light */
 		PerLight,
 		/* Everything used by the same model. */

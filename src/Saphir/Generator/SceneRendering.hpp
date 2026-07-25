@@ -125,7 +125,7 @@ namespace EmEn::Saphir::Generator
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
 			[[nodiscard]]
-			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 5 > & descriptorSetLayouts, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept override;
+			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 6 > & descriptorSetLayouts, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
 			[[nodiscard]]
@@ -137,6 +137,15 @@ namespace EmEn::Saphir::Generator
 			 */
 			[[nodiscard]]
 			bool isAdvancedRendering () const noexcept;
+
+			/**
+			 * @brief Returns whether the program uses the scene InstanceTransforms SSBO set (SetType::PerSceneTransforms).
+			 * @note Non-instanced, non-MDI, non-cubemap scene rendering (classic AND advanced).
+			 * Evaluated at prepareUniformSets() time — it seals the pipeline layout.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool useInstanceTransformsSet () const noexcept;
 
 			/**
 			 * @brief Generates the vertex shader stage of the graphics pipeline.

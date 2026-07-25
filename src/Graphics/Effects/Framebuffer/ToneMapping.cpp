@@ -441,21 +441,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(singleInputLayout);
 
 			m_pipelineLayout = layoutManager.getPipelineLayout(sets, pcRange16);
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_adaptPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange16);
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_autoExpPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange32);

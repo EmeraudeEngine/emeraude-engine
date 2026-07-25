@@ -991,8 +991,10 @@ if ( materialType == PBRResource::ClassId )
 > [!CRITICAL]
 > The Vulkan spec only guarantees **128 bytes** for `maxPushConstantsSize`. NVIDIA exposes
 > 256, but part of the AMD/Intel fleet exposes exactly 128 — a pipeline layout declaring a
-> larger range fails to create there (`vkCreatePipelineLayout` rejects it). The engine
-> currently has **NO validation** of this limit anywhere.
+> larger range fails to create there (`vkCreatePipelineLayout` rejects it).
+> VALIDATION (2026-07-25): `Vulkan::PipelineLayout::createOnHardware()` now rejects any
+> range above the DEVICE limit (hard error) and warns on any range above the 128-byte
+> minimum guarantee. A min-spec warning in the logs is a portability defect to fix.
 
 **Known state:**
 - RTGI's former trace push constants were exactly 128 B; adding the previous-frame matrix
@@ -1000,12 +1002,19 @@ if ( materialType == PBRResource::ClassId )
   Use the same pattern for any effect whose per-frame data outgrows 128 B:
   `IndirectPostProcessEffect::getInputLayout(samplerCount, uniformBufferCount)` +
   `createPerFrameUniformBuffers()` + `updateUniformBufferData()`.
-- **OPEN ISSUE:** the scene-pass `useAdvancedMatrices` path pushes **132 bytes**
-  (view 64 + model 64 + frameIndex 4 — `RenderableInstance/Unique.cpp`,
-  `pushMatricesForRendering()`). This exceeds the min-spec TODAY: on a 128-byte device the
-  main rendering pipelines would not build. Fix = move scene-pass transforms to a
-  per-instance SSBO (also the prerequisite for motion vectors). Tracked in projet-alpha
-  `TODO.md`.
+- **FIXED (2026-07-25, motion vectors B1):** the scene-pass `useAdvancedMatrices` path
+  pushed **132 bytes** (view 64 + model 64 + frameIndex 4). With the `InstanceTransforms`
+  SSBO (`SetType::PerSceneTransforms`), the non-instanced scene paths now push
+  VP + frameIndex (classic) or V + frameIndex (advanced) = **68 B**; the model matrix comes
+  from the per-instance SSBO entry (`gl_InstanceIndex`, slot in `firstInstance`). The 132 B
+  block only survives as a fallback for scenes whose instance transforms failed to
+  initialize. See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path".
+- **FIXED (2026-07-25, B1 milestone 5):** the INSTANCED advanced/billboard block declared
+  V + VP + frameIndex = **132 bytes**. It now pushes V (+ frameIndex) only — the shader
+  recomposes VP from the view UBO projection × V (`prepareModelViewProjectionMatrix()`
+  instanced branches; shadow instanced billboard included — the ShadowCasting vertex
+  shader now declares the view uniform block for every instanced program). All scene and
+  shadow push blocks are ≤ 128 B; the PipelineLayout creation-time validation keeps it so.
 
 **Rule:** before adding ANY field to a push constant block, sum the struct size; at
 > 128 B, migrate to a UBO/SSBO instead. Never rely on the 256 B NVIDIA limit.

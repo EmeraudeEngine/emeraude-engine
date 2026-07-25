@@ -6,6 +6,12 @@
 - GENERAL: Replace all "std::stringstream" by "std::format" (C++20) for simple keys, names or identifiers creation. WARNING: This doesn't work under macOS for targeting older SDKs.
 - GENERAL: Issue on Linux with X11, multi-monitors and NVIDIA proprietary driver. More info: https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406
 - RENDERING SYSTEM: Check sprite texture clamping to edges.
+- RENDERING SYSTEM: Remove the dead camera velocity vector from the view UBOs — uploaded
+  every frame (`ViewMatrices*UBO::updateViewCoordinates()`, `VelocityVectorOffset`) and
+  declared in the generated GLSL view blocks, but read by NO shader. The velocity parameter
+  itself stays (it feeds the OpenAL listener/doppler on the audio side of the AVConsole
+  contract). Motion vectors do NOT use it (they need the previous view-projection matrix,
+  not a linear velocity).
 - PHYSICS SYSTEM: Enable the rotational physics. (WIP)
 - PHYSICS SYSTEM: Create a particle system using Compute Shader.
 - RESOURCES SYSTEM: Merge Font from PixelFactory and FontResource.
@@ -63,12 +69,42 @@
   matrix (Unique member; Multiple: +4 vec4/instance in the VBO); (B3) RG16F MRT attachment
   (watch the depth clear index shift, same trap as the albedo attachment); (B4) skeletal:
   previous pose retained + double skinning in the VS (permanent VS cost on humanoids).
+  PROGRESS 2026-07-25 — B1 milestones 1-3 DONE: `Scenes/SceneInstanceTransforms` (per-frame
+  SSBO `{VP, prevVP}` header + `{model, prevModel}` entries, frame-linear slots staged at
+  `prepareRender()`, `Scene::beginRenderFrame()` renderer contract) + dedicated descriptor
+  set per frame-in-flight at the new `Saphir::SetType::PerSceneTransforms` index (owner
+  decision: NOT in the per-target view set — incompatible lifecycles) + CLASSIC PATH
+  SWITCHED: non-instanced/non-MDI/non-cubemap/non-advanced scene programs push VP+frameIndex
+  (68 B, MDI precedent) and read the model matrix from the SSBO via `gl_InstanceIndex`
+  (== firstInstance with instanceCount 1 — no shaderDrawParameters requirement; owner-visible
+  deviation from the gl_BaseInstance wording, same mechanism, wider fleet).
+  Validated: doom-loader (unlit=switched path), global-illumination A/B in noise floor,
+  basic-scenery (infinity view + sprites). MILESTONE 4 DONE (2026-07-25): ADVANCED path
+  switched too (push V + frameIndex = 68 B, projection from the view UBO, model from the
+  SSBO — kills the Unique 132 B violation; incl. the LightGenerator.ShadowMap non-instanced
+  reads). OWNER DECISION: cubemap scene / shadow 2D / CSM / shadow-cubemap paths STAY on
+  push constants (64-68 B, min-spec clean, no motion data needed there) — assumed limit.
+  GI demo A/B: M4 render BIT-IDENTICAL to M3 (0 differing bytes, converged accumulation).
+  MILESTONE 5 DONE (2026-07-25): `PipelineLayout::createOnHardware()` validates every push
+  range (hard error above the device limit, warning above the 128 B minimum guarantee) +
+  INSTANCED advanced/billboard 132 B block fixed (push V only, VP recomposed in shader from
+  the view UBO projection — scene AND shadow variants; validated on the sprite and
+  basic-scenery demos, zero min-spec warnings engine-wide). Bench: perf-neutral (GI demo,
+  deterministic camera: 230 FPS B1 vs 225-235 baseline; doom-loader ~7.6k vs ~7.2k).
+  ==> B1 COMPLETE. Next: B2 (per-object previous model matrices), B3 (RG16F velocity
+  attachment — consume the SSBO header), B4 (double skinning).
+  See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path".
 - [ ] **Push constant min-spec violation (132 B)** — `RenderableInstance/Unique.cpp`
   `pushMatricesForRendering()`, `useAdvancedMatrices` path: view(64)+model(64)+frameIndex(4)
   = 132 B > the 128 B Vulkan minimum guarantee → main pipelines would fail to build on
   128 B devices (part of the AMD/Intel fleet). No engine-wide `maxPushConstantsSize`
   validation exists either. Fixed by B1 above; add a creation-time validation regardless.
   See caution-points § "Push Constants: the 128-Byte Minimum Guarantee".
+  DISCOVERED 2026-07-25: the INSTANCED advanced/billboard block has the same violation —
+  `Saphir/Generator/Abstract.cpp::declareMatrixPushConstantBlock()`, `wasInstancingEnabled`
+  branch declares V(64)+VP(64)+frameIndex(4) = 132 B. Owner decision: handle it with the
+  min-spec validation step (B1 milestone 5), not in the B1 non-instanced switch (likely
+  fix: stop pushing VP, recompose it in the shader from the view UBO projection × pushed V).
 - [x] **`GBufferInputs` struct refactor** — DONE 2026-07-25 as
   `IndirectPostProcessEffect::FrameContext` (G-buffers + lightSet + ACTIVE CAMERA +
   push constants), mechanical pass across all 16 effects. Motivated by the physical

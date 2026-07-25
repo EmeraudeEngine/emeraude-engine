@@ -494,7 +494,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(tripleLayout);
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
@@ -505,7 +505,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(tripleLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
@@ -516,7 +516,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(applyInputLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{

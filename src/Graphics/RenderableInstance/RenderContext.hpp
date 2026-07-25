@@ -137,5 +137,14 @@ namespace EmEn::Graphics::RenderableInstance
 		 * construct a billboard orientation from it.
 		 */
 		bool useBillboarding{false};
+
+		/**
+		 * @brief Whether the shader reads its model matrix from the scene InstanceTransforms SSBO.
+		 *
+		 * When true (classic non-instanced path), only the view-projection matrix and the
+		 * frame index are pushed; the model matrix comes from the per-instance SSBO entry
+		 * selected by the firstInstance draw parameter (read as gl_InstanceIndex).
+		 */
+		bool useInstanceTransforms{false};
 	};
 }

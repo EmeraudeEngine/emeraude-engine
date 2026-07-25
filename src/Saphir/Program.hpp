@@ -129,6 +129,13 @@ namespace EmEn::Saphir
 			bool wasMDIEnabled () const noexcept;
 
 			/**
+			 * @brief Returns whether the vertex shader reads its model matrix from the InstanceTransforms SSBO.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool wasInstanceTransformsEnabled () const noexcept;
+
+			/**
 			 * @brief Initializes the vertex shader and returns it.
 			 * @param name A reference to a string.
 			 * @param enableInstancing Enable instancing for the vertex shader.

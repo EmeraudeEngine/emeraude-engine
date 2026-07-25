@@ -103,8 +103,40 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* Push constant min-spec validation: the Vulkan spec only guarantees 128 bytes for
+		 * maxPushConstantsSize (NVIDIA exposes 256, part of the AMD/Intel fleet exactly 128).
+		 * A range above the DEVICE limit is a hard failure; a range above the 128-byte
+		 * minimum guarantee is a portability defect that must be fixed, never silenced.
+		 * See docs/caution-points.md § "Push Constants: the 128-Byte Minimum Guarantee". */
+		{
+			const auto maxPushConstantsSize = this->device()->physicalDevice()->properties().properties.limits.maxPushConstantsSize;
+
+			for ( const auto & range : m_pushConstantRanges )
+			{
+				const uint32_t rangeEnd = range.offset + range.size;
+
+				if ( rangeEnd > maxPushConstantsSize )
+				{
+					TraceError{ClassId} <<
+						"A push constant range ends at " << rangeEnd << " bytes, "
+						"above the device limit of " << maxPushConstantsSize << " bytes ! "
+						"Pipeline layout creation aborted.";
+
+					return false;
+				}
+
+				if ( rangeEnd > 128 )
+				{
+					TraceWarning{ClassId} <<
+						"A push constant range ends at " << rangeEnd << " bytes, "
+						"above the 128-byte Vulkan minimum guarantee ! "
+						"This pipeline layout will fail to create on min-spec devices.";
+				}
+			}
+		}
+
 		/* Repack vulkan handles to use within the createInfo. */
-		StaticVector< VkDescriptorSetLayout, 5 > setLayouts{};
+		StaticVector< VkDescriptorSetLayout, 6 > setLayouts{};
 
 		std::ranges::transform(m_descriptorSetLayouts, std::back_inserter(setLayouts), [] (const auto & item) -> VkDescriptorSetLayout {
 			return item->handle();
@@ -159,7 +191,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	PipelineLayout::computeHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
+	PipelineLayout::computeHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
 	{
 		/* FIXME: Weak and unstable hash method !! */
 		size_t hash = 0;

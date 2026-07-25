@@ -598,7 +598,7 @@ namespace EmEn::Saphir::Generator
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 5 > & descriptorSetLayouts, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept = 0;
+			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Base::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 6 > & descriptorSetLayouts, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept = 0;
 
 			/**
 			 * @brief Configures the graphics pipeline from child shader generators.

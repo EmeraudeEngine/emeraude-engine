@@ -127,7 +127,7 @@ namespace EmEn::Vulkan
 			 * @return std::shared_ptr< PipelineLayout >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< PipelineLayout > getPipelineLayout (const Base::StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, const Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
+			std::shared_ptr< PipelineLayout > getPipelineLayout (const Base::StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & descriptorSetLayouts, const Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
 
 		private:
 

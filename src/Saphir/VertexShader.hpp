@@ -304,6 +304,31 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Enables the InstanceTransforms SSBO as the model matrix source.
+			 * @note The model matrix is read from the scene InstanceTransforms SSBO entry
+			 * indexed by gl_InstanceIndex (== the firstInstance draw parameter — this path
+			 * always draws with instanceCount = 1, so no shaderDrawParameters feature is
+			 * required, contrary to gl_BaseInstance).
+			 * @return void
+			 */
+			void
+			enableInstanceTransforms () noexcept
+			{
+				m_instanceTransformsEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the InstanceTransforms SSBO is the model matrix source.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isInstanceTransformsEnabled () const noexcept
+			{
+				return m_instanceTransformsEnabled;
+			}
+
+			/**
 			 * @brief Enables skeletal skinning in this vertex shader.
 			 * @return void
 			 */
@@ -350,6 +375,14 @@ namespace EmEn::Saphir
 
 			[[nodiscard]]
 			bool prepareMDIModelMatrix () noexcept;
+
+			/**
+			 * @brief Creates a local variable for the model matrix read from the InstanceTransforms SSBO.
+			 * @note Indexed by gl_InstanceIndex (instanceCount is always 1 on this path).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool prepareInstanceModelMatrix () noexcept;
 
 			/**
 			 * @brief Creates a local variable for modelView matrix with VBO.
@@ -531,5 +564,6 @@ namespace EmEn::Saphir
 			bool m_csmModeEnabled{false};
 			bool m_MDIEnabled{false};
 			bool m_skinningEnabled{false};
+			bool m_instanceTransformsEnabled{false};
 	};
 }

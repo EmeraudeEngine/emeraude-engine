@@ -85,6 +85,7 @@ namespace EmEn
 		}
 
 		class Scene;
+		class SceneInstanceTransforms;
 	}
 }
 
@@ -631,6 +632,31 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Stages this instance's transforms into the scene instance transforms SSBO and retains the slot.
+			 * @note Non-instanced path only (instanced renderables carry their model matrices in a VBO).
+			 * Called by Scene::prepareRender() during render list population; the retained slot is
+			 * consumed by the draws recorded until the next prepareRender(). The model matrix
+			 * computation mirrors Unique::pushMatricesForRendering().
+			 * @param instanceTransforms A reference to the scene instance transforms manager.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
+			 * @return void
+			 */
+			void stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const Base::Math::CartesianFrame< float > * worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
+
+			/**
+			 * @brief Returns the instance transforms SSBO slot staged for the current render pass.
+			 * @note Only meaningful on the non-instanced path, between two Scene::prepareRender() calls.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			instanceTransformsSlot () const noexcept
+			{
+				return m_instanceTransformsSlot;
+			}
+
+			/**
 			 * @brief Draws the instance into a shadow map.
 			 *
 			 * Renders the instance for shadow casting using a simplified pipeline:
@@ -679,7 +705,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see renderTBNSpace() For debug visualization.
 			 * @version 0.8.35
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target with state tracking to skip redundant binds.
@@ -704,7 +730,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @see render() For the non-tracked version.
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.
@@ -916,6 +942,8 @@ namespace EmEn::Graphics::RenderableInstance
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_frameIndex{0};
+			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
+			uint32_t m_instanceTransformsSlot{0};
 			/* Skeletal skinning GPU resources (per-instance). */
 			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;

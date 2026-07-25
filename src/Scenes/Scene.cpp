@@ -57,6 +57,7 @@ namespace EmEn::Scenes
 		m_seaLevel{seaLevel},
 		m_AVConsoleManager{name, graphicsRenderer, audioManager},
 		m_sceneMetaData{graphicsRenderer.device(), graphicsRenderer.accelerationStructureBuilder(), &graphicsRenderer.deferredDestructor()},
+		m_instanceTransforms{graphicsRenderer.device(), &graphicsRenderer.deferredDestructor()},
 		m_boundary{boundary}
 	{
 		this->observe(&m_AVConsoleManager);
@@ -72,6 +73,9 @@ namespace EmEn::Scenes
 
 			m_TLASDistance = settings.getOrSetDefault< float >(GraphicsRayTracingTLASDistanceKey, DefaultGraphicsRayTracingTLASDistance);
 		}
+
+		/* Initialize per-frame instance transforms SSBOs and descriptor sets (non-instanced rendering path). */
+		static_cast< void >(m_instanceTransforms.initializePerFrameBuffers(graphicsRenderer));
 
 		m_LODScreenCoverageThreshold = settings.getOrSetDefault< float >(GraphicsLODScreenCoverageThresholdKey, DefaultGraphicsLODScreenCoverageThreshold);
 

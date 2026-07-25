@@ -284,7 +284,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(singleInputLayout);
 
 			m_thresholdLayout = layoutManager.getPipelineLayout(sets, {
@@ -293,7 +293,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(singleInputLayout);
 
 			m_ghostHaloLayout = layoutManager.getPipelineLayout(sets, {
@@ -302,7 +302,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_compositeLayout = layoutManager.getPipelineLayout(sets, {

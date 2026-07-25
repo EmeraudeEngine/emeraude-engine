@@ -66,9 +66,15 @@ namespace EmEn::Saphir
 					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
 				}
 			}
+			else if ( vertexShader.isInstanceTransformsEnabled() )
+			{
+				/* Get the model matrix from the InstanceTransforms SSBO entry.
+				 * NOTE: The preparation is guaranteed requested by the MVP synthesis. */
+				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << ShaderVariable::InstanceModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+			}
 			else
 			{
-				/* Get the model matrix from UBO. */
+				/* Get the model matrix from the push constants. */
 				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << Attribute::Position << ", 1.0);";
 			}
 		}
@@ -93,6 +99,12 @@ namespace EmEn::Saphir
 				{
 					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
 				}
+			}
+			else if ( vertexShader.isInstanceTransformsEnabled() )
+			{
+				/* Get the model matrix from the InstanceTransforms SSBO entry.
+				 * NOTE: The preparation is guaranteed requested by the MVP synthesis. */
+				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << ShaderVariable::InstanceModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
 			}
 			else
 			{

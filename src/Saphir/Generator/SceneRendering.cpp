@@ -51,6 +51,16 @@ namespace EmEn::Saphir::Generator
 	{
 		setIndexes.enableSet(SetType::PerView);
 
+		/* Scene instance transforms SSBO (non-instanced model matrices, classic AND
+		 * advanced). This decision seals the pipeline layout; the CPU binding follows
+		 * setIndexes (pipeline layout) while the matrix source follows
+		 * Program::wasInstanceTransformsEnabled() (shader code) — keep both conditions
+		 * separate (see src/Saphir/AGENTS.md § "InstanceTransforms SSBO Path"). */
+		if ( this->useInstanceTransformsSet() )
+		{
+			setIndexes.enableSet(SetType::PerSceneTransforms);
+		}
+
 		if ( this->isFlagEnabled(IsLightingEnabled) )
 		{
 			switch ( m_renderPassType )
@@ -161,6 +171,22 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
+	SceneRendering::useInstanceTransformsSet () const noexcept
+	{
+		if ( this->isFlagEnabled(IsInstancingEnabled) || this->isMultiDrawIndirectEnabled() )
+		{
+			return false;
+		}
+
+		if ( this->renderTarget()->isCubemap() )
+		{
+			return false;
+		}
+
+		return m_scene != nullptr && m_scene->instanceTransforms().isInitialized();
+	}
+
+	bool
 	SceneRendering::isAdvancedRendering () const noexcept
 	{
 		if ( this->getMaterialInterface()->isComplex() )
@@ -207,8 +233,24 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	SceneRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	SceneRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
+		/* Prepare the descriptor set layout for the scene instance transforms SSBO.
+		 * NOTE: Must come right after the PerView layout (set index order). */
+		if ( setIndexes.isSetEnabled(SetType::PerSceneTransforms) )
+		{
+			auto descriptorSetLayout = Scenes::SceneInstanceTransforms::getDescriptorSetLayout(renderer.layoutManager());
+
+			if ( descriptorSetLayout == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to get the instance transforms descriptor set layout !");
+
+				return false;
+			}
+
+			descriptorSetLayouts.emplace_back(descriptorSetLayout);
+		}
+
 		if ( m_scene != nullptr && setIndexes.isSetEnabled(SetType::PerLight) )
 		{
 			/* NOTE: Use the unified layout (2 bindings: UBO + shadow sampler).
@@ -296,6 +338,26 @@ namespace EmEn::Saphir::Generator
 		if ( isCubemapTarget )
 		{
 			vertexShader->setExtensionBehavior("GL_EXT_multiview", "enable");
+		}
+
+		/* Scene instance transforms SSBO: the model matrix source of the non-instanced
+		 * path (classic AND advanced). The flag MUST be set before
+		 * declareMatrixPushConstantBlock() (it selects the VP-only or V-only push block). */
+		if ( program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
+		{
+			vertexShader->enableInstanceTransforms();
+
+			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
+
+			/* NOTE: {model, previousModel} interleaved (stride 2), preceded by the
+			 * {viewProjection, previousViewProjection} header reserved for the
+			 * motion-vector pass. Must match Scenes::SceneInstanceTransforms GPU layout. */
+			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
+			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
+			ssbo.addMember(Declaration::VariableType::Matrix4, "viewProjection");
+			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
+			ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
+			vertexShader->declare(ssbo);
 		}
 
 		if ( !this->declareMatrixPushConstantBlock(*vertexShader) )

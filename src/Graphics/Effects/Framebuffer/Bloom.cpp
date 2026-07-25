@@ -335,21 +335,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Pipeline layouts. */
 		{
 			/* Downsample: binding 0 = input texture, binding 1 = material properties. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_downsampleLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_upsampleLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_compositeLayout = renderer.layoutManager().getPipelineLayout(sets, pushConstantRanges);

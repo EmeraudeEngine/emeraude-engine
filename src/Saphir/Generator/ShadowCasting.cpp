@@ -121,7 +121,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	ShadowCasting::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	ShadowCasting::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
 
@@ -250,8 +250,12 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* For multiview (cubemap/CSM), declare the view UBO with view matrices. */
-		if ( useMultiview )
+		/* For multiview (cubemap/CSM), declare the view UBO with view matrices.
+		 * Instancing also declares it: the billboard path recomposes VP from the view UBO
+		 * projection × the pushed view matrix (the V + VP push block was 132 B, above the
+		 * 128 B Vulkan minimum guarantee). The PerView set is already enabled and bound
+		 * for every instanced shadow program. */
+		if ( useMultiview || this->isFlagEnabled(IsInstancingEnabled) )
 		{
 			if ( !this->declareViewUniformBlock(*vertexShader) )
 			{

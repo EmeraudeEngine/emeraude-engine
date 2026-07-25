@@ -65,6 +65,8 @@ namespace EmEn::Graphics::RenderableInstance
 		uint32_t lastLightUBOOffset{UINT32_MAX};
 		/** @brief Last bound view descriptor set handle. */
 		VkDescriptorSet lastViewDS{VK_NULL_HANDLE};
+		/** @brief Last bound scene instance transforms descriptor set handle. */
+		VkDescriptorSet lastSceneTransformsDS{VK_NULL_HANDLE};
 		/** @brief Last bound bindless descriptor set handle. */
 		VkDescriptorSet lastBindlessDS{VK_NULL_HANDLE};
 		/** @brief Whether the viewport/scissor has already been set for this pass. */
@@ -86,6 +88,7 @@ namespace EmEn::Graphics::RenderableInstance
 			lastLightDS = VK_NULL_HANDLE;
 			lastLightUBOOffset = UINT32_MAX;
 			lastViewDS = VK_NULL_HANDLE;
+			lastSceneTransformsDS = VK_NULL_HANDLE;
 			lastBindlessDS = VK_NULL_HANDLE;
 			viewportSet = false;
 		}
@@ -103,6 +106,7 @@ namespace EmEn::Graphics::RenderableInstance
 			lastLightDS = VK_NULL_HANDLE;
 			lastLightUBOOffset = UINT32_MAX;
 			lastViewDS = VK_NULL_HANDLE;
+			lastSceneTransformsDS = VK_NULL_HANDLE;
 			lastBindlessDS = VK_NULL_HANDLE;
 		}
 

@@ -970,7 +970,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		{
 			/* Trace: set 0 = RT data, set 1 = input textures + frame UBO, set 2 = bindless textures.
 			 * No push constants: the per-frame data lives in the UBO. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
@@ -979,7 +979,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(blurInputLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
@@ -992,7 +992,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Temporal resolve: single set, no push constants (frame UBO). */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(temporalInputLayout);
 
 			m_temporalLayout = layoutManager.getPipelineLayout(sets, {});
@@ -1000,14 +1000,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			/* Normal history: single set, no push constants (frame UBO). */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(normalCopyInputLayout);
 
 			m_normalCopyLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(applyLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {

@@ -292,6 +292,27 @@ namespace EmEn::Saphir
 	}
 
 	bool
+	VertexShader::prepareInstanceModelMatrix () noexcept
+	{
+		if ( this->preparationAlreadyDone(ShaderVariable::InstanceModelMatrix) )
+		{
+			return true;
+		}
+
+		std::stringstream code;
+
+		/* NOTE: The InstanceTransforms SSBO interleaves {model, previousModel} matrices
+		 * (stride 2). The slot is encoded in the firstInstance draw parameter: with
+		 * instanceCount always 1 on this path, gl_InstanceIndex == firstInstance — no
+		 * shaderDrawParameters feature required (contrary to gl_BaseInstance). */
+		code << "\t" "const mat4 " << ShaderVariable::InstanceModelMatrix << " = ubInstanceTransforms.instanceMatrices[gl_InstanceIndex * 2];" "\n\n";
+
+		m_uniquePreparations.emplace_back(ShaderVariable::InstanceModelMatrix, code.str());
+
+		return true;
+	}
+
+	bool
 	VertexShader::prepareModelViewMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::ModelViewMatrix) )
@@ -368,6 +389,17 @@ namespace EmEn::Saphir
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = "
 				<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, false) << " * "
 				<< ShaderVariable::MDIModelMatrix << ";" "\n";
+		}
+		else if ( this->isInstanceTransformsEnabled() )
+		{
+			/* NOTE: Advanced path on the InstanceTransforms SSBO: the view matrix is
+			 * pushed, the model matrix comes from the per-instance entry. */
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << ShaderVariable::InstanceModelMatrix << ";" "\n";
 		}
 		else
 		{
@@ -514,7 +546,10 @@ namespace EmEn::Saphir
 					return false;
 				}
 
-				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << ShaderVariable::SpriteModelMatrix << ";" "\n";
+				/* NOTE: VP is recomposed from the view UBO projection × the pushed view
+				 * matrix — pushing V + VP + frameIndex was 132 B, above the 128 B Vulkan
+				 * minimum guarantee for maxPushConstantsSize. */
+				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << ShaderVariable::SpriteModelMatrix << ";" "\n";
 			}
 			else
 			{
@@ -523,7 +558,15 @@ namespace EmEn::Saphir
 					return false;
 				}
 
-				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << ";" "\n";
+				if ( this->isAdvancedMatricesEnabled() )
+				{
+					/* NOTE: Advanced instanced pushes V only (see the billboard note). */
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << Attribute::ModelMatrix << ";" "\n";
+				}
+				else
+				{
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << ";" "\n";
+				}
 			}
 		}
 		else if ( this->isMDIEnabled() )
@@ -534,6 +577,29 @@ namespace EmEn::Saphir
 			}
 
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << ShaderVariable::MDIModelMatrix << ";" "\n";
+		}
+		else if ( this->isInstanceTransformsEnabled() && !this->isAdvancedMatricesEnabled() )
+		{
+			/* NOTE: Classic path on the InstanceTransforms SSBO: the view-projection matrix
+			 * is pushed (MDI precedent), the model matrix comes from the per-instance entry. */
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << ShaderVariable::InstanceModelMatrix << ";" "\n";
+		}
+		else if ( this->isInstanceTransformsEnabled() )
+		{
+			/* NOTE: Advanced path on the InstanceTransforms SSBO: the projection comes
+			 * from the view UBO, the view matrix is pushed, the model matrix comes from
+			 * the per-instance entry. */
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << ShaderVariable::InstanceModelMatrix << ";" "\n";
 		}
 		else
 		{
@@ -597,6 +663,17 @@ namespace EmEn::Saphir
 			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
 
 			code << Attribute::ModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
+		}
+		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
+		{
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+			code << ShaderVariable::InstanceModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
 		else
 		{
@@ -672,7 +749,7 @@ namespace EmEn::Saphir
 		/* NOTE: When rendering to a cubemap or CSM, we MUST always prepare the ModelViewProjectionMatrix
 		 * because the push constant contains only the Model matrix, and Projection/View come from the UBO
 		 * indexed by gl_ViewIndex. Without this, the shader would try to read a non-existent MVP from push constants. */
-		if ( this->isMDIEnabled() || this->isInstancingEnabled() || this->isAdvancedMatricesEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
+		if ( this->isMDIEnabled() || this->isInstancingEnabled() || this->isAdvancedMatricesEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() || this->isInstanceTransformsEnabled() )
 		{
 			if ( !this->prepareModelViewProjectionMatrix() )
 			{
@@ -894,6 +971,15 @@ namespace EmEn::Saphir
 
 			modelMatrix = Attribute::ModelMatrix;
 		}
+		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
+		{
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			modelMatrix = ShaderVariable::InstanceModelMatrix;
+		}
 		else
 		{
 			modelMatrix = MatrixPC(PushConstant::Component::ModelMatrix);
@@ -1015,6 +1101,15 @@ namespace EmEn::Saphir
 			}
 
 			modelMatrix = Attribute::ModelMatrix;
+		}
+		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
+		{
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			modelMatrix = ShaderVariable::InstanceModelMatrix;
 		}
 		else
 		{

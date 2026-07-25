@@ -131,7 +131,7 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::createDataLayout (Renderer & renderer) noexcept
 	{
-		StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > descriptorSetLayouts;
+		StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > descriptorSetLayouts;
 		StaticVector< VkPushConstantRange, 4 > pushConstantRanges;
 
 		const auto & setIndexes = m_shaderProgram->setIndexes();
@@ -428,9 +428,10 @@ namespace EmEn::Saphir::Generator
 		{
 			if ( m_shaderProgram->wasAdvancedMatricesEnabled() || m_shaderProgram->wasBillBoardingEnabled() )
 			{
-				/* NOTE: Push the view matrix (V) and the view projection matrix (VP). */
+				/* NOTE: Push the view matrix (V) ONLY — the shader recomposes VP from the
+				 * view UBO projection × V. Pushing V + VP + frameIndex was 132 B, above
+				 * the 128 B Vulkan minimum guarantee for maxPushConstantsSize. */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
-				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewProjectionMatrix);
 			}
 			else
 			{
@@ -449,9 +450,24 @@ namespace EmEn::Saphir::Generator
 			}
 			else if ( m_shaderProgram->wasAdvancedMatricesEnabled() )
 			{
-				/* NOTE: Push the view matrix (V) and the model matrix (M). */
+				/* NOTE: Push the view matrix (V) — the projection comes from the view UBO. */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
-				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ModelMatrix);
+
+				/* NOTE: On the InstanceTransforms SSBO, the model matrix comes from the
+				 * per-instance entry (indexed by gl_InstanceIndex) — V + frameIndex = 68 B.
+				 * The V+M+frameIndex fallback (132 B) VIOLATES the 128 B Vulkan minimum
+				 * guarantee and only remains for scenes without instance transforms. */
+				if ( !m_shaderProgram->wasInstanceTransformsEnabled() )
+				{
+					pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ModelMatrix);
+				}
+			}
+			else if ( m_shaderProgram->wasInstanceTransformsEnabled() )
+			{
+				/* NOTE: Classic path on the InstanceTransforms SSBO: push the view projection
+				 * matrix (VP) only (MDI precedent) — the model matrix is read from the
+				 * per-instance SSBO entry indexed by gl_InstanceIndex. */
+				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewProjectionMatrix);
 			}
 			else
 			{

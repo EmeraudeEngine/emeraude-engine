@@ -142,6 +142,17 @@ namespace EmEn::Saphir
 		return m_vertexShader->isMDIEnabled();
 	}
 
+	bool
+	Program::wasInstanceTransformsEnabled () const noexcept
+	{
+		if ( m_vertexShader == nullptr )
+		{
+			return false;
+		}
+
+		return m_vertexShader->isInstanceTransformsEnabled();
+	}
+
 	VertexShader *
 	Program::initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode, bool enableMDI) noexcept
 	{

@@ -519,6 +519,7 @@ the previous frame's data.
 | RT material data SSBOs | `SceneMetaData` | `m_currentFrameIndex` |
 | RT descriptor sets | `Renderer` | `m_currentFrameIndex` |
 | Light UBOs | `LightSet` | Dynamic offset |
+| Instance transforms SSBOs | `SceneInstanceTransforms` | `m_currentFrameIndex` |
 
 ### Rules When Adding New GPU Data
 
@@ -572,6 +573,64 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 - `Renderer.cpp:renderFrameWithPostProcessing()` — Captures `scene->preparedReadStateIndex()` before post-processing
 - `Effects/Framebuffer/RTR.cpp:execute()` — Uses `readStateIndex` for NDC → world reconstruction
 - `ViewMatrices3DUBO.cpp:viewMatrix()` — Two overloads: `m_logicState` vs `m_renderState[idx]`
+
+## Instance Transforms (SceneInstanceTransforms)
+
+`SceneInstanceTransforms` owns the per-scene **InstanceTransforms SSBO** (one buffer per
+frame-in-flight, `SceneMetaData::initializePerFrameBuffers()` pattern). It is the B1 step of
+the motion-vectors chain (see engine `TODO.md`): move the non-instanced model matrices out of
+push constants into a per-instance SSBO indexed by `gl_BaseInstance`, and carry
+`{model, previousModel}` per entry for temporal effects (TAA, RTGI reprojection, motion blur).
+
+**GPU layout** (std430): `Header {mat4 viewProjection; mat4 previousViewProjection;}` followed
+by `Entry {mat4 model; mat4 previousModel;}[]`. The header is reserved for the motion-vector
+pass and written **only** by the primary view target (`RenderTargetType::View`); the regular
+matrix path keeps pushing the view-projection matrix through push constants (MDI precedent)
+and only reads the entries.
+
+**Frame contract (frame-linear slots):**
+1. The **Renderer** calls `Scene::beginRenderFrame()` once per rendered frame (both windowed
+   and windowless flows), BEFORE any `Scene::prepareRender()` — this resets the staging cursor
+   and targets the current frame-in-flight buffer.
+2. Every `prepareRender()` of the frame (render-to-textures first, main view last) stages one
+   entry per **visible non-instanced** instance (`!useModelVertexBufferObject()`) via
+   `RenderableInstance::Abstract::stageInstanceTransforms()` — a mirror of
+   `Unique::pushMatricesForRendering()`'s model matrix computation — then uploads the whole
+   staged range (`updateVideoMemory()`, cumulative and idempotent within the frame).
+3. The instance retains its slot (`instanceTransformsSlot()`) for the draws recorded until the
+   next `prepareRender()`. The same instance may hold a different slot per render target within
+   one frame — REQUIRED for sprites, whose model matrix depends on the camera position.
+4. Buffers grow on demand (power of two); the old buffer is retired through the
+   `Vulkan::DeferredDestructor`.
+
+**Descriptor binding (milestone 2):** the SSBO is exposed through a DEDICATED descriptor set
+owned by `SceneInstanceTransforms` (one set per frame-in-flight, shared renderer descriptor
+pool, layout cached under UUID `InstanceTransformsSSBO` via
+`SceneInstanceTransforms::getDescriptorSetLayout()`), at the dynamic set index
+`Saphir::SetType::PerSceneTransforms`. NOT inside the per-render-target view UBO set — the
+SSBO is per-scene/per-frame while view sets are per-target and frame-agnostic (incompatible
+lifecycles; same reasoning as the skinning SSBO's dedicated PerModel set). On buffer growth,
+the current frame's set is rewritten in place (legal: the frame fence guarantees no in-flight
+reference).
+
+**Consumption (milestone 3):** the classic non-instanced scene path (non-MDI, non-cubemap,
+non-advanced) READS the SSBO: push constants shrink to VP + frameIndex (68 B), the model
+matrix comes from `instanceMatrices[gl_InstanceIndex * 2]`, the slot travels through the
+`firstInstance` draw parameter (`CommandBuffer::drawWithFirstInstance()` — instanceCount
+is 1, so `gl_InstanceIndex == firstInstance`, no shaderDrawParameters feature needed).
+The descriptor set is passed from `Scene::prepareRender()`'s cached
+`m_preparedInstanceTransformsDS` down through `render()`. Full shader-side contract
+(incl. the ⚠️ two-condition binding rule): `src/Saphir/AGENTS.md` § "InstanceTransforms
+SSBO Path". Advanced/lighted, cubemap/CSM and shadow paths still push their matrices
+(milestone 4).
+
+**Status:** milestones 1-4 DONE (2026-07-25) — classic AND advanced paths consume the SSBO
+(advanced pushes V + frameIndex = 68 B, killing the historical 132 B min-spec violation).
+Cubemap/shadow/CSM paths stay on push constants (owner decision — min-spec clean, no motion
+data needed). Until per-object motion tracking (B2), `previousModel == model` for every
+entry. Validated: `doom-loader` (unlit classic path), `global-illumination` A/B pixel diff
+vs pre-B1 baseline within the stochastic noise floor + M4 BIT-IDENTICAL to M3 (deterministic
+console camera), `basic-scenery` (skybox infinity view + sprites + instanced + shadow-receiving).
 
 ## Ray Tracing Architecture (SceneMetaData)
 

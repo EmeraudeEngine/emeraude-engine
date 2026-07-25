@@ -1122,6 +1122,10 @@ namespace EmEn::Graphics
 		/* NOTE: Offscreen rendering */
 		if ( scene != nullptr )
 		{
+			/* Frame-begin contract: resets the scene's frame-linear instance transforms
+			 * staging BEFORE any prepareRender() of this frame (render-to-textures included). */
+			scene->beginRenderFrame();
+
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */
@@ -1275,6 +1279,10 @@ namespace EmEn::Graphics
 		/* NOTE: Offscreen rendering */
 		if ( scene != nullptr )
 		{
+			/* Frame-begin contract: resets the scene's frame-linear instance transforms
+			 * staging BEFORE any prepareRender() of this frame (render-to-textures included). */
+			scene->beginRenderFrame();
+
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */

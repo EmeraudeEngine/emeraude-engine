@@ -41,6 +41,15 @@
     attachment count**. Full contract + pitfalls (clear-value indices, blend-state counts,
     GrabPass copies): `docs/caution-points.md` § "SSGI Indirect Light Ignored Receiver
     Albedo — New Albedo G-Buffer Attachment".
+5.  **Instance transforms (motion vectors B1)**: every visible NON-instanced
+    `RenderableInstance` stages its `{model, previousModel}` matrices into the scene's
+    `InstanceTransforms` SSBO during `Scene::prepareRender()`
+    (`Abstract::stageInstanceTransforms()`, slot retained via `instanceTransformsSlot()`).
+    The classic scene path CONSUMES it: push = VP + frameIndex, model matrix from the SSBO,
+    slot in the `firstInstance` draw parameter (`CommandBuffer::drawWithFirstInstance()`).
+    Advanced/cubemap/CSM/shadow paths still push their matrices (B1 milestone 4 pending).
+    Contract details: `src/Scenes/AGENTS.md` § "Instance Transforms (SceneInstanceTransforms)"
+    and `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path".
 
 ## 4. Caching Architecture
 

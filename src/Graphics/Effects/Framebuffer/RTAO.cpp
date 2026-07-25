@@ -400,7 +400,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pipeline layouts ---- */
 		{
 			/* Trace: set 0 = RT data (TLAS only), set 1 = depth + normals. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 
@@ -410,7 +410,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(blurInputLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
@@ -419,7 +419,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(applyLayout);
 
 			m_applyLayout = layoutManager.getPipelineLayout(sets, {

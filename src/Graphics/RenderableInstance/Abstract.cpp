@@ -39,6 +39,7 @@
 #include "Saphir/Generator/TBNSpaceRendering.hpp"
 #include "Saphir/Program.hpp"
 #include "Scenes/Component/AbstractLightEmitter.hpp"
+#include "Scenes/SceneInstanceTransforms.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -54,6 +55,32 @@ namespace EmEn::Graphics::RenderableInstance
 	using namespace Saphir::Keys;
 
 	constexpr auto TracerTag{"RenderableInstance"};
+
+	void
+	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition) noexcept
+	{
+		/* Prepare the model matrix (M).
+		 * NOTE: Mirror of Unique::pushMatricesForRendering() — the staged matrix must be
+		 * exactly what the push constant path would have computed for this instance. */
+		Matrix< 4, float > modelMatrix;
+
+		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
+		if ( worldCoordinates != nullptr )
+		{
+			modelMatrix = m_renderable->isSprite() ?
+				worldCoordinates->getSpriteModelMatrix(cameraPosition) :
+				worldCoordinates->getModelMatrix();
+		}
+
+		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
+		{
+			modelMatrix *= this->transformationMatrix();
+		}
+
+		/* NOTE: Until per-object motion tracking exists, the previous model matrix is the
+		 * current one (zero per-object velocity, camera reprojection covers the static world). */
+		m_instanceTransformsSlot = instanceTransforms.stageEntry(modelMatrix, modelMatrix);
+	}
 
 	bool
 	Abstract::createSkinningResources (const std::shared_ptr< Device > & device, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept
@@ -693,7 +720,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		/* For grab-pass layers on render targets with a post-process framebuffer,
 		 * use the post-process render pass handle (pipelines were created for it). */
@@ -747,7 +774,8 @@ namespace EmEn::Graphics::RenderableInstance
 			.pipelineLayout = pipelineLayout.get(),
 			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
-			.useBillboarding = program->wasBillBoardingEnabled()
+			.useBillboarding = program->wasBillBoardingEnabled(),
+			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
 		};
 
 		/* Configure the push constants. */
@@ -757,6 +785,15 @@ namespace EmEn::Graphics::RenderableInstance
 
 		/* Bind view UBO. */
 		commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+
+		/* Bind the scene instance transforms SSBO set.
+		 * NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
+		 * the set may be part of the layout yet unreferenced by the shader (advanced
+		 * fallback), and set index ordering must stay consistent either way. */
+		if ( program->setIndexes().isSetEnabled(Saphir::SetType::PerSceneTransforms) && sceneTransformsDS != nullptr )
+		{
+			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+		}
 
 		/* Bind light UBO (and shadow map sampler if applicable). */
 		if ( lightEmitter != nullptr && lightEmitter->isCreated() )
@@ -784,6 +821,10 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
 		}
 
+		/* NOTE: The InstanceTransforms slot travels through the firstInstance draw
+		 * parameter (read as gl_InstanceIndex in the vertex shader, instanceCount == 1). */
+		const uint32_t firstInstance = pushContext.useInstanceTransforms ? this->instanceTransformsSlot() : 0;
+
 		/* Check for adaptive LOD rendering. */
 		if ( geometry->isAdaptiveLOD() )
 		{
@@ -799,7 +840,7 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				const auto range = geometry->getAdaptiveDrawCallRange(drawCallIndex, viewPosition);
 
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
 			}
 
 			/* Draw stitching geometry between LOD zones. */
@@ -809,25 +850,25 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				const auto range = geometry->getStitchingDrawCallRange(stitchIndex);
 
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
 			}
 		}
 		else if ( material->isAnimated() )
 		{
-			commandBuffer.draw(*geometry, m_frameIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, m_frameIndex, this->instanceCount());
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.draw(*geometry, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->instanceCount());
 		}
 		else
 		{
-			commandBuffer.draw(*geometry, layerIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, this->instanceCount());
 		}
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		/* For grab-pass layers on render targets with a post-process framebuffer,
 		 * use the post-process render pass handle (pipelines were created for it). */
@@ -916,7 +957,8 @@ namespace EmEn::Graphics::RenderableInstance
 			.pipelineLayout = pipelineLayout.get(),
 			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
-			.useBillboarding = program->wasBillBoardingEnabled()
+			.useBillboarding = program->wasBillBoardingEnabled(),
+			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
 		};
 
 		/* Push constants are always required (unique model matrix per object). */
@@ -934,6 +976,21 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		setOffset++;
+
+		/* Bind the scene instance transforms SSBO set (skip if already bound).
+		 * NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
+		 * the set may be part of the layout yet unreferenced by the shader (advanced
+		 * fallback), and set index ordering must stay consistent either way. */
+		if ( program->setIndexes().isSetEnabled(Saphir::SetType::PerSceneTransforms) && sceneTransformsDS != nullptr )
+		{
+			if ( tracker.lastSceneTransformsDS != sceneTransformsDS->handle() )
+			{
+				commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
+				tracker.lastSceneTransformsDS = sceneTransformsDS->handle();
+			}
+
+			setOffset++;
+		}
 
 		/* Bind light UBO (and shadow map sampler if applicable). */
 		if ( lightEmitter != nullptr && lightEmitter->isCreated() )
@@ -996,6 +1053,10 @@ namespace EmEn::Graphics::RenderableInstance
 		tracker.totalDrawCalls++;
 #endif
 
+		/* NOTE: The InstanceTransforms slot travels through the firstInstance draw
+		 * parameter (read as gl_InstanceIndex in the vertex shader, instanceCount == 1). */
+		const uint32_t firstInstance = pushContext.useInstanceTransforms ? this->instanceTransformsSlot() : 0;
+
 		/* Issue the draw command (same logic as non-tracked render). */
 		if ( geometry->isAdaptiveLOD() )
 		{
@@ -1009,7 +1070,7 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				const auto range = geometry->getAdaptiveDrawCallRange(drawCallIndex, viewPosition);
 
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
 			}
 
 			const auto stitchingCount = geometry->getStitchingDrawCallCount();
@@ -1018,20 +1079,20 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				const auto range = geometry->getStitchingDrawCallRange(stitchIndex);
 
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
 			}
 		}
 		else if ( material->isAnimated() )
 		{
-			commandBuffer.draw(*geometry, m_frameIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, m_frameIndex, this->instanceCount());
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.draw(*geometry, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->instanceCount());
 		}
 		else
 		{
-			commandBuffer.draw(*geometry, layerIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, this->instanceCount());
 		}
 	}
 

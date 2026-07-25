@@ -95,7 +95,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	GizmoRendering::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > & /*descriptorSetLayouts*/, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
+	GizmoRendering::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & /*descriptorSetLayouts*/, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		/* NOTE: Push constants visible to both vertex (MVP) and fragment (highlightFactor) stages. */
 		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);

@@ -368,6 +368,12 @@ namespace EmEn::Scenes
 		}
 	}
 
+	void
+	Scene::beginRenderFrame () noexcept
+	{
+		m_instanceTransforms.beginFrame(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
+	}
+
 	bool
 	Scene::prepareRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
@@ -377,7 +383,37 @@ namespace EmEn::Scenes
 
 		m_preparedBindlessManager = bindlessManager.usable() ? &bindlessManager : nullptr;
 
-		if ( !this->populateRenderLists(renderTarget, m_preparedReadStateIndex) )
+		/* Cache the instance transforms descriptor set for the current frame-in-flight,
+		 * consumed by the render(step) calls recorded until the next prepareRender(). */
+		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+
+		m_preparedInstanceTransformsDS = m_instanceTransforms.descriptorSet(frameIndex);
+
+		const bool renderListsPopulated = this->populateRenderLists(renderTarget, m_preparedReadStateIndex);
+
+		/* Instance transforms header: current and previous view-projection matrices of the
+		 * primary view target (motion vectors). Render-to-texture/cubemap targets must not
+		 * write it — they are prepared BEFORE the main view, but the gate keeps the header
+		 * semantics independent from the renderer's target ordering. */
+		if ( renderTarget->renderType() == RenderTargetType::View )
+		{
+			const auto & viewMatrices = renderTarget->viewMatrices();
+
+			m_instanceTransforms.setViewProjectionMatrices(
+				viewMatrices.projectionMatrix(m_preparedReadStateIndex) * viewMatrices.viewMatrix(m_preparedReadStateIndex, false, 0),
+				viewMatrices.previousProjectionMatrix() * viewMatrices.previousViewMatrix()
+			);
+		}
+
+		/* Upload the staged instance transforms (header + frame-linear entries) to the
+		 * current frame-in-flight SSBO. Cumulative across the prepareRender() calls of the
+		 * frame, so entries staged for earlier targets (render-to-textures) stay valid. */
+		if ( !m_instanceTransforms.updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update the instance transforms SSBO to the video memory !");
+		}
+
+		if ( !renderListsPopulated )
 		{
 			return false;
 		}
@@ -385,7 +421,6 @@ namespace EmEn::Scenes
 		/* Rebuild the TLAS and RT metadata from RT-specific render lists (no frustum culling).
 		 * RT effects cast rays in world space and need ALL scene geometry, not just what's on screen. */
 		auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
-		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
 		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
 
 		return true;
@@ -426,7 +461,7 @@ namespace EmEn::Scenes
 
 						if ( isSkipped )
 						{
-							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager);
+							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 						}
 					}
 				}
@@ -438,14 +473,14 @@ namespace EmEn::Scenes
 
 				for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
 				{
-					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager);
+					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 				}
 			}
 		}
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[OpaqueLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 		}
 	}
 
@@ -456,13 +491,13 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : m_renderLists[Translucent] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 			}
 		}
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentLighted], m_preparedBindlessManager);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 		}
 	}
 
@@ -473,13 +508,13 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : m_renderLists[TranslucentGB] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 			}
 		}
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentGBLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentGBLighted], m_preparedBindlessManager);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentGBLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 		}
 	}
 
@@ -966,6 +1001,10 @@ namespace EmEn::Scenes
 		const auto & frustum = renderTarget->viewMatrices().frustum(0);
 		const auto viewDistance = renderTarget->viewDistance();
 
+		/* NOTE: Camera position from the read state, used to stage sprite model matrices.
+		 * Mirrors pushMatricesForRendering() which reads position(readStateIndex). */
+		const auto & renderCameraPosition = renderTarget->viewMatrices().position(readStateIndex);
+
 		/* Store view distance for LOD computation in insertIntoRenderLists(). */
 		m_currentViewDistance = viewDistance;
 
@@ -1023,7 +1062,7 @@ namespace EmEn::Scenes
 				}
 			}
 
-			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F);
+			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, renderCameraPosition);
 		}
 
 		/* Sorting renderable objects from scene static entities. */
@@ -1093,7 +1132,7 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance);
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition);
 				});
 			}
 		}
@@ -1178,7 +1217,7 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance);
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition);
 				});
 			}
 		}
@@ -1192,7 +1231,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::insertIntoRenderLists (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
+	Scene::insertIntoRenderLists (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance, const Vector< 3, float > & cameraPosition) noexcept
 	{
 		/* This is a raw pointer to the renderable interface. */
 		const auto * renderable = renderableInstance->renderable();
@@ -1215,6 +1254,14 @@ namespace EmEn::Scenes
 
 				return;
 			}
+		}
+
+		/* Stage the instance transforms SSBO entry (non-instanced path only; instanced
+		 * renderables carry their model matrices in a VBO). The instance retains its
+		 * frame-linear slot for the draws recorded until the next prepareRender(). */
+		if ( !renderableInstance->useModelVertexBufferObject() )
+		{
+			renderableInstance->stageInstanceTransforms(m_instanceTransforms, worldCoordinates, cameraPosition);
 		}
 
 		/* Compute LOD level from screen-space coverage (distance + object size).
@@ -1260,7 +1307,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager) const noexcept
+	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		/* State tracker for redundant bind elimination (lighted list is state-sorted). */
 		RenderableInstance::RenderStateTracker tracker{};
@@ -1269,7 +1316,7 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : renderBatches | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 
 			return;
@@ -1284,7 +1331,7 @@ namespace EmEn::Scenes
 			const std::scoped_lock lock{m_lightSet.mutex()};
 
 			/* Ambient pass. */
-			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
+			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 
 			/* Instance world bounding sphere, computed once for the per-light culling
 			 * below. Lights are tested against the whole instance VOLUME, not just its
@@ -1338,7 +1385,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::DirectionalLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 
 			/* Loop through all point lights. */
@@ -1381,7 +1428,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::PointLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 
 			/* Loop through all spotlights. */
@@ -1424,7 +1471,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::SpotLightPass;
 				}
 
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 		}
 

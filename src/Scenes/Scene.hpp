@@ -65,6 +65,7 @@
 #include "OctreeSector.hpp"
 #include "Physics/ConstraintSolver.hpp"
 #include "RenderBatch.hpp"
+#include "SceneInstanceTransforms.hpp"
 #include "SceneMetaData.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "SeaLevelInterface.hpp"
@@ -1561,6 +1562,15 @@ namespace EmEn::Scenes
 			void castShadows (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			/**
+			 * @brief Declares the beginning of a rendered frame on the render thread.
+			 *
+			 * Resets the frame-linear staging of the instance transforms SSBO. The Renderer
+			 * MUST call this once per rendered frame, before any prepareRender() of the frame
+			 * (render-to-textures included).
+			 */
+			void beginRenderFrame () noexcept;
+
+			/**
 			 * @brief Prepares render lists for a frame without issuing draw calls.
 			 *
 			 * Populates render lists via frustum culling and Z-sorting, and caches
@@ -1605,6 +1615,17 @@ namespace EmEn::Scenes
 			sceneMetaData () const noexcept
 			{
 				return m_sceneMetaData;
+			}
+
+			/**
+			 * @brief Returns the per-instance transforms manager (InstanceTransforms SSBO).
+			 * @return const SceneInstanceTransforms &
+			 */
+			[[nodiscard]]
+			const SceneInstanceTransforms &
+			instanceTransforms () const noexcept
+			{
+				return m_instanceTransforms;
 			}
 
 			/**
@@ -2071,12 +2092,14 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Inserts a renderable instance in render lists.
+			 * @note Also stages the instance transforms SSBO entry for the non-instanced path.
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
+			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
 			 * @return void
 			 */
-			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
 
 			/**
 			 * @brief Renders a list of objects Z-sorted that uses lighting.
@@ -2087,7 +2110,7 @@ namespace EmEn::Scenes
 			 * @param bindlessTexturesManager A pointer to the bindless texture manager. Can be nullptr.
 			 * @return void
 			 */
-			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager) const noexcept;
+			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS) const noexcept;
 
 			/**
 			 * @brief Initializes a render target with all scene renderable instances.
@@ -2311,6 +2334,8 @@ namespace EmEn::Scenes
 			uint32_t m_preparedReadStateIndex{0};
 			/** @brief Cached bindless texture manager pointer set by prepareRender(). Null if not usable. */
 			const Graphics::BindlessTextureManager * m_preparedBindlessManager{nullptr};
+			/** @brief Cached instance transforms descriptor set (current frame-in-flight) set by prepareRender(). */
+			const Vulkan::DescriptorSet * m_preparedInstanceTransformsDS{nullptr};
 
 			/* ============================================================
 			 * [PRIVATE: SCENE CONTENT]
@@ -2347,6 +2372,8 @@ namespace EmEn::Scenes
 			BindlessTextureSet m_bindlessTextureSet;
 			/** @brief Scene metadata manager (TLAS, mesh/material SSBOs for RT). */
 			SceneMetaData m_sceneMetaData;
+			/** @brief Per-instance transforms manager (InstanceTransforms SSBO, non-instanced path). */
+			SceneInstanceTransforms m_instanceTransforms;
 			/** @brief Render lists indexed by render category (Opaque, Translucent, TranslucentGB, etc.). */
 			std::array< RenderBatch::List, 7 > m_renderLists{};
 			/** @brief RT opaque render list (all scene geometry, no frustum culling). */

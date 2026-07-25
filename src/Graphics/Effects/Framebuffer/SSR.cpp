@@ -507,7 +507,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pipeline layouts ---- */
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(traceInputLayout);
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {
@@ -516,7 +516,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(resolveInputLayout);
 
 			m_resolveLayout = layoutManager.getPipelineLayout(sets, {
@@ -525,7 +525,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(singleLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
@@ -534,7 +534,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 5 > sets;
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(compositeLayout);
 
 			m_compositeLayout = layoutManager.getPipelineLayout(sets, {

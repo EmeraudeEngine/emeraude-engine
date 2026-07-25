@@ -95,6 +95,38 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Unique::pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const CartesianFrame< float > * worldCoordinates) const noexcept
 	{
+		/* InstanceTransforms SSBO paths: the model matrix is read from the per-instance
+		 * SSBO entry selected by the firstInstance draw parameter (the slot staged at
+		 * Scene::prepareRender()), so its CPU-side computation is skipped entirely.
+		 * Classic: push VP + frameIndex (68 B). Advanced: push V + frameIndex (68 B, the
+		 * projection comes from the view UBO) — this replaces the V+M+frameIndex fallback
+		 * (132 B) that violates the 128 B Vulkan minimum guarantee.
+		 * NOTE: The generator only sets this flag on non-cubemap programs. */
+		if ( pushContext.useInstanceTransforms )
+		{
+			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
+
+			std::array< float, Matrix4Alignment + 1 > buffer{};
+
+			if ( pushContext.useAdvancedMatrices )
+			{
+				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
+			}
+			else
+			{
+				const auto & projectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex);
+				const auto viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+				std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
+			}
+
+			buffer[Matrix4Alignment] = static_cast< float >(this->frameIndex());
+
+			vkCmdPushConstants(passContext.commandBuffer->handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, 0, MatrixBytes + sizeof(float), buffer.data());
+
+			return;
+		}
+
 		/* Prepare the model matrix (M). */
 		Matrix< 4, float > modelMatrix;
 
