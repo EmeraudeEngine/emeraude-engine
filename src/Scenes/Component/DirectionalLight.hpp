@@ -132,6 +132,32 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
+			/**
+			 * @brief Sets the illuminance the light casts on a surface facing it, in lux.
+			 * @note THE authoring unit for a sun or a moon: the source is at a constant (infinite)
+			 * distance, so there is no falloff to integrate and the illuminance IS the intensity.
+			 * Reference values: direct sunlight 100 000 lx, overcast daylight 10 000 lx, full moon
+			 * 0.25 lx (see Graphics::Photometry).
+			 * @param lux The illuminance, in lux.
+			 * @return void
+			 */
+			void
+			setIlluminance (float lux) noexcept
+			{
+				this->setIntensity(lux);
+			}
+
+			/**
+			 * @brief Returns the illuminance the light casts on a surface facing it, in lux.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			illuminance () const noexcept
+			{
+				return this->intensity();
+			}
+
 			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
 			bool

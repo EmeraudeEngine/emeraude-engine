@@ -178,8 +178,18 @@ namespace EmEn::Scenes::Component
 			void setColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
-			 * @brief Sets the intensity of the light.
-			 * @param intensity An arbitrary value.
+			 * @brief Sets the PHOTOMETRIC intensity of the light, in the unit its type is measured in.
+			 * @note This is the GPU-facing quantity: ILLUMINANCE in lux for a directional light
+			 * (the distance is constant, so an illuminance is the natural description), LUMINOUS
+			 * INTENSITY in candela for a point or spot light. Prefer the per-type helpers, which
+			 * take the unit content is actually authored in — `DirectionalLight::setIlluminance()`
+			 * (lux) and `PointLight`/`SpotLight::setLuminousPower()` (lumens, as a bulb is sold) —
+			 * and convert through `Graphics::Photometry`.
+			 * @warning ⚠️ A photometric value is only meaningful with a PHYSICAL (inverse-square)
+			 * attenuation. The point/spot falloff is still the radius-bounded artistic
+			 * `max(1 - (d/r)², 0)`, so these units are currently PROPORTIONAL, not absolute — see
+			 * `TODO.md` § "Photometric lighting + absolute exposure", phase 1.
+			 * @param intensity The photometric intensity (lux for directional, candela otherwise).
 			 * @return void
 			 */
 			void setIntensity (float intensity) noexcept;
@@ -196,7 +206,9 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the light intensity.
+			 * @brief Returns the light photometric intensity.
+			 * @note Lux for a directional light, candela for a point or spot light. See
+			 * setIntensity() for the unit contract and its current limit.
 			 * @return float
 			 */
 			[[nodiscard]]

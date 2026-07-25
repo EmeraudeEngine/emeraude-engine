@@ -30,6 +30,9 @@
 #include <array>
 #include <memory>
 
+/* Local inclusions for usages. */
+#include "Graphics/Photometry.hpp"
+
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
 
@@ -217,6 +220,25 @@ namespace EmEn::Scenes::Component
 			 * @param outerAngle The outer angle in degree of the cone until the light is off.
 			 */
 			void setConeAngles (float innerAngle, float outerAngle = 0.0F) noexcept;
+
+			/**
+			 * @brief Sets the luminous power of the light, in lumens.
+			 * @note THE authoring unit for a lamp. Converted to the luminous intensity the GPU
+			 * needs by spreading the power over the CONE only (`lm / 2pi(1 - cos(outer))`), so a
+			 * narrower beam is brighter for the same wattage: a 100 lm flashlight with a 20 degree
+			 * beam yields ~1047 cd.
+			 * @warning Depends on the OUTER cone angle: call setConeAngles() FIRST, or re-call this
+			 * afterwards. Changing the cone later does not re-derive the intensity — a real lamp
+			 * does not gain power when you narrow its reflector, but its beam does get brighter,
+			 * and only the author can say which of the two they meant.
+			 * @param lumens The luminous power, in lumens.
+			 * @return void
+			 */
+			void
+			setLuminousPower (float lumens) noexcept
+			{
+				this->setIntensity(Graphics::Photometry::candelaFromSpotLumens(lumens, m_outerAngle));
+			}
 
 			/**
 			 * @brief Returns the radius of the light area.

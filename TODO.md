@@ -274,6 +274,19 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   point/spot = lumens converted to candela, emissive/sky = nits) with the conversions in ONE
   place; calibrated so the current look survives at a chosen reference distance.
 - [ ] **Phase 2 — re-light every demo** in real values.
+  ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
+  light domain.** Two more sources feed the image and carry arbitrary units today:
+    - **Emissive materials** — `StandardResource::setEmissiveStrength()` implements the glTF
+      extension `KHR_materials_emissive_strength`, which is DEFINED as a multiplier over a
+      texture in [0,1]. A photometric emissive is a LUMINANCE in nits. The two cannot both hold
+      for an imported material, so this needs an owner decision: keep glTF semantics and convert
+      at import (a nits-per-unit factor), or treat the strength as nits directly and accept that
+      imported assets need re-authoring. NOT a phase 1 blocker.
+    - **IBL / environment** — per-material `IBLIntensity` plus `ambientLightIntensity` in the view
+      UBO, fed by environment cubemaps. If those cubemaps are LDR [0,1] their luminance has no
+      unit, and the sky stays wrong even with correct lights. Verify whether the cubemap pipeline
+      can carry HDR values before phase 2, because the answer decides whether the sky can be
+      authored in nits at all.
 - [ ] **Phase 3 — absolute exposure**: ISO on `Camera`, EV100 from the triad, auto-exposure
   rewired as auto-ISO (min/max = the sensor's usable range), replacing
   `ToneMapping::Parameters::exposure` as an arbitrary multiplier.

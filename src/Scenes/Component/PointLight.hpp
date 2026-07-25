@@ -29,6 +29,9 @@
 /* STL inclusions. */
 #include <array>
 
+/* Local inclusions for usages. */
+#include "Graphics/Photometry.hpp"
+
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
 
@@ -204,6 +207,20 @@ namespace EmEn::Scenes::Component
 			shadowBias () const noexcept override
 			{
 				return m_shadowBias;
+			}
+
+			/**
+			 * @brief Sets the luminous power of the light, in lumens.
+			 * @note THE authoring unit for a bulb — that is what one is sold as. Converted to the
+			 * luminous intensity the GPU needs by spreading the power over the whole sphere
+			 * (`lm / 4pi`): an 800 lm household bulb is 63.7 cd in every direction.
+			 * @param lumens The luminous power, in lumens.
+			 * @return void
+			 */
+			void
+			setLuminousPower (float lumens) noexcept
+			{
+				this->setIntensity(Graphics::Photometry::candelaFromPointLumens(lumens));
 			}
 
 			/**
