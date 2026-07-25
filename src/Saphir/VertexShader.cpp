@@ -404,7 +404,16 @@ namespace EmEn::Saphir
 		}
 
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
-		Code{*this, Location::Output} << ShaderVariable::ClipPositionPrevious << " = ubInstanceTransforms.previousViewProjection * " << previousModelMatrix << " * vec4(" << prevPosExpr << ", 1.0);";
+		/* The INFINITY view drops the camera translation: an object rendered with it (the sky
+		 * background) must have its previous clip position built from the previous INFINITY
+		 * view-projection. Mixing the two is a STRUCTURAL mismatch — it does not cancel on a
+		 * static camera, and produced a smooth NDC-position-like velocity gradient of up to
+		 * ~0.3 NDC over the whole sky (measured 2026-07-25 with a boolean velocity probe). */
+		const auto * previousViewProjection = m_infinityViewEnabled ?
+			"ubInstanceTransforms.previousViewProjectionInfinity" :
+			"ubInstanceTransforms.previousViewProjection";
+
+		Code{*this, Location::Output} << ShaderVariable::ClipPositionPrevious << " = " << previousViewProjection << " * " << previousModelMatrix << " * vec4(" << prevPosExpr << ", 1.0);";
 
 		/* NOTE: Both clip positions are jitter-free BY CONSTRUCTION — no matrix ever carries
 		 * the TAA sub-pixel jitter (neither the view UBO projection, nor the pushed view

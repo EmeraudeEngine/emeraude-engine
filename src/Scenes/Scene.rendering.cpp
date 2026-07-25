@@ -401,10 +401,16 @@ namespace EmEn::Scenes
 
 			/* NOTE: UNJITTERED matrices — the velocity clip positions are built from this header
 			 * and must stay jitter-free (the TAA sub-pixel offset is a per-draw push constant
-			 * applied to gl_Position only). */
-			m_instanceTransforms.setViewProjectionMatrices(
-				viewMatrices.unjitteredProjectionMatrix(m_preparedReadStateIndex) * viewMatrices.viewMatrix(m_preparedReadStateIndex, false, 0),
-				viewMatrices.previousProjectionMatrix() * viewMatrices.previousViewMatrix()
+			 * applied to gl_Position only).
+			 * NOTE: The infinity variant serves the renderables rendered with the translation-free
+			 * view (the sky background): their current clip position comes from the pushed INFINITY
+			 * view, so their previous one must too, otherwise the velocity is off by the whole
+			 * camera translation even on a static camera. */
+			const auto & previousProjection = viewMatrices.previousProjectionMatrix();
+
+			m_instanceTransforms.setPreviousViewProjectionMatrices(
+				previousProjection * viewMatrices.previousViewMatrix(),
+				previousProjection * viewMatrices.previousInfinityViewMatrix()
 			);
 		}
 

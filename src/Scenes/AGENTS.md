@@ -582,11 +582,16 @@ the motion-vectors chain (see engine `TODO.md`): move the non-instanced model ma
 push constants into a per-instance SSBO indexed by `gl_BaseInstance`, and carry
 `{model, previousModel}` per entry for temporal effects (TAA, RTGI reprojection, motion blur).
 
-**GPU layout** (std430, header `static_assert`-ed at 128 B): `Header {mat4 viewProjection;
-mat4 previousViewProjection;}` followed by `Entry {mat4 model; mat4 previousModel;}[]`. The
-header is reserved for the motion-vector pass and written **only** by the primary view target
-(`RenderTargetType::View`); the regular matrix path keeps pushing the view-projection matrix
-through push constants (MDI precedent) and only reads the entries.
+**GPU layout** (std430, header `static_assert`-ed at 128 B):
+`Header {mat4 previousViewProjection; mat4 previousViewProjectionInfinity;}` followed by
+`Entry {mat4 model; mat4 previousModel;}[]`. The header is reserved for the motion-vector pass and
+written **only** by the primary view target (`RenderTargetType::View`); the regular matrix path
+keeps pushing the view-projection matrix through push constants (MDI precedent) and only reads the
+entries. The second matrix serves the renderables drawn with the **translation-free infinity
+view** (the sky): their current clip position comes from the pushed infinity view, so their
+previous one must match, or the velocity is off by the whole camera translation even on a static
+camera. The header used to hold the CURRENT view-projection in that slot — read 0 times by the
+generated GLSL, hence recycled at no size cost.
 
 ⚠️ **Both header matrices MUST be UNJITTERED** — stage them from
 `ViewMatricesInterface::unjitteredProjectionMatrix()`, never from `projectionMatrix()`, which

@@ -348,6 +348,15 @@ namespace EmEn::Saphir::Generator
 			vertexShader->enableInstanceMotionHistory();
 		}
 
+		/* Infinity view (sky background): selects the previous INFINITY view-projection for the
+		 * velocity outputs. Part of the generator flags, hence of the program cache key — two
+		 * instances of the same renderable, one infinity-view and one not, MUST NOT share a
+		 * program. */
+		if ( this->isUsingInfinityView() )
+		{
+			vertexShader->enableInfinityView();
+		}
+
 		/* NOTE: Cubemap rendering requires multiview extension for gl_ViewIndex. */
 		if ( isCubemapTarget )
 		{
@@ -369,15 +378,17 @@ namespace EmEn::Saphir::Generator
 			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
 
 			/* NOTE: {model, previousModel} interleaved (stride 2), preceded by the
-			 * {viewProjection, previousViewProjection} header reserved for the motion-vector
-			 * pass. Both header matrices are UNJITTERED — the TAA sub-pixel jitter is a
-			 * per-draw push constant applied to gl_Position only, so the velocity clip
+			 * {previousViewProjection, previousViewProjectionInfinity} header reserved for the
+			 * motion-vector pass — the second one serves the renderables rendered with the
+			 * translation-free INFINITY view (the sky), whose velocity would otherwise be wrong
+			 * by the camera translation. Both header matrices are UNJITTERED — the TAA sub-pixel
+			 * jitter is a per-draw push constant applied to gl_Position only, so the velocity clip
 			 * positions computed from this header need no jitter correction.
 			 * Must match Scenes::SceneInstanceTransforms GPU layout. */
 			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
 			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
-			ssbo.addMember(Declaration::VariableType::Matrix4, "viewProjection");
 			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
+			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjectionInfinity");
 			ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
 			vertexShader->declare(ssbo);
 		}

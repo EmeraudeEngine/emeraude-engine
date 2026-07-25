@@ -136,13 +136,31 @@
   reconstructed (unjittered) neighbours rather than raw taps, which costs a 5x5 tap footprint;
   cheaper knobs first: `VarianceGamma`, and Karis' luma weighting (already available).
 
-- [ ] **Translucent pass writes a garbage velocity** — visualising the velocity buffer shows the
-  translucent skylight glass of Sponza with a smooth NDC-position-like gradient up to ~0.3 NDC,
-  the signature of a null previous clip position. Found during the TAA debugging session of
-  2026-07-25 (it was "defect 3" of the TAA item, moved here: it is a VELOCITY defect, pre-existing
-  and independent of TAA, and it affects EVERY velocity consumer — RTGI reprojection included).
-  The translucent scene program must synthesize its velocity clip positions like the opaque one
-  (`VertexShader::synthesizeVelocityClipPositions()`), or explicitly write a zero velocity.
+- [x] **Infinity-view renderables wrote a garbage velocity (the sky)** — DONE 2026-07-25.
+  MISDIAGNOSED TWICE before being measured: the smooth NDC-position-like gradient (up to ~0.3 NDC)
+  was blamed on the translucent skylight glass of Sponza, because the SKY is seen THROUGH that
+  glass and both occupy the same screen region. A boolean velocity probe (see the measurement doc)
+  settled it: on a static camera the whole buffer was EXACTLY zero except a trapezoid at the top
+  centre — the sky, 2.7% of pixels, above 0.01 NDC (~14 px).
+  ROOT CAUSE: a STRUCTURAL matrix mismatch, not a temporal one. Renderables using the infinity
+  view (`isUsingInfinityView()`, the sky background) get their CURRENT clip position from the
+  pushed translation-free view, while their PREVIOUS one came from the InstanceTransforms header,
+  which only carried the REGULAR previous view-projection. The two differ by the whole camera
+  translation, so the velocity never cancelled — not even with a perfectly frozen camera.
+  FIX (owner decision, zero size cost): the header's CURRENT `viewProjection` member was read 0
+  times by the generated GLSL, so it now carries `previousViewProjectionInfinity` — the header
+  stays at 128 B. The vertex shader selects the right one from a new generator flag
+  `IsUsingInfinityView`, which reaches the program cache key through `flags()` (mandatory: two
+  instances of the same renderable, one infinity-view and one not, must never share a program).
+  New `ViewMatricesInterface::previousInfinityViewMatrix()`, archived by `ViewMatrices2DUBO`.
+  VALIDATED: static camera → velocity buffer exactly 0.000% non-zero everywhere (was 2.7%);
+  generated GLSL → exactly ONE program reads the infinity variant (`SimplePass`, the sky), every
+  other reads the regular one; camera ROTATING → the sky lights up again (owner moved the mouse
+  during a probe run: a screenshot cannot catch a one-frame event at 200+ FPS). Image stability on
+  a static camera is unchanged (0.264 vs 0.244, inside the envelope) — expected, the sky is a
+  smooth gradient and the variance clip already bounded the wrong reprojection. The value is
+  correctness for every velocity consumer (RTGI reprojection, future motion blur) and no sky
+  smearing during pans.
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 
 ### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)

@@ -84,16 +84,22 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief GPU layout of the buffer header (std430).
-			 * @note Reserved for the motion-vector pass: current and previous view-projection
-			 * matrices of the primary view target. Matrices are column-major, matching GLSL mat4.
+			 * @note Reserved for the motion-vector pass: the previous view-projection matrices of
+			 * the primary view target, in both view forms (regular and infinity). Matrices are
+			 * column-major, matching GLSL mat4. The CURRENT view-projection used to sit here and was
+			 * read 0 times by the generated GLSL (every path gets it from push constants or from the
+			 * view UBO) — that dead slot now carries the infinity variant, at no size cost.
 			 * @note Both matrices are UNJITTERED: the TAA sub-pixel jitter never travels through a
 			 * matrix, it is a per-draw push constant applied to gl_Position only. This is what keeps
 			 * the velocity outputs jitter-free without any subtraction in the vertex shader.
 			 */
 			struct Header
 			{
-				Base::Math::Matrix< 4, float > viewProjectionMatrix;
 				Base::Math::Matrix< 4, float > previousViewProjectionMatrix;
+				/** @brief Previous view-projection built with the translation-free INFINITY view, for
+				 * the renderables rendered with it (the sky background). Mixing the two forms is a
+				 * STRUCTURAL mismatch that does not cancel on a static camera. */
+				Base::Math::Matrix< 4, float > previousViewProjectionInfinityMatrix;
 			};
 
 			/**
@@ -108,6 +114,7 @@ namespace EmEn::Scenes
 			};
 
 			static_assert(sizeof(Header) == 128, "InstanceTransforms header must match the GPU layout (2 x mat4).");
+
 			static_assert(sizeof(Entry) == 128, "InstanceTransforms entry must match the GPU layout (2 x mat4).");
 			static_assert(std::is_trivially_copyable_v< Header > && std::is_trivially_copyable_v< Entry >, "InstanceTransforms structures must be trivially copyable (raw memcpy upload).");
 
@@ -175,19 +182,20 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Stages the header matrices for the primary view target.
+			 * @brief Stages the previous view-projection matrices for the primary view target.
 			 * @note Reserved for the velocity/motion-vector pass. Only the primary view target
 			 * (RenderTargetType::View) writes it; render-to-texture targets must not.
 			 * @warning Both matrices MUST be unjittered (see the Header note): the TAA jitter is a
 			 * per-draw push constant, it must never be baked in a matrix a velocity consumer reads.
-			 * @param viewProjectionMatrix The current view-projection matrix.
 			 * @param previousViewProjectionMatrix The previous frame view-projection matrix.
+			 * @param previousViewProjectionInfinityMatrix The previous frame view-projection matrix
+			 * built with the infinity (translation-free) view, for the sky background.
 			 */
 			void
-			setViewProjectionMatrices (const Base::Math::Matrix< 4, float > & viewProjectionMatrix, const Base::Math::Matrix< 4, float > & previousViewProjectionMatrix) noexcept
+			setPreviousViewProjectionMatrices (const Base::Math::Matrix< 4, float > & previousViewProjectionMatrix, const Base::Math::Matrix< 4, float > & previousViewProjectionInfinityMatrix) noexcept
 			{
-				m_stagedHeader.viewProjectionMatrix = viewProjectionMatrix;
 				m_stagedHeader.previousViewProjectionMatrix = previousViewProjectionMatrix;
+				m_stagedHeader.previousViewProjectionInfinityMatrix = previousViewProjectionInfinityMatrix;
 			}
 
 			/**

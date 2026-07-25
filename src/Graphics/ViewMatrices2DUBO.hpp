@@ -90,6 +90,14 @@ namespace EmEn::Graphics
 				return m_previousState.view;
 			}
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::previousInfinityViewMatrix() const */
+			[[nodiscard]]
+			const Base::Math::Matrix< 4, float > &
+			previousInfinityViewMatrix () const noexcept override
+			{
+				return m_previousState.infinityView;
+			}
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::previousProjectionMatrix() const */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > &
@@ -281,6 +289,7 @@ namespace EmEn::Graphics
 			struct PreviousFrameState
 			{
 				Base::Math::Matrix< 4, float > view; /**< View matrix of the previous rendered frame. */
+				Base::Math::Matrix< 4, float > infinityView; /**< Infinity (translation-free) view matrix of the previous rendered frame, for the renderables rendered with it (sky background). */
 				Base::Math::Matrix< 4, float > projection; /**< Projection matrix of the previous rendered frame (NEVER jittered: the TAA jitter is a per-draw push constant, see archiveStateAfterRendering()). */
 			};
 

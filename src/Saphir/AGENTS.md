@@ -657,6 +657,16 @@ The classic non-instanced scene path reads its model matrix from the per-scene
   The fragment side outputs the plain NDC delta. Both endpoints are expressed in the
   **same, jitter-free** projection by construction (see the jitter contract below) — no
   subtraction is performed, and reintroducing one would be a regression.
+- **⚠️ Infinity view**: renderables drawn with the translation-free view
+  (`isUsingInfinityView()`, the sky background) take their CURRENT clip position from the pushed
+  infinity view, so their PREVIOUS one MUST come from the header's
+  `previousViewProjectionInfinity`, never from `previousViewProjection`. The generator flag
+  `IsUsingInfinityView` selects it at generation time and reaches the program cache key through
+  `flags()` — two instances of the same renderable, one infinity-view and one not, must never
+  share a program. Mixing the two forms is a **STRUCTURAL** mismatch: it differs by the whole
+  camera translation and therefore does NOT cancel on a static camera (lived: a smooth
+  NDC-position-like velocity gradient over the entire sky, blamed on the translucent glass in
+  front of it for two sessions before anyone visualised the buffer).
 
 ### TAA Sub-Pixel Jitter — The Per-Draw Push Constant Contract (fixed 2026-07-25)
 

@@ -80,7 +80,10 @@ namespace EmEn::Saphir::Generator
 		/** @brief Skeletal animation enabled: bone matrix SSBO and vertex skinning in shaders. */
 		IsSkeletalAnimationEnabled = 1U << 7,
 		/** @brief Instanced motion history: the per-instance VBO carries the previous model matrix (+4 vec4). */
-		IsInstanceMotionHistoryEnabled = 1U << 8
+		IsInstanceMotionHistoryEnabled = 1U << 8,
+		/** @brief The renderable uses the INFINITY view (translation-free, e.g. the sky background):
+		 * its velocity must be built from the previous INFINITY view-projection, not the regular one. */
+		IsUsingInfinityView = 1U << 9
 	};
 
 	/**
@@ -208,6 +211,17 @@ namespace EmEn::Saphir::Generator
 			isInstanceMotionHistoryEnabled () const noexcept
 			{
 				return this->isFlagEnabled(IsInstanceMotionHistoryEnabled);
+			}
+
+			/**
+			 * @brief Returns whether the renderable uses the infinity view (translation-free).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsingInfinityView () const noexcept
+			{
+				return this->isFlagEnabled(IsUsingInfinityView);
 			}
 
 			/**
@@ -545,6 +559,15 @@ namespace EmEn::Saphir::Generator
 				if ( renderableInstance->renderable()->isSprite() )
 				{
 					this->enableFlag(IsRenderableFacingCamera);
+				}
+
+				/* NOTE: The infinity view drops the camera translation, so a velocity built
+				 * from the REGULAR previous view-projection would be wrong by that translation
+				 * -- a structural mismatch that does not cancel even on a static camera.
+				 * The flag reaches the program cache key through flags(). */
+				if ( renderableInstance->isUsingInfinityView() )
+				{
+					this->enableFlag(IsUsingInfinityView);
 				}
 
 				if ( renderableInstance->isLightingEnabled() )

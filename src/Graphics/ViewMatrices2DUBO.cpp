@@ -360,6 +360,7 @@ namespace EmEn::Graphics
 		const auto & renderedState = m_renderState[readStateIndex];
 
 		m_previousState.view = renderedState.view;
+		m_previousState.infinityView = renderedState.infinityView;
 
 		/* NOTE: The archive holds the UNJITTERED projection, whatever the TAA state. Velocity
 		 * consumers rebuild the previous clip position from it and must get a jitter-free

@@ -329,6 +329,31 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Enables the infinity-view mode: the velocity outputs read the previous
+			 * INFINITY view-projection from the InstanceTransforms header.
+			 * @note The infinity view drops the camera translation. Mixing it with the regular
+			 * previous view-projection yields a velocity wrong by that translation, which does
+			 * NOT cancel on a static camera (it is a structural, not a temporal, mismatch).
+			 * @return void
+			 */
+			void
+			enableInfinityView () noexcept
+			{
+				m_infinityViewEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the infinity-view mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isInfinityViewEnabled () const noexcept
+			{
+				return m_infinityViewEnabled;
+			}
+
+			/**
 			 * @brief Returns whether the matrix push constant block carries the TAA sub-pixel
 			 * projection jitter, i.e. whether gl_Position must be offset by it in this shader.
 			 * @note MUST mirror Generator::Abstract::declareMatrixPushConstantBlock(): the
@@ -631,6 +656,7 @@ namespace EmEn::Saphir
 			bool m_MDIEnabled{false};
 			bool m_skinningEnabled{false};
 			bool m_instanceTransformsEnabled{false};
+			bool m_infinityViewEnabled{false};
 			bool m_instanceMotionHistoryEnabled{false};
 			/** @brief Whether the velocity outputs need the previous skinned position (double skinning). */
 			bool m_previousSkinningRequired{false};

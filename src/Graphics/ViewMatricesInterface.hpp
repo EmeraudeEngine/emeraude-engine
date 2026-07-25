@@ -158,6 +158,24 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the INFINITY view matrix (translation-free) used by the previously
+			 * rendered frame.
+			 * @note Frame-history contract for temporal effects. See previousViewMatrix().
+			 * Renderables drawn with the infinity view (the sky background) build their current
+			 * clip position from it, so their previous one MUST come from here: mixing the two
+			 * forms is a structural mismatch that does not cancel on a static camera.
+			 * Views without an infinity form serve the regular previous view matrix.
+			 * @return const Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Matrix< 4, float > &
+			previousInfinityViewMatrix () const noexcept
+			{
+				return this->previousViewMatrix();
+			}
+
+			/**
 			 * @brief Returns the projection matrix used by the previously rendered frame.
 			 * @note Frame-history contract for temporal effects. See previousViewMatrix().
 			 * @return const Matrix< 4, float > &

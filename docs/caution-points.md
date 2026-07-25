@@ -1080,6 +1080,36 @@ defect.
 > motion-vector chain down with it, including consumers (RTGI) whose own history validation
 > hid the damage instead of reporting it.
 
+### A STRUCTURAL matrix mismatch does not cancel on a static camera (Jul 2026)
+
+**Symptom.** With a perfectly frozen camera, the velocity buffer was exactly zero everywhere
+except one trapezoid at the top of the screen, carrying a smooth NDC-position-like gradient up
+to ~0.3 NDC — the sky, seen through Sponza's translucent skylight glass.
+
+**Two wrong diagnoses before anyone measured.** Both sessions blamed the *translucent pass*,
+because the glass and the sky occupy the same screen region and translucency is a plausible
+culprit (blend state, write masks, draw order). Reading the generated GLSL showed the
+translucent path was byte-identical to the opaque one. The actual discriminator took one
+minute: a **boolean velocity probe** (emit `length(velocity) > 1e-6` as the resolved colour,
+`return` early) drew the offending surface as a shape — and the shape was the sky, not the glass.
+
+**Root cause.** Renderables using the infinity view (`isUsingInfinityView()`) build their
+CURRENT clip position from the pushed **translation-free** view, while their PREVIOUS one came
+from the `InstanceTransforms` header, which only carried the **regular** previous
+view-projection. The two matrices differ by the whole camera translation.
+
+> **Takeaway:** a temporal artefact does not imply a temporal bug. `velocity = f(current) -
+> f(previous)` cancels on a static camera **only if both endpoints use the same function**.
+> When two code paths pick their matrices independently — one per-draw from a push constant, the
+> other per-scene from a buffer — the mismatch is structural and survives any amount of
+> camera stillness. Audit the PAIR, not the history. (Same session, same lesson twice: the
+> jitter race above was the temporal variant of this, this one is the structural variant.)
+
+**Fix.** Carry both forms in the header (`previousViewProjection` +
+`previousViewProjectionInfinity`, at no size cost — the CURRENT view-projection that used to sit
+there was read 0 times by the generated GLSL) and select with a generator flag that is part of
+the program cache key. See `TODO.md` § "Infinity-view renderables wrote a garbage velocity".
+
 ---
 
 ## Shader/GLSL Pitfalls
