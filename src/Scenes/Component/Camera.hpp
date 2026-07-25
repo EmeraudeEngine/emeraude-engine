@@ -271,7 +271,8 @@ namespace EmEn::Scenes::Component
 			/* ---- Physical camera (photographic) options ----
 			 * The camera is the single source of truth for the photographic behaviour of the
 			 * rendered image, like a real camera body: optics (aperture, focal length, focus)
-			 * and exposure. The engine materializes the matching post-process effects
+			 * and exposure, plus the shutter speed that drives the motion blur length. The engine
+			 * materializes the matching post-process effects
 			 * (DepthOfField, ToneMapping) in the scene chain when enabled here; when disabled,
 			 * these options are retained but have no effect (no-op contract). Every property is
 			 * readable by the effects each frame: changes apply immediately, no rebuild. */
@@ -361,6 +362,36 @@ namespace EmEn::Scenes::Component
 			focalLength () const noexcept
 			{
 				return m_focalLength;
+			}
+
+			/**
+			 * @brief Sets the shutter speed (exposure time) in seconds.
+			 * @note Photographic driver of the MOTION BLUR length: the effect blurs along the
+			 * velocity buffer over the fraction of the frame the shutter stays open, i.e. the
+			 * SHUTTER ANGLE = shutterSpeed / frameTime. `1/48` s at 24 fps is the cinematic
+			 * 180-degree rule (angle 0.5); an angle at or above 1 means the shutter never closes
+			 * (the effect clamps there — a longer exposure than the frame cannot be reconstructed
+			 * from a single per-frame velocity). Expressing it in seconds is what makes the blur
+			 * INDEPENDENT of the framerate: at a fixed shutter speed, a frame twice as long
+			 * simply covers twice the motion, exactly as a real camera would.
+			 * @param seconds The exposure time (e.g. 1.0F / 60.0F).
+			 * @return void
+			 */
+			void
+			setShutterSpeed (float seconds) noexcept
+			{
+				m_shutterSpeed = std::clamp(seconds, 1.0F / 8000.0F, 1.0F);
+			}
+
+			/**
+			 * @brief Returns the shutter speed (exposure time) in seconds.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			shutterSpeed () const noexcept
+			{
+				return m_shutterSpeed;
 			}
 
 			/**
@@ -557,6 +588,7 @@ namespace EmEn::Scenes::Component
 			float m_aperture{2.8F}; /**< Lens aperture, as an f-number. */
 			float m_focalLength{50.0F}; /**< Lens focal length, in millimeters. */
 			float m_focusDistance{10.0F}; /**< Manual focus plane distance, in meters. */
+			float m_shutterSpeed{1.0F / 60.0F}; /**< Exposure time, in seconds: drives the motion blur length through the shutter angle (shutterSpeed / frameTime). */
 			float m_exposureCompensation{0.0F}; /**< Exposure bias, in EV. */
 	};
 

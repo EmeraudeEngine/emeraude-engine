@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -111,6 +112,13 @@ namespace EmEn::Graphics
 				float nearPlane;
 				float farPlane;
 				float tanHalfFovY;
+				/** @brief Duration of the previous RENDERED frame, in seconds. Single source of
+				 * truth for the whole chain: the velocity G-buffer holds a PER-FRAME delta, so any
+				 * effect converting it to a physical duration (the motion blur shutter angle) needs
+				 * the same number. Clamped to a sane range, so a hitch or the first frame cannot
+				 * produce an absurd exposure. Zero on the direct (lens) chain, which has no
+				 * temporal consumer. */
+				float deltaTime;
 			};
 
 			/* Construction & configuration. */
@@ -357,6 +365,10 @@ namespace EmEn::Graphics
 			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
 			float m_nearPlane{0.1F};
 			float m_farPlane{1000.0F};
+			/** @brief Timestamp of the previous indirect-chain execution, for PushConstants::deltaTime.
+			 * Mutable because the chain executes from a const method (same idiom as
+			 * ViewMatrices2DUBO's cached jittered projection). */
+			mutable std::chrono::steady_clock::time_point m_lastChainFrameTime{};
 			bool m_enabled{false};
 			/* Cached requirements from configure(). */
 			bool m_cachedRequiresHDR{false};

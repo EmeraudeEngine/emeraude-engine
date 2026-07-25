@@ -57,7 +57,37 @@
 
 - [x] **Screen-Space GI (SSGI)** — DONE (validated 2026-07-23 in the `global-illumination`
   demo bench, incl. receiver-albedo modulation via the new albedo G-buffer attachment).
-- [ ] **Motion Blur** — Flou de mouvement caméra/objets. Sensation de poids et d'inertie.
+- [x] **Motion Blur** — DONE 2026-07-26, validated visually by the owner (streak follows the
+  motion, no ghost copies, no tile seams, no bleeding through silhouettes, sharp at rest).
+  `Graphics/Effects/Framebuffer/MotionBlur.{hpp,cpp}` implements McGuire et al., "A
+  Reconstruction Filter for Plausible Motion Blur" (I3D 2012) in four fragment/IRT passes:
+  `MB_TileMaxH` + `MB_TileMax` (SEPARABLE reduction to the dominant velocity of each 64 px tile —
+  separable so K can be large: 64+64 iterations instead of 64² = 4096 in one invocation, same
+  total fetches), `MB_NeighborMax` (3x3 tile max, so a fast object smears beyond its own tile),
+  and `MB_Output` (24 jittered samples along the dominant velocity, cone/cylinder weights with a
+  soft depth foreground/background classification; interleaved gradient noise for the jitter,
+  after Jimenez SIGGRAPH 2014).
+  PHOTOGRAPHIC CONTRACT (owner decision): the blur LENGTH is not a strength slider but
+  `Camera::setShutterSpeed()` (seconds) divided by the frame duration = the SHUTTER ANGLE, i.e.
+  how many frames of motion the exposure covers. Angles above 1 are normal and must NOT be
+  clamped (1/60 s at 500 fps = 8.3): clamping to 1 made the blur shrink as the framerate rose,
+  which is exactly what a shutter speed exists to prevent. The velocity is extrapolated linearly
+  over the exposure — assumed limit: a curved trajectory becomes a straight streak.
+  New contract member `PostProcessor::PushConstants::deltaTime` (duration of the previous
+  RENDERED frame, clamped to [1/1000, 1/15] s): the chain's single source of truth for anything
+  converting the per-frame velocity buffer into a physical duration.
+  Placement (owner decision): HDR, AFTER the temporal resolve (blurring before it would poison
+  the TAA history) and BEFORE the photographic effects — the camera inserts DepthOfField and
+  ToneMapping ahead of the first display-referred effect, so stacking the blur between TAA and
+  Sharpen is enough. Settings: `Core/Graphics/MotionBlur/*` (quality knobs only).
+  ⚠️ Two traps paid for during this work, both written up in `docs/caution-points.md`: the
+  velocity buffer's floating-point noise floor must be gated on the RAW per-frame magnitude
+  (a shutter angle above 1 amplifies it past any post-scale threshold), and the auto-exposure
+  settle time lengthens when an effect engages on the startup transient — verify a flat
+  per-frame mean luma before trusting any measurement (see projet-alpha
+  `docs/temporal-stability-measurement.md` step 3).
+  NOT DONE: coupling the shutter speed to the exposure value (a 1/8 s pose should also be +3 EV)
+  — that belongs to the pending ISO/shutter work of the physical camera.
 - [x] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
   **DONE 2026-07-25 — VALIDATED VISUALLY BY THE OWNER.** The remaining static-camera residual
   (`0.195` mean / `11.3` p99.9 on Sponza, ray tracing off, see the bench below) was inspected

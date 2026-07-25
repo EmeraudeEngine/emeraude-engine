@@ -467,6 +467,19 @@ namespace EmEn
 			constexpr auto GraphicsTAALumaWeightingKey{"Core/Graphics/AntiAliasing/Temporal/LumaWeighting"};
 			constexpr auto DefaultGraphicsTAALumaWeighting{true};
 
+			/* Motion Blur — effect QUALITY knobs only. The blur LENGTH is photographic and
+			 * belongs to the active camera: shutter speed / frame duration = shutter angle
+			 * (Scenes::Component::Camera::setShutterSpeed()). Requires the velocity G-buffer;
+			 * runs in HDR, after the temporal resolve and before the photographic effects. */
+			constexpr auto GraphicsMotionBlurEnabledKey{"Core/Graphics/MotionBlur/Enabled"};
+			constexpr auto DefaultGraphicsMotionBlurEnabled{false};
+			/* Samples walked along the dominant velocity (odd: one lands on the pixel centre). */
+			constexpr auto GraphicsMotionBlurSampleCountKey{"Core/Graphics/MotionBlur/SampleCount"};
+			constexpr auto DefaultGraphicsMotionBlurSampleCount{24U};
+			/* Depth interval, in meters, softening the foreground/background classification. */
+			constexpr auto GraphicsMotionBlurSoftDepthExtentKey{"Core/Graphics/MotionBlur/SoftDepthExtent"};
+			constexpr auto DefaultGraphicsMotionBlurSoftDepthExtent{0.05F};
+
 			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
 			 * focal length, focus) belong to the active camera (physical camera model,
 			 * Scenes::Component::Camera), NOT to the settings. */

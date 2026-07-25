@@ -865,6 +865,18 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
   anything feeding a velocity clip position (the InstanceTransforms SSBO header, the pushed
   view-projection of the paths that jitter in the shader).
 
+- `PushConstants::deltaTime` — duration of the previous RENDERED frame, in seconds, clamped to
+  [1/1000, 1/15]. The chain's SINGLE source of truth for anything converting the per-frame
+  velocity G-buffer into a physical duration: `MotionBlur` divides the camera's shutter speed by
+  it to get the shutter angle (how many frames of motion the exposure covers). Effects must NOT
+  measure time themselves — a chain where two effects disagree on the frame duration cannot be
+  reasoned about. Zero on the direct (lens) chain, which has no temporal consumer.
+- ⚠️ **Amplifying the velocity buffer requires a raw dead zone.** Its two clip positions come
+  from differently-computed matrix products, so a static camera leaves ~1e-4 px of rounding
+  noise. Any effect scaling velocity by more than 1 must reject that on the RAW per-frame
+  magnitude, before its own factor — see `docs/caution-points.md` § "A velocity buffer has a
+  floating-point noise floor".
+
 **Interface** (`PostProcessEffect.hpp`):
 - `create(renderer, width, height)` — Allocate GPU resources (IRTs, pipelines, descriptors)
 - `destroy()` — Release resources

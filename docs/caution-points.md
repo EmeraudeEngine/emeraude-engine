@@ -1080,6 +1080,30 @@ defect.
 > motion-vector chain down with it, including consumers (RTGI) whose own history validation
 > hid the damage instead of reporting it.
 
+### A velocity buffer has a floating-point noise floor — do not amplify it (Jul 2026)
+
+**Symptom.** The motion blur, whose shutter angle multiplies the per-frame velocity, turned a
+perfectly static camera into a whole-frame shimmer as soon as the angle was allowed above 1.
+
+**Mechanism.** The velocity output is `(current.xy / current.w) - (previous.xy / previous.w)`,
+and the two clip positions come from two DIFFERENTLY COMPUTED matrix products — the current one
+from a pushed view-projection, the previous one from the SSBO header. Mathematically equal on a
+static camera, they are not BIT-equal: the rounding leaves ~1e-7 NDC, i.e. ~1e-4 px. Harmless
+until something multiplies it: a 1/60 s exposure at 500 fps is a shutter angle of 8.3, and a
+64 px tile then spreads whatever crossed the gate over a 192x192 px neighbourhood — the whole
+frame.
+
+> **Takeaway:** any consumer that AMPLIFIES the velocity must gate on the **raw per-frame**
+> magnitude, before its own scale factor, not after. A post-scale threshold moves with the
+> amplification and will always be crossed eventually. Sub-quarter-pixel motion per frame is
+> below the raster's own precision, so a dead zone there costs nothing real.
+>
+> Corollary for measurement: a probe that reports "nothing above 0.5 px" does NOT license
+> "nothing above 0.06 px". Ask the probe the question you actually need answered.
+
+**Fix.** `MotionBlur`'s horizontal reduction rejects raw velocities below
+`Parameters::deadZonePixels` (0.25 px) before applying the shutter angle.
+
 ### A STRUCTURAL matrix mismatch does not cancel on a static camera (Jul 2026)
 
 **Symptom.** With a perfectly frozen camera, the velocity buffer was exactly zero everywhere

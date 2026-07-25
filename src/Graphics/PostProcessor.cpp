@@ -27,6 +27,7 @@
 #include "PostProcessor.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <numbers>
@@ -1199,7 +1200,21 @@ namespace EmEn::Graphics
 
 		/* Build push constants for the effect chain. */
 		static const auto startTime = std::chrono::steady_clock::now();
-		const auto elapsedTime = std::chrono::duration< float >(std::chrono::steady_clock::now() - startTime).count();
+		const auto now = std::chrono::steady_clock::now();
+		const auto elapsedTime = std::chrono::duration< float >(now - startTime).count();
+
+		/* Duration of the previous RENDERED frame: the chain's single source of truth for
+		 * anything converting the per-frame velocity G-buffer into a physical duration (the
+		 * motion blur shutter angle). Clamped so the first frame and any hitch (a stall, a
+		 * breakpoint, a scene load) cannot produce an absurd exposure. */
+		constexpr float MinDeltaTime{1.0F / 1000.0F};
+		constexpr float MaxDeltaTime{1.0F / 15.0F};
+
+		const auto deltaTime = m_lastChainFrameTime.time_since_epoch().count() == 0 ?
+			MinDeltaTime :
+			std::clamp(std::chrono::duration< float >(now - m_lastChainFrameTime).count(), MinDeltaTime, MaxDeltaTime);
+
+		m_lastChainFrameTime = now;
 
 		const auto mainRT = m_renderer.mainRenderTarget();
 		const auto & extent = mainRT->extent();
@@ -1244,7 +1259,8 @@ namespace EmEn::Graphics
 				.time = elapsedTime,
 				.nearPlane = m_nearPlane,
 				.farPlane = m_farPlane,
-				.tanHalfFovY = tanHalfFovY
+				.tanHalfFovY = tanHalfFovY,
+				.deltaTime = deltaTime
 			}
 		};
 
@@ -1407,7 +1423,9 @@ namespace EmEn::Graphics
 				.time = elapsedTime,
 				.nearPlane = m_nearPlane,
 				.farPlane = m_farPlane,
-				.tanHalfFovY = tanHalfFovY
+				.tanHalfFovY = tanHalfFovY,
+				/* Direct (lens) chain: no temporal consumer, no frame delta needed. */
+				.deltaTime = 0.0F
 			};
 
 			vkCmdPushConstants(
