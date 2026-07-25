@@ -225,14 +225,44 @@ namespace EmEn::Saphir
 		/* NOTE: Check the radius influence. */
 		if ( lightType != LightType::Directional )
 		{
-			fragmentShader.addComment("Compute the radius influence over the light factor [Point+Spot].");
+			fragmentShader.addComment("Physical distance attenuation over the light factor [Point+Spot].");
 
+			/* PHOTOMETRIC ATTENUATION — windowed inverse square (B. Karis, "Real Shading in
+			 * Unreal Engine 4", SIGGRAPH 2013; same form in Frostbite). The light intensity is a
+			 * LUMINOUS INTENSITY in candela, so the illuminance it produces falls as 1/d^2 — that
+			 * is what makes a value in lumens mean anything at all.
+			 *
+			 * `1 / (d^2 + 1)` rather than `1 / d^2`: the bare inverse square is infinite at the
+			 * source, which blows up any surface touching the light. The +1 costs one lux of
+			 * accuracy at one meter and removes the singularity.
+			 *
+			 * `saturate(1 - (d/r)^4)^2` is the WINDOW: it forces the contribution to reach
+			 * exactly zero at the radius, which the inverse square never does, so the renderer
+			 * keeps culling lights by radius. Squaring the window makes it reach zero smoothly
+			 * instead of with a visible edge.
+			 *
+			 * The previous falloff was `max(1 - (d/r)^2, 0)`: radius-bounded and artistic, and
+			 * NOT proportional to 1/d^2 anywhere. See TODO.md § "Photometric lighting". */
 			Code{fragmentShader} <<
 				"if ( " << this->lightRadius() << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
-				"	const vec3 DR = abs(" << LightGenerator::variable(Distance) << ") / " << this->lightRadius() << ';' << Line::Blank <<
+				"	const float lightDistance = length(" << LightGenerator::variable(Distance) << ");" << Line::End <<
+				"	const float distanceOverRadius = lightDistance / " << this->lightRadius() << ';' << Line::End <<
+				"	const float radiusWindow = clamp(1.0 - distanceOverRadius * distanceOverRadius * distanceOverRadius * distanceOverRadius, 0.0, 1.0);" << Line::Blank <<
 
-				"	" << LightFactor << " *= max(1.0 - dot(DR, DR), 0.0);" << Line::End <<
+				/* ⚠️ TEMPORARY, PHASE 2 DELETES THIS ONE EXPRESSION. The switch from
+				 * `max(1 - (d/r)^2, 0)` to a true inverse square makes every existing light ~22x
+				 * dimmer at mid-range (r = 10, d = 5: 0.75 before, 0.034 after), because content
+				 * is still authored in the old arbitrary units. This factor restores the previous
+				 * level at the reference distance d = r/2, keeping the RELATIVE balance between
+				 * lights of different radii — which is the one thing the auto-exposure cannot fix
+				 * for us. Derived per-light from its own radius:
+				 *   comp(r) = old(r/2) / new(r/2) = 0.75 * (r^2/4 + 1) / (1 - 1/16)^2
+				 *           = 0.8533 * (r^2/4 + 1)
+				 * It disappears the moment the demos carry real lumens (phase 2). */
+				"	const float legacyUnitCompensation = 0.8533 * (" << this->lightRadius() << " * " << this->lightRadius() << " * 0.25 + 1.0);" << Line::Blank <<
+
+				"	" << LightFactor << " *= legacyUnitCompensation * (radiusWindow * radiusWindow) / (lightDistance * lightDistance + 1.0);" << Line::End <<
 				'}' << Line::End;
 
 			if ( m_discardUnlitFragment )

@@ -269,10 +269,24 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
 **Formulas** (APEX / Frostbite, Lagarde & de Rousiers SIGGRAPH 2014):
 `EV100 = log2(N^2 / t * 100 / S)` then `exposure = 1 / (1.2 * 2^EV100)`.
 
-- [ ] **Phase 1 — physical attenuation + photometric units, together.** Karis windowed inverse
-  square in `LightGenerator.PerFragment`; per-type units on the emitters (directional = lux,
-  point/spot = lumens converted to candela, emissive/sky = nits) with the conversions in ONE
-  place; calibrated so the current look survives at a chosen reference distance.
+- [x] **Phase 1 — physical attenuation + photometric units, together.** DONE 2026-07-26.
+  `Graphics/Photometry.hpp` is the single conversion point (lumens->candela per light type, the
+  inverse-square law, and the APEX exposure equations phase 3 needs); the emitters gained
+  `DirectionalLight::setIlluminance()` (lux) and `PointLight`/`SpotLight::setLuminousPower()`
+  (lumens); and `LightGenerator.PerFragment` replaced `max(1 - (d/r)^2, 0)` with the Karis
+  windowed inverse square `saturate(1 - (d/r)^4)^2 / (d^2 + 1)`.
+  ⚠️ Carries ONE temporary expression, `legacyUnitCompensation = 0.8533 * (r^2/4 + 1)`, derived
+  per-light from its own radius: the switch to a true inverse square makes existing content ~22x
+  dimmer at mid-range (r = 10, d = 5: 0.75 before, 0.034 after), and this restores the previous
+  level at d = r/2 so the RELATIVE balance between lights of different radii survives — the one
+  thing the auto-exposure cannot fix. **Phase 2 deletes that expression** when the demos carry
+  real lumens.
+  Measured (`liminal`, ray tracing on, TAA off, the only stock demo with point lights AND tone
+  mapping — Sponza has zero point lights so it cannot validate this): mean luma 121.4 against a
+  123.0 baseline taken with the old falloff, i.e. 1.3%, flat across the series. Visually
+  indistinguishable at screenshot scale. ⚠️ The SHAPE of the falloff did change: brighter close
+  to a source, dimmer far from it. Scenes where a light sits CLOSE to a surface will show it, and
+  `liminal` is not that scene — check `light-and-shadow-debug` and `basic-scenery` in phase 2.
 - [ ] **Phase 2 — re-light every demo** in real values.
   ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
   light domain.** Two more sources feed the image and carry arbitrary units today:
