@@ -33,12 +33,22 @@
 - VULKAN: Find a better way to detect the UBO max capacity. For now the limit is hard-coded to 65,536 bytes.
 - VULKAN: Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering (Vulkan 1.3), then leverage dynamic rendering to order draws by pipeline layout and reduce binding cost.
 - VULKAN: Extend SharedUniformBuffer pooling strategy to short-lived entities (particles, projectiles) for UBO/VBO allocation optimization.
-- RAY TRACING: Skinned meshes sit in the TLAS with their BIND-POSE BLAS (skinning happens
-  in the vertex shader, invisible to ray queries) — RT effects (RTAO/RTGI/RTR) trace an
-  invisible T-pose statue at the actor's transform. SYMPTOM SEEN 2026-07-25 (owner, GI demo
-  + Paladin): a phantom second pair of foot-occlusion marks offset from the animated feet.
-  Options: exclude skinned renderables from the TLAS (cheap, standard), per-frame BLAS
-  refit from compute-skinned vertices (correct, costly), or accept. Decide with B4.
+- RAY TRACING: Skinned meshes sit in the TLAS with their BIND-POSE BLAS — **ACCEPTED LIMIT
+  (owner decision 2026-07-25), deferred on purpose. Do not "fix" it opportunistically.**
+  Skinning happens in the vertex shader, invisible to ray queries, so RT effects (RTAO/RTGI/RTR)
+  trace an invisible bind-pose statue at the actor's transform. SYMPTOM SEEN 2026-07-25 (owner,
+  GI demo + Paladin): a phantom second pair of foot-occlusion marks offset from the animated feet.
+  The two real options remain open for the day this is revisited — recorded here so nobody has to
+  re-derive them:
+    1. EXCLUDE skinned renderables from the TLAS — cheap, industry-standard. Cost: animated actors
+       stop casting RT shadows and stop appearing in reflections/GI entirely. Trades a wrong
+       contribution for a missing one.
+    2. PER-FRAME BLAS REFIT from compute-skinned vertices — correct. Cost: one refit per skinned
+       actor per frame, and it REQUIRES a compute skinning path that does not exist yet (skinning
+       is vertex-shader only today, see the double-skinning work of the motion-vector chain).
+  Whichever is chosen, decide it against a MEASUREMENT of the phantom's actual contribution (a
+  boolean probe on the RT effect output, cf. projet-alpha
+  `docs/temporal-stability-measurement.md` § "the boolean probe draws a SHAPE"), not on principle.
 - RENDERING SYSTEM: Hi-Z Occlusion
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
 - RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
