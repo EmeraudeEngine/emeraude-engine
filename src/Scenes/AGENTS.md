@@ -624,7 +624,7 @@ The descriptor set is passed from `Scene::prepareRender()`'s cached
 SSBO Path". Advanced/lighted, cubemap/CSM and shadow paths still push their matrices
 (milestone 4).
 
-**Status:** B1 (e080399e) + B2 (4d500626) + B3 (velocity MRT + RTGI dilation consumption)
+**Status:** B1 (e080399e) + B2 (4d500626) + B3 (velocity MRT + RTGI dilation consumption) + B4 (double skinning: the skinning SSBO interleaves {current, previous} bone matrices, stride 2 — limb-level velocity)
 DONE 2026-07-25 — the header {VP, previousVP} is now CONSUMED by the velocity vertex
 shaders and the entries' previousModel by the same path. B1 details: — classic AND advanced
 paths consume the SSBO (advanced pushes V + frameIndex = 68 B, killing the historical 132 B

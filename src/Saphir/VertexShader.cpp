@@ -392,12 +392,19 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* NOTE: Skinned meshes use the CURRENT pose for both positions until double
-		 * skinning exists (B4) — object velocity comes from the transform delta only. */
+		/* Double skinning: the previous clip position uses the PREVIOUS pose (the skinning
+		 * SSBO interleaves {current, previous} bone matrices) — limb motion produces real
+		 * velocity, not just the transform delta. */
 		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+		const auto prevPosExpr = m_skinningEnabled ? "previousSkinnedPosition" : Attribute::Position;
+
+		if ( m_skinningEnabled )
+		{
+			m_previousSkinningRequired = true;
+		}
 
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
-		Code{*this, Location::Output} << ShaderVariable::ClipPositionPrevious << " = ubInstanceTransforms.previousViewProjection * " << previousModelMatrix << " * vec4(" << posExpr << ", 1.0);";
+		Code{*this, Location::Output} << ShaderVariable::ClipPositionPrevious << " = ubInstanceTransforms.previousViewProjection * " << previousModelMatrix << " * vec4(" << prevPosExpr << ", 1.0);";
 
 		emitted = true;
 
@@ -1661,14 +1668,27 @@ namespace EmEn::Saphir
 			const bool hasBinormal = m_vertexAttributes.contains(Graphics::VertexAttributeType::Binormal);
 			const bool needsSkinMatrix3 = hasNormal || hasTangent || hasBinormal;
 
+			/* NOTE: The skinning SSBO interleaves {current, previous} bone matrices
+			 * (stride 2) — see RenderableInstance::Abstract::updateSkinningMatrices(). */
 			std::string skinCode =
 				"\t" "/* Skeletal skinning. */" "\n"
-				"\t" "ivec4 boneIdx = ivec4(" + std::string{Keys::Attribute::BoneInfluence} + ");" "\n"
+				"\t" "ivec4 boneIdx = ivec4(" + std::string{Keys::Attribute::BoneInfluence} + ") * 2;" "\n"
 				"\t" "mat4 skinMatrix = " + std::string{Keys::Attribute::BoneWeight} + ".x * ubSkinningMatrices.bones[boneIdx.x]" "\n"
 				"\t" "			   + " + std::string{Keys::Attribute::BoneWeight} + ".y * ubSkinningMatrices.bones[boneIdx.y]" "\n"
 				"\t" "			   + " + std::string{Keys::Attribute::BoneWeight} + ".z * ubSkinningMatrices.bones[boneIdx.z]" "\n"
 				"\t" "			   + " + std::string{Keys::Attribute::BoneWeight} + ".w * ubSkinningMatrices.bones[boneIdx.w];" "\n"
 				"\t" "vec3 skinnedPosition = (skinMatrix * vec4(" + std::string{Keys::Attribute::Position} + ", 1.0)).xyz;" "\n";
+
+			/* Double skinning (velocity): blend the PREVIOUS pose matrices (odd slots). */
+			if ( m_previousSkinningRequired )
+			{
+				skinCode +=
+					"\t" "mat4 prevSkinMatrix = " + std::string{Keys::Attribute::BoneWeight} + ".x * ubSkinningMatrices.bones[boneIdx.x + 1]" "\n"
+					"\t" "				   + " + std::string{Keys::Attribute::BoneWeight} + ".y * ubSkinningMatrices.bones[boneIdx.y + 1]" "\n"
+					"\t" "				   + " + std::string{Keys::Attribute::BoneWeight} + ".z * ubSkinningMatrices.bones[boneIdx.z + 1]" "\n"
+					"\t" "				   + " + std::string{Keys::Attribute::BoneWeight} + ".w * ubSkinningMatrices.bones[boneIdx.w + 1];" "\n"
+					"\t" "vec3 previousSkinnedPosition = (prevSkinMatrix * vec4(" + std::string{Keys::Attribute::Position} + ", 1.0)).xyz;" "\n";
+			}
 
 			if ( needsSkinMatrix3 )
 			{

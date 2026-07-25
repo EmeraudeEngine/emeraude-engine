@@ -515,7 +515,9 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param matrices The skinning matrices to upload.
 			 * @return bool
 			 */
-			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) const noexcept;
+			/* NOTE: Non-const — archives the previous pose for the motion-vectors double
+			 * skinning (the SSBO interleaves {current, previous} matrices, stride 2). */
+			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept;
 
 			/**
 			 * @brief Returns whether skinning GPU resources are available.
@@ -960,6 +962,10 @@ namespace EmEn::Graphics::RenderableInstance
 			uint32_t m_instanceTransformsSlot{0};
 			/* Skeletal skinning GPU resources (per-instance). */
 			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;
+			/** @brief Previous-pose bone matrices (motion vectors double skinning). */
+			std::vector< Base::Math::Matrix< 4, float > > m_previousSkinningMatrices;
+			/** @brief Interleaved {current, previous} staging reused across updates. */
+			std::vector< Base::Math::Matrix< 4, float > > m_skinningStaging;
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_skinningDescriptorSet;
 			/** @brief Whether m_lastModelMatrix holds a valid previous-frame matrix (false until the first primary staging). */

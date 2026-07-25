@@ -609,5 +609,7 @@ namespace EmEn::Saphir
 			bool m_skinningEnabled{false};
 			bool m_instanceTransformsEnabled{false};
 			bool m_instanceMotionHistoryEnabled{false};
+			/** @brief Whether the velocity outputs need the previous skinned position (double skinning). */
+			bool m_previousSkinningRequired{false};
 	};
 }

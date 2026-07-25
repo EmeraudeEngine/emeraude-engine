@@ -117,7 +117,13 @@
   tests + neighborhood clamp already BOUNDED the wrong reprojection by REJECTING history on
   the moving actor (visible as GI grain/shimmer on him); B3 reuses the history through
   per-object velocity → visibly more stable GI on the moving actor (owner confirmed).
-  Optional future evidence: RenderDoc velocity-buffer capture. Next: B4 (double skinning), then TAA
+  Optional future evidence: RenderDoc velocity-buffer capture. B4 DOUBLE SKINNING DONE
+  (2026-07-25): the skinning SSBO interleaves {current, previous} bone matrices (stride 2,
+  archived by `RenderableInstance::Abstract::updateSkinningMatrices()`, buffer x2, identity
+  init both slots); the vertex shader blends the previous pose (odd slots) into
+  `previousSkinnedPosition` when the velocity outputs are emitted — LIMB motion now
+  produces real per-pixel velocity. Skinning regression-checked (fbx-loader animated
+  Paladin incl. skinned shadow). Next: TAA
   (jitter + history, `runsAfterToneMapping()` contract) and motion blur (camera effect,
   shutter speed — state-of-the-art research first: McGuire tile-based reconstruction).
   See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and

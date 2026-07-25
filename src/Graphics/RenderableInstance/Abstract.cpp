@@ -100,7 +100,9 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		const auto bufferSize = static_cast< VkDeviceSize >(boneCount * 16UL * sizeof(float));
+		/* NOTE: Interleaved {current, previous} bone matrices (stride 2) for the
+		 * motion-vectors double skinning — twice the bind-pose-only size. */
+		const auto bufferSize = static_cast< VkDeviceSize >(boneCount * 2UL * 16UL * sizeof(float));
 
 		/* Create the SSBO (host-visible for CPU write each frame). */
 		m_skinningSSBO = std::make_unique< ShaderStorageBufferObject >(device, bufferSize, true);
@@ -161,10 +163,11 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* Initialize SSBO with identity matrices so the mesh renders in bind pose
-		 * until the first animation frame uploads real skinning matrices. */
+		/* Initialize SSBO with identity matrices (current AND previous slots) so the
+		 * mesh renders in bind pose with zero pose velocity until the first animation
+		 * frame uploads real skinning matrices. */
 		{
-			std::vector< Matrix< 4, float > > identityMatrices(boneCount);
+			std::vector< Matrix< 4, float > > identityMatrices(static_cast< size_t >(boneCount) * 2UL);
 			m_skinningSSBO->writeData(MemoryRegion{
 				identityMatrices.data(),
 				identityMatrices.size() * sizeof(Matrix< 4, float >)
@@ -175,16 +178,35 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Abstract::updateSkinningMatrices (const std::vector< Matrix< 4, float > > & matrices) const noexcept
+	Abstract::updateSkinningMatrices (const std::vector< Matrix< 4, float > > & matrices) noexcept
 	{
 		if ( m_skinningSSBO == nullptr || matrices.empty() )
 		{
 			return false;
 		}
 
+		/* First pose (or bone count change): previous == current, zero pose velocity. */
+		if ( m_previousSkinningMatrices.size() != matrices.size() )
+		{
+			m_previousSkinningMatrices = matrices;
+		}
+
+		/* Interleave {current, previous} (stride 2) — matches the vertex shader layout
+		 * (double skinning for the motion vectors). */
+		m_skinningStaging.resize(matrices.size() * 2UL);
+
+		for ( size_t index = 0; index < matrices.size(); ++index )
+		{
+			m_skinningStaging[(index * 2UL) + 0UL] = matrices[index];
+			m_skinningStaging[(index * 2UL) + 1UL] = m_previousSkinningMatrices[index];
+		}
+
+		/* Archive the pose for the next update (one history step per logic update). */
+		m_previousSkinningMatrices = matrices;
+
 		return m_skinningSSBO->writeData(MemoryRegion{
-			matrices.data(),
-			matrices.size() * sizeof(Matrix< 4, float >)
+			m_skinningStaging.data(),
+			m_skinningStaging.size() * sizeof(Matrix< 4, float >)
 		});
 	}
 
