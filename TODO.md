@@ -220,6 +220,66 @@
   smooth gradient and the variance clip already bounded the wrong reprojection. The value is
   correctness for every velocity consumer (RTGI reprojection, future motion blur) and no sky
   smearing during pans.
+### Photometric lighting + absolute exposure (PROJECT, owner decisions taken 2026-07-26)
+
+Goal: the camera's aperture / shutter speed / ISO drive the exposure through the real APEX
+equation, which only means something once the SCENE carries physical light units. Four owner
+decisions, taken before any code:
+
+1. **Photometric units FIRST**, not a relative calibration constant. The shortcut (couple EV to
+   the current arbitrary units through a calibration factor, giving correct RATIOS but no
+   absolute level) was explicitly REJECTED.
+2. **Auto-exposure becomes AUTO-ISO.** Aperture drives the depth of field and shutter speed
+   drives the motion blur — both are CREATIVE controls the metering must never touch, or dialing
+   exposure would change the bokeh or the streak length. ISO is the only pure exposure variable.
+   That is how live-action shooting works, and it makes auto mode honest: a slow shutter blurs
+   more WITHOUT over-exposing, because ISO drops to compensate.
+3. **Big-bang migration**: attenuation and units land in the SAME step. Taken together they can
+   be calibrated to PRESERVE the current look at a reference distance, whereas either alone
+   destroys it — one visual recalibration instead of two, and no duplicated shading path (an
+   opt-in `usesPhotometricUnits()` flag was rejected for that reason).
+4. Phase order below.
+
+**THE LOAD-BEARING FACT.** The current point/spot attenuation is NOT physical
+(`LightGenerator.PerFragment.cpp`, "radius influence"):
+
+```glsl
+const vec3 DR = abs(distance) / lightRadius;
+lightFactor *= max(1.0 - dot(DR, DR), 0.0);      /* = max(1 - (d/r)^2, 0) */
+```
+
+A radius-bounded artistic falloff: exactly zero at `d == r` (convenient for culling) but nothing
+like `I/d^2`. **Lumens are meaningless until this becomes a windowed inverse square** (Karis:
+`saturate(1 - (d/r)^4)^2 / (d^2 + 1)`). This is why units and attenuation cannot be separated.
+
+**Migration surface (measured, small):** 3 `setIntensity` call sites in projet-alpha
+(Actor/Drone, Actor/Player, Actor/Marble), 6 in the engine, 4 data files carrying an
+`"Intensity"`, and `DefaultIntensity` = 1.0. The cost is the VISUAL recalibration, not the line
+count.
+
+**⚠️ Method: keep the AUTO-EXPOSURE ON for the whole migration.** Absolute values go from ~1 to
+~100000; without metering, every intermediate step renders pure white or pure black and nothing
+can be verified.
+
+**Reference values** (UE5 physical light units, and ikrima's unit survey): sun 100 000 lx,
+overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-equivalent bulb
+800 lm; monitor 200-300 nits, candle 5-10 nits. Conversions: point `cd = lm / 4pi`, spot
+`cd = lm / (2pi(1 - cos(theta/2)))`, and `lux = cd / d^2`.
+
+**Formulas** (APEX / Frostbite, Lagarde & de Rousiers SIGGRAPH 2014):
+`EV100 = log2(N^2 / t * 100 / S)` then `exposure = 1 / (1.2 * 2^EV100)`.
+
+- [ ] **Phase 1 — physical attenuation + photometric units, together.** Karis windowed inverse
+  square in `LightGenerator.PerFragment`; per-type units on the emitters (directional = lux,
+  point/spot = lumens converted to candela, emissive/sky = nits) with the conversions in ONE
+  place; calibrated so the current look survives at a chosen reference distance.
+- [ ] **Phase 2 — re-light every demo** in real values.
+- [ ] **Phase 3 — absolute exposure**: ISO on `Camera`, EV100 from the triad, auto-exposure
+  rewired as auto-ISO (min/max = the sensor's usable range), replacing
+  `ToneMapping::Parameters::exposure` as an arbitrary multiplier.
+- [ ] **Phase 4 — recalibrate** every effect reading absolute luminance: bloom threshold,
+  auto-exposure clamps, GI/AO thresholds.
+
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 
 ### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)
