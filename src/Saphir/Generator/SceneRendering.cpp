@@ -619,7 +619,19 @@ namespace EmEn::Saphir::Generator
 		}
 		else if ( this->materialEnabled() )
 		{
-			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << this->getMaterialInterface()->fragmentColor() << ';';
+			/* UNLIT path. With no lighting to add an emissive term over, a self-illuminating
+			 * material's surface colour IS its emitted radiance, so the emission MULTIPLIES here
+			 * (the lit path adds it instead — see LightGenerator). Without this, a skybox with a
+			 * luminance of 8000 nits still rendered as its raw [0,1] cubemap, i.e. black once the
+			 * scene went photometric: the simple pass wrote the surface colour verbatim. */
+			if ( const auto emission = this->getMaterialInterface()->emissionMultiplier(); emission.empty() )
+			{
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << this->getMaterialInterface()->fragmentColor() << ';';
+			}
+			else
+			{
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4((" << this->getMaterialInterface()->fragmentColor() << ").rgb * " << emission << ", (" << this->getMaterialInterface()->fragmentColor() << ").a);";
+			}
 
 			if ( m_hasNormalsAttachment )
 			{

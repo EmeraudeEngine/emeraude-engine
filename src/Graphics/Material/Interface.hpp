@@ -435,6 +435,27 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
+			/**
+			 * @brief Returns a GLSL expression scaling the surface colour into an emitted
+			 * radiance, or an empty string when the material does not emit.
+			 * @note For the UNLIT path only. A material with no lighting has no illumination to
+			 * add emission on top of: its surface colour IS what leaves the surface, so the
+			 * emission is a MULTIPLIER there, unlike the lit path where LightGenerator ADDS the
+			 * emissive term over the lighting. Returning something here from a material that also
+			 * declares its emission to the light generator would double-count it.
+			 * @warning Callers must NOT apply this to the albedo G-buffer attachment: albedo is a
+			 * reflectance in [0,1], and an emissive luminance in nits would poison every consumer
+			 * that reads it (RTGI in particular).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			virtual
+			std::string
+			emissionMultiplier () const noexcept
+			{
+				return {};
+			}
+
 			virtual bool setupLightGenerator (Saphir::LightGenerator & lightGenerator) const noexcept = 0;
 
 			/**

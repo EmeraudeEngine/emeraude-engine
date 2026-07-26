@@ -344,35 +344,24 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   110.2 / 34.2% / 10.2% with lights converted alone (incoherent), 194.0 / 0.2% / 75.4% with the
   ambient converted, **137.6 / 0.0% / 90.4%** with middle grey. `liminal`: 130.9 / 0.0% / 93.6%.
 
-  ⚠️ **REMAINING, and it is the last visible defect: THE SKY RENDERS BLACK.** The environment
-  cubemap is still LDR (~1) while everything else lives in thousands of lux, so it vanishes under
-  the exposure. DESIGN ALREADY WORKED OUT, it just needs plumbing:
-    - A skybox is a self-illuminating surface, and the engine's emissive path is exactly the
-      glTF-conformant one we chose to honour: `fragmentColor.rgb += autoIlluminationColor.rgb *
-      autoIlluminationAmount * emissiveStrength` (`LightGenerator.cpp:1049`). So the sky wants
-      `autoIlluminationAmount = 1.0` and `emissiveStrength = peakLuminanceNits` (overcast sky
-      ~8000 nits, clear blue sky away from the sun ~5000-10000).
-    - DONE: `BasicResource` now has `setEmissiveStrength()`. It cost nothing structurally — the
-      material-properties buffer was `std::array<float, 12>` whose twelfth slot was literally
-      commented "Unused", so the new member claims it and the block finally matches the buffer
-      exactly (three vec4, no alignment change). `SkyBoxResource` sets amount = 1 and
-      strength = `DefaultSkyLuminance` (8000 nits) on both of its material creation paths.
-    - ⚠️ **REAL BLOCKER, found by dumping the generated GLSL: the UNLIT pass ignores emission.**
-      A skybox is rendered by `RenderableInstanceSimplePassFragmentShader`, whose entire body is
-      `svOutputFragment = SurfaceColor;`. The uniform block DOES carry `autoIlluminationAmount`
-      and `emissiveStrength` (verified in the dump), but the emissive code lives in
-      `LightGenerator` (`LightGenerator.cpp:1041-1067`, including a legacy branch that handles a
-      material with an amount but no explicit emissive colour) and the light generator is not run
-      for an unlit material.
-      FIX: the unlit branch of `Saphir::Generator::SceneRendering` — the one writing
-      `OutputFragment = materialInterface->fragmentColor()` — must apply the emission. ⚠️ It must
-      NOT be baked into `fragmentColor()` itself: the LIT path ADDS the emissive term on top of
-      the lighting, so doing both would double-count it for lit materials. For an unlit material
-      there is no lighting, so the surface colour IS the emitted radiance and the term is a
-      multiplication there.
-    - NOTE: `autoIlluminationAmount` is clamped to [0,1] when used as the emissive MASK
-      (`LightGenerator.cpp:183`) but NOT in the additive term. Do not try to smuggle the nits
-      through the amount itself.
+  SKY: DONE. A skybox is self-illuminating, so it now carries a real luminance:
+  `BasicResource` gained `setEmissiveStrength()` (free structurally — the material-properties
+  buffer's twelfth float was commented "Unused", so the block finally matches the buffer exactly),
+  `SkyBoxResource` sets amount = 1 and strength = `DefaultSkyLuminance` (8000 nits) on both of its
+  creation paths, and the UNLIT path of `SceneRendering` applies it.
+  ⚠️ That last step is where the subtlety lives, and it cost a GLSL dump to find: the skybox is
+  drawn by `RenderableInstanceSimplePassFragmentShader`, whose body was just
+  `svOutputFragment = SurfaceColor;`. The uniform block carried the members but nothing applied
+  them, because the emissive code lives in `LightGenerator`, which does not run for an unlit
+  material. Hence `Material::Interface::emissionMultiplier()`: with no lighting to add emission
+  ON TOP OF, the surface colour IS the emitted radiance, so the emission MULTIPLIES there while
+  the lit path keeps ADDING it. Applying it in both would double-count.
+  ⚠️ It is deliberately NOT applied to the albedo G-buffer attachment written from the same
+  `fragmentColor()` expression: albedo is a reflectance in [0,1], and 8000 nits in there would
+  poison every consumer that reads it, RTGI first.
+  Measured on `gltf-loader`, mean luma / crushed / blown / midtones: **124.8 / 0.0% / 0.0% /
+  97.0%**, against 67.2 / 1.0% / 0.1% / 33.9% before the whole project.
+
   Still open after that: `IBLIntensity` as a nits scale for the materials' reflection component.
   ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
   light domain.** Two more sources feed the image and carry arbitrary units today:

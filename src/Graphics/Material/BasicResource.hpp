@@ -243,6 +243,10 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateShadowVertexCode (const Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::emissionMultiplier() */
+			[[nodiscard]]
+			std::string emissionMultiplier () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::fragmentColor() */
 			[[nodiscard]]
 			std::string fragmentColor () const noexcept override;

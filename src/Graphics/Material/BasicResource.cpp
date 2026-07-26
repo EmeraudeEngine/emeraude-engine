@@ -531,6 +531,20 @@ namespace EmEn::Graphics::Material
 	}
 
 	std::string
+	BasicResource::emissionMultiplier () const noexcept
+	{
+		/* Only a self-illuminating material emits. A skybox is the canonical case: it is drawn
+		 * unlit, so nothing would ever apply its luminance otherwise — the simple pass writes the
+		 * surface colour verbatim. */
+		if ( !this->isFlagEnabled(AutoIlluminationEnabled) )
+		{
+			return {};
+		}
+
+		return (std::stringstream{} << '(' << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << " * " << MaterialUB(UniformBlock::Component::EmissiveStrength) << ')').str();
+	}
+
+	std::string
 	BasicResource::fragmentColor () const noexcept
 	{
 		/* Prioritize the texture's alpha channel over the uniform opacity. An
