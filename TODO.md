@@ -419,9 +419,24 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
       (`setReflectionComponentFromEnvironmentCubemap`, `IBLIntensity`), so wet ground and metal
       will mirror a DULL GREY sun instead of a blinding highlight, and an environment-driven bloom
       cannot be right either. Accepted for now, fixed by the item below.
-- [ ] **Phase 3 — absolute exposure**: ISO on `Camera`, EV100 from the triad, auto-exposure
-  rewired as auto-ISO (min/max = the sensor's usable range), replacing
-  `ToneMapping::Parameters::exposure` as an arbitrary multiplier.
+- [x] **Phase 3 — absolute exposure**: DONE 2026-07-26. `Camera` carries the third member of the
+  triad (`setSensitivity()` in ISO, plus `setSensitivityRange()` defaulting to 100-12800), and
+  `ToneMapping` computes the APEX exposure from it: `EV100 = log2(N^2/t * 100/S)` then
+  `exposure = 1/(1.2 * 2^EV100)`. The auto-exposure clamps are no longer hand-picked numbers —
+  they are what the SENSOR allows at the current aperture and shutter, i.e. the exposures of the
+  min and max ISO. That is auto-ISO: the metering moves the sensitivity and nothing else, so the
+  aperture stays a depth-of-field control and the shutter a motion-blur control.
+  ⚠️ TRAP PAID FOR: the shader does `hdrColor *= exposure * autoExposure`, so the two terms
+  MULTIPLY. Putting the physical exposure in both compounded it to ~3e-6 and rendered every scene
+  black (measured: mean luma 10.9). In AUTO mode the metering IS the exposure and the term is only
+  the EV bias; the full APEX exposure belongs there only in MANUAL mode.
+  ⚠️ CONSEQUENCE, and it is the point of the whole project: **the camera settings must now match
+  the lighting, exactly like a real body.** `gltf-loader` shot its 100000 lx courtyard at f/2.8
+  1/60 — an indoor setting, about three stops over even at the ISO 100 floor, where the metering
+  has nowhere left to go: 16.5% of the frame blown. Moved to f/11 1/250 (sunny-16), it reads
+  **125.2 mean / 0.0% crushed / 0.0% blown / 98.0% midtones**, the best of the whole migration.
+  ⚠️ `liminal` still reads 200.4 with 5.8% blown at f/4 1/60: its lamps and its optics have not
+  been tuned against each other yet. That is authoring, not a defect.
 - [ ] **Phase 4 — recalibrate** every effect reading absolute luminance: bloom threshold,
   auto-exposure clamps, GI/AO thresholds.
 

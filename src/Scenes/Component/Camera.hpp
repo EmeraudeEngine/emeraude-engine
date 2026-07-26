@@ -395,6 +395,73 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Sets the sensor sensitivity, in ISO.
+			 * @note The third member of the exposure triad, and the ONLY one the metering is
+			 * allowed to move: the aperture drives the depth of field and the shutter speed drives
+			 * the motion blur, so both are creative controls. With the auto-exposure on, this is
+			 * the value the metering lands on, bounded by the sensor range below — which is what
+			 * makes auto mode honest: a slow shutter blurs more WITHOUT over-exposing, because the
+			 * ISO drops to compensate, exactly as in live-action shooting.
+			 * @param iso The sensitivity (100 = the ISO 100 reference).
+			 * @return void
+			 */
+			void
+			setSensitivity (float iso) noexcept
+			{
+				m_sensitivity = std::clamp(iso, m_minSensitivity, m_maxSensitivity);
+			}
+
+			/**
+			 * @brief Returns the sensor sensitivity, in ISO.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			sensitivity () const noexcept
+			{
+				return m_sensitivity;
+			}
+
+			/**
+			 * @brief Sets the usable sensitivity range of the sensor, in ISO.
+			 * @note The bounds of the auto-ISO metering. They REPLACE the arbitrary exposure
+			 * clamps a tone mapper would otherwise carry: a real body cannot amplify beyond its
+			 * sensor, and expressing the limit in ISO makes it mean something.
+			 * @param minimum The lowest usable sensitivity.
+			 * @param maximum The highest usable sensitivity.
+			 * @return void
+			 */
+			void
+			setSensitivityRange (float minimum, float maximum) noexcept
+			{
+				m_minSensitivity = std::max(1.0F, minimum);
+				m_maxSensitivity = std::max(m_minSensitivity, maximum);
+				m_sensitivity = std::clamp(m_sensitivity, m_minSensitivity, m_maxSensitivity);
+			}
+
+			/**
+			 * @brief Returns the lowest usable sensitivity, in ISO.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			minSensitivity () const noexcept
+			{
+				return m_minSensitivity;
+			}
+
+			/**
+			 * @brief Returns the highest usable sensitivity, in ISO.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			maxSensitivity () const noexcept
+			{
+				return m_maxSensitivity;
+			}
+
+			/**
 			 * @brief Sets a manual focus distance in meters.
 			 * @note Like tapping to focus on a real camera: this DISABLES the auto-focus.
 			 * Re-enable it with setAutoFocus(true).
@@ -589,6 +656,9 @@ namespace EmEn::Scenes::Component
 			float m_focalLength{50.0F}; /**< Lens focal length, in millimeters. */
 			float m_focusDistance{10.0F}; /**< Manual focus plane distance, in meters. */
 			float m_shutterSpeed{1.0F / 60.0F}; /**< Exposure time, in seconds: drives the motion blur length through the shutter angle (shutterSpeed / frameTime). */
+			float m_sensitivity{100.0F}; /**< Sensor sensitivity in ISO — the third member of the exposure triad. */
+			float m_minSensitivity{100.0F}; /**< Lowest usable sensitivity, the auto-ISO floor. */
+			float m_maxSensitivity{12800.0F}; /**< Highest usable sensitivity, the auto-ISO ceiling. */
 			float m_exposureCompensation{0.0F}; /**< Exposure bias, in EV. */
 	};
 

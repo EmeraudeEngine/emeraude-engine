@@ -32,6 +32,7 @@
 #include <string>
 
 /* Local inclusions. */
+#include "Graphics/Photometry.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Scenes/Component/Camera.hpp"
@@ -702,11 +703,40 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * each EV doubles/halves the light gathered. */
 		float exposure = m_parameters.exposure;
 		bool autoExposureEnabled = m_parameters.autoExposureEnabled;
+		auto minExposure = m_parameters.minExposure;
+		auto maxExposure = m_parameters.maxExposure;
 
 		if ( context.camera != nullptr )
 		{
-			exposure = m_parameters.exposure * std::exp2(context.camera->exposureCompensation());
-			autoExposureEnabled = context.camera->isAutoExposureEnabled();
+			const auto * camera = context.camera;
+
+			/* ABSOLUTE EXPOSURE, from the camera's triad through the APEX equation
+			 * (Lagarde & de Rousiers, Frostbite): EV100 = log2(N^2 / t * 100 / S), then
+			 * exposure = 1 / (1.2 * 2^EV100). This only means something because the scene now
+			 * carries photometric units — the same setting would be meaningless against
+			 * arbitrary light values. The exposure compensation stays an EV bias on top. */
+			const auto exposureValue = Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->sensitivity());
+
+			autoExposureEnabled = camera->isAutoExposureEnabled();
+
+			/* ⚠️ The shader multiplies the two terms (`hdrColor *= exposure * autoExposure`), so
+			 * they must never both carry the physical exposure. In AUTO mode the metering IS the
+			 * exposure — it lands on a sensitivity within the sensor range — and this term is only
+			 * the EV bias. In MANUAL mode there is no metering, so the full APEX exposure goes
+			 * here. Applying both compounded them into ~3e-6 and rendered the scene black. */
+			exposure = autoExposureEnabled ?
+				std::exp2(camera->exposureCompensation()) :
+				Photometry::exposureFromValue100(exposureValue) * std::exp2(camera->exposureCompensation());
+
+			/* AUTO-ISO. The metering is allowed to move the sensitivity and NOTHING else: the
+			 * aperture drives the depth of field and the shutter drives the motion blur, both
+			 * creative controls. So the clamps on the metered multiplier are simply what the
+			 * sensor's ISO range allows at the current aperture and shutter — a real body cannot
+			 * amplify past its sensor. A higher ISO means a lower EV100, hence a larger exposure,
+			 * which is why the bounds cross over. This REPLACES the hand-picked [1e-5, 100]
+			 * range that stood in while the scene was still on arbitrary units. */
+			minExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->minSensitivity()));
+			maxExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->maxSensitivity()));
 		}
 
 		/* Update the per-frame descriptor set for the HDR input. */
@@ -815,8 +845,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					.gamma = m_parameters.gamma,
 					.tonemapOperator = static_cast< uint32_t >(m_parameters.tonemapOperator),
 					.keyValue = m_parameters.keyValue,
-					.minExposure = m_parameters.minExposure,
-					.maxExposure = m_parameters.maxExposure,
+					.minExposure = minExposure,
+					.maxExposure = maxExposure,
 					.padding0 = 0.0F,
 					.padding1 = 0.0F
 				};
