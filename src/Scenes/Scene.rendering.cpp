@@ -1045,8 +1045,17 @@ namespace EmEn::Scenes
 			/* RT list: scene visuals (ground) are always included (distance 0).
 			 * ONE batch per renderable — per-sub-geometry materials are resolved in the
 			 * RT trace shader via materialIndices[geometryIndex] (multi-geometry BLAS).
-			 * The renderable is included if ANY of its layers is opaque or alpha-test. */
-			if ( rtEnabled )
+			 * The renderable is included if ANY of its layers is opaque or alpha-test.
+			 *
+			 * ⚠️ EXCEPT THE BACKGROUND. The sky is a backdrop, not geometry: it is drawn as a
+			 * huge mesh enclosing the scene, so putting it in the TLAS walls the world in and
+			 * NO ray can ever escape. Every ray-traced effect reads a miss as "the sky is
+			 * visible in that direction" — the GI turns it into sky light, the reflections into
+			 * an environment sample — and an enclosing shell silently turns that into "blocked"
+			 * everywhere. Measured before this exclusion (Sponza, gallery): the ray-outcome
+			 * visualization was ENTIRELY red, i.e. every single ray hit the skybox shell beyond
+			 * the bounce range and contributed nothing, which is why shadows were pitch black. */
+			if ( rtEnabled && component != m_sceneVisualComponents[BackgroundVisualIndex] )
 			{
 				const auto * renderable = renderableInstance->renderable();
 

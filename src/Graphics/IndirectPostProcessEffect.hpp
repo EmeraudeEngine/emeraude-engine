@@ -289,6 +289,14 @@ namespace EmEn::Graphics
 				const Vulkan::TextureInterface * velocity{nullptr};
 				const Scenes::LightSet * lightSet{nullptr};
 				const Scenes::Component::Camera * camera{nullptr};
+				/* Luminance of the scene background, in nits (cd/m²), or 0 when the scene has no
+				 * background. THE SKY IS A LIGHT SOURCE: the ray-traced GI turns an escaping ray
+				 * into this radiance, which is what fills shadows in daylight (bounces alone
+				 * light a scene like the Moon). The cubemap itself needs no plumbing — the
+				 * BindlessTextureManager keeps the active scene's environment cubemap in a
+				 * reserved slot — so this scalar also acts as the "there is a sky" flag, since
+				 * that slot falls back to the engine default cubemap. */
+				float skyLuminance{0.0F};
 				/* Sub-pixel projection jitter of the frame being rendered, in NDC units. Zero when
 				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
 				 * centers; no history counterpart is exposed because nothing in the chain has to

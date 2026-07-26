@@ -2397,6 +2397,13 @@ namespace EmEn::Scenes
 			/** @brief Octree for physics broad-phase collision. @note Uses shared_ptr due to enable_shared_from_this. */
 			std::shared_ptr< OctreeSector< AbstractEntity, true > > m_physicsOctree;
 			/** @brief Visual components for background/terrain/water. @bug Should be refactored. */
+			/** @brief Slots of m_sceneVisualComponents. ⚠️ The BACKGROUND is deliberately kept
+			 * OUT of the ray-tracing lists (see prepareRender): it is a backdrop shell, and in
+			 * the TLAS it walls the scene in so no ray can ever reach the sky. */
+			static constexpr size_t BackgroundVisualIndex{0};
+			static constexpr size_t GroundVisualIndex{1};
+			static constexpr size_t SeaLevelVisualIndex{2};
+
 			std::array< std::unique_ptr< Component::Visual >, 3 > m_sceneVisualComponents{nullptr, nullptr, nullptr};
 			/** @brief Weak references to shadow map render targets. */
 			RenderTargetAccessList m_renderToShadowMaps;

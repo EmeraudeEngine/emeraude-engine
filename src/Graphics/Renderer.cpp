@@ -58,6 +58,28 @@ namespace
 {
 	/** @brief Empty lens effects list for the passthrough shader case. */
 	const std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
+
+	/**
+	 * @brief Returns the luminance of a scene's background in nits, or 0 when it has none.
+	 * @note The sky is a LIGHT SOURCE for the ray-traced GI, not merely a backdrop: this scalar
+	 * is what the escaping rays turn into radiance. Zero means "no sky", which matters because
+	 * the bindless environment slot the shader samples always holds SOMETHING (the engine
+	 * default cubemap when a scene declares no background).
+	 * @param scene A pointer to the scene, may be nullptr.
+	 * @return float
+	 */
+	float
+	sceneSkyLuminance (const EmEn::Scenes::Scene * scene) noexcept
+	{
+		if ( scene == nullptr )
+		{
+			return 0.0F;
+		}
+
+		const auto background = scene->background();
+
+		return background != nullptr ? background->luminance() : 0.0F;
+	}
 }
 
 namespace EmEn::Graphics
@@ -1591,7 +1613,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get());
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -1762,7 +1784,7 @@ namespace EmEn::Graphics
 		 * context (physical camera model: optics, exposure) to the effect chain. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get());
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr));
 		}
 
 		/* Establish swap-chain image layouts by running RP1 (CLEAR) with no draw calls.

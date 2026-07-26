@@ -101,6 +101,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				std::array< float, 4 > temporalParams;
 				/* strength, clamp, unused, unused. */
 				std::array< float, 4 > bounceParams;
+				/* sky luminance in nits (0 = no sky), sky ray distance, unused, unused. */
+				std::array< float, 4 > skyParams;
 			};
 
 			/**

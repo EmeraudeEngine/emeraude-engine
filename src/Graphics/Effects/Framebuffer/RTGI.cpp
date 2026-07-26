@@ -112,10 +112,36 @@ layout(set = 1, binding = 4, std140) uniform FrameData
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z/w = unused. */
 };
 
-/* Bindless textures (set 2). Binding 1 = 2D texture array. */
+/* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cubemap array whose
+ * reserved slot 0 always holds the ACTIVE SCENE's environment cubemap (the
+ * BindlessTextureManager keeps it in sync and parks the engine default when a scene has none
+ * — hence the luminance guard below rather than a null test). */
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
+layout(set = 2, binding = 3) uniform samplerCube texturesCube[];
+
+/* Reserved bindless slot of the scene environment cubemap (BindlessTextureManager). */
+const uint EnvironmentCubemapSlot = 0u;
+
+/* Radiance of the sky in a given direction, in nits.
+ * The cubemap is LDR (display-referred colour), the physical scale is the background's declared
+ * luminance — the same value the skybox renders with, so the lighting and the visible sky cannot
+ * disagree. THE SKY IS A LIGHT SOURCE: without this, a ray that escapes contributes nothing and
+ * every shadow is lit by bounces alone (Sponza on the Moon).
+ * @note No sun-disc exclusion: an LDR cubemap clamps a painted sun to the sky's own luminance,
+ * and a ~0.5-degree disc is ~2e-5 of a cosine-weighted hemisphere — 0.002% of the sky's
+ * irradiance, far below the sampling noise. An HDR sky would need one. */
+vec3 skyRadiance (vec3 direction)
+{
+	if (skyParams.x <= 0.0)
+	{
+		return vec3(0.0);
+	}
+
+	return texture(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], direction).rgb * skyParams.x;
+}
 
 /* NOTE: GLSL has no built-in PI constant. */
 const float PI = 3.14159265;
@@ -395,6 +421,8 @@ void main()
 	float maxDistance = traceParams.x;
 	float bias = traceParams.y;
 	uint sampleCount = uint(traceParams.z);
+	/* How far a ray must travel before "nothing hit" may be called sky (see the gather). */
+	float skyDistance = max(skyParams.y, maxDistance);
 	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
 
 	/* Transform view-space normal to world space. */
@@ -449,21 +477,46 @@ void main()
 			sampleDir = -sampleDir;
 		}
 
-		/* Trace a diffuse bounce ray.
+		/* Trace ONE ray that answers both questions at once — the bounce and the sky.
+		 * tMax is the SKY distance, not the bounce distance: "nothing hit within 8 m" does not
+		 * mean "sees the sky", it means the bounce range is empty. Stopping there and calling
+		 * it sky would light the far end of a corridor through 15 m of building. So the ray
+		 * runs to the sky distance and the three outcomes are read from the hit distance:
+		 *   miss              -> the sky is visible in that direction (a light source);
+		 *   hit beyond range  -> geometry blocks the sky, too far to carry a bounce (nothing);
+		 *   hit within range  -> a real bounce, shaded below.
 		 * tMin is a tiny CONSTANT, decoupled from the adaptive origin offset (same fix as
 		 * RTAO): a tMin equal to the adaptive bias skips real geometry closer than it and
 		 * leaks light at wall/floor creases. */
 		rayQueryEXT rayQuery;
 		rayQueryInitializeEXT(
 			rayQuery, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF,
-			rayOrigin, 0.001, sampleDir, maxDistance
+			rayOrigin, 0.001, sampleDir, skyDistance
 		);
 
 		while (rayQueryProceedEXT(rayQuery)) {}
 
-		if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
+		if (rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
+		{
+			/* The ray escaped: this direction sees the sky. Cosine weighting is implicit in the
+			 * hemisphere distribution, so the radiance enters the estimator unmodified (the
+			 * receiver albedo and the 1/N are applied once, after the loop). */
+			indirectLight += skyRadiance(sampleDir);
+
+			continue;
+		}
+
 		{
 			float hitT = rayQueryGetIntersectionTEXT(rayQuery, true);
+
+			/* Geometry occludes the sky but sits outside the bounce range: it contributes no
+			 * light, and that ABSENCE is the shadowing — this is what carves the vertical
+			 * gradient of a courtyard out of the sky term. */
+			if (hitT > maxDistance)
+			{
+				continue;
+			}
+
 			uint instanceIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, true);
 			uint primitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
 			vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(rayQuery, true);
@@ -511,8 +564,14 @@ void main()
 			 * The feedback is NOT multiplied by the hit albedo: the history already
 			 * stores outgoing radiance (receiver albedo applied at resolve time).
 			 * Cosine-weighted by the hemisphere sampling (implicit in the distribution).
-			 * Distance attenuation: closer bounces contribute more. */
-			float distFade = 1.0 - clamp(hitT / maxDistance, 0.0, 1.0);
+			 *
+			 * Range fade: the transfer itself is already governed by the solid angle, so a
+			 * fade proportional to the distance is NOT physical — it used to run linearly from
+			 * the surface, halving a bounce found at mid-range and costing about a factor two
+			 * of indirect energy against the screen-space path (measured on Sponza). It now
+			 * only smooths the LAST FIFTH of the range, whose sole purpose is to keep geometry
+			 * from popping as it crosses the maxDistance boundary. */
+			float distFade = 1.0 - smoothstep(maxDistance * 0.8, maxDistance, hitT);
 
 			/* Lambert BRDF energy conservation: divide by PI. */
 			indirectLight += ((albedo / PI) * lighting + historyFeedback(hitPos)) * distFade;
@@ -1378,7 +1437,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					m_parameters.multiBounceClamp,
 					0.0F,
 					0.0F
-				}
+				},
+				/* THE SKY IS A LIGHT SOURCE. The luminance comes from the scene background
+				 * (0 = no background, no sky light). The sky distance is how far a ray must
+				 * travel before "hit nothing" may be read as "sees the sky": the far plane is
+				 * the frame's own "nothing beyond this exists" bound, so distant geometry can
+				 * never be mistaken for open sky. */
+				.skyParams = {context.skyLuminance, context.constants.farPlane, 0.0F, 0.0F}
 			};
 
 			if ( !IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData)) )

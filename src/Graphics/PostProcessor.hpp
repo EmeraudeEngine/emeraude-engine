@@ -324,9 +324,12 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param stack The scene's post-process stack.
 			 * @param lightSet A reference to the scene light set.
+			 * @param activeCamera The scene's active camera (photographic authority).
+			 * @param skyLuminance The scene background's luminance in nits, 0 when there is no
+			 * background: the sky is a LIGHT SOURCE for the ray-traced GI, not just a backdrop.
 			 * @return bool
 			 */
-			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.
