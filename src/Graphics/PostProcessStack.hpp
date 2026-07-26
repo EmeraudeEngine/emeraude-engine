@@ -89,7 +89,7 @@ namespace EmEn::Graphics
 			 * @brief Synchronizes the CAMERA-DRIVEN photographic effects with the active camera.
 			 * @note Physical camera contract: the camera declares its photographic behaviour
 			 * (enableDepthOfField()/enableHDR()); this call (de)materializes the matching effects
-			 * at the END of the chain, in canonical order (DepthOfField then ToneMapping last).
+			 * at the END of the chain, in canonical order (DepthOfField, then Bloom, then ToneMapping last).
 			 * Scene effects (GI, AO, fog...) added by the application are left untouched.
 			 * Called by the Renderer once per frame, on the render thread; removed effects are
 			 * retired through the deferred destructor (frames-in-flight safety).
@@ -217,6 +217,7 @@ namespace EmEn::Graphics
 			/* Camera-driven photographic effects (physical camera contract). Kept aside to
 			 * distinguish them from the application/scene effects inside m_effects. */
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraDepthOfField;
+			std::shared_ptr< IndirectPostProcessEffect > m_cameraBloom;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
 	};
 }

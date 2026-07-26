@@ -307,6 +307,76 @@ namespace EmEn::Scenes::Component
 			void enableHDR (bool state) noexcept;
 
 			/**
+			 * @brief Enables the lens glare (bloom) for this camera.
+			 * @note Materializes the Bloom effect in the scene post-process chain, between the
+			 * depth of field and the tone mapping. Veiling glare is scattering INSIDE the lens:
+			 * it applies to the image the optics have already formed, so it belongs after the
+			 * defocus and the motion smear and before the sensor — which is exactly what that
+			 * position gives, and what a bloom sitting early in the scene stack does not.
+			 * @param state The state.
+			 * @return void
+			 */
+			void enableBloom (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the lens glare is enabled for this camera.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isBloomEnabled () const noexcept
+			{
+				return this->isFlagEnabled(BloomEnabled);
+			}
+
+			/**
+			 * @brief Sets the scene luminance above which the lens glares, in nits (cd/m²).
+			 * @note An absolute scene luminance, because the glare happens before the sensor: a
+			 * wall in a lit interior sits around 15-30 nits, an overcast sky 8000, a bare lamp far
+			 * above. A night scene glows from a 20-nit torch-lit wall; a daylight one must not.
+			 * @param nits The threshold, in candela per square meter.
+			 * @return void
+			 */
+			void
+			setBloomThreshold (float nits) noexcept
+			{
+				m_bloomThreshold = std::max(0.0F, nits);
+			}
+
+			/**
+			 * @brief Returns the glare threshold, in nits.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			bloomThreshold () const noexcept
+			{
+				return m_bloomThreshold;
+			}
+
+			/**
+			 * @brief Sets how much the lens scatters, as a multiplier on the glare.
+			 * @param intensity The glare intensity.
+			 * @return void
+			 */
+			void
+			setBloomIntensity (float intensity) noexcept
+			{
+				m_bloomIntensity = std::max(0.0F, intensity);
+			}
+
+			/**
+			 * @brief Returns the glare intensity.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			bloomIntensity () const noexcept
+			{
+				return m_bloomIntensity;
+			}
+
+			/**
 			 * @brief Returns whether the HDR rendering is enabled for this camera.
 			 * @return bool
 			 */
@@ -644,6 +714,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto HDREnabled{UnusedFlag + 2UL};
 			static constexpr auto AutoFocusEnabled{UnusedFlag + 3UL};
 			static constexpr auto AutoExposureEnabled{UnusedFlag + 4UL};
+			static constexpr auto BloomEnabled{UnusedFlag + 5UL};
 
 			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_lensEffects;
 			float m_fov{DefaultGraphicsFieldOfView};
@@ -659,6 +730,8 @@ namespace EmEn::Scenes::Component
 			float m_sensitivity{100.0F}; /**< Sensor sensitivity in ISO — the third member of the exposure triad. */
 			float m_minSensitivity{100.0F}; /**< Lowest usable sensitivity, the auto-ISO floor. */
 			float m_maxSensitivity{12800.0F}; /**< Highest usable sensitivity, the auto-ISO ceiling. */
+			float m_bloomThreshold{1000.0F}; /**< Scene luminance above which the lens glares, in nits. */
+			float m_bloomIntensity{1.0F}; /**< How much the lens scatters. */
 			float m_exposureCompensation{0.0F}; /**< Exposure bias, in EV. */
 	};
 

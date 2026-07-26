@@ -31,6 +31,7 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Effects/Framebuffer/Bloom.hpp"
 #include "Effects/Framebuffer/DepthOfField.hpp"
 #include "Effects/Framebuffer/ToneMapping.hpp"
 #include "IndirectPostProcessEffect.hpp"
@@ -71,12 +72,14 @@ namespace EmEn::Graphics
 	PostProcessStack::syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept
 	{
 		const bool wantDepthOfField = camera != nullptr && camera->isDepthOfFieldEnabled();
+		const bool wantBloom = camera != nullptr && camera->isBloomEnabled();
 		const bool wantHDR = camera != nullptr && camera->isHDREnabled();
 
 		const bool hasDepthOfField = m_cameraDepthOfField != nullptr;
+		const bool hasBloom = m_cameraBloom != nullptr;
 		const bool hasHDR = m_cameraToneMapping != nullptr;
 
-		if ( wantDepthOfField == hasDepthOfField && wantHDR == hasHDR )
+		if ( wantDepthOfField == hasDepthOfField && wantBloom == hasBloom && wantHDR == hasHDR )
 		{
 			return false;
 		}
@@ -95,6 +98,11 @@ namespace EmEn::Graphics
 		if ( m_cameraDepthOfField != nullptr )
 		{
 			std::erase(m_effects, m_cameraDepthOfField);
+		}
+
+		if ( m_cameraBloom != nullptr )
+		{
+			std::erase(m_effects, m_cameraBloom);
 		}
 
 		if ( m_cameraToneMapping != nullptr )
@@ -124,6 +132,33 @@ namespace EmEn::Graphics
 			});
 
 			m_cameraDepthOfField.reset();
+		}
+
+		/* Lens glare materialization. Veiling glare is scattering INSIDE the lens, so it applies
+		 * to the image the optics have already formed — after the defocus, before the sensor. */
+		if ( wantBloom && m_cameraBloom == nullptr )
+		{
+			auto effect = std::make_shared< Effects::Framebuffer::Bloom >(renderer, Effects::Framebuffer::Bloom::Parameters{
+				.threshold = camera->bloomThreshold(),
+				.intensity = camera->bloomIntensity()
+			});
+
+			if ( effect->create(extent.width, extent.height) )
+			{
+				m_cameraBloom = std::move(effect);
+			}
+			else
+			{
+				TraceError{ClassId} << "Failed to materialize the camera bloom effect !";
+			}
+		}
+		else if ( !wantBloom && m_cameraBloom != nullptr )
+		{
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraBloom)] () {
+				effect->destroy();
+			});
+
+			m_cameraBloom.reset();
 		}
 
 		/* HDR (tone mapping) materialization. */
@@ -159,6 +194,11 @@ namespace EmEn::Graphics
 		if ( m_cameraDepthOfField != nullptr )
 		{
 			insertIt = std::next(m_effects.insert(insertIt, m_cameraDepthOfField));
+		}
+
+		if ( m_cameraBloom != nullptr )
+		{
+			insertIt = std::next(m_effects.insert(insertIt, m_cameraBloom));
 		}
 
 		if ( m_cameraToneMapping != nullptr )

@@ -200,6 +200,20 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	Camera::enableBloom (bool state) noexcept
+	{
+		if ( this->isFlagEnabled(BloomEnabled) == state )
+		{
+			return;
+		}
+
+		this->setFlag(BloomEnabled, state);
+
+		/* The scene observes its active camera and (de)materializes the effect. */
+		this->notify(PhysicalEffectsToggled);
+	}
+
+	void
 	Camera::addLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
 		/* We don't want to notify an effect twice. */

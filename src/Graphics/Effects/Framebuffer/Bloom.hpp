@@ -61,7 +61,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			struct EMEN_API Parameters
 			{
-				float threshold{1.0F};
+				/** @brief Brightness above which a pixel glows, in NITS (cd/m²).
+				 * @note This effect runs on the HDR scene BEFORE tone mapping, so the threshold is
+				 * an absolute scene luminance, not a display value. Now that scenes are
+				 * photometric that matters enormously: the old default of 1.0 meant "anything
+				 * above one nit", i.e. every lit surface in the frame, so the whole image bloomed.
+				 * Reference points to choose one: a wall under a lit interior sits around 15-30
+				 * nits, an overcast sky 8000, a bare lamp or the sun far above. Pick it per scene
+				 * — a night scene glows from a 10-nit torch-lit wall, a daylight one must not. */
+				float threshold{1000.0F};
 				float softKnee{0.5F};
 				float intensity{1.0F};
 				float spread{1.0F};

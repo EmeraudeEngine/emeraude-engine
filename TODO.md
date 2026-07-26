@@ -437,8 +437,29 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   **125.2 mean / 0.0% crushed / 0.0% blown / 98.0% midtones**, the best of the whole migration.
   ⚠️ `liminal` still reads 200.4 with 5.8% blown at f/4 1/60: its lamps and its optics have not
   been tuned against each other yet. That is authoring, not a defect.
-- [ ] **Phase 4 — recalibrate** every effect reading absolute luminance: bloom threshold,
-  auto-exposure clamps, GI/AO thresholds.
+- [x] **Phase 4 — recalibrate** every effect reading absolute luminance. DONE 2026-07-26.
+  GI/AO turned out to carry NO absolute luminance threshold, so this reduced to the bloom, and the
+  auto-exposure clamps were already done in phase 3 (they are the sensor's ISO range now).
+  The bloom threshold is a scene luminance in NITS, because the effect runs on the HDR scene
+  before the sensor: the old 0.8-1.3 meant "anything above one nit", i.e. every lit surface, so
+  the whole frame bloomed and veiled itself. Re-authored per scene: 3000 for a sunlit courtyard,
+  1000-2000 for a bright debug scene, 150 for an indoor pool, 20 for a night castle.
+  ⚠️ AND THE ORDER WAS WRONG (owner spotted it). Veiling glare is scattering INSIDE the lens, so
+  it applies to the image the optics have already FORMED — after the defocus and the motion smear,
+  before the sensor. It used to sit early in the scene stack, ahead of the temporal resolve, so it
+  was computed on a jittered aliased image whose thin highlights flicker in and out of the
+  threshold. Bloom is therefore now a CAMERA-materialized photographic effect like the depth of
+  field and the tone mapping (`Camera::enableBloom()`, `setBloomThreshold()` in nits,
+  `setBloomIntensity()`), inserted in the canonical order **DepthOfField -> Bloom -> ToneMapping**,
+  and removed from all four demo stacks.
+  Measured on `gltf-loader`: local contrast `|grad|` rises from 2.056 to **2.861** (+39%) — the
+  signature of a bloom that stops veiling the whole frame — with the midtones relaxing from 98.0%
+  to 83.9%, i.e. the dynamic range reopening instead of being flattened.
+  ⚠️ NOTICED, NOT FIXED: the depth of field is strong for f/11, where it should be deep.
+  `Core/Graphics/DepthOfField/CoCScale` defaults to 10 — an arbitrary multiplier of exactly the
+  family this project has been eliminating. With a physical aperture the circle of confusion needs
+  no fudge factor; that scale should be 1 and the difference re-checked against a real depth
+  table.
 
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 
