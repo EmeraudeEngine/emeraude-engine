@@ -1117,6 +1117,12 @@ LensPresets:: functions remain the lens-stack building blocks.
   50 mm is 27°. An ultra-wide has enormous depth of field (the circle of confusion goes as
   f²), so a game field of view yields a subtle DoF whatever the aperture — that is optics,
   not a weak effect.
+- `setSensorWidth(mm)` is the FORMAT knob, and the reference length that gives millimetres a
+  meaning: it converts the thin-lens circle of confusion (in meters, on the sensor) into a
+  fraction of the image, which is why the DoF needs no arbitrary scale. It behaves as a
+  **constant lens**: the focal length is kept and the field of view is recomputed, i.e. the
+  physical crop factor — 11 mm sees 94.6° on full frame and 71.2° on APS-C. Changing the
+  format therefore REFRAMES; it does not merely restyle the blur.
 - Exposure: `setExposureCompensation(EV)`, `setAutoExposure(bool)`.
 - ⚠️ **With auto-ISO on (the default), the aperture is not an exposure control.** The
   metering solves directly for the multiplier that puts the scene on middle grey, and the

@@ -413,8 +413,9 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets the lens focal length in millimeters.
-			 * @note Longer focal length = thinner in-focus plane. Does NOT drive the field of
-			 * view in this version (decoupled optics).
+			 * @note Longer focal length = narrower field of view AND thinner in-focus plane. The
+			 * focal length and the field of view are ONE quantity in two units, so this REFRAMES
+			 * the shot — see the note in the body.
 			 * @param millimeters The focal length.
 			 * @return void
 			 */
@@ -478,6 +479,13 @@ namespace EmEn::Scenes::Component
 			 * implicitly expressed in. It is what converts a circle of confusion — computed in
 			 * meters ON the sensor by the thin-lens formula — into a fraction of the image, so it
 			 * is the reason the depth of field needs no arbitrary scale factor.
+			 * @note CONSTANT LENS: changing the format keeps the focal length and REFRAMES, because
+			 * a smaller sensor crops the image circle of the same lens — the physical crop factor
+			 * (an APS-C body at 23.6 mm sees 1.53x narrower than full frame). Re-applying the
+			 * unchanged focal length is what propagates it: the round trip is stable, since the
+			 * field of view is derived from the new sensor height and yields back the same
+			 * millimetres. Leaving it unpropagated made the depth of field combine a stale focal
+			 * length with a fresh sensor.
 			 * @param millimeters The sensor width (36 = full frame, 23.6 = APS-C).
 			 * @return void
 			 */
@@ -485,6 +493,8 @@ namespace EmEn::Scenes::Component
 			setSensorWidth (float millimeters) noexcept
 			{
 				m_sensorWidth = std::max(1.0F, millimeters);
+
+				this->setFocalLength(m_focalLength);
 			}
 
 			/**
