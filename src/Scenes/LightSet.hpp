@@ -325,8 +325,13 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the ambient light intensity.
-			 * @param intensity The light intensity value.
+			 * @brief Sets the ambient ILLUMINANCE, in lux.
+			 * @note Stands in for the sky and the bounce light reaching a surface, so it is an
+			 * illuminance like a directional light's: the shader turns it into an outgoing
+			 * luminance with the Lambertian `albedo * E / pi`. Reference values: a shadowed
+			 * surface under a clear sky receives 10-20% of the direct sun, i.e. 10000-20000 lx;
+			 * an overcast day gives ~5000; a lit interior ~100; a moonlit night ~1.
+			 * @param intensity The ambient illuminance, in lux.
 			 * @return void
 			 */
 			void

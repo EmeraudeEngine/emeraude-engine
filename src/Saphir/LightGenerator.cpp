@@ -744,10 +744,14 @@ namespace EmEn::Saphir
 
 		if ( m_surfaceAmbientColor.empty() )
 		{
-			/* NOTE: Get 5% of the surface diffuse/albedo color to create the surface ambient color.
+			/* PHOTOMETRIC AMBIENT. The ambient intensity is an ILLUMINANCE in lux (the sky and
+			 * bounce light reaching the surface), so the outgoing luminance of a Lambertian
+			 * surface is `albedo * E / pi` — hence the 1/pi normalization here, not an arbitrary
+			 * scale. It used to be a hard-coded 0.05 ("5% of the albedo"), which was a purely
+			 * artistic factor and made the ambient term incomparable with a light in candela.
 			 * In PBR mode, use albedo instead of diffuse. */
 			const auto & baseColor = m_usePBRMode && !m_surfaceAlbedo.empty() ? m_surfaceAlbedo : m_surfaceDiffuseColor;
-			surfaceColor = (std::stringstream{} << "(" << baseColor << " * 0.05)").str();
+			surfaceColor = (std::stringstream{} << "(" << baseColor << " * 0.3183098862)").str();
 		}
 		else
 		{
