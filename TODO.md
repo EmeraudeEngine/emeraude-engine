@@ -68,6 +68,22 @@
   what serializes AS builds against transfers when actors are created/destroyed at runtime.
   NOTE: `[Error][UIManagerService] No default page found !` appears in EVERY demo, including the
   ones that never fail — it is not related.
+- **IMAGE PIPELINE: no HDR file format — blocks photometric skies and correct specular.**
+  `PixelFactory` (in `emeraude-base`) decodes JPEG, PNG and Targa: all integer, all [0,1]. There
+  is no way to store a luminance above the display range, so an environment cubemap clamps its sun
+  disc and every specular reflection of the sky is wrong (see the phase 2 note of the photometric
+  project). Deliberately NOT done during the photometric migration: it is not a prerequisite (the
+  LDR + peak-luminance scale is correct for diffuse), `emeraude-base` is under the "Ave robustus!"
+  feature freeze, and the right answer is not obvious — which is exactly why it deserves its own
+  design pass rather than a rushed decoder. The three options, pre-chewed:
+    1. **Radiance `.hdr` (RGBE)** — ~200 lines, zero dependency, 8-bit mantissa per channel with a
+       shared exponent. Plenty for skies. The pragmatic minimum.
+    2. **OpenEXR** — physically the right answer (half/float, arbitrary channels), but a heavy
+       third-party dependency to add to `ext-deps-generator`.
+    3. **KTX2/DDS with BC6H** — the actual RUNTIME format wanted: GPU-compressed HDR, no decode
+       cost, no VRAM blow-up. But this is an ASSET PIPELINE question (offline compressor, mip
+       generation, cubemap faces), not just a decoder — the reason this item is not a quick win.
+  Whatever is chosen, the freeze comes first.
 - RENDERING SYSTEM: Hi-Z Occlusion
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
 - RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
@@ -297,10 +313,19 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
       at import (a nits-per-unit factor), or treat the strength as nits directly and accept that
       imported assets need re-authoring. NOT a phase 1 blocker.
     - **IBL / environment** — per-material `IBLIntensity` plus `ambientLightIntensity` in the view
-      UBO, fed by environment cubemaps. If those cubemaps are LDR [0,1] their luminance has no
-      unit, and the sky stays wrong even with correct lights. Verify whether the cubemap pipeline
-      can carry HDR values before phase 2, because the answer decides whether the sky can be
-      authored in nits at all.
+      UBO, fed by environment cubemaps. VERIFIED 2026-07-26: `PixelFactory` decodes JPEG, PNG and
+      Targa only — three integer [0,1] formats, no Radiance `.hdr`, no OpenEXR. **The sky cannot
+      be authored in nits.**
+      OWNER DECISION 2026-07-26: go with **LDR + a per-cubemap `peakLuminanceNits` scale**. It is
+      CORRECT for the diffuse contribution, which is the bulk of what a sky provides: diffuse IBL
+      is a wide convolution where the sun disc weighs little, so an LDR gradient times a peak
+      luminance gives a right ambience.
+      ⚠️ **DOCUMENTED FAILURE MODE: a clamped sun means WRONG SPECULAR.** In a real cubemap the
+      sun disc is ~1.6e9 nits against ~8000 for the surrounding sky, a 200 000:1 ratio; in [0,1]
+      both end at 1.0. The cubemap feeds the materials' reflection component
+      (`setReflectionComponentFromEnvironmentCubemap`, `IBLIntensity`), so wet ground and metal
+      will mirror a DULL GREY sun instead of a blinding highlight, and an environment-driven bloom
+      cannot be right either. Accepted for now, fixed by the item below.
 - [ ] **Phase 3 — absolute exposure**: ISO on `Camera`, EV100 from the triad, auto-exposure
   rewired as auto-ISO (min/max = the sensor's usable range), replacing
   `ToneMapping::Parameters::exposure` as an arbitrary multiplier.
