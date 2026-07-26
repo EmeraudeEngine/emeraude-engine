@@ -292,7 +292,14 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 		mountFormat(camera, FullFrameFormat);
 
 		camera.enableDepthOfField(false);
-		camera.enableHDR(false);
+
+		/* The tone mapping is NOT a style: it is the sensor's response, and a photometric
+		 * scene (nits) without it clamps to white — "Normal" was unusable. Neutral strips
+		 * every photographic CHARACTER but keeps the camera a camera (owner decision
+		 * 2026-07-26). Consequence: the style reset yields a clean exposed image, not the
+		 * scene-authored look (a demo's DoF/bloom stay off until re-enabled). */
+		camera.enableHDR(true);
+
 		camera.setAutoFocus(true);
 		camera.setAutoExposure(true);
 		camera.setExposureCompensation(0.0F);

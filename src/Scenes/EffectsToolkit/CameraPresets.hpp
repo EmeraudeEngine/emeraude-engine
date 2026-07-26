@@ -55,7 +55,9 @@ namespace EmEn::Scenes::EffectsToolkit
 	 */
 	enum class CameraPreset : uint8_t
 	{
-		/** @brief Bare camera: no lens effects, no depth of field, no HDR, automatic modes. */
+		/** @brief Bare camera: no lens effects, no depth of field, automatic modes — but HDR
+		 * (tone mapping) STAYS ON: the sensor response is not a style, and a photometric scene
+		 * without it clamps to white. */
 		Normal,
 		/** @brief Modern digital cinema camera: clean image, fast f/2.8 prime on full frame, DoF + HDR (the framing is the scene's, a style declares a FORMAT, not a lens). */
 		HighQuality,
@@ -164,7 +166,10 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 
 	/**
 	 * @brief Resets the camera to a bare, neutral state.
-	 * @note No lens effects, no depth of field, no HDR, neutral exposure, automatic modes.
+	 * @note No lens effects, no depth of field, neutral exposure, automatic modes — and HDR
+	 * (tone mapping) ON: the sensor response is not a photographic character, a photometric
+	 * scene without it clamps to white. This is a STYLE reset, not a scene reset: effects the
+	 * scene author enabled (DoF, bloom) stay off until re-enabled.
 	 * @param camera A reference to the camera to configure.
 	 * @return void
 	 */
