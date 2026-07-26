@@ -78,8 +78,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float keyValue{0.5F};
 				float adaptSpeedUp{1.5F};
 				float adaptSpeedDown{2.0F};
-				float minExposure{0.1F};
-				float maxExposure{4.0F};
+				/* PHOTOMETRIC RANGE. These clamp the auto-exposure multiplier that maps scene
+				 * luminance to the display range, so they must span the physical range of the
+				 * content: a sunlit white surface is ~30000 nits and needs ~1e-5, while a moonlit
+				 * interior is a fraction of a nit and needs to be lifted. The previous 0.1 floor
+				 * was calibrated for arbitrary light units, and it made every photometric scene
+				 * saturate against it — the metering asked for 0.001 and got 0.1, i.e. 100x too
+				 * bright, with 44% of the frame blown to white. */
+				float minExposure{1.0e-5F};
+				float maxExposure{100.0F};
 				bool autoExposureEnabled{true};
 			};
 
