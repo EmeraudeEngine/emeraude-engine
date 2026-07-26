@@ -364,6 +364,34 @@ namespace EmEn::Graphics::Material
 			bool setAutoIlluminationAmount (float amount) noexcept;
 
 			/**
+			 * @brief Sets the emissive strength, the HDR multiplier of the self-illumination.
+			 * @note Same contract as the glTF extension `KHR_materials_emissive_strength` and as
+			 * `StandardResource`: the emitted quantity is
+			 * `autoIlluminationColor * autoIlluminationAmount * emissiveStrength`, and glTF 2.0
+			 * specifies that product to be a LUMINANCE in candela per square meter (nits). So this
+			 * is where a self-illuminating surface gets a physical brightness — a skybox authored
+			 * as an LDR cubemap becomes a real sky by setting the amount to 1 and the strength to
+			 * the sky's peak luminance (an overcast sky is ~8000 nits, a monitor 200-300, a candle
+			 * flame 5-10).
+			 * @warning The AMOUNT is clamped to [0,1] where it acts as the emissive mask, so a
+			 * luminance cannot be passed through it — it belongs here.
+			 * @param strength The multiplier, >= 0.
+			 * @return bool
+			 */
+			bool setEmissiveStrength (float strength) noexcept;
+
+			/**
+			 * @brief Returns the emissive strength.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			emissiveStrength () const noexcept
+			{
+				return m_materialProperties[EmissiveStrengthOffset];
+			}
+
+			/**
 			 * @brief Returns the diffuse color.
 			 * @note Dynamic properties.
 			 * @return Libraries::PixelFactory::Color< float >
@@ -487,6 +515,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ShininessOffset{8UL};
 			static constexpr auto OpacityOffset{9UL};
 			static constexpr auto AutoIlluminationOffset{10UL};
+			static constexpr auto EmissiveStrengthOffset{11UL};
 
 			/* Default values. */
 			static constexpr auto DefaultDiffuseColor{Base::PixelFactory::Grey};
@@ -494,6 +523,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultShininess{200.0F};
 			static constexpr auto DefaultOpacity{1.0F};
 			static constexpr auto DefaultAutoIllumination{0.0F};
+			static constexpr auto DefaultEmissiveStrength{1.0F};
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unique_ptr< Component::Texture > m_textureComponent;
@@ -503,8 +533,8 @@ namespace EmEn::Graphics::Material
 				DefaultDiffuseColor.red(), DefaultDiffuseColor.green(), DefaultDiffuseColor.blue(), DefaultDiffuseColor.alpha(),
 				/* Specular color (4), */
 				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
-				/* Shininess (1), Opacity (1), AutoIlluminationColor (1), Unused (1). */
-				DefaultShininess, DefaultOpacity, DefaultAutoIllumination, 0.0F
+				/* Shininess (1), Opacity (1), AutoIlluminationAmount (1), EmissiveStrength (1). */
+				DefaultShininess, DefaultOpacity, DefaultAutoIllumination, DefaultEmissiveStrength
 			};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;

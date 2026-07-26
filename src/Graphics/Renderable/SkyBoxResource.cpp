@@ -61,6 +61,15 @@ namespace EmEn::Graphics::Renderable
 					return false;
 				}
 
+				/* A sky EMITS, it is not lit: full self-illumination, scaled to a physical
+				 * luminance. The cubemap itself is LDR ([0,1] JPEG/PNG/Targa — the image pipeline
+				 * has no HDR format), so this strength is what turns a normalized gradient into
+				 * candela per square meter. ⚠️ Known limit of the LDR source: the sun disc clamps
+				 * with the rest of the sky, so specular reflections of the sun are dull rather
+				 * than blinding — see TODO.md, the HDR file format item. */
+				materialResource.setAutoIlluminationAmount(1.0F);
+				materialResource.setEmissiveStrength(DefaultSkyLuminance);
+
 				return materialResource.setManualLoadSuccess(true);
 			}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);
 
@@ -106,6 +115,15 @@ namespace EmEn::Graphics::Renderable
 				{
 					return false;
 				}
+
+				/* A sky EMITS, it is not lit: full self-illumination, scaled to a physical
+				 * luminance. The cubemap itself is LDR ([0,1] JPEG/PNG/Targa — the image pipeline
+				 * has no HDR format), so this strength is what turns a normalized gradient into
+				 * candela per square meter. ⚠️ Known limit of the LDR source: the sun disc clamps
+				 * with the rest of the sky, so specular reflections of the sun are dull rather
+				 * than blinding — see TODO.md, the HDR file format item. */
+				materialResource.setAutoIlluminationAmount(1.0F);
+				materialResource.setEmissiveStrength(DefaultSkyLuminance);
 
 				return materialResource.setManualLoadSuccess(true);
 			}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);

@@ -352,11 +352,24 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
       autoIlluminationAmount * emissiveStrength` (`LightGenerator.cpp:1049`). So the sky wants
       `autoIlluminationAmount = 1.0` and `emissiveStrength = peakLuminanceNits` (overcast sky
       ~8000 nits, clear blue sky away from the sun ~5000-10000).
-    - ⚠️ BLOCKER: `SkyBoxResource` builds its material from `Graphics::Material::BasicResource`,
-      which has `setAutoIlluminationAmount()` but NO `setEmissiveStrength()` — only
-      `StandardResource` has it. Adding it means extending BasicResource's material-properties
-      buffer, whose offsets are fixed constants (`AutoIlluminationOffset{10UL}` and friends), so
-      the layout and its shader binding both move. Modest but not a one-liner.
+    - DONE: `BasicResource` now has `setEmissiveStrength()`. It cost nothing structurally — the
+      material-properties buffer was `std::array<float, 12>` whose twelfth slot was literally
+      commented "Unused", so the new member claims it and the block finally matches the buffer
+      exactly (three vec4, no alignment change). `SkyBoxResource` sets amount = 1 and
+      strength = `DefaultSkyLuminance` (8000 nits) on both of its material creation paths.
+    - ⚠️ **REAL BLOCKER, found by dumping the generated GLSL: the UNLIT pass ignores emission.**
+      A skybox is rendered by `RenderableInstanceSimplePassFragmentShader`, whose entire body is
+      `svOutputFragment = SurfaceColor;`. The uniform block DOES carry `autoIlluminationAmount`
+      and `emissiveStrength` (verified in the dump), but the emissive code lives in
+      `LightGenerator` (`LightGenerator.cpp:1041-1067`, including a legacy branch that handles a
+      material with an amount but no explicit emissive colour) and the light generator is not run
+      for an unlit material.
+      FIX: the unlit branch of `Saphir::Generator::SceneRendering` — the one writing
+      `OutputFragment = materialInterface->fragmentColor()` — must apply the emission. ⚠️ It must
+      NOT be baked into `fragmentColor()` itself: the LIT path ADDS the emissive term on top of
+      the lighting, so doing both would double-count it for lit materials. For an unlit material
+      there is no lighting, so the surface colour IS the emitted radiance and the term is a
+      multiplication there.
     - NOTE: `autoIlluminationAmount` is clamped to [0,1] when used as the emissive MASK
       (`LightGenerator.cpp:183`) but NOT in the additive term. Do not try to smuggle the nits
       through the amount itself.

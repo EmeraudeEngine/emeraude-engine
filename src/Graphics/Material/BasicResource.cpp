@@ -658,6 +658,7 @@ namespace EmEn::Graphics::Material
 		if ( this->isFlagEnabled(AutoIlluminationEnabled) )
 		{
 			lightGenerator.declareSurfaceAutoIllumination(MaterialUB(UniformBlock::Component::AutoIlluminationAmount));
+			lightGenerator.declareSurfaceEmissiveStrength(MaterialUB(UniformBlock::Component::EmissiveStrength));
 		}
 
 		return true;
@@ -672,6 +673,9 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Shininess);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Opacity);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AutoIlluminationAmount);
+		/* Claims the twelfth float, which the buffer already reserved as padding — the block now
+		 * matches m_materialProperties exactly, three vec4 worth, no alignment change. */
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
 
 		return block;
 	}
@@ -980,6 +984,17 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[AutoIlluminationOffset] = amount;
 
 		this->enableFlag(AutoIlluminationEnabled);
+
+		return this->updateVideoMemory();
+	}
+
+	bool
+	BasicResource::setEmissiveStrength (float strength) noexcept
+	{
+		/* NOTE: Unlike the amount, this does NOT gate the auto-illumination flag: it only scales
+		 * an emission that the amount has already enabled. Setting a strength on a material whose
+		 * amount is still zero emits nothing, which is the glTF semantics. */
+		m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, strength);
 
 		return this->updateVideoMemory();
 	}

@@ -52,6 +52,14 @@ namespace EmEn::Graphics::Renderable
 
 		public:
 
+			/**
+			 * @brief Default sky luminance, in nits (cd/m²).
+			 * @note An overcast sky sits around 8000 nits and a clear blue sky away from the sun
+			 * in the same range, which is what makes a sky readable next to a 100000 lx sun. The
+			 * cubemap is a normalized LDR gradient; this is the physical scale applied to it.
+			 */
+			static constexpr auto DefaultSkyLuminance{8000.0F};
+
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SkyBoxResource"};
 
