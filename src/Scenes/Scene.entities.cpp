@@ -450,7 +450,7 @@ namespace EmEn::Scenes
 			{
 				auto camera = std::any_cast< std::shared_ptr< Component::Camera > >(data);
 				m_AVConsoleManager.addVideoDevice(camera, true);
-				m_activeCamera = camera.get();
+				this->setActiveCamera(camera);
 
 				return true;
 			}
@@ -459,9 +459,11 @@ namespace EmEn::Scenes
 			{
 				auto camera = std::any_cast< std::shared_ptr< Component::Camera > >(data);
 
-				if ( m_activeCamera == camera.get() )
+				/* NOTE: The weak reference would self-heal anyway (activeCamera() resolves a
+				 * dead camera to nullptr); clearing eagerly just keeps the state tidy. */
+				if ( this->activeCamera() == camera )
 				{
-					m_activeCamera = nullptr;
+					this->setActiveCamera(nullptr);
 				}
 
 				m_AVConsoleManager.removeVideoDevice(camera);

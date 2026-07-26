@@ -1243,12 +1243,23 @@ LensPresets:: functions remain the lens-stack building blocks.
   logic thread (use-after-free one keypress away) — do NOT reintroduce a mutable reference
   accessor, and never destroy a direct effect in place while frames are in flight.
 
-**Camera cut** (`Scene::switchToCamera(Component::Camera &)`): performs a full cut — the
-camera becomes the RENDERED point of view (primary video source reroute through
-`AVConsole::Manager::switchPrimaryVideoSource()`, which disconnects every other source
-feeding the primary output) AND the photographic authority (active camera). One call:
-image + look together. Validated on Sponza with two fixed showcase cameras carrying
+**Camera cut** (`Scene::switchToCamera(std::shared_ptr< Component::Camera >)`): performs a
+full cut — the camera becomes the RENDERED point of view (primary video source reroute
+through `AVConsole::Manager::switchPrimaryVideoSource()`, which disconnects every other
+source feeding the primary output) AND the photographic authority (active camera). One
+call: image + look together. Validated on Sponza with fixed showcase cameras carrying
 different presets (KeyPad8 cycle in the projet-alpha demos).
+
+⚠️ **Active-camera lifetime contract (2026-07-26)**: the scene holds the photographic
+authority as a WEAK reference behind an internal publication mutex.
+`Scene::activeCamera()` returns a `std::shared_ptr` — a camera whose entity
+self-terminated resolves to nullptr and the effects dematerialize through the regular
+per-frame polling; the shared_ptr keeps the component alive for the caller's use even if
+the entity dies mid-frame. NEVER cache the raw pointer across frames (that was the
+use-after-free this replaced: the render thread could copy the raw pointer, then the
+entity's destruction freed the component under it — the old CameraDestroyed clear was
+unlocked and could arrive too late). App-side long-lived references (the KeyPad8 player
+camera) are captured as `std::weak_ptr` and locked at use.
 
 **Materialization mechanics** (no observer, no cross-thread races):
 - `Renderer::renderFrame*()` calls `PostProcessStack::syncCameraEffects(activeCamera,

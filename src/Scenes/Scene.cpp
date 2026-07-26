@@ -178,37 +178,42 @@ namespace EmEn::Scenes
 		m_postProcessStack = std::move(stack);
 	}
 
-	const Component::Camera *
+	std::shared_ptr< Component::Camera >
 	Scene::activeCamera () const noexcept
 	{
-		return m_activeCamera;
-	}
+		const std::lock_guard< std::mutex > lock{m_activeCameraAccess};
 
-	Component::Camera *
-	Scene::activeCamera () noexcept
-	{
-		return m_activeCamera;
+		/* Self-healing: a camera whose entity died resolves to nullptr, and the
+		 * photographic effects dematerialize through the regular per-frame polling. */
+		return m_activeCamera.lock();
 	}
 
 	void
-	Scene::setActiveCamera (Component::Camera * camera) noexcept
+	Scene::setActiveCamera (const std::shared_ptr< Component::Camera > & camera) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_activeCameraAccess};
+
 		m_activeCamera = camera;
 	}
 
 	bool
-	Scene::switchToCamera (Component::Camera & camera) noexcept
+	Scene::switchToCamera (const std::shared_ptr< Component::Camera > & camera) noexcept
 	{
-		/* Camera cut (physical camera contract): the camera becomes the RENDERED point
-		 * of view (primary video source reroute through the AVConsole) AND the
-		 * photographic authority (active camera) — its DoF/HDR/lens setup reshapes the
-		 * post-process pipeline within a frame. */
-		if ( !m_AVConsoleManager.switchPrimaryVideoSource(camera.id()) )
+		if ( camera == nullptr )
 		{
 			return false;
 		}
 
-		m_activeCamera = &camera;
+		/* Camera cut (physical camera contract): the camera becomes the RENDERED point
+		 * of view (primary video source reroute through the AVConsole) AND the
+		 * photographic authority (active camera) — its DoF/HDR/lens setup reshapes the
+		 * post-process pipeline within a frame. */
+		if ( !m_AVConsoleManager.switchPrimaryVideoSource(camera->id()) )
+		{
+			return false;
+		}
+
+		this->setActiveCamera(camera);
 
 		return true;
 	}

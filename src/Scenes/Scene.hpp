@@ -735,18 +735,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the active camera connected to the primary video output (const).
-			 * @return const Component::Camera * or nullptr if no camera is connected.
+			 * @brief Returns the ACTIVE camera — the photographic authority — or nullptr.
+			 * @note SELF-HEALING lifetime contract: the scene holds a WEAK reference guarded by
+			 * an internal mutex, so a camera whose entity self-terminated resolves to nullptr —
+			 * the photographic effects then dematerialize through the regular per-frame polling
+			 * (no-op contract), nothing dangles. The returned shared_ptr keeps the component
+			 * alive for the caller's use even if the entity dies mid-frame: hold it for the
+			 * duration of the work, do not cache the raw pointer.
+			 * @return std::shared_ptr< Component::Camera >
 			 */
 			[[nodiscard]]
-			const Component::Camera * activeCamera () const noexcept;
-
-			/**
-			 * @brief Returns the active camera connected to the primary video output (mutable).
-			 * @return Component::Camera * or nullptr if no camera is connected.
-			 */
-			[[nodiscard]]
-			Component::Camera * activeCamera () noexcept;
+			std::shared_ptr< Component::Camera > activeCamera () const noexcept;
 
 			/**
 			 * @brief Performs a camera cut: the camera becomes the rendered point of view
@@ -754,17 +753,17 @@ namespace EmEn::Scenes
 			 * @note Reroutes the primary video source through the AVConsole, then transfers
 			 * the active-camera role. Each camera keeps its own photographic setup
 			 * (optics, exposure, DoF/HDR, lens effects): cutting swaps the whole look.
-			 * @param camera A reference to the camera to cut to.
+			 * @param camera A reference to the camera smart pointer to cut to.
 			 * @return bool Whether the cut succeeded.
 			 */
 			[[nodiscard]]
-			bool switchToCamera (Component::Camera & camera) noexcept;
+			bool switchToCamera (const std::shared_ptr< Component::Camera > & camera) noexcept;
 
 			/**
 			 * @brief Manually sets the active camera for this scene.
 			 * @param camera Pointer to the camera component, or nullptr to clear.
 			 */
-			void setActiveCamera (Component::Camera * camera) noexcept;
+			void setActiveCamera (const std::shared_ptr< Component::Camera > & camera) noexcept;
 
 			/**
 			 * @brief Returns the debug node controller (const).
@@ -2417,8 +2416,15 @@ namespace EmEn::Scenes
 			std::unique_ptr< Audio::Ambience > m_ambience;
 			/** @brief Per-scene multi-pass post-processing effect stack. Null if no scene effects. */
 			std::unique_ptr< Graphics::PostProcessStack > m_postProcessStack;
-			/** @brief Cached pointer to the active camera component. Set by PrimaryCameraCreated notification. */
-			Component::Camera * m_activeCamera{nullptr};
+			/** @brief Guards the PUBLICATION of the active-camera reference (the pointer swap):
+			 * writers come from the logic thread (notifications, console, camera cuts) while the
+			 * render thread resolves it every frame. Same publication-guard family as the
+			 * camera's lens-effect list. */
+			mutable std::mutex m_activeCameraAccess;
+			/** @brief WEAK reference to the active camera (photographic authority): an entity
+			 * that self-terminates leaves a reference that resolves to nullptr instead of a
+			 * dangling pointer — the self-healing lifetime contract of activeCamera(). */
+			std::weak_ptr< Component::Camera > m_activeCamera;
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */

@@ -1000,7 +1000,7 @@ namespace EmEn
 					return;
 				}
 
-				auto * camera = activeScene->activeCamera();
+				const auto camera = activeScene->activeCamera();
 
 				if ( camera == nullptr )
 				{

@@ -324,7 +324,7 @@ namespace EmEn::Scenes
 			}
 
 			/* Set as the active camera for the scene. */
-			m_activeScene->setActiveCamera(camera.get());
+			m_activeScene->setActiveCamera(camera);
 
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Camera '" << cameraName << "' attached to node '" << nodeName << "' and set as active.");
 
@@ -771,7 +771,7 @@ namespace EmEn::Scenes
 				++staticEntityCount;
 			});
 
-			const auto * camera = scene.activeCamera();
+			const auto camera = scene.activeCamera();
 
 			std::stringstream info;
 			info << "Scene: " << scene.name() << "\n";

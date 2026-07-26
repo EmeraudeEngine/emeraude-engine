@@ -1397,7 +1397,7 @@ namespace EmEn::Graphics
 		 * requirements (HDR may appear or disappear with the tone mapping). */
 		if ( scene != nullptr && stack != nullptr )
 		{
-			if ( scene->postProcessStack()->syncCameraEffects(scene->activeCamera(), *this) && m_sceneTarget != nullptr )
+			if ( scene->postProcessStack()->syncCameraEffects(scene->activeCamera().get(), *this) && m_sceneTarget != nullptr )
 			{
 				m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
 					target->destroyRenderTarget();
@@ -1591,7 +1591,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera());
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get());
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -1599,7 +1599,7 @@ namespace EmEn::Graphics
 			/* Process camera lens effects (single-pass). The snapshot is RETAINED in this
 			 * frame's slot: it only drops when the slot is reused (fence passed), so effects
 			 * removed from the camera meanwhile survive until the GPU is done with them. */
-			const auto * camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
+			const auto camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
 			auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
 			lensEffectsSnapshot = (camera != nullptr) ? camera->lensEffects() : nullptr;
 
@@ -1762,7 +1762,7 @@ namespace EmEn::Graphics
 		 * context (physical camera model: optics, exposure) to the effect chain. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera());
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get());
 		}
 
 		/* Establish swap-chain image layouts by running RP1 (CLEAR) with no draw calls.
@@ -1777,7 +1777,7 @@ namespace EmEn::Graphics
 
 		/* Process camera lens effects (single-pass). Same snapshot-retention contract as the
 		 * direct swap-chain path: the slot keeps the list alive for the in-flight frame. */
-		const auto * camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
+		const auto camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
 		auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
 		lensEffectsSnapshot = (camera != nullptr) ? camera->lensEffects() : nullptr;
 

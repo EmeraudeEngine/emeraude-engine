@@ -452,7 +452,7 @@ namespace EmEn::Scenes
 
 						if ( camera != nullptr && isPrimary )
 						{
-							scene.setActiveCamera(camera.get());
+							scene.setActiveCamera(camera);
 						}
 					}
 					else if ( compType == "Microphone" )
