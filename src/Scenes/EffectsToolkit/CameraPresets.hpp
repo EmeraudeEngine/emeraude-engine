@@ -98,7 +98,15 @@ namespace EmEn::Scenes::EffectsToolkit
 	{
 		/* Optics. */
 		float aperture{2.8F}; /**< Lens aperture, as an f-number. */
-		float focalLength{50.0F}; /**< Focal length, in millimeters. */
+		/** @brief Sensor/gate WIDTH in millimeters — the FORMAT the style emulates, not a lens.
+		 * @note A style never steals the framing: the shot belongs to whoever placed the camera,
+		 * so applying a style recomputes the EQUIVALENT focal length on the new format and the
+		 * field of view is left where it was — the same move a director of photography makes when
+		 * changing stock. What the format DOES change is the optical character: the circle of
+		 * confusion scales with the focal length squared over the format width, so a small gate is
+		 * deep-focus by construction (36 = full frame, 24.89 = Super 35, 8.8 = 2/3" broadcast,
+		 * 6.4 = 1/2" camcorder, 5.79 = Super 8). */
+		float sensorWidth{36.0F};
 		float focusDistance{10.0F}; /**< Manual focus plane distance, in meters (see manualFocus). */
 		/* Exposure. */
 		float exposureCompensation{0.0F}; /**< Exposure bias, in EV. */

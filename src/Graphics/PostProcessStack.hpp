@@ -217,6 +217,7 @@ namespace EmEn::Graphics
 			/* Camera-driven photographic effects (physical camera contract). Kept aside to
 			 * distinguish them from the application/scene effects inside m_effects. */
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraDepthOfField;
+			std::shared_ptr< IndirectPostProcessEffect > m_cameraMotionBlur;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraBloom;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
 	};

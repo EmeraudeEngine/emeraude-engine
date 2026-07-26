@@ -349,6 +349,29 @@ namespace EmEn::Scenes::Component
 			void enableBloom (bool state) noexcept;
 
 			/**
+			 * @brief Materializes or removes the MOTION BLUR for this camera.
+			 * @note Photographic like the depth of field: the blur LENGTH is not a strength slider
+			 * but `setShutterSpeed()` divided by the frame duration — the shutter angle, i.e. the
+			 * fraction of the frame during which light was collected. 1/48 s at 24 fps is the
+			 * cinematic 180-degree rule. This only decides whether the effect EXISTS; the exposure
+			 * time decides how long the smear is, which is why the result is framerate-independent.
+			 * @param state The state.
+			 * @return void
+			 */
+			void enableMotionBlur (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the motion blur is enabled for this camera.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMotionBlurEnabled () const noexcept
+			{
+				return this->isFlagEnabled(MotionBlurEnabled);
+			}
+
+			/**
 			 * @brief Returns whether the lens glare is enabled for this camera.
 			 * @return bool
 			 */
@@ -789,6 +812,7 @@ namespace EmEn::Scenes::Component
 			/** @brief The field of view is a GEOMETRIC constraint (cubemap face): the format is
 			 * locked, because changing it would reframe and break the required angle. */
 			static constexpr auto TechnicalProjection{UnusedFlag + 6UL};
+			static constexpr auto MotionBlurEnabled{UnusedFlag + 7UL};
 
 			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_lensEffects;
 			float m_distance{DefaultGraphicsViewDistance};

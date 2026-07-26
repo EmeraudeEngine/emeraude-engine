@@ -260,6 +260,20 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	Camera::enableMotionBlur (bool state) noexcept
+	{
+		if ( this->isFlagEnabled(MotionBlurEnabled) == state )
+		{
+			return;
+		}
+
+		this->setFlag(MotionBlurEnabled, state);
+
+		/* The scene observes its active camera and (de)materializes the effect. */
+		this->notify(PhysicalEffectsToggled);
+	}
+
+	void
 	Camera::addLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
 		/* We don't want to notify an effect twice. */

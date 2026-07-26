@@ -33,6 +33,7 @@
 /* Local inclusions. */
 #include "Effects/Framebuffer/Bloom.hpp"
 #include "Effects/Framebuffer/DepthOfField.hpp"
+#include "Effects/Framebuffer/MotionBlur.hpp"
 #include "Effects/Framebuffer/ToneMapping.hpp"
 #include "IndirectPostProcessEffect.hpp"
 #include "Renderer.hpp"
@@ -72,14 +73,16 @@ namespace EmEn::Graphics
 	PostProcessStack::syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept
 	{
 		const bool wantDepthOfField = camera != nullptr && camera->isDepthOfFieldEnabled();
+		const bool wantMotionBlur = camera != nullptr && camera->isMotionBlurEnabled();
 		const bool wantBloom = camera != nullptr && camera->isBloomEnabled();
 		const bool wantHDR = camera != nullptr && camera->isHDREnabled();
 
 		const bool hasDepthOfField = m_cameraDepthOfField != nullptr;
+		const bool hasMotionBlur = m_cameraMotionBlur != nullptr;
 		const bool hasBloom = m_cameraBloom != nullptr;
 		const bool hasHDR = m_cameraToneMapping != nullptr;
 
-		if ( wantDepthOfField == hasDepthOfField && wantBloom == hasBloom && wantHDR == hasHDR )
+		if ( wantDepthOfField == hasDepthOfField && wantMotionBlur == hasMotionBlur && wantBloom == hasBloom && wantHDR == hasHDR )
 		{
 			return false;
 		}
@@ -94,10 +97,16 @@ namespace EmEn::Graphics
 		const auto & extent = mainRenderTarget->extent();
 
 		/* Detach the current camera effects: they are re-appended below in canonical
-		 * order (DepthOfField, then ToneMapping LAST — HDR resolve closes the chain). */
+		 * order (DepthOfField, MotionBlur, Bloom, then ToneMapping LAST — the HDR resolve closes
+		 * the chain: optics, then exposure duration, then glare, then the sensor response). */
 		if ( m_cameraDepthOfField != nullptr )
 		{
 			std::erase(m_effects, m_cameraDepthOfField);
+		}
+
+		if ( m_cameraMotionBlur != nullptr )
+		{
+			std::erase(m_effects, m_cameraMotionBlur);
 		}
 
 		if ( m_cameraBloom != nullptr )
@@ -132,6 +141,33 @@ namespace EmEn::Graphics
 			});
 
 			m_cameraDepthOfField.reset();
+		}
+
+		/* Motion blur materialization. The smear happens DURING the exposure, on the image the
+		 * optics have already formed — hence after the defocus — and before the glare scatters it
+		 * and the sensor responds. Its length comes from the camera's shutter speed, so there is
+		 * nothing photographic to pass here; the quality knobs are read from the settings by the
+		 * effect itself. */
+		if ( wantMotionBlur && m_cameraMotionBlur == nullptr )
+		{
+			auto effect = std::make_shared< Effects::Framebuffer::MotionBlur >(renderer);
+
+			if ( effect->create(extent.width, extent.height) )
+			{
+				m_cameraMotionBlur = std::move(effect);
+			}
+			else
+			{
+				TraceError{ClassId} << "Failed to materialize the camera motion blur effect !";
+			}
+		}
+		else if ( !wantMotionBlur && m_cameraMotionBlur != nullptr )
+		{
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraMotionBlur)] () {
+				effect->destroy();
+			});
+
+			m_cameraMotionBlur.reset();
 		}
 
 		/* Lens glare materialization. Veiling glare is scattering INSIDE the lens, so it applies
@@ -194,6 +230,11 @@ namespace EmEn::Graphics
 		if ( m_cameraDepthOfField != nullptr )
 		{
 			insertIt = std::next(m_effects.insert(insertIt, m_cameraDepthOfField));
+		}
+
+		if ( m_cameraMotionBlur != nullptr )
+		{
+			insertIt = std::next(m_effects.insert(insertIt, m_cameraMotionBlur));
 		}
 
 		if ( m_cameraBloom != nullptr )

@@ -361,6 +361,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
+		/* Effect-quality knobs, engine-wide and persisted in the settings file. The PHOTOGRAPHIC
+		 * parameter — how long the shutter stays open, hence how long the smear is — is NOT a
+		 * setting: it belongs to the active camera and is read per frame in execute(). */
+		auto & settings = renderer.primaryServices().settings();
+
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsMotionBlurSampleCountKey, DefaultGraphicsMotionBlurSampleCount);
+		m_parameters.softDepthExtent = settings.getOrSetDefault< float >(GraphicsMotionBlurSoftDepthExtentKey, DefaultGraphicsMotionBlurSoftDepthExtent);
+
 		/* The tile targets hold a 2D velocity in pixels: RG16F is enough (a 16-bit float
 		 * resolves any pixel count we can render). The output is the colour chain format. */
 		constexpr auto velocityFormat = VK_FORMAT_R16G16_SFLOAT;

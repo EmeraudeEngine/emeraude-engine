@@ -1087,6 +1087,21 @@ namespace EmEn
 						camera->enableDepthOfField(depthOfField);
 					}
 
+					auto motionBlur = camera->isMotionBlurEnabled();
+
+					if ( ImGui::Checkbox("Motion blur", &motionBlur) )
+					{
+						camera->enableMotionBlur(motionBlur);
+					}
+
+					if ( motionBlur )
+					{
+						/* There is no strength slider by design: the shutter speed above IS the
+						 * control, since the smear length is the shutter angle. */
+						ImGui::SameLine();
+						ImGui::TextDisabled("(length = the shutter speed above)");
+					}
+
 					auto HDR = camera->isHDREnabled();
 
 					if ( ImGui::Checkbox("HDR (tone mapping)", &HDR) )

@@ -1070,11 +1070,23 @@ image-rendering effects are camera-manageable (lens effects already are).
 
 **Camera presets** (`Scenes/EffectsToolkit/CameraPresets.{hpp,cpp}`): full photographic
 packages — optics + exposure + DoF/HDR materialization + lens effects in one call.
-`Neutral` (reset), `HighQuality` (f/2.8 50mm clean), `HumanEye` (f/8 17mm, soft peripheral
-vignette), `VintageBlackAndWhite` (f/5.6 40mm + LensPresets::Hitchcock60s stack),
-`Super8` (f/1.9 25mm, +0.3 EV, coarse grain/jitter/flicker/dust). Applying a preset
+`Neutral` (reset), `HighQuality` (f/2.8 full frame, clean), `HumanEye` (f/8, soft peripheral
+vignette), `VintageBlackAndWhite` (f/5.6 Super 35 + LensPresets::Hitchcock60s stack),
+`Super8` (f/1.9 Super 8 gate, +0.3 EV, coarse grain/jitter/flicker/dust). Applying a preset
 REPLACES the camera's photographic setup; two cameras can carry different presets
 (active-camera switch = full look switch). Validated on Sponza (Jul 2026).
+
+⚠️ **A style declares a FORMAT, not a lens, and NEVER steals the framing** (owner decision,
+Jul 2026, once the focal length started driving the field of view). `CameraStyle::sensorWidth`
+replaced `focalLength`, and applying a style reads the current field of view, mounts the format,
+then re-derives the EQUIVALENT focal length — the same move a director of photography makes when
+changing stock. The shot belongs to whoever placed the camera; what the format changes is the
+optical CHARACTER, since the circle of confusion scales as the focal length squared over the
+format width. Hence `FullFrameFormat` 36 mm, `Super35Format` 24.89, `BroadcastFormat` 8.8 (2/3"
+tube), `CamcorderFormat` 6.4 (1/2"), `Super8Format` 5.79 — and that is *why* 1980s broadcast video
+and Super 8 look flat while a full-frame prime separates its subject. This also deleted twelve
+arbitrary focal-length values. ⚠️ A style is REFUSED on a technical camera (`isStyleable()` warns):
+a cubemap face has no format, no lens and no grading.
 
 **EXTENSION CONTRACT — consumer-defined styles** (`EffectsToolkit::CameraStyle`): an
 engine consumer declares its own photographic style as a DATA block (optics, exposure,
@@ -1103,8 +1115,19 @@ capture cameras are never graded). Runtime re-application goes through
 LensPresets:: functions remain the lens-stack building blocks.
 
 **Camera API** (all no-op when the matching effect is absent — the options are retained):
-- `enableDepthOfField(bool)` / `enableHDR(bool)` — MATERIALIZES the DepthOfField /
-  ToneMapping effect in the scene chain (and removes it when disabled).
+- `enableDepthOfField(bool)` / `enableMotionBlur(bool)` / `enableBloom(bool)` / `enableHDR(bool)`
+  — MATERIALIZE the DepthOfField / MotionBlur / Bloom / ToneMapping effect in the scene chain (and
+  remove it when disabled). ⚠️ **Canonical order: DepthOfField → MotionBlur → Bloom → ToneMapping**,
+  which is the physical order of events: the optics form the image, the motion smears during the
+  exposure, the glass scatters what was formed, the sensor responds. All four insert themselves
+  ahead of the first `runsAfterToneMapping()` effect.
+- ⚠️ **The motion blur has no strength knob, by design**: its length is `setShutterSpeed()` divided
+  by the frame duration — the shutter angle, i.e. the fraction of the frame during which light was
+  collected (1/48 s at 24 fps is the cinematic 180-degree rule). That is what makes it
+  framerate-independent, and it means the exposure time is a SHARED control: it sets the blur AND
+  one third of the exposure triad. A demo no longer adds `MotionBlur` to its stack; the quality
+  knobs (`Core/Graphics/MotionBlur/SampleCount`, `SoftDepthExtent`) are read by the effect itself,
+  like the depth of field's.
 - Optics: `setAperture(fStop)`, `setFocalLength(mm)`, `setFocusDistance(m)` (implies
   manual focus, like tapping to focus), `setAutoFocus(bool)`.
 - ⚠️⚠️ **THE FIELD OF VIEW IS NOT SETTABLE — it is derived.** `m_focalLength` (+ `m_sensorWidth`)

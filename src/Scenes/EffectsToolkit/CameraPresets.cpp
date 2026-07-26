@@ -43,10 +43,66 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	using namespace Graphics::Effects::Lens;
 
 	/**
+	 * @brief Sensor/gate WIDTHS in millimeters — the formats the styles emulate.
+	 * @note A format is what gives a style its optical character rather than its framing: the
+	 * circle of confusion scales as the focal length squared over the format width, so the small
+	 * gates below are deep-focus by construction. That is why 1980s broadcast video and Super 8
+	 * look "flat" and why a full-frame prime separates its subject.
+	 */
+	constexpr auto FullFrameFormat{36.0F};        /* 35 mm stills, 36 x 24 mm. */
+	constexpr auto Super35Format{24.89F};         /* 1960s-onward 35 mm cinema. */
+	constexpr auto BroadcastFormat{8.8F};         /* 2/3" tube and CCD broadcast cameras. */
+	constexpr auto CamcorderFormat{6.4F};         /* 1/2" consumer camcorder. */
+	constexpr auto Super8Format{5.79F};           /* Super 8 film gate, 5.79 x 4.01 mm. */
+
+	/**
+	 * @brief [Internal] Mounts a FORMAT on a camera without moving the shot.
+	 * @note Reads the framing BEFORE the format changes, then mounts the equivalent focal length
+	 * on the new gate. Setting the format alone would reframe by the crop factor, and stealing the
+	 * framing is not a style's business — the scene author placed that camera. The optical
+	 * character still changes, which is the whole point of declaring a format.
+	 * @param camera A reference to the camera.
+	 * @param sensorWidth The format width, in millimeters.
+	 * @return void
+	 */
+	static
+	void
+	mountFormat (Component::Camera & camera, float sensorWidth) noexcept
+	{
+		const auto framing = camera.fieldOfView();
+
+		camera.setSensorWidth(sensorWidth);
+		camera.setFocalLength(camera.sensorHeight() / (2.0F * std::tan(Base::Math::Radian(framing) * 0.5F)));
+	}
+
+	/**
+	 * @brief [Internal] Rejects the cameras a photographic style must never touch.
+	 * @note A technical camera (a cubemap face) has no format, no lens and no grading: its field
+	 * of view is a geometric constraint and every optical knob here would break it.
+	 * @param camera A reference to the camera.
+	 * @return bool True when the camera can be styled.
+	 */
+	static
+	bool
+	isStyleable (const Component::Camera & camera) noexcept
+	{
+		if ( camera.isTechnicalCamera() )
+		{
+			TraceWarning{"CameraPresets"} << "Camera '" << camera.name() << "' is a technical "
+				"camera (its field of view is a geometric constraint): a photographic style would "
+				"break it. Ignoring.";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * @brief [Internal] Applies a full optics/exposure block, then replaces the lens stack.
 	 * @param camera A reference to the camera.
 	 * @param aperture The f-stop.
-	 * @param focalLength The focal length in millimeters.
+	 * @param sensorWidth The FORMAT width in millimeters (the framing is preserved).
 	 * @param exposureCompensation The exposure bias in EV.
 	 * @param depthOfField Materializes the depth of field.
 	 * @param HDR Materializes the HDR tone mapping.
@@ -55,12 +111,17 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 */
 	static
 	void
-	configureCamera (Component::Camera & camera, float aperture, float focalLength, float exposureCompensation, bool depthOfField, bool HDR, const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & lensEffects = {}) noexcept
+	configureCamera (Component::Camera & camera, float aperture, float sensorWidth, float exposureCompensation, bool depthOfField, bool HDR, const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & lensEffects = {}) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
 
 		camera.setAperture(aperture);
-		camera.setFocalLength(focalLength);
+		mountFormat(camera, sensorWidth);
 		camera.setAutoFocus(true);
 		camera.setAutoExposure(true);
 		camera.setExposureCompensation(exposureCompensation);
@@ -99,10 +160,15 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	Apply (Component::Camera & camera, const CameraStyle & style) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
 
 		camera.setAperture(style.aperture);
-		camera.setFocalLength(style.focalLength);
+		mountFormat(camera, style.sensorWidth);
 
 		if ( style.manualFocus )
 		{
@@ -212,7 +278,15 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	Neutral (Component::Camera & camera) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
+
+		/* Back to the reference format; the framing is preserved as everywhere else. */
+		mountFormat(camera, FullFrameFormat);
 
 		camera.enableDepthOfField(false);
 		camera.enableHDR(false);
@@ -226,9 +300,10 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	{
 		camera.clearLensEffects();
 
-		/* Modern digital cinema package: fast prime lens, clean sensor. */
+		/* Modern digital cinema package: fast prime lens, clean full-frame sensor — the format
+		 * that separates its subject the most of the catalogue. */
 		camera.setAperture(2.8F);
-		camera.setFocalLength(50.0F);
+		mountFormat(camera, FullFrameFormat);
 		camera.setAutoFocus(true);
 		camera.setAutoExposure(true);
 		camera.setExposureCompensation(0.0F);
@@ -245,7 +320,9 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 		 * stays subtle (visible on very close subjects only). The iris adapts (auto
 		 * exposure); accommodation is instantaneous and silent (auto focus). */
 		camera.setAperture(8.0F);
-		camera.setFocalLength(17.0F);
+		/* The eye is, near enough, a 17 mm lens on a 24 mm globe — which is the height of a
+		 * full-frame gate, so the reference format is also the physically honest one here. */
+		mountFormat(camera, FullFrameFormat);
 		camera.setAutoFocus(true);
 		camera.setAutoExposure(true);
 		camera.setExposureCompensation(0.0F);
@@ -265,9 +342,9 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	{
 		camera.clearLensEffects();
 
-		/* 1960s film noir package over a classic prime lens. */
+		/* 1960s film noir package on 35 mm cinema stock. */
 		camera.setAperture(5.6F);
-		camera.setFocalLength(40.0F);
+		mountFormat(camera, Super35Format);
 		camera.setAutoFocus(true);
 		camera.setAutoExposure(true);
 		camera.setExposureCompensation(0.0F);
@@ -286,53 +363,53 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	Analog80s (Component::Camera & camera) noexcept
 	{
 		/* Studio broadcast camera: deep focus video optics over the clean CRT stack. */
-		configureCamera(camera, 4.0F, 25.0F, 0.0F, false, true, LensPresets::Analog80s());
+		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, LensPresets::Analog80s());
 	}
 
 	void
 	VHSAnalog80s (Component::Camera & camera) noexcept
 	{
 		/* VHS camcorder (small sensor, no bokeh, video overexposure) on a CRT. */
-		configureCamera(camera, 1.8F, 8.0F, 0.2F, false, true, LensPresets::VHSToAnalog80s());
+		configureCamera(camera, 1.8F, CamcorderFormat, 0.2F, false, true, LensPresets::VHSToAnalog80s());
 	}
 
 	void
 	SatelliteAnalog80s (Component::Camera & camera) noexcept
 	{
-		configureCamera(camera, 4.0F, 25.0F, 0.0F, false, true, LensPresets::SatelliteToAnalog80s());
+		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, LensPresets::SatelliteToAnalog80s());
 	}
 
 	void
 	VHSPureSignal (Component::Camera & camera) noexcept
 	{
-		configureCamera(camera, 1.8F, 8.0F, 0.2F, false, true, LensPresets::VHSToPureSignal());
+		configureCamera(camera, 1.8F, CamcorderFormat, 0.2F, false, true, LensPresets::VHSToPureSignal());
 	}
 
 	void
 	SatellitePureSignal (Component::Camera & camera) noexcept
 	{
-		configureCamera(camera, 4.0F, 25.0F, 0.0F, false, true, LensPresets::SatelliteToPureSignal());
+		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, LensPresets::SatelliteToPureSignal());
 	}
 
 	void
 	GoldenHour (Component::Camera & camera) noexcept
 	{
 		/* Warm anamorphic cinema: photographic DoF, overexposed toward the sun. */
-		configureCamera(camera, 2.8F, 65.0F, 0.3F, true, true, LensPresets::GoldenHour());
+		configureCamera(camera, 2.8F, FullFrameFormat, 0.3F, true, true, LensPresets::GoldenHour());
 	}
 
 	void
 	BlueHour (Component::Camera & camera) noexcept
 	{
 		/* Cool cinematic twilight: photographic DoF, underexposed. */
-		configureCamera(camera, 2.8F, 50.0F, -0.4F, true, true, LensPresets::BlueHour());
+		configureCamera(camera, 2.8F, FullFrameFormat, -0.4F, true, true, LensPresets::BlueHour());
 	}
 
 	void
 	Retro8Bits (Component::Camera & camera) noexcept
 	{
 		/* Pixel-art display: raw palette, NO photometry (no DoF, no HDR). */
-		configureCamera(camera, 2.8F, 50.0F, 0.0F, false, false, LensPresets::Retro8Bits());
+		configureCamera(camera, 2.8F, FullFrameFormat, 0.0F, false, false, LensPresets::Retro8Bits());
 	}
 
 	void
@@ -343,7 +420,9 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 		/* Super 8 amateur camera: fast f/1.9 lens (the standard on those bodies),
 		 * short focal length, amateur metering slightly overexposing. */
 		camera.setAperture(1.9F);
-		camera.setFocalLength(25.0F);
+		/* The gate is the reason Super 8 looks the way it does: 5.79 mm of width makes the image
+		 * deep-focus whatever the f-stop, so the f/1.9 buys light, not bokeh. */
+		mountFormat(camera, Super8Format);
 		camera.setAutoFocus(true);
 		camera.setAutoExposure(true);
 		camera.setExposureCompensation(0.3F);
