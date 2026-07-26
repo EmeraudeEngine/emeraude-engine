@@ -320,9 +320,15 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
       i.e. exactly phase 3.
       TWO CONSEQUENCES, which are the real work:
         1. Assets authored ARTISTICALLY (emissive in [0,1], no extension) become ~1 nit, i.e.
-           black next to an 800 lm bulb. OWNER DECISION STILL OPEN: apply a compatibility
-           multiplier at import ONLY when the extension is ABSENT (documented, reversible shim),
-           or fix the assets.
+           black next to an 800 lm bulb. **OWNER DECISION 2026-07-26: follow the spec, NO
+           compatibility shim.** An import-time multiplier would be a deviation from the very
+           spec we are choosing to honour, and it would silently double-correct assets that ARE
+           conformant. If an emissive goes black in phase 2, the fix belongs in the asset or in
+           the material setup, not in the importer.
+           Cost measured before deciding, and it is why this is cheap: exactly ONE asset file in
+           `projet-alpha.data` uses emissive at all, ZERO use
+           `KHR_materials_emissive_strength`, and there are 4 `setEmissiveStrength()` call sites
+           outside the loaders. Nothing meaningful to break.
         2. ⚠️ Do NOT compensate for an exporter bug. Khronos glTF-Blender-IO issue #1766: Blender's
            watts-based emission needs a `*683/(2*pi)` factor to produce spec-compliant nits. A dim
            emissive coming out of Blender is wrong AT THE SOURCE; compensating engine-side would
