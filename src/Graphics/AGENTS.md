@@ -1107,22 +1107,35 @@ LensPresets:: functions remain the lens-stack building blocks.
   ToneMapping effect in the scene chain (and removes it when disabled).
 - Optics: `setAperture(fStop)`, `setFocalLength(mm)`, `setFocusDistance(m)` (implies
   manual focus, like tapping to focus), `setAutoFocus(bool)`.
-- ⚠️ **The focal length IS the field of view**, one quantity in two units, related through
-  the sensor: `f = h / (2·tan(fov/2))`, `h` being `sensorHeight()` (`sensorWidth × 2/3`,
-  3:2 full frame) because the engine's field of view is VERTICAL. `setFocalLength()` derives
-  the field of view and `setFieldOfView()` derives the focal length — the latter writes
-  `m_focalLength` DIRECTLY, since calling the sibling setter would recurse. Consequences:
-  authoring a focal length REFRAMES the shot, and the two can no longer be authored
-  independently (the last call wins). The 85° default is an **11 mm** ultra-wide equivalent,
-  50 mm is 27°. An ultra-wide has enormous depth of field (the circle of confusion goes as
-  f²), so a game field of view yields a subtle DoF whatever the aperture — that is optics,
-  not a weak effect.
+- ⚠️⚠️ **THE FIELD OF VIEW IS NOT SETTABLE — it is derived.** `m_focalLength` (+ `m_sensorWidth`)
+  is the SINGLE source of truth for the framing; `fieldOfView()` computes `2·atan(h/(2f))` on
+  demand, `h` being `sensorHeight()` (`sensorWidth × 2/3`, 3:2 full frame) because the engine's
+  field of view is VERTICAL. A camera is configured **like a real appliance** — a lens, a format,
+  an aperture, a shutter, an ISO — and the projection matrices follow. `setFieldOfView()` and
+  `changeFieldOfView()` **no longer exist**, `setPerspectiveProjection(distance)` no longer takes
+  an angle, and `AnimationID::FieldOfView` is gone (animate `FocalLength`: a zoom IS a focal ramp).
+  Reference points: 13.096 mm = the historical 85° default, 12 mm = 90°, 20.8 = 60°, 25.7 = 50°,
+  50 mm = 27°.
+  **Why it was done** (owner, Jul 2026): storing both an angle and a lens meant FOUR writers, and
+  one of them — `setPerspectiveProjection(fov, distance)` — updated only the angle and left a stale
+  focal length behind, so the panel reported a lens that did not match the image. Deriving removes
+  the class of bug rather than one instance of it. Side effect: the 1 mm focal floor caps the
+  derived angle at ~171°, replacing a clamp that allowed a geometrically meaningless 360°.
+- An ultra-wide has enormous depth of field (the circle of confusion goes as f²), so a game-style
+  framing yields a subtle DoF whatever the aperture — that is optics, not a weak effect. Visible
+  background separation needs a longer lens, not a smaller f-number.
 - `setSensorWidth(mm)` is the FORMAT knob, and the reference length that gives millimetres a
   meaning: it converts the thin-lens circle of confusion (in meters, on the sensor) into a
   fraction of the image, which is why the DoF needs no arbitrary scale. It behaves as a
-  **constant lens**: the focal length is kept and the field of view is recomputed, i.e. the
-  physical crop factor — 11 mm sees 94.6° on full frame and 71.2° on APS-C. Changing the
-  format therefore REFRAMES; it does not merely restyle the blur.
+  **constant lens**: the focal length is kept and the field of view follows, i.e. the physical crop
+  factor — 11 mm sees 94.6° on full frame and 71.2° on APS-C. Changing the format therefore
+  REFRAMES; it does not merely restyle the blur.
+- `setTechnicalFieldOfView(degrees)` is the ONLY way an angle enters a camera, and it is **not
+  photographic**: it exists where the field of view is a GEOMETRIC constraint — a cubemap face is
+  strictly 90° or the six faces do not join. It stores the focal length that yields the angle (90°
+  on a 24 mm-high sensor is exactly 12 mm, the round trip costing ~1e-5°) and raises
+  `TechnicalProjection`, which **locks the sensor format** (`setSensorWidth()` warns and returns),
+  since reframing is precisely what would break the constraint. `isTechnicalCamera()` reports it.
 - Exposure: `setExposureCompensation(EV)`, `setAutoExposure(bool)`.
 - ⚠️ **With auto-ISO on (the default), the aperture is not an exposure control.** The
   metering solves directly for the multiplier that puts the scene on middle grey, and the

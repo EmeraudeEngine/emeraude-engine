@@ -431,7 +431,10 @@ namespace EmEn::Scenes
 			 * @brief Generates a camera using the perspective projection.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the camera component.
-			 * @param fov The camera field of view expressed in degrees. Default 85.0.
+			 * @param focalLength The lens focal length in millimeters, on a full-frame sensor —
+			 * the camera is framed like a real appliance, the field of view being derived from the
+			 * optics. Default 13.096 mm, which is the historical 85 degree framing. Reference
+			 * points: 12 mm = 90 deg, 20.8 mm = 60 deg, 25.7 mm = 50 deg, 50 mm = 27 deg.
 			 * @param lookAt A position where the camera should initially look at. Default, [0,0,0].
 			 * @param primaryDevice Set the camera as the primary device. Default, 'false'.
 			 * @param showModel Enables a model to visualize the camera. Default, 'false'.
@@ -443,7 +446,7 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Base::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false, EffectsToolkit::CameraPreset preset = EffectsToolkit::CameraPreset::Normal) noexcept
+			generatePerspectiveCamera (const std::string & entityName, float focalLength = DefaultGraphicsFocalLength, const Base::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false, EffectsToolkit::CameraPreset preset = EffectsToolkit::CameraPreset::Normal) noexcept
 				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
@@ -464,8 +467,9 @@ namespace EmEn::Scenes
 					builder.asPrimary();
 				}
 
-				auto component = builder.setup([fov, distance] (auto & camera) {
-					camera.setPerspectiveProjection(fov, distance);
+				auto component = builder.setup([focalLength, distance] (auto & camera) {
+					camera.setFocalLength(focalLength);
+					camera.setPerspectiveProjection(distance);
 				}).build();
 
 				/* Photographic preset (physical camera model). 'Normal' is a no-op on a
@@ -558,7 +562,11 @@ namespace EmEn::Scenes
 				}
 
 				auto component = builder.setup([distance] (auto & camera) {
-					camera.setPerspectiveProjection(90.0F, distance);
+					/* ⚠️ A cube face is strictly 90 degrees or the six faces do not join, so this is
+					 * a GEOMETRIC constraint, not a lens choice: it goes through the technical
+					 * entry point, which also locks the sensor format against a later reframe. */
+					camera.setTechnicalFieldOfView(90.0F);
+					camera.setPerspectiveProjection(distance);
 				}).build();
 
 				if ( showModel )

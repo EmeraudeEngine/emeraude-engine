@@ -323,8 +323,14 @@ namespace EmEn
 		constexpr auto GraphicsViewDistanceKey{"Core/Graphics/ViewDistance"};
 		constexpr auto DefaultGraphicsViewDistance{10000.0F}; /* NOTE: 10km */
 		/* Vertical field of view in degrees. */
-		constexpr auto GraphicsFieldOfViewKey{"Core/Graphics/FieldOfView"};
-		constexpr auto DefaultGraphicsFieldOfView{85.0F}; /* NOTE: 85° */
+		/* NOTE: The framing is authored as a LENS, never as an angle — a camera is configured
+		 * like a real appliance and the field of view is derived (see Scenes::Component::Camera).
+		 * 13.096 mm is the focal length that reproduces the historical 85° default on a 36x24 mm
+		 * full-frame sensor, so this constant carries the same framing as the angle it replaces.
+		 * ⚠️ The key itself has NEVER been read by anything — it was dead when it named an angle
+		 * and it stays dead now; a user-facing framing control has yet to be wired. */
+		constexpr auto GraphicsFocalLengthKey{"Core/Graphics/FocalLength"};
+		constexpr auto DefaultGraphicsFocalLength{13.096F}; /* NOTE: 85° vertical, full frame. */
 
 			/* Texture */
 			/* Magnification / minification / mipmap filtering (shared default). Values: "nearest", "linear". */

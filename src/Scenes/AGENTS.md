@@ -327,7 +327,13 @@ toolkit.clearGenerationParameters();
 - `generateDirectionalLight<T>(name, color, intensity, shadowRes, range)`
 - `generatePointLight<T>(name, color, range, intensity, shadowRes)`
 - `generateSpotLight<T>(name, color, range, intensity, angle, shadowRes)`
-- `generateCamera<T>(name, fov)`
+- `generatePerspectiveCamera<T>(name, focalLengthMM, lookAt, primary, showModel, preset)` — ⚠️ the
+  framing is a LENS in millimetres, never an angle (13.096 mm = the historical 85° default;
+  12 mm = 90°, 20.8 = 60°, 25.7 = 50°, 50 = 27°). See `Component/Camera.hpp`.
+- `generateOrthographicCamera<T>(name, size, ...)` — unaffected: no lens under an orthographic
+  projection.
+- `generateCubemapCamera<T>(name, ...)` / `generateEnvironmentCubemapRenderer<T>(...)` — go through
+  `setTechnicalFieldOfView(90)`, a cube face being a geometric constraint rather than a lens choice.
 
 All generators support `<Node>` or `<StaticEntity>` as template parameter (default: `StaticEntity`).
 

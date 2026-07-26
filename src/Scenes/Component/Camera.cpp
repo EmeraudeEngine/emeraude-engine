@@ -59,7 +59,7 @@ namespace EmEn::Scenes::Component
 		/* When a new render target is connected, we initialize it with coordinates and camera properties. */
 		if ( this->isPerspectiveProjection() )
 		{
-			targetDevice.updateVideoDeviceProperties(m_fov, m_distance, false);
+			targetDevice.updateVideoDeviceProperties(this->fieldOfView(), m_distance, false);
 		}
 		else
 		{
@@ -75,7 +75,7 @@ namespace EmEn::Scenes::Component
 		if ( this->isPerspectiveProjection() )
 		{
 			this->forEachOutputs([&] (const auto & output) {
-				output->updateVideoDeviceProperties(m_fov, m_distance, false);
+				output->updateVideoDeviceProperties(this->fieldOfView(), m_distance, false);
 			});
 		}
 		else
@@ -87,12 +87,13 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::setPerspectiveProjection (float fov, float distance) noexcept
+	Camera::setPerspectiveProjection (float distance) noexcept
 	{
 		this->enableFlag(PerspectiveProjection);
 
-		m_fov = std::min(std::abs(fov), FullRevolution< float >);
-
+		/* NOTE: No field of view here. The framing belongs to the optics and the lens already
+		 * mounted keeps it, which is exactly what one wants when coming back from an orthographic
+		 * projection: the focus and framing are found unchanged. */
 		if ( distance >= 0.0F )
 		{
 			m_distance = distance;
@@ -106,18 +107,56 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::setFieldOfView (float degrees) noexcept
+	Camera::setFocalLength (float millimeters) noexcept
 	{
-		m_fov = std::min(std::abs(degrees), FullRevolution< float >);
+		/* THE single framing writer. The field of view is derived from this and the sensor
+		 * (`fieldOfView()`), so there is nothing to keep in sync — the previous design stored both
+		 * and had FOUR writers, one of which (setPerspectiveProjection) updated only the angle and
+		 * left a stale focal length behind: the panel then reported a lens that did not match the
+		 * image. A one-millimeter floor keeps the derived angle below 171 degrees, which also
+		 * replaces the old clamp that allowed a geometrically meaningless 360. */
+		m_focalLength = std::max(millimeters, 1.0F);
 
-		/* The field of view and the focal length are the SAME quantity in two units, related
-		 * through the sensor: f = h / (2 * tan(fov / 2)), h being the sensor HEIGHT since the
-		 * engine's field of view is vertical (see PostProcessor's tanHalfFovY). Keeping them
-		 * independent made the panel's focal-length slider look broken — it changed the depth of
-		 * field and nothing else, while the framing kept obeying a separate value. */
-		m_focalLength = std::max(this->sensorHeight() / (2.0F * std::tan(Radian(m_fov) * 0.5F)), 1.0F);
+		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
+	}
 
-		/* Update existing connected render targets only if perspective projection is enabled. */
+	void
+	Camera::setSensorWidth (float millimeters) noexcept
+	{
+		if ( this->isTechnicalCamera() )
+		{
+			TraceWarning{ClassId} << "Camera '" << this->name() << "' is a technical camera: its "
+				"field of view is a geometric constraint, so the sensor format is locked. Ignoring "
+				"the " << millimeters << " mm request.";
+
+			return;
+		}
+
+		m_sensorWidth = std::max(1.0F, millimeters);
+
+		/* CONSTANT LENS: the focal length is untouched, so the derived field of view changes —
+		 * the physical crop factor. Only the render targets need to hear about it. */
+		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
+	}
+
+	void
+	Camera::setTechnicalFieldOfView (float degrees) noexcept
+	{
+		this->enableFlag(TechnicalProjection);
+
+		const auto clamped = std::clamp(std::abs(degrees), 1.0F, 179.0F);
+
+		/* Expressed as the focal length that yields the angle on the current sensor, so the single
+		 * source of truth still holds; the format is locked from here on so nothing can reframe it
+		 * behind the caller's back. 90 degrees on a 24 mm-high sensor is exactly 12 mm. */
+		m_focalLength = this->sensorHeight() / (2.0F * std::tan(Radian(clamped) * 0.5F));
+
 		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
 		{
 			this->updateAllVideoDeviceProperties();
@@ -267,10 +306,6 @@ namespace EmEn::Scenes::Component
 	{
 		switch ( animationID )
 		{
-			case FieldOfView :
-				this->setFieldOfView(value.asFloat());
-				return true;
-
 			case Distance  :
 				this->setDistance(value.asFloat());
 				return true;

@@ -73,7 +73,8 @@ namespace EmEn::Scenes::Component
 			/** @brief Animatable Interface key. */
 			enum AnimationID : uint8_t
 			{
-				FieldOfView,
+				/* NOTE: There is no FieldOfView entry: the framing is animated through
+				 * FocalLength, the two being the same quantity. A zoom IS a focal ramp. */
 				Distance,
 				Aperture,
 				FocalLength,
@@ -148,6 +149,17 @@ namespace EmEn::Scenes::Component
 				return AVConsole::VideoType::Camera;
 			}
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
+			[[nodiscard]]
+			Base::Math::CartesianFrame< float >
+			getWorldCoordinates () const noexcept override
+			{
+				return Abstract::getWorldCoordinates();
+			}
+
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept override;
+
 			/**
 			 * @brief Returns whether the camera is using a perspective projection.
 			 * @return bool
@@ -172,39 +184,56 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets a perspective projection.
-			 * @param fov The field of view in degrees.
+			 * @note The FRAMING is not a parameter here: it belongs to the optics. A camera is
+			 * configured like a real one — `setFocalLength()` and `setSensorWidth()` — and the
+			 * projection matrices follow from them. This only declares the projection KIND and how
+			 * far the camera sees; switching back from an orthographic projection therefore
+			 * restores the lens that was already mounted.
 			 * @param distance The distance of view.
 			 * @return void
 			 */
-			void setPerspectiveProjection (float fov, float distance) noexcept;
+			void setPerspectiveProjection (float distance) noexcept;
 
 			/**
-			 * @brief Sets the field of view in degrees.
-			 * @param degrees A value between 0.0 and 360.0.
+			 * @brief Pins the field of view of a TECHNICAL camera, in degrees.
+			 * @warning NOT a photographic control, and the ONLY way an angle enters the camera. It
+			 * exists for cameras whose field of view is a GEOMETRIC constraint rather than a
+			 * creative choice: a cubemap face is strictly 90 degrees or the six faces do not join.
+			 * Such a camera has no photographic meaning — no format, no lens, no grading — so it
+			 * also LOCKS the sensor width, since changing the format would silently break the
+			 * angle (see `setSensorWidth()`).
+			 * @note Implemented as the focal length that yields the angle on the current sensor, so
+			 * there is still a single source of truth. 90 degrees on a 24 mm-high sensor is exactly
+			 * 12 mm; the tan/atan round trip costs about 1e-5 degree, four orders of magnitude
+			 * below one pixel on a cube face.
+			 * @param degrees The required field of view, in degrees.
 			 * @return void
 			 */
-			void setFieldOfView (float degrees) noexcept;
+			void setTechnicalFieldOfView (float degrees) noexcept;
 
 			/**
-			 * @brief Updates the field of view by degrees.
-			 * @param degrees The degrees to add or remove from the current value.
-			 * @return void
+			 * @brief Returns whether this camera's field of view is a pinned geometric constraint.
+			 * @return bool
 			 */
-			void
-			changeFieldOfView (float degrees) noexcept
+			[[nodiscard]]
+			bool
+			isTechnicalCamera () const noexcept
 			{
-				this->setFieldOfView(m_fov + degrees);
+				return this->isFlagEnabled(TechnicalProjection);
 			}
 
 			/**
-			 * @brief Returns the field of view in degrees.
+			 * @brief Returns the vertical field of view in degrees, DERIVED from the optics.
+			 * @note Not a setting — a consequence. `fov = 2 * atan(h / (2f))`, `h` being
+			 * `sensorHeight()`. This is what the projection matrices consume, which is the only
+			 * reason the accessor exists; to change the framing, change the lens.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
 			fieldOfView () const noexcept
 			{
-				return m_fov;
+				return Base::Math::Degree(2.0F * std::atan(this->sensorHeight() / (2.0F * m_focalLength)));
 			}
 
 			/**
@@ -413,24 +442,13 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets the lens focal length in millimeters.
-			 * @note Longer focal length = narrower field of view AND thinner in-focus plane. The
-			 * focal length and the field of view are ONE quantity in two units, so this REFRAMES
-			 * the shot — see the note in the body.
+			 * @note THE single source of truth for the framing: longer focal length = narrower
+			 * field of view AND thinner in-focus plane. This REFRAMES the shot, the field of view
+			 * being derived from it (`fieldOfView()`).
 			 * @param millimeters The focal length.
 			 * @return void
 			 */
-			void
-			setFocalLength (float millimeters) noexcept
-			{
-				m_focalLength = std::max(millimeters, 1.0F);
-
-				/* Same quantity, other unit: a focal length IS a field of view once the sensor is
-				 * known — fov = 2 * atan(h / (2f)). Setting one without the other left the panel's
-				 * focal slider changing the depth of field while the framing obeyed a separate
-				 * value, which reads as a dead control. Goes through setFieldOfView() so the
-				 * connected render targets are updated. */
-				this->setFieldOfView(Base::Math::Degree(2.0F * std::atan(this->sensorHeight() / (2.0F * m_focalLength))));
-			}
+			void setFocalLength (float millimeters) noexcept;
 
 			/**
 			 * @brief Returns the lens focal length in millimeters.
@@ -481,21 +499,16 @@ namespace EmEn::Scenes::Component
 			 * is the reason the depth of field needs no arbitrary scale factor.
 			 * @note CONSTANT LENS: changing the format keeps the focal length and REFRAMES, because
 			 * a smaller sensor crops the image circle of the same lens — the physical crop factor
-			 * (an APS-C body at 23.6 mm sees 1.53x narrower than full frame). Re-applying the
-			 * unchanged focal length is what propagates it: the round trip is stable, since the
-			 * field of view is derived from the new sensor height and yields back the same
-			 * millimetres. Leaving it unpropagated made the depth of field combine a stale focal
-			 * length with a fresh sensor.
+			 * (an APS-C body at 23.6 mm sees 1.53x narrower than full frame). The field of view
+			 * being derived, nothing needs synchronizing; the connected render targets are simply
+			 * re-notified.
+			 * @warning IGNORED on a technical camera (`setTechnicalFieldOfView()`), whose angle is a
+			 * geometric constraint: a cubemap face must stay at 90 degrees, and the format is what
+			 * would silently break it.
 			 * @param millimeters The sensor width (36 = full frame, 23.6 = APS-C).
 			 * @return void
 			 */
-			void
-			setSensorWidth (float millimeters) noexcept
-			{
-				m_sensorWidth = std::max(1.0F, millimeters);
-
-				this->setFocalLength(m_focalLength);
-			}
+			void setSensorWidth (float millimeters) noexcept;
 
 			/**
 			 * @brief Returns the sensor width, in millimeters.
@@ -704,7 +717,7 @@ namespace EmEn::Scenes::Component
 			bool
 			isLensEffectPresent (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) const noexcept
 			{
-				return std::find(m_lensEffects.cbegin(), m_lensEffects.cend(), effect) != m_lensEffects.cend();
+				return std::ranges::find(m_lensEffects, effect) != m_lensEffects.cend();
 			}
 
 			/**
@@ -728,27 +741,26 @@ namespace EmEn::Scenes::Component
 			 */
 			void clearLensEffects () noexcept;
 
-		private:
+		protected:
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
-			void onSuspend () noexcept override { }
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
-			void onWakeup () noexcept override { }
-
-			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
-			[[nodiscard]]
-			Base::Math::CartesianFrame< float >
-			getWorldCoordinates () const noexcept override
+			void
+			onSuspend () noexcept override
 			{
-				return Abstract::getWorldCoordinates();
+
 			}
 
-			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
-			void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
+			void
+			onWakeup () noexcept override
+			{
+
+			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
 			void onOutputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & targetDevice) noexcept override;
+
+		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
@@ -774,16 +786,18 @@ namespace EmEn::Scenes::Component
 			static constexpr auto AutoFocusEnabled{UnusedFlag + 3UL};
 			static constexpr auto AutoExposureEnabled{UnusedFlag + 4UL};
 			static constexpr auto BloomEnabled{UnusedFlag + 5UL};
+			/** @brief The field of view is a GEOMETRIC constraint (cubemap face): the format is
+			 * locked, because changing it would reframe and break the required angle. */
+			static constexpr auto TechnicalProjection{UnusedFlag + 6UL};
 
 			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_lensEffects;
-			float m_fov{DefaultGraphicsFieldOfView};
 			float m_distance{DefaultGraphicsViewDistance};
 			float m_near{0.0F};
 			float m_far{DefaultGraphicsViewDistance};
 			/* Physical camera options (photographic model, consumed by the post-process
 			 * effects materialized through enableDepthOfField()/enableHDR()). */
 			float m_aperture{2.8F}; /**< Lens aperture, as an f-number. */
-			float m_focalLength{50.0F}; /**< Lens focal length, in millimeters. */
+			float m_focalLength{DefaultGraphicsFocalLength}; /**< Lens focal length, in millimeters — the SINGLE source of truth for the framing, the field of view being derived from it. */
 			float m_focusDistance{10.0F}; /**< Manual focus plane distance, in meters. */
 			float m_shutterSpeed{1.0F / 60.0F}; /**< Exposure time, in seconds: drives the motion blur length through the shutter angle (shutterSpeed / frameTime). */
 			float m_sensorWidth{36.0F}; /**< Sensor width in millimeters — full frame. */
@@ -807,7 +821,8 @@ namespace EmEn::Scenes::Component
 			"Position: " << coordinates.position() << "\n"
 			"Forward: " << coordinates.forwardVector() << "\n"
 			"Velocity: " << velocity << "\n"
-			"Field of view: " << obj.fieldOfView() << "\n"
+			"Focal length: " << obj.focalLength() << " mm on a " << obj.sensorWidth() << " mm sensor\n"
+			"Field of view: " << obj.fieldOfView() << " degrees (derived)\n"
 			"Size of view: " << obj.distance() << "\n";
 	}
 
