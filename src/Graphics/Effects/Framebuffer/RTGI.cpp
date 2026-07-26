@@ -390,6 +390,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 	return totalLight;
 }
 
+)GLSL" R"GLSL(
 void main()
 {
 	float depth = texture(depthTex, vUV).r;

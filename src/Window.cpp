@@ -1267,6 +1267,11 @@ namespace EmEn
 		glfwSetFramebufferSizeCallback(m_handle.get(), framebufferSizeCallback);
 		glfwSetWindowContentScaleCallback(m_handle.get(), windowContentScaleCallback);
 
+#if IS_WINDOWS
+		// TODO: Make this feature global on all system an optional. For now disabled.
+		//this->setupWindowsResizeHandling();
+#endif
+
 		return true;
 	}
 

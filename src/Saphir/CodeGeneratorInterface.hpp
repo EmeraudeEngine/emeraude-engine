@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <string>
 #include <vector>
@@ -35,7 +38,7 @@ namespace EmEn::Saphir
 	/**
 	 * @brief The code generator interface class.
 	 */
-	class CodeGeneratorInterface
+	class EMEN_API CodeGeneratorInterface
 	{
 		public:
 

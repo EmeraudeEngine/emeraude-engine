@@ -1296,8 +1296,10 @@ misleading.
 - **Symptom (MSVC only):** `error C2026: string too big, trailing characters truncated` (FR:
   *« chaîne trop grande, caractères de fin tronqués »*). The reported line is where the byte counter
   overflows mid-literal, **not** where the code is actually wrong — do not go looking for a bug there.
-- **Seen in:** `Graphics/Effects/Framebuffer/RTR.cpp` — `RTRTraceFragmentShader` grew to ~18 KB
-  (fixed Jul 2026).
+- **Seen in:**
+  - `Graphics/Effects/Framebuffer/RTR.cpp` — `RTRTraceFragmentShader` grew to ~18 KB (fixed Jul 2026).
+  - `Graphics/Effects/Framebuffer/RTGI.cpp` — `RTGITraceFragmentShader` grew to ~16.6 KB, split at the
+    `computeDirectLighting()` / `main()` boundary into ~10 KB + ~6.7 KB halves (fixed Jul 2026).
 - **Wrong fixes:** there is no warning to silence — C2026 is a hard **error**, and the project never
   disables diagnostics anyway. Do **not** move the shader to an external file just to dodge this
   (embedded shaders are the engine convention).

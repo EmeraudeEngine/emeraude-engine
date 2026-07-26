@@ -935,12 +935,33 @@ namespace EmEn
 			[[nodiscard]]
 			std::array< int32_t, 2 > getCenteredPosition (const std::array< uint32_t , 2 > & windowSize, int32_t desiredMonitor = -1) const noexcept;
 
+#if IS_WINDOWS
+			/**
+			 * @brief Sets up the Windows-specific resize handling by subclassing the window.
+			 * @return void
+			 */
+			void setupWindowsResizeHandling () noexcept;
+
+			/**
+			 * @brief Custom Windows procedure to intercept WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE.
+			 * @param hWnd The window handle.
+			 * @param uMsg The message identifier.
+			 * @param wParam Additional message information.
+			 * @param lParam Additional message information.
+			 * @return LRESULT
+			 */
+			static LRESULT CALLBACK windowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+#endif
+
 			PrimaryServices & m_primaryServices;
 			const Vulkan::Instance & m_instance;
 			std::string m_title;
 			State m_state{};
 			std::unique_ptr< GLFWwindow, std::function< void (GLFWwindow *) > > m_handle;
 			std::unique_ptr< Vulkan::Surface > m_surface;
+#if IS_WINDOWS
+			WNDPROC m_originalWndProc{nullptr};
+#endif
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_isUserResizing{false};
