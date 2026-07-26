@@ -49,6 +49,13 @@ namespace EmEn::Graphics::Renderable
 		public:
 
 			/**
+			 * @brief Default background luminance, in nits (cd/m²).
+			 * @note An overcast sky sits around 8000 nits, and a clear blue sky away from the sun
+			 * in the same range — which is what makes a sky readable next to a 100000 lx sun.
+			 */
+			static constexpr auto DefaultLuminance{8000.0F};
+
+			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
@@ -93,6 +100,32 @@ namespace EmEn::Graphics::Renderable
 			boundingSphere () const noexcept final
 			{
 				return NullBoundingSphere;
+			}
+
+			/**
+			 * @brief Sets the LUMINANCE of the background, in nits (cd/m²).
+			 * @note A background is a self-illuminating surface: this is the physical scale
+			 * applied to its normalized [0,1] source, both when it is DRAWN (the skybox material's
+			 * emissive strength) and when it is REFLECTED (the IBL contribution of every material
+			 * sampling the environment cubemap). An overcast sky is ~8000 nits.
+			 * @param nits The luminance, in candela per square meter.
+			 * @return void
+			 */
+			void
+			setLuminance (float nits) noexcept
+			{
+				m_luminance = std::max(0.0F, nits);
+			}
+
+			/**
+			 * @brief Returns the luminance of the background, in nits.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			luminance () const noexcept
+			{
+				return m_luminance;
 			}
 
 			/**
@@ -256,6 +289,7 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto SkySize{512.0F};
 
 			Base::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};
+			float m_luminance{DefaultLuminance}; /**< Physical luminance of the background, in nits. */
 			Base::Math::Vector< 3, float > m_lightPosition{0.6666F, 0.3333F, 0.6666F};
 			Base::PixelFactory::Color< float > m_lightAmbientColor{0.0F, 0.0F, 0.13F, 1.0F};
 			Base::PixelFactory::Color< float > m_lightDiffuseColor{1.0F, 1.0F, 1.0F, 1.0F};

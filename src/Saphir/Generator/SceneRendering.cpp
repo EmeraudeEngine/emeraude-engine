@@ -475,6 +475,14 @@ namespace EmEn::Saphir::Generator
 	bool
 	SceneRendering::generateFragmentShader (Program & program) noexcept
 	{
+		/* The environment cubemap is a normalized [0,1] source, so the IBL needs the scene's
+		 * physical environment luminance to contribute anything to a photometric scene. Baked as
+		 * a literal, like the static lighting values. */
+		if ( m_scene != nullptr && m_scene->background() != nullptr )
+		{
+			m_lightGenerator.setEnvironmentLuminance(m_scene->background()->luminance());
+		}
+
 		/* Create the fragment shader. */
 		auto * fragmentShader = program.initFragmentShader(this->name( ) + "FragmentShader");
 		fragmentShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");

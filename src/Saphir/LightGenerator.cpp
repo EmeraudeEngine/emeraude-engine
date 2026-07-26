@@ -783,7 +783,10 @@ namespace EmEn::Saphir
 			 * IBL is the main contribution for glass - it shows the environment, not ambient light.
 			 * IBLIntensity allows dynamic control over the cubemap contribution.
 			 * Requires high-quality mode for reflectionNormal and reflectionI variables. */
-			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
+			 * without this the reflections contribute a fraction of a nit to a scene lit in
+			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
+			const auto iblIntensity = this->scaledIBLIntensity();
 			const auto code = (std::stringstream{} <<
 				"/* PBR Glass IBL - Fresnel-Schlick approximation. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
@@ -831,7 +834,10 @@ namespace EmEn::Saphir
 			 * share the same energy budget rather than being additive.
 			 * Beer's law absorption colors the transmitted light.
 			 * Requires high-quality mode for reflectionNormal and reflectionI variables. */
-			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
+			 * without this the reflections contribute a fraction of a nit to a scene lit in
+			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
+			const auto iblIntensity = this->scaledIBLIntensity();
 			const auto code = (std::stringstream{} <<
 				"/* PBR Reflection + Transmission - energy-conserving Fresnel blend. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
@@ -876,7 +882,10 @@ namespace EmEn::Saphir
 			 * For metals (metalness=1), F0 = albedo color, giving strong colored reflections.
 			 * For dielectrics (metalness=0), F0 from IOR when available, otherwise 0.5 (boosted for visibility).
 			 * Requires high-quality mode for reflectionNormal and reflectionI variables. */
-			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
+			 * without this the reflections contribute a fraction of a nit to a scene lit in
+			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
+			const auto iblIntensity = this->scaledIBLIntensity();
 			const auto albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
 			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
 
@@ -950,7 +959,10 @@ namespace EmEn::Saphir
 			 * are not available. We approximate F0 using metalness:
 			 * - Dielectrics (metalness=0): F0 from IOR+specular when available, else LowQualityDielectricF0
 			 * - Metals (metalness=1): F0 = albedo (colored reflections) */
-			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
+			 * without this the reflections contribute a fraction of a nit to a scene lit in
+			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
+			const auto iblIntensity = this->scaledIBLIntensity();
 			const auto albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
 			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
 
@@ -994,7 +1006,10 @@ namespace EmEn::Saphir
 		{
 			/* NOTE: PBR low-quality fallback for refraction-only materials.
 			 * Refraction is less affected by F0 - use a subtle blend. */
-			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
+			 * without this the reflections contribute a fraction of a nit to a scene lit in
+			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
+			const auto iblIntensity = this->scaledIBLIntensity();
 
 			if ( m_useTransmission )
 			{
@@ -1121,7 +1136,10 @@ namespace EmEn::Saphir
 		 * Gated by inverse Fresnel: reflected light can't also be transmitted. */
 		if ( m_useTransmission && !m_useRefraction && !m_useReflection )
 		{
-			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
+			 * without this the reflections contribute a fraction of a nit to a scene lit in
+			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
+			const auto iblIntensity = this->scaledIBLIntensity();
 			const auto roughness = m_surfaceRoughness.empty() ? "0.5" : m_surfaceRoughness;
 
 			if ( this->highQualityEnabled() )

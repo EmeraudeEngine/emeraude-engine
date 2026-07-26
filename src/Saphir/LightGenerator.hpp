@@ -610,6 +610,22 @@ namespace EmEn::Saphir
 			 * @brief Declares the emissive strength HDR multiplier (KHR_materials_emissive_strength).
 			 * @param variableName The GLSL expression for the emissive strength value.
 			 */
+			/**
+			 * @brief Sets the LUMINANCE of the scene environment, in nits, used to scale the IBL.
+			 * @note The environment cubemap is a normalized [0,1] source (the image pipeline has no
+			 * HDR format), so everything reflecting it would contribute a fraction of a nit in a
+			 * scene lit in thousands — i.e. no visible reflections at all. Baked as a literal in
+			 * the generated code, like the static lighting values: it is scene-authoring data, and
+			 * the program cache key already covers the scene lighting state.
+			 * @param nits The environment luminance, in candela per square meter.
+			 * @return void
+			 */
+			void
+			setEnvironmentLuminance (float nits) noexcept
+			{
+				m_environmentLuminance = nits;
+			}
+
 			void
 			declareSurfaceEmissiveStrength (const std::string & variableName) noexcept
 			{
@@ -1074,5 +1090,25 @@ namespace EmEn::Saphir
 			bool m_useReflectivityMap{false};
 			bool m_highQualityEnabled{false};
 			bool m_PCFEnabled{false};
+			/**
+			 * @brief Returns the IBL weight expression, scaled by the environment luminance.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			scaledIBLIntensity () const noexcept
+			{
+				const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
+
+				if ( m_environmentLuminance == 1.0F )
+				{
+					return weight;
+				}
+
+				return '(' + weight + " * " + std::to_string(m_environmentLuminance) + ')';
+			}
+
+			float m_environmentLuminance{1.0F}; /**< Scene environment luminance in nits, scaling the IBL contribution. */
+
 	};
 }
