@@ -59,6 +59,7 @@ namespace EmEn::Graphics::Renderable
 	static constexpr auto JKSquareDiamondNoise{"SquareDiamond"};
 	static constexpr auto JKVertexColor{"VertexColor"};
 	static constexpr auto JKTexture{"Texture"};
+	static constexpr auto JKLuminance{"Luminance"};
 	static constexpr auto JKLightPosition{"LightPosition"};
 	static constexpr auto JKLightAmbientColor{"LightAmbientColor"};
 	static constexpr auto JKLightDiffuseColor{"LightDiffuseColor"};

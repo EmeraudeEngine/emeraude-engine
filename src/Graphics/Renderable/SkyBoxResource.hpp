@@ -58,7 +58,27 @@ namespace EmEn::Graphics::Renderable
 			 * in the same range, which is what makes a sky readable next to a 100000 lx sun. The
 			 * cubemap is a normalized LDR gradient; this is the physical scale applied to it.
 			 */
-			static constexpr auto DefaultSkyLuminance{8000.0F};
+			/**
+			 * @brief Reference sky LUMINANCES, in nits (cd/m²) — what a sky actually measures.
+			 * @note A sky is an emitter, so it is described by a luminance, and its value spans
+			 * SEVEN orders of magnitude between noon and midnight: that range is precisely what a
+			 * scene's exposure has to sit inside. Authoring a night scene under a daylight sky
+			 * leaves the metering with fifteen stops to reconcile — the sky clips to white and the
+			 * ground crushes to black (observed on the Citadel demo, Jul 2026).
+			 * @note ⚠️ Because the cubemap is LDR ([0,1] — the image pipeline has no HDR format),
+			 * ONE scalar has to stand for the whole sky, moon and stars included. A real moonlit sky
+			 * measures 0.001-0.01 cd/m² while the moon disc itself measures ~2500: no single number
+			 * describes both, so `MoonlitNightSkyLuminance` deliberately represents the sky AS SEEN
+			 * with its moon glow — which lands near late twilight — rather than the empty sky. This
+			 * compromise disappears the day a real HDR sky format exists (see TODO.md).
+			 */
+			static constexpr auto DaylightSkyLuminance{8000.0F};   /* Clear day, away from the sun. */
+			static constexpr auto OvercastSkyLuminance{2000.0F};   /* Heavy cloud cover. */
+			static constexpr auto TwilightSkyLuminance{10.0F};     /* Civil dusk, sun just set. */
+			static constexpr auto MoonlitNightSkyLuminance{1.0F};  /* Full moon visible (see note). */
+
+			/** @brief Luminance used when a sky declares none — a clear day. */
+			static constexpr auto DefaultSkyLuminance{DaylightSkyLuminance};
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SkyBoxResource"};

@@ -52,6 +52,9 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
+		/* Keeps the IBL scale in step with the emission, as the JSON path does. */
+		this->setLuminance(DefaultSkyLuminance);
+
 		auto defaultCubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getDefaultResource();
 
 		const auto material = this->serviceProvider().container< BasicResource >()
@@ -106,11 +109,30 @@ namespace EmEn::Graphics::Renderable
 
 		const auto textureName = data[JKTexture].asString();
 
+		/* A sky's LUMINANCE belongs to the sky asset, not to the code that displays it: a night
+		 * cubemap and a noon cubemap are not the same photometric object. Optional — absent means
+		 * a clear day, which is what every sky implicitly claimed before this key existed. */
+		const auto luminance = std::max(FastJSON::getValue< float >(data, JKLuminance).value_or(DefaultSkyLuminance), 0.0F);
+
+		/* ⚠️⚠️ The luminance drives TWO consumers and BOTH must hear about it: the material's
+		 * emission (what you see when you look up) AND the background's luminance, which is the
+		 * factor scaling every IBL contribution (`LightGenerator::setEnvironmentLuminance()`, fed
+		 * from `Scene::background()->luminance()`). Nothing ever called this setter before, so the
+		 * IBL scale sat on its 8000-nit daylight default in EVERY scene: a material reflecting a
+		 * mere 3% of the environment then received 240 nits, against 0.1 nit of moonlit diffuse —
+		 * 2400x too much, which turned Citadel's stone walls into white neon (found live with the
+		 * owner, Jul 2026). Setting only the material would have fixed what the sky LOOKS like
+		 * while leaving everything it LIGHTS wrong. */
+		this->setLuminance(luminance);
+
 		/* Store the cubemap for environment IBL access. */
 		auto cubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading());
 
+		/* ⚠️ The luminance is part of the material IDENTITY: two manifests sharing one cubemap at
+		 * different luminances must not share a material, or whichever loaded first would silently
+		 * impose its exposure on the other. */
 		const auto material = this->serviceProvider().container< BasicResource >()
-			->getOrCreateResource(textureName + "SkyboxMaterial", [cubemapResource] (auto & materialResource) {
+			->getOrCreateResource(textureName + "SkyboxMaterial" + std::to_string(luminance), [cubemapResource, luminance] (auto & materialResource) {
 				if ( !materialResource.setTextureResource(cubemapResource) )
 				{
 					return false;
@@ -123,7 +145,7 @@ namespace EmEn::Graphics::Renderable
 				 * with the rest of the sky, so specular reflections of the sun are dull rather
 				 * than blinding — see TODO.md, the HDR file format item. */
 				materialResource.setAutoIlluminationAmount(1.0F);
-				materialResource.setEmissiveStrength(DefaultSkyLuminance);
+				materialResource.setEmissiveStrength(luminance);
 
 				return materialResource.setManualLoadSuccess(true);
 			}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);

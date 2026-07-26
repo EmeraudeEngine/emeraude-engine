@@ -1068,6 +1068,29 @@ The `Scenes::Component::Camera` is the **single source of truth for the photogra
 behaviour** of the rendered image, like a real camera body. Owner vision: ultimately ALL
 image-rendering effects are camera-manageable (lens effects already are).
 
+### Sky luminance — the sky is a light source, and it is authored in the asset (Jul 2026)
+
+A sky EMITS, so it is described by a **luminance in nits**, and that value spans seven orders of
+magnitude between noon and midnight: `DaylightSkyLuminance` 8000, `OvercastSkyLuminance` 2000,
+`TwilightSkyLuminance` 10, `MoonlitNightSkyLuminance` 1 (`Graphics/Renderable/SkyBoxResource.hpp`).
+It is declared by the sky's own JSON manifest through the optional `"Luminance"` key (`JKLuminance`),
+because a night cubemap and a noon cubemap are not the same photometric object; absent means a clear
+day, which is what every sky implicitly claimed before the key existed.
+
+⚠️⚠️ **The luminance drives TWO consumers and both must hear about it**: the material's emission
+(what you see looking up) AND `AbstractBackground::setLuminance()`, which feeds
+`LightGenerator::setEnvironmentLuminance()` — the factor scaling **every IBL contribution**.
+`setLuminance()` was never called by anything, so the IBL scale sat on its 8000-nit daylight default
+in every scene: a material reflecting 3% of its environment received 240 nits against 0.1 nit of
+moonlit diffuse, 2400x too much. Citadel's stone walls read as white neon, and the relief detail
+modulating that clipped signal was mistakable for a broken normal map. Fixing only the material
+would have corrected what the sky LOOKS like while leaving everything it LIGHTS wrong.
+⚠️ The luminance is also part of the sky material's IDENTITY (it is in the resource name): two
+manifests sharing one cubemap at different luminances must not share a material.
+⚠️ A copy-paste default of `Roughness 0.5` + `Reflection Automatic 0.1` exists in 54 of the 3917
+material manifests; they were all amplifying the IBL the same way. Correct by construction now that
+the scale is right, but their satin roughness is still worth reviewing surface by surface.
+
 **Camera presets** (`Scenes/EffectsToolkit/CameraPresets.{hpp,cpp}`): full photographic
 packages — optics + exposure + DoF/HDR materialization + lens effects in one call.
 `Neutral` (reset), `HighQuality` (f/2.8 full frame, clean), `HumanEye` (f/8, soft peripheral
