@@ -306,12 +306,27 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
 - [ ] **Phase 2 — re-light every demo** in real values.
   ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
   light domain.** Two more sources feed the image and carry arbitrary units today:
-    - **Emissive materials** — `StandardResource::setEmissiveStrength()` implements the glTF
-      extension `KHR_materials_emissive_strength`, which is DEFINED as a multiplier over a
-      texture in [0,1]. A photometric emissive is a LUMINANCE in nits. The two cannot both hold
-      for an imported material, so this needs an owner decision: keep glTF semantics and convert
-      at import (a nits-per-unit factor), or treat the strength as nits directly and accept that
-      imported assets need re-authoring. NOT a phase 1 blocker.
+    - **Emissive materials — RESOLVED BY THE SPEC ITSELF, no convention to invent.** The earlier
+      framing here (a conflict between glTF conformance and photometric units) was WRONG.
+      glTF 2.0 `Specification.adoc` line 2118: *"For implementations where a physical light unit
+      is needed, the units for the multiplicative product of the emissive texture and factor are
+      candela per square meter (cd/m^2), sometimes called nits."* And the
+      `KHR_materials_emissive_strength` README: the extension *"supplies a unitless multiplier"*
+      and *"does not alter the physical units defined in glTF 2.0's additional textures section"*.
+      So `emissiveFactor * emissiveTexture * emissiveStrength` IS a luminance in nits — follow it
+      literally, no anchor constant to pick. The spec even defers the rest to us: line 2123, *"the
+      exact conversion from physical light units to the brightness of rendered pixels requires
+      knowledge of the camera's exposure settings, which are left as an implementation detail"* —
+      i.e. exactly phase 3.
+      TWO CONSEQUENCES, which are the real work:
+        1. Assets authored ARTISTICALLY (emissive in [0,1], no extension) become ~1 nit, i.e.
+           black next to an 800 lm bulb. OWNER DECISION STILL OPEN: apply a compatibility
+           multiplier at import ONLY when the extension is ABSENT (documented, reversible shim),
+           or fix the assets.
+        2. ⚠️ Do NOT compensate for an exporter bug. Khronos glTF-Blender-IO issue #1766: Blender's
+           watts-based emission needs a `*683/(2*pi)` factor to produce spec-compliant nits. A dim
+           emissive coming out of Blender is wrong AT THE SOURCE; compensating engine-side would
+           double-correct every correctly exported asset.
     - **IBL / environment** — per-material `IBLIntensity` plus `ambientLightIntensity` in the view
       UBO, fed by environment cubemaps. VERIFIED 2026-07-26: `PixelFactory` decodes JPEG, PNG and
       Targa only — three integer [0,1] formats, no Radiance `.hdr`, no OpenEXR. **The sky cannot
