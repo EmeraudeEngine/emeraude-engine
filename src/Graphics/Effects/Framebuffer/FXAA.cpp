@@ -368,11 +368,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	/* ---- Execute ---- */
 
 	const TextureInterface &
-	FXAA::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	FXAA::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & /*context*/) noexcept
 	{
-		const auto & constants = context.constants;
-
-
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Update the per-frame descriptor set with the current input. */
