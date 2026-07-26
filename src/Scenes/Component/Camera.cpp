@@ -110,6 +110,13 @@ namespace EmEn::Scenes::Component
 	{
 		m_fov = std::min(std::abs(degrees), FullRevolution< float >);
 
+		/* The field of view and the focal length are the SAME quantity in two units, related
+		 * through the sensor: f = h / (2 * tan(fov / 2)), h being the sensor HEIGHT since the
+		 * engine's field of view is vertical (see PostProcessor's tanHalfFovY). Keeping them
+		 * independent made the panel's focal-length slider look broken — it changed the depth of
+		 * field and nothing else, while the framing kept obeying a separate value. */
+		m_focalLength = std::max(this->sensorHeight() / (2.0F * std::tan(Radian(m_fov) * 0.5F)), 1.0F);
+
 		/* Update existing connected render targets only if perspective projection is enabled. */
 		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
 		{

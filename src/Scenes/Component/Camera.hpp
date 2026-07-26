@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 
@@ -421,6 +422,13 @@ namespace EmEn::Scenes::Component
 			setFocalLength (float millimeters) noexcept
 			{
 				m_focalLength = std::max(millimeters, 1.0F);
+
+				/* Same quantity, other unit: a focal length IS a field of view once the sensor is
+				 * known — fov = 2 * atan(h / (2f)). Setting one without the other left the panel's
+				 * focal slider changing the depth of field while the framing obeyed a separate
+				 * value, which reads as a dead control. Goes through setFieldOfView() so the
+				 * connected render targets are updated. */
+				this->setFieldOfView(Base::Math::Degree(2.0F * std::atan(this->sensorHeight() / (2.0F * m_focalLength))));
 			}
 
 			/**
@@ -488,6 +496,21 @@ namespace EmEn::Scenes::Component
 			sensorWidth () const noexcept
 			{
 				return m_sensorWidth;
+			}
+
+			/**
+			 * @brief Returns the sensor height, in millimeters.
+			 * @note Derived from the width through the 3:2 still-photography format (36 x 24 mm
+			 * full frame), which is the convention the focal lengths are quoted in. It is the
+			 * dimension the FIELD OF VIEW is computed from, the engine's field of view being
+			 * vertical.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			sensorHeight () const noexcept
+			{
+				return m_sensorWidth * (2.0F / 3.0F);
 			}
 
 			/**

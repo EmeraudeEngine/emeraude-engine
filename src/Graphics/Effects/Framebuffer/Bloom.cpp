@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -606,6 +607,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	const TextureInterface &
 	Bloom::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		/* The ACTIVE CAMERA owns the glare, since it is a lens phenomenon: re-read it EVERY FRAME.
+		 * Capturing the threshold and the intensity when the effect is materialized froze them —
+		 * the panel's sliders moved the camera and nothing happened on screen. */
+		auto threshold = m_parameters.threshold;
+		auto intensity = m_parameters.intensity;
+
+		if ( context.camera != nullptr )
+		{
+			threshold = context.camera->bloomThreshold();
+			intensity = context.camera->bloomIntensity();
+		}
+
 		const auto * inputMaterialProperties = context.materialProperties;
 
 
@@ -647,9 +660,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const BloomPushConstants pc{
 				.texelSizeX = 1.0F / inputW,
 				.texelSizeY = 1.0F / inputH,
-				.threshold = (mipLevel == 0) ? m_parameters.threshold : 0.0F,
+				.threshold = (mipLevel == 0) ? threshold : 0.0F,
 				.softKnee = m_parameters.softKnee,
-				.intensity = m_parameters.intensity,
+				.intensity = intensity,
 				.spread = m_parameters.spread
 			};
 
@@ -680,7 +693,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.texelSizeY = 1.0F / outH,
 				.threshold = 0.0F,
 				.softKnee = 0.0F,
-				.intensity = m_parameters.intensity,
+				.intensity = intensity,
 				.spread = m_parameters.spread
 			};
 
@@ -705,7 +718,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.texelSizeY = 1.0F / outH,
 				.threshold = 0.0F,
 				.softKnee = 0.0F,
-				.intensity = m_parameters.intensity,
+				.intensity = intensity,
 				.spread = m_parameters.spread
 			};
 
