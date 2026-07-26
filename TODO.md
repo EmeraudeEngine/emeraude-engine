@@ -268,10 +268,24 @@ A radius-bounded artistic falloff: exactly zero at `d == r` (convenient for cull
 like `I/d^2`. **Lumens are meaningless until this becomes a windowed inverse square** (Karis:
 `saturate(1 - (d/r)^4)^2 / (d^2 + 1)`). This is why units and attenuation cannot be separated.
 
-**Migration surface (measured, small):** 3 `setIntensity` call sites in projet-alpha
-(Actor/Drone, Actor/Player, Actor/Marble), 6 in the engine, 4 data files carrying an
-`"Intensity"`, and `DefaultIntensity` = 1.0. The cost is the VISUAL recalibration, not the line
-count.
+**Migration surface — CORRECTED 2026-07-26, the earlier figure here was WRONG.** It said "3
+`setIntensity` call sites, small". That measurement missed the actual authoring path: demo lights
+are created through `Scenes::Toolkit::generate{Point,Spot,Directional}Light()`, which take the
+intensity as a PARAMETER. The real surface is **~45 light creation sites across ~20 demos**, plus
+3 `setIntensity` call sites in projet-alpha (Actor/Drone, Actor/Player, Actor/Marble), 6 in the
+engine and 4 data files. Still not a large diff, but it is an ART pass, not a mechanical one.
+
+**⚠️ AND THE VALUES CANNOT BE CONVERTED MECHANICALLY.** One world unit IS one metre — established:
+`Actor/Paladin.cpp` scales the Mixamo rig to a 1.90 m target from a measured 1.725 m,
+`Builtin/GlobalIllumination.cpp` documents "Layout constants (metres)" with a 6 m ceiling, and
+`Actor/Player.cpp` reasons about "a 1.75 m player". Yet the authored light radii are **120, 400,
+512 and 1024 metres** — a 512 m point light inside a 6 m room. Those numbers were never physical
+extents, only "big enough not to clip" under a falloff that reached zero at the radius.
+Consequence: converting to preserve the current look gives absurd values (the `liminal` pool light,
+r = 120, I = 4, becomes 12 292 cd = ~154 000 lm, a stadium floodlight indoors). Phase 2 must
+AUTHOR plausible values and accept that the look changes — and with the falloff now physical, the
+radius is only a CULLING bound, so it should be set where the contribution becomes negligible
+(a 800 lm bulb is 63.7 cd, i.e. 0.16 lx at 20 m: r = 20 is already generous).
 
 **⚠️ Method: keep the AUTO-EXPOSURE ON for the whole migration.** Absolute values go from ~1 to
 ~100000; without metering, every intermediate step renders pure white or pure black and nothing
