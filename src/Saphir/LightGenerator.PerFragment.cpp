@@ -250,19 +250,8 @@ namespace EmEn::Saphir
 				"	const float distanceOverRadius = lightDistance / " << this->lightRadius() << ';' << Line::End <<
 				"	const float radiusWindow = clamp(1.0 - distanceOverRadius * distanceOverRadius * distanceOverRadius * distanceOverRadius, 0.0, 1.0);" << Line::Blank <<
 
-				/* ⚠️ TEMPORARY, PHASE 2 DELETES THIS ONE EXPRESSION. The switch from
-				 * `max(1 - (d/r)^2, 0)` to a true inverse square makes every existing light ~22x
-				 * dimmer at mid-range (r = 10, d = 5: 0.75 before, 0.034 after), because content
-				 * is still authored in the old arbitrary units. This factor restores the previous
-				 * level at the reference distance d = r/2, keeping the RELATIVE balance between
-				 * lights of different radii — which is the one thing the auto-exposure cannot fix
-				 * for us. Derived per-light from its own radius:
-				 *   comp(r) = old(r/2) / new(r/2) = 0.75 * (r^2/4 + 1) / (1 - 1/16)^2
-				 *           = 0.8533 * (r^2/4 + 1)
-				 * It disappears the moment the demos carry real lumens (phase 2). */
-				"	const float legacyUnitCompensation = 0.8533 * (" << this->lightRadius() << " * " << this->lightRadius() << " * 0.25 + 1.0);" << Line::Blank <<
 
-				"	" << LightFactor << " *= legacyUnitCompensation * (radiusWindow * radiusWindow) / (lightDistance * lightDistance + 1.0);" << Line::End <<
+				"	" << LightFactor << " *= (radiusWindow * radiusWindow) / (lightDistance * lightDistance + 1.0);" << Line::End <<
 				'}' << Line::End;
 
 			if ( m_discardUnlitFragment )

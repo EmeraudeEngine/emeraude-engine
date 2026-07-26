@@ -317,7 +317,27 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   indistinguishable at screenshot scale. ⚠️ The SHAPE of the falloff did change: brighter close
   to a source, dimmer far from it. Scenes where a light sits CLOSE to a surface will show it, and
   `liminal` is not that scene — check `light-and-shadow-debug` and `basic-scenery` in phase 2.
-- [ ] **Phase 2 — re-light every demo** in real values.
+- [~] **Phase 2 — re-light every demo** in real values. MECHANISM DONE, SCENE NOT YET COHERENT.
+  Done: `Scenes::Toolkit::generate{Point,Spot,Directional}Light()` now take the AUTHORING unit —
+  lumens for point/spot (converted to candela, the spot after its cone angles are set), lux for
+  directional — and the temporary `legacyUnitCompensation` is GONE from the shader. All 46 demo
+  light values re-authored to plausible magnitudes (sun 100000 lx, warm low sun 30000, moon 0.5,
+  indoor fill 100; bulb 800 lm, ceiling panel 4000-6000, torch 100, accent 300; spot 1500-3000),
+  with radii cut from 120-4096 m down to a real culling bound (8-60 m).
+  ⚠️ **MEASURED CONSEQUENCE — the scene is now INCOHERENT, and lights alone cannot fix it.**
+  `gltf-loader`: blown whites went from 0.1% to **34.2%** of pixels while the midtones collapsed
+  from 33.9% to 10.2% — the image is a silhouette, white in the sun and black in the shade. The
+  mean luma (67 -> 110) hides it; the histogram does not. Cause: the lights are photometric
+  (sun = 100000 lx) while `ambientLightIntensity`, the per-material `IBLIntensity` and the
+  environment cubemaps are still arbitrary (~1). Five orders of magnitude apart, and a single
+  exposure cannot span that — it blows the sun AND crushes the shadows.
+  ⚠️ Demos that never migrated to the physical camera (`Liminal`, `Citadel`: they add `ToneMapping`
+  by hand with fixed parameters) have NO metering at all to absorb the change and are simply blown
+  out — `liminal` reads 244/255. The method note "keep the auto-exposure ON" only protects the
+  demos that let the CAMERA materialize tone mapping.
+  NEXT, and it is not optional: convert the AMBIENT path in the same pass — `ambientLightIntensity`
+  in nits, `IBLIntensity` as a nits scale, and the per-cubemap `peakLuminanceNits` already decided.
+  Then re-check the histogram, not the mean.
   ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
   light domain.** Two more sources feed the image and carry arbitrary units today:
     - **Emissive materials — RESOLVED BY THE SPEC ITSELF, no convention to invent.** The earlier

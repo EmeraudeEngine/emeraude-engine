@@ -574,7 +574,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param color The color of the light. Default, white.
-			 * @param intensity The light intensity. Default 1.
+			 * @param intensity The ILLUMINANCE on a surface facing the light, in lux (direct sunlight 100000, overcast 10000, an office interior ~500, full moon 0.25).
 			 * @return BuiltEntity< entity_t, Component::DirectionalLight >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -594,7 +594,9 @@ namespace EmEn::Scenes
 				auto component = entity->template componentBuilder< Component::DirectionalLight >(entityName)
 					.setup([color, intensity] (auto & light) {
 						light.setColor(color);
-						light.setIntensity(intensity);
+						/* The intensity parameter is an ILLUMINANCE in lux — direct sunlight is
+						 * 100000, overcast daylight 10000, an office interior ~500. */
+						light.setIlluminance(intensity);
 					}).build();
 
 				return {entity, component};
@@ -605,7 +607,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param color The color of the light. Default, white.
-			 * @param intensity The light intensity. Default 1.
+			 * @param intensity The ILLUMINANCE on a surface facing the light, in lux (direct sunlight 100000, overcast 10000, an office interior ~500, full moon 0.25).
 			 * @param shadowMapResolution The shadow map resolution. Default disabled (0).
 			 * @param coverageSize The coverage size in world units.
 			 * @return BuiltEntity< entity_t, Component::DirectionalLight >
@@ -627,7 +629,9 @@ namespace EmEn::Scenes
 				auto component = entity->template componentBuilder< Component::DirectionalLight >(entityName)
 					.setup([color, intensity] (auto & light) {
 						light.setColor(color);
-						light.setIntensity(intensity);
+						/* The intensity parameter is an ILLUMINANCE in lux — direct sunlight is
+						 * 100000, overcast daylight 10000, an office interior ~500. */
+						light.setIlluminance(intensity);
 					}).build(shadowMapResolution, coverageSize);
 
 				return {entity, component};
@@ -639,7 +643,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param color The color of the light.
-			 * @param intensity The light intensity.
+			 * @param intensity The ILLUMINANCE on a surface facing the light, in lux (direct sunlight 100000, overcast 10000, an office interior ~500, full moon 0.25).
 			 * @param shadowMapResolution The shadow map resolution per cascade.
 			 * @param cascadeCount The number of cascades (1-4).
 			 * @param lambda The split factor (0 = linear, 1 = logarithmic, 0.5 = balanced).
@@ -663,7 +667,9 @@ namespace EmEn::Scenes
 				auto component = entity->template componentBuilder< Component::DirectionalLight >(entityName)
 					.setup([color, intensity] (auto & light) {
 						light.setColor(color);
-						light.setIntensity(intensity);
+						/* The intensity parameter is an ILLUMINANCE in lux — direct sunlight is
+						 * 100000, overcast daylight 10000, an office interior ~500. */
+						light.setIlluminance(intensity);
 					}).build(shadowMapResolution, cascadeCount, lambda, csmScale);
 
 				return {entity, component};
@@ -674,8 +680,8 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param color The color of the light. Default, white.
-			 * @param radius The radius of the light. Default, infinite.
-			 * @param intensity The light intensity. Default 1.
+			 * @param radius The influence radius, in METRES. With the physical inverse-square falloff this is only a CULLING bound: set it where the contribution becomes negligible (an 800 lm bulb yields 0.16 lx at 20 m).
+			 * @param intensity The LUMINOUS POWER, in lumens — what a bulb is sold as (household bulb 800, ceiling panel 4000, torch 100). Converted to candela internally.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
 			 * @return BuiltEntity< entity_t, Component::PointLight >
 			 */
@@ -697,7 +703,9 @@ namespace EmEn::Scenes
 					.setup([color, radius, intensity] (auto & light) {
 						light.setColor(color);
 						light.setRadius(radius);
-						light.setIntensity(intensity);
+						/* The intensity parameter is a LUMINOUS POWER in lumens — what a bulb is
+						 * sold as. Converted to candela here (see Graphics::Photometry). */
+						light.setLuminousPower(intensity);
 					}).build(shadowMapResolution);
 
 				return {entity, component};
@@ -711,8 +719,8 @@ namespace EmEn::Scenes
 			 * @param innerAngle Define the inner border of the light cone where the light will be emitted at 100% inside. Default 35°.
 			 * @param outerAngle Define the outer border of the light cone where no more light will be emitted outside this range. Default 40°.
 			 * @param color The color of the light. White by default.
-			 * @param radius The radius of the light. Infinite by default.
-			 * @param intensity The light intensity. Default 1.
+			 * @param radius The influence radius, in METRES. With the physical inverse-square falloff this is only a CULLING bound: set it where the contribution becomes negligible (an 800 lm bulb yields 0.16 lx at 20 m).
+			 * @param intensity The LUMINOUS POWER, in lumens — what a bulb is sold as (household bulb 800, ceiling panel 4000, torch 100). Converted to candela internally.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
 			 * @return BuiltEntity< entity_t, Component::SpotLight >
 			 */
@@ -733,9 +741,12 @@ namespace EmEn::Scenes
 				auto component = entity->template componentBuilder< Component::SpotLight >(entityName)
 					.setup([color, innerAngle, outerAngle, radius, intensity] (auto & light) {
 						light.setColor(color);
+						/* Angles FIRST: the lumens -> candela conversion below divides by the
+						 * cone's solid angle, so it needs the outer angle already set. */
 						light.setConeAngles(innerAngle, outerAngle);
 						light.setRadius(radius);
-						light.setIntensity(intensity);
+						/* The intensity parameter is a LUMINOUS POWER in lumens. */
+						light.setLuminousPower(intensity);
 					}).build(shadowMapResolution);
 
 				return {entity, component};
@@ -933,7 +944,7 @@ namespace EmEn::Scenes
 			 * @note Shortcut to Toolkit::generateRenderableInstance(). The TBN space and one texture coordinates will be enabled.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
-			 * @param radius The radius of the sphere.
+			 * @param radius The influence radius, in METRES. With the physical inverse-square falloff this is only a CULLING bound: set it where the contribution becomes negligible (an 800 lm bulb yields 0.16 lx at 20 m).
 			 * @param materialResource A reference to a material smart pointer. Default nullptr.
 			 * @param useGeodesic Use a geodesic sphere instead of a classic one. Default, 'false'.
 			 * @param enableLighting Enable the lighting. Default true.
