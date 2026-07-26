@@ -335,9 +335,32 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   by hand with fixed parameters) have NO metering at all to absorb the change and are simply blown
   out — `liminal` reads 244/255. The method note "keep the auto-exposure ON" only protects the
   demos that let the CAMERA materialize tone mapping.
-  NEXT, and it is not optional: convert the AMBIENT path in the same pass — `ambientLightIntensity`
-  in nits, `IBLIntensity` as a nits scale, and the per-cubemap `peakLuminanceNits` already decided.
-  Then re-check the histogram, not the mean.
+  AMBIENT: DONE. `LightSet::setAmbientLightIntensity()` is an ILLUMINANCE in lux and the shader
+  applies the Lambertian `albedo * E / pi` (0.3183) instead of the old arbitrary 0.05; the 23 demo
+  values are re-authored (15000 lx sunlit exterior, 5000 overcast, 100 lit interior, 1 moonlit
+  night). EXPOSURE: DONE. The auto-exposure clamps span a photometric range [1e-5, 100] instead of
+  [0.1, 4], and `keyValue` is the photographic middle grey 0.18 instead of 0.5.
+  Measured on `gltf-loader` (mean luma / blown / midtones): 67.2 / 0.1% / 33.9% before the project,
+  110.2 / 34.2% / 10.2% with lights converted alone (incoherent), 194.0 / 0.2% / 75.4% with the
+  ambient converted, **137.6 / 0.0% / 90.4%** with middle grey. `liminal`: 130.9 / 0.0% / 93.6%.
+
+  ⚠️ **REMAINING, and it is the last visible defect: THE SKY RENDERS BLACK.** The environment
+  cubemap is still LDR (~1) while everything else lives in thousands of lux, so it vanishes under
+  the exposure. DESIGN ALREADY WORKED OUT, it just needs plumbing:
+    - A skybox is a self-illuminating surface, and the engine's emissive path is exactly the
+      glTF-conformant one we chose to honour: `fragmentColor.rgb += autoIlluminationColor.rgb *
+      autoIlluminationAmount * emissiveStrength` (`LightGenerator.cpp:1049`). So the sky wants
+      `autoIlluminationAmount = 1.0` and `emissiveStrength = peakLuminanceNits` (overcast sky
+      ~8000 nits, clear blue sky away from the sun ~5000-10000).
+    - ⚠️ BLOCKER: `SkyBoxResource` builds its material from `Graphics::Material::BasicResource`,
+      which has `setAutoIlluminationAmount()` but NO `setEmissiveStrength()` — only
+      `StandardResource` has it. Adding it means extending BasicResource's material-properties
+      buffer, whose offsets are fixed constants (`AutoIlluminationOffset{10UL}` and friends), so
+      the layout and its shader binding both move. Modest but not a one-liner.
+    - NOTE: `autoIlluminationAmount` is clamped to [0,1] when used as the emissive MASK
+      (`LightGenerator.cpp:183`) but NOT in the additive term. Do not try to smuggle the nits
+      through the amount itself.
+  Still open after that: `IBLIntensity` as a nits scale for the materials' reflection component.
   ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
   light domain.** Two more sources feed the image and carry arbitrary units today:
     - **Emissive materials — RESOLVED BY THE SPEC ITSELF, no convention to invent.** The earlier
