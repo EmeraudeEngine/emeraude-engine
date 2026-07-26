@@ -455,11 +455,16 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   Measured on `gltf-loader`: local contrast `|grad|` rises from 2.056 to **2.861** (+39%) — the
   signature of a bloom that stops veiling the whole frame — with the midtones relaxing from 98.0%
   to 83.9%, i.e. the dynamic range reopening instead of being flattened.
-  ⚠️ NOTICED, NOT FIXED: the depth of field is strong for f/11, where it should be deep.
-  `Core/Graphics/DepthOfField/CoCScale` defaults to 10 — an arbitrary multiplier of exactly the
-  family this project has been eliminating. With a physical aperture the circle of confusion needs
-  no fudge factor; that scale should be 1 and the difference re-checked against a real depth
-  table.
+  DEPTH OF FIELD: FIXED, and it was a FORMULA BUG, not a scale. The thin-lens circle of confusion
+  needs the aperture DIAMETER, `A = f / N`; the shader used the f-number N itself, which inverts
+  the whole relation — closing down to f/11 blurred FOUR TIMES MORE than f/2.8 instead of four
+  times less. `CoCScale = 10` was the fudge compensating for it. Now: the diameter is derived from
+  the f-number, the resulting CoC (a size in meters ON the sensor) is normalised by the sensor
+  width, which the camera carries (`setSensorWidth()`, 36 mm full frame — the format the focal
+  lengths were already implicitly in), and `CoCScale` drops to 1, surviving only as a deliberate
+  artistic override.
+  Measured on `gltf-loader` at f/11: local contrast `|grad|` **2.861 -> 9.940**, ×3.5, the
+  foreground finally sharp as a small aperture demands.
 
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 

@@ -108,7 +108,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float aperture;
 				float focalLength;
 				float cocScale;
-				float padding1;
+				float sensorWidth;
 				float padding2;
 				float padding3;
 			};

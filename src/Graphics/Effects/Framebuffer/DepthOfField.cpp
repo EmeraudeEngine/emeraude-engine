@@ -144,7 +144,7 @@ layout(push_constant) uniform PushConstants
 	float aperture;
 	float focalLength;
 	float cocScale;
-	float padding1;
+	float sensorWidth;
 	float padding2;
 	float padding3;
 };
@@ -161,12 +161,23 @@ void main()
 	float linearZ = linearizeDepth(texture(depthTex, vUV).r);
 	float fd = texelFetch(focusTex, ivec2(0), 0).r;
 
-	/* Thin lens circle of confusion, SIGNED (positive behind the focus plane).
-	 * CoC = aperture * f * (z - fd) / (z * (fd - f)) */
+	/* Thin lens circle of confusion, SIGNED (positive behind the focus plane):
+	 *     CoC = A * f * (z - fd) / (z * (fd - f))
+	 * where A is the aperture DIAMETER, not the f-number. The f-number IS the focal length
+	 * divided by that diameter (N = f / A), so A = f / N — and using N directly, as this shader
+	 * did, inverts the whole relation: closing down to f/11 then blurred FOUR TIMES MORE than
+	 * f/2.8 instead of four times less. The old `cocScale` default of 10 was the fudge factor
+	 * compensating for that. */
 	float focalLengthM = focalLength * 0.001; /* mm to meters. */
-	float coc = aperture * focalLengthM * (linearZ - fd) / (linearZ * max(fd - focalLengthM, 0.001));
+	float apertureDiameterM = focalLengthM / max(aperture, 0.001);
+	float cocMeters = apertureDiameterM * focalLengthM * (linearZ - fd) / (linearZ * max(fd - focalLengthM, 0.001));
 
-	outSetup = vec4(color, clamp(coc * cocScale, -1.0, 1.0));
+	/* The CoC above is a size ON THE SENSOR, in meters. Dividing by the sensor width turns it
+	 * into a fraction of the image — the physical normalisation that replaces an arbitrary scale.
+	 * `cocScale` survives as a deliberate artistic override, defaulting to 1. */
+	float cocFraction = cocMeters / (sensorWidth * 0.001);
+
+	outSetup = vec4(color, clamp(cocFraction * cocScale, -1.0, 1.0));
 }
 )GLSL";
 
@@ -707,6 +718,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Effective optics: the ACTIVE CAMERA is the single source of truth for the
 		 * photographic options; the local parameters only act as a fallback. */
 		float aperture = m_parameters.aperture;
+		auto sensorWidth = 36.0F; /* Full frame, until the active camera says otherwise. */
 		float focalLength = m_parameters.focalLength;
 		float focusDistance = m_parameters.focusDistance;
 		bool autoFocus = m_parameters.autoFocus;
@@ -714,6 +726,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( context.camera != nullptr )
 		{
 			aperture = context.camera->aperture();
+			sensorWidth = context.camera->sensorWidth();
 			focalLength = context.camera->focalLength();
 			focusDistance = context.camera->focusDistance();
 			autoFocus = context.camera->isAutoFocusEnabled();
@@ -783,7 +796,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.aperture = aperture,
 				.focalLength = focalLength,
 				.cocScale = m_parameters.cocScale,
-				.padding1 = 0.0F,
+				.sensorWidth = sensorWidth,
 				.padding2 = 0.0F,
 				.padding3 = 0.0F
 			};

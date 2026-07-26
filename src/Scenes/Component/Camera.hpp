@@ -465,6 +465,32 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Sets the sensor width, in millimeters.
+			 * @note Full-frame (36 mm) by default, which is the format the focal lengths are
+			 * implicitly expressed in. It is what converts a circle of confusion — computed in
+			 * meters ON the sensor by the thin-lens formula — into a fraction of the image, so it
+			 * is the reason the depth of field needs no arbitrary scale factor.
+			 * @param millimeters The sensor width (36 = full frame, 23.6 = APS-C).
+			 * @return void
+			 */
+			void
+			setSensorWidth (float millimeters) noexcept
+			{
+				m_sensorWidth = std::max(1.0F, millimeters);
+			}
+
+			/**
+			 * @brief Returns the sensor width, in millimeters.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			sensorWidth () const noexcept
+			{
+				return m_sensorWidth;
+			}
+
+			/**
 			 * @brief Sets the sensor sensitivity, in ISO.
 			 * @note The third member of the exposure triad, and the ONLY one the metering is
 			 * allowed to move: the aperture drives the depth of field and the shutter speed drives
@@ -727,6 +753,7 @@ namespace EmEn::Scenes::Component
 			float m_focalLength{50.0F}; /**< Lens focal length, in millimeters. */
 			float m_focusDistance{10.0F}; /**< Manual focus plane distance, in meters. */
 			float m_shutterSpeed{1.0F / 60.0F}; /**< Exposure time, in seconds: drives the motion blur length through the shutter angle (shutterSpeed / frameTime). */
+			float m_sensorWidth{36.0F}; /**< Sensor width in millimeters — full frame. */
 			float m_sensitivity{100.0F}; /**< Sensor sensitivity in ISO — the third member of the exposure triad. */
 			float m_minSensitivity{100.0F}; /**< Lowest usable sensitivity, the auto-ISO floor. */
 			float m_maxSensitivity{12800.0F}; /**< Highest usable sensitivity, the auto-ISO ceiling. */

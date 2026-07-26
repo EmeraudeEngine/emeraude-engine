@@ -485,7 +485,7 @@ namespace EmEn
 			 * Scenes::Component::Camera), NOT to the settings. */
 			/* CoC sensitivity: scales the thin-lens circle of confusion before clamping. */
 			constexpr auto GraphicsDepthOfFieldCoCScaleKey{"Core/Graphics/DepthOfField/CoCScale"};
-			constexpr auto DefaultGraphicsDepthOfFieldCoCScale{10.0F};
+			constexpr auto DefaultGraphicsDepthOfFieldCoCScale{1.0F};
 			/* Blur ceiling: maximum gather radius in half-res pixels. */
 			constexpr auto GraphicsDepthOfFieldMaxRadiusKey{"Core/Graphics/DepthOfField/MaxRadius"};
 			constexpr auto DefaultGraphicsDepthOfFieldMaxRadius{12.0F};
