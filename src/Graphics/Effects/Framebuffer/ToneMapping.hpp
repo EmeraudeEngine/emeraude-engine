@@ -75,7 +75,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/* NOTE: Defaults calibrated for sRGB-correct textures (lower linear values
 				 * need a higher exposure target) — the values validated in the demo benches.
 				 * These are the values used by the camera-materialized instance (enableHDR()). */
-				float keyValue{0.5F};
+				/* MIDDLE GREY. The auto-exposure maps the scene's log-average luminance onto this
+				 * value (`autoExposure = keyValue / avgLuminance`), so it IS the photographic key:
+				 * 0.18 is the 18% grey card, Reinhard's classic constant, and what a reflected-light
+				 * meter is calibrated for. The previous 0.5 placed the average about 1.5 stops too
+				 * high — tolerable when the scene carried arbitrary units, washed out once it is
+				 * photometric (gltf-loader read a mean luma of 194/255, flat and grey). */
+				float keyValue{0.18F};
 				float adaptSpeedUp{1.5F};
 				float adaptSpeedDown{2.0F};
 				/* PHOTOMETRIC RANGE. These clamp the auto-exposure multiplier that maps scene
