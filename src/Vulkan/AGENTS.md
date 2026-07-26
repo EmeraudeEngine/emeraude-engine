@@ -444,7 +444,7 @@ barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
 
 Imports a GPU texture owned by another API/process as a `VkImage` — built for the CEF
 `OnAcceleratedPaint` path (Windows/D3D11 and macOS/IOSurface implemented; the consumer side lives
-in app_system's `WebView`, plan in app_system `docs/migration/plan-onacceleratedpaint-shared-texture.md`).
+in the consumer's `WebView`, plan in the consumer's own migration documentation).
 
 **Components:**
 - `ExternalImageDescriptor.hpp` — platform-neutral hand-off struct (`HandleType`:

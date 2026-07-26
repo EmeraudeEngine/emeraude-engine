@@ -89,7 +89,7 @@ via `Base::Version` (`FromString` + `operator<=>`).
 > lacking the new keys are migrated by the missing-stamp reset above (one reset on first launch).
 
 Contrast with `--reset-settings` (the `ResetSettingsArg` flag), which backs up then **exits**
-(`willNotRun()`). This feature backs up and **keeps running**. Consumers (e.g. app_system) pass
+(`willNotRun()`). This feature backs up and **keeps running**. Consumers (e.g. a CEF-based application) pass
 `true`; the default keeps existing behaviour unchanged.
 
 ### Core - External Main-Loop Cycle Scheduling

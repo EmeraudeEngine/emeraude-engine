@@ -222,7 +222,7 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
 
 `Core::updatePointerScaling()` is called at init and again on **`Window::OSRequestsToRescaleContentBy`** (emitted by `windowContentScaleCallback` after updating `m_state.contentXScale`), so the factor follows live scale changes — window dragged to a monitor with a different scale (e.g. 2.0 → 1.0), or a Wayland fractional-scale change. This single mechanism fixes both the Wayland mixed-DPI input bug and the macOS monitor-switch (2.0→1.0) bug.
 
-> Consumers that map this physical coordinate further (e.g. app_system's `WebView::windowXToViewX`) must account for whether their own target buffer is physical or logical. See `app_system/src/UI/AGENTS.md § Pointer coordinate space`.
+> Consumers that map this physical coordinate further (e.g. the consumer's `WebView::windowXToViewX`) must account for whether their own target buffer is physical or logical. See the consumer's own UI documentation, section "Pointer coordinate space".
 
 ## Critical Points
 

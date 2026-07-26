@@ -2,8 +2,8 @@
 
 > Status: **migration complete (2026-07).** `EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to **ON**
 > (explicit `EMERAUDE_API` boundary, `WINDOWS_EXPORT_ALL_SYMBOLS` dropped) and
-> `EMERAUDE_ENABLE_PCH` defaults to **ON**. The full MSVC cascade (base → engine → app_kernel →
-> app_system executables) builds and links with the PCH enabled. New public API that a consumer
+> `EMERAUDE_ENABLE_PCH` defaults to **ON**. The full MSVC cascade (base → engine → a consumer library →
+> consumer executables) builds and links with the PCH enabled. New public API that a consumer
 > references out-of-line must carry `EMERAUDE_API` — the consumer's linker (`LNK2019` on
 > `__imp_...`) names any omission.
 
@@ -76,7 +76,7 @@ code review instead.
 
 `emeraude-base` is a STATIC library consumed **twice** in the cascade: its objects are folded into
 `Emeraude.dll`, *and* the final executables get their own static copy (propagated through the
-engine's / app_kernel's `PUBLIC` link). Executables therefore resolve every base symbol from
+engine's / the consumer library's `PUBLIC` link). Executables therefore resolve every base symbol from
 **their own embedded copy** — they import nothing base-related from the DLL. This duplication is
 the long-standing status quo and works.
 
@@ -88,7 +88,7 @@ stays completely untouched by this migration.
 The alternative (a single source of truth where executables import base symbols from the DLL and
 stop linking base statically) remains possible later as a separate project — it would require the
 dllexport/dllimport macro, a much larger exported surface, and a linkage rework across the cascade
-(app_kernel's `Kernel` and the executables). Do not introduce a no-op `EMERAUDE_BASE_API` in the
+(the consumer library's `Kernel` and the executables). Do not introduce a no-op `EMERAUDE_BASE_API` in the
 meantime: an inert macro with ambiguous semantics is worse than none.
 
 ## 5. Migration procedure (iterative, build-driven)
@@ -115,7 +115,7 @@ minimal and intentional.
 - [x] First annotated class: `Core` (pattern example).
 - [x] Decision "2b": no `EMERAUDE_BASE_API`, static base copies preserved, `/wd4251 /wd4275`
       added to `EMERAUDE_COMPILE_OPTIONS` (MSVC) in emeraude-base.
-- [x] Engine public surface referenced by app_system (~120 annotations over 2 linker-driven
+- [x] Engine public surface referenced by a consumer application (~120 annotations over 2 linker-driven
       iterations; includes the `FramebufferProperties` friend `operator<<` pattern — the DLL
       linkage attribute must be on the FIRST namespace-scope declaration, before the class).
 - [x] Flip defaults to ON (`EMERAUDE_USE_EXPLICIT_EXPORTS`, `EMERAUDE_ENABLE_PCH`); full MSVC

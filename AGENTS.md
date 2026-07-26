@@ -33,7 +33,7 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > `WINDOWS_EXPORT_ALL_SYMBOLS` + PCH incompatibility (PCH marker symbols leaking into the
 > auto-generated `exports.def` → `LNK2001`) was fixed by completing the explicit-export
 > migration — `EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to **On**, the public surface consumed
-> by app_system carries `EMERAUDE_API`, and C4251/C4275 are disabled cascade-wide (decision
+> by a consumer application carries `EMERAUDE_API`, and C4251/C4275 are disabled cascade-wide (decision
 > "2b": emeraude-base types stay unexported, consumers keep their static base copy). Full MSVC
 > cascade verified (build + link with PCH). **macOS Objective-C++ is handled (2026-07):** the
 > base helper auto-sets `SKIP_PRECOMPILE_HEADERS` on the engine's `.mm` sources (SerialPort,

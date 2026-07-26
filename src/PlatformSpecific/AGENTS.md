@@ -132,7 +132,7 @@ it falls back to running the dialog inline on the caller thread.
 
 **Why (perf):** the dialog's modal message loop pumps **every** message of the thread it runs on.
 On the engine main thread that means the heavy main-thread traffic (rendering, input, and — under
-app_system — CEF), and the Windows shell reacts by re-resolving its navigation pane on every burst:
+a CEF-based consumer, the browser traffic too), and the Windows shell reacts by re-resolving its navigation pane on every burst:
 thousands of redundant known-folder / cloud-sync-root (`SyncRootManager`) registry lookups. On a
 machine whose known folders are redirected to a cloud provider (OneDrive, the Windows default), this
 delays the dialog **3–5 s**. A dedicated thread has an empty message queue, so the pane resolves once
@@ -175,7 +175,7 @@ want an ownerless dialog.
 
 ### Responsiveness — message-pumping wait
 
-`execute()` is synchronous by contract (the app_system IPC handler needs the result to send its
+`execute()` is synchronous by contract (the consumer's IPC handler needs the result to send its
 ZeroMQ reply), so the caller must wait for the worker — but a bare `join()` **hard-blocks** the main
 thread, which breaks two things:
 
@@ -392,7 +392,7 @@ Linux dialogs use native desktop tools via shell commands.
 > launched with its bundled library directory pushed into `LD_LIBRARY_PATH` (AppImage
 > wrappers, dev launchers, Steam-like parents), that value is inherited by the spawned
 > child and a bundled library can shadow its system counterpart. The observed failure:
-> a consumer (app_system) bundles CEF's stripped `libvulkan.so.1`, which does **not**
+> a CEF-based consumer bundles CEF's stripped `libvulkan.so.1`, which does **not**
 > export `vkCreateXlibSurfaceKHR`; a GTK-4 zenity built with the Vulkan renderer
 > (Fedora 43+) then aborts with `undefined symbol: vkCreateXlibSurfaceKHR`. Both spawn
 > paths therefore route through `cleanLoaderEnvCommand()` (prefix
@@ -630,7 +630,7 @@ are this-process RSS).
 | `free` | `MemAvailable` from `/proc/meminfo` (kernel ≥ 3.14; fallback `_SC_AVPHYS_PAGES`) — 2026-07: `_SC_AVPHYS_PAGES` alone counts the reclaimable page cache as "used", overestimating the memory load by tens of percents | `GlobalMemoryStatusEx().ullAvailPhys` | `host_statistics64(HOST_VM_INFO64)` — free + inactive pages (2026-07, replaces the historical stub that returned 0) |
 
 **Contract**: `free == 0` (or `total == 0`) means "probe unavailable" — consumers (e.g.
-app_system's `ArrayBufferManager` memory-pressure purge) must treat it as *no pressure*,
+the consumer's `ArrayBufferManager` memory-pressure purge) must treat it as *no pressure*,
 never as a full machine.
 
 ---

@@ -275,7 +275,7 @@ elseif ( UNIX )
 	# ext-deps lib directory into the shared library's DT_RUNPATH. That directory only
 	# holds static archives (every runtime dependency of libEmeraude is a system lib),
 	# so the entry is vestigial at runtime — but it leaks the build tree into shipped
-	# binaries and trips the consumers' packaging portability checks (app_system
+	# binaries and trips the consumers' packaging portability checks (a consumer's
 	# deploy/package.py fails on any absolute RPATH/RUNPATH since the AppImage field
 	# incident where the same pattern made a library unresolvable). "$ORIGIN" keeps
 	# resolution relative to wherever the library is installed.
