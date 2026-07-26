@@ -1107,7 +1107,24 @@ LensPresets:: functions remain the lens-stack building blocks.
   ToneMapping effect in the scene chain (and removes it when disabled).
 - Optics: `setAperture(fStop)`, `setFocalLength(mm)`, `setFocusDistance(m)` (implies
   manual focus, like tapping to focus), `setAutoFocus(bool)`.
+- ⚠️ **The focal length IS the field of view**, one quantity in two units, related through
+  the sensor: `f = h / (2·tan(fov/2))`, `h` being `sensorHeight()` (`sensorWidth × 2/3`,
+  3:2 full frame) because the engine's field of view is VERTICAL. `setFocalLength()` derives
+  the field of view and `setFieldOfView()` derives the focal length — the latter writes
+  `m_focalLength` DIRECTLY, since calling the sibling setter would recurse. Consequences:
+  authoring a focal length REFRAMES the shot, and the two can no longer be authored
+  independently (the last call wins). The 85° default is an **11 mm** ultra-wide equivalent,
+  50 mm is 27°. An ultra-wide has enormous depth of field (the circle of confusion goes as
+  f²), so a game field of view yields a subtle DoF whatever the aperture — that is optics,
+  not a weak effect.
 - Exposure: `setExposureCompensation(EV)`, `setAutoExposure(bool)`.
+- ⚠️ **With auto-ISO on (the default), the aperture is not an exposure control.** The
+  metering solves directly for the multiplier that puts the scene on middle grey, and the
+  aperture only enters through the CLAMPS (what the ISO range permits). So f/11 → f/32
+  changes the depth of field and nothing else until the metering saturates — aperture
+  priority, exactly as a real body behaves. The aperture reads as stops of brightness only
+  in manual mode, where the full APEX exposure applies. The metered sensitivity lives on the
+  GPU and is not read back, so the panel cannot display the ISO the camera actually chose.
 - **Automatic modes are the default** (auto-focus + auto-exposure ON at construction).
 - All optics are ANIMATABLE (`AnimationID::Aperture/FocalLength/FocusDistance/
   ExposureCompensation`) — focus pulls and exposure ramps via the animation system.
