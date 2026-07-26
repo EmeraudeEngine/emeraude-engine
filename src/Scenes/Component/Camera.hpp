@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <mutex>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -302,10 +303,11 @@ namespace EmEn::Scenes::Component
 			 * The camera is the single source of truth for the photographic behaviour of the
 			 * rendered image, like a real camera body: optics (aperture, focal length, focus)
 			 * and exposure, plus the shutter speed that drives the motion blur length. The engine
-			 * materializes the matching post-process effects
-			 * (DepthOfField, ToneMapping) in the scene chain when enabled here; when disabled,
-			 * these options are retained but have no effect (no-op contract). Every property is
-			 * readable by the effects each frame: changes apply immediately, no rebuild. */
+			 * materializes the matching post-process effects — DepthOfField, MotionBlur, Bloom and
+			 * ToneMapping, in that canonical (physical) order — in the scene chain when enabled
+			 * here; when disabled, these options are retained but have no effect (no-op contract).
+			 * Every property is readable by the effects each frame: changes apply immediately, no
+			 * rebuild. */
 
 			/**
 			 * @brief Enables the depth of field for this camera.
@@ -408,8 +410,13 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets how much the lens scatters, as a multiplier on the glare.
-			 * @param intensity The glare intensity.
+			 * @brief Sets the FRACTION of the above-threshold energy the lens scatters.
+			 * @note This is a physical quantity, not an artistic gain: the glare pipeline carries
+			 * the full photometric energy of the bright sources (a sunlit wall is ~20000 nits),
+			 * and this fraction is what the glass spreads across the image. A clean modern lens
+			 * scatters 2-5 percent; 1.0 would mean the lens diffuses ALL of it and sets any
+			 * daylight scene ablaze.
+			 * @param intensity The scattered fraction (0.03 = 3 percent, the default).
 			 * @return void
 			 */
 			void
@@ -489,11 +496,12 @@ namespace EmEn::Scenes::Component
 			 * @note Photographic driver of the MOTION BLUR length: the effect blurs along the
 			 * velocity buffer over the fraction of the frame the shutter stays open, i.e. the
 			 * SHUTTER ANGLE = shutterSpeed / frameTime. `1/48` s at 24 fps is the cinematic
-			 * 180-degree rule (angle 0.5); an angle at or above 1 means the shutter never closes
-			 * (the effect clamps there — a longer exposure than the frame cannot be reconstructed
-			 * from a single per-frame velocity). Expressing it in seconds is what makes the blur
-			 * INDEPENDENT of the framerate: at a fixed shutter speed, a frame twice as long
-			 * simply covers twice the motion, exactly as a real camera would.
+			 * 180-degree rule (angle 0.5). ⚠️ An angle ABOVE 1 is the NORMAL case at high
+			 * framerates and must NOT be clamped to 1 — that clamp was a lived regression (the
+			 * blur shrank as the framerate rose); the effect only caps it at 128 as hygiene, the
+			 * effective ceiling being its maximum blur radius in pixels. Expressing it in seconds
+			 * is what makes the blur INDEPENDENT of the framerate: at a fixed shutter speed, a
+			 * frame twice as long simply covers twice the motion, exactly as a real camera would.
 			 * @param seconds The exposure time (e.g. 1.0F / 60.0F).
 			 * @return void
 			 */
@@ -676,8 +684,10 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets the exposure compensation in EV (exposure bias).
-			 * @note 0 = neutral, +1 EV = twice the light, -1 EV = half. Applies on top of the
-			 * auto-exposure when it is enabled, or on the manual exposure otherwise.
+			 * @note 0 = neutral, +1 EV = twice the light, -1 EV = half. With the auto-exposure
+			 * ON, the bias shifts the METERING TARGET and therefore saturates at the sensor's
+			 * ISO bounds, exactly as on a real auto-ISO body — it does not post-amplify past
+			 * the sensor. In manual mode it is a straight EV bias on the APEX exposure.
 			 * @param exposureValue The bias in EV.
 			 * @return void
 			 */
@@ -721,13 +731,21 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the lens effect list.
-			 * @return const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > &
+			 * @brief Returns the current lens-effect snapshot, or nullptr when the camera has none.
+			 * @note Thread-safe PUBLICATION contract: every mutation replaces the list wholesale
+			 * (copy-on-write under the camera's lock), so the returned list is immutable — a
+			 * caller iterates its own snapshot, never a vector another thread can reallocate
+			 * (the KeyPad style-cycling crash this replaces). GPU lifetime is the RENDERER's
+			 * side of the contract: it retains the snapshot it records per frame in flight, so
+			 * an effect removed here cannot be destroyed while a command buffer references it.
+			 * @return std::shared_ptr< const Graphics::DirectEffectList >
 			 */
 			[[nodiscard]]
-			const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > &
+			std::shared_ptr< const Graphics::DirectEffectList >
 			lensEffects () const noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_lensEffectsAccess};
+
 				return m_lensEffects;
 			}
 
@@ -740,7 +758,9 @@ namespace EmEn::Scenes::Component
 			bool
 			isLensEffectPresent (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) const noexcept
 			{
-				return std::ranges::find(m_lensEffects, effect) != m_lensEffects.cend();
+				const auto snapshot = this->lensEffects();
+
+				return snapshot != nullptr && std::ranges::find(*snapshot, effect) != snapshot->cend();
 			}
 
 			/**
@@ -814,7 +834,11 @@ namespace EmEn::Scenes::Component
 			static constexpr auto TechnicalProjection{UnusedFlag + 6UL};
 			static constexpr auto MotionBlurEnabled{UnusedFlag + 7UL};
 
-			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_lensEffects;
+			/** @brief Guards the PUBLICATION of the lens-effect list (the pointer swap), not its
+			 * content: published lists are immutable, mutators build a fresh copy (copy-on-write). */
+			mutable std::mutex m_lensEffectsAccess;
+			/** @brief Immutable lens-effect snapshot; nullptr = no lens effect. */
+			std::shared_ptr< const Graphics::DirectEffectList > m_lensEffects;
 			float m_distance{DefaultGraphicsViewDistance};
 			float m_near{0.0F};
 			float m_far{DefaultGraphicsViewDistance};
@@ -829,7 +853,7 @@ namespace EmEn::Scenes::Component
 			float m_minSensitivity{100.0F}; /**< Lowest usable sensitivity, the auto-ISO floor. */
 			float m_maxSensitivity{12800.0F}; /**< Highest usable sensitivity, the auto-ISO ceiling. */
 			float m_bloomThreshold{1000.0F}; /**< Scene luminance above which the lens glares, in nits. */
-			float m_bloomIntensity{1.0F}; /**< How much the lens scatters. */
+			float m_bloomIntensity{0.03F}; /**< Fraction of the above-threshold energy the lens scatters (a clean lens: 2-5%). */
 			float m_exposureCompensation{0.0F}; /**< Exposure bias, in EV. */
 	};
 

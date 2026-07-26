@@ -58,6 +58,23 @@ namespace EmEn::Graphics::Photometry
 	constexpr float OvercastDaylightIlluminance{10000.0F};
 	constexpr float DirectSunlightIlluminance{100000.0F};
 
+	/** @brief Saturation-based calibration of the exposure multiplier (Frostbite form):
+	 * 78 / (S · q) with S = ISO 100 as the reference and q = 0.65 the lens/sensor factor. */
+	constexpr float MeterCalibration{1.2F};
+
+	/** @brief Reflected-light meter constant K (ISO 2720): the scene luminance in nits that a
+	 * meter maps to a "correct" exposure at EV100 = 0 is K / (t·S/N²)… in practice, K relates
+	 * the metered average luminance to the exposure the triad should produce. */
+	constexpr float ReflectedMeterK{12.5F};
+
+	/** @brief Display-referred value the METERED average luminance lands on after the manual
+	 * APEX exposure: K / (MeterCalibration · 100) ≈ 0.104. This is the value the AUTO exposure
+	 * must key on (`autoExposure = MeteredMiddleGrey / avgLuminance`) for the auto and manual
+	 * paths to land a correctly metered scene identically — keying on Reinhard's 0.18 instead
+	 * put the two conventions 0.79 EV apart, and shifted the auto-ISO window by as much
+	 * relative to the sensor bounds computed with the APEX semantics. */
+	constexpr float MeteredMiddleGrey{ReflectedMeterK / (MeterCalibration * 100.0F)};
+
 	/**
  * @brief Converts the luminous power of a POINT light to a luminous intensity.
  * @note A point source radiates into the whole sphere, 4pi steradians: a 800 lm bulb is
@@ -157,8 +174,6 @@ namespace EmEn::Graphics::Photometry
 	float
 	exposureFromValue100 (float exposureValue100) noexcept
 	{
-		constexpr auto MeterCalibration{1.2F};
-
 		return 1.0F / (MeterCalibration * std::exp2(exposureValue100));
 	}
 }

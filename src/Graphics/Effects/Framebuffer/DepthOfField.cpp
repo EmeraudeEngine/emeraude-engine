@@ -26,6 +26,10 @@
 
 #include "DepthOfField.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+#include <cstring>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -40,6 +44,7 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 
 namespace
 {
@@ -78,7 +83,13 @@ float linearizeDepth (float depth)
 
 void main()
 {
+	/* On the reset frame (bit 1) the ping-pong history was never written: its content is
+	 * undefined and must not leak into any path — an undefined NaN would survive every later
+	 * EMA (mix(NaN, x, a) = NaN) and kill the focus permanently. The manual focus distance
+	 * is the only trustworthy value on that frame. */
+	bool resetHistory = (flags & 2u) != 0u;
 	vec4 previous = texelFetch(previousFocusTex, ivec2(0), 0);
+	float previousFocus = resetHistory ? focusDistance : previous.r;
 
 	float target = focusDistance;
 
@@ -98,7 +109,9 @@ void main()
 				float d = texture(depthTex, uv).r;
 
 				if (d >= 1.0)
+				{
 					continue;
+				}
 
 				float w = exp(-float(x * x + y * y) / 4.5);
 				totalDepth += linearizeDepth(d) * w;
@@ -107,17 +120,17 @@ void main()
 		}
 
 		/* Nothing measurable at the center (sky): hold the previous focus. */
-		target = (totalWeight > 0.0) ? totalDepth / totalWeight : previous.r;
+		target = (totalWeight > 0.0) ? totalDepth / totalWeight : previousFocus;
 	}
 
 	float focus = target;
 
-	if ((flags & 2u) == 0u)
+	if (!resetHistory)
 	{
 		/* Exponential rack focus: never snaps, like a real focus ring. */
 		float dt = clamp(time - previous.g, 0.0, 1.0);
 		float a = 1.0 - exp(-autoFocusSpeed * dt);
-		focus = mix(previous.r, target, a);
+		focus = mix(previousFocus, target, a);
 	}
 
 	outFocus = vec4(focus, time, 0.0, 0.0);
@@ -143,10 +156,10 @@ layout(push_constant) uniform PushConstants
 	float farPlane;
 	float aperture;
 	float focalLength;
-	float cocScale;
 	float sensorWidth;
-	float padding2;
-	float padding3;
+	float targetWidth;
+	float maxCoCRadius;
+	float padding;
 };
 
 float linearizeDepth (float depth)
@@ -173,11 +186,19 @@ void main()
 	float cocMeters = apertureDiameterM * focalLengthM * (linearZ - fd) / (linearZ * max(fd - focalLengthM, 0.001));
 
 	/* The CoC above is a size ON THE SENSOR, in meters. Dividing by the sensor width turns it
-	 * into a fraction of the image — the physical normalisation that replaces an arbitrary scale.
-	 * `cocScale` survives as a deliberate artistic override, defaulting to 1. */
+	 * into a fraction of the image width — the physical normalisation that replaces an
+	 * arbitrary scale. */
 	float cocFraction = cocMeters / (sensorWidth * 0.001);
 
-	outSetup = vec4(color, clamp(cocFraction * cocScale, -1.0, 1.0));
+	/* A DIAMETER fraction of the image maps to `fraction * targetWidth` pixels of diameter on
+	 * this half-res target, hence half that in radius — the unit every downstream pass (dilate,
+	 * gathers, composite blend) consumes. Skipping this conversion was the bug that made the
+	 * physically-correct CoC invisible: the fraction (~0.01 for a typical shot) was fed to the
+	 * gathers as if it were pixels. `maxCoCRadius` clamps the radius at the source, as a pure
+	 * performance/quality ceiling. */
+	float cocPixels = cocFraction * targetWidth * 0.5;
+
+	outSetup = vec4(color, clamp(cocPixels, -maxCoCRadius, maxCoCRadius));
 }
 )GLSL";
 
@@ -236,8 +257,8 @@ layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
 	float texelSizeY;
-	float maxCoCRadius;
 	uint sampleCount;
+	uint padding;
 };
 
 const float GOLDEN_ANGLE = 2.39996323;
@@ -246,8 +267,9 @@ void main()
 {
 	vec2 texel = vec2(texelSizeX, texelSizeY);
 	vec4 center = texture(setupTex, vUV);
-	float centerCoC = max(center.a, 0.0);
-	float radiusPx = centerCoC * maxCoCRadius;
+
+	/* The setup alpha IS the signed CoC radius in half-res pixels, already clamped. */
+	float radiusPx = max(center.a, 0.0);
 
 	/* In focus (or near field): keep sharp, zero blend. */
 	if (radiusPx < 0.5)
@@ -266,7 +288,7 @@ void main()
 		vec2 offset = vec2(cos(theta), sin(theta)) * r * texel;
 
 		vec4 s = texture(setupTex, vUV + offset);
-		float sampleRadiusPx = max(s.a, 0.0) * maxCoCRadius;
+		float sampleRadiusPx = max(s.a, 0.0);
 
 		/* The sample's own CoC must cover the gather distance. */
 		float w = clamp(sampleRadiusPx - r + 1.0, 0.0, 1.0);
@@ -275,8 +297,9 @@ void main()
 		accumWeight += w;
 	}
 
-	/* Alpha = composite blend factor, saturating quickly with the CoC. */
-	outFar = vec4(accum / accumWeight, clamp(centerCoC * 4.0, 0.0, 1.0));
+	/* Alpha = composite blend factor: fully sharp below the half-pixel cutoff, fully
+	 * blurred once the radius reaches two half-res pixels (real blur exists on screen). */
+	outFar = vec4(accum / accumWeight, clamp((radiusPx - 0.5) / 1.5, 0.0, 1.0));
 }
 )GLSL";
 
@@ -296,8 +319,8 @@ layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
 	float texelSizeY;
-	float maxCoCRadius;
 	uint sampleCount;
+	uint padding;
 };
 
 const float GOLDEN_ANGLE = 2.39996323;
@@ -305,8 +328,9 @@ const float GOLDEN_ANGLE = 2.39996323;
 void main()
 {
 	vec2 texel = vec2(texelSizeX, texelSizeY);
-	float dilatedNear = texture(dilatedNearTex, vUV).r;
-	float radiusPx = dilatedNear * maxCoCRadius;
+
+	/* The dilated map carries the near-field CoC radius in half-res pixels. */
+	float radiusPx = texture(dilatedNearTex, vUV).r;
 
 	vec4 center = texture(setupTex, vUV);
 
@@ -326,7 +350,7 @@ void main()
 		vec2 offset = vec2(cos(theta), sin(theta)) * r * texel;
 
 		vec4 s = texture(setupTex, vUV + offset);
-		float sampleNearPx = max(-s.a, 0.0) * maxCoCRadius;
+		float sampleNearPx = max(-s.a, 0.0);
 
 		float w = clamp(sampleNearPx - r + 1.0, 0.0, 1.0);
 
@@ -363,10 +387,8 @@ layout(set = 0, binding = 3) uniform sampler2D materialPropsTex;
 
 layout(push_constant) uniform PushConstants
 {
-	float texelSizeX;
-	float texelSizeY;
 	uint nearFieldEnabled;
-	float padding;
+	uint padding;
 };
 
 void main()
@@ -409,7 +431,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Effect-quality knobs, engine-wide and persisted in the settings file.
 		 * The OPTICAL parameters are NOT settings: they belong to the active camera. */
-		m_parameters.cocScale = settings.getOrSetDefault< float >(GraphicsDepthOfFieldCoCScaleKey, DefaultGraphicsDepthOfFieldCoCScale);
 		m_parameters.maxCoCRadius = settings.getOrSetDefault< float >(GraphicsDepthOfFieldMaxRadiusKey, DefaultGraphicsDepthOfFieldMaxRadius);
 		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsDepthOfFieldSampleCountKey, DefaultGraphicsDepthOfFieldSampleCount);
 		m_parameters.autoFocusSpeed = settings.getOrSetDefault< float >(GraphicsDepthOfFieldAutoFocusSpeedKey, DefaultGraphicsDepthOfFieldAutoFocusSpeed);
@@ -430,6 +451,41 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 				return false;
 			}
+		}
+
+		/* Focus-distance readback ring: one tiny (8 B, a single RG32F texel) host-visible slot
+		 * per frame in flight, persistently mapped. Slot N receives the focus value written
+		 * during frame N and is read back when slot N comes around again — its fence has passed
+		 * by then, so the read never stalls and costs framesInFlight frames of latency. */
+		{
+			m_focusReadback.clear();
+			m_focusReadback.resize(renderer.framesInFlight());
+
+			for ( auto & slot : m_focusReadback )
+			{
+				slot.buffer = std::make_unique< Vulkan::Buffer >(renderer.device(), static_cast< VkBufferCreateFlags >(0), 8, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
+				slot.buffer->setHostReadable(true);
+
+				if ( !slot.buffer->createOnHardware() )
+				{
+					TraceError{TracerTag} << "Failed to create a focus readback slot !";
+
+					return false;
+				}
+
+				slot.mappedPtr = slot.buffer->mapMemoryAs< uint8_t >();
+
+				if ( slot.mappedPtr == nullptr )
+				{
+					TraceError{TracerTag} << "Failed to map a focus readback slot !";
+
+					return false;
+				}
+
+				slot.pending = false;
+			}
+
+			m_meteredFocusDistance = 0.0F;
 		}
 
 		/* Setup target: color + signed CoC (half-res). */
@@ -699,6 +755,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			target.destroy();
 		}
 
+		/* Focus-distance readback ring (persistently mapped). */
+		for ( auto & slot : m_focusReadback )
+		{
+			if ( slot.buffer != nullptr && slot.mappedPtr != nullptr )
+			{
+				slot.buffer->unmapMemory();
+			}
+		}
+
+		m_focusReadback.clear();
+		m_meteredFocusDistance = 0.0F;
+
 		m_focusValid = false;
 		m_focusWriteIndex = 0;
 	}
@@ -718,7 +786,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Effective optics: the ACTIVE CAMERA is the single source of truth for the
 		 * photographic options; the local parameters only act as a fallback. */
 		float aperture = m_parameters.aperture;
-		auto sensorWidth = 36.0F; /* Full frame, until the active camera says otherwise. */
+		float sensorWidth = m_parameters.sensorWidth;
 		float focalLength = m_parameters.focalLength;
 		float focusDistance = m_parameters.focusDistance;
 		bool autoFocus = m_parameters.autoFocus;
@@ -788,6 +856,75 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			);
 		}
 
+		/* ---- Focus-distance readback ---- */
+		if ( frameIndex < m_focusReadback.size() )
+		{
+			auto & slot = m_focusReadback[frameIndex];
+
+			/* Consume the value this slot captured framesInFlight frames ago FIRST (its fence
+			 * has passed, the memory is host-coherent): the rack-focus position becomes
+			 * displayable at that latency, with zero stall. */
+			if ( slot.pending )
+			{
+				float focusMeters = 0.0F;
+				std::memcpy(&focusMeters, slot.mappedPtr, sizeof(focusMeters));
+
+				if ( std::isfinite(focusMeters) && focusMeters > 0.0F )
+				{
+					m_meteredFocusDistance = focusMeters;
+				}
+			}
+
+			/* Then record this frame's capture: the focus history just recorded above is
+			 * copied into the slot. The copy sits OUTSIDE any render pass; the barriers take
+			 * the image from the shader-read layout its render pass left it in, and hand it
+			 * back before the setup pass below samples it. */
+			{
+				const auto & focusImage = m_focusTargets[writeIdx].image();
+
+				const Vulkan::Sync::ImageMemoryBarrier toTransfer{
+					*focusImage,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_ASPECT_COLOR_BIT
+				};
+
+				commandBuffer.pipelineBarrier(toTransfer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+				VkBufferImageCopy region{};
+				region.bufferOffset = 0;
+				region.bufferRowLength = 0;
+				region.bufferImageHeight = 0;
+				region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+				region.imageOffset = {.x=0, .y=0, .z=0};
+				region.imageExtent = {.width=1, .height=1, .depth=1};
+
+				vkCmdCopyImageToBuffer(
+					commandBuffer.handle(),
+					focusImage->handle(),
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					slot.buffer->handle(),
+					1,
+					&region
+				);
+
+				const Vulkan::Sync::ImageMemoryBarrier toShader{
+					*focusImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_ASPECT_COLOR_BIT
+				};
+
+				commandBuffer.pipelineBarrier(toShader, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+				slot.pending = true;
+			}
+		}
+
 		/* ---- Pass 2: CoC setup (signed, half-res) ---- */
 		{
 			const SetupPushConstants pc{
@@ -795,10 +932,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.farPlane = constants.farPlane,
 				.aperture = aperture,
 				.focalLength = focalLength,
-				.cocScale = m_parameters.cocScale,
 				.sensorWidth = sensorWidth,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
+				.targetWidth = static_cast< float >(m_setupTarget.width()),
+				.maxCoCRadius = m_parameters.maxCoCRadius,
+				.padding = 0.0F
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -861,8 +998,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const GatherPushConstants pc{
 				.texelSizeX = 1.0F / static_cast< float >(m_farGatherTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_farGatherTarget.height()),
-				.maxCoCRadius = m_parameters.maxCoCRadius,
-				.sampleCount = m_parameters.sampleCount
+				.sampleCount = m_parameters.sampleCount,
+				.padding = 0U
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -882,8 +1019,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const GatherPushConstants pc{
 				.texelSizeX = 1.0F / static_cast< float >(m_nearGatherTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_nearGatherTarget.height()),
-				.maxCoCRadius = m_parameters.maxCoCRadius,
-				.sampleCount = m_parameters.sampleCount
+				.sampleCount = m_parameters.sampleCount,
+				.padding = 0U
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -900,10 +1037,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pass 7: Composite ---- */
 		{
 			const CompositePushConstants pc{
-				.texelSizeX = 1.0F / static_cast< float >(m_outputTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_outputTarget.height()),
 				.nearFieldEnabled = m_parameters.nearFieldEnabled ? 1U : 0U,
-				.padding = 0.0F
+				.padding = 0U
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

@@ -1039,8 +1039,11 @@ namespace EmEn::Scenes
 			 * @brief Generates a camera and a 2D texture offscreen-rendering connected to it.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param name A reference to a string.
-			 * @param fov The camera field of view expressed in degrees. Default 85.0.
-			 * @param lookAt A position where the camera should initially look at. Default, [0,0,0].
+			 * @param focalLength The camera lens focal length in MILLIMETERS, like every camera of
+			 * the physical model (`DefaultGraphicsFocalLength` = 13.096 mm = the historical 85
+			 * degrees vertical on full frame). This used to be an angle in degrees: forwarding one
+			 * here now mounts a telephoto (85 "degrees" = an 85 mm lens, ~16 degrees).
+			 * @param lookAt A position where the camera should initially look at.
 			 * @param precision
 			 * @param distance
 			 * @param showModel
@@ -1049,10 +1052,10 @@ namespace EmEn::Scenes
 			template< typename entity_t = StaticEntity >
 			[[nodiscard]]
 			std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > >
-			generateTexture2DRenderer (const std::string & name, float fov, const Base::Math::Vector< 3, float > & lookAt, uint32_t precision = 512, float distance = 5000.0F, bool showModel = false) noexcept
+			generateTexture2DRenderer (const std::string & name, float focalLength, const Base::Math::Vector< 3, float > & lookAt, uint32_t precision = 512, float distance = 5000.0F, bool showModel = false) noexcept
 				requires(std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				const auto builtEntity = this->generatePerspectiveCamera< entity_t >(name + "Camera", fov, lookAt, false, showModel);
+				const auto builtEntity = this->generatePerspectiveCamera< entity_t >(name + "Camera", focalLength, lookAt, false, showModel);
 
 				if ( !builtEntity.isValid() )
 				{

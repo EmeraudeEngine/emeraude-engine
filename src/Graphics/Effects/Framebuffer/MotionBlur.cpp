@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cstring>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"

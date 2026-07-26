@@ -57,7 +57,7 @@ namespace EmEn::Scenes::EffectsToolkit
 	{
 		/** @brief Bare camera: no lens effects, no depth of field, no HDR, automatic modes. */
 		Normal,
-		/** @brief Modern digital cinema camera: clean image, f/2.8 50mm, DoF + HDR. */
+		/** @brief Modern digital cinema camera: clean image, fast f/2.8 prime on full frame, DoF + HDR (the framing is the scene's, a style declares a FORMAT, not a lens). */
 		HighQuality,
 		/** @brief Human eye perception: subtle DoF, adaptive exposure, peripheral falloff. */
 		HumanEye,
@@ -75,9 +75,9 @@ namespace EmEn::Scenes::EffectsToolkit
 		VHSPureSignal,
 		/** @brief Poor satellite feed on a modern screen. */
 		SatellitePureSignal,
-		/** @brief Warm anamorphic cinema at golden hour: f/2.8 65mm, +0.3 EV. */
+		/** @brief Warm anamorphic cinema at golden hour: f/2.8 on full frame, +0.3 EV. */
 		GoldenHour,
-		/** @brief Cool cinematic twilight: f/2.8 50mm, -0.4 EV. */
+		/** @brief Cool cinematic twilight: f/2.8 on full frame, -0.4 EV. */
 		BlueHour,
 		/** @brief Retro 8-bits pixel-art display: raw palette, no photometry at all. */
 		Retro8Bits,
@@ -172,7 +172,7 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 
 	/**
 	 * @brief Modern high-quality digital cinema camera.
-	 * @note Clean image (no lens artifacts), f/2.8 50mm optics, depth of field and
+	 * @note Clean image (no lens artifacts), f/2.8 full-frame optics (the current framing is kept), depth of field and
 	 * HDR tone mapping enabled, auto-focus and auto-exposure.
 	 * @param camera A reference to the camera to configure.
 	 * @return void
@@ -192,7 +192,7 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	/**
 	 * @brief Vintage 1960s black & white film camera.
 	 * @note Reuses the LensPresets::Hitchcock60s() lens stack (grain, high-contrast B&W,
-	 * projector artifacts) over f/5.6 40mm optics with depth of field and HDR.
+	 * projector artifacts) over f/5.6 full-frame optics with depth of field and HDR.
 	 * @param camera A reference to the camera to configure.
 	 * @return void
 	 */
@@ -228,10 +228,10 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	/** @brief Poor satellite feed on a modern screen (f/4, deep focus, HDR). */
 	EMEN_API void SatellitePureSignal (Component::Camera & camera) noexcept;
 
-	/** @brief Warm anamorphic cinema at golden hour (f/2.8 65mm, DoF + HDR, +0.3 EV). */
+	/** @brief Warm anamorphic cinema at golden hour (f/2.8 full frame, DoF + HDR, +0.3 EV). */
 	EMEN_API void GoldenHour (Component::Camera & camera) noexcept;
 
-	/** @brief Cool cinematic twilight (f/2.8 50mm, DoF + HDR, -0.4 EV). */
+	/** @brief Cool cinematic twilight (f/2.8 full frame, DoF + HDR, -0.4 EV). */
 	EMEN_API void BlueHour (Component::Camera & camera) noexcept;
 
 	/** @brief Retro 8-bits pixel-art display (no DoF, no HDR — raw palette). */

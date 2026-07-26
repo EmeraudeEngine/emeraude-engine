@@ -37,6 +37,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Graphics/Photometry.hpp"
+#include "Vulkan/Buffer.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -76,12 +78,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				 * need a higher exposure target) — the values validated in the demo benches.
 				 * These are the values used by the camera-materialized instance (enableHDR()). */
 				/* MIDDLE GREY. The auto-exposure maps the scene's log-average luminance onto this
-				 * value (`autoExposure = keyValue / avgLuminance`), so it IS the photographic key:
-				 * 0.18 is the 18% grey card, Reinhard's classic constant, and what a reflected-light
-				 * meter is calibrated for. The previous 0.5 placed the average about 1.5 stops too
-				 * high — tolerable when the scene carried arbitrary units, washed out once it is
-				 * photometric (gltf-loader read a mean luma of 194/255, flat and grey). */
-				float keyValue{0.18F};
+				 * value (`autoExposure = keyValue / avgLuminance`), so it IS the photographic key.
+				 * It keys on `Photometry::MeteredMiddleGrey` (K=12.5 / (1.2 · 100) ≈ 0.104) — the
+				 * value the MANUAL APEX triad lands a correctly metered scene on — so the auto and
+				 * manual paths agree and the ISO bounds keep their meaning. History: 0.5 placed the
+				 * average ~1.5 stops hot (washed out once photometric); the next value, Reinhard's
+				 * 0.18, is a DISPLAY-side grey-card convention, NOT what a K=12.5 reflected-light
+				 * meter produces through this engine's own exposure function — it kept the auto
+				 * mode 0.79 EV hotter than the same scene shot manually. */
+				float keyValue{Photometry::MeteredMiddleGrey};
 				float adaptSpeedUp{1.5F};
 				float adaptSpeedDown{2.0F};
 				/* PHOTOMETRIC RANGE. These clamp the auto-exposure multiplier that maps scene
@@ -163,7 +168,44 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return m_parameters;
 			}
 
+			/**
+			 * @brief Returns the sensitivity (ISO) the auto-exposure metering landed on.
+			 * @note Read back from the GPU adaptation history with `framesInFlight` frames of
+			 * latency (one tiny host-visible slot per frame in flight, zero stall — the slot is
+			 * only read once its fence has passed). 0 until a measurement completed, and reset
+			 * when the auto-exposure is off (there is no metering to report then).
+			 * @warning RENDER THREAD contract: written by execute(), intended for the overlay
+			 * panel which draws inside the same frame scope.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			meteredSensitivity () const noexcept
+			{
+				return m_meteredSensitivity;
+			}
+
+			/**
+			 * @brief Returns the metered scene average luminance, in nits (cd/m²).
+			 * @note Same readback and thread contract as meteredSensitivity(); 0 until valid.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			meteredLuminance () const noexcept
+			{
+				return m_meteredLuminance;
+			}
+
 		private:
+
+			/** @brief One host-visible readback slot per frame in flight (metered exposure). */
+			struct MeteredReadbackSlot
+			{
+				std::unique_ptr< Vulkan::Buffer > buffer;
+				const uint8_t * mappedPtr{nullptr};
+				bool pending{false};
+			};
 
 			/**
 			 * @brief Creates all graphics pipelines.
@@ -205,8 +247,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_lumDownDescSets;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_adaptPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_autoExpDescPerFrame;
-			/* Auto-exposure: time tracking for deltaTime computation. */
-			float m_previousTime{0.0F};
+			/* Metered-exposure readback ring (auto-ISO display): slot N is written by the GPU
+			 * during frame N and read back when slot N comes around again — framesInFlight
+			 * frames of latency, zero stall. Persistently mapped. RENDER THREAD ONLY. */
+			std::vector< MeteredReadbackSlot > m_meteredReadback;
+			float m_meteredSensitivity{0.0F};
+			float m_meteredLuminance{0.0F};
+			/* Auto-exposure: true until the first adaptation pass ran — drives the shader-side
+			 * history reset (the frame delta itself comes from PushConstants::deltaTime). */
 			bool m_firstFrame{true};
 	};
 }

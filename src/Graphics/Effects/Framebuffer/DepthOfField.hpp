@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/Buffer.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -73,9 +74,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float focusDistance{10.0F};
 				float aperture{2.8F};
 				float focalLength{50.0F};
-				/* Effect-quality knobs (settings-driven). */
-				float cocScale{10.0F};
-				float maxCoCRadius{12.0F};
+				float sensorWidth{36.0F};
+				/* Effect-quality knobs (settings-driven). maxCoCRadius is a pure
+				 * performance/quality clamp in half-res pixels: the blur amount itself is
+				 * the thin-lens CoC converted from sensor fraction to pixels, unscaled. */
+				float maxCoCRadius{32.0F};
 				float autoFocusSpeed{3.0F};
 				uint32_t sampleCount{48};
 				bool autoFocus{true};
@@ -107,10 +110,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float farPlane;
 				float aperture;
 				float focalLength;
-				float cocScale;
 				float sensorWidth;
-				float padding2;
-				float padding3;
+				/* Width of the setup target in pixels: converts the CoC — a fraction of the
+				 * image width — into a half-res pixel radius, the unit of every later pass. */
+				float targetWidth;
+				/* Blur ceiling in half-res pixels (performance clamp, applied at the source). */
+				float maxCoCRadius;
+				float padding;
 			};
 
 			/**
@@ -134,8 +140,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			{
 				float texelSizeX;
 				float texelSizeY;
-				float maxCoCRadius;
 				uint32_t sampleCount;
+				uint32_t padding;
 			};
 
 			/**
@@ -143,10 +149,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			struct EMEN_API CompositePushConstants
 			{
-				float texelSizeX;
-				float texelSizeY;
 				uint32_t nearFieldEnabled;
-				float padding;
+				uint32_t padding;
 			};
 
 			/**
@@ -223,7 +227,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return m_parameters;
 			}
 
+			/**
+			 * @brief Returns the focus distance the rack-focus EMA is currently at, in meters.
+			 * @note Read back from the GPU focus history (1x1 RG32F, R = distance) with
+			 * `framesInFlight` frames of latency — one tiny host-visible slot per frame in
+			 * flight, read only once its fence has passed, zero stall. Meaningful in AUTO focus
+			 * (what the measurement landed on) and during a manual focus pull (the smoothed
+			 * position of the ring). 0 until a measurement completed.
+			 * @warning RENDER THREAD contract: written by execute(), read by the overlay panel
+			 * inside the same frame scope.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			meteredFocusDistance () const noexcept
+			{
+				return m_meteredFocusDistance;
+			}
+
 		private:
+
+			/** @brief One host-visible readback slot per frame in flight (focus distance). */
+			struct FocusReadbackSlot
+			{
+				std::unique_ptr< Vulkan::Buffer > buffer;
+				const uint8_t * mappedPtr{nullptr};
+				bool pending{false};
+			};
 
 			Parameters m_parameters;
 			/* IRTs. Half-res working set; auto-focus history is a 1x1 RG32F ping-pong
@@ -258,6 +288,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::unique_ptr< Vulkan::DescriptorSet > m_dilateVDescSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_farGatherDescSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_nearGatherDescSet;
+			/* Focus-distance readback ring: slot N is written by the GPU during frame N and
+			 * read back when slot N comes around again — framesInFlight frames of latency,
+			 * zero stall. Persistently mapped. RENDER THREAD ONLY. */
+			std::vector< FocusReadbackSlot > m_focusReadback;
+			float m_meteredFocusDistance{0.0F};
 			/* Ping-pong index of the focus history written THIS frame. */
 			uint32_t m_focusWriteIndex{0};
 			/* False until the focus history holds a valid value (forces a reset). */

@@ -71,7 +71,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				 * — a night scene glows from a 10-nit torch-lit wall, a daylight one must not. */
 				float threshold{1000.0F};
 				float softKnee{0.5F};
-				float intensity{1.0F};
+				/** @brief Fraction of the above-threshold energy the lens scatters (physical:
+				 * a clean modern lens 2-5%). Mirrors the Camera default. */
+				float intensity{0.03F};
 				float spread{1.0F};
 			};
 
@@ -86,6 +88,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float softKnee;
 				float intensity;
 				float spread;
+				/** @brief Anti-firefly ceiling, in nits: max(threshold, 1) * 64 — the six stops of
+				 * differentiation headroom the LDR-era constant 64 provided above a threshold of 1.
+				 * The SAME ceiling is sent to every downsample mip: a fixed 64 there re-crushed the
+				 * whole photometric range (a 1200-nit lamp and the sun bloomed identically). */
+				float fireflyClamp;
+				/** @brief 1 on the first downsample pass only: Karis anti-firefly weighting +
+				 * threshold extraction + material-properties modulation. An EXPLICIT flag — the
+				 * old discriminator was `threshold > 0`, which silently disabled all three on a
+				 * legal threshold of zero ("everything glares"). */
+				uint32_t firstPass;
 			};
 
 			/**
@@ -189,13 +201,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_downsampleLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_upsampleLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
-			/* Descriptor sets.
-			 * NOTE: m_downDescSets[0] and m_compositeDescSet are updated every frame
-			 * in execute(), so they need per-frame-in-flight copies to avoid updating
-			 * a descriptor set still referenced by a pending command buffer. */
+			/* Descriptor sets. The passes reading EXTERNAL per-frame textures (first downsample,
+			 * composite) use per-frame-in-flight copies — rewriting a set still referenced by a
+			 * pending command buffer is illegal; static sets only reference the effect's own
+			 * targets. m_downDescSets[0] stays empty (mip 0 lives in m_downFirstPerFrame). */
 			std::array< std::unique_ptr< Vulkan::DescriptorSet >, MipLevels > m_downDescSets;
 			std::array< std::unique_ptr< Vulkan::DescriptorSet >, MipLevels - 1 > m_upDescSets;
-			std::unique_ptr< Vulkan::DescriptorSet > m_compositeDescSet;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_downFirstPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
 	};

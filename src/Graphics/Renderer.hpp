@@ -1455,6 +1455,12 @@ namespace EmEn::Graphics
 			Vulkan::DeferredDestructor m_deferredDestructor;
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope{};
+			/** @brief Lens-effect snapshots retained per frame in flight (renderer side of the
+			 * camera's copy-on-write publication contract): the snapshot recorded into frame slot
+			 * N stays referenced until slot N is reused — its fence has passed by then — so a
+			 * lens effect removed from the camera can never be destroyed while an in-flight
+			 * command buffer still references its pipeline. Indexed by currentFrameIndex(). */
+			std::array< std::shared_ptr< const DirectEffectList >, 5 > m_lensEffectsSnapshots{};
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/** @brief Transparent hash for heterogeneous string_view lookup in unordered_map. */

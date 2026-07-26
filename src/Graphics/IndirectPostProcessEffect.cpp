@@ -46,7 +46,6 @@
 #include "Vulkan/UniformBufferObject.hpp"
 
 static constexpr auto TracerTag{"IndirectPostProcessEffect"};
-/* NOLINTEND(cert-err58-cpp) */
 
 namespace EmEn::Graphics
 {

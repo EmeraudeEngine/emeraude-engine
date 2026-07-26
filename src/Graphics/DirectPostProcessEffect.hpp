@@ -142,4 +142,12 @@ namespace EmEn::Graphics
 			 */
 			DirectPostProcessEffect () noexcept = default;
 	};
+
+	/**
+	 * @brief An ordered list of direct (lens) post-process effects.
+	 * @note This is the unit of PUBLICATION between the camera and the renderer: the camera
+	 * swaps in a fresh immutable list on every mutation (copy-on-write) and the render thread
+	 * iterates its own snapshot, so the list content is never modified under an iteration.
+	 */
+	using DirectEffectList = std::vector< std::shared_ptr< DirectPostProcessEffect > >;
 }

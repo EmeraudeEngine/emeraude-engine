@@ -45,6 +45,12 @@ namespace EmEn::Scenes::Component
 	class Camera;
 }
 
+namespace EmEn::Graphics::Effects::Framebuffer
+{
+	class DepthOfField;
+	class ToneMapping;
+}
+
 namespace EmEn::Graphics
 {
 	/**
@@ -99,6 +105,25 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Returns the camera-materialized tone mapping effect, or nullptr.
+			 * @note For readers of its metered values (the overlay panel): RENDER THREAD only,
+			 * inside the frame scope — the instance is (de)materialized by syncCameraEffects()
+			 * on that same thread, once per frame.
+			 * @return std::shared_ptr< Effects::Framebuffer::ToneMapping >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Effects::Framebuffer::ToneMapping > cameraToneMapping () const noexcept;
+
+			/**
+			 * @brief Returns the camera-materialized depth of field effect, or nullptr.
+			 * @note Same RENDER THREAD / frame scope contract as cameraToneMapping(); the panel
+			 * reads its metered focus distance through this.
+			 * @return std::shared_ptr< Effects::Framebuffer::DepthOfField >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Effects::Framebuffer::DepthOfField > cameraDepthOfField () const noexcept;
 
 			/**
 			 * @brief Clears the entire effect chain.

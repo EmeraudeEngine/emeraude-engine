@@ -28,7 +28,9 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <cstring>
 #include <string>
 
 /* Local inclusions. */
@@ -42,10 +44,56 @@
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 
 namespace
 {
 	using namespace EmEn;
+
+	/**
+	 * @brief Decodes an IEEE 754 binary16 into a float32.
+	 * @note The adaptation history is RGBA16F: the metered-exposure readback decodes its R
+	 * channel CPU-side. Subnormals, infinities and NaN are handled (a NaN stays a NaN, which
+	 * the caller treats as "no valid measurement").
+	 * @param value The half-float bit pattern.
+	 * @return float
+	 */
+	float
+	halfToFloat (uint16_t value) noexcept
+	{
+		const uint32_t sign = static_cast< uint32_t >(value & 0x8000U) << 16U;
+		const uint32_t exponent = (value & 0x7C00U) >> 10U;
+		uint32_t mantissa = value & 0x03FFU;
+
+		uint32_t bits = sign;
+
+		if ( exponent == 0U )
+		{
+			if ( mantissa != 0U )
+			{
+				/* Subnormal half: renormalize into the float32 exponent range. */
+				uint32_t unbiased = 127U - 15U + 1U;
+
+				while ( (mantissa & 0x0400U) == 0U )
+				{
+					mantissa <<= 1U;
+					--unbiased;
+				}
+
+				bits |= (unbiased << 23U) | ((mantissa & 0x03FFU) << 13U);
+			}
+		}
+		else if ( exponent == 0x1FU )
+		{
+			bits |= 0x7F800000U | (mantissa << 13U); /* Inf / NaN. */
+		}
+		else
+		{
+			bits |= ((exponent + (127U - 15U)) << 23U) | (mantissa << 13U);
+		}
+
+		return std::bit_cast< float >(bits);
+	}
 
 	/* ---- Internal push constant structures ---- */
 
@@ -62,7 +110,9 @@ namespace
 		float deltaTime;
 		float adaptSpeedUp;
 		float adaptSpeedDown;
-		float padding;
+		/* 1 on the first execution after (re)creation: the 1x1 history was never written and
+		 * must not leak into the EMA (a recycled NaN would survive it forever). */
+		uint32_t resetHistory;
 	};
 
 	struct AutoExposurePushConstants
@@ -175,12 +225,21 @@ layout(push_constant) uniform PushConstants
 	float deltaTime;
 	float adaptSpeedUp;
 	float adaptSpeedDown;
-	float padding;
+	uint resetHistory;
 };
 
 void main()
 {
 	float currentLogLum = texture(currentLumTex, vec2(0.5)).r;
+
+	/* Reset frame: the ping-pong history was never written — its content is undefined and
+	 * must not enter the EMA (mix with a NaN stays NaN forever). Snap to the measurement. */
+	if (resetHistory != 0u)
+	{
+		outColor = vec4(currentLogLum, 0.0, 0.0, 1.0);
+		return;
+	}
+
 	float prevAdapted = texture(prevAdaptedTex, vec2(0.5)).r;
 
 	/* Asymmetric speed: adapt faster when the scene brightens (pupil constricts),
@@ -618,6 +677,43 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_currentAdaptIndex = 0;
 
+		/* Metered-exposure readback ring: one tiny (8 B, a single RGBA16F texel) host-visible
+		 * slot per frame in flight, persistently mapped. Slot N receives the adaptation value
+		 * written during frame N and is read back when slot N comes around again — its fence
+		 * has passed by then, so the read never stalls and costs framesInFlight frames of
+		 * latency, the standard readback pattern. */
+		{
+			m_meteredReadback.clear();
+			m_meteredReadback.resize(renderer.framesInFlight());
+
+			for ( auto & slot : m_meteredReadback )
+			{
+				slot.buffer = std::make_unique< Vulkan::Buffer >(renderer.device(), static_cast< VkBufferCreateFlags >(0), 8, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
+				slot.buffer->setHostReadable(true);
+
+				if ( !slot.buffer->createOnHardware() )
+				{
+					TraceError{ClassId} << "Failed to create a metered-exposure readback slot !";
+
+					return false;
+				}
+
+				slot.mappedPtr = slot.buffer->mapMemoryAs< uint8_t >();
+
+				if ( slot.mappedPtr == nullptr )
+				{
+					TraceError{ClassId} << "Failed to map a metered-exposure readback slot !";
+
+					return false;
+				}
+
+				slot.pending = false;
+			}
+
+			m_meteredSensitivity = 0.0F;
+			m_meteredLuminance = 0.0F;
+		}
+
 		/* Create pipelines. */
 		if ( !this->createPipelines() )
 		{
@@ -635,7 +731,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		m_firstFrame = true;
-		m_previousTime = 0.0F;
 
 		return true;
 	}
@@ -684,8 +779,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Output target. */
 		m_outputTarget.destroy();
 
+		/* Metered-exposure readback ring (persistently mapped). */
+		for ( auto & slot : m_meteredReadback )
+		{
+			if ( slot.buffer != nullptr && slot.mappedPtr != nullptr )
+			{
+				slot.buffer->unmapMemory();
+			}
+		}
+
+		m_meteredReadback.clear();
+		m_meteredSensitivity = 0.0F;
+		m_meteredLuminance = 0.0F;
+
 		m_firstFrame = true;
-		m_previousTime = 0.0F;
 		m_currentAdaptIndex = 0;
 	}
 
@@ -702,6 +809,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * present (physical camera model). The exposure compensation is an EV bias:
 		 * each EV doubles/halves the light gathered. */
 		float exposure = m_parameters.exposure;
+		float keyValue = m_parameters.keyValue;
 		bool autoExposureEnabled = m_parameters.autoExposureEnabled;
 		auto minExposure = m_parameters.minExposure;
 		auto maxExposure = m_parameters.maxExposure;
@@ -710,23 +818,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		{
 			const auto * camera = context.camera;
 
-			/* ABSOLUTE EXPOSURE, from the camera's triad through the APEX equation
-			 * (Lagarde & de Rousiers, Frostbite): EV100 = log2(N^2 / t * 100 / S), then
-			 * exposure = 1 / (1.2 * 2^EV100). This only means something because the scene now
-			 * carries photometric units — the same setting would be meaningless against
-			 * arbitrary light values. The exposure compensation stays an EV bias on top. */
-			const auto exposureValue = Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->sensitivity());
-
 			autoExposureEnabled = camera->isAutoExposureEnabled();
 
 			/* ⚠️ The shader multiplies the two terms (`hdrColor *= exposure * autoExposure`), so
-			 * they must never both carry the physical exposure. In AUTO mode the metering IS the
-			 * exposure — it lands on a sensitivity within the sensor range — and this term is only
-			 * the EV bias. In MANUAL mode there is no metering, so the full APEX exposure goes
-			 * here. Applying both compounded them into ~3e-6 and rendered the scene black. */
-			exposure = autoExposureEnabled ?
-				std::exp2(camera->exposureCompensation()) :
-				Photometry::exposureFromValue100(exposureValue) * std::exp2(camera->exposureCompensation());
+			 * they must never both carry the physical exposure — applying both compounded them
+			 * into ~3e-6 and rendered the scene black. In AUTO mode the metering IS the exposure,
+			 * so the multiplier here is exactly 1: the EV compensation biases the METERING TARGET
+			 * (the key value) INSIDE the sensor clamp, the way a real auto-ISO body works — the
+			 * bias shifts what the metering aims for and saturates at the same ISO ceiling, it
+			 * does not post-amplify beyond the sensor. In MANUAL mode there is no metering: the
+			 * full APEX exposure goes here (EV100 = log2(N^2 / t * 100 / S), exposure =
+			 * 1 / (1.2 * 2^EV100), Lagarde & de Rousiers, Frostbite), and the compensation is a
+			 * straight EV bias on it. Both only mean something because the scene carries
+			 * photometric units. */
+			if ( autoExposureEnabled )
+			{
+				exposure = 1.0F;
+				keyValue = m_parameters.keyValue * std::exp2(camera->exposureCompensation());
+			}
+			else
+			{
+				const auto exposureValue = Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->sensitivity());
+
+				exposure = Photometry::exposureFromValue100(exposureValue) * std::exp2(camera->exposureCompensation());
+			}
 
 			/* AUTO-ISO. The metering is allowed to move the sensitivity and NOTHING else: the
 			 * aperture drives the depth of field and the shutter drives the motion blur, both
@@ -744,22 +859,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		if ( autoExposureEnabled && !m_lumTargets.empty() )
 		{
-			/* ---- Compute deltaTime ---- */
-			float deltaTime;
+			/* Frame delta from the chain's single source of truth (PushConstants::deltaTime —
+			 * effects must NOT measure time themselves; subtracting float seconds-since-start
+			 * also quantizes to multiple milliseconds after hours of runtime). The first
+			 * execution after (re)creation RESETS the adaptation history in the shader instead
+			 * of snapping through a huge delta: the 1x1 ping-pong was never written, and
+			 * non-finite garbage would survive any EMA weight. */
+			const bool resetHistory = m_firstFrame;
+			m_firstFrame = false;
 
-			if ( m_firstFrame )
-			{
-				/* First frame: snap adaptation immediately to current luminance. */
-				deltaTime = 100.0F;
-				m_firstFrame = false;
-			}
-			else
-			{
-				deltaTime = constants.time - m_previousTime;
-				deltaTime = std::clamp(deltaTime, 0.001F, 0.5F);
-			}
-
-			m_previousTime = constants.time;
+			const float deltaTime = constants.deltaTime;
 
 			/* ---- Pass 1: Luminance Extraction (HDR -> half-res log-luminance) ---- */
 			{
@@ -820,7 +929,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					.deltaTime = deltaTime,
 					.adaptSpeedUp = m_parameters.adaptSpeedUp,
 					.adaptSpeedDown = m_parameters.adaptSpeedDown,
-					.padding = 0.0F
+					.resetHistory = resetHistory ? 1U : 0U
 				};
 
 				IndirectPostProcessEffect::recordFullscreenPass(
@@ -834,6 +943,86 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				);
 			}
 
+			/* ---- Metered-exposure readback (record) ---- */
+			if ( frameIndex < m_meteredReadback.size() )
+			{
+				auto & slot = m_meteredReadback[frameIndex];
+
+				/* Consume the value this slot captured framesInFlight frames ago FIRST (its
+				 * fence has passed, the memory is host-coherent): the metered ISO becomes
+				 * displayable at that latency, with zero stall. */
+				if ( slot.pending && context.camera != nullptr )
+				{
+					uint16_t halfBits = 0;
+					std::memcpy(&halfBits, slot.mappedPtr, sizeof(halfBits));
+
+					const auto adaptedLogLum = halfToFloat(halfBits);
+
+					if ( std::isfinite(adaptedLogLum) )
+					{
+						m_meteredLuminance = std::exp(adaptedLogLum);
+
+						/* Reproduce the shader's clamp CPU-side, then convert the effective
+						 * multiplier into the SENSITIVITY that produces it at the current
+						 * aperture and shutter — the exposure scales linearly with the ISO
+						 * (EV100 = log2(N²/t · 100/S)), so S = 100 · exposure / exposure@ISO100. */
+						const auto meteredExposure = std::clamp(keyValue / std::max(m_meteredLuminance, 0.001F), minExposure, maxExposure);
+						const auto exposureAtISO100 = Photometry::exposureFromValue100(Photometry::exposureValue100(context.camera->aperture(), context.camera->shutterSpeed(), 100.0F));
+
+						m_meteredSensitivity = 100.0F * meteredExposure / std::max(exposureAtISO100, 1.0e-12F);
+					}
+				}
+
+				/* Then record this frame's capture: the adaptation target just recorded above
+				 * is copied into the slot. The copy sits OUTSIDE any render pass; the barriers
+				 * take the image from the shader-read layout its render pass left it in, and
+				 * hand it back before the auto-exposure pass below samples it. */
+				{
+					const auto & adaptImage = m_adaptTargets[m_currentAdaptIndex].image();
+
+					const Vulkan::Sync::ImageMemoryBarrier toTransfer{
+						*adaptImage,
+						VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+						VK_ACCESS_TRANSFER_READ_BIT,
+						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+						VK_IMAGE_ASPECT_COLOR_BIT
+					};
+
+					commandBuffer.pipelineBarrier(toTransfer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+					VkBufferImageCopy region{};
+					region.bufferOffset = 0;
+					region.bufferRowLength = 0;
+					region.bufferImageHeight = 0;
+					region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+					region.imageOffset = {.x=0, .y=0, .z=0};
+					region.imageExtent = {.width=1, .height=1, .depth=1};
+
+					vkCmdCopyImageToBuffer(
+						commandBuffer.handle(),
+						adaptImage->handle(),
+						VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+						slot.buffer->handle(),
+						1,
+						&region
+					);
+
+					const Vulkan::Sync::ImageMemoryBarrier toShader{
+						*adaptImage,
+						VK_ACCESS_TRANSFER_READ_BIT,
+						VK_ACCESS_SHADER_READ_BIT,
+						VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						VK_IMAGE_ASPECT_COLOR_BIT
+					};
+
+					commandBuffer.pipelineBarrier(toShader, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+					slot.pending = true;
+				}
+			}
+
 			/* ---- Auto-Exposure Tone Mapping ---- */
 			{
 				/* Update descriptor set: binding 0 = HDR input, binding 1 = adapted luminance. */
@@ -844,7 +1033,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					.exposure = exposure,
 					.gamma = m_parameters.gamma,
 					.tonemapOperator = static_cast< uint32_t >(m_parameters.tonemapOperator),
-					.keyValue = m_parameters.keyValue,
+					.keyValue = keyValue,
 					.minExposure = minExposure,
 					.maxExposure = maxExposure,
 					.padding0 = 0.0F,
@@ -868,7 +1057,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		else
 		{
 			/* ---- Standard Tone Mapping (fixed exposure) ---- */
-			m_previousTime = constants.time;
+
+			/* No metering in manual mode: report nothing rather than a stale value. */
+			m_meteredSensitivity = 0.0F;
+			m_meteredLuminance = 0.0F;
 
 			const ToneMappingPushConstants pc{
 				.exposure = exposure,

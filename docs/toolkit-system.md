@@ -145,10 +145,12 @@ auto light = toolkit
 ### Render Target Generators
 
 ```cpp
-// Camera + 2D offscreen texture
+// Camera + 2D offscreen texture. The framing parameter is a lens FOCAL LENGTH in
+// millimeters (physical camera model), NOT an angle: pass DefaultGraphicsFocalLength
+// (13.096 mm = the historical 85 degrees vertical) unless a specific lens is wanted.
 auto [cam, texture] = toolkit
     .setCursor(x, y, z)
-    .generateTexture2DRenderer<Node>("SecurityCam", fov, lookAt, precision, distance, showModel);
+    .generateTexture2DRenderer<Node>("SecurityCam", focalLength, lookAt, precision, distance, showModel);
 
 // Camera + cubemap offscreen rendering (for environment reflections)
 auto [cam, cubemap] = toolkit

@@ -227,7 +227,9 @@ namespace EmEn::Scenes::Component
 
 		this->setFlag(DepthOfFieldEnabled, state);
 
-		/* The scene observes its active camera and (de)materializes the effect. */
+		/* NOTE: Nobody observes this in the engine — the render thread POLLS the four flags
+		 * every frame (PostProcessStack::syncCameraEffects); the notification remains for
+		 * application-side observers. */
 		this->notify(PhysicalEffectsToggled);
 	}
 
@@ -241,7 +243,9 @@ namespace EmEn::Scenes::Component
 
 		this->setFlag(HDREnabled, state);
 
-		/* The scene observes its active camera and (de)materializes the effect. */
+		/* NOTE: Nobody observes this in the engine — the render thread POLLS the four flags
+		 * every frame (PostProcessStack::syncCameraEffects); the notification remains for
+		 * application-side observers. */
 		this->notify(PhysicalEffectsToggled);
 	}
 
@@ -255,7 +259,9 @@ namespace EmEn::Scenes::Component
 
 		this->setFlag(BloomEnabled, state);
 
-		/* The scene observes its active camera and (de)materializes the effect. */
+		/* NOTE: Nobody observes this in the engine — the render thread POLLS the four flags
+		 * every frame (PostProcessStack::syncCameraEffects); the notification remains for
+		 * application-side observers. */
 		this->notify(PhysicalEffectsToggled);
 	}
 
@@ -269,20 +275,31 @@ namespace EmEn::Scenes::Component
 
 		this->setFlag(MotionBlurEnabled, state);
 
-		/* The scene observes its active camera and (de)materializes the effect. */
+		/* NOTE: Nobody observes this in the engine — the render thread POLLS the four flags
+		 * every frame (PostProcessStack::syncCameraEffects); the notification remains for
+		 * application-side observers. */
 		this->notify(PhysicalEffectsToggled);
 	}
 
 	void
 	Camera::addLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
-		/* We don't want to notify an effect twice. */
-		if ( this->isLensEffectPresent(effect) )
 		{
-			return;
-		}
+			const std::lock_guard< std::mutex > lock{m_lensEffectsAccess};
 
-		m_lensEffects.emplace_back(effect);
+			/* We don't want to notify an effect twice. */
+			if ( m_lensEffects != nullptr && std::ranges::find(*m_lensEffects, effect) != m_lensEffects->cend() )
+			{
+				return;
+			}
+
+			/* Copy-on-write publication: a reader holding the previous snapshot keeps
+			 * iterating a list that never changes under it. */
+			auto nextList = m_lensEffects != nullptr ? std::make_shared< DirectEffectList >(*m_lensEffects) : std::make_shared< DirectEffectList >();
+			nextList->emplace_back(effect);
+
+			m_lensEffects = std::move(nextList);
+		}
 
 		this->notify(LensEffectsChanged);
 	}
@@ -290,14 +307,29 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::removeLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
-		const auto lensIt = std::find(m_lensEffects.cbegin(), m_lensEffects.cend(), effect);
-
-		if ( lensIt == m_lensEffects.cend() )
 		{
-			return;
-		}
+			const std::lock_guard< std::mutex > lock{m_lensEffectsAccess};
 
-		m_lensEffects.erase(lensIt);
+			if ( m_lensEffects == nullptr )
+			{
+				return;
+			}
+
+			const auto lensIt = std::find(m_lensEffects->cbegin(), m_lensEffects->cend(), effect);
+
+			if ( lensIt == m_lensEffects->cend() )
+			{
+				return;
+			}
+
+			/* Copy-on-write publication; the removed effect stays alive in every snapshot
+			 * still retained by the renderer (per frame in flight), which is what makes the
+			 * removal safe for command buffers already recorded against it. */
+			auto nextList = std::make_shared< DirectEffectList >(*m_lensEffects);
+			nextList->erase(nextList->cbegin() + std::distance(m_lensEffects->cbegin(), lensIt));
+
+			m_lensEffects = std::move(nextList);
+		}
 
 		this->notify(LensEffectsChanged);
 	}
@@ -305,12 +337,17 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::clearLensEffects () noexcept
 	{
-		if ( m_lensEffects.empty() )
 		{
-			return;
-		}
+			const std::lock_guard< std::mutex > lock{m_lensEffectsAccess};
 
-		m_lensEffects.clear();
+			if ( m_lensEffects == nullptr || m_lensEffects->empty() )
+			{
+				return;
+			}
+
+			/* nullptr IS the empty snapshot; the old list survives in retained snapshots. */
+			m_lensEffects.reset();
+		}
 
 		this->notify(LensEffectsChanged);
 	}

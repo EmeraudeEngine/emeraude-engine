@@ -41,7 +41,6 @@
 #include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"BloomEffect"};
-/* NOLINTEND(cert-err58-cpp) */
 
 namespace
 {
@@ -64,6 +63,8 @@ layout(push_constant) uniform PushConstants
 	float softKnee;
 	float intensity;
 	float spread;
+	float fireflyClamp;
+	uint firstPass;
 };
 
 /* Karis average weight: suppresses firefly pixels by weighting
@@ -149,9 +150,9 @@ void main()
 {
 	vec2 ts = vec2(texelSizeX, texelSizeY);
 
-	/* Anti-firefly (Karis weight) on the first downsample pass only
-	 * (when threshold > 0). Subsequent passes use standard averaging. */
-	vec4 color = downsample13Tap(inputTex, vUV, ts, threshold > 0.0);
+	/* Anti-firefly (Karis weight) on the first downsample pass only.
+	 * Subsequent passes use standard averaging. */
+	vec4 color = downsample13Tap(inputTex, vUV, ts, firstPass != 0u);
 
 	/* Reject NaN/Inf to prevent contamination of the bloom chain. */
 	if (any(isnan(color)) || any(isinf(color)))
@@ -160,7 +161,7 @@ void main()
 		return;
 	}
 
-	if (threshold > 0.0)
+	if (firstPass != 0u)
 	{
 		/* Decode bloom contribution and emissive mask from material properties G-buffer.
 		 * B channel: high nibble = bloomContrib, low nibble = emissiveMask. */
@@ -178,9 +179,12 @@ void main()
 		color.rgb *= bloomContrib;
 	}
 
-	/* Clamp after threshold: Karis handles moderate outliers,
-	 * this catches extreme values that still slip through. */
-	outColor = clamp(color, vec4(0.0), vec4(64.0));
+	/* Clamp after threshold: Karis handles moderate outliers, this catches extreme values
+	 * that still slip through. The ceiling is PROPORTIONAL to the threshold (six stops of
+	 * headroom above it, pushed by the CPU as max(threshold, 1) * 64 so every mip uses the
+	 * same one) — a fixed LDR-era 64 sat four stops BELOW the default 1000-nit threshold and
+	 * flattened every source to identical glare. */
+	outColor = clamp(color, vec4(0.0), vec4(fireflyClamp));
 }
 )GLSL";
 
@@ -382,13 +386,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Downsample descriptor sets (dual input: binding 0 = input, binding 1 = material properties).
-		 * Set [0] is updated per-frame in execute() to point to the input texture,
-		 * so we create per-frame-in-flight copies to avoid descriptor update conflicts.
-		 * Sets [1..4] are pre-written to the previous downsample target.
-		 * Binding 1 (materialPropsTex) is only sampled in the first pass (threshold > 0),
-		 * but must be bound for all passes to satisfy the descriptor set layout. */
-		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
+		/* Downsample descriptor sets (dual input: binding 0 = input, binding 1 = material
+		 * properties). Mip 0 reads the EXTERNAL input, rewritten every frame, so it lives in
+		 * the per-frame-in-flight copies below (m_downFirstPerFrame) — slot [0] of this array
+		 * stays empty. Sets [1..4] are pre-written to the previous downsample target.
+		 * Binding 1 (materialPropsTex) is only sampled in the first pass, but must be bound
+		 * for all passes to satisfy the descriptor set layout. */
+		for ( uint32_t mipLevel = 1; mipLevel < MipLevels; ++mipLevel )
 		{
 			m_downDescSets[mipLevel] = std::make_unique< DescriptorSet >(pool, dualInputLayout);
 			m_downDescSets[mipLevel]->setIdentifier(ClassId, "DownDescSet" + std::to_string(mipLevel), "DescriptorSet");
@@ -398,25 +402,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return false;
 			}
 
-			if ( mipLevel > 0 )
+			const auto & input = m_downTargets[static_cast< size_t >(mipLevel - 1)];
+
+			if ( !m_downDescSets[mipLevel]->writeCombinedImageSampler(0, input) )
 			{
-				const auto & input = m_downTargets[static_cast< size_t >(mipLevel - 1)];
+				return false;
+			}
 
-				if ( !m_downDescSets[mipLevel]->writeCombinedImageSampler(0, input) )
-				{
-					return false;
-				}
-
-				/* Binding 1: write the previous downsample target as a dummy for
-				 * material properties (not sampled in non-threshold passes). */
-				if ( !m_downDescSets[mipLevel]->writeCombinedImageSampler(1, input) )
-				{
-					return false;
-				}
+			/* Binding 1: write the previous downsample target as a dummy for
+			 * material properties (not sampled in non-first passes). */
+			if ( !m_downDescSets[mipLevel]->writeCombinedImageSampler(1, input) )
+			{
+				return false;
 			}
 		}
 
-		/* Per-frame copies of m_downDescSets[0] for safe per-frame updates. */
+		/* Per-frame sets for the first downsample pass (external input, rewritten per frame). */
 		m_downFirstPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "DownDescSet0");
 
 		if ( m_downFirstPerFrame.empty() )
@@ -570,7 +571,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		m_compositePerFrame.clear();
 		m_downFirstPerFrame.clear();
-		m_compositeDescSet.reset();
 
 		for ( auto & descSet : m_upDescSets )
 		{
@@ -619,6 +619,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			intensity = context.camera->bloomIntensity();
 		}
 
+		/* Anti-firefly ceiling: six stops of differentiation headroom above the threshold
+		 * (the ratio the LDR-era constant provided over a threshold of 1). The max() keeps a
+		 * floor when the threshold is 0 ("everything glares"). Every mip gets the SAME value. */
+		const auto fireflyClamp = std::max(threshold, 1.0F) * 64.0F;
+
 		const auto * inputMaterialProperties = context.materialProperties;
 
 
@@ -640,21 +645,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Downsample Chain ---- */
 		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
 		{
-			const auto idx = mipLevel;
-
 			/* Texel size of the INPUT texture for this pass. */
 			float inputW, inputH;
 
 			if ( mipLevel == 0 )
 			{
-				/* First pass reads from the external input. */
-				inputW = static_cast< float >(m_downTargets[0].width() * 2);
-				inputH = static_cast< float >(m_downTargets[0].height() * 2);
+				/* First pass reads from the external input: use the EXACT frame size (a
+				 * half-res target rounds down, so width*2 is off by one texel on odd widths). */
+				inputW = context.constants.frameWidth;
+				inputH = context.constants.frameHeight;
 			}
 			else
 			{
-				inputW = static_cast< float >(m_downTargets[idx - 1].width());
-				inputH = static_cast< float >(m_downTargets[idx - 1].height());
+				inputW = static_cast< float >(m_downTargets[mipLevel - 1].width());
+				inputH = static_cast< float >(m_downTargets[mipLevel - 1].height());
 			}
 
 			const BloomPushConstants pc{
@@ -663,16 +667,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.threshold = (mipLevel == 0) ? threshold : 0.0F,
 				.softKnee = m_parameters.softKnee,
 				.intensity = intensity,
-				.spread = m_parameters.spread
+				.spread = m_parameters.spread,
+				.fireflyClamp = fireflyClamp,
+				.firstPass = (mipLevel == 0) ? 1U : 0U
 			};
 
 			/* For the first pass (i==0), use the per-frame descriptor set
 			 * since it's updated every frame with the external input. */
-			const auto & descSet = (mipLevel == 0) ? *m_downFirstPerFrame[frameIndex] : *m_downDescSets[idx];
+			const auto & descSet = (mipLevel == 0) ? *m_downFirstPerFrame[frameIndex] : *m_downDescSets[mipLevel];
 
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
-				m_downTargets[idx],
+				m_downTargets[mipLevel],
 				*m_downsamplePipeline,
 				*m_downsampleLayout,
 				descSet,
@@ -694,7 +700,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.threshold = 0.0F,
 				.softKnee = 0.0F,
 				.intensity = intensity,
-				.spread = m_parameters.spread
+				.spread = m_parameters.spread,
+				.fireflyClamp = fireflyClamp,
+				.firstPass = 0U
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -719,7 +727,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.threshold = 0.0F,
 				.softKnee = 0.0F,
 				.intensity = intensity,
-				.spread = m_parameters.spread
+				.spread = m_parameters.spread,
+				.fireflyClamp = fireflyClamp,
+				.firstPass = 0U
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

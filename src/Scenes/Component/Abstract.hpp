@@ -77,11 +77,14 @@ namespace EmEn::Scenes::Component
 	 * @brief Class that hold the base of every component that can be attached to an entity.
 	 * @note [OBS][SHARED-OBSERVABLE]
 	 * @extends EmEn::Base::NameableTrait Each component is named.
-	 * @extends EmEn::Base::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
+	 * @extends EmEn::Base::FlagArrayTrait Each component has 16 flags, ALL free for the derived
+	 * classes (this base uses none; `UnusedFlag` = 0 is the first index). ⚠️ The trait silently
+	 * no-ops out-of-bound indices, so a derived class exceeding the capacity gets a flag that
+	 * compiles and never works — Camera already uses 8 of the 16.
 	 * @extends EmEn::Base::ObservableTrait To transfer physical properties changes. FIXME: Observable is kept for future features.
 	 * @extends Animations::AnimatableInterface Component are animatable.
 	 */
-	class EMEN_API Abstract : public Base::NameableTrait, public Base::FlagArrayTrait< 8 >, public Base::ObservableTrait, public Animations::AnimatableInterface
+	class EMEN_API Abstract : public Base::NameableTrait, public Base::FlagArrayTrait< 16 >, public Base::ObservableTrait, public Animations::AnimatableInterface
 	{
 		public:
 

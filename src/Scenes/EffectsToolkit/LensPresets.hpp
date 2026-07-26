@@ -92,5 +92,5 @@ namespace EmEn::Scenes::EffectsToolkit::LensPresets
 	 * @note Pixelation + color quantization + Bayer dithering + scanlines + phosphor bloom + vignetting.
 	 * @return std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > >
 	 */
-	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Retro8Bits () noexcept;;
+	EMEN_API std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > Retro8Bits () noexcept;
 }

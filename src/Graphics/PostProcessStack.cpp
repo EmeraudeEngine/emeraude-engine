@@ -250,6 +250,20 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	std::shared_ptr< Effects::Framebuffer::ToneMapping >
+	PostProcessStack::cameraToneMapping () const noexcept
+	{
+		/* NOTE: m_cameraToneMapping is only ever assigned a ToneMapping (materialized above). */
+		return std::static_pointer_cast< Effects::Framebuffer::ToneMapping >(m_cameraToneMapping);
+	}
+
+	std::shared_ptr< Effects::Framebuffer::DepthOfField >
+	PostProcessStack::cameraDepthOfField () const noexcept
+	{
+		/* NOTE: m_cameraDepthOfField is only ever assigned a DepthOfField (materialized above). */
+		return std::static_pointer_cast< Effects::Framebuffer::DepthOfField >(m_cameraDepthOfField);
+	}
+
 	bool
 	PostProcessStack::createAll (uint32_t width, uint32_t height) const noexcept
 	{

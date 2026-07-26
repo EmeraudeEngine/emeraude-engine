@@ -452,10 +452,21 @@ glare with its threshold in nits). At the bottom it prints the **EV100 and the r
 multiplier from the same APEX equation the tone mapper uses** — so a setting that reads wrong in
 the panel IS wrong on screen. That readout is the point of the panel, not a decoration.
 
-⚠️ With auto-ISO on, the ISO slider is DISABLED and labelled as such: the metering picks the
-sensitivity on the GPU and never writes it back, so no widget can show the value actually in
-effect. Reporting it needs a readback of the adaptation texture — a frame of latency and its own
-piece of work. Do not "fix" the label by pretending the slider reflects the metered value.
+⚠️ With auto-ISO on, the ISO slider is DISABLED (it shows the manual fallback value, not what is
+in effect) and the METERED values are displayed next to it instead: "metered: ISO N | scene avg
+X nits", read back from the GPU adaptation history with framesInFlight frames of latency
+(`ToneMapping::meteredSensitivity()/meteredLuminance()` via
+`PostProcessStack::cameraToneMapping()`). The auto-focus line does the same with the rack-focus
+position ("measured: focus at X m", `DepthOfField::meteredFocusDistance()`). Both are
+render-thread frame-scope reads, which is exactly where the panel draws.
+
+⚠️ **Scene access from an ImGui/overlay draw callback (2026-07-26)**: draw callbacks run on the
+RENDER THREAD, inside the frame's `withSharedActiveScene()` scope (Core's render block holds the
+scene manager's shared lock for the whole frame). They MUST read the scene through
+`Core::m_frameScene` — the pointer Core publishes for exactly that scope — and NEVER call
+`withSharedActiveScene()` again: re-acquiring a `std::shared_mutex` the thread already
+share-owns is undefined behaviour, and deadlocks on Windows SRWLOCK the moment an exclusive
+writer (pause/resume, scene replacement) is queued. The camera panel is the reference example.
 
 ### Using ImGui for Debug
 

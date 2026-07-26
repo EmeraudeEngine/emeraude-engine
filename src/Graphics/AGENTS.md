@@ -895,9 +895,10 @@ This is what makes a light intensity in **candela** mean anything: the illuminan
 `I/d^2`. The previous falloff, `max(1 - (d/r)^2, 0)`, was radius-bounded and artistic — nothing
 was proportional to `1/d^2` anywhere, so a value in lumens was arbitrary.
 
-⚠️ The generated code still multiplies by `legacyUnitCompensation`, a TEMPORARY per-light factor
-that restores the pre-change brightness at `d = r/2` while content is authored in the old units.
-`TODO.md` § "Photometric lighting", phase 2, deletes it.
+`legacyUnitCompensation` — the TEMPORARY per-light factor that restored the pre-change
+brightness while content was authored in the old units — is GONE: photometric phase 2
+removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is the clean
+`saturate(1-(d/r)^4)^2 / (d^2+1)`.
 
 **Interface** (`PostProcessEffect.hpp`):
 - `create(renderer, width, height)` — Allocate GPU resources (IRTs, pipelines, descriptors)
@@ -1188,13 +1189,59 @@ LensPresets:: functions remain the lens-stack building blocks.
   aperture only enters through the CLAMPS (what the ISO range permits). So f/11 → f/32
   changes the depth of field and nothing else until the metering saturates — aperture
   priority, exactly as a real body behaves. The aperture reads as stops of brightness only
-  in manual mode, where the full APEX exposure applies. The metered sensitivity lives on the
-  GPU and is not read back, so the panel cannot display the ISO the camera actually chose.
+  in manual mode, where the full APEX exposure applies.
+- ⚠️ **EV compensation respects the sensor (2026-07-26)**: with auto-ISO on, the bias shifts
+  the METERING TARGET (`keyValue × 2^EC`, applied INSIDE the sensor clamp) instead of
+  post-amplifying the clamped result — +3 EV saturates at the same ISO ceiling, exactly as a
+  real auto-ISO body. In manual mode it stays a straight EV bias on the APEX exposure.
+- **Metered values ARE read back (2026-07-26)**: both GPU-resident measurements come home
+  through a per-frame-in-flight host-visible ring (one tiny persistently-mapped slot per
+  frame; slot N is read when it comes around again — its fence passed — so the read never
+  stalls and costs framesInFlight frames of latency, the standard pattern).
+  `ToneMapping::meteredSensitivity()/meteredLuminance()` (ISO + scene average in nits,
+  decoded from the RGBA16F adaptation history) and `DepthOfField::meteredFocusDistance()`
+  (meters, from the 1x1 RG32F focus history). Access from the panel through
+  `PostProcessStack::cameraToneMapping()/cameraDepthOfField()` — RENDER THREAD, inside the
+  frame scope, like everything the panel touches.
+- ⚠️ **Auto and manual expose IDENTICALLY (2026-07-26)**: the auto-exposure keys on
+  `Photometry::MeteredMiddleGrey` (K=12.5 / (MeterCalibration=1.2 · 100) ≈ 0.104), the value the
+  manual APEX triad lands a correctly metered scene on. The previous key, Reinhard's 0.18, is a
+  display-side grey-card convention — NOT what a K=12.5 meter produces through
+  `exposureFromValue100()` — and kept auto mode 0.79 EV hotter than the same scene shot manually,
+  shifting the auto-ISO window against its own sensor bounds. The three constants live in
+  `Photometry.hpp` (single source); do not reintroduce a literal.
+  Two consequences worth knowing: (1) the adaptation now consumes `PushConstants::deltaTime`
+  (the chain contract — no self-measured time) and its FIRST execution resets the 1x1 history
+  in the shader (`resetHistory` push constant): startup convergence is instantaneous instead of
+  a long transient, and a recycled NaN can no longer poison the EMA forever (same guard as the
+  DoF focus history); (2) ⚠️ any exposure statistic captured BEFORE that reset existed is
+  suspect — the old path could take tens of seconds to converge, and comparisons made against
+  such captures mis-attributed the difference (lived: a keyValue A/B read "no change" against a
+  reference that was in fact an unconverged transient; the METERED ISO readback below is what
+  settled it — gltf-loader meters ~ISO 1000 at f/11 1/250, well inside the sensor bounds).
+- ⚠️ **Bloom intensity = the FRACTION of above-threshold energy the lens scatters (2026-07-26)**:
+  the glare chain carries the full photometric energy (sunlit stone ~20000 nits over a 1000-nit
+  threshold), and the composite is `original + bloom × intensity` in nits — so 1.0 means "the
+  glass scatters ALL of it" and sets any daylight scene ablaze. Camera default 0.03 (a clean
+  modern lens scatters 2-5%; a hazy vintage one >10%). This became visible when the anti-firefly
+  ceiling was fixed: the old fixed `clamp(…, 64)` (LDR-era, four stops BELOW the default
+  threshold) crushed every source to identical, near-invisible glare; the ceiling is now
+  `max(threshold, 1) × 64` — six stops of differentiation headroom — pushed to EVERY downsample
+  mip (`BloomPushConstants::fireflyClamp`).
 - **Automatic modes are the default** (auto-focus + auto-exposure ON at construction).
 - All optics are ANIMATABLE (`AnimationID::Aperture/FocalLength/FocusDistance/
   ExposureCompensation`) — focus pulls and exposure ramps via the animation system.
 - Single-pass lens effects (VHS, grain, B&W...) were ALREADY per-camera via
   `addLensEffect()`; the physical camera extends the model to multi-pass effects.
+- ⚠️ **Lens-effect list = PUBLICATION contract (2026-07-26)**: `Camera::lensEffects()`
+  returns a `std::shared_ptr< const Graphics::DirectEffectList >` SNAPSHOT (nullptr = no
+  effect); every mutation replaces the list wholesale (copy-on-write under the camera's
+  internal lock). The renderer RETAINS the snapshot it records per frame in flight
+  (`Renderer::m_lensEffectsSnapshots`, indexed by `currentFrameIndex()`), so a removed
+  effect survives until the frame slot's fence has passed. This replaced a bare
+  `std::vector` the render thread iterated while KeyPad style-cycling mutated it from the
+  logic thread (use-after-free one keypress away) — do NOT reintroduce a mutable reference
+  accessor, and never destroy a direct effect in place while frames are in flight.
 
 **Camera cut** (`Scene::switchToCamera(Component::Camera &)`): performs a full cut — the
 camera becomes the RENDERED point of view (primary video source reroute through
@@ -1251,9 +1298,16 @@ in COD:AW", SIGGRAPH 2014):
 
 1. **Focus** (1x1 RG32F ping-pong): auto-focus measurement (5x5 Gaussian around screen
    center) + exponential rack focus EMA (R = focus distance, G = timestamp for the frame
-   delta; manual focus pulls are smoothed too). First-frame reset flag (DONT_CARE images).
+   delta; manual focus pulls are smoothed too). First-frame reset flag (DONT_CARE images);
+   on the reset frame the shader must NOT read the undefined history — it falls back to the
+   manual focus distance (an inherited NaN would survive every later EMA and kill the DoF
+   until recreation).
 2. **Setup** (half-res RGBA16F): downsampled color + SIGNED thin-lens CoC in alpha
    (positive = far field, negative = near field; sky lands in the far field naturally).
+   ⚠️ The alpha is the CoC radius in half-res PIXELS (`sensorFraction * targetWidth / 2`,
+   clamped to ±MaxRadius at the source) — NOT a normalized fraction. Every downstream pass
+   consumes pixels directly; skipping that conversion once left the physically-correct CoC
+   ~80x too weak (the ~0.01 fraction was read as pixels).
 3/4. **Near-CoC dilation** (H/V max filter, R16F): spreads the near coverage BEYOND the
    silhouettes — the foreground blur must bleed over the sharp background.
 5. **Far gather** (half-res): golden-angle spiral disc (circular bokeh), scatter-as-gather
@@ -1265,8 +1319,12 @@ in COD:AW", SIGGRAPH 2014):
    modulated by the per-pixel material DoF mask (matprops A low nibble, HUD exemption).
 
 Optics come from the ACTIVE CAMERA (`FrameContext::camera`); quality knobs from
-`Core/Graphics/DepthOfField/` settings (`CoCScale`, `MaxRadius`, `SampleCount`,
-`AutoFocusSpeed`, `NearField`). `NearField=false` skips passes 3/4/6 entirely.
+`Core/Graphics/DepthOfField/` settings (`MaxRadius`, `SampleCount`, `AutoFocusSpeed`,
+`NearField`). `MaxRadius` (default 32, half-res pixels) is a pure performance/quality
+ceiling — the blur AMOUNT is the thin-lens CoC alone, there is no scale factor
+(`CoCScale` was removed 2026-07-26; a stale persisted key is ignored, but a persisted
+`MaxRadius` from an older settings file still caps the blur). `NearField=false` skips
+passes 3/4/6 entirely.
 
 ### FrameContext — Effect Chain Context (Jul 2026)
 

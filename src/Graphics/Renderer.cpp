@@ -1596,11 +1596,14 @@ namespace EmEn::Graphics
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-			/* Process camera lens effects (single-pass). */
+			/* Process camera lens effects (single-pass). The snapshot is RETAINED in this
+			 * frame's slot: it only drops when the slot is reused (fence passed), so effects
+			 * removed from the camera meanwhile survive until the GPU is done with them. */
 			const auto * camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
-			const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
+			auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
+			lensEffectsSnapshot = (camera != nullptr) ? camera->lensEffects() : nullptr;
 
-			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
+			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
 		}
 
 		/* Render the editor gizmos over the scene. */
@@ -1772,11 +1775,13 @@ namespace EmEn::Graphics
 		 * This transitions the swap-chain color to PRESENT_SRC_KHR for presentation. */
 		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-		/* Process camera lens effects (single-pass). */
+		/* Process camera lens effects (single-pass). Same snapshot-retention contract as the
+		 * direct swap-chain path: the slot keeps the list alive for the in-flight frame. */
 		const auto * camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
-		const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
+		auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
+		lensEffectsSnapshot = (camera != nullptr) ? camera->lensEffects() : nullptr;
 
-		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
+		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
 
 		/* Render the editor gizmos over the post-processed scene. */
 		if ( editorManager != nullptr )

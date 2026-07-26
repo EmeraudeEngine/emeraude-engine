@@ -489,12 +489,12 @@ namespace EmEn
 			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
 			 * focal length, focus) belong to the active camera (physical camera model,
 			 * Scenes::Component::Camera), NOT to the settings. */
-			/* CoC sensitivity: scales the thin-lens circle of confusion before clamping. */
-			constexpr auto GraphicsDepthOfFieldCoCScaleKey{"Core/Graphics/DepthOfField/CoCScale"};
-			constexpr auto DefaultGraphicsDepthOfFieldCoCScale{1.0F};
-			/* Blur ceiling: maximum gather radius in half-res pixels. */
+			/* Blur ceiling: maximum gather radius in half-res pixels. A pure performance/quality
+			 * clamp — the blur AMOUNT is the thin-lens circle of confusion, converted to pixels
+			 * from the sensor fraction (no scale factor). 32 half-res = ~64 full-res pixels of
+			 * diameter, past which 48 spiral taps would start to ring. */
 			constexpr auto GraphicsDepthOfFieldMaxRadiusKey{"Core/Graphics/DepthOfField/MaxRadius"};
-			constexpr auto DefaultGraphicsDepthOfFieldMaxRadius{12.0F};
+			constexpr auto DefaultGraphicsDepthOfFieldMaxRadius{32.0F};
 			/* Golden-spiral gather taps per pixel (bokeh quality). */
 			constexpr auto GraphicsDepthOfFieldSampleCountKey{"Core/Graphics/DepthOfField/SampleCount"};
 			constexpr auto DefaultGraphicsDepthOfFieldSampleCount{48U};

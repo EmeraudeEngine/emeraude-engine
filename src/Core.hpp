@@ -1243,6 +1243,15 @@ namespace EmEn
 			std::shared_ptr< Overlay::ImGUIScreen > m_cameraScreen;
 #endif
 
+			/** @brief The scene of the frame BEING RECORDED, exposed to overlay screens.
+			 * @warning RENDER THREAD ONLY, and only valid inside the shared-scene frame scope:
+			 * it is set/cleared around the render block that already holds the scene manager's
+			 * shared lock. Overlay/ImGui draw callbacks run inside that scope and MUST read
+			 * this instead of calling withSharedActiveScene() again — re-acquiring a
+			 * std::shared_mutex the thread already share-owns is undefined behaviour, and
+			 * deadlocks on Windows SRWLOCK as soon as an exclusive waiter is queued. */
+			Scenes::Scene * m_frameScene{nullptr};
+
 			/**
 			 * @brief Logic thread entry point.
 			 * @details Runs physics simulation, scene updates, and calls onCoreProcessLogics().

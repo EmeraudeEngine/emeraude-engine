@@ -26,6 +26,9 @@
 
 #include "CameraPresets.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Graphics/Effects/Lens/ColorGrading.hpp"
 #include "Graphics/Effects/Lens/DustAndHair.hpp"
@@ -298,6 +301,11 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	HighQuality (Component::Camera & camera) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
 
 		/* Modern digital cinema package: fast prime lens, clean full-frame sensor — the format
@@ -314,6 +322,11 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	HumanEye (Component::Camera & camera) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
 
 		/* The eye: short focal length and modest effective aperture — bokeh exists but
@@ -340,6 +353,11 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	VintageBlackAndWhite (Component::Camera & camera) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
 
 		/* 1960s film noir package on 35 mm cinema stock. */
@@ -415,6 +433,11 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	Super8 (Component::Camera & camera) noexcept
 	{
+		if ( !isStyleable(camera) )
+		{
+			return;
+		}
+
 		camera.clearLensEffects();
 
 		/* Super 8 amateur camera: fast f/1.9 lens (the standard on those bodies),

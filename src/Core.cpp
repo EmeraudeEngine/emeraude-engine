@@ -42,7 +42,10 @@
 
 /* Local inclusions. */
 #include "Constants.hpp"
+#include "Graphics/Effects/Framebuffer/DepthOfField.hpp"
+#include "Graphics/Effects/Framebuffer/ToneMapping.hpp"
 #include "Graphics/Photometry.hpp"
+#include "Graphics/PostProcessStack.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
@@ -252,6 +255,11 @@ namespace EmEn
 					return;
 				}
 
+				/* Expose the frame's scene to the overlay screens drawn inside renderFrame():
+				 * they run on THIS thread, inside THIS shared lock, and must not re-acquire it
+				 * (recursive shared_mutex = UB, deadlocks on Windows once a writer queues). */
+				m_frameScene = activeScene.get();
+
 				/* Temporal anti-aliasing contract: advance and apply the sub-pixel projection
 				 * jitter BEFORE the view UBO upload below — every consumer of the frame
 				 * (UBO projection, push-constant MVPs, instance transforms header) must see
@@ -286,6 +294,10 @@ namespace EmEn
 				{
 					m_graphicsRenderer.recorder().captureAndSubmitFrame();
 				}
+
+				/* The frame scope ends with the shared lock: past this point the pointer
+				 * would outlive the guarantee. */
+				m_frameScene = nullptr;
 			}, false);
 
 			/* NOTE: Consume one frame from the on-demand budget. Harmless in continuous mode
@@ -974,7 +986,13 @@ namespace EmEn
 				return;
 			}
 
-			m_sceneManager.withSharedActiveScene([] (const std::shared_ptr< Scenes::Scene > & activeScene) {
+			/* This callback runs on the RENDER THREAD, inside the frame's shared-scene scope
+			 * (Overlay::Manager::render() is called from Renderer::renderFrame(), itself inside
+			 * withSharedActiveScene). Re-locking the scene manager here would re-acquire a
+			 * shared_mutex this thread already share-owns — UB, and a real deadlock on Windows
+			 * SRWLOCK once a writer queues. The frame's scene is read from m_frameScene, the
+			 * pointer Core publishes for exactly this scope. */
+			[] (Scenes::Scene * const activeScene) {
 				if ( activeScene == nullptr )
 				{
 					ImGui::TextUnformatted("No active scene.");
@@ -1009,7 +1027,7 @@ namespace EmEn
 
 					auto sensorWidth = camera->sensorWidth();
 
-					if ( ImGui::SliderFloat("Sensor width (mm)", &sensorWidth, 6.0F, 70.0F, "%.1f") )
+					if ( ImGui::SliderFloat("Sensor width (mm)", &sensorWidth, 5.5F, 70.0F, "%.1f") )
 					{
 						camera->setSensorWidth(sensorWidth);
 					}
@@ -1021,7 +1039,23 @@ namespace EmEn
 						camera->setAutoFocus(autoFocus);
 					}
 
-					if ( !autoFocus )
+					if ( autoFocus )
+					{
+						/* The rack-focus position lives on the GPU (1x1 focus history); the
+						 * camera-materialized DoF reads it back with framesInFlight frames of
+						 * latency. Same frame-scope contract as the metered ISO below. */
+						const auto depthOfField = activeScene->postProcessStack() != nullptr ? activeScene->postProcessStack()->cameraDepthOfField() : nullptr;
+
+						if ( depthOfField != nullptr && depthOfField->meteredFocusDistance() > 0.0F )
+						{
+							ImGui::Text("measured: focus at %.2f m", depthOfField->meteredFocusDistance());
+						}
+						else
+						{
+							ImGui::TextDisabled("measuring...");
+						}
+					}
+					else
 					{
 						auto focusDistance = camera->focusDistance();
 
@@ -1051,11 +1085,10 @@ namespace EmEn
 
 					auto sensitivity = camera->sensitivity();
 
-					/* ⚠️ With auto-ISO on, the metering picks the sensitivity on the GPU and never
-					 * writes it back, so this slider does NOT show what is in effect — it shows
-					 * the manual value the panel would fall back to. Disabled rather than
-					 * mislabelled: reporting the metered ISO needs a readback of the adaptation
-					 * texture, which is a frame of latency and its own piece of work. */
+					/* ⚠️ With auto-ISO on, the metering picks the sensitivity on the GPU, so this
+					 * slider does NOT show what is in effect — it shows the manual value the panel
+					 * would fall back to. The METERED value is displayed below instead, read back
+					 * from the adaptation history with framesInFlight frames of latency. */
 					ImGui::BeginDisabled(autoExposure);
 
 					if ( ImGui::SliderFloat("ISO", &sensitivity, camera->minSensitivity(), camera->maxSensitivity(), "%.0f", ImGuiSliderFlags_Logarithmic) && !autoExposure )
@@ -1067,7 +1100,24 @@ namespace EmEn
 
 					if ( autoExposure )
 					{
-						ImGui::TextDisabled("metered on the GPU, not read back — range %.0f-%.0f ISO", camera->minSensitivity(), camera->maxSensitivity());
+						/* The camera-materialized tone mapper owns the metering; the panel draws
+						 * on the render thread inside the frame scope, so reading it here is the
+						 * documented contract (PostProcessStack::cameraToneMapping()). */
+						const auto toneMapping = activeScene->postProcessStack() != nullptr ? activeScene->postProcessStack()->cameraToneMapping() : nullptr;
+
+						if ( toneMapping != nullptr && toneMapping->meteredSensitivity() > 0.0F )
+						{
+							ImGui::Text("metered: ISO %.0f | scene avg %.1f nits", toneMapping->meteredSensitivity(), toneMapping->meteredLuminance());
+
+							if ( toneMapping->meteredSensitivity() <= camera->minSensitivity() || toneMapping->meteredSensitivity() >= camera->maxSensitivity() )
+							{
+								ImGui::TextDisabled("(saturated at the sensor bound — range %.0f-%.0f ISO)", camera->minSensitivity(), camera->maxSensitivity());
+							}
+						}
+						else
+						{
+							ImGui::TextDisabled("metering... — range %.0f-%.0f ISO", camera->minSensitivity(), camera->maxSensitivity());
+						}
 					}
 
 					auto exposureCompensation = camera->exposureCompensation();
@@ -1127,7 +1177,9 @@ namespace EmEn
 
 						auto intensity = camera->bloomIntensity();
 
-						if ( ImGui::SliderFloat("Glare intensity", &intensity, 0.0F, 4.0F, "%.2f") )
+						/* Physical scattered FRACTION: a clean lens sits at 2-5%, a hazy vintage
+						 * one above 10% — 25% is already a heavily veiling glass. */
+						if ( ImGui::SliderFloat("Glare intensity", &intensity, 0.0F, 0.25F, "%.3f") )
 						{
 							camera->setBloomIntensity(intensity);
 						}
@@ -1147,7 +1199,7 @@ namespace EmEn
 					ImGui::TextDisabled("(computed at the manual ISO above — the metered one differs)");
 				}
 				ImGui::TextDisabled("sunlit 100000 lx ~ EV15 | overcast ~ EV12 | lit interior ~ EV7");
-			}, false);
+			}(m_frameScene);
 
 			ImGui::End();
 		});

@@ -343,6 +343,17 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   Measured on `gltf-loader` (mean luma / blown / midtones): 67.2 / 0.1% / 33.9% before the project,
   110.2 / 34.2% / 10.2% with lights converted alone (incoherent), 194.0 / 0.2% / 75.4% with the
   ambient converted, **137.6 / 0.0% / 90.4%** with middle grey. `liminal`: 130.9 / 0.0% / 93.6%.
+  FOLLOW-UP (2026-07-26): keyValue is now `Photometry::MeteredMiddleGrey` = 12.5/(1.2·100) ≈
+  0.104, NOT 0.18 — Reinhard's grey card is a display-side convention and kept the auto mode
+  0.79 EV hotter than the same scene shot with the manual APEX triad (two standard conventions,
+  mixed). Auto and manual now land a metered scene identically and the ISO bounds keep their
+  meaning; scenes read ~0.8 EV darker in auto (gltf-loader median 101 → 83, mean 118 → 114,
+  0% blown). Constants single-sourced in `Photometry.hpp` (MeterCalibration promoted,
+  ReflectedMeterK added). In the same pass, the bloom's anti-firefly ceiling became
+  `max(threshold,1)×64` on every mip (was a fixed LDR-era 64 nits, four stops BELOW the default
+  threshold — every source crushed to identical glare) and `bloomIntensity` became a PHYSICAL
+  scattered fraction, default 0.03 (the composite adds full photometric energy in nits; 1.0
+  meant "the lens scatters 100%" and set daylight ablaze — 15.4% of the frame clipped).
 
   SKY: DONE. A skybox is self-illuminating, so it now carries a real luminance:
   `BasicResource` gained `setEmissiveStrength()` (free structurally — the material-properties
@@ -465,6 +476,20 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   artistic override.
   Measured on `gltf-loader` at f/11: local contrast `|grad|` **2.861 -> 9.940**, ×3.5, the
   foreground finally sharp as a small aperture demands.
+  FOLLOW-UP (2026-07-26, code inspection): the normalisation above never reached the screen — the
+  setup stored the CoC as a FRACTION of the image width but the gathers multiplied it by
+  `MaxRadius` (12) instead of converting to pixels (`fraction * halfResWidth / 2`, ~×720 at
+  2880-wide), leaving the blur ~80x too weak and resolution-dependent: subject isolation was
+  impossible (owner-reported symptom). Fixed at the source: the setup now writes the SIGNED CoC
+  radius in half-res PIXELS, clamped by `MaxRadius` — which becomes a pure performance/quality
+  ceiling (default raised 12 -> 32) — and every downstream pass (dilate, gathers, composite blend)
+  consumes pixels directly. `CoCScale` is REMOVED (key and member): the physics is the only truth.
+  Also fixed in the same pass: first-frame read of the undefined 1x1 focus history (NaN could
+  poison the EMA forever; the reset frame now falls back to the manual focus distance) and the
+  dead `texelSize` push constants of the composite. ⚠️ A persisted `MaxRadius` from an older
+  settings file still caps the new default; the stale `CoCScale` entry is simply ignored.
+  Verified on `gltf-loader`: close-focus shot (capital at 0.6 m, courtyard at ~12 m), subject
+  sharp, background visibly defocused at f/2.8 / 13.1 mm.
 
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
 
