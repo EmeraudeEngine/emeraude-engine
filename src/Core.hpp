@@ -1238,6 +1238,11 @@ namespace EmEn
 			 */
 			bool initializeCoreScreen () noexcept;
 
+#ifdef IMGUI_ENABLED
+			/** @brief The physical camera panel, toggled with Shift+F2. */
+			std::shared_ptr< Overlay::ImGUIScreen > m_cameraScreen;
+#endif
+
 			/**
 			 * @brief Logic thread entry point.
 			 * @details Runs physics simulation, scene updates, and calls onCoreProcessLogics().

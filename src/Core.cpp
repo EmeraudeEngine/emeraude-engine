@@ -42,6 +42,8 @@
 
 /* Local inclusions. */
 #include "Constants.hpp"
+#include "Graphics/Photometry.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
 #include "IO/IO.hpp"
@@ -594,7 +596,7 @@ namespace EmEn
 
 			m_coreHelp.registerShortcut("Quit the application.", KeyEscape, ModKeyShift);
 			m_coreHelp.registerShortcut("Print the active scene content in console.", KeyF1, ModKeyShift);
-			m_coreHelp.registerShortcut("Provoke a swap-chain re-creation (Experimental).", KeyF2, ModKeyShift);
+			m_coreHelp.registerShortcut("Toggle the physical camera panel (requires ImGui).", KeyF2, ModKeyShift);
 			m_coreHelp.registerShortcut("Toggle scene editor mode.", KeyF3, ModKeyShift);
 			m_coreHelp.registerShortcut("Reset the window size to defaults.", KeyF4, ModKeyShift);
 			m_coreHelp.registerShortcut("Open settings file in text editor.", KeyF5, ModKeyShift);
@@ -959,6 +961,186 @@ namespace EmEn
 		});
 
 		screen->setVisibility(false);
+
+		/* PHYSICAL CAMERA panel, toggled with Shift+F2. The camera is the single source of truth
+		 * for the photographic behaviour of the image — optics, exposure triad, and the effects it
+		 * materializes — so a panel bound to it replaces a rebuild for every tweak. The EV100
+		 * readout at the bottom is the point: it makes the physics legible while you drag. */
+		m_cameraScreen = m_overlayManager.createImGUIScreen("PhysicalCameraScreen", [this] () {
+			if ( !ImGui::Begin("Physical camera") )
+			{
+				ImGui::End();
+
+				return;
+			}
+
+			m_sceneManager.withSharedActiveScene([] (const std::shared_ptr< Scenes::Scene > & activeScene) {
+				if ( activeScene == nullptr )
+				{
+					ImGui::TextUnformatted("No active scene.");
+
+					return;
+				}
+
+				auto * camera = activeScene->activeCamera();
+
+				if ( camera == nullptr )
+				{
+					ImGui::TextUnformatted("No active camera.");
+
+					return;
+				}
+
+				if ( ImGui::CollapsingHeader("Optics", ImGuiTreeNodeFlags_DefaultOpen) )
+				{
+					auto focalLength = camera->focalLength();
+
+					if ( ImGui::SliderFloat("Focal length (mm)", &focalLength, 8.0F, 300.0F, "%.0f") )
+					{
+						camera->setFocalLength(focalLength);
+					}
+
+					auto aperture = camera->aperture();
+
+					if ( ImGui::SliderFloat("Aperture (f/N)", &aperture, 1.0F, 32.0F, "f/%.1f") )
+					{
+						camera->setAperture(aperture);
+					}
+
+					auto sensorWidth = camera->sensorWidth();
+
+					if ( ImGui::SliderFloat("Sensor width (mm)", &sensorWidth, 6.0F, 70.0F, "%.1f") )
+					{
+						camera->setSensorWidth(sensorWidth);
+					}
+
+					auto autoFocus = camera->isAutoFocusEnabled();
+
+					if ( ImGui::Checkbox("Auto-focus", &autoFocus) )
+					{
+						camera->setAutoFocus(autoFocus);
+					}
+
+					if ( !autoFocus )
+					{
+						auto focusDistance = camera->focusDistance();
+
+						if ( ImGui::SliderFloat("Focus distance (m)", &focusDistance, 0.1F, 200.0F, "%.2f", ImGuiSliderFlags_Logarithmic) )
+						{
+							camera->setFocusDistance(focusDistance);
+						}
+					}
+				}
+
+				if ( ImGui::CollapsingHeader("Exposure", ImGuiTreeNodeFlags_DefaultOpen) )
+				{
+					/* Shown as the denominator, the way a shutter speed is actually read. */
+					auto shutterDenominator = 1.0F / std::max(camera->shutterSpeed(), 1.0e-6F);
+
+					if ( ImGui::SliderFloat("Shutter (1/x s)", &shutterDenominator, 4.0F, 4000.0F, "1/%.0f", ImGuiSliderFlags_Logarithmic) )
+					{
+						camera->setShutterSpeed(1.0F / std::max(shutterDenominator, 1.0F));
+					}
+
+					auto autoExposure = camera->isAutoExposureEnabled();
+
+					if ( ImGui::Checkbox("Auto-ISO", &autoExposure) )
+					{
+						camera->setAutoExposure(autoExposure);
+					}
+
+					auto sensitivity = camera->sensitivity();
+
+					/* ⚠️ With auto-ISO on, the metering picks the sensitivity on the GPU and never
+					 * writes it back, so this slider does NOT show what is in effect — it shows
+					 * the manual value the panel would fall back to. Disabled rather than
+					 * mislabelled: reporting the metered ISO needs a readback of the adaptation
+					 * texture, which is a frame of latency and its own piece of work. */
+					ImGui::BeginDisabled(autoExposure);
+
+					if ( ImGui::SliderFloat("ISO", &sensitivity, camera->minSensitivity(), camera->maxSensitivity(), "%.0f", ImGuiSliderFlags_Logarithmic) && !autoExposure )
+					{
+						camera->setSensitivity(sensitivity);
+					}
+
+					ImGui::EndDisabled();
+
+					if ( autoExposure )
+					{
+						ImGui::TextDisabled("metered on the GPU, not read back — range %.0f-%.0f ISO", camera->minSensitivity(), camera->maxSensitivity());
+					}
+
+					auto exposureCompensation = camera->exposureCompensation();
+
+					if ( ImGui::SliderFloat("Compensation (EV)", &exposureCompensation, -5.0F, 5.0F, "%+.2f") )
+					{
+						camera->setExposureCompensation(exposureCompensation);
+					}
+				}
+
+				if ( ImGui::CollapsingHeader("Photographic effects", ImGuiTreeNodeFlags_DefaultOpen) )
+				{
+					auto depthOfField = camera->isDepthOfFieldEnabled();
+
+					if ( ImGui::Checkbox("Depth of field", &depthOfField) )
+					{
+						camera->enableDepthOfField(depthOfField);
+					}
+
+					auto HDR = camera->isHDREnabled();
+
+					if ( ImGui::Checkbox("HDR (tone mapping)", &HDR) )
+					{
+						camera->enableHDR(HDR);
+					}
+
+					auto bloom = camera->isBloomEnabled();
+
+					if ( ImGui::Checkbox("Lens glare (bloom)", &bloom) )
+					{
+						camera->enableBloom(bloom);
+					}
+
+					if ( bloom )
+					{
+						auto threshold = camera->bloomThreshold();
+
+						if ( ImGui::SliderFloat("Glare threshold (nits)", &threshold, 1.0F, 20000.0F, "%.0f", ImGuiSliderFlags_Logarithmic) )
+						{
+							camera->setBloomThreshold(threshold);
+						}
+
+						auto intensity = camera->bloomIntensity();
+
+						if ( ImGui::SliderFloat("Glare intensity", &intensity, 0.0F, 4.0F, "%.2f") )
+						{
+							camera->setBloomIntensity(intensity);
+						}
+					}
+				}
+
+				/* The readout that makes the model legible: the same APEX equation the tone mapper
+				 * uses, so a setting that reads wrong here IS wrong on screen. */
+				ImGui::Separator();
+
+				const auto exposureValue = Graphics::Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->sensitivity());
+
+				ImGui::Text("EV100 %.2f   exposure %.3e", exposureValue, Graphics::Photometry::exposureFromValue100(exposureValue));
+
+				if ( camera->isAutoExposureEnabled() )
+				{
+					ImGui::TextDisabled("(computed at the manual ISO above — the metered one differs)");
+				}
+				ImGui::TextDisabled("sunlit 100000 lx ~ EV15 | overcast ~ EV12 | lit interior ~ EV7");
+			}, false);
+
+			ImGui::End();
+		});
+
+		if ( m_cameraScreen != nullptr )
+		{
+			m_cameraScreen->setVisibility(false);
+		}
 #else
 		const auto screen = m_overlayManager.createScreen("CoreScreen", false, false);
 #endif
@@ -1322,10 +1504,14 @@ namespace EmEn
 					return true;
 
 				case KeyF2 :
-					Tracer::info(ClassId, "Force refresh the rendering system!");
-
-					m_graphicsRenderer.setSwapChainDegraded();
-
+#ifdef IMGUI_ENABLED
+					if ( m_cameraScreen != nullptr )
+					{
+						m_cameraScreen->setVisibility(!m_cameraScreen->isVisible());
+					}
+#else
+					Tracer::info(ClassId, "The physical camera panel requires EMERAUDE_ENABLE_IMGUI.");
+#endif
 					return true;
 
 				case KeyF3 :

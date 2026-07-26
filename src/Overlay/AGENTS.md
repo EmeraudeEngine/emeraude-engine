@@ -437,6 +437,26 @@ pixmap.drawText(20, 20, "HP: 100", font, Color::White);
 surface->markDirty();
 ```
 
+### The Physical Camera Panel (Shift+F2)
+
+`Core::initializeCoreScreen()` registers an ImGUI screen named `PhysicalCameraScreen`, hidden by
+default and toggled by **Shift+F2** — a shortcut that used to force a swap-chain re-creation
+(owner decision 2026-07-26: none of the twelve Shift+F<n> was free, and that experimental debug
+path was the least used). Requires `-DEMERAUDE_ENABLE_IMGUI=On`; without it the shortcut only
+traces a hint.
+
+It binds the ACTIVE camera, which is the single source of truth for the photographic behaviour of
+the image: optics (focal length, f-number, sensor width, focus), the exposure triad (shutter, ISO,
+EV compensation) and the effects the camera materializes (depth of field, HDR/tone mapping, lens
+glare with its threshold in nits). At the bottom it prints the **EV100 and the resulting exposure
+multiplier from the same APEX equation the tone mapper uses** — so a setting that reads wrong in
+the panel IS wrong on screen. That readout is the point of the panel, not a decoration.
+
+⚠️ With auto-ISO on, the ISO slider is DISABLED and labelled as such: the metering picks the
+sensitivity on the GPU and never writes it back, so no widget can show the value actually in
+effect. Reporting it needs a readback of the adaptation texture — a frame of latency and its own
+piece of work. Do not "fix" the label by pretending the slider reflects the metered value.
+
 ### Using ImGui for Debug
 
 ImGui screens are **retained**: you register a draw callback once via
