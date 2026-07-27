@@ -1977,7 +1977,11 @@ namespace EmEn::Graphics::Material
 					std::string{SurfaceTransmissionColor},
 					MaterialUB(UniformBlock::Component::AttenuationColor),
 					MaterialUB(UniformBlock::Component::AttenuationDistance),
-					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : MaterialUB(UniformBlock::Component::ThicknessFactor)
+					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : MaterialUB(UniformBlock::Component::ThicknessFactor),
+					/* The grab pass hands over the rendered scene in nits; the environment cubemap
+					 * hands over a normalized [0,1] texel. Only the latter needs to be scaled by
+					 * the sky luminance downstream. */
+					m_isUsingGrabPassForTransmission
 				);
 			}
 		}

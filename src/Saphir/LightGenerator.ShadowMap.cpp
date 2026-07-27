@@ -484,7 +484,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & viewMatrix, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept
+	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept
 	{
 		std::stringstream code{};
 
@@ -492,10 +492,13 @@ namespace EmEn::Saphir
 
 		code << "float shadowFactor = 1.0;" "\n\n";
 
-		/* Compute view-space depth for cascade selection. */
+		/* Compute view-space depth for cascade selection.
+		 * NOTE: read straight off the interpolated view-space position. Re-deriving it from
+		 * the world-space position would need the view matrix, which no fragment shader on
+		 * the main render target can reach. */
 		code <<
 			"/* Compute view-space depth for cascade selection. */" "\n"
-			"const float viewDepth = abs((" << viewMatrix << " * vec4(" << fragmentPositionWorldSpace << ", 1.0)).z);" "\n\n";
+			"const float viewDepth = abs(" << fragmentPositionViewSpace << ".z);" "\n\n";
 
 		/* Determine which cascade to use based on view-space depth. */
 		code <<

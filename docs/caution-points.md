@@ -561,6 +561,110 @@ if ( materialType == PBRResource::ClassId )
 > **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
 > (shadowRayVisibility + gating + ambient push constants), `RTGI.cpp` (gating).
 
+### Fixed: SimplePass normal-mapped shader referenced an undeclared `N` — in BOTH quality levels (Jul 2026)
+
+> [!WARNING]
+> **A `SimplePass` material with a normal map fails to compile the moment a post-process
+> effect enables the normal G-buffer attachment.** Symptom seen on WaterWorld / BallsOfSteel:
+> `Unable to compile shader 'RenderableInstanceSimplePassFragmentShader'`, then a cascade of
+> `Unable to get ready the renderable instance` for every affected renderable — the scene
+> renders nothing. Three distinct GLSL errors were hit, one per shading path:
+> `'N' : undeclared identifier` (high-quality Blinn-Phong), `'N' : redefinition` (high-quality
+> PBR), `'ViewTBNMatrix' : undeclared identifier` (low-quality Gouraud, any material).
+>
+> **Root cause:**
+> - `SceneRendering` writes `svOutputNormal` for the `AmbientPass` **and** the `SimplePass`,
+>   using `LightGenerator::finalNormalViewSpaceExpression()`, which returns the bare identifier
+>   `N` (`= normalize(transpose(ViewTBNMatrix) * surfaceNormal)`) whenever normal mapping is on.
+> - `N` was only declared in the `AmbientPass` branch of `generateFragmentShaderCode()`. But
+>   `checkRenderPassType()` **remaps `SimplePass` to a light-pass type**, so a `SimplePass` never
+>   entered that branch → `N` (and its `ViewTBNMatrix` dependency) was never declared.
+> - **Latent** until then: with no post-process the normal attachment does not exist, so the
+>   `svOutputNormal` write is never generated and the missing symbols are never referenced.
+>
+> **The quality trap (⚠️ the load-bearing subtlety):** high and low quality
+> (`Core/Graphics/Shader/EnableHighQuality`, default `false`) route through **different
+> generators**. In **high** quality PBR self-declares a two-sided-flipped `N` and Blinn-Phong
+> does not; in **low** quality **every** material — PBR included — is shaded by the **Gouraud**
+> generator, which declares neither `N` nor requests `ViewTBNMatrix`. So a fix validated in one
+> quality level can still be broken in the other. The first fix attempt passed high quality
+> then failed low quality on the exact same scene.
+>
+> **Fix (two guards, both quality-aware):**
+> - `generateFragmentShaderCode()` declares `N` up-front for
+>   `AmbientPass || (SimplePass && !(m_usePBRMode && highQualityEnabled()))` — everything except
+>   the *only* self-declaring path, high-quality PBR (declaring it there would redefine `N`).
+> - `generateVertexShaderCode()` synthesizes `ViewTBNMatrix` (`ToNextStage`) for
+>   `SimplePass && !highQualityEnabled()` — the low-quality Gouraud vertex path is the only one
+>   that does not request it itself. Keeps the G-buffer normal normal-mapped in both levels.
+>
+> **Files involved:**
+> - `Saphir/LightGenerator.cpp:generateFragmentShaderCode()` — up-front `N` guard
+> - `Saphir/LightGenerator.cpp:generateVertexShaderCode()` — `ViewTBNMatrix` request for low-Q SimplePass
+> - `Saphir/LightGenerator.PBR.cpp` — high-quality PBR path self-declares `N`
+> - `Saphir/LightGenerator.PerVertex.cpp` — Gouraud (low quality), declares no `N`
+> - `Saphir/Generator/SceneRendering.cpp:561` — `svOutputNormal` write (AmbientPass || SimplePass)
+> - See `src/Saphir/AGENTS.md` → "MRT normal output — the `N` declaration contract".
+>
+> **Verification:** WaterWorld covers all four combinations in one scene — Standard floor
+> (`WaterWorldSceneFloor`) + PBR sea (`WaterWorldSea`) × high/low quality. Toggle
+> `EnableHighQuality` and confirm zero shader errors in both.
+
+### Fixed: Direct diffuse was missing the Lambertian 1/pi — Standard vs PBR disagreed by a factor of pi (Jul 2026)
+
+**Symptom.** Sunlit ground rendered markedly brighter than the sky that lit it, and brighter than a
+PBR surface beside it under the same light. Owner's words: "flashy as hell". On `water-world`, sand
+under a 100000 lx sun reached ~28000 nits against an 8000-nit sky dome.
+
+**Root cause.** Light intensities are ILLUMINANCE in lux, so a Lambertian surface emits
+`albedo * E * cos(theta) / pi`. That `1/pi` existed in exactly ONE place in the whole Saphir
+generator — the ambient pass (`LightGenerator.cpp`, `albedo * 0.3183098862`). The PBR generator had
+its own (`LightGenerator.PBR.cpp`: `kD * albedo / 3.14159265`). The **legacy/Standard direct diffuse
+had none**, so the two material models differed by pi (~3.14x) on direct lighting.
+
+**Fix.** `LightGenerator::generateFinalFragmentOutput()` now builds a `diffuseIlluminance`
+expression (`lightIntensity * 0.3183098862`) and uses it at all four diffuse emission sites (plain,
+reflection, refraction, reflection+refraction).
+
+> [!WARNING]
+> The normalisation is deliberately **NOT** folded into `finaleDiffuseFactor`: that same expression
+> is reused as a raw geometric N.L term inside the PBR low-quality specular `pow()` further down, and
+> scaling it there would change the highlight exponent's input rather than its energy.
+
+**Still open:** the legacy specular is not normalised either (see `TODO.md`) — that one changes the
+look of every legacy material, so it is an owner decision.
+
+### Fixed: the material-facing grab pass was 8-bit under an HDR scene, and its transmission was scaled twice (Jul 2026)
+
+Two coupled defects on grab-pass transmission (water, glass — any `setTransmissionComponentFromGrabPass`).
+
+**(a) Format.** `Renderer` allocated the grab with `swapChainCreateInfo.imageFormat` — an 8-bit
+`B8G8R8A8_SRGB` — while the scene target it is blitted from is `R16G16B16A16_SFLOAT` under HDR.
+`vkCmdBlitImage` therefore **clamped the scene radiance to [0,1]**, so every refraction sampled a
+blown-out white image. Note the `PostProcessor` has its own, separate grab that always honoured HDR;
+only the material-facing one did not.
+
+Fixed by `Renderer::refreshGrabPass()`, which derives format and extent from the image the grab
+actually copies (the scene target when post-processing is active, the swap chain otherwise). It is
+called at renderer init, from both exits of `recreateSceneTarget()`, and on resize.
+
+**(b) Unit.** With (a) fixed, the shallow water turned solid white. The PBR reflection+transmission
+block scaled BOTH terms by `scaledIBLIntensity()` = `IBLIntensity * backgroundLuminance`. That is
+correct for the reflection — a cubemap texel is normalized [0,1] and needs the sky luminance to
+become a luminance — but **wrong for a grab-pass transmission, which is already the rendered scene
+in nits**. It multiplied the scene by the sky luminance a second time. Worst at the shoreline, where
+Beer's law absorbs almost nothing so the sunlit sand comes through undimmed.
+
+Fixed by teaching the generator the unit of its source:
+`LightGenerator::declareSurfaceTransmission(..., bool transmissionIsSceneRadiance)`, passed as
+`m_isUsingGrabPassForTransmission` from `PBRResource`. When set, the transmission term skips the
+luminance scale; the reflection term always keeps it.
+
+> [!IMPORTANT]
+> **The rule: scale by the environment luminance only what came out of the environment cubemap.**
+> Anything read back from the rendered scene (grab pass, and by extension any screen-space capture)
+> is already an absolute luminance.
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]

@@ -76,7 +76,7 @@ namespace EmEn::Saphir::Generator
 					this->enableFlag(HighQualityEnabled);
 				}
 
-				this->setPOMIterations(this->highQualityEnabled() ? settings.getOrSetDefault< int >(POMIterationsKey, DefaultPOMIterations) : 0);
+				this->setPOMIterations(this->highQualityEnabled() ? settings.getOrSetDefault< int >(GraphicsTexturePOMIterationsKey, DefaultGraphicsTexturePOMIterations) : 0);
 
 				if ( (this->materialEnabled() && this->getMaterialInterface()->useEnvironmentCubemap()) || Graphics::renderPassUsesColorProjection(renderPassType) )
 				{

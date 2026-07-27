@@ -550,10 +550,14 @@ namespace EmEn::Saphir
 			 * @param transmissionColorVariableName A reference to a string for GLSL variable holding the sampled transmission color (from cubemap).
 			 * @param attenuationDistanceVariableName A reference to a string for GLSL variable holding the Beer's law attenuation distance.
 			 * @param thicknessVariableName A reference to a string for GLSL variable holding the material thickness.
+			 * @param transmissionIsSceneRadiance Set when the transmission color was sampled from the
+			 * GRAB PASS rather than from the environment cubemap. It changes the UNIT of the source and
+			 * therefore whether it must be scaled by the environment luminance — see
+			 * transmissionIsSceneRadiance(). Default false (cubemap).
 			 * @return void
 			 */
 			void
-			declareSurfaceTransmission (const std::string & factorVariableName, const std::string & transmissionColorVariableName, const std::string & attenuationColorVariableName, const std::string & attenuationDistanceVariableName, const std::string & thicknessVariableName) noexcept
+			declareSurfaceTransmission (const std::string & factorVariableName, const std::string & transmissionColorVariableName, const std::string & attenuationColorVariableName, const std::string & attenuationDistanceVariableName, const std::string & thicknessVariableName, bool transmissionIsSceneRadiance = false) noexcept
 			{
 				m_surfaceTransmissionFactor = factorVariableName;
 				m_surfaceTransmissionColor = transmissionColorVariableName;
@@ -561,6 +565,24 @@ namespace EmEn::Saphir
 				m_surfaceAttenuationDistance = attenuationDistanceVariableName;
 				m_surfaceThicknessFactor = thicknessVariableName;
 				m_useTransmission = true;
+				m_transmissionIsSceneRadiance = transmissionIsSceneRadiance;
+			}
+
+			/**
+			 * @brief Returns whether the transmitted color is already an absolute scene luminance.
+			 *
+			 * The environment cubemap is a NORMALIZED [0,1] source, so a reflection or a transmission
+			 * sampled from it must be multiplied by the sky luminance to become a luminance. The GRAB
+			 * PASS is not: it is a copy of the rendered scene, in nits, so scaling it again multiplies
+			 * the whole scene by the sky luminance a second time.
+			 *
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			transmissionIsSceneRadiance () const noexcept
+			{
+				return m_transmissionIsSceneRadiance;
 			}
 
 			/**
@@ -918,7 +940,7 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & viewMatrix, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept;
+			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept;
 
 			/**
 			 * @brief Returns the variable responsible for the light position in world space.
@@ -1084,6 +1106,7 @@ namespace EmEn::Saphir
 			bool m_useSheen{false};
 			bool m_useAnisotropy{false};
 			bool m_useTransmission{false};
+			bool m_transmissionIsSceneRadiance{false};
 			bool m_useIridescence{false};
 			bool m_useKHRSpecular{false};
 			bool m_useMaterialIOR{false};

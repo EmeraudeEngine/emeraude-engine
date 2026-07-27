@@ -1392,7 +1392,13 @@ namespace EmEn::Scenes
 
 				if ( useShadow && useColorProjection )
 				{
-					passType = light->usesCSM() ? RenderPassType::DirectionalLightPassFullCSM : RenderPassType::DirectionalLightPassFull;
+					/* NOTE: A cascaded light keeps its shadow and drops the projection. The two
+					 * are mutually exclusive by contract (docs/shadow-mapping.md): the light-space
+					 * position is resolved per cascade in the fragment shader and cannot address a
+					 * single projection texture, and the CSM light block declares no projection
+					 * member. Asking for both used to name a pass whose shader cannot compile,
+					 * which broke the whole renderable instance — shadow is the load-bearing half. */
+					passType = light->usesCSM() ? RenderPassType::DirectionalLightPassCSM : RenderPassType::DirectionalLightPassFull;
 				}
 				else if ( useShadow )
 				{
@@ -1654,6 +1660,17 @@ namespace EmEn::Scenes
 				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassShadowMap);
 				renderPassTypes.emplace_back(RenderPassType::PointLightPassShadowMap);
 				renderPassTypes.emplace_back(RenderPassType::SpotLightPassShadowMap);
+
+				/* Cascaded variant: renderLightedSelection() picks it the moment a directional
+				 * light was built with the CSM constructor, so the program must exist even
+				 * though no light declares CSM at this point — the light set is not what this
+				 * list is keyed on.
+				 * NOTE: DirectionalLightPassFullCSM is deliberately absent. CSM and colour
+				 * projection are mutually exclusive by contract (a per-cascade light-space
+				 * position cannot address one projection texture, cf. docs/shadow-mapping.md),
+				 * and the CSM light block carries no colour-projection member — generating it
+				 * only produces a shader that cannot compile. */
+				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassCSM);
 
 				/* Full pass types (shadow + color projection). */
 				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassFull);

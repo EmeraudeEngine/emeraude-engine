@@ -383,6 +383,55 @@ case DirectionalLightPassColorMap: if (!enableShadowMap) { enableColorProjection
 case DirectionalLightPass: lightType = Directional; break;
 ```
 
+### MRT normal output — the `N` declaration contract
+
+`SceneRendering` writes the view-space perturbed normal to the G-buffer normal
+attachment (`svOutputNormal`) for the **`AmbientPass`** *and* the **`SimplePass`**, using
+`LightGenerator::finalNormalViewSpaceExpression()`. That helper returns the bare identifier
+**`N`** whenever normal mapping is active — so `N` **must be declared** in exactly those two
+passes, and in each material's shading path. The ownership is split and non-obvious:
+
+- **`AmbientPass`** never reaches a light-pass generator (it returns right after
+  `generateAmbientFragmentShader()`, which does *not* declare `N`). So `generateFragmentShaderCode()`
+  declares `N` up-front, at the top of the function, for the ambient pass.
+- **`SimplePass`** is remapped by `checkRenderPassType()` to a *light-pass* type
+  (`DirectionalLightPass`/`PointLightPass`/`SpotLightPass`), so it flows through a light-pass
+  generator. Whether that generator declares `N` itself **depends on the quality level**
+  (`EnableHighQualityKey`), which is the subtle part:
+  - **High quality**: PBR (`LightGenerator.PBR.cpp`) declares its own two-sided-flipped `N`;
+    Blinn-Phong-with-normal-map (`LightGenerator.PerFragment.NormalMap.cpp`) shades in *tangent*
+    space and declares **no** view-space `N`.
+  - **Low quality**: **every** material — PBR included — is shaded by the **Gouraud** generator
+    (`LightGenerator.PerVertex.cpp`), which declares no `N` and computes lighting per-vertex.
+
+  So the *only* path that self-declares `N` is **high-quality PBR**. The up-front declaration
+  therefore fires for `AmbientPass || (SimplePass && !(m_usePBRMode && highQualityEnabled()))` —
+  i.e. everything except that one self-declaring case (declaring it there would **redefine** `N`).
+
+  `N`'s expression uses `transpose(ViewTBNMatrix)`, so `ViewTBNMatrix` must be synthesized to
+  the fragment stage. High-quality vertex paths request it themselves; the **low-quality
+  Gouraud vertex path does not**, so `generateVertexShaderCode()` requests
+  `ViewTBNMatrix` for `SimplePass && !highQualityEnabled()` (mirroring the AmbientPass request).
+  Net effect: the G-buffer normal stays normal-mapped in **both** quality levels, consistent
+  with the AmbientPass.
+
+> [!CAUTION]
+> **When you touch a lighting shader, always check BOTH quality levels
+> (`Core/Graphics/Shader/EnableHighQuality`, default `false`).** High and low quality route
+> through *different* generators (per-fragment PBR/Blinn-Phong vs per-vertex Gouraud), so a
+> change that compiles in one can break the other — a variable declared by the high-quality
+> fragment path (e.g. `N`, `ViewTBNMatrix`) may be entirely absent in the low-quality Gouraud
+> path. Test with `EnableHighQuality` both `true` and `false`.
+>
+> This particular bug is also **latent until a post-process effect enables the normal G-buffer
+> attachment**. A `SimplePass` material (static single light) with a normal map compiles fine
+> with no post-process, then fails to compile (`'N' : undeclared identifier`, `redefinition`
+> for high-quality PBR, or `'ViewTBNMatrix' : undeclared identifier` in low-quality Gouraud)
+> the moment SSAO/SSR/RTR/RTGI turns the attachment on. If you add a shading family or a pass
+> that writes `svOutputNormal`, keep the `N`-declaration guard in `generateFragmentShaderCode()`
+> and the `ViewTBNMatrix` request in `generateVertexShaderCode()` in sync. See
+> `docs/caution-points.md`.
+
 ### Shader Program Variants
 
 Each `RenderPassType` generates a **distinct shader program** with only the needed code:

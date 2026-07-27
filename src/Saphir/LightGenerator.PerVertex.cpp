@@ -165,9 +165,17 @@ namespace EmEn::Saphir
 
 			if ( enableShadowMap && useCSM )
 			{
-				/* NOTE: CSM computes light-space position in the fragment shader.
-				 * We only need to pass the world-space position. */
+				/* NOTE: CSM computes the light-space position in the fragment shader, from the
+				 * world-space position. The cascade itself is selected on VIEW-space depth, and
+				 * the view matrix is not reachable from a fragment shader on the main render
+				 * target: its view UBO does not carry one (it travels as a push constant, vertex
+				 * stage only). Hence the view-space position is forwarded as well. */
 				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::ToNextStage) )
+				{
+					return false;
+				}
+
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionViewSpace, VariableScope::ToNextStage) )
 				{
 					return false;
 				}
@@ -284,12 +292,13 @@ namespace EmEn::Saphir
 				case LightType::Directional :
 					if ( useCSM )
 					{
-						/* NOTE: CSM requires world-space position, view matrix for depth calculation,
-						 * and cascade matrices/split distances from the light UBO. */
+						/* NOTE: CSM needs the world-space position for the cascade matrix, the
+						 * view-space position for the cascade selection depth, and the cascade
+						 * matrices / split distances from the light UBO. */
 						Code{fragmentShader} << '\t' << this->generateCSMShadowMapCode(
 							Uniform::ShadowMapSampler,
 							std::string(ShaderVariable::PositionWorldSpace) + ".xyz",
-							ViewUB(UniformBlock::Component::ViewMatrix, false),
+							std::string(ShaderVariable::PositionViewSpace),
 							LightUB(UniformBlock::Component::CascadeViewProjectionMatrices),
 							LightUB(UniformBlock::Component::CascadeSplitDistances),
 							LightUB(UniformBlock::Component::CascadeCount)

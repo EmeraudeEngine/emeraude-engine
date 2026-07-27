@@ -13,7 +13,7 @@ The engine supports shadow mapping for all three light types:
 
 Shadow mapping can be globally enabled/disabled via the settings system.
 
-**Setting key:** `GraphicsShadowMappingEnabledKey` (`Core/Graphics/Renderer/ShadowMappingEnabled`)
+**Setting key:** `GraphicsShadowMappingEnabledKey` (`Core/Graphics/ShadowMapping/Enabled`)
 
 | Value | Behavior |
 |-------|----------|
@@ -117,6 +117,61 @@ Shadow map filtering code is generated in `LightGenerator.ShadowMap.cpp`:
 **Code references:**
 - `Saphir/LightGenerator.ShadowMap.cpp` - All shadow map code generation
 - `Saphir/LightGenerator.hpp:PCFMethod` - PCF method enum
+
+## Cascaded Shadow Maps (CSM) — STATUS: PARTIALLY REPAIRED, STILL NOT USABLE (Jul 2026)
+
+> [!CAUTION]
+> **A directional light built with the CSM constructor contributes NO light at all on `develop`
+> before Jul 2026, and still does not light correctly after the three fixes below.** Prefer the
+> classic constructor (`shadowMapResolution`, `coverageSize`) until this is closed.
+>
+> `Toolkit::generateDirectionalLight` selects CSM purely by ARGUMENT COUNT — `(name, colour, lux,
+> 2048, 4, 0.5F)` is CSM, `(name, colour, lux, 2048, 140.0F)` is the classic map. The two are
+> easy to confuse and the failure is silent.
+
+### What was broken, and what each defect cost
+
+| # | Defect | Symptom | Status |
+|---|---|---|---|
+| 1 | `Scene::prepareRenderPassTypes()` never emitted `DirectionalLightPassCSM`, while `renderLightedSelection()` selects it as soon as `light->usesCSM()` | Program lookup missed at draw time → the whole directional pass was skipped. No diffuse, no specular, NO shadow. Only the ambient pass survived, so the scene looked flatly ambient-lit | **FIXED** |
+| 2 | `generateCSMShadowMapCode()` emitted `ubView.viewMatrix`, which the 2D view block does not declare (the view matrix travels as a PUSH CONSTANT, vertex stage only) | The CSM fragment shader could not compile. `setBroken()` on the instance then removed the renderable from rendering entirely — a disappearing ground and a frozen animated material | **FIXED** — reads `svPositionViewSpace.z`, requested `ToNextStage` in all four light generators |
+| 3 | `LightSet::initialize()` sized the shared directional UBO on the CLASSIC block (~120 B) while a CSM light always uploads the CSM block (324 B) | Cascade splits, cascade count, shadow bias and the light's own colour / direction / intensity were truncated away and never reached the GPU | **FIXED** — sized on `max(classic, CSM)` |
+| 4 | The CSM block's colour / direction / intensity are written **only** inside `DirectionalLight::updateCascades()`, which returns early when `m_shadowMap == nullptr` | Measured live after fixes 1-3: the ground still receives no sun from a CSM light. Switching the same scene to the classic constructor lights it correctly — an A/B on `water-world` with everything else unchanged | **OPEN** — see `TODO.md` |
+
+### The CSM ⊕ colour-projection contract is now enforced in code
+
+CSM and colour projection are mutually exclusive: the light-space position is resolved per cascade
+in the fragment shader and cannot address a single projection texture, and `getUniformBlockCSM()`
+declares no `colorProjectionBoost` / `ColorProjectionIndex` member. `DirectionalLightPassFullCSM`
+therefore names a shader that **cannot compile**.
+
+- `prepareRenderPassTypes()` deliberately does NOT pre-generate `DirectionalLightPassFullCSM`.
+- `renderLightedSelection()` falls back to `DirectionalLightPassCSM` when a CSM light also carries a
+  colour projection texture: the shadow is the load-bearing half, the projection is dropped.
+
+Previously, asking for both produced a compile failure that broke the entire renderable instance.
+
+### Resolution budget — CSM coverage comes from the CAMERA, not the scene
+
+Cascade splits are derived from the main camera's near/far (`ViewMatricesCascadedUBO`, practical
+split scheme), never from the scene bounding box. With the engine default `Core/Graphics/ViewDistance`
+of 10000 m, 4 cascades and `lambda = 0.5`, cascade 0 alone spans **~1250 m**, so its light-space box
+covers kilometres and 2048 px resolves about **1.2 m per texel** — every shadow detail below a metre
+is sub-texel and simply cannot appear, even with a fully working CSM.
+
+Two knobs: `csmScale` on the light (16-32 concentrates the cascades near the camera, shadows stop
+beyond ~1/scale of the far plane), and `Camera::setDistance()` — which reaches the render target
+through `updateAllVideoDeviceProperties()` and is what `Scene::updateCSMCascades()` reads. For a
+small world, the classic constructor is simply the better tool: its coverage is an explicit
+half-extent in world units, so the texel density is fixed and independent of where the camera looks.
+
+### No explicit depth bias
+
+The CSM sampling path compares `projCoords.z` raw. This matches the 2D **PCF** path (which also has
+no explicit bias and relies on the hardware comparison sampler); only the non-PCF 2D path and the
+cubemap path apply `max(ShadowBias, 0.005)`. The shadow-map render pass itself uses
+`ProgramType::ShadowCasting` with `RenderPassType::SimplePass`, which leaves `depthBiasEnable` off
+unless the material's options ask for it.
 
 ## Per-Light Shadow Configuration
 

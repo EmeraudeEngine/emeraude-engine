@@ -82,7 +82,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Store the cubemap for environment IBL access. */
-		m_environmentCubemap = defaultCubemapResource;
+		m_environmentCubemap = std::move(defaultCubemapResource);
 
 		return this->setLoadSuccess(true);
 	}
@@ -164,7 +164,7 @@ namespace EmEn::Graphics::Renderable
 		this->setLightSpecularColor(FastJSON::getValue< Color< float > >(data, JKLightSpecularColor).value_or(Black));
 
 		/* Store the cubemap for environment IBL access. */
-		m_environmentCubemap = cubemapResource;
+		m_environmentCubemap = std::move(cubemapResource);
 
 		return this->setLoadSuccess(true);
 	}

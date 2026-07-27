@@ -1202,6 +1202,49 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the renderable instance backing the scene ground level.
+			 *
+			 * The ground, the sea and the background are scene VISUAL COMPONENTS, not entities,
+			 * so their renderable instances are not reachable through the node tree. This exposes
+			 * the ground's so that per-instance switches — the TBN-space debug visualization,
+			 * shadow casting/receiving — can be driven from outside the scene.
+			 *
+			 * @return Shared pointer to the ground renderable instance, or nullptr if no ground
+			 * level is set or it has not been registered yet.
+			 *
+			 * @see seaLevelRenderableInstance()
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::RenderableInstance::Abstract >
+			groundLevelRenderableInstance () const noexcept
+			{
+				if ( m_sceneVisualComponents[GroundVisualIndex] == nullptr )
+				{
+					return nullptr;
+				}
+
+				return m_sceneVisualComponents[GroundVisualIndex]->getRenderableInstance();
+			}
+
+			/**
+			 * @brief Returns the renderable instance backing the scene sea level.
+			 * @return Shared pointer to the sea renderable instance, or nullptr if no sea level
+			 * is set or it has not been registered yet.
+			 * @see groundLevelRenderableInstance()
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::RenderableInstance::Abstract >
+			seaLevelRenderableInstance () const noexcept
+			{
+				if ( m_sceneVisualComponents[SeaLevelVisualIndex] == nullptr )
+				{
+					return nullptr;
+				}
+
+				return m_sceneVisualComponents[SeaLevelVisualIndex]->getRenderableInstance();
+			}
+
+			/**
 			 * @brief Sets the scene water level surface.
 			 *
 			 * SeaLevel provides water plane rendering with reflections

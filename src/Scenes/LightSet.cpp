@@ -27,6 +27,7 @@
 #include "LightSet.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <ostream>
 
@@ -106,11 +107,19 @@ namespace EmEn::Scenes
 
 		/* Generate directional light shared uniform buffer.
 		 * NOTE: Always allocate with maximum layout (shadow=true, colorProjection=true) to ensure
-		 * the UBO size matches DirectionalLight::m_buffer which always includes all fields. */
+		 * the UBO size matches DirectionalLight::m_buffer which always includes all fields.
+		 * ⚠️ The CSM layout is the LARGER of the two (four cascade matrices instead of one
+		 * view-projection matrix) and any directional light may turn out to be a CSM one — the
+		 * buffer is shared by all of them and its element stride is fixed here, before a single
+		 * light has declared its shadow mode. Sizing on the classic block alone truncated every
+		 * CSM upload mid-buffer: the cascade splits, the cascade count, the shadow bias and the
+		 * light's own colour / direction / intensity never reached the GPU. */
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, true, true);
+			const auto uniformBlockCSM = LightGenerator::getUniformBlockCSM(0, 0);
+			const auto elementSize = std::max(uniformBlock.bytes(), uniformBlockCSM.bytes());
 
-			m_directionalLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
+			m_directionalLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, elementSize);
 
 			if ( m_directionalLightUBO == nullptr )
 			{

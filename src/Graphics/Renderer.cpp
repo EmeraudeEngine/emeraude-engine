@@ -585,28 +585,10 @@ namespace EmEn::Graphics
 		/* Create the grab pass texture (initially disabled, but pre-allocated). */
 		if ( m_swapChain != nullptr )
 		{
-			const auto & swapChainCreateInfo = m_swapChain->createInfo();
-
 			m_grabPass = std::make_unique< GrabPass >();
 
-			if ( m_grabPass->create(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat, m_swapChain->depthStencilFormat()) )
+			if ( !this->refreshGrabPass() )
 			{
-				if ( m_bindlessTextureManager.usable() )
-				{
-					static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
-
-					if ( m_grabPass->hasDepth() )
-					{
-						static_cast< void >(m_bindlessTextureManager.updateTexture2DFromDescriptorInfo(
-							BindlessTextureManager::GrabPassDepthSlot,
-							m_grabPass->depthDescriptorInfo()));
-					}
-				}
-			}
-			else
-			{
-				TraceError{ClassId} << "Unable to create the grab pass texture !";
-
 				m_grabPass.reset();
 			}
 		}
@@ -859,6 +841,62 @@ namespace EmEn::Graphics
 	}
 
 	bool
+	Renderer::refreshGrabPass () noexcept
+	{
+		if ( m_grabPass == nullptr || m_swapChain == nullptr )
+		{
+			return false;
+		}
+
+		/* The grab is a copy of whatever image the translucent-grab pass reads back, so it must
+		 * carry that image's FORMAT — not the swap chain's.
+		 * ⚠️ When post-processing is active the source is the scene target, which is
+		 * R16G16B16A16_SFLOAT under HDR. Allocating the grab in the 8-bit swap-chain format made
+		 * vkCmdBlitImage clamp the scene radiance to [0,1], so every material sampling the grab
+		 * (water, glass — anything with grab-pass transmission) refracted a blown-out white
+		 * image, which the shader then scaled by the sky luminance. The PostProcessor's own grab
+		 * already honoured HDR; this one now agrees with it. */
+		const auto * source = m_sceneTarget != nullptr ? m_sceneTarget->colorImage().get() : m_swapChain->currentColorImage().get();
+
+		if ( source == nullptr )
+		{
+			return false;
+		}
+
+		const auto colorFormat = source->createInfo().format;
+		const auto width = source->width();
+		const auto height = source->height();
+		const auto depthFormat = m_sceneTarget != nullptr && m_sceneTarget->depthStencilImage() != nullptr
+			? m_sceneTarget->depthStencilImage()->createInfo().format
+			: m_swapChain->depthStencilFormat();
+
+		const auto succeeded = m_grabPass->isCreated()
+			? m_grabPass->recreate(*this, width, height, colorFormat, depthFormat)
+			: m_grabPass->create(*this, width, height, colorFormat, depthFormat);
+
+		if ( !succeeded )
+		{
+			TraceError{ClassId} << "Unable to create the grab pass texture !";
+
+			return false;
+		}
+
+		if ( m_bindlessTextureManager.usable() )
+		{
+			static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
+
+			if ( m_grabPass->hasDepth() )
+			{
+				static_cast< void >(m_bindlessTextureManager.updateTexture2DFromDescriptorInfo(
+					BindlessTextureManager::GrabPassDepthSlot,
+					m_grabPass->depthDescriptorInfo()));
+			}
+		}
+
+		return true;
+	}
+
+	bool
 	Renderer::recreateSceneTarget () noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -876,6 +914,9 @@ namespace EmEn::Graphics
 
 		if ( !m_postProcessingActive && !m_windowLess )
 		{
+			/* No scene target: the grab reads the swap chain back, so it must follow ITS format. */
+			static_cast< void >(this->refreshGrabPass());
+
 			return true;
 		}
 
@@ -960,6 +1001,9 @@ namespace EmEn::Graphics
 		}
 
 		TraceSuccess{ClassId} << "Scene render target created (" << width << "x" << height << ", format: " << ( m_postProcessor.cachedRequiresHDR() ? "R16G16B16A16_SFLOAT" : "swapchain" ) << ").";
+
+		/* The grab now reads this target back: realign its format and extent on it. */
+		static_cast< void >(this->refreshGrabPass());
 
 		return true;
 	}
@@ -2120,30 +2164,10 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Recreate the grab pass texture with the new swap-chain dimensions. */
-		if ( m_grabPass != nullptr )
-		{
-			const auto & swapChainCreateInfo = m_swapChain->createInfo();
-
-			if ( m_grabPass->recreate(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat, m_swapChain->depthStencilFormat()) )
-			{
-				if ( m_bindlessTextureManager.usable() )
-				{
-					static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
-
-					if ( m_grabPass->hasDepth() )
-					{
-						static_cast< void >(m_bindlessTextureManager.updateTexture2DFromDescriptorInfo(
-							BindlessTextureManager::GrabPassDepthSlot,
-							m_grabPass->depthDescriptorInfo()));
-					}
-				}
-			}
-			else
-			{
-				TraceError{ClassId} << "Unable to recreate the grab pass texture !";
-			}
-		}
+		/* Recreate the grab pass texture with the new dimensions.
+		 * NOTE: recreateSceneTarget() above already refreshed it when a scene target exists;
+		 * this covers the no-scene-target case and keeps the extent in step either way. */
+		static_cast< void >(this->refreshGrabPass());
 
 		this->notify(WindowContentRefreshed);
 

@@ -347,6 +347,9 @@ namespace EmEn
 			/* Distance up to which full-resolution textures are used (default ~5 km). */
 			constexpr auto GraphicsTextureViewDistanceKey{"Core/Graphics/Texture/ViewDistance"};
 			constexpr auto DefaultGraphicsTextureViewDistance{5000.0F}; /* NOTE: 5km */
+			/* Parallax occlusion mapping ray-march iteration count. */
+			constexpr auto GraphicsTexturePOMIterationsKey{"Core/Graphics/Texture/POMIterations"};
+			constexpr auto DefaultGraphicsTexturePOMIterations{0};
 
 			/* Ray Tracing.
 			 * The root group holds the master switch and the acceleration-structure
@@ -594,9 +597,6 @@ namespace EmEn
 			/* Generate higher-quality (more expensive) shader variants. */
 			constexpr auto EnableHighQualityKey{"Core/Graphics/Shader/EnableHighQuality"};
 			constexpr auto DefaultEnableHighQuality{false};
-			/* Parallax occlusion mapping ray-march iteration count. */
-			constexpr auto POMIterationsKey{"Core/Graphics/Shader/POMIterations"};
-			constexpr auto DefaultPOMIterations{16};
 
 		/* RushMaker (in-engine screencast / video recorder) */
 		/* Enable video / audio capture in RushMaker (shared default). */

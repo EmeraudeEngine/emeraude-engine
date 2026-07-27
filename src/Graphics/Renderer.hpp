@@ -1397,6 +1397,17 @@ namespace EmEn::Graphics
 			bool recreateSceneTarget () noexcept;
 
 			/**
+			 * @brief Creates or recreates the grab pass so that it matches the image it copies.
+			 * @note The grab source is the scene render target when post-processing is active, the
+			 * swap chain otherwise. Its FORMAT is what matters: an 8-bit grab clamps an HDR scene
+			 * to [0,1] during the blit, and every material sampling the grab then refracts a
+			 * saturated image. Call this whenever the scene target or the swap chain changes.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool refreshGrabPass () noexcept;
+
+			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
 			 * @param imageCount The number of frames for the rendering system.
 			 * @return bool

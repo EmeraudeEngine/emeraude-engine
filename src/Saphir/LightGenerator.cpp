@@ -465,6 +465,27 @@ namespace EmEn::Saphir
 		bool enableShadowMap = false;
 		bool enableColorProjection = false;
 
+		/* The MRT normals output ("N") is a normal-mapped view-space normal built with
+		 * transpose(ViewTBNMatrix), so ViewTBNMatrix must be synthesized to the fragment stage
+		 * whenever generateFragmentShaderCode() declares "N" — see the matching guard there.
+		 * The AmbientPass case below requests it for its own branch. The SimplePass (remapped
+		 * by checkRenderPassType() to a light-pass type) needs it requested here for the
+		 * LOW-QUALITY Gouraud path — which shades EVERY material, PBR included, and whose vertex
+		 * generator does NOT request it. All HIGH-quality vertex paths (PBR, Blinn-Phong with
+		 * normal map) request ViewTBNMatrix themselves, so this is gated to low quality to keep
+		 * the request single. This keeps the G-buffer normal normal-mapped in BOTH quality
+		 * levels, consistent with the AmbientPass. */
+		if ( m_renderPassType == RenderPassType::SimplePass && !generator.highQualityEnabled()
+			&& m_useNormalMapping && !m_surfaceNormalVector.empty() )
+		{
+			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::ViewTBNMatrix, VariableScope::ToNextStage) )
+			{
+				Tracer::error(ClassId, "Unable to synthesize ViewTBNMatrix for the simple pass !");
+
+				return false;
+			}
+		}
+
 		switch ( this->checkRenderPassType() )
 		{
 			case RenderPassType::AmbientPass :
@@ -584,6 +605,30 @@ namespace EmEn::Saphir
 		bool enableShadowMap = false;
 		bool enableColorProjection = false;
 
+		/* Declare the perturbed normal in view space ("N") for the MRT normals output.
+		 * Post-process effects (RTR, SSR, SSAO, RTAO, RTGI) need it, and
+		 * finalNormalViewSpaceExpression() returns "N" whenever normal mapping is active.
+		 * SceneRendering writes that output for BOTH the AmbientPass and the SimplePass:
+		 *   - AmbientPass never reaches a light-pass generator (it returns after the ambient
+		 *     shader), so no generator declares "N" for it — we must declare it here.
+		 *   - SimplePass is remapped by checkRenderPassType() to a light-pass type, so it
+		 *     cannot be keyed off the switch below.
+		 * The ONLY fragment path that declares its own two-sided-flipped "N" is the PBR
+		 * light-pass generator, which runs only under high quality. In LOW quality every
+		 * material — PBR included — is shaded by the Gouraud generator, which declares no "N".
+		 * So we declare "N" here unless the self-declaring path is active (high-quality PBR
+		 * SimplePass); declaring it there would redefine "N". The surface normal vector is
+		 * declared earlier by the material code (Location::Top), so this Location::Main
+		 * statement always sees it. */
+		const bool fragmentSelfDeclaresN = m_usePBRMode && generator.highQualityEnabled();
+
+		if ( ( m_renderPassType == RenderPassType::AmbientPass ||
+				( m_renderPassType == RenderPassType::SimplePass && !fragmentSelfDeclaresN ) )
+			&& m_useNormalMapping && !m_surfaceNormalVector.empty() )
+		{
+			Code{fragmentShader} << "const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");";
+		}
+
 		switch ( this->checkRenderPassType() )
 		{
 			case RenderPassType::AmbientPass :
@@ -597,12 +642,9 @@ namespace EmEn::Saphir
 
 				Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, 1.0);";
 
-				/* Declare the perturbed normal in view space for the MRT normals output.
-				 * Post-process effects (RTR, SSR, SSAO, RTAO) need this. */
-				if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
-				{
-					Code{fragmentShader} << "const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");";
-				}
+				/* Note: the perturbed view-space normal "N" needed by the MRT normals output
+				 * is declared once at the top of this function, since the SimplePass needs it
+				 * too and checkRenderPassType() masks SimplePass here. */
 
 				this->generateAmbientFragmentShader(fragmentShader);
 
@@ -838,6 +880,17 @@ namespace EmEn::Saphir
 			 * without this the reflections contribute a fraction of a nit to a scene lit in
 			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
 			const auto iblIntensity = this->scaledIBLIntensity();
+
+			/* ⚠️ The transmitted light does NOT always share the reflection's unit. The reflection is
+			 * a cubemap texel in [0,1] and genuinely needs the sky luminance to become a luminance.
+			 * A GRAB-PASS transmission is a copy of the rendered scene, already in nits: scaling it
+			 * too multiplied the scene by the sky luminance a SECOND time, which is what turned the
+			 * shallow water — where Beer's law absorbs almost nothing, so the sunlit sand comes
+			 * through undimmed — into a solid white blowout. */
+			const auto transmissionScale = m_transmissionIsSceneRadiance
+				? std::string{}
+				: " * " + iblIntensity;
+
 			const auto code = (std::stringstream{} <<
 				"/* PBR Reflection + Transmission - energy-conserving Fresnel blend. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
@@ -858,7 +911,7 @@ namespace EmEn::Saphir
 				"const vec3 transmittedLight = " << m_surfaceTransmissionColor << " * transAbsorption;" "\n"
 				"/* F = reflection, (1-F)*transmissionFactor = transmission. */" "\n" <<
 				m_fragmentColor << ".rgb += reflectedColor * fresnelDielectric * " << iblIntensity << ";" "\n" <<
-				m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (1.0 - fresnelDielectric) * " << iblIntensity << ";").str();
+				m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (1.0 - fresnelDielectric)" << transmissionScale << ";").str();
 
 			Code{fragmentShader, Location::Output} << code;
 
@@ -1203,7 +1256,19 @@ namespace EmEn::Saphir
 
 		const auto finaleDiffuseFactor = m_useOpacity ? diffuseFactor + " * " + m_surfaceOpacityAmount : diffuseFactor;
 
-		Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+		/* PHOTOMETRIC DIRECT DIFFUSE. The light intensity is an ILLUMINANCE in lux, so the outgoing
+		 * LUMINANCE of a Lambertian surface is albedo * E * cos(theta) / pi — the same 1/pi the
+		 * ambient pass applies (see generateAmbientFragmentShader).
+		 * ⚠️ This normalisation was missing here while the PBR generator had it
+		 * (LightGenerator.PBR.cpp: "kD * albedo / 3.14159265"), so the two material models
+		 * disagreed by a factor of pi on DIRECT lighting: a legacy/Standard surface rendered ~3.14x
+		 * brighter than a PBR one under the same sun, which put sunlit ground well above the sky's
+		 * own luminance and read as "flashy".
+		 * NOTE: deliberately NOT folded into finaleDiffuseFactor — that expression is also used as
+		 * a raw geometric N.L term inside the PBR low-quality specular pow() below. */
+		const auto diffuseIlluminance = (std::stringstream{} << '(' << this->lightIntensity() << " * 0.3183098862)").str();
+
+		Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->lightColor() << ".rgb * projectionColor * " << diffuseIlluminance << " * " << finaleDiffuseFactor << ");";
 
 		/* NOTE: In PBR mode, reflection/refraction (IBL) is handled ONLY in the ambient pass
 		 * via generateAmbientFragmentShader(). We skip per-light reflection mixing here.
@@ -1220,17 +1285,17 @@ namespace EmEn::Saphir
 					"const vec3 reflected = mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb;" "\n"
 					"const vec3 refracted = mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb;" "\n\n" <<
 
-					m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");").str();
+					m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * (" << this->lightColor() << ".rgb * projectionColor * " << diffuseIlluminance << " * " << finaleDiffuseFactor << ");").str();
 
 				Code{fragmentShader, Location::Output} << code;
 			}
 			else if ( m_useReflection )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * projectionColor * " << diffuseIlluminance << " * " << finaleDiffuseFactor << ");";
 			}
 			else if ( m_useRefraction )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->lightColor() << ".rgb * projectionColor * " << diffuseIlluminance << " * " << finaleDiffuseFactor << ");";
 			}
 		}
 
