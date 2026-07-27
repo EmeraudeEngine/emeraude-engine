@@ -1276,6 +1276,41 @@ camera) are captured as `std::weak_ptr` and locked at use.
 - Demos/apps DO NOT add DepthOfField/ToneMapping to their stack anymore — they enable
   them on the camera (see `projet-alpha` `GLTFLoader::onEnabled()`).
 
+**The chain is created ON DEMAND (Jul 2026)** — the camera is never silently ignored:
+
+- `Component::Camera::requiresPostProcessing()` answers "does this camera need the
+  pipeline to exist at all" (any of DoF / motion blur / bloom / HDR, or at least one lens
+  effect). When it says yes and the scene has no chain, `Renderer::renderFrame()` calls
+  `Scenes::Scene::requirePostProcessStack()`, which lazily creates an empty one.
+- **The bug this closes:** before, `syncCameraEffects()` only ran when the APPLICATION had
+  provided a stack, so `camera->enableHDR(true)` on any other scene was a no-op with no
+  diagnostic. The raw photometric radiance then reached an LDR swap-chain — a daylight
+  scene came out **pure white**, a night scene **pure black**. In `projet-alpha`, 29 of the
+  34 demos were in that state.
+- Lifetime/threading are unchanged: the stack still belongs to the `Scene` and dies with
+  it. `requirePostProcessStack()` is render-thread (frame scope) or scene-building thread
+  BEFORE activation — `Manager::newScene()` does not activate, so the two never overlap.
+
+**Master switch vs. actual work** — two distinct questions, do not conflate them:
+
+| Question | Who answers | API |
+|---|---|---|
+| Is post-processing ALLOWED? | the user | `PostProcessor::enable()` / `isEnabled()`, **default ON** |
+| Is there anything TO run? | the renderer | `Renderer::m_postProcessingActive` / `needsInternalTarget()` |
+
+`m_postProcessingActive` is recomputed once per recorded frame, **after**
+`syncCameraEffects()` (so effects materialized this very frame count), as
+`isEnabled() && (stack has effects || camera has lens effects)`. Every decision inside the
+renderer — scene-target create/destroy, strategy dispatch, direct-path composite, jitter —
+keys on it, never on `isEnabled()` alone. A scene with an empty chain therefore stays on
+`renderFrameDirect()` and pays nothing, which is what lets the switch default to ON.
+
+> [!CAUTION]
+> Do not "fix" a missing effect by calling `postProcessor().enable(true)` from the
+> application. That call is gone from `projet-alpha` (`AbstractDemo::createScene()`) on
+> purpose: making the application arm the pipeline is what produced the silent no-op above.
+> Declare the effect on the camera, or add it to the scene stack — the renderer arms itself.
+
 ### Effect Chain Order & Phase Contract (Jul 2026)
 
 The chain has THREE phases, enforced structurally:
@@ -1523,6 +1558,19 @@ for reads (render thread), exclusive lock for writes (resource loading thread).
 > **Code references:**
 > - `Graphics/Renderer.cpp` — Deferred scene target creation
 > - `Graphics/PostProcessor.cpp` — `requiresHDR()` aggregates chain needs
+
+> [!WARNING]
+> **Still true with the on-demand chain (Jul 2026), and it constrains WHEN an application
+> may hand over a stack.** The render thread can now create an empty stack itself
+> (`Scene::requirePostProcessStack()`), and `Scene::setPostProcessStack()` **destroys** the
+> stack it replaces — so calling it on a scene that is already being rendered would tear
+> down the camera effects under the render thread. Build the scene fully, THEN activate it:
+> `Manager::newScene()` deliberately does not activate, which is what keeps the two writers
+> apart. Never call `setPostProcessStack()` on the active scene.
+>
+> Ordering inside the frame is what makes the requirements correct: the scene target is
+> created AFTER `syncCameraEffects()`, so a stack the camera just populated already reports
+> `requiresHDR()` on the very frame it appears — no one-frame LDR flash.
 
 ## 15c. GrabPass Destruction Safety (Fixed Mar 2026)
 

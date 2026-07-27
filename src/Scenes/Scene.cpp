@@ -178,6 +178,17 @@ namespace EmEn::Scenes
 		m_postProcessStack = std::move(stack);
 	}
 
+	PostProcessStack &
+	Scene::requirePostProcessStack () noexcept
+	{
+		if ( m_postProcessStack == nullptr )
+		{
+			m_postProcessStack = std::make_unique< PostProcessStack >();
+		}
+
+		return *m_postProcessStack;
+	}
+
 	std::shared_ptr< Component::Camera >
 	Scene::activeCamera () const noexcept
 	{

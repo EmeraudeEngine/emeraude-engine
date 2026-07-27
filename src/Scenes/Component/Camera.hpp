@@ -448,6 +448,31 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns whether this camera needs the post-process pipeline to exist at all.
+			 * @note The camera is the photographic authority, so it must never be silently ignored:
+			 * a scene that declares no effect of its own still owes a post-process chain to a
+			 * camera that asks for one. The renderer polls this every frame and CREATES the
+			 * scene chain on demand (Scenes::Scene::requirePostProcessStack()) — before this
+			 * existed, enableHDR() on a scene without an application-provided stack was a no-op
+			 * with no diagnostic, and the raw photometric radiance went straight to an LDR
+			 * swap-chain (a daylight scene came out pure white).
+			 * The lens effects count: they are single-pass effects executed by the post-processor
+			 * composite, so they need the pipeline just as much as the photographic ones do.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			requiresPostProcessing () const noexcept
+			{
+				if ( this->isDepthOfFieldEnabled() || this->isMotionBlurEnabled() || this->isBloomEnabled() || this->isHDREnabled() )
+				{
+					return true;
+				}
+
+				return this->hasLensEffects();
+			}
+
+			/**
 			 * @brief Sets the lens aperture (f-stop).
 			 * @note Lower f-stop = shallower depth of field (stronger blur). Typical range f/1.4 - f/22.
 			 * @param fStop The aperture as an f-number.
@@ -747,6 +772,20 @@ namespace EmEn::Scenes::Component
 				const std::lock_guard< std::mutex > lock{m_lensEffectsAccess};
 
 				return m_lensEffects;
+			}
+
+			/**
+			 * @brief Returns whether the camera carries at least one lens effect.
+			 * @note Same snapshot contract as lensEffects(): the answer is a point-in-time read.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasLensEffects () const noexcept
+			{
+				const auto snapshot = this->lensEffects();
+
+				return snapshot != nullptr && !snapshot->empty();
 			}
 
 			/**

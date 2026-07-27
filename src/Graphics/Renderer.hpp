@@ -836,13 +836,16 @@ namespace EmEn::Graphics
 			 * @brief Returns whether the internal scene render target is needed.
 			 * @note The internal target is required when the post-processor is active,
 			 * windowless mode is active, or MSAA is enabled.
+			 * @note "Active" is not the master switch: it is the switch AND actual work to do
+			 * (see m_postProcessingActive). The value is the one decided by the last recorded
+			 * frame, which is what the resize/recreate paths need.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			needsInternalTarget () const noexcept
 			{
-				return m_windowLess || m_postProcessor.isEnabled();
+				return m_windowLess || m_postProcessingActive;
 			}
 
 			/**
@@ -1534,5 +1537,10 @@ namespace EmEn::Graphics
 			bool m_grabPassEnabled{false};
 			bool m_shutdownRequested{false};
 			bool m_MDIEnabled{false};
+			/* Decided once per recorded frame: the post-processor master switch AND actual work
+			 * to run (a non-empty scene chain or a camera carrying lens effects). Keeping the two
+			 * apart is what lets the switch default to ON without putting an effect-less scene
+			 * on the scene-target path — the composite it would run is a pure copy. */
+			bool m_postProcessingActive{false};
 	};
 }

@@ -874,7 +874,7 @@ namespace EmEn::Graphics
 			m_sceneTarget.reset();
 		}
 
-		if ( !m_postProcessor.isEnabled() && !m_windowLess )
+		if ( !m_postProcessingActive && !m_windowLess )
 		{
 			return true;
 		}
@@ -1265,7 +1265,7 @@ namespace EmEn::Graphics
 
 		const auto * stack = scene != nullptr ? scene->postProcessStack() : nullptr;
 
-		if ( !m_postProcessor.isEnabled() || stack == nullptr || !stack->requiresJitter() )
+		if ( !m_postProcessingActive || stack == nullptr || !stack->requiresJitter() )
 		{
 			viewMatrices.disableProjectionJitter();
 
@@ -1416,18 +1416,42 @@ namespace EmEn::Graphics
 		 * (enableDepthOfField()/enableHDR()); the stack (de)materializes them here, once
 		 * per frame on the render thread. When the effect set changes, the scene target is
 		 * retired so the lazy block below reconfigures the pipeline with the fresh
-		 * requirements (HDR may appear or disappear with the tone mapping). */
-		if ( scene != nullptr && stack != nullptr )
+		 * requirements (HDR may appear or disappear with the tone mapping).
+		 * The chain is CREATED ON DEMAND: the camera is the photographic authority, so a scene
+		 * whose author never built a stack must still honour it. Without this, enableHDR() on
+		 * such a scene was silently ignored and the raw photometric radiance reached an LDR
+		 * swap-chain — pure white in daylight, pure black at night. */
+		if ( scene != nullptr )
 		{
-			if ( scene->postProcessStack()->syncCameraEffects(scene->activeCamera().get(), *this) && m_sceneTarget != nullptr )
+			const auto camera = scene->activeCamera();
+
+			if ( stack == nullptr && camera != nullptr && camera->requiresPostProcessing() )
+			{
+				stack = &scene->requirePostProcessStack();
+			}
+
+			if ( stack != nullptr && scene->postProcessStack()->syncCameraEffects(camera.get(), *this) && m_sceneTarget != nullptr )
 			{
 				m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
 					target->destroyRenderTarget();
 				});
 			}
+
+			/* The master switch says the user ALLOWS post-processing; this says there is
+			 * something to run. A scene with an empty chain and a bare camera stays on the
+			 * direct path and pays nothing — which is why the switch can default to ON and
+			 * stop being an application responsibility. Computed AFTER the sync above: the
+			 * effects a camera just materialized count from this very frame. */
+			m_postProcessingActive =
+				m_postProcessor.isEnabled() &&
+				( ( stack != nullptr && stack->hasEffects() ) || ( camera != nullptr && camera->hasLensEffects() ) );
+		}
+		else
+		{
+			m_postProcessingActive = false;
 		}
 
-		if ( m_postProcessor.isEnabled() && m_sceneTarget == nullptr && stack != nullptr )
+		if ( m_postProcessingActive && m_sceneTarget == nullptr && stack != nullptr )
 		{
 			/* Pre-update cached requirements so recreateSceneTarget() picks up
 			 * correct formats (HDR color, normals MRT) before creating the target. */
@@ -1454,7 +1478,7 @@ namespace EmEn::Graphics
 				}
 			}
 		}
-		else if ( !m_postProcessor.isEnabled() && m_sceneTarget != nullptr )
+		else if ( !m_postProcessingActive && m_sceneTarget != nullptr )
 		{
 			/* Defer destruction: retire the scene target so that in-flight command
 			 * buffers finish referencing its resources (framebuffer, render pass,
@@ -1473,7 +1497,7 @@ namespace EmEn::Graphics
 		 * descriptors — fall back to direct rendering (black frame), exactly like a plain scene
 		 * deletion. Same multi-scene rule as the bindless table: a global service only ever
 		 * mirrors the active scene. */
-		if ( scene != nullptr && m_sceneTarget != nullptr && m_postProcessor.isEnabled() )
+		if ( scene != nullptr && m_sceneTarget != nullptr && m_postProcessingActive )
 		{
 			this->renderFrameWithInternal(scene, overlayManager, editorManager, currentFrameScope, commandBuffer);
 		}
@@ -1586,7 +1610,7 @@ namespace EmEn::Graphics
 		 * nothing rendered to blit and the composite's primary-sampler descriptor points at a
 		 * destroyed/null image (the deleted scene's effect output) → invalid render pass + device
 		 * lost. With no scene we fall through as a plain cleared frame (black), like a non-PP scene. */
-		if ( scenePtr != nullptr && m_postProcessor.isEnabled() )
+		if ( scenePtr != nullptr && m_postProcessingActive )
 		{
 			commandBuffer->endRenderPass();
 
@@ -2077,7 +2101,7 @@ namespace EmEn::Graphics
 
 		/* Recreate the post-processor with the new dimensions.
 		 * Reuses cached requirements — the PostProcessStack is resized by Scene's observer. */
-		if ( m_postProcessor.usable() && m_postProcessor.isEnabled() )
+		if ( m_postProcessor.usable() && m_postProcessingActive )
 		{
 			const auto renderTarget = m_sceneTarget != nullptr
 				? std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget)

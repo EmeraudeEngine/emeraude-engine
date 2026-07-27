@@ -702,6 +702,21 @@ namespace EmEn::Scenes
 			void setPostProcessStack (std::unique_ptr< Graphics::PostProcessStack > stack) noexcept;
 
 			/**
+			 * @brief Returns the post-process stack, creating an empty one if the scene has none.
+			 * @note The camera contract's entry point: a camera that declares a photographic
+			 * effect must get it, even in a scene whose author never built a chain. The renderer
+			 * calls this once per frame when Component::Camera::requiresPostProcessing() says so,
+			 * then lets PostProcessStack::syncCameraEffects() populate it.
+			 * @warning RENDER THREAD, or the scene-building thread BEFORE the scene is activated —
+			 * same contract as setPostProcessStack(). A scene is built by the logic thread and
+			 * only rendered once activated (Manager::newScene() does not activate), so the two
+			 * writers never overlap; do not call this on a scene that is being rendered by
+			 * another thread.
+			 * @return Graphics::PostProcessStack &
+			 */
+			Graphics::PostProcessStack & requirePostProcessStack () noexcept;
+
+			/**
 			 * @brief Returns the per-scene post-process stack (const).
 			 * @return const Graphics::PostProcessStack *
 			 */

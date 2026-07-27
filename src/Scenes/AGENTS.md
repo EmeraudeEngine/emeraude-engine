@@ -202,6 +202,20 @@ The Scene class is split into multiple implementation files by concept for easie
 | Effects | Visual effects (fog, depth of field) |
 | Debug Display | Statistics and debug visualization |
 
+> [!IMPORTANT]
+> **Post-process stack ownership (Jul 2026).** The `PostProcessStack` belongs to the Scene and
+> dies with it, but the Scene is no longer the only one who may create it:
+> - `setPostProcessStack()` — the APPLICATION hands over a chain of SCENE effects (GI, AO,
+>   fog). It **destroys** the stack it replaces, so it may only be called while the scene is
+>   being built, **before activation**. `Manager::newScene()` deliberately does not activate.
+> - `requirePostProcessStack()` — the RENDERER lazily creates an empty one, once per frame, when
+>   `Component::Camera::requiresPostProcessing()` says the active camera needs the pipeline.
+>   Without this, `camera->enableHDR(true)` on a scene the application never gave a stack was a
+>   silent no-op and the photometric radiance reached an LDR swap-chain (white/black screen).
+>
+> Both writers are safe **only** because they never overlap in time. Never call
+> `setPostProcessStack()` on the active scene. See `Graphics/AGENTS.md` § Physical Camera.
+
 **Private Section:**
 | Concept | Description |
 |---------|-------------|

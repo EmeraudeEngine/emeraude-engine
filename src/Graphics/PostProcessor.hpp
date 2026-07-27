@@ -183,6 +183,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Enables or disables the post-processor.
+			 * @note USER-level master switch, enabled by default. Turning it off forces the
+			 * direct rendering path whatever the scene and the camera ask for; turning it on
+			 * only ALLOWS post-processing — the renderer still skips the whole path when there
+			 * is no effect to run.
 			 * @param state The desired enabled state.
 			 * @return void
 			 */
@@ -195,6 +199,10 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns whether the post-processor is enabled and ready to render.
 			 * @note All cancellation conditions are centralized here for simplicity.
+			 * @warning This is the PERMISSION, not the verdict: it says nothing about the active
+			 * scene having any effect to run. Inside the renderer, use m_postProcessingActive
+			 * (Renderer::needsInternalTarget()) — a scene with an empty chain must stay on the
+			 * direct path rather than pay a composite that copies pixels for nothing.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -372,7 +380,14 @@ namespace EmEn::Graphics
 			 * Mutable because the chain executes from a const method (same idiom as
 			 * ViewMatrices2DUBO's cached jittered projection). */
 			mutable std::chrono::steady_clock::time_point m_lastChainFrameTime{};
-			bool m_enabled{false};
+			/* USER master switch, not a capability: it answers "is post-processing allowed",
+			 * never "is there anything to post-process" — that second question belongs to the
+			 * renderer, which alone knows the active scene's chain (Renderer::needsInternalTarget()).
+			 * Default ON, because an application that builds effects or a camera that declares
+			 * them must not additionally have to remember to flip a switch (that omission is
+			 * exactly what made enableHDR() a silent no-op on every scene without an
+			 * application-provided stack). */
+			bool m_enabled{true};
 			/* Cached requirements from configure(). */
 			bool m_cachedRequiresHDR{false};
 			bool m_cachedRequiresDepth{false};
