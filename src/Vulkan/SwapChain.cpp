@@ -43,6 +43,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/Instance.hpp"
 #include "Vulkan/Utility.hpp"
 
 namespace EmEn::Vulkan

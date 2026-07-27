@@ -52,6 +52,15 @@
     Advanced/cubemap/CSM/shadow paths still push their matrices (B1 milestone 4 pending).
     Contract details: `src/Scenes/AGENTS.md` § "Instance Transforms (SceneInstanceTransforms)"
     and `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path".
+6.  **`Renderer.hpp` include diet (no regrowth)**: `Graphics/Renderer.hpp` is included by ~77 TUs
+    directly and propagates via `Core.hpp` and `Overlay/UIScreen.hpp`, so one `#include` added
+    there is paid by most of the engine. `SwapChain`, `Vulkan::Instance`, `Window`,
+    `Resources::Manager`, `GrabPass`, `MDI::BatchBuilder`, `SceneRenderTarget` and
+    `TextureResource::TextureCubemap` are **forward-declared on purpose** (legal because the
+    destructor is out-of-line — the "exported pimpl" pattern). `setSwapChainDegraded()` /
+    `isSwapChainDegraded()` are out-of-line for the same reason: do not re-inline them.
+    When a consumer TU stops compiling, **add the include to the consumer**, never back into
+    `Renderer.hpp`. Full contract: `docs/windows-export-api.md` § "Exported pimpl".
 
 ## 4. Caching Architecture
 

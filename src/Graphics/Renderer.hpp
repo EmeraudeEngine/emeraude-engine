@@ -31,11 +31,16 @@
 #include <cstdint>
 #include <any>
 #include <array>
+#include <chrono>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+/* Third-party inclusions. */
+#include <vulkan/vulkan.h>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -46,24 +51,18 @@
 /* Local inclusions for usages. */
 #include "BindlessTextureManager.hpp"
 #include "ExternalInput.hpp"
-#include "GrabPass.hpp"
 #include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "StaticVector.hpp"
 #include "Time/Statistics/RealTime.hpp"
-#include "MDI/BatchBuilder.hpp"
 #include "PostProcessor.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
-#include "RenderTarget/Abstract.hpp"
-#include "Resources/Manager.hpp"
 #include "Saphir/ShaderManager.hpp"
-#include "SceneRenderTarget.hpp"
 #include "SharedUBOManager.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
-#include "TextureResource/TextureCubemap.hpp"
 #include "VertexBufferFormatManager.hpp"
-#include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/SwapChain.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 /* Forward declarations. */
@@ -79,9 +78,13 @@ namespace EmEn
 		class AccelerationStructureBuilder;
 		class CommandPool;
 		class CommandBuffer;
+		class Framebuffer;
 		class GraphicsPipeline;
+		class Image;
+		class Instance;
 		class Queue;
 		class Sampler;
+		class SwapChain;
 	}
 
 	namespace Scenes
@@ -95,6 +98,8 @@ namespace EmEn
 		class DummyColorProjectionTexture;
 		class DummyShadowTexture;
 		class IBLTexture;
+		class GrabPass;
+		class SceneRenderTarget;
 
 		namespace Compute
 		{
@@ -111,6 +116,11 @@ namespace EmEn
 			class Interface;
 		}
 
+		namespace MDI
+		{
+			class BatchBuilder;
+		}
+
 		namespace RenderableInstance
 		{
 			class Abstract;
@@ -119,6 +129,11 @@ namespace EmEn
 		namespace RenderTarget
 		{
 			class Abstract;
+		}
+
+		namespace TextureResource
+		{
+			class TextureCubemap;
 		}
 	}
 
@@ -148,6 +163,8 @@ namespace EmEn
 	}
 
 	class PrimaryServices;
+	class Settings;
+	class Window;
 }
 
 namespace EmEn::Graphics
@@ -1260,25 +1277,20 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
+			 * @note Defined out-of-line to keep 'Vulkan/SwapChain.hpp' (and the whole
+			 * Window/Framebuffer/CommandBuffer/ViewMatrices chain it drags in) out of this header.
 			 * @return void
 			 */
-			void
-			setSwapChainDegraded () const noexcept
-			{
-				m_swapChain->setDegraded();
-			}
+			void setSwapChainDegraded () const noexcept;
 
 			/**
 			 * @brief Tells the Core that the swap-chain must be recreated.
 			 * @note This allows the main thread to be in charge of recreating the swap-chain.
+			 * @note Defined out-of-line, see setSwapChainDegraded().
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool
-			isSwapChainDegraded () const noexcept
-			{
-				return m_swapChain->status() == Vulkan::SwapChainStatus::Degraded;
-			}
+			bool isSwapChainDegraded () const noexcept;
 
 			/**
 			 * @brief Requests a graceful shutdown of the renderer.
@@ -1471,7 +1483,6 @@ namespace EmEn::Graphics
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourcesManager;
-			Renderer & m_renderer;
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
 			std::shared_ptr< Vulkan::Device > m_device;

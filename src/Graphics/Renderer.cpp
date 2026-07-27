@@ -42,20 +42,25 @@
 #include "IBLTexture.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
+#include "MDI/BatchBuilder.hpp"
 #include "Overlay/Manager.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Manager.hpp"
 #include "SceneRenderTarget.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Editor/Manager.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneMetaData.hpp"
+#include "TextureResource/TextureCubemap.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Window.hpp"
 
 namespace
 {
@@ -103,7 +108,6 @@ namespace EmEn::Graphics
 		ControllableTrait{ClassId},
 		m_primaryServices{primaryServices},
 		m_resourcesManager{resourcesManager},
-		m_renderer{resourcesManager.graphicsRenderer()},
 		m_vulkanInstance{instance},
 		m_window{window},
 		m_shaderManager{primaryServices},
@@ -765,6 +769,21 @@ namespace EmEn::Graphics
 		m_device.reset();
 
 		return error == 0;
+	}
+
+	/* NOTE: Out-of-line (was inline in the header) so 'Vulkan/SwapChain.hpp' — and the
+	 * Window/Framebuffer/CommandBuffer/ViewMatrices chain it drags in — stays out of
+	 * 'Renderer.hpp', which is included by ~77 translation units. */
+	void
+	Renderer::setSwapChainDegraded () const noexcept
+	{
+		m_swapChain->setDegraded();
+	}
+
+	bool
+	Renderer::isSwapChainDegraded () const noexcept
+	{
+		return m_swapChain->status() == SwapChainStatus::Degraded;
 	}
 
 	std::shared_ptr< RenderTarget::Abstract >

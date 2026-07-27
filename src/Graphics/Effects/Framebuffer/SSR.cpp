@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"

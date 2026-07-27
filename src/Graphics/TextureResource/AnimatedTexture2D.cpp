@@ -33,6 +33,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/Instance.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {

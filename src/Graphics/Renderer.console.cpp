@@ -37,6 +37,8 @@
 #include "PixelFactory/FileIO.hpp"
 #include "MDI/BatchBuilder.hpp"
 #include "PrimaryServices.hpp"
+#include "Vulkan/Instance.hpp"
+#include "Vulkan/SwapChain.hpp"
 
 namespace EmEn::Graphics
 {

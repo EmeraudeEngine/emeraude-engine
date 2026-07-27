@@ -108,7 +108,87 @@ build** and draining the linker:
 Do not annotate blind — let the linker name exactly what is missing, so the exported surface stays
 minimal and intentional.
 
-## 6. Status
+## 6. Exported pimpl — out-of-line destructors, and the header hygiene it unlocks
+
+An `EMERAUDE_API`-exported class forces MSVC to instantiate its **destructor at the class
+definition point in every TU**. If such a class holds a `std::unique_ptr< T >` to a
+forward-declared (incomplete) `T`, `= default`-ing the destructor in the header instantiates
+`std::default_delete< T >` on an incomplete type → hard error. The fix is the **exported pimpl**
+pattern: declare the destructor in the header, define it out-of-line in the `.cpp` where `T` is
+complete.
+
+```cpp
+// Foo.hpp
+class EMERAUDE_API Foo final
+{
+    public:
+        ~Foo ();                       // declared only — NOT '= default'
+    private:
+        std::unique_ptr< Bar > m_bar;  // Bar is only forward-declared
+};
+
+// Foo.cpp
+#include "Bar.hpp"
+Foo::~Foo () = default;                // deleter sees the complete Bar here
+```
+
+Current users: `Graphics::Renderer`, `Graphics::PostProcessor`, `Graphics::BindlessTextureManager`.
+
+**The lever this unlocks.** Once the destructor is out-of-line, *every* smart-pointer and
+reference member may point at an incomplete type, so a hot header can trade `#include` for
+forward declaration. That is a real compile-time knob: the engine's heaviest headers fan out to
+dozens or hundreds of TUs.
+
+> [!IMPORTANT]
+> **`Graphics/Renderer.hpp` is under an explicit no-regrowth contract (2026-07).** It is included
+> by ~77 TUs directly and propagates through `Core.hpp` and `Overlay/UIScreen.hpp`, so a single
+> `#include` added here is paid by most of the engine. The following are **deliberately
+> forward-declared, not included** — do not "fix" a missing type by re-adding the header:
+>
+> | Forward-declared | Why it is safe |
+> |---|---|
+> | `Vulkan::SwapChain` | `shared_ptr` member only; `setSwapChainDegraded()` / `isSwapChainDegraded()` are **out-of-line on purpose** (they were the only inline bodies needing the complete type). Re-inlining them drags back `Window.hpp`, `Vulkan/Framebuffer.hpp`, `Vulkan/CommandBuffer.hpp` and the ViewMatrices UBOs. |
+> | `Vulkan::Instance` | reference member + reference-returning getter |
+> | `Window` | reference member + reference-returning getters |
+> | `Resources::Manager` | reference member + by-reference parameters |
+> | `GrabPass`, `MDI::BatchBuilder` | `unique_ptr` member + raw-pointer getter (relies on the out-of-line destructor) |
+> | `SceneRenderTarget`, `TextureResource::TextureCubemap` | `shared_ptr` member + `const shared_ptr &` getter |
+>
+> When a consumer TU breaks after touching this header, **add the include to the consumer**, never
+> back into `Renderer.hpp`.
+
+### Finding the consumers before the build — and the method's blind spot
+
+Walking the quoted-include graph with and without the removed edges gives the **header-level**
+delta per TU, and that part is reliable: it is how the 2026-07 pass found `Graphics/PostProcessor.cpp`,
+`Vulkan/SwapChain.cpp` and the five `Graphics/TextureResource/*.cpp` before compiling anything.
+
+> [!WARNING]
+> **Do not try to narrow that delta by grepping for the type name — it is unsound.** A TU can
+> require a complete type it never spells, via `auto` plus a member call:
+> ```cpp
+> const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+> ```
+> `Graphics/Effects/Framebuffer/RTAO.cpp` broke exactly this way on `ViewMatricesInterface`
+> (reached through `Vulkan/SwapChain.hpp` → `ViewMatrices{2D,3D}UBO.hpp`) and no name-based
+> filter could have seen it. Same trap for `Manager`/`Abstract`/`Interface`/`Surface`: the names
+> are ambiguous across namespaces, so a symbol grep produces both false negatives and a flood of
+> false positives.
+>
+> Two further detectors were tried during the 2026-07 pass and **both silently under-reported**:
+> - an accessor sweep matching `accessor()` immediately followed by `.`/`->` — missed
+>   `Scenes/Scene.rendering.cpp`, where the result is parked in a variable first
+>   (`auto * b = renderer.MDIBatchBuilder();` … `b->isReady()`). Covering that needs a second
+>   step: capture the assigned name, then look for `name->`/`name.`;
+> - a *method*-name sweep ("call a method declared only in a lost header") — its regex parsed
+>   **zero** methods out of `MDI/BatchBuilder.hpp`, because the codebase puts the return type on
+>   its own line, so the "0 regressions" it printed was a broken oracle, not a clean result.
+>
+> **Lesson: validate a detector against a known-broken TU before trusting its silence.** Only the
+> header-level delta is sound enough to bound the surface; for the rest, **let the compiler
+> enumerate it** and budget several build rounds.
+
+## 7. Status
 
 - [x] `emeraude_export.hpp` reworked for the staged toggle (no-op default).
 - [x] `EMERAUDE_USE_EXPLICIT_EXPORTS` option + `WINDOWS_EXPORT_ALL_SYMBOLS` gating wired.
