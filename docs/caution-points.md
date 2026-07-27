@@ -665,6 +665,58 @@ luminance scale; the reflection term always keeps it.
 > Anything read back from the rendered scene (grab pass, and by extension any screen-space capture)
 > is already an absolute luminance.
 
+### Fixed: the legacy specular was PHONG despite being named Blinn-Phong (Jul 2026)
+
+**The trap.** `LightGenerator` dispatches the non-PBR paths to functions called
+`generatePhongBlinnVertexShader` / `generatePhongBlinnFragmentShader` /
+`generatePhongBlinnWithNormalMap*`. The names promised Blinn-Phong; the maths inside was plain
+**Phong** — `R = reflect(rayDirection, N)` then `pow(max(dot(R, V), 0), shininess)`. There was no
+half vector anywhere in the legacy path. Owner's verdict: "une vieille erreur".
+
+**Two axes, both named after Phong — do not confuse them.**
+
+| Axis | Options | Where it lives here |
+|---|---|---|
+| WHERE the lighting is evaluated | **Gouraud** (per-vertex colour) vs **Phong shading** (per-fragment, interpolated normals) | `highQualityEnabled()` — `Core/Graphics/Shader/EnableHighQuality`. `false` → `generateGouraud*`; `true` → `generatePBR*` / `generatePhongBlinn*` |
+| WHICH specular formula (the BRDF) | **Phong model** (`R·V`) vs **Blinn-Phong model** (`N·H`) vs **Cook-Torrance GGX** | PBR materials → GGX; everything else → Blinn-Phong since this fix |
+
+Blinn-Phong is **not** "Blinn plus Phong": it is Blinn's 1977 amendment of Phong's model, replacing
+the reflected ray by the half vector `H = normalize(L + V)`. It says nothing about which shader stage
+evaluates it — the two axes combine freely, and this engine offers all four combinations.
+
+> [!IMPORTANT]
+> `DefaultEnableHighQuality` is **`false`**, so a fresh install runs the **Gouraud** path. It is not
+> dead code — verify changes to the legacy lighting in BOTH quality levels. Note also that the
+> grab-pass transmission path is gated on high quality, so water renders flat and opaque with HQ off.
+
+**Why the half vector, concretely.**
+- `dot(R, V)` goes negative over a wide region at grazing angles and the highlight is **truncated
+  along a hard edge**. `dot(N, H)` stays positive whenever light and eye are on the same side, so the
+  falloff is continuous. Most visible exactly on the large flat surfaces this engine renders — ground
+  planes and sea level.
+- Phong's lobe is rotationally symmetric around `R`, so the highlight stays a **disc** at any viewing
+  angle. The half-vector lobe **stretches** with obliquity, which is what real specular reflection does
+  on a flat surface — the sun's glitter path on water.
+- `N·H` makes the term a microfacet **normal distribution over H**, the same family as the PBR path's
+  GGX, so `shininess` and `roughness` can be related. Parameterised around `R`, they cannot be — which
+  is structurally why a `StandardResource` and a `PBRResource` could never agree under one light.
+
+**Changed sites:** `LightGenerator.PerFragment.cpp` (view space, reuses `twoSidedN` / `twoSidedV`),
+`LightGenerator.PerFragment.NormalMap.cpp` (**tangent** space — N, V and H all in tangent space),
+`LightGenerator.PerVertex.cpp` (view space, computed in the vertex shader). The function names are now
+truthful, so nothing was renamed.
+
+> [!CAUTION]
+> **Material shininess values are now wrong, in a specific direction.** `dot(N, H) > dot(R, V)` for the
+> same geometry, so at an UNCHANGED `shininess` every highlight is **WIDER** than the Phong one it
+> replaced. Verified live on `water-world`: the sand went visibly glittery. Rule of thumb — a Blinn
+> exponent needs roughly **4x** the Phong one for the same visual width (`Grounds/desert001`'s 192
+> wants something nearer 768). Tracked in `TODO.md`.
+>
+> The specular is also still **not energy-normalised** (no `(n+2)/(8*pi)`), unlike its diffuse sibling.
+> That is a separate, owner-gated change — and it should be done in the SAME pass as the shininess
+> retune, since both force the same sweep over the material store.
+
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
 > [!WARNING]

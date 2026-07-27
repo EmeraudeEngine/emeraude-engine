@@ -411,8 +411,21 @@ namespace EmEn::Saphir
 
 				"if ( " << DiffuseFactor << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
-				"	const vec3 R = reflect(" << rayDirectionViewSpace << ", twoSidedN);" << Line::End <<
-				"	" << SpecularFactor << " = pow(max(dot(R, twoSidedV), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
+				/* BLINN-PHONG: the specular lobe is built on the HALF VECTOR
+				 * H = normalize(L + V), not on the reflected ray. L is the direction TOWARDS the
+				 * light, i.e. the opposite of the ray's travel direction, hence "V - rayDirection".
+				 * Why the half vector: dot(N, H) keeps a continuous falloff at grazing angles where
+				 * dot(R, V) goes negative and truncates the highlight along a hard edge, and its lobe
+				 * stretches with the viewing angle instead of staying a disc — which is what a real
+				 * specular reflection does on a flat surface (the sun's glitter path on water).
+				 * It is also a microfacet normal distribution over H, the same family as the PBR
+				 * path's GGX, so shininess and roughness can be related. Phong's lobe, parameterised
+				 * around R, cannot be.
+				 * ⚠️ dot(N, H) > dot(R, V) for the same geometry, so at an UNCHANGED shininess the
+				 * highlight is WIDER than the Phong one it replaces. Material shininess values were
+				 * authored against Phong and may want raising. */
+				"	const vec3 H = normalize(twoSidedV - " << rayDirectionViewSpace << ");" << Line::End <<
+				"	" << SpecularFactor << " = pow(max(dot(twoSidedN, H), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
 				'}' << Line::End;
 		}
 
