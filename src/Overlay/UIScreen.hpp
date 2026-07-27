@@ -50,6 +50,10 @@ namespace EmEn::Graphics::Geometry
 {
 	class IndexedVertexResource;
 }
+namespace EmEn::Vulkan
+{
+	class PipelineLayout;
+}
 namespace EmEn::Overlay
 {
 	/**

@@ -90,6 +90,10 @@ namespace EmEn
 #endif
 	}
 }
+namespace EmEn::Saphir
+{
+	class Program;
+}
 
 namespace EmEn::Overlay
 {

@@ -30,6 +30,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
@@ -43,8 +44,7 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "DirStackFileIncluder.hpp"
-#include "Saphir/Program.hpp"
+#include "StaticVector.hpp"
 #include "Types.hpp"
 #include "Vulkan/Types.hpp"
 
@@ -60,6 +60,7 @@ namespace EmEn
 	namespace Saphir
 	{
 		class AbstractShader;
+		class Program;
 	}
 
 	class PrimaryServices;
@@ -100,15 +101,20 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Constructs the shader manager.
+			 * @note Defined out-of-line (not inline here): it initializes a
+			 * std::unique_ptr< GLSLangContext > pointing to an incomplete type, whose
+			 * complete definition is only visible in ShaderManager.cpp.
 			 * @param primaryServices A reference to the primary services.
 			 */
-			explicit
-			ShaderManager (PrimaryServices & primaryServices) noexcept
-				: ServiceInterface{ClassId},
-				m_primaryServices{primaryServices}
-			{
+			explicit ShaderManager (PrimaryServices & primaryServices) noexcept;
 
-			}
+			/**
+			 * @brief Destructs the shader manager.
+			 * @note Defined out-of-line for the same reason as the constructor: destroying
+			 * the std::unique_ptr< GLSLangContext > requires the complete type for the
+			 * deleter. See docs/windows-export-api.md § "exported pimpl".
+			 */
+			~ShaderManager () override;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
@@ -277,14 +283,6 @@ namespace EmEn::Saphir
 			void printCompilationErrors (const std::string & shaderIdentifier, const std::string & sourceCode, const char * log) noexcept;
 
 			/**
-			 * @brief Converts shader type from saphir to GLSLang type.
-			 * @param shaderType The Saphir shader type.
-			 * @return EShLanguage
-			 */
-			[[nodiscard]]
-			static EShLanguage GLSLangShaderType (ShaderType shaderType) noexcept;
-
-			/**
 			 * @brief Converts a shader type from saphir to Vulkan type.
 			 * @param shaderType The Saphir shader type.
 			 * @return VkShaderStageFlagBits
@@ -295,22 +293,28 @@ namespace EmEn::Saphir
 			static constexpr auto ShaderSourcesDirectoryName{"shader-sources"};
 			static constexpr auto ShaderBinariesDirectoryName{"shader-binaries"};
 
+			/**
+			 * @brief The GLSLang compilation context: built-in resource limits, shader
+			 * includer, GLSL profile, target version and message filter.
+			 * @note Held by pointer so that <glslang/Public/ShaderLang.h> stays OUT of this
+			 * header. Every one of these fields is a glslang type (TBuiltInResource,
+			 * DirStackFileIncluder, EProfile, EShMessages), so keeping them by value leaked
+			 * the whole glslang public header into each of the 21 translation units
+			 * including ShaderManager.hpp — and, through Graphics/Renderer.hpp, into 81 more.
+			 * Defined in ShaderManager.cpp; never null after a successful onInitialize().
+			 */
+			struct GLSLangContext;
+
 			PrimaryServices & m_primaryServices;
 			std::map< size_t, std::shared_ptr< Vulkan::ShaderModule > > m_shaderModules;
 			std::map< size_t, std::filesystem::path > m_cachedShaderSourceCodes;
 			std::map< size_t, std::filesystem::path > m_cachedShaderBinaries;
 			std::filesystem::path m_shadersSourcesDirectory;
 			std::filesystem::path m_shadersBinariesDirectory;
-			TBuiltInResource m_builtInResource{};
-			DirStackFileIncluder m_includer;
-			EProfile m_profile{ECoreProfile}; // ENoProfile
-			int m_defaultVersion{100};
-			EShMessages m_messageFilter{static_cast< EShMessages >(EShMsgDefault | EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo)};
+			std::unique_ptr< GLSLangContext > m_glslang;
 			bool m_showInformation{false};
 			bool m_showSourceCode{false};
 			bool m_sourceCodeCacheEnabled{false};
 			bool m_binaryCacheEnabled{false};
-			bool m_forceDefaultVersionAndProfile{false};
-			bool m_forwardCompatible{false};
 	};
 }

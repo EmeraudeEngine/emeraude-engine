@@ -41,8 +41,10 @@
 /* Local inclusions. */
 #include "AbstractShader.hpp"
 #include "Arguments.hpp"
+#include "DirStackFileIncluder.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
+#include "Program.hpp"
 #include "SourceCodeParser.hpp"
 #include "TokenFormatter.hpp"
 #include "PrimaryServices.hpp"
@@ -54,6 +56,70 @@ namespace EmEn::Saphir
 {
 	using namespace Base;
 	using namespace Vulkan;
+
+	/**
+	 * @brief The GLSLang compilation context, kept out of ShaderManager.hpp so that
+	 * <glslang/Public/ShaderLang.h> does not leak into every consumer of the manager.
+	 */
+	struct ShaderManager::GLSLangContext
+	{
+		TBuiltInResource builtInResource{};
+		DirStackFileIncluder includer;
+		EProfile profile{ECoreProfile}; // ENoProfile
+		int defaultVersion{100};
+		EShMessages messageFilter{static_cast< EShMessages >(EShMsgDefault | EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo)};
+		bool forceDefaultVersionAndProfile{false};
+		bool forwardCompatible{false};
+	};
+
+	ShaderManager::ShaderManager (PrimaryServices & primaryServices) noexcept
+		: ServiceInterface{ClassId},
+		m_primaryServices{primaryServices},
+		m_glslang{std::make_unique< GLSLangContext >()}
+	{
+
+	}
+
+	ShaderManager::~ShaderManager () = default;
+
+	/**
+	 * @brief Converts a Saphir shader type to its GLSLang counterpart.
+	 * @note File-local: its EShLanguage return type used to drag the glslang public
+	 * header into ShaderManager.hpp.
+	 * @param shaderType The Saphir shader type.
+	 * @return EShLanguage
+	 */
+	[[nodiscard]]
+	static
+	EShLanguage
+	toGLSLangShaderType (ShaderType shaderType) noexcept
+	{
+		switch ( shaderType )
+		{
+			case ShaderType::VertexShader :
+				return EShLangVertex;
+
+			case ShaderType::TesselationControlShader :
+				return EShLangTessControl;
+
+			case ShaderType::TesselationEvaluationShader :
+				return EShLangTessEvaluation;
+
+			case ShaderType::GeometryShader :
+				return EShLangGeometry;
+
+			case ShaderType::FragmentShader :
+				return EShLangFragment;
+
+			case ShaderType::ComputeShader :
+				return EShLangCompute;
+
+			default:
+				Tracer::error(ShaderManager::ClassId, "Unknown shader type !");
+
+				return EShLangCount;
+		}
+	}
 
 	bool
 	ShaderManager::onInitialize () noexcept
@@ -113,101 +179,103 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		m_builtInResource.maxLights = 32;
-		m_builtInResource.maxClipPlanes = 6;
-		m_builtInResource.maxTextureUnits = 32;
-		m_builtInResource.maxTextureCoords = 32;
-		m_builtInResource.maxVertexAttribs = 64;
-		m_builtInResource.maxVertexUniformComponents = 4096;
-		m_builtInResource.maxVaryingFloats = 64;
-		m_builtInResource.maxVertexTextureImageUnits = 32;
-		m_builtInResource.maxCombinedTextureImageUnits = 80;
-		m_builtInResource.maxTextureImageUnits = 32;
-		m_builtInResource.maxFragmentUniformComponents = 4096;
-		m_builtInResource.maxDrawBuffers = 32;
-		m_builtInResource.maxVertexUniformVectors = 128;
-		m_builtInResource.maxVaryingVectors = 8;
-		m_builtInResource.maxFragmentUniformVectors = 16;
-		m_builtInResource.maxVertexOutputVectors = 16;
-		m_builtInResource.maxFragmentInputVectors = 15;
-		m_builtInResource.minProgramTexelOffset = -8;
-		m_builtInResource.maxProgramTexelOffset = 7;
-		m_builtInResource.maxClipDistances = 8;
-		m_builtInResource.maxComputeWorkGroupCountX = 65535;
-		m_builtInResource.maxComputeWorkGroupCountY = 65535;
-		m_builtInResource.maxComputeWorkGroupCountZ = 65535;
-		m_builtInResource.maxComputeWorkGroupSizeX = 1024;
-		m_builtInResource.maxComputeWorkGroupSizeY = 1024;
-		m_builtInResource.maxComputeWorkGroupSizeZ = 64;
-		m_builtInResource.maxComputeUniformComponents = 1024;
-		m_builtInResource.maxComputeTextureImageUnits = 16;
-		m_builtInResource.maxComputeImageUniforms = 8;
-		m_builtInResource.maxComputeAtomicCounters = 8;
-		m_builtInResource.maxComputeAtomicCounterBuffers = 1;
-		m_builtInResource.maxVaryingComponents = 60;
-		m_builtInResource.maxVertexOutputComponents = 64;
-		m_builtInResource.maxGeometryInputComponents = 64;
-		m_builtInResource.maxGeometryOutputComponents = 128;
-		m_builtInResource.maxFragmentInputComponents = 128;
-		m_builtInResource.maxImageUnits = 8;
-		m_builtInResource.maxCombinedImageUnitsAndFragmentOutputs = 8;
-		m_builtInResource.maxCombinedShaderOutputResources = 8;
-		m_builtInResource.maxImageSamples = 0;
-		m_builtInResource.maxVertexImageUniforms = 0;
-		m_builtInResource.maxTessControlImageUniforms = 0;
-		m_builtInResource.maxTessEvaluationImageUniforms = 0;
-		m_builtInResource.maxGeometryImageUniforms = 0;
-		m_builtInResource.maxFragmentImageUniforms = 8;
-		m_builtInResource.maxCombinedImageUniforms = 8;
-		m_builtInResource.maxGeometryTextureImageUnits = 16;
-		m_builtInResource.maxGeometryOutputVertices = 256;
-		m_builtInResource.maxGeometryTotalOutputComponents = 1024;
-		m_builtInResource.maxGeometryUniformComponents = 1024;
-		m_builtInResource.maxGeometryVaryingComponents = 64;
-		m_builtInResource.maxTessControlInputComponents = 128;
-		m_builtInResource.maxTessControlOutputComponents = 128;
-		m_builtInResource.maxTessControlTextureImageUnits = 16;
-		m_builtInResource.maxTessControlUniformComponents = 1024;
-		m_builtInResource.maxTessControlTotalOutputComponents = 4096;
-		m_builtInResource.maxTessEvaluationInputComponents = 128;
-		m_builtInResource.maxTessEvaluationOutputComponents = 128;
-		m_builtInResource.maxTessEvaluationTextureImageUnits = 16;
-		m_builtInResource.maxTessEvaluationUniformComponents = 1024;
-		m_builtInResource.maxTessPatchComponents = 120;
-		m_builtInResource.maxPatchVertices = 32;
-		m_builtInResource.maxTessGenLevel = 64;
-		m_builtInResource.maxViewports = 16;
-		m_builtInResource.maxVertexAtomicCounters = 0;
-		m_builtInResource.maxTessControlAtomicCounters = 0;
-		m_builtInResource.maxTessEvaluationAtomicCounters = 0;
-		m_builtInResource.maxGeometryAtomicCounters = 0;
-		m_builtInResource.maxFragmentAtomicCounters = 8;
-		m_builtInResource.maxCombinedAtomicCounters = 8;
-		m_builtInResource.maxAtomicCounterBindings = 1;
-		m_builtInResource.maxVertexAtomicCounterBuffers = 0;
-		m_builtInResource.maxTessControlAtomicCounterBuffers = 0;
-		m_builtInResource.maxTessEvaluationAtomicCounterBuffers = 0;
-		m_builtInResource.maxGeometryAtomicCounterBuffers = 0;
-		m_builtInResource.maxFragmentAtomicCounterBuffers = 1;
-		m_builtInResource.maxCombinedAtomicCounterBuffers = 1;
-		m_builtInResource.maxAtomicCounterBufferSize = 16384;
-		m_builtInResource.maxTransformFeedbackBuffers = 4;
-		m_builtInResource.maxTransformFeedbackInterleavedComponents = 64;
-		m_builtInResource.maxCullDistances = 8;
-		m_builtInResource.maxCombinedClipAndCullDistances = 8;
-		m_builtInResource.maxSamples = 4;
+		auto & builtInResource = m_glslang->builtInResource;
 
-		m_builtInResource.limits.nonInductiveForLoops = true;
-		m_builtInResource.limits.whileLoops = true;
-		m_builtInResource.limits.doWhileLoops = true;
-		m_builtInResource.limits.generalUniformIndexing = true;
-		m_builtInResource.limits.generalAttributeMatrixVectorIndexing = true;
-		m_builtInResource.limits.generalVaryingIndexing = true;
-		m_builtInResource.limits.generalSamplerIndexing = true;
-		m_builtInResource.limits.generalVariableIndexing = true;
-		m_builtInResource.limits.generalConstantMatrixVectorIndexing = true;
+		builtInResource.maxLights = 32;
+		builtInResource.maxClipPlanes = 6;
+		builtInResource.maxTextureUnits = 32;
+		builtInResource.maxTextureCoords = 32;
+		builtInResource.maxVertexAttribs = 64;
+		builtInResource.maxVertexUniformComponents = 4096;
+		builtInResource.maxVaryingFloats = 64;
+		builtInResource.maxVertexTextureImageUnits = 32;
+		builtInResource.maxCombinedTextureImageUnits = 80;
+		builtInResource.maxTextureImageUnits = 32;
+		builtInResource.maxFragmentUniformComponents = 4096;
+		builtInResource.maxDrawBuffers = 32;
+		builtInResource.maxVertexUniformVectors = 128;
+		builtInResource.maxVaryingVectors = 8;
+		builtInResource.maxFragmentUniformVectors = 16;
+		builtInResource.maxVertexOutputVectors = 16;
+		builtInResource.maxFragmentInputVectors = 15;
+		builtInResource.minProgramTexelOffset = -8;
+		builtInResource.maxProgramTexelOffset = 7;
+		builtInResource.maxClipDistances = 8;
+		builtInResource.maxComputeWorkGroupCountX = 65535;
+		builtInResource.maxComputeWorkGroupCountY = 65535;
+		builtInResource.maxComputeWorkGroupCountZ = 65535;
+		builtInResource.maxComputeWorkGroupSizeX = 1024;
+		builtInResource.maxComputeWorkGroupSizeY = 1024;
+		builtInResource.maxComputeWorkGroupSizeZ = 64;
+		builtInResource.maxComputeUniformComponents = 1024;
+		builtInResource.maxComputeTextureImageUnits = 16;
+		builtInResource.maxComputeImageUniforms = 8;
+		builtInResource.maxComputeAtomicCounters = 8;
+		builtInResource.maxComputeAtomicCounterBuffers = 1;
+		builtInResource.maxVaryingComponents = 60;
+		builtInResource.maxVertexOutputComponents = 64;
+		builtInResource.maxGeometryInputComponents = 64;
+		builtInResource.maxGeometryOutputComponents = 128;
+		builtInResource.maxFragmentInputComponents = 128;
+		builtInResource.maxImageUnits = 8;
+		builtInResource.maxCombinedImageUnitsAndFragmentOutputs = 8;
+		builtInResource.maxCombinedShaderOutputResources = 8;
+		builtInResource.maxImageSamples = 0;
+		builtInResource.maxVertexImageUniforms = 0;
+		builtInResource.maxTessControlImageUniforms = 0;
+		builtInResource.maxTessEvaluationImageUniforms = 0;
+		builtInResource.maxGeometryImageUniforms = 0;
+		builtInResource.maxFragmentImageUniforms = 8;
+		builtInResource.maxCombinedImageUniforms = 8;
+		builtInResource.maxGeometryTextureImageUnits = 16;
+		builtInResource.maxGeometryOutputVertices = 256;
+		builtInResource.maxGeometryTotalOutputComponents = 1024;
+		builtInResource.maxGeometryUniformComponents = 1024;
+		builtInResource.maxGeometryVaryingComponents = 64;
+		builtInResource.maxTessControlInputComponents = 128;
+		builtInResource.maxTessControlOutputComponents = 128;
+		builtInResource.maxTessControlTextureImageUnits = 16;
+		builtInResource.maxTessControlUniformComponents = 1024;
+		builtInResource.maxTessControlTotalOutputComponents = 4096;
+		builtInResource.maxTessEvaluationInputComponents = 128;
+		builtInResource.maxTessEvaluationOutputComponents = 128;
+		builtInResource.maxTessEvaluationTextureImageUnits = 16;
+		builtInResource.maxTessEvaluationUniformComponents = 1024;
+		builtInResource.maxTessPatchComponents = 120;
+		builtInResource.maxPatchVertices = 32;
+		builtInResource.maxTessGenLevel = 64;
+		builtInResource.maxViewports = 16;
+		builtInResource.maxVertexAtomicCounters = 0;
+		builtInResource.maxTessControlAtomicCounters = 0;
+		builtInResource.maxTessEvaluationAtomicCounters = 0;
+		builtInResource.maxGeometryAtomicCounters = 0;
+		builtInResource.maxFragmentAtomicCounters = 8;
+		builtInResource.maxCombinedAtomicCounters = 8;
+		builtInResource.maxAtomicCounterBindings = 1;
+		builtInResource.maxVertexAtomicCounterBuffers = 0;
+		builtInResource.maxTessControlAtomicCounterBuffers = 0;
+		builtInResource.maxTessEvaluationAtomicCounterBuffers = 0;
+		builtInResource.maxGeometryAtomicCounterBuffers = 0;
+		builtInResource.maxFragmentAtomicCounterBuffers = 1;
+		builtInResource.maxCombinedAtomicCounterBuffers = 1;
+		builtInResource.maxAtomicCounterBufferSize = 16384;
+		builtInResource.maxTransformFeedbackBuffers = 4;
+		builtInResource.maxTransformFeedbackInterleavedComponents = 64;
+		builtInResource.maxCullDistances = 8;
+		builtInResource.maxCombinedClipAndCullDistances = 8;
+		builtInResource.maxSamples = 4;
 
-		//m_includer.pushExternalLocalDirectory("");
+		builtInResource.limits.nonInductiveForLoops = true;
+		builtInResource.limits.whileLoops = true;
+		builtInResource.limits.doWhileLoops = true;
+		builtInResource.limits.generalUniformIndexing = true;
+		builtInResource.limits.generalAttributeMatrixVectorIndexing = true;
+		builtInResource.limits.generalVaryingIndexing = true;
+		builtInResource.limits.generalSamplerIndexing = true;
+		builtInResource.limits.generalVariableIndexing = true;
+		builtInResource.limits.generalConstantMatrixVectorIndexing = true;
+
+		//m_glslang->includer.pushExternalLocalDirectory("");
 
 		return true;
 	}
@@ -603,36 +671,6 @@ namespace EmEn::Saphir
 		return std::stoull(tmpB[0]);
 	}
 
-	EShLanguage
-	ShaderManager::GLSLangShaderType (ShaderType shaderType) noexcept
-	{
-		switch ( shaderType )
-		{
-			case ShaderType::VertexShader :
-				return EShLangVertex;
-
-			case ShaderType::TesselationControlShader :
-				return EShLangTessControl;
-
-			case ShaderType::TesselationEvaluationShader :
-				return EShLangTessEvaluation;
-
-			case ShaderType::GeometryShader :
-				return EShLangGeometry;
-
-			case ShaderType::FragmentShader :
-				return EShLangFragment;
-
-			case ShaderType::ComputeShader :
-				return EShLangCompute;
-
-			default:
-				Tracer::error(ClassId, "Unknown shader type !");
-
-				return EShLangCount;
-		}
-	}
-
 	VkShaderStageFlagBits
 	ShaderManager::vkShaderType (ShaderType shaderType) noexcept
 	{
@@ -696,12 +734,12 @@ namespace EmEn::Saphir
 		}
 
 		/* NOTE: Convert shader shaderType to GLSLang shaderType. */
-		const auto shaderType = ShaderManager::GLSLangShaderType(type);
+		const auto shaderType = toGLSLangShaderType(type);
 		const auto * sourceCodeCString = sourceCode.c_str();
 
 		glslang::TShader glslShader{shaderType};
 		glslShader.setStrings(&sourceCodeCString, 1);
-		glslShader.setEnvInput(glslang::EShSourceGlsl, shaderType, glslang::EShClientVulkan, m_defaultVersion);
+		glslShader.setEnvInput(glslang::EShSourceGlsl, shaderType, glslang::EShClientVulkan, m_glslang->defaultVersion);
 		/* [VULKAN-API-SETUP] GLSL/SPIR-V version for Vulkan. */
 		if constexpr ( IsMacOS )
 		{
@@ -719,7 +757,7 @@ namespace EmEn::Saphir
 		/* NOTE: Preprocess the source code. */
 		std::string preprocessedSource;
 
-		if ( !glslShader.preprocess(&m_builtInResource, m_defaultVersion, m_profile, m_forceDefaultVersionAndProfile, m_forwardCompatible, m_messageFilter, &preprocessedSource, m_includer) )
+		if ( !glslShader.preprocess(&m_glslang->builtInResource, m_glslang->defaultVersion, m_glslang->profile, m_glslang->forceDefaultVersionAndProfile, m_glslang->forwardCompatible, m_glslang->messageFilter, &preprocessedSource, m_glslang->includer) )
 		{
 			this->printCompilationErrors(shaderIdentifier, preprocessedSource, glslShader.getInfoLog());
 
@@ -745,7 +783,7 @@ namespace EmEn::Saphir
 
 		glslShader.setStrings(&c_string, 1);
 
-		if ( !glslShader.parse(&m_builtInResource, m_defaultVersion, m_profile, m_forceDefaultVersionAndProfile, m_forwardCompatible, m_messageFilter, m_includer) )
+		if ( !glslShader.parse(&m_glslang->builtInResource, m_glslang->defaultVersion, m_glslang->profile, m_glslang->forceDefaultVersionAndProfile, m_glslang->forwardCompatible, m_glslang->messageFilter, m_glslang->includer) )
 		{
 			this->printCompilationErrors(shaderIdentifier, preprocessedSource, glslShader.getInfoLog());
 
@@ -756,7 +794,7 @@ namespace EmEn::Saphir
 		glslang::TProgram program;
 		program.addShader(&glslShader);
 
-		if ( !program.link(m_messageFilter) )
+		if ( !program.link(m_glslang->messageFilter) )
 		{
 			this->printCompilationErrors(shaderIdentifier, preprocessedSource, glslShader.getInfoLog());
 

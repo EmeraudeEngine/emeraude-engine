@@ -39,6 +39,7 @@
 #include "Surface.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/PipelineLayout.hpp"
 
 namespace EmEn::Overlay
 {

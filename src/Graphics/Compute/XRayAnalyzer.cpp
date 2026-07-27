@@ -42,6 +42,7 @@
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Queue.hpp"
+#include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 
 namespace EmEn::Graphics::Compute
