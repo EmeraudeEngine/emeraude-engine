@@ -237,13 +237,10 @@ namespace EmEn::Saphir
 		 * Two-sided: test against the viewer-oriented normal (dot(N,V), winding-independent)
 		 * so a back-facing surface with a correct normal is not wrongly discarded. Tangent-space
 		 * lighting of genuine back-faces on this legacy normal-mapped path stays approximate. */
-		if ( !m_useStaticLighting )
-		{
-			Code{fragmentShader} <<
-				"const vec3 twoSidedV = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
-				"const vec3 twoSidedN = dot(" << ShaderVariable::NormalViewSpace << ", twoSidedV) < 0.0 ? -" << ShaderVariable::NormalViewSpace << " : " << ShaderVariable::NormalViewSpace << ";" << Line::End <<
-				"if ( dot(-" << rayDirectionViewSpace << ", twoSidedN) < -0.33 ) { discard; }";
-		}
+		Code{fragmentShader} <<
+			"const vec3 twoSidedV = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
+			"const vec3 twoSidedN = dot(" << ShaderVariable::NormalViewSpace << ", twoSidedV) < 0.0 ? -" << ShaderVariable::NormalViewSpace << " : " << ShaderVariable::NormalViewSpace << ";" << Line::End <<
+			"if ( dot(-" << rayDirectionViewSpace << ", twoSidedN) < -0.33 ) { discard; }";
 
 		/* Get the ray direction in texture space */
 		{

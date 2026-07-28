@@ -29,8 +29,13 @@
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
+/* STL inclusions. */
+#include <vector>
+
 /* Local inclusions for usages. */
+#include "Graphics/CelestialBody.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Photometry.hpp"
 #include "PixelFactory/Color.hpp"
 
 namespace EmEn::Graphics::TextureResource
@@ -140,47 +145,55 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Sets the light position.
-			 * @param position A reference to a position vector.
+			 * @brief Sets the illuminance the background pours on the scene, in lux.
+			 * @note This is the value the LightSet ambient light receives when the scene derives
+			 * its lighting from the background. References: open shade under a clear sky
+			 * 20000 lx, overcast 5000 lx, moonlit night ~1 lx.
+			 * @param lux The ambient illuminance, in lux.
 			 * @return void
 			 */
 			void
-			setLightPosition (const Base::Math::Vector< 3, float > & position) noexcept
+			setAmbientIlluminance (float lux) noexcept
 			{
-				m_lightPosition = position;
+				m_ambientIlluminance = std::max(0.0F, lux);
 			}
 
 			/**
-			 * @brief Sets the light ambient color.
-			 * @param color A reference to a color.
-			 * @return void
+			 * @brief Returns the illuminance the background pours on the scene, in lux.
+			 * @note When the manifest does not declare it, it is derived from the luminance
+			 * (E = pi * L, uniform dome — see Photometry::illuminanceFromSkyLuminance()).
+			 * @return float
 			 */
-			void
-			setLightAmbientColor (const Base::PixelFactory::Color< float > & color) noexcept
+			[[nodiscard]]
+			float
+			ambientIlluminance () const noexcept
 			{
-				m_lightAmbientColor = color;
+				return m_ambientIlluminance < 0.0F ? Photometry::illuminanceFromSkyLuminance(m_luminance) : m_ambientIlluminance;
 			}
 
 			/**
-			 * @brief Sets the light diffuse color.
-			 * @param color A reference to a color.
+			 * @brief Adds a celestial body (a sun, a moon, ...) to the background description.
+			 * @param celestialBody A reference to a celestial body.
 			 * @return void
 			 */
 			void
-			setLightDiffuseColor (const Base::PixelFactory::Color< float > & color) noexcept
+			addStar (const CelestialBody & celestialBody) noexcept
 			{
-				m_lightDiffuseColor = color;
+				m_stars.emplace_back(celestialBody);
 			}
 
 			/**
-			 * @brief Sets the light specular color.
-			 * @param color A reference to a color.
-			 * @return void
+			 * @brief Returns the celestial bodies identified in the background.
+			 * @note Can be empty: a background without an identifiable light point (overcast sky,
+			 * nebula, cave dome) only provides ambiance. The first one is meant to become the
+			 * scene main directional light.
+			 * @return const std::vector< CelestialBody > &
 			 */
-			void
-			setLightSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept
+			[[nodiscard]]
+			const std::vector< CelestialBody > &
+			stars () const noexcept
 			{
-				m_lightSpecularColor = color;
+				return m_stars;
 			}
 
 			/**
@@ -192,50 +205,6 @@ namespace EmEn::Graphics::Renderable
 			averageColor () const noexcept
 			{
 				return m_averageColor;
-			}
-
-			/**
-			 * @brief Returns the light position.
-			 * @return const Base::Math::Vector< 3, float > &
-			 */
-			[[nodiscard]]
-			const Base::Math::Vector< 3, float > &
-			lightPosition () const noexcept
-			{
-				return m_lightPosition;
-			}
-
-			/**
-			 * @brief Returns the light ambient color.
-			 * @return const Libraries::PixelFactory::Color< float > &
-			 */
-			[[nodiscard]]
-			const Base::PixelFactory::Color< float > &
-			lightAmbientColor () const noexcept
-			{
-				return m_lightAmbientColor;
-			}
-
-			/**
-			 * @brief Returns the light diffuse color.
-			 * @return const Libraries::PixelFactory::Color< float > &
-			 */
-			[[nodiscard]]
-			const Base::PixelFactory::Color< float > &
-			lightDiffuseColor () const noexcept
-			{
-				return m_lightDiffuseColor;
-			}
-
-			/**
-			 * @brief Returns the light specular color.
-			 * @return const Libraries::PixelFactory::Color< float > &
-			 */
-			[[nodiscard]]
-			const Base::PixelFactory::Color< float > &
-			lightSpecularColor () const noexcept
-			{
-				return m_lightSpecularColor;
 			}
 
 			/**
@@ -280,7 +249,22 @@ namespace EmEn::Graphics::Renderable
 
 			}
 
+			/**
+			 * @brief Parses the photometric part of a background manifest — the SINGLE parsing
+			 * point shared by every background type (sky box, dynamic sky, color background).
+			 * @note Reads the optional keys "Luminance" (nits, defaults to a clear day),
+			 * "AverageColor" (sRGB, defaults to the loaded source average), "AmbientIlluminance"
+			 * (lux, defaults to pi * luminance) and "Stars" (array of celestial bodies, each with
+			 * "Direction" and "Illuminance" required, "Type", "Temperature"/"Color",
+			 * "AngularDiameter" and "InTexture" optional).
+			 * @param data A reference to the JSON data.
+			 * @return bool
+			 */
+			bool parsePhotometry (const Json::Value & data) noexcept;
+
 		private:
+
+			static constexpr auto TracerTag{"AbstractBackground"};
 
 			static constexpr auto SkyBoxGeometryName{"SkyBoxGeometry"};
 			static constexpr auto SkyDomeGeometryName{"SkyDomeGeometry"};
@@ -288,11 +272,9 @@ namespace EmEn::Graphics::Renderable
 			/* FIXME: Set the correct size. */
 			static constexpr auto SkySize{512.0F};
 
+			std::vector< CelestialBody > m_stars;
 			Base::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};
 			float m_luminance{DefaultLuminance}; /**< Physical luminance of the background, in nits. */
-			Base::Math::Vector< 3, float > m_lightPosition{0.6666F, 0.3333F, 0.6666F};
-			Base::PixelFactory::Color< float > m_lightAmbientColor{0.0F, 0.0F, 0.13F, 1.0F};
-			Base::PixelFactory::Color< float > m_lightDiffuseColor{1.0F, 1.0F, 1.0F, 1.0F};
-			Base::PixelFactory::Color< float > m_lightSpecularColor{1.0F, 1.0F, 1.0F, 1.0F};
+			float m_ambientIlluminance{-1.0F}; /**< Ambient illuminance, in lux. Negative means "derive from the luminance". */
 	};
 }

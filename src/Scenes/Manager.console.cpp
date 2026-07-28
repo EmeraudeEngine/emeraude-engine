@@ -144,11 +144,11 @@ namespace EmEn::Scenes
 				cameraNode->componentBuilder< Component::Microphone >(cameraNodeName + "Microphone").asPrimary().build();
 			}
 
-			/* Setup basic directional lighting. */
-			scene->lightSet().enableAsStaticLighting()
-				.setAmbientParameters({0.3F, 0.4F, 0.6F, 1.0F}, 0.25F)
-				.setLightParameters({1.0F, 0.95F, 0.8F, 1.0F}, 1.2F)
-				.setAsDirectionalLight({1.0F, 1.0F, 1.0F}, true);
+			/* Setup a neutral ambient lighting (photometric: the intensity is an
+			 * illuminance in lux, overcast-like default). */
+			scene->lightSet().enable();
+			scene->lightSet().setAmbientLightColor({1.0F, 1.0F, 1.0F, 1.0F});
+			scene->lightSet().setAmbientLightIntensity(5000.0F);
 
 			if ( this->enableScene(scene) )
 			{

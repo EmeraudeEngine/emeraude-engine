@@ -1069,23 +1069,65 @@ The `Scenes::Component::Camera` is the **single source of truth for the photogra
 behaviour** of the rendered image, like a real camera body. Owner vision: ultimately ALL
 image-rendering effects are camera-manageable (lens effects already are).
 
-### Sky luminance — the sky is a light source, and it is authored in the asset (Jul 2026)
+### Background photometric contract — the sky is a light source, authored in the asset (Jul 2026)
 
 A sky EMITS, so it is described by a **luminance in nits**, and that value spans seven orders of
 magnitude between noon and midnight: `DaylightSkyLuminance` 8000, `OvercastSkyLuminance` 2000,
 `TwilightSkyLuminance` 10, `MoonlitNightSkyLuminance` 1 (`Graphics/Renderable/SkyBoxResource.hpp`).
-It is declared by the sky's own JSON manifest through the optional `"Luminance"` key (`JKLuminance`),
-because a night cubemap and a noon cubemap are not the same photometric object; absent means a clear
-day, which is what every sky implicitly claimed before the key existed.
+A background manifest (store `Backgrounds`) declares the FULL photometric description of the sky:
+
+```json
+{
+	"Cubemap": "BlueSky",
+	"Luminance": 8000.0,
+	"AverageColor": [0.35, 0.55, 0.85],
+	"AmbientIlluminance": 20000.0,
+	"Stars": [
+		{ "Type": "Sun", "Direction": [0.35, -0.55, 0.63], "Illuminance": 100000.0,
+		  "Temperature": 5500, "AngularDiameter": 0.53, "InTexture": true }
+	]
+}
+```
+
+- `Cubemap` (required): resource name in the `Cubemaps` store (the key REPLACED `"Texture"`, Jul 2026).
+- `Luminance` (nits, default 8000 = clear day): the emission scale of the LDR source — a night
+  cubemap and a noon cubemap are not the same photometric object.
+- `AverageColor` (sRGB, optional): authored/cheated average; absent = computed from the source
+  (`CubemapResource::averageColor()`).
+- `AmbientIlluminance` (lux, optional): what the dome pours on the ground; absent = derived as
+  `E = π·L` (`Photometry::illuminanceFromSkyLuminance()`).
+- `Stars` (optional, 0..N): celestial bodies (`Graphics::CelestialBody`) to derive analytic
+  directional lights from — `Direction` points TOWARD the body (engine frame, UP = -Y),
+  `Illuminance` in lux, `Temperature` in kelvins (industry-standard authoring; wins over a direct
+  `"Color"` when both are present) resolved via `Photometry::colorFromTemperature()` (Planckian
+  locus), `AngularDiameter` in degrees, `InTexture` = anti-double-counting flag (informative in
+  LDR, structuring for the future HDR pipeline). Zero stars is legitimate: pure ambiance
+  (overcast, nebula, cave).
+
+Parsing is CENTRALIZED in `AbstractBackground::parsePhotometry()` — every background type
+(`SkyBoxResource`, future `DynamicSkyResource`, `ColorBackgroundResource`) goes through it.
+
+**The scene consumes this in two ways:**
+1. **Always** (automatic): the luminance scales every IBL contribution. It travels through the
+   View UBO (`UniformBlock::Component::EnvironmentLuminance`, pushed by
+   `Scene::refreshAmbientLightProperties()` to ALL render targets — main, views, textures — at
+   LightSet init, on `setBackground()`, and when an async background finishes loading). The
+   shader reads it via `LightGenerator::scaledIBLIntensity()`; it is a UNIFORM, not a baked
+   literal, so it can change at runtime (day/night) without regenerating programs.
+2. **Opt-in**: `Scene::applyBackgroundLighting(options)` derives the scene lighting — LightSet
+   ambient = `AverageColor` × `AmbientIlluminance`, one `DirectionalLight` per star (the first
+   becomes the main directional light). Shadow mapping is NOT photometric data: it comes from
+   `BackgroundLightingOptions` (classic map or CSM). Deferred automatically while the background
+   resource is still loading (observer on `LoadFinished`). Scene JSON: `"ApplyLighting": true`
+   in the `Background` block. Full manual = don't call it.
 
 ⚠️⚠️ **The luminance drives TWO consumers and both must hear about it**: the material's emission
-(what you see looking up) AND `AbstractBackground::setLuminance()`, which feeds
-`LightGenerator::setEnvironmentLuminance()` — the factor scaling **every IBL contribution**.
-`setLuminance()` was never called by anything, so the IBL scale sat on its 8000-nit daylight default
-in every scene: a material reflecting 3% of its environment received 240 nits against 0.1 nit of
-moonlit diffuse, 2400x too much. Citadel's stone walls read as white neon, and the relief detail
-modulating that clipped signal was mistakable for a broken normal map. Fixing only the material
-would have corrected what the sky LOOKS like while leaving everything it LIGHTS wrong.
+(what you see looking up) AND the IBL scale above. Historically the IBL scale sat on its 8000-nit
+daylight default in every scene: a material reflecting 3% of its environment received 240 nits
+against 0.1 nit of moonlit diffuse, 2400x too much — Citadel's stone walls read as white neon, and
+the relief detail modulating that clipped signal was mistakable for a broken normal map. Fixing
+only the material would have corrected what the sky LOOKS like while leaving everything it LIGHTS
+wrong.
 ⚠️ The luminance is also part of the sky material's IDENTITY (it is in the resource name): two
 manifests sharing one cubemap at different luminances must not share a material.
 ⚠️ A copy-paste default of `Roughness 0.5` + `Reflection Automatic 0.1` exists in 54 of the 3917

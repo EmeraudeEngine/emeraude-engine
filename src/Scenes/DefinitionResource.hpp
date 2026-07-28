@@ -69,6 +69,7 @@ namespace EmEn::Scenes
 			/* Top-level JSON keys. */
 			static constexpr auto BoundaryKey{"Boundary"};
 			static constexpr auto BackgroundKey{"Background"};
+			static constexpr auto ApplyLightingKey{"ApplyLighting"};
 			static constexpr auto GroundKey{"Ground"};
 			static constexpr auto LightingKey{"Lighting"};
 			static constexpr auto NodesKey{"Nodes"};

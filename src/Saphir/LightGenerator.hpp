@@ -33,9 +33,9 @@
 
 /* Local inclusions for usages. */
 #include "Declaration/UniformBlock.hpp"
+#include "Graphics/Types.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "StaticLighting.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Saphir
@@ -127,7 +127,6 @@ namespace EmEn::Saphir
 				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSamplesKey, DefaultGraphicsShadowMappingPCFSamples)},
 				m_PCFMethod{stringToPCFMethod(settings.getOrSetDefault< std::string >(GraphicsShadowMappingPCFMethodKey, DefaultGraphicsShadowMappingPCFMethod))},
 				m_fragmentColor{fragmentColor},
-				m_useStaticLighting{m_renderPassType == Graphics::RenderPassType::SimplePass},
 				m_highQualityEnabled{highQualityEnabled},
 				m_PCFEnabled{settings.getOrSetDefault< bool >(GraphicsShadowMappingEnablePCFKey, DefaultGraphicsShadowMappingEnablePCF)}
 			{
@@ -143,18 +142,6 @@ namespace EmEn::Saphir
 			isAmbientPass () const noexcept
 			{
 				return m_renderPassType == Graphics::RenderPassType::AmbientPass;
-			}
-
-			/**
-			 * @brief Sets a static lighting to use.
-			 * @param staticLighting A pointer to a static lighting.
-			 * @return void
-			 */
-			void
-			setStaticLighting (const StaticLighting * staticLighting) noexcept
-			{
-				m_staticLighting = staticLighting;
-				m_useStaticLighting = true;
 			}
 
 			/**
@@ -632,22 +619,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the emissive strength HDR multiplier (KHR_materials_emissive_strength).
 			 * @param variableName The GLSL expression for the emissive strength value.
 			 */
-			/**
-			 * @brief Sets the LUMINANCE of the scene environment, in nits, used to scale the IBL.
-			 * @note The environment cubemap is a normalized [0,1] source (the image pipeline has no
-			 * HDR format), so everything reflecting it would contribute a fraction of a nit in a
-			 * scene lit in thousands — i.e. no visible reflections at all. Baked as a literal in
-			 * the generated code, like the static lighting values: it is scene-authoring data, and
-			 * the program cache key already covers the scene lighting state.
-			 * @param nits The environment luminance, in candela per square meter.
-			 * @return void
-			 */
-			void
-			setEnvironmentLuminance (float nits) noexcept
-			{
-				m_environmentLuminance = nits;
-			}
-
 			void
 			declareSurfaceEmissiveStrength (const std::string & variableName) noexcept
 			{
@@ -754,13 +725,6 @@ namespace EmEn::Saphir
 			static Declaration::UniformBlock getUniformBlockCSM (uint32_t set, uint32_t binding, uint32_t cascadeCount = 4) noexcept;
 
 		private:
-
-			/**
-			 * @brief Returns the real light pass type.
-			 * @return Graphics::RenderPassType
-			 */
-			[[nodiscard]]
-			Graphics::RenderPassType checkRenderPassType () const noexcept;
 
 			/**
 			 * @brief Generate the vertex shader code to fetch data from a shadow map.
@@ -1089,9 +1053,7 @@ namespace EmEn::Saphir
 			std::string m_surfaceEmissiveStrength;
 			/* Reflectivity map variable (per-pixel reflectivity for G-buffer). */
 			std::string m_surfaceReflectivityMap;
-			const StaticLighting * m_staticLighting{nullptr};
 			bool m_discardUnlitFragment{true};
-			bool m_useStaticLighting{false};
 			bool m_useNormalMapping{false};
 			bool m_useOpacity{false};
 			bool m_useReflection{false};
@@ -1115,6 +1077,11 @@ namespace EmEn::Saphir
 			bool m_PCFEnabled{false};
 			/**
 			 * @brief Returns the IBL weight expression, scaled by the environment luminance.
+			 * @note The environment cubemap is a normalized [0,1] source (the image pipeline has no
+			 * HDR format), so everything reflecting it would contribute a fraction of a nit in a
+			 * scene lit in thousands — i.e. no visible reflections at all. The luminance, in nits,
+			 * is read from the view uniform block (fed by the scene background), so it can change
+			 * at runtime without regenerating any program.
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -1123,15 +1090,8 @@ namespace EmEn::Saphir
 			{
 				const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
 
-				if ( m_environmentLuminance == 1.0F )
-				{
-					return weight;
-				}
-
-				return '(' + weight + " * " + std::to_string(m_environmentLuminance) + ')';
+				return '(' + weight + " * " + ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) + ')';
 			}
-
-			float m_environmentLuminance{1.0F}; /**< Scene environment luminance in nits, scaling the IBL contribution. */
 
 	};
 }

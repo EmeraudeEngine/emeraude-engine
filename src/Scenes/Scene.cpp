@@ -64,6 +64,13 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
 
+		/* An asynchronously loading background pushes its photometry (luminance, ambient,
+		 * stars) when its manifest is parsed — see the observer branch in onNotification(). */
+		if ( m_backgroundResource != nullptr && !m_backgroundResource->isLoaded() )
+		{
+			this->observe(m_backgroundResource.get());
+		}
+
 		auto & settings = graphicsRenderer.primaryServices().settings();
 
 		/* Initialize per-frame RT SSBOs to match the renderer's frames-in-flight count. */
@@ -682,6 +689,23 @@ namespace EmEn::Scenes
 
 			/* Keep listening. */
 			return true;
+		}
+
+		if ( m_backgroundResource != nullptr && observable == m_backgroundResource.get() )
+		{
+			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
+			{
+				/* The manifest is parsed: the photometric description is final. */
+				this->refreshAmbientLightProperties();
+
+				if ( m_backgroundLightingRequested )
+				{
+					this->applyBackgroundLightingNow();
+				}
+			}
+
+			/* One-shot: stop listening. */
+			return false;
 		}
 
 		if ( observable->is(StaticEntity::getClassUID()) )

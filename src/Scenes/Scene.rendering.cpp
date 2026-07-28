@@ -1334,16 +1334,6 @@ namespace EmEn::Scenes
 		/* State tracker for redundant bind elimination (lighted list is state-sorted). */
 		RenderableInstance::RenderStateTracker tracker{};
 
-		if ( m_lightSet.isUsingStaticLighting() )
-		{
-			for ( const auto & renderBatch : renderBatches | std::views::values )
-			{
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
-			}
-
-			return;
-		}
-
 		/* NOTE: Check global shadow mapping setting from the renderer. */
 		const bool shadowMapsEnabled = m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled();
 
@@ -1638,7 +1628,7 @@ namespace EmEn::Scenes
 
 		StaticVector< RenderPassType, MaxPassCount > renderPassTypes;
 
-		if ( !m_lightSet.isEnabled() || !renderableInstance.isLightingEnabled() || m_lightSet.isUsingStaticLighting() )
+		if ( !m_lightSet.isEnabled() || !renderableInstance.isLightingEnabled() )
 		{
 			renderPassTypes.emplace_back(RenderPassType::SimplePass);
 		}

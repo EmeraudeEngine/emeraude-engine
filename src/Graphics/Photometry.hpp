@@ -31,6 +31,9 @@
 #include <cmath>
 #include <numbers>
 
+/* Local inclusions for usages. */
+#include "PixelFactory/Color.hpp"
+
 /**
  * @brief Photometric unit conversions — the SINGLE place where physical light and exposure
  * units are converted in the engine.
@@ -175,5 +178,96 @@ namespace EmEn::Graphics::Photometry
 	exposureFromValue100 (float exposureValue100) noexcept
 	{
 		return 1.0F / (MeterCalibration * std::exp2(exposureValue100));
+	}
+
+	/**
+ * @brief Returns the illuminance received on the ground from a uniform sky dome.
+ * @note For a hemisphere of uniform luminance L, the horizontal illuminance is `E = pi * L`
+	 * (Lambertian integral of L·cosθ over the upper hemisphere). Used as the default ambient
+	 * illuminance when a sky manifest declares a luminance but no explicit ambient value: an
+	 * 8000-nit clear sky yields ~25000 lx, consistent with the ~20000 lx measured in open shade
+	 * under a clear sky.
+ * @param nits The sky luminance, in candela per square meter.
+ * @return float The illuminance, in lux.
+	 */
+	[[nodiscard]]
+	inline
+	float
+	illuminanceFromSkyLuminance (float nits) noexcept
+	{
+		return std::numbers::pi_v< float > * std::max(0.0F, nits);
+	}
+
+	/**
+ * @brief Returns the sRGB color of a black body at a given color temperature.
+ * @note Planckian locus approximation in CIE 1931 (x, y) after Kang et al., "Design of
+	 * advanced color temperature control system for HDTV applications", J. Korean Phys. Soc. 41
+	 * (2002) — the approximation documented by the Wikipedia "Planckian locus" article. The
+	 * chromaticity goes xyY (Y = 1) -> XYZ -> linear sRGB (D65 matrix), is normalized to a max
+	 * component of 1, then sRGB-encoded ("Color" suffix convention: sRGB). Valid from 1667 K to
+	 * 25000 K, the input is clamped. ~6500 K resolves to white.
+ * @param kelvin The color temperature, in kelvins.
+ * @return Base::PixelFactory::Color< float > The color, in sRGB.
+	 */
+	[[nodiscard]]
+	inline
+	Base::PixelFactory::Color< float >
+	colorFromTemperature (float kelvin) noexcept
+	{
+		const auto temperature = std::clamp(kelvin, 1667.0F, 25000.0F);
+
+		/* CIE 1931 chromaticity (x, y) on the Planckian locus. */
+		const auto invT = 1000.0F / temperature;
+		const auto invT2 = invT * invT;
+		const auto invT3 = invT2 * invT;
+
+		const auto x = temperature <= 4000.0F
+			? -0.2661239F * invT3 - 0.2343589F * invT2 + 0.8776956F * invT + 0.179910F
+			: -3.0258469F * invT3 + 2.1070379F * invT2 + 0.2226347F * invT + 0.240390F;
+
+		const auto x2 = x * x;
+		const auto x3 = x2 * x;
+
+		float y;
+
+		if ( temperature <= 2222.0F )
+		{
+			y = -1.1063814F * x3 - 1.34811020F * x2 + 2.18555832F * x - 0.20219683F;
+		}
+		else if ( temperature <= 4000.0F )
+		{
+			y = -0.9549476F * x3 - 1.37418593F * x2 + 2.09137015F * x - 0.16748867F;
+		}
+		else
+		{
+			y = 3.0817580F * x3 - 5.87338670F * x2 + 3.75112997F * x - 0.37001483F;
+		}
+
+		/* xyY (Y = 1) -> XYZ -> linear sRGB (D65, IEC 61966-2-1 matrix). */
+		const auto bigX = x / y;
+		const auto bigZ = (1.0F - x - y) / y;
+
+		auto red = 3.2404542F * bigX - 1.5371385F - 0.4985314F * bigZ;
+		auto green = -0.9692660F * bigX + 1.8760108F + 0.0415560F * bigZ;
+		auto blue = 0.0556434F * bigX - 0.2040259F + 1.0572252F * bigZ;
+
+		red = std::max(0.0F, red);
+		green = std::max(0.0F, green);
+		blue = std::max(0.0F, blue);
+
+		const auto maxComponent = std::max(red, std::max(green, blue));
+
+		if ( maxComponent > 0.0F )
+		{
+			red /= maxComponent;
+			green /= maxComponent;
+			blue /= maxComponent;
+		}
+
+		const auto encode = [] (float component) {
+			return component <= 0.0031308F ? 12.92F * component : 1.055F * std::pow(component, 1.0F / 2.4F) - 0.055F;
+		};
+
+		return {encode(red), encode(green), encode(blue), 1.0F};
 	}
 }

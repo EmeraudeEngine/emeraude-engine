@@ -562,6 +562,7 @@ namespace EmEn::Saphir::Generator
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
+			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
 
 			return shader.declare(uniformBlock);
 		}
@@ -576,7 +577,8 @@ namespace EmEn::Saphir::Generator
 			 * vec4 velocity - offset 304
 			 * vec4 viewProperties - offset 320
 			 * vec4 ambientLightColor - offset 336
-			 * float ambientLightIntensity - offset 352 */
+			 * float ambientLightIntensity - offset 352
+			 * float environmentLuminance - offset 356 */
 			Declaration::UniformBlock uniformBlock{setIndex, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::CSMView, UniformBlock::View};
 			uniformBlock.addArrayMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CascadeViewProjectionMatrices, 4);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeSplitDistances);
@@ -586,6 +588,7 @@ namespace EmEn::Saphir::Generator
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
+			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
 
 			return shader.declare(uniformBlock);
 		}
@@ -597,6 +600,7 @@ namespace EmEn::Saphir::Generator
 		uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
 		uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
+		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
 
 		return shader.declare(uniformBlock);
 	}

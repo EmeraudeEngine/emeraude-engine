@@ -780,6 +780,33 @@ The Scene dispatches renderable layers into 7 render lists (defined in `Scene.hp
 - `Scene.rendering.cpp:insertIntoRenderLists()` — 3-way dispatch
 - `Scene.rendering.cpp:populateRenderLists()` — Clear and populate all 6 non-shadow lists
 
+## LightSet & Background-Derived Lighting (Jul 2026)
+
+**The "static lighting" mode was REMOVED** (`Saphir::StaticLighting`, `enableAsStaticLighting()`,
+`isUsingStaticLighting()`, the `SimplePass` remap and its program-cache-key bit). It was a
+performance shortcut (one forward pass with a single light baked as GLSL literals) predating the
+photometric migration; owner decision: more trouble than it was worth. `RenderPassType::SimplePass`
+is now strictly UNLIT (light set disabled or instance lighting disabled). The `LightSet` is a pure
+aggregator: lights + photometric ambient (`setAmbientLightColor()` sRGB +
+`setAmbientLightIntensity()` in LUX).
+
+**Sky → LightSet bridge (OPT-IN)**: `Scene::applyBackgroundLighting(BackgroundLightingOptions)`
+derives the scene lighting from the background photometric manifest — ambient = average color ×
+ambient illuminance, plus one `StaticEntity` + `DirectionalLight` per declared celestial body
+(`Graphics::CelestialBody`; the entity sits at `direction × 1000`, the component default shines
+along `-normalize(position)`). The first star becomes `mainDirectionalLight`. Options carry the
+NON-photometric choices only (shadow map resolution, classic coverage vs CSM cascades). If the
+background resource is still loading, application is deferred to its `LoadFinished` notification
+(one-shot observer wired in the Scene ctor / `setBackground()`). Scene JSON opt-in:
+`"ApplyLighting": true` in the `Background` block (`DefinitionResource::readBackground()`).
+
+**Environment luminance is a View UBO value, not a baked literal**:
+`Scene::refreshAmbientLightProperties()` pushes ambient color + intensity + background luminance
+to EVERY render target's view UBO (main, render-to-view, render-to-texture — offsets
+`EnvironmentLuminanceOffset` in the three `ViewMatrices*UBO`). Called at `LightSet::initialize()`,
+`Scene::setBackground()`, background `LoadFinished`, and by `applyBackgroundLightingNow()`.
+See `src/Graphics/AGENTS.md` § "Background photometric contract" for the manifest schema.
+
 ## Shadow Mapping Integration
 
 The Scene handles shadow map rendering and lighting pass selection. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.

@@ -251,7 +251,7 @@ Available skyboxes depend on the application's resource store. Use `listResource
 
 ### Lighting
 
-`createScene` automatically adds static directional lighting (ambient blue + warm directional light). No manual light setup needed for basic scenes.
+`createScene` automatically adds a neutral PHOTOMETRIC ambient (white, 5000 lx, overcast-like). No manual light setup needed for basic scenes; add directional/point/spot lights explicitly, or derive the lighting from the background (see `ApplyLighting` in the JSON scene format).
 
 ### Adding 3D objects
 
@@ -267,7 +267,7 @@ Use `listResources(MeshResource)` to discover available meshes.
 1. **Camera is created BEFORE `enableScene()`** -- this prevents the engine from creating a default camera that overrides yours
 2. **Camera Y=-2 is the verification position** -- below ground, you see the grey ground above you
 3. **Camera Y=0 won't see the ground** -- same level as ground plane
-4. **Lighting is automatic** -- `createScene` adds static directional lighting
+4. **Lighting is automatic** -- `createScene` adds a neutral photometric ambient (5000 lx)
 5. **Always verify with screenshot** -- take a screenshot and read the PNG to confirm visual output
 
 ---
@@ -279,7 +279,7 @@ Complete scenes can be built from a single JSON description sent via TCP. Lines 
 ### Sending a JSON scene
 
 ```bash
-echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resource":"Miramar"},"Ground":{"Type":"Basic","Material":{"Type":"Basic"}},"Lighting":{"Type":"Static","Ambient":{"Color":[0.3,0.4,0.6,1.0],"Intensity":0.25},"Light":{"Color":[1.0,0.95,0.8,1.0],"Intensity":1.2},"Direction":[1.0,1.0,1.0]},"Nodes":[{"Name":"Observer","Position":[0.0,5.0,20.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Name":"MainCam","Primary":true},{"Type":"Microphone","Name":"MainMic","Primary":true}]}],"StaticEntities":[{"Name":"SponzaBuilding","Position":[0.0,0.0,0.0],"Components":[{"Type":"Visual","Mesh":"Sponza","Scale":0.01}]}]}' | nc -q 5 localhost 7777
+echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resource":"Miramar","ApplyLighting":true},"Ground":{"Type":"Basic","Material":{"Type":"Basic"}},"Nodes":[{"Name":"Observer","Position":[0.0,5.0,20.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Name":"MainCam","Primary":true},{"Type":"Microphone","Name":"MainMic","Primary":true}]}],"StaticEntities":[{"Name":"SponzaBuilding","Position":[0.0,0.0,0.0],"Components":[{"Type":"Visual","Mesh":"Sponza","Scale":0.01}]}]}' | nc -q 5 localhost 7777
 ```
 
 ### JSON Scene Format Specification
@@ -291,7 +291,8 @@ echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resourc
 
   "Background": {
     "Type": "SkyBox",
-    "Resource": "Miramar"
+    "Resource": "Miramar",
+    "ApplyLighting": true
   },
 
   "Ground": {
@@ -312,16 +313,10 @@ echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resourc
   },
 
   "Lighting": {
-    "Type": "Static",
     "Ambient": {
-      "Color": [0.3, 0.4, 0.6, 1.0],
-      "Intensity": 0.25
-    },
-    "Light": {
-      "Color": [1.0, 0.95, 0.8, 1.0],
-      "Intensity": 1.2
-    },
-    "Direction": [1.0, 1.0, 1.0]
+      "Color": [1.0, 1.0, 1.0, 1.0],
+      "Intensity": 5000.0
+    }
   },
 
   "Nodes": [
@@ -363,6 +358,7 @@ echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resourc
 | | `Boundary` | float | Half-size of the cubic scene volume |
 | **Background** | `Type` | string | `SkyBox` (only supported type currently) |
 | | `Resource` | string | SkyBox resource name |
+| | `ApplyLighting` | bool | OPT-IN: derive ambient + directional lights from the background photometric manifest (default: false) |
 | **Ground** | `Type` | string | `Basic` (flat), `PerlinNoise`, `DiamondSquare` |
 | | `GridDivision` | int | Mesh tessellation (default: 64) |
 | | `UVMultiplier` | float | Texture repeat factor (default: boundary) |
@@ -373,12 +369,8 @@ echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resourc
 | | `Noise.Factor` | float | Perlin noise amplitude (default: 0.5) |
 | | `Noise.Roughness` | float | Diamond-square roughness (default: 0.5) |
 | | `Noise.Seed` | int | Diamond-square seed (default: 0) |
-| **Lighting** | `Type` | string | `Static` (only supported type currently) |
-| | `Ambient.Color` | [r,g,b,a] | Ambient light color (default: blue-ish) |
-| | `Ambient.Intensity` | float | Ambient intensity (default: 0.25) |
-| | `Light.Color` | [r,g,b,a] | Directional light color (default: warm white) |
-| | `Light.Intensity` | float | Directional intensity (default: 1.2) |
-| | `Direction` | [x,y,z] | Light direction vector |
+| **Lighting** | `Ambient.Color` | [r,g,b,a] | Ambient light color (sRGB, default: white) |
+| | `Ambient.Intensity` | float | Ambient ILLUMINANCE in lux (default: 100; open shade 20000, overcast 5000, moonlit night ~1) |
 | **Nodes** | `Name` | string | Node name (required) |
 | | `Position` | [x,y,z] | World-space position |
 | | `LookAt` | [x,y,z] | World-space target to look at |
@@ -632,7 +624,7 @@ echo "quit" | nc -q 1 localhost $PORT
 ### Alternative: JSON scene (single command)
 
 ```bash
-echo '{"Name":"AIScene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar"},"Ground":{"Type":"Basic"},"Lighting":{"Type":"Static"},"Nodes":[{"Name":"Observer","Position":[0.0,10.0,30.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Primary":true},{"Type":"Microphone","Primary":true}]}]}' | nc -q 5 localhost 7777
+echo '{"Name":"AIScene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar","ApplyLighting":true},"Ground":{"Type":"Basic"},"Nodes":[{"Name":"Observer","Position":[0.0,10.0,30.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Primary":true},{"Type":"Microphone","Primary":true}]}]}' | nc -q 5 localhost 7777
 ```
 
 ---

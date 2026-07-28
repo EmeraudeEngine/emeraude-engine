@@ -150,6 +150,36 @@ namespace EmEn::Scenes
 	};
 
 	/**
+	 * @brief Options for Scene::applyBackgroundLighting().
+	 *
+	 * The photometric data (illuminances, colors, directions) comes from the background
+	 * manifest; these options only cover what is NOT photometric — which stages to apply
+	 * and the shadow mapping technique, which is a runtime budget decision.
+	 *
+	 * @see Scene::applyBackgroundLighting()
+	 */
+	struct EMEN_API BackgroundLightingOptions
+	{
+		/** @brief Shadow map resolution for the derived directional lights. 0 = no shadow mapping. */
+		uint32_t shadowMapResolution{0};
+
+		/** @brief Cascade count. 0 = classic shadow map; 1-4 = cascaded shadow mapping (CSM). */
+		uint32_t cascadeCount{0};
+
+		/** @brief Classic shadow map coverage, in world units. Ignored with CSM. */
+		float shadowCoverage{100.0F};
+
+		/** @brief CSM split factor (0 = linear, 1 = logarithmic). Ignored with a classic map. */
+		float cascadeLambda{0.5F};
+
+		/** @brief Applies the ambient stage (average color + ambient illuminance). */
+		bool applyAmbient{true};
+
+		/** @brief Applies the celestial bodies stage (one directional light per star). */
+		bool applyStars{true};
+	};
+
+	/**
 	 * @brief Unique non-owner list of render targets for faster access.
 	 *
 	 * Uses weak_ptr to avoid circular references with render targets.
@@ -1112,6 +1142,29 @@ namespace EmEn::Scenes
 			 * @see Graphics::Renderable::AbstractBackground For background interface.
 			 */
 			void setBackground (const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background) noexcept;
+
+			/**
+			 * @brief Pushes the ambient light properties and the environment luminance to every
+			 * render target view UBO (main view, render-to-view and render-to-texture targets).
+			 * @note The environment luminance, in nits, comes from the scene background (1.0,
+			 * neutral, without background) and scales every IBL contribution in the shaders.
+			 * @return void
+			 */
+			void refreshAmbientLightProperties () noexcept;
+
+			/**
+			 * @brief Derives the scene lighting from the background photometric description
+			 * (OPT-IN — nothing is applied without this call, full manual stays the default).
+			 * @note The ambient stage feeds the LightSet with the background average color and
+			 * ambient illuminance (lux); the stars stage creates one static entity holding a
+			 * DirectionalLight per celestial body (color, illuminance in lux, direction), the
+			 * first one becoming the scene main directional light. When the background resource
+			 * is still loading, the application is deferred until its manifest is parsed.
+			 * @param options The non-photometric options (stages, shadow mapping). Default, all
+			 * stages, no shadow mapping.
+			 * @return bool True if the application was done or scheduled.
+			 */
+			bool applyBackgroundLighting (const BackgroundLightingOptions & options = {}) noexcept;
 
 			/**
 			 * @brief Returns the current scene background.
@@ -2105,6 +2158,14 @@ namespace EmEn::Scenes
 			void registerSceneVisualComponents () noexcept;
 
 			/**
+			 * @brief Applies the background lighting derivation for real — the background
+			 * resource MUST be loaded (its manifest parsed) when this runs.
+			 * @note See Scene::applyBackgroundLighting() for the deferred entry point.
+			 * @return void
+			 */
+			void applyBackgroundLightingNow () noexcept;
+
+			/**
 			 * @brief Check if a renderable instance is ready for shadow casting.
 			 * @param renderTarget A reference to the render target smart-pointer.
 			 * @param renderableInstance A reference to the renderable instance smart-pointer.
@@ -2405,6 +2466,8 @@ namespace EmEn::Scenes
 			std::map< std::string , std::shared_ptr< StaticEntity > > m_staticEntities;
 			/** @brief Scene background (skybox, procedural sky). May be null. */
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_backgroundResource;
+			/** @brief Options of a requested background lighting derivation. */
+			BackgroundLightingOptions m_backgroundLightingOptions;
 			/** @brief Current environment cubemap for IBL. Should never be null after initialization. */
 			std::shared_ptr< Graphics::TextureResource::TextureCubemap > m_environmentCubemap;
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
@@ -2532,5 +2595,7 @@ namespace EmEn::Scenes
 			mutable std::mutex m_stateCopyLock;
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
+			/** @brief True when applyBackgroundLighting() waits for the background to load. */
+			bool m_backgroundLightingRequested{false};
 	};
 }

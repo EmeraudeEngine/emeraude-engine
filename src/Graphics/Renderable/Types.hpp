@@ -60,9 +60,17 @@ namespace EmEn::Graphics::Renderable
 	static constexpr auto JKVertexColor{"VertexColor"};
 	static constexpr auto JKTexture{"Texture"};
 	static constexpr auto JKLuminance{"Luminance"};
-	static constexpr auto JKLightPosition{"LightPosition"};
-	static constexpr auto JKLightAmbientColor{"LightAmbientColor"};
-	static constexpr auto JKLightDiffuseColor{"LightDiffuseColor"};
-	static constexpr auto JKLightSpecularColor{"LightSpecularColor"};
+	/* Background photometric contract. */
+	static constexpr auto JKCubemap{"Cubemap"};
+	static constexpr auto JKAverageColor{"AverageColor"};
+	static constexpr auto JKAmbientIlluminance{"AmbientIlluminance"};
+	static constexpr auto JKStars{"Stars"};
+	static constexpr auto JKType{"Type"};
+	static constexpr auto JKDirection{"Direction"};
+	static constexpr auto JKIlluminance{"Illuminance"};
+	static constexpr auto JKTemperature{"Temperature"};
+	static constexpr auto JKColor{"Color"};
+	static constexpr auto JKAngularDiameter{"AngularDiameter"};
+	static constexpr auto JKInTexture{"InTexture"};
 	static constexpr auto JKUVMultiplier{"UVMultiplier"};
 }

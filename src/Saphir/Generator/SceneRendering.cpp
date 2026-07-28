@@ -117,21 +117,6 @@ namespace EmEn::Saphir::Generator
 				return false;
 			}
 
-			if ( m_renderPassType == RenderPassType::SimplePass && m_scene->lightSet().isUsingStaticLighting() )
-			{
-				/* FIXME: Check where to put the name of the static lighting! */
-				const auto * staticLighting = m_scene->lightSet().getStaticLightingPointer();
-
-				if ( staticLighting == nullptr )
-				{
-					TraceError{ClassId} << "The static lighting is not available from the scene !";
-
-					return false;
-				}
-
-				m_lightGenerator.setStaticLighting(staticLighting);
-			}
-
 			if ( this->materialEnabled() )
 			{
 				if ( !this->getMaterialInterface()->setupLightGenerator(m_lightGenerator) )
@@ -205,7 +190,7 @@ namespace EmEn::Saphir::Generator
 		switch ( m_renderPassType )
 		{
 			case RenderPassType::SimplePass :
-				return m_scene->lightSet().isUsingStaticLighting();
+				return false;
 
 			case RenderPassType::DirectionalLightPass :
 			case RenderPassType::DirectionalLightPassShadowMap :
@@ -475,14 +460,6 @@ namespace EmEn::Saphir::Generator
 	bool
 	SceneRendering::generateFragmentShader (Program & program) noexcept
 	{
-		/* The environment cubemap is a normalized [0,1] source, so the IBL needs the scene's
-		 * physical environment luminance to contribute anything to a photometric scene. Baked as
-		 * a literal, like the static lighting values. */
-		if ( m_scene != nullptr && m_scene->background() != nullptr )
-		{
-			m_lightGenerator.setEnvironmentLuminance(m_scene->background()->luminance());
-		}
-
 		/* Create the fragment shader. */
 		auto * fragmentShader = program.initFragmentShader(this->name( ) + "FragmentShader");
 		fragmentShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
@@ -532,7 +509,7 @@ namespace EmEn::Saphir::Generator
 		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
 		{
 			/* Declare the view uniform block. */
-			if ( !m_scene->lightSet().isUsingStaticLighting() && !this->declareViewUniformBlock(*fragmentShader) )
+			if ( !this->declareViewUniformBlock(*fragmentShader) )
 			{
 				return false;
 			}
@@ -847,13 +824,7 @@ namespace EmEn::Saphir::Generator
 		/* 6. Generator flags (instancing, lighting, facing camera, etc.). */
 		hashCombine(hash, static_cast< size_t >(this->flags()));
 
-		/* 7. Scene static lighting state (affects shader generation). */
-		if ( m_scene != nullptr && m_scene->lightSet().isUsingStaticLighting() )
-		{
-			hashCombine(hash, 1ULL);
-		}
-
-		/* 8. Material layout signature to separate incompatible pipelines (e.g. Standard Refl/Refract). */
+		/* 7. Material layout signature to separate incompatible pipelines (e.g. Standard Refl/Refract). */
 		if ( this->materialEnabled() )
 		{
 			if ( const auto & layout = this->getMaterialInterface()->descriptorSetLayout(); layout != nullptr )

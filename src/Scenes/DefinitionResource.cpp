@@ -188,6 +188,13 @@ namespace EmEn::Scenes
 				{
 					scene.setBackground(skyBox);
 
+					/* OPT-IN: derive the scene lighting (ambient + directional) from the
+					 * background photometric description. */
+					if ( FastJSON::getValue< bool >(bg, ApplyLightingKey).value_or(false) )
+					{
+						scene.applyBackgroundLighting();
+					}
+
 					return true;
 				}
 
@@ -315,74 +322,41 @@ namespace EmEn::Scenes
 		}
 
 		const auto & lit = m_root[LightingKey];
-		const auto type = FastJSON::getValue< std::string >(lit, TypeKey).value_or("Static");
 
-		if ( type == "Static" )
+		/* Ambient: photometric contract, the intensity is an illuminance in lux
+		 * (see LightSet::setAmbientLightIntensity()). */
+		if ( lit.isMember(AmbientKey) && lit[AmbientKey].isObject() )
 		{
-			auto & staticLighting = scene.lightSet().enableAsStaticLighting();
+			const auto & amb = lit[AmbientKey];
 
-			/* Ambient. */
-			if ( lit.isMember(AmbientKey) && lit[AmbientKey].isObject() )
+			float r = 1.0F, g = 1.0F, b = 1.0F, a = 1.0F;
+
+			if ( amb.isMember(ColorKey) && amb[ColorKey].isArray() && amb[ColorKey].size() >= 3 )
 			{
-				const auto & amb = lit[AmbientKey];
+				r = amb[ColorKey][0U].asFloat();
+				g = amb[ColorKey][1U].asFloat();
+				b = amb[ColorKey][2U].asFloat();
 
-				float r = 0.3F, g = 0.4F, b = 0.6F, a = 1.0F;
-
-				if ( amb.isMember(ColorKey) && amb[ColorKey].isArray() && amb[ColorKey].size() >= 3 )
+				if ( amb[ColorKey].size() >= 4 )
 				{
-					r = amb[ColorKey][0U].asFloat();
-					g = amb[ColorKey][1U].asFloat();
-					b = amb[ColorKey][2U].asFloat();
-
-					if ( amb[ColorKey].size() >= 4 )
-					{
-						a = amb[ColorKey][3U].asFloat();
-					}
+					a = amb[ColorKey][3U].asFloat();
 				}
-
-				const auto intensity = FastJSON::getValue< float >(amb, IntensityKey).value_or(0.25F);
-
-				staticLighting.setAmbientParameters({r, g, b, a}, intensity);
 			}
 
-			/* Light. */
-			if ( lit.isMember(LightKey) && lit[LightKey].isObject() )
-			{
-				const auto & light = lit[LightKey];
+			const auto illuminance = FastJSON::getValue< float >(amb, IntensityKey).value_or(100.0F);
 
-				float r = 1.0F, g = 0.95F, b = 0.8F, a = 1.0F;
-
-				if ( light.isMember(ColorKey) && light[ColorKey].isArray() && light[ColorKey].size() >= 3 )
-				{
-					r = light[ColorKey][0U].asFloat();
-					g = light[ColorKey][1U].asFloat();
-					b = light[ColorKey][2U].asFloat();
-
-					if ( light[ColorKey].size() >= 4 )
-					{
-						a = light[ColorKey][3U].asFloat();
-					}
-				}
-
-				const auto intensity = FastJSON::getValue< float >(light, IntensityKey).value_or(1.2F);
-
-				staticLighting.setLightParameters({r, g, b, a}, intensity);
-			}
-
-			/* Direction. */
-			if ( lit.isMember(DirectionKey) && lit[DirectionKey].isArray() && lit[DirectionKey].size() >= 3 )
-			{
-				const auto x = lit[DirectionKey][0U].asFloat();
-				const auto y = lit[DirectionKey][1U].asFloat();
-				const auto z = lit[DirectionKey][2U].asFloat();
-
-				staticLighting.setAsDirectionalLight({x, y, z}, true);
-			}
+			auto & lightSet = scene.lightSet();
+			lightSet.enable();
+			lightSet.setAmbientLightColor({r, g, b, a});
+			lightSet.setAmbientLightIntensity(illuminance);
 
 			return true;
 		}
 
-		TraceWarning{ClassId} << "Lighting type '" << type << "' not yet supported.";
+		/* NOTE: The legacy "Static" lighting type is gone. Directional lights are
+		 * declared as entity components or derived from the background (sky) contract. */
+		TraceWarning{ClassId} << "The scene lighting block declares no 'Ambient' object. "
+			"Lights are declared as entity components or derived from the background contract.";
 
 		return false;
 	}

@@ -26,6 +26,10 @@
 
 #include "ColorBackgroundResource.hpp"
 
+/* Local inclusions. */
+#include "FastJSON.hpp"
+#include "Types.hpp"
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Base;
@@ -44,16 +48,24 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	ColorBackgroundResource::load (const Json::Value & /*data*/) noexcept
+	ColorBackgroundResource::load (const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		Tracer::warning(ClassId, "Loading via JSON not done yet !");
+		/* Photometric part of the manifest (luminance, ambient illuminance, stars). */
+		if ( !this->parsePhotometry(data) )
+		{
+			return this->setLoadSuccess(false);
+		}
 
-		this->setAverageColor(PixelFactory::Black);
+		/* NOTE: The background color IS the average color here. */
+		if ( const auto color = FastJSON::getValue< PixelFactory::Color< float > >(data, JKColor) )
+		{
+			this->setAverageColor(*color);
+		}
 
 		return this->setLoadSuccess(true);
 	}

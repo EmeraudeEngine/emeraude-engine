@@ -262,13 +262,14 @@ namespace EmEn::Graphics
 	}
 
 	void
-	ViewMatrices3DUBO::updateAmbientLightProperties (const PixelFactory::Color< float > & color, float intensity) noexcept
+	ViewMatrices3DUBO::updateAmbientLightProperties (const PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept
 	{
 		m_logicState.bufferData[AmbientLightColorOffset+0] = color.red();
 		m_logicState.bufferData[AmbientLightColorOffset+1] = color.green();
 		m_logicState.bufferData[AmbientLightColorOffset+2] = color.blue();
 
 		m_logicState.bufferData[AmbientLightIntensityOffset] = intensity;
+		m_logicState.bufferData[EnvironmentLuminanceOffset] = environmentLuminance;
 	}
 
 	bool

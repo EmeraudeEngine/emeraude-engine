@@ -27,6 +27,9 @@
 #include "AbstractBackground.hpp"
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
+#include "Tracer.hpp"
+#include "Types.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -78,7 +81,7 @@ namespace EmEn::Graphics::Renderable
 
 		const auto shape = ShapeGenerator::generateSphere< float, uint32_t >(SkySize, 16, 16, options);
 
-		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(serviceProvider, SkyBoxGeometryName);
+		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(serviceProvider, SkyDomeGeometryName);
 
 		if ( !geometry->load(shape) )
 		{
@@ -88,5 +91,87 @@ namespace EmEn::Graphics::Renderable
 		geometries->addResource(geometry);
 
 		return geometry;
+	}
+
+	bool
+	AbstractBackground::parsePhotometry (const Json::Value & data) noexcept
+	{
+		/* ⚠️⚠️ The luminance drives TWO consumers and BOTH must hear about it: the background
+		 * material's emission (what you see when you look up) AND the scene environment luminance
+		 * (View UBO, fed by Scene::refreshAmbientLightProperties()), which scales every IBL
+		 * contribution. A sky's LUMINANCE belongs to the sky asset, not to the code that displays
+		 * it: a night cubemap and a noon cubemap are not the same photometric object. Optional —
+		 * absent means a clear day, which is what every sky implicitly claimed before this key
+		 * existed. */
+		this->setLuminance(std::max(FastJSON::getValue< float >(data, JKLuminance).value_or(DefaultLuminance), 0.0F));
+
+		/* Authored (or cheated) average color. Absent: the loader keeps the average computed
+		 * from the actual source. */
+		if ( const auto averageColor = FastJSON::getValue< Base::PixelFactory::Color< float > >(data, JKAverageColor) )
+		{
+			this->setAverageColor(*averageColor);
+		}
+
+		/* Explicit ambient illuminance. Absent: derived from the luminance (E = pi * L). */
+		if ( const auto ambientIlluminance = FastJSON::getValue< float >(data, JKAmbientIlluminance) )
+		{
+			this->setAmbientIlluminance(*ambientIlluminance);
+		}
+
+		/* Celestial bodies. Zero is legitimate (overcast sky, nebula, cave dome): the
+		 * background then only provides ambiance. */
+		if ( data.isMember(JKStars) )
+		{
+			if ( !data[JKStars].isArray() )
+			{
+				TraceError{TracerTag} << "The '" << JKStars << "' key must be an array in '" << this->name() << "' !";
+
+				return false;
+			}
+
+			for ( const auto & starData : data[JKStars] )
+			{
+				const auto direction = FastJSON::getValue< Base::Math::Vector< 3, float > >(starData, JKDirection);
+
+				if ( !direction.has_value() )
+				{
+					TraceError{TracerTag} << "A star of '" << this->name() << "' has no '" << JKDirection << "' key !";
+
+					return false;
+				}
+
+				const auto illuminance = FastJSON::getValue< float >(starData, JKIlluminance);
+
+				if ( !illuminance.has_value() )
+				{
+					TraceError{TracerTag} << "A star of '" << this->name() << "' has no '" << JKIlluminance << "' key !";
+
+					return false;
+				}
+
+				CelestialBody star;
+				star.setType(CelestialBody::parseType(FastJSON::getValue< std::string >(starData, JKType).value_or("Sun")));
+				star.setDirection(*direction);
+				star.setIlluminance(*illuminance);
+
+				/* The color temperature (kelvins) is the industry-standard authoring and WINS
+				 * over a direct color when both are present (owner decision). */
+				if ( const auto temperature = FastJSON::getValue< float >(starData, JKTemperature) )
+				{
+					star.setTemperature(*temperature);
+				}
+				else if ( const auto color = FastJSON::getValue< Base::PixelFactory::Color< float > >(starData, JKColor) )
+				{
+					star.setColor(*color);
+				}
+
+				star.setAngularDiameter(FastJSON::getValue< float >(starData, JKAngularDiameter).value_or(CelestialBody::EarthlikeAngularDiameter));
+				star.setInTexture(FastJSON::getValue< bool >(starData, JKInTexture).value_or(true));
+
+				this->addStar(star);
+			}
+		}
+
+		return true;
 	}
 }

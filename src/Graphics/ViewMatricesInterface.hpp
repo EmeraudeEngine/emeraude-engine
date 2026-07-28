@@ -332,12 +332,14 @@ namespace EmEn::Graphics
 			virtual void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept = 0;
 
 			/**
-			 * @brief Updates optional ambient color and intensity.
+			 * @brief Updates optional ambient color, intensity and environment luminance.
 			 * @param color A reference to a color.
-			 * @param intensity The light intensity.
+			 * @param intensity The ambient illuminance, in lux.
+			 * @param environmentLuminance The luminance of the environment cubemap (the sky), in
+			 * candela per square meter (nits), scaling every IBL contribution. 1.0 is neutral.
 			 * @return void
 			 */
-			virtual void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity) noexcept = 0;
+			virtual void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept = 0;
 
 			/**
 			 * @brief Creates a buffer in the video memory.

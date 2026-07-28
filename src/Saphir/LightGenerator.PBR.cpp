@@ -742,11 +742,6 @@ namespace EmEn::Saphir
 			Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, 1.0);";
 		}
 
-		if ( m_useStaticLighting )
-		{
-			this->generateAmbientFragmentShader(fragmentShader);
-		}
-
 		/* Apply diffuse and specular contributions. */
 		if ( m_useClearCoat && m_useSubsurface )
 		{

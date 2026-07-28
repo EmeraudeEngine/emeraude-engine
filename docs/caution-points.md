@@ -563,6 +563,12 @@ if ( materialType == PBRResource::ClassId )
 
 ### Fixed: SimplePass normal-mapped shader referenced an undeclared `N` — in BOTH quality levels (Jul 2026)
 
+> [!NOTE]
+> **Obsolete since the static-lighting removal (Jul 2026)**: the `SimplePass` is no longer
+> remapped to a light-pass type (`checkRenderPassType()` is gone) — it is strictly unlit, and the
+> `N` declaration guard covers the `AmbientPass` only. Kept for history; the two-quality-levels
+> caution below remains fully valid.
+
 > [!WARNING]
 > **A `SimplePass` material with a normal map fails to compile the moment a post-process
 > effect enables the normal G-buffer attachment.** Symptom seen on WaterWorld / BallsOfSteel:

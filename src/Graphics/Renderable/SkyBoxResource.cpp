@@ -100,30 +100,24 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !data.isMember(JKTexture) || !data[JKTexture].isString() )
+		if ( !data.isMember(JKCubemap) || !data[JKCubemap].isString() )
 		{
-			TraceError{ClassId} << "The '" << JKTexture << "' key is not present or not a string in '" << this->name() << "' Json file ! ";
+			TraceError{ClassId} << "The '" << JKCubemap << "' key is not present or not a string in '" << this->name() << "' Json file ! ";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto textureName = data[JKTexture].asString();
+		const auto textureName = data[JKCubemap].asString();
 
-		/* A sky's LUMINANCE belongs to the sky asset, not to the code that displays it: a night
-		 * cubemap and a noon cubemap are not the same photometric object. Optional — absent means
-		 * a clear day, which is what every sky implicitly claimed before this key existed. */
-		const auto luminance = std::max(FastJSON::getValue< float >(data, JKLuminance).value_or(DefaultSkyLuminance), 0.0F);
+		/* Photometric part of the manifest: luminance (⚠️ TWO consumers — the material emission
+		 * below AND the IBL scale, see AbstractBackground::parsePhotometry()), average color,
+		 * ambient illuminance and celestial bodies. */
+		if ( !this->parsePhotometry(data) )
+		{
+			return this->setLoadSuccess(false);
+		}
 
-		/* ⚠️⚠️ The luminance drives TWO consumers and BOTH must hear about it: the material's
-		 * emission (what you see when you look up) AND the background's luminance, which is the
-		 * factor scaling every IBL contribution (`LightGenerator::setEnvironmentLuminance()`, fed
-		 * from `Scene::background()->luminance()`). Nothing ever called this setter before, so the
-		 * IBL scale sat on its 8000-nit daylight default in EVERY scene: a material reflecting a
-		 * mere 3% of the environment then received 240 nits, against 0.1 nit of moonlit diffuse —
-		 * 2400x too much, which turned Citadel's stone walls into white neon (found live with the
-		 * owner, Jul 2026). Setting only the material would have fixed what the sky LOOKS like
-		 * while leaving everything it LIGHTS wrong. */
-		this->setLuminance(luminance);
+		const auto luminance = this->luminance();
 
 		/* Store the cubemap for environment IBL access. */
 		auto cubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading());
@@ -155,14 +149,6 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		this->setLightPosition(FastJSON::getValue< Vector< 3, float > >(data, JKLightPosition).value_or(Vector< 3, float >::origin()));
-
-		this->setLightAmbientColor(FastJSON::getValue< Color< float > >(data, JKLightAmbientColor).value_or(Black));
-
-		this->setLightDiffuseColor(FastJSON::getValue< Color< float > >(data, JKLightDiffuseColor).value_or(Black));
-
-		this->setLightSpecularColor(FastJSON::getValue< Color< float > >(data, JKLightSpecularColor).value_or(Black));
-
 		/* Store the cubemap for environment IBL access. */
 		m_environmentCubemap = std::move(cubemapResource);
 
@@ -176,6 +162,12 @@ namespace EmEn::Graphics::Renderable
 		{
 			return false;
 		}
+
+		/* NOTE: The caller owns the material, so its emissive strength is its own business —
+		 * but the BACKGROUND luminance (the IBL scale) must still be coherent: without further
+		 * information, this custom sky claims the daylight default. Call setLuminance() after
+		 * this load for a non-daylight sky. */
+		this->setLuminance(DefaultSkyLuminance);
 
 		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(this->serviceProvider()) ) )
 		{

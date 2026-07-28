@@ -202,99 +202,54 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightPositionWorldSpace () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return m_staticLighting->positionVec4();
-		}
-
 		return LightUB(UniformBlock::Component::PositionWorldSpace);
 	}
 
 	std::string
 	LightGenerator::lightDirectionWorldSpace () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return m_staticLighting->directionVec4();
-		}
-
 		return LightUB(UniformBlock::Component::DirectionWorldSpace);
 	}
 
 	std::string
 	LightGenerator::ambientLightColor () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return m_staticLighting->ambientColorVec4();
-		}
-
 		return ViewUB(UniformBlock::Component::AmbientLightColor, false);
 	}
 
 	std::string
 	LightGenerator::ambientLightIntensity () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return std::to_string(m_staticLighting->ambientIntensity());
-		}
-
 		return ViewUB(UniformBlock::Component::AmbientLightIntensity, false);
 	}
 
 	std::string
 	LightGenerator::lightIntensity () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return std::to_string(m_staticLighting->intensity());
-		}
-
 		return LightUB(UniformBlock::Component::Intensity);
 	}
 
 	std::string
 	LightGenerator::lightRadius () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return std::to_string(m_staticLighting->radius());
-		}
-
 		return LightUB(UniformBlock::Component::Radius);
 	}
 
 	std::string
 	LightGenerator::lightInnerCosAngle () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return std::to_string(m_staticLighting->innerCosAngle());
-		}
-
 		return LightUB(UniformBlock::Component::InnerCosAngle);
 	}
 
 	std::string
 	LightGenerator::lightOuterCosAngle () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return std::to_string(m_staticLighting->outerCosAngle());
-		}
-
 		return LightUB(UniformBlock::Component::OuterCosAngle);
 	}
 
 	std::string
 	LightGenerator::lightColor () const noexcept
 	{
-		if ( m_useStaticLighting )
-		{
-			return m_staticLighting->colorVec4();
-		}
-
 		return LightUB(UniformBlock::Component::Color);
 	}
 
@@ -432,30 +387,6 @@ namespace EmEn::Saphir
 		return block;
 	}
 
-	RenderPassType
-	LightGenerator::checkRenderPassType () const noexcept
-	{
-		if ( m_renderPassType != RenderPassType::SimplePass )
-		{
-			return m_renderPassType;
-		}
-
-		switch ( m_staticLighting->type() )
-		{
-			case LightType::Directional :
-				return RenderPassType::DirectionalLightPass;
-
-			case LightType::Point :
-				return RenderPassType::PointLightPass;
-
-			case LightType::Spot :
-				return RenderPassType::SpotLightPass;
-
-			default:
-				return RenderPassType::None;
-		}
-	}
-
 	bool
 	LightGenerator::generateVertexShaderCode (Generator::Abstract & generator, VertexShader & vertexShader) const noexcept
 	{
@@ -465,28 +396,7 @@ namespace EmEn::Saphir
 		bool enableShadowMap = false;
 		bool enableColorProjection = false;
 
-		/* The MRT normals output ("N") is a normal-mapped view-space normal built with
-		 * transpose(ViewTBNMatrix), so ViewTBNMatrix must be synthesized to the fragment stage
-		 * whenever generateFragmentShaderCode() declares "N" — see the matching guard there.
-		 * The AmbientPass case below requests it for its own branch. The SimplePass (remapped
-		 * by checkRenderPassType() to a light-pass type) needs it requested here for the
-		 * LOW-QUALITY Gouraud path — which shades EVERY material, PBR included, and whose vertex
-		 * generator does NOT request it. All HIGH-quality vertex paths (PBR, Blinn-Phong with
-		 * normal map) request ViewTBNMatrix themselves, so this is gated to low quality to keep
-		 * the request single. This keeps the G-buffer normal normal-mapped in BOTH quality
-		 * levels, consistent with the AmbientPass. */
-		if ( m_renderPassType == RenderPassType::SimplePass && !generator.highQualityEnabled()
-			&& m_useNormalMapping && !m_surfaceNormalVector.empty() )
-		{
-			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::ViewTBNMatrix, VariableScope::ToNextStage) )
-			{
-				Tracer::error(ClassId, "Unable to synthesize ViewTBNMatrix for the simple pass !");
-
-				return false;
-			}
-		}
-
-		switch ( this->checkRenderPassType() )
+		switch ( m_renderPassType )
 		{
 			case RenderPassType::AmbientPass :
 				/* Request ViewTBNMatrix for the MRT normals output when normal mapping is active.
@@ -559,21 +469,18 @@ namespace EmEn::Saphir
 		}
 
 		/* CSM uses a specialized uniform block. */
-		const bool useCSM = renderPassUsesCSM(this->checkRenderPassType());
+		const bool useCSM = renderPassUsesCSM(m_renderPassType);
 
-		if ( !m_useStaticLighting )
+		if ( useCSM )
 		{
-			if ( useCSM )
-			{
-				if ( !vertexShader.declare(LightGenerator::getUniformBlockCSM(lightSetIndex, 0)) )
-				{
-					return false;
-				}
-			}
-			else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
+			if ( !vertexShader.declare(LightGenerator::getUniformBlockCSM(lightSetIndex, 0)) )
 			{
 				return false;
 			}
+		}
+		else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
+		{
+			return false;
 		}
 
 
@@ -608,28 +515,17 @@ namespace EmEn::Saphir
 		/* Declare the perturbed normal in view space ("N") for the MRT normals output.
 		 * Post-process effects (RTR, SSR, SSAO, RTAO, RTGI) need it, and
 		 * finalNormalViewSpaceExpression() returns "N" whenever normal mapping is active.
-		 * SceneRendering writes that output for BOTH the AmbientPass and the SimplePass:
-		 *   - AmbientPass never reaches a light-pass generator (it returns after the ambient
-		 *     shader), so no generator declares "N" for it — we must declare it here.
-		 *   - SimplePass is remapped by checkRenderPassType() to a light-pass type, so it
-		 *     cannot be keyed off the switch below.
-		 * The ONLY fragment path that declares its own two-sided-flipped "N" is the PBR
-		 * light-pass generator, which runs only under high quality. In LOW quality every
-		 * material — PBR included — is shaded by the Gouraud generator, which declares no "N".
-		 * So we declare "N" here unless the self-declaring path is active (high-quality PBR
-		 * SimplePass); declaring it there would redefine "N". The surface normal vector is
+		 * SceneRendering writes that output for the AmbientPass, which never reaches a
+		 * light-pass generator (it returns after the ambient shader), so no generator
+		 * declares "N" for it — we must declare it here. The surface normal vector is
 		 * declared earlier by the material code (Location::Top), so this Location::Main
 		 * statement always sees it. */
-		const bool fragmentSelfDeclaresN = m_usePBRMode && generator.highQualityEnabled();
-
-		if ( ( m_renderPassType == RenderPassType::AmbientPass ||
-				( m_renderPassType == RenderPassType::SimplePass && !fragmentSelfDeclaresN ) )
-			&& m_useNormalMapping && !m_surfaceNormalVector.empty() )
+		if ( m_renderPassType == RenderPassType::AmbientPass && m_useNormalMapping && !m_surfaceNormalVector.empty() )
 		{
 			Code{fragmentShader} << "const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");";
 		}
 
-		switch ( this->checkRenderPassType() )
+		switch ( m_renderPassType )
 		{
 			case RenderPassType::AmbientPass :
 			{
@@ -643,8 +539,7 @@ namespace EmEn::Saphir
 				Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, 1.0);";
 
 				/* Note: the perturbed view-space normal "N" needed by the MRT normals output
-				 * is declared once at the top of this function, since the SimplePass needs it
-				 * too and checkRenderPassType() masks SimplePass here. */
+				 * is declared once at the top of this function. */
 
 				this->generateAmbientFragmentShader(fragmentShader);
 
@@ -713,21 +608,18 @@ namespace EmEn::Saphir
 		}
 
 		/* CSM uses a specialized uniform block. */
-		const bool useCSM = renderPassUsesCSM(this->checkRenderPassType());
+		const bool useCSM = renderPassUsesCSM(m_renderPassType);
 
-		if ( !m_useStaticLighting )
+		if ( useCSM )
 		{
-			if ( useCSM )
-			{
-				if ( !fragmentShader.declare(LightGenerator::getUniformBlockCSM(lightSetIndex, 0)) )
-				{
-					return false;
-				}
-			}
-			else if ( !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
+			if ( !fragmentShader.declare(LightGenerator::getUniformBlockCSM(lightSetIndex, 0)) )
 			{
 				return false;
 			}
+		}
+		else if ( !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
+		{
+			return false;
 		}
 
 
@@ -1244,11 +1136,6 @@ namespace EmEn::Saphir
 		else
 		{
 			Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, 1.0);";
-		}
-
-		if ( m_useStaticLighting )
-		{
-			this->generateAmbientFragmentShader(fragmentShader);
 		}
 
 		/* NOTE: In PBR mode, use albedo instead of diffuse color. */

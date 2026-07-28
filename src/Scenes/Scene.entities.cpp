@@ -37,12 +37,14 @@
 #include "Graphics/Renderer.hpp"
 #include "NodeCrawler.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/Microphone.hpp"
 
 namespace EmEn::Scenes
 {
 	using namespace Base;
 	using namespace Base::Math;
+	using Graphics::CelestialBody;
 
 	std::shared_ptr< Node >
 	Scene::findNode (const std::string & nodeName) const noexcept
@@ -195,6 +197,122 @@ namespace EmEn::Scenes
 		return true;
 	}
 
+	bool
+	Scene::applyBackgroundLighting (const BackgroundLightingOptions & options) noexcept
+	{
+		if ( m_backgroundResource == nullptr )
+		{
+			Tracer::warning(ClassId, "There is no background to derive the lighting from !");
+
+			return false;
+		}
+
+		m_backgroundLightingOptions = options;
+		m_backgroundLightingRequested = true;
+
+		/* NOTE: A still-loading background defers the application to the moment its manifest
+		 * is parsed (see the observer branch in Scene::onNotification()). */
+		if ( m_backgroundResource->isLoaded() )
+		{
+			this->applyBackgroundLightingNow();
+		}
+
+		return true;
+	}
+
+	void
+	Scene::applyBackgroundLightingNow () noexcept
+	{
+		/* The entity holding a derived directional light sits toward the celestial body: the
+		 * component default behavior shines along -normalize(position), i.e. from the body to
+		 * the scene. The magnitude itself is irrelevant to the light. */
+		constexpr auto StarEntityDistance{1000.0F};
+
+		const auto & background = *m_backgroundResource;
+		const auto & options = m_backgroundLightingOptions;
+
+		m_backgroundLightingRequested = false;
+
+		m_lightSet.enable();
+
+		if ( options.applyAmbient )
+		{
+			m_lightSet.setAmbientLightColor(background.averageColor());
+			m_lightSet.setAmbientLightIntensity(background.ambientIlluminance());
+		}
+
+		if ( options.applyStars )
+		{
+			uint32_t starIndex = 0;
+
+			for ( const auto & star : background.stars() )
+			{
+				const auto entityName = background.name() + CelestialBody::typeName(star.type()) + std::to_string(starIndex++);
+
+				CartesianFrame< float > coordinates;
+				coordinates.setPosition(star.direction() * StarEntityDistance);
+
+				const auto entity = this->createStaticEntity(entityName, coordinates);
+
+				if ( entity == nullptr )
+				{
+					TraceError{ClassId} << "Unable to create the static entity '" << entityName << "' for a background star !";
+
+					continue;
+				}
+
+				const auto setup = [&star] (auto & light) {
+					light.setColor(star.color());
+					/* The celestial body illuminance is in lux, the directional light unit. */
+					light.setIlluminance(star.illuminance());
+				};
+
+				std::shared_ptr< Component::DirectionalLight > component;
+
+				if ( options.shadowMapResolution == 0 )
+				{
+					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build();
+				}
+				else if ( options.cascadeCount > 0 )
+				{
+					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build(options.shadowMapResolution, options.cascadeCount, options.cascadeLambda);
+				}
+				else
+				{
+					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build(options.shadowMapResolution, options.shadowCoverage);
+				}
+
+				if ( component == nullptr )
+				{
+					TraceError{ClassId} << "Unable to create the directional light '" << entityName << "' from a background star !";
+				}
+			}
+		}
+
+		this->refreshAmbientLightProperties();
+	}
+
+	void
+	Scene::refreshAmbientLightProperties () noexcept
+	{
+		const auto & color = m_lightSet.ambientLightColor();
+		const auto intensity = m_lightSet.ambientLightIntensity();
+		/* NOTE: 1.0 is the neutral IBL scale when no background declares a luminance. */
+		const auto environmentLuminance = m_backgroundResource != nullptr ? m_backgroundResource->luminance() : 1.0F;
+
+		if ( const auto renderTarget = m_AVConsoleManager.graphicsRenderer().mainRenderTarget(); renderTarget != nullptr )
+		{
+			renderTarget->viewMatrices().updateAmbientLightProperties(color, intensity, environmentLuminance);
+		}
+
+		const auto updateTarget = [&color, intensity, environmentLuminance] (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) {
+			renderTarget->viewMatrices().updateAmbientLightProperties(color, intensity, environmentLuminance);
+		};
+
+		this->forEachRenderToView(updateTarget);
+		this->forEachRenderToTexture(updateTarget);
+	}
+
 	void
 	Scene::setBackground (const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background) noexcept
 	{
@@ -220,6 +338,9 @@ namespace EmEn::Scenes
 				}
 			}
 		}
+
+		/* The IBL scale (environment luminance) follows the background. */
+		this->refreshAmbientLightProperties();
 
 		this->registerSceneVisualComponents();
 	}

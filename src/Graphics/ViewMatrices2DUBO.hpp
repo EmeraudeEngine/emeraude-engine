@@ -196,7 +196,7 @@ namespace EmEn::Graphics
 			void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateAmbientLightProperties() */
-			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity) noexcept override;
+			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
 			bool create (Renderer & renderer, const std::string & instanceID) noexcept override;
@@ -248,6 +248,8 @@ namespace EmEn::Graphics
 			static constexpr auto AmbientLightColorOffset{28UL};
 			/** @brief Offset of the ambient light intensity in the buffer. */
 			static constexpr auto AmbientLightIntensityOffset{32UL};
+			/** @brief Offset of the environment luminance (nits) in the buffer. */
+			static constexpr auto EnvironmentLuminanceOffset{33UL};
 
 			/**
 			 * @brief Internal state structure holding view matrices and related data.

@@ -194,8 +194,8 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* FIXME: Take only in account the main view! */
-		renderer.mainRenderTarget()->viewMatrices().updateAmbientLightProperties(m_ambientLightColor, m_ambientLightIntensity);
+		/* Push the ambient properties and the environment luminance to every render target. */
+		scene.refreshAmbientLightProperties();
 
 		/* Create the RT light SSBO for ray query shaders.
 		 * This flat array contains all light types in a unified format. */
@@ -438,53 +438,10 @@ namespace EmEn::Scenes
 		return descriptorSetLayout;
 	}
 
-	StaticLighting &
-	LightSet::getOrCreateDefaultStaticLighting () noexcept
-	{
-		const auto staticLightingIt = m_staticLighting.find(DefaultStaticLightingName);
-
-		if ( staticLightingIt != m_staticLighting.cend() )
-		{
-			return staticLightingIt->second;
-		}
-
-		StaticLighting staticLighting;
-		staticLighting
-			.setAmbientParameters(Blue, 0.005F)
-			.setLightParameters(White, 1.5F)
-			.setAsDirectionalLight({0.0F, 1.0F, 0.0F}, true);
-
-		return m_staticLighting.emplace(DefaultStaticLightingName, staticLighting).first->second;
-	}
-
-	StaticLighting &
-	LightSet::getOrCreateStaticLighting (const std::string & name) noexcept
-	{
-		if ( const auto staticLightingIt = m_staticLighting.find(name); staticLightingIt != m_staticLighting.cend() )
-		{
-			return staticLightingIt->second;
-		}
-
-		return m_staticLighting.emplace(DefaultStaticLightingName, StaticLighting{}).first->second;
-	}
-
-	const StaticLighting *
-	LightSet::getStaticLightingPointer (const std::string & name) const noexcept
-	{
-		const auto staticLightingIt = m_staticLighting.find(name);
-
-		if ( staticLightingIt == m_staticLighting.cend() )
-		{
-			return nullptr;
-		}
-
-		return &staticLightingIt->second;
-	}
-
 	bool
 	LightSet::updateVideoMemory () const noexcept
 	{
-		if ( !this->isEnabled() || this->isUsingStaticLighting() )
+		if ( !this->isEnabled() )
 		{
 			return true;
 		}

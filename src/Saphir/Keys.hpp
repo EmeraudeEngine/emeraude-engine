@@ -772,6 +772,7 @@ namespace EmEn::Saphir
 				constexpr auto ViewProperties{"viewProperties"};
 				constexpr auto AmbientLightColor{"ambientLightColor"};
 				constexpr auto AmbientLightIntensity{"ambientLightIntensity"};
+				constexpr auto EnvironmentLuminance{"environmentLuminance"};
 				/* Material specific (Phong) */
 				constexpr auto AmbientColor{"ambientColor"};
 				constexpr auto DiffuseColor{"diffuseColor"};

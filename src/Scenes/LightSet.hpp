@@ -45,7 +45,6 @@
 #include "Component/PointLight.hpp"
 #include "Component/SpotLight.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "Saphir/StaticLighting.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 
@@ -94,7 +93,6 @@ namespace EmEn::Scenes
 			};
 
 			/* Default variables. */
-			static constexpr auto DefaultStaticLightingName{"Default"};
 			static constexpr auto DefaultLightPercentToAmbient{0.1F};
 			static constexpr auto DefaultAmbientLightIntensity{0.1F};
 
@@ -208,19 +206,6 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Enables the lighting for the scene with static light.
-			 * @return Saphir::StaticLighting &
-			 */
-			Saphir::StaticLighting &
-			enableAsStaticLighting () noexcept
-			{
-				this->enable();
-				this->setStaticLightingState(true);
-
-				return this->getOrCreateStaticLighting(DefaultStaticLightingName);
-			}
-
-			/**
 			 * @brief Initializes the light set GPU resources.
 			 * @param scene A reference to a scene.
 			 * @return bool
@@ -234,33 +219,6 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			bool terminate (Scene & scene) noexcept;
-
-			/**
-			 * @brief Enables the use of static lighting incorporated to the shaders.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			setStaticLightingState (bool state) noexcept
-			{
-				m_useStaticLighting = state;
-
-				if ( state )
-				{
-					this->getOrCreateDefaultStaticLighting();
-				}
-			}
-
-			/**
-			 * @brief Returns whether static lighting is used.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isUsingStaticLighting () const noexcept
-			{
-				return m_useStaticLighting;
-			}
 
 			/**
 			 * @brief Returns the shared buffer uniform for directional light buffer.
@@ -536,28 +494,6 @@ namespace EmEn::Scenes
 			void removeAllLights () noexcept;
 
 			/**
-			 * @return Returns or creates the default static lighting.
-			 * @return Saphir::StaticLighting &
-			 */
-			Saphir::StaticLighting & getOrCreateDefaultStaticLighting () noexcept;
-
-			/**
-			 * @brief Returns or creates a static lighting.
-			 * @param name A reference to a string.
-			 * @return Saphir::StaticLighting &
-			 */
-			Saphir::StaticLighting & getOrCreateStaticLighting (const std::string & name) noexcept;
-
-			/**
-			 * @brief Returns the pointer to a static lighting.
-			 * @warning Can be nullptr!
-			 * @param name A reference to a string. Default, none.
-			 * @return const Saphir::StaticLighting *
-			 */
-			[[nodiscard]]
-			const Saphir::StaticLighting * getStaticLightingPointer (const std::string & name = DefaultStaticLightingName) const noexcept;
-
-			/**
 			 * @brief Updates all light UBO.
 			 * @return bool
 			 */
@@ -626,7 +562,6 @@ namespace EmEn::Scenes
 			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
 			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights;
-			std::map< std::string, Saphir::StaticLighting > m_staticLighting;
 			std::weak_ptr< Component::DirectionalLight > m_mainDirectionalLight;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightUBO;
@@ -639,7 +574,6 @@ namespace EmEn::Scenes
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
 			bool m_initialized{false};
 			bool m_enabled{false};
-			bool m_useStaticLighting{false};
 			bool m_createAmbientFromLights{false};
 			bool m_useLightDistance{false};
 	};
