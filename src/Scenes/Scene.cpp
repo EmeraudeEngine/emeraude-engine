@@ -345,6 +345,19 @@ namespace EmEn::Scenes
 		m_lifetimeUS += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 		m_lifetimeMS += WorldPhysicsUpdateCycleDurationMS< uint32_t >;
 
+		/* Deferred background photometry (see onNotification()): the resource LoadFinished
+		 * notification fires on a LOADING thread, and deriving the lighting creates entities
+		 * and components — scene mutations that MUST happen here, on the logic thread. */
+		if ( m_backgroundPhotometryDirty.exchange(false) )
+		{
+			this->refreshAmbientLightProperties();
+
+			if ( m_backgroundLightingRequested )
+			{
+				this->applyBackgroundLightingNow();
+			}
+		}
+
 		m_nodeController.update();
 
 		/* Update scene static entities logics. */
@@ -695,13 +708,10 @@ namespace EmEn::Scenes
 		{
 			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
-				/* The manifest is parsed: the photometric description is final. */
-				this->refreshAmbientLightProperties();
-
-				if ( m_backgroundLightingRequested )
-				{
-					this->applyBackgroundLightingNow();
-				}
+				/* The manifest is parsed: the photometric description is final.
+				 * ⚠️ This notification fires on a LOADING thread — the actual application
+				 * (entity creation, light set, view UBOs) is deferred to processLogics(). */
+				m_backgroundPhotometryDirty = true;
 			}
 
 			/* One-shot: stop listening. */

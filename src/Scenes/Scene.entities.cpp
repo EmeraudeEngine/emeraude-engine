@@ -210,6 +210,11 @@ namespace EmEn::Scenes
 		m_backgroundLightingOptions = options;
 		m_backgroundLightingRequested = true;
 
+		/* ⚠️ Enable the light set NOW, not at application time: LightSet::initialize() runs
+		 * once at scene enabling and skips a disabled set — a deferred enable would leave the
+		 * whole scene without light buffers, hence without a single lighted render program. */
+		m_lightSet.enable();
+
 		/* NOTE: A still-loading background defers the application to the moment its manifest
 		 * is parsed (see the observer branch in Scene::onNotification()). */
 		if ( m_backgroundResource->isLoaded() )

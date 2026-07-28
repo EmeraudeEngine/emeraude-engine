@@ -2593,6 +2593,9 @@ namespace EmEn::Scenes
 			mutable std::mutex m_renderToViewAccess;
 			/** @brief Mutex for double-buffer state copy operation. */
 			mutable std::mutex m_stateCopyLock;
+			/** @brief Set by the background LoadFinished notification (loading thread), consumed
+			 * by processLogics() (logic thread) to apply the photometry and derived lighting. */
+			std::atomic_bool m_backgroundPhotometryDirty{false};
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
 			/** @brief True when applyBackgroundLighting() waits for the background to load. */
