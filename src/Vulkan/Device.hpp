@@ -31,8 +31,10 @@
 #include <memory>
 #include <mutex>
 
-/* Third-party inclusions. */
-#include "vk_mem_alloc.h"
+/* Third-party forward declarations (the VMA implementation header is only
+ * needed by the few .cpp files that call vma* functions — VmaAllocator is
+ * an opaque handle, identical to VMA's own VK_DEFINE_HANDLE definition). */
+typedef struct VmaAllocator_T * VmaAllocator;
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"

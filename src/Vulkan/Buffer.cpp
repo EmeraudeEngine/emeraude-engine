@@ -29,6 +29,9 @@
 /* STL inclusions. */
 #include <ranges>
 
+/* Third-party inclusions. */
+#include "vk_mem_alloc.h"
+
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Tracer.hpp"

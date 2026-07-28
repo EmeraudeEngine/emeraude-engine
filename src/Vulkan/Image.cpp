@@ -30,6 +30,9 @@
 #include <numeric>
 #include <ranges>
 
+/* Third-party inclusions. */
+#include "vk_mem_alloc.h"
+
 #if IS_WINDOWS
 /* NOTE: Win32 external-memory import (VkImportMemoryWin32HandleInfoKHR lives in vulkan_win32.h,
  * which requires the Windows API types). Project-wide WIN32_LEAN_AND_MEAN/NOMINMAX apply. */

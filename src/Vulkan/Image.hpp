@@ -37,8 +37,8 @@
 #include <memory>
 #include <span>
 
-/* Third-party inclusions. */
-#include "vk_mem_alloc.h"
+/* Third-party forward declarations (see Device.hpp note). */
+typedef struct VmaAllocation_T * VmaAllocation;
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"

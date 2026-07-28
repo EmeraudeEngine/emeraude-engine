@@ -100,6 +100,27 @@ dispatches).
 - Use `MemoryRegion` and `DeviceMemory` for encapsulation
 - RAII for automatic Vulkan resource management
 
+> [!IMPORTANT]
+> **`vk_mem_alloc.h` is `.cpp`-only — never include it from a header.** VMA's interface
+> section is ~20 000 lines of templates, and `Device.hpp` sits at the root of the wrapper
+> hierarchy: including it there re-parsed those lines in nearly every Vulkan/Graphics TU.
+> The three headers that need a VMA type (`Device.hpp` → `VmaAllocator`, `Buffer.hpp` and
+> `Image.hpp` → `VmaAllocation`) **forward-declare the opaque handle** instead:
+> ```cpp
+> typedef struct VmaAllocator_T * VmaAllocator;   // identical to VMA's own VK_DEFINE_HANDLE
+> ```
+> Redeclaring an identical typedef is legal C++, so this coexists with the real include in
+> the `.cpp`. Only the three TUs that call `vma*` include the real header
+> (`Device.cpp`, `Buffer.cpp`, `Image.cpp`).
+>
+> **`VMA_IMPLEMENTATION` lives in `Device.cpp`** and is compiled in that TU only. Its
+> defines (`VK_USE_PLATFORM_WIN32_KHR`, the `VMA_ASSERT` override, `VMA_IMPLEMENTATION`)
+> **MUST precede** the `#include "vk_mem_alloc.h"` — do not reorder them, and do not move
+> the include after `Device.hpp`.
+>
+> If a new TU hits `error C2027: use of undefined type 'VmaAllocator_T'`, it is
+> dereferencing the handle: add the include **to that `.cpp`**, never back into a header.
+
 ### Synchronization
 - Rigorous fence and semaphore management
 - Avoid deadlocks through strict acquisition order

@@ -47,7 +47,10 @@
 
 #define VMA_IMPLEMENTATION
 
-/* NOTE: Inverted includes order is required here! */
+/* NOTE: The defines above (VMA_ASSERT override, VMA_IMPLEMENTATION) must precede
+ * this include — the VMA implementation is compiled in this TU only. */
+#include "vk_mem_alloc.h"
+
 #include "Device.hpp"
 
 /* STL inclusions. */
