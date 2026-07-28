@@ -36,6 +36,9 @@
 #include <numbers>
 #include <ranges>
 
+/* STL inclusions. */
+#include <cstring>
+
 /* Local inclusions. */
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "PixelFactory/FileIO.hpp"
@@ -46,6 +49,80 @@ namespace EmEn::Graphics
 	using namespace Base;
 	using namespace Base::Math;
 	using namespace Base::PixelFactory;
+
+	namespace
+	{
+		/**
+		 * @brief Bilinear RGB sample on the RAW float data of an equirectangular pixmap.
+		 * @warning Color< float > clamps its components to [0,1] on construction, which would
+		 * destroy HDR radiances — every HDR sampling path must stay on raw floats.
+		 */
+		void
+		sampleEquirectangularHDR (const Pixmap< float > & source, float u, float v, std::array< float, 3 > & radiance) noexcept
+		{
+			const auto width = source.width();
+			const auto height = source.height();
+			const auto colorCount = static_cast< size_t >(source.colorCount());
+			const auto * data = source.data().data();
+
+			/* Longitude wrap, latitude clamp. */
+			u = u - std::floor(u);
+			v = std::clamp(v, 0.0F, 1.0F);
+
+			const auto realX = static_cast< float >(width - 1) * u;
+			const auto realY = static_cast< float >(height - 1) * v;
+			const auto loX = static_cast< size_t >(realX);
+			const auto loY = static_cast< size_t >(realY);
+			const auto hiX = std::min(loX + 1, static_cast< size_t >(width - 1));
+			const auto hiY = std::min(loY + 1, static_cast< size_t >(height - 1));
+			const auto fracX = realX - static_cast< float >(loX);
+			const auto fracY = realY - static_cast< float >(loY);
+
+			for ( size_t channel = 0; channel < 3; ++channel )
+			{
+				const auto topLeft = data[(loY * width + loX) * colorCount + channel];
+				const auto topRight = data[(loY * width + hiX) * colorCount + channel];
+				const auto bottomLeft = data[(hiY * width + loX) * colorCount + channel];
+				const auto bottomRight = data[(hiY * width + hiX) * colorCount + channel];
+
+				const auto top = topLeft + (topRight - topLeft) * fracX;
+				const auto bottom = bottomLeft + (bottomRight - bottomLeft) * fracX;
+
+				radiance[channel] = top + (bottom - top) * fracY;
+			}
+		}
+
+		/**
+		 * @brief Converts a float to an IEEE 754 half (binary16).
+		 * @note Overflows clamp to the half maximum (65504) instead of infinity — a radiance
+		 * spike must stay a finite, filterable value — and denormals flush to zero, both
+		 * irrelevant at radiance scales. Truncation rounding (max 1 ULP, ~0.1%).
+		 */
+		[[nodiscard]]
+		uint16_t
+		floatToHalf (float value) noexcept
+		{
+			uint32_t bits = 0;
+			std::memcpy(&bits, &value, sizeof(bits));
+
+			const auto sign = static_cast< uint16_t >((bits >> 16) & 0x8000U);
+			const auto exponent = static_cast< int32_t >((bits >> 23) & 0xFFU) - 127 + 15;
+			const auto mantissa = bits & 0x7FFFFFU;
+
+			if ( exponent >= 31 )
+			{
+				/* NOTE: 0x7BFF = 65504.0, the largest finite half. */
+				return sign | 0x7BFFU;
+			}
+
+			if ( exponent <= 0 )
+			{
+				return sign;
+			}
+
+			return static_cast< uint16_t >(sign | (static_cast< uint32_t >(exponent) << 10) | (mantissa >> 13));
+		}
+	}
 
 	bool
 	CubemapResource::load () noexcept
@@ -240,6 +317,25 @@ namespace EmEn::Graphics
 				return this->setLoadSuccess(false);
 			}
 
+			/* HDR source (Radiance RGBE): float pipeline, photometric calibration. */
+			if ( fileFormat == "hdr" )
+			{
+				Pixmap< float > equirectangular{};
+
+				if ( !FileIO::read(filepath, equirectangular) )
+				{
+					TraceError{ClassId} << "Unable to read the HDR equirectangular cubemap file '" << filepath << "' !";
+
+					return this->setLoadSuccess(false);
+				}
+
+				const uint32_t faceSize = data.isMember("Size")
+					? data["Size"].asUInt()
+					: equirectangular.height() / 2;
+
+				return this->loadEquirectangularHDR(equirectangular, faceSize);
+			}
+
 			Pixmap< uint8_t > equirectangular{};
 
 			if ( !FileIO::read(filepath, equirectangular) )
@@ -254,6 +350,13 @@ namespace EmEn::Graphics
 				: equirectangular.height() / 2;
 
 			return this->loadEquirectangular(equirectangular, faceSize);
+		}
+
+		if ( fileFormat == "hdr" )
+		{
+			TraceError{ClassId} << "HDR cubemaps are only supported through the '" << EquirectangularKey << "' layout !";
+
+			return this->setLoadSuccess(false);
 		}
 
 		/* Unpacked mode: load individual face files. */
@@ -362,6 +465,183 @@ namespace EmEn::Graphics
 				return this->setLoadSuccess(false);
 			}
 		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	CubemapResource::loadEquirectangularHDR (const Pixmap< float > & equirectangular, uint32_t faceSize) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( !equirectangular.isValid() || equirectangular.colorCount() < 3 || faceSize == 0 )
+		{
+			Tracer::error(ClassId, "Unable to use this HDR equirectangular pixmap to create a cubemap !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		constexpr auto pi = std::numbers::pi_v< float >;
+		constexpr auto twoPi = 2.0F * pi;
+
+		const auto width = equirectangular.width();
+		const auto height = equirectangular.height();
+		const auto colorCount = static_cast< size_t >(equirectangular.colorCount());
+		const auto * sourceData = equirectangular.data().data();
+
+		/* Photometric calibration (owner decision D6, Unity-like): measure the illuminance the
+		 * upper hemisphere pours on a horizontal ground — E = sum(L * cos(zenith) * dOmega),
+		 * with dOmega = (2pi/W)(pi/H)cos(elevation) per equirectangular texel — and derive the
+		 * factor that makes the source behave like a UNIFORM DOME of luminance 1 (E = pi lux).
+		 * The Background "Luminance" key (nits) then scales an HDR sky exactly like an LDR one,
+		 * and the average color stays representative. Rec.709 luma on linear radiances. */
+		double hemisphereIlluminance = 0.0;
+		double sphereWeightedLuma[3] = {0.0, 0.0, 0.0};
+		double sphereSolidAngle = 0.0;
+
+		for ( uint32_t row = 0; row < height; ++row )
+		{
+			const auto elevation = pi * (0.5F - (static_cast< float >(row) + 0.5F) / static_cast< float >(height));
+			const auto texelSolidAngle = (twoPi / static_cast< float >(width)) * (pi / static_cast< float >(height)) * std::cos(elevation);
+			const auto groundCosine = std::sin(elevation);
+
+			const auto * rowData = sourceData + static_cast< size_t >(row) * width * colorCount;
+
+			double rowSum[3] = {0.0, 0.0, 0.0};
+
+			for ( uint32_t col = 0; col < width; ++col )
+			{
+				rowSum[0] += rowData[col * colorCount + 0];
+				rowSum[1] += rowData[col * colorCount + 1];
+				rowSum[2] += rowData[col * colorCount + 2];
+			}
+
+			for ( size_t channel = 0; channel < 3; ++channel )
+			{
+				sphereWeightedLuma[channel] += rowSum[channel] * texelSolidAngle;
+			}
+
+			sphereSolidAngle += static_cast< double >(texelSolidAngle) * width;
+
+			/* Only the sky half lights the ground. */
+			if ( groundCosine > 0.0F )
+			{
+				const auto rowLuma = 0.2126 * rowSum[0] + 0.7152 * rowSum[1] + 0.0722 * rowSum[2];
+
+				hemisphereIlluminance += rowLuma * texelSolidAngle * groundCosine;
+			}
+		}
+
+		if ( hemisphereIlluminance <= 0.0 )
+		{
+			Tracer::error(ClassId, "The HDR source has no energy in its upper hemisphere, unable to calibrate it !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		const auto calibration = static_cast< float >(std::numbers::pi / hemisphereIlluminance);
+
+		/* Average color over the sphere, calibrated then clamped: the LightSet ambient tint. */
+		{
+			const auto red = std::clamp(static_cast< float >(sphereWeightedLuma[0] / sphereSolidAngle) * calibration, 0.0F, 1.0F);
+			const auto green = std::clamp(static_cast< float >(sphereWeightedLuma[1] / sphereSolidAngle) * calibration, 0.0F, 1.0F);
+			const auto blue = std::clamp(static_cast< float >(sphereWeightedLuma[2] / sphereSolidAngle) * calibration, 0.0F, 1.0F);
+
+			m_averageColorHDR = {red, green, blue, 1.0F};
+		}
+
+		/* Project the six faces straight to calibrated RGBA16F texels. */
+		const auto invSize = 1.0F / static_cast< float >(faceSize);
+
+		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+		{
+			auto & face = m_facesHDR.at(faceIndex);
+			face.resize(static_cast< size_t >(faceSize) * faceSize * 4);
+
+			for ( uint32_t row = 0; row < faceSize; row++ )
+			{
+				const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+
+				for ( uint32_t col = 0; col < faceSize; col++ )
+				{
+					const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+
+					/* Compute the 3D direction vector for this texel based on face. */
+					float dx, dy, dz;
+
+					switch ( faceIndex )
+					{
+						case 0: /* PositiveX */ dx =  1.0F; dy = -t;	dz = -s;	break;
+						case 1: /* NegativeX */ dx = -1.0F; dy = -t;	dz =  s;	break;
+						case 2: /* PositiveY */ dx =  s;	dy =  1.0F; dz =  t;	break;
+						case 3: /* NegativeY */ dx =  s;	dy = -1.0F; dz = -t;	break;
+						case 4: /* PositiveZ */ dx =  s;	dy = -t;	dz =  1.0F; break;
+						default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
+					}
+
+					const auto length = std::sqrt(dx * dx + dy * dy + dz * dz);
+					const auto nx = dx / length;
+					const auto ny = dy / length;
+					const auto nz = dz / length;
+
+					const auto theta = std::atan2(nz, nx);
+					const auto phi = std::asin(ny);
+					const auto u = theta / twoPi + 0.5F;
+					const auto v = 0.5F - phi / pi;
+
+					std::array< float, 3 > radiance{};
+					sampleEquirectangularHDR(equirectangular, u, v, radiance);
+
+					auto * texel = face.data() + (static_cast< size_t >(row) * faceSize + col) * 4;
+					texel[0] = floatToHalf(radiance[0] * calibration);
+					texel[1] = floatToHalf(radiance[1] * calibration);
+					texel[2] = floatToHalf(radiance[2] * calibration);
+					texel[3] = floatToHalf(1.0F);
+				}
+			}
+		}
+
+		m_cubeSize = faceSize;
+		m_isHDR = true;
+
+#ifdef EMERAUDE_DEBUG_HDR_FACES
+		/* TEMPORARY: tonemapped dump of the six faces for visual inspection. */
+		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+		{
+			Pixmap< uint8_t > debugFace;
+
+			if ( debugFace.initialize(faceSize, faceSize, ChannelMode::RGB) )
+			{
+				auto * out = debugFace.data().data();
+				const auto & face = m_facesHDR.at(faceIndex);
+
+				const auto halfToFloat = [] (uint16_t half) {
+					const auto exponent = static_cast< int32_t >((half >> 10) & 0x1FU);
+					const auto mantissa = half & 0x3FFU;
+					if ( exponent == 0 ) { return 0.0F; }
+					return std::ldexp(1.0F + static_cast< float >(mantissa) / 1024.0F, exponent - 15);
+				};
+
+				for ( size_t index = 0; index < static_cast< size_t >(faceSize) * faceSize; ++index )
+				{
+					for ( size_t channel = 0; channel < 3; ++channel )
+					{
+						const auto value = halfToFloat(face[index * 4 + channel]);
+						out[index * 3 + channel] = static_cast< uint8_t >(std::pow(value / (1.0F + value), 1.0F / 2.2F) * 255.0F);
+					}
+				}
+
+				std::ignore = FileIO::write(debugFace, std::filesystem::path{"/tmp/hdrface-" + this->name() + "-" + std::to_string(faceIndex) + ".png"}, true);
+			}
+		}
+#endif
+
+		TraceSuccess{ClassId} <<
+			"HDR cubemap '" << this->name() << "' calibrated (factor: " << calibration <<
+			", upper hemisphere -> pi lux at scale 1) and converted to RGBA16F (" << faceSize << "px².";
 
 		return this->setLoadSuccess(true);
 	}
@@ -498,7 +778,13 @@ namespace EmEn::Graphics
 		{
 			return {};
 		}
-		
+
+		/* NOTE: Computed once at load time from the raw radiances (Color clamps to [0,1]). */
+		if ( m_isHDR )
+		{
+			return m_averageColorHDR;
+		}
+
 		constexpr auto ratio{1.0F / static_cast< float >(CubemapFaceCount)};
 
 		auto red = 0.0F;

@@ -1107,6 +1107,24 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
 Parsing is CENTRALIZED in `AbstractBackground::parsePhotometry()` — every background type
 (`SkyBoxResource`, future `DynamicSkyResource`, `ColorBackgroundResource`) goes through it.
 
+**HDR skies (Jul 2026)**: a Cubemaps manifest with `"FileFormat": "hdr"` + `"Equirectangular"`
+loads a Radiance RGBE source through the float pipeline (`CubemapResource::loadEquirectangularHDR`):
+- **D6 calibration (Unity-like)**: an HDRI is RELATIVE; the loader measures the illuminance its
+  upper hemisphere pours on the ground and normalizes so scale 1 = uniform dome of luminance 1
+  (E = pi lux). The Background `Luminance` key then means EXACTLY the same thing for LDR and HDR,
+  and the unclipped sun keeps its full relative punch (clamped to 65504, the half-float maximum —
+  real blinding specular reflections).
+- Faces are stored as raw **RGBA16F** texels (`hdrFaceData()`, `isHDR()`; `faces()` stays empty)
+  and uploaded as `VK_FORMAT_R16G16B16A16_SFLOAT` (guaranteed filterable, half the VRAM of 32F).
+- ⚠️ **`Base::PixelFactory::Color< float > CLAMPS to [0,1] on construction** — every HDR data
+  path must stay on RAW floats (`sampleEquirectangularHDR()` bypasses `linearSample`/`pixel()`).
+- ⚠️ **`Vulkan::Image::pixelBytes()` must know the texel format**: it drives the per-layer buffer
+  offsets of the cubemap upload. Its missing 16F entries scrambled the faces of the first HDR sky
+  (fixed) — extend it whenever a new texel format enters the engine.
+- Debug: compile with `EMERAUDE_DEBUG_HDR_FACES` to dump tonemapped face PNGs to `/tmp` at load.
+- The average color is computed at load from the calibrated radiances (`averageColor()` override).
+- LDR-only consumers (`CubemapMovieResource`) explicitly reject HDR cubemaps.
+
 **The scene consumes this in two ways:**
 1. **Always** (automatic): the luminance scales every IBL contribution. It travels through the
    View UBO (`UniformBlock::Component::EnvironmentLuminance`, pushed by

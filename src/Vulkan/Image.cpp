@@ -555,6 +555,33 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* HDR cubemap: the faces are raw RGBA16F texel vectors. */
+		if ( cubemapResource->isHDR() )
+		{
+			const size_t faceBytes = static_cast< size_t >(cubemapResource->cubeSize()) * cubemapResource->cubeSize() * 4 * sizeof(uint16_t);
+			const size_t totalBytes = faceBytes * Graphics::CubemapFaceCount;
+
+			return transferManager.uploadImage(*this, totalBytes, [&cubemapResource, faceBytes] (const Buffer & stagingBuffer) {
+				size_t offset = 0;
+
+				for ( size_t faceIndex = 0; faceIndex < Graphics::CubemapFaceCount; ++faceIndex )
+				{
+					const auto & face = cubemapResource->hdrFaceData(faceIndex);
+
+					if ( !stagingBuffer.writeData({face.data(), faceBytes, offset}) )
+					{
+						TraceError{ClassId} << "Unable to write " << faceBytes << " bytes of HDR data in the staging buffer !";
+
+						return false;
+					}
+
+					offset += faceBytes;
+				}
+
+				return true;
+			});
+		}
+
 		const auto & pixmaps = cubemapResource->faces();
 
 		/* Get the total bytes requested for the 6 faces. */

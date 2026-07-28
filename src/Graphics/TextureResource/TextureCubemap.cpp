@@ -61,11 +61,15 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	TextureCubemap::createTexture (Renderer & renderer) noexcept
 	{
-		for ( const auto & pixmap: m_localData->faces() )
+		/* NOTE: HDR faces are raw RGBA16F texels, the LDR pixmap validation does not apply. */
+		if ( !m_localData->isHDR() )
 		{
-			if ( !this->validateTexture(pixmap, !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+			for ( const auto & pixmap: m_localData->faces() )
 			{
-				return false;
+				if ( !this->validateTexture(pixmap, !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+				{
+					return false;
+				}
 			}
 		}
 
@@ -76,11 +80,17 @@ namespace EmEn::Graphics::TextureResource
 			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
+		/* NOTE: An HDR cubemap is RGBA16F — the guaranteed-filterable HDR format, half the
+		 * memory of RGBA32F — and is inherently linear (no sRGB variant exists or is needed). */
+		const auto format = m_localData->isHDR()
+			? VK_FORMAT_R16G16B16A16_SFLOAT
+			: Image::getFormat< uint8_t >(m_localData->data(0).colorCount(), this->isSRGB());
+
 		/* Create a Vulkan image. */
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
-			Image::getFormat< uint8_t >(m_localData->data(0).colorCount(), this->isSRGB()),
+			format,
 			VkExtent3D{m_localData->cubeSize(), m_localData->cubeSize(), 1U},
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,

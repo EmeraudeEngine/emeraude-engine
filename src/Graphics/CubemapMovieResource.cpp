@@ -273,6 +273,13 @@ namespace EmEn::Graphics
 				return false;
 			}
 
+			if ( cubemapResource->isHDR() )
+			{
+				TraceError{ClassId} << "Cubemap '" << cubemapName << "' is HDR, which cubemap movies do not support !";
+
+				return false;
+			}
+
 			/* Save frame data by copying the 6 faces. */
 			m_frames.emplace_back(cubemapResource->faces(), frameDuration);
 		}

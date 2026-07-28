@@ -26,6 +26,11 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <array>
+#include <cstdint>
+#include <vector>
+
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
@@ -120,6 +125,11 @@ namespace EmEn::Graphics
 					bytes += pixmap.bytes< size_t >();
 				}
 
+				for ( const auto & face : m_facesHDR )
+				{
+					bytes += face.size() * sizeof(uint16_t);
+				}
+
 				return bytes;
 			}
 
@@ -163,6 +173,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns faces of the cubemap.
+			 * @warning Empty pixmaps for an HDR cubemap (see isHDR() / hdrFaceData()).
 			 * @return const CubemapPixmaps &
 			 */
 			[[nodiscard]]
@@ -170,6 +181,31 @@ namespace EmEn::Graphics
 			faces () const noexcept
 			{
 				return m_faces;
+			}
+
+			/**
+			 * @brief Returns whether the cubemap holds HDR (RGBA16F) data.
+			 * @note HDR sources (Radiance .hdr) keep their dynamic range: the faces are stored
+			 * as half-float texels (see hdrFaceData()), the LDR faces() stay empty.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHDR () const noexcept
+			{
+				return m_isHDR;
+			}
+
+			/**
+			 * @brief Returns the RGBA16F texel data of a face (HDR cubemaps only).
+			 * @param faceIndex The face index [0-5].
+			 * @return const std::vector< uint16_t > &
+			 */
+			[[nodiscard]]
+			const std::vector< uint16_t > &
+			hdrFaceData (size_t faceIndex) const noexcept
+			{
+				return m_facesHDR.at(faceIndex);
 			}
 
 			/**
@@ -181,7 +217,7 @@ namespace EmEn::Graphics
 			uint32_t
 			cubeSize () const noexcept
 			{
-				return m_faces[0].width();
+				return m_isHDR ? m_cubeSize : m_faces[0].width();
 			}
 
 			/**
@@ -205,7 +241,25 @@ namespace EmEn::Graphics
 			static constexpr auto EquirectangularKey{"Equirectangular"};
 			static constexpr auto FileFormatKey{"FileFormat"};
 
+			/**
+			 * @brief Loads an HDR equirectangular pixmap as a calibrated RGBA16F cubemap.
+			 * @note The Unity-like photometric calibration (owner decision D6): an HDRI holds
+			 * RELATIVE radiances, so the loader measures the illuminance the upper hemisphere
+			 * pours on the ground and normalizes the data so a scale of 1 behaves like a
+			 * UNIFORM DOME of luminance 1 (E = pi lux). The Background manifest "Luminance"
+			 * (nits) then means exactly the same thing for LDR and HDR sources, and the sun
+			 * keeps its full relative punch (clamped to the half-float maximum, 65504x the sky).
+			 * @param equirectangular A reference to the source pixmap (linear radiances).
+			 * @param faceSize The face size in pixels.
+			 * @return bool
+			 */
+			bool loadEquirectangularHDR (const Base::PixelFactory::Pixmap< float > & equirectangular, uint32_t faceSize) noexcept;
+
 			CubemapPixmaps m_faces;
+			std::array< std::vector< uint16_t >, CubemapFaceCount > m_facesHDR{};
+			Base::PixelFactory::Color< float > m_averageColorHDR;
+			uint32_t m_cubeSize{0};
+			bool m_isHDR{false};
 	};
 }
 

@@ -321,6 +321,9 @@ namespace EmEn::Vulkan
 						return 4 * sizeof(double);
 					case VK_FORMAT_R32G32B32A32_SFLOAT :
 						return 4 * sizeof(float);
+					case VK_FORMAT_R16G16B16A16_SFLOAT :
+					case VK_FORMAT_R16G16B16A16_UNORM :
+						return 4 * sizeof(uint16_t);
 
 					/* NOTE: RGB */
 					case VK_FORMAT_R8G8B8_UNORM :
@@ -332,6 +335,9 @@ namespace EmEn::Vulkan
 						return 3 * sizeof(double);
 					case VK_FORMAT_R32G32B32_SFLOAT :
 						return 3 * sizeof(float);
+					case VK_FORMAT_R16G16B16_SFLOAT :
+					case VK_FORMAT_R16G16B16_UNORM :
+						return 3 * sizeof(uint16_t);
 
 					/* NOTE: GRAY+ALPHA */
 					case VK_FORMAT_R8G8_UNORM :
@@ -343,6 +349,9 @@ namespace EmEn::Vulkan
 						return 2 * sizeof(double);
 					case VK_FORMAT_R32G32_SFLOAT :
 						return 2 * sizeof(float);
+					case VK_FORMAT_R16G16_SFLOAT :
+					case VK_FORMAT_R16G16_UNORM :
+						return 2 * sizeof(uint16_t);
 
 					/* NOTE: GRAY */
 					case VK_FORMAT_R8_UNORM :
@@ -354,6 +363,9 @@ namespace EmEn::Vulkan
 						return sizeof(double);
 					case VK_FORMAT_R32_SFLOAT :
 						return sizeof(float);
+					case VK_FORMAT_R16_SFLOAT :
+					case VK_FORMAT_R16_UNORM :
+						return sizeof(uint16_t);
 
 					/* NOTE: Unhandled */
 					case VK_FORMAT_UNDEFINED :

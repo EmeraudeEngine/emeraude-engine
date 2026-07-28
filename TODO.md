@@ -111,22 +111,17 @@
   what serializes AS builds against transfers when actors are created/destroyed at runtime.
   NOTE: `[Error][UIManagerService] No default page found !` appears in EVERY demo, including the
   ones that never fail — it is not related.
-- **IMAGE PIPELINE: no HDR file format — blocks photometric skies and correct specular.**
-  `PixelFactory` (in `emeraude-base`) decodes JPEG, PNG and Targa: all integer, all [0,1]. There
-  is no way to store a luminance above the display range, so an environment cubemap clamps its sun
-  disc and every specular reflection of the sky is wrong (see the phase 2 note of the photometric
-  project). Deliberately NOT done during the photometric migration: it is not a prerequisite (the
-  LDR + peak-luminance scale is correct for diffuse), `emeraude-base` is under the "Ave robustus!"
-  feature freeze, and the right answer is not obvious — which is exactly why it deserves its own
-  design pass rather than a rushed decoder. The three options, pre-chewed:
-    1. **Radiance `.hdr` (RGBE)** — ~200 lines, zero dependency, 8-bit mantissa per channel with a
-       shared exponent. Plenty for skies. The pragmatic minimum.
-    2. **OpenEXR** — physically the right answer (half/float, arbitrary channels), but a heavy
-       third-party dependency to add to `ext-deps-generator`.
-    3. **KTX2/DDS with BC6H** — the actual RUNTIME format wanted: GPU-compressed HDR, no decode
-       cost, no VRAM blow-up. But this is an ASSET PIPELINE question (offline compressor, mip
-       generation, cubemap faces), not just a decoder — the reason this item is not a quick win.
-  Whatever is chosen, the freeze comes first.
+- **IMAGE PIPELINE: HDR — DONE for environment cubemaps (Jul 2026), option 1 (Radiance RGBE).**
+  `PixelFactory::FileFormatHDR` (owner-approved exception to the "Ave robustus!" freeze) reads and
+  writes Radiance `.hdr`, unit-tested (round-trip, RLE variants, hostile streams). The engine loads
+  `"FileFormat": "hdr"` equirectangular cubemaps through a float pipeline (`Pixmap< float >`, raw
+  sampling — ⚠️ `Color< float >` CLAMPS to [0,1], every HDR path must stay on raw floats),
+  photometrically calibrated (D6, Unity-like: the upper hemisphere is normalized to pi lux at
+  scale 1, so the Background "Luminance" key means the same thing for LDR and HDR), and uploaded
+  as RGBA16F (guaranteed-filterable, sun clamped to the 65504 half maximum — a real specular sun
+  at last). Remaining options if ever needed: OpenEXR (heavy dependency), KTX2/BC6H (asset
+  pipeline question). ⚠️ Root cause of the first broken display: `Vulkan::Image::pixelBytes()`
+  did not know the 16-bit formats — wrong per-layer buffer offsets, scrambled cubemap faces.
 - RENDERING SYSTEM: Hi-Z Occlusion
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
 - RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
