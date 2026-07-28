@@ -236,6 +236,9 @@ namespace EmEn
 			/* Create a borderless window (no OS title bar / decorations). */
 			constexpr auto WindowFramelessKey{"Core/Video/Window/Frameless"};
 			constexpr auto DefaultWindowFrameless{false};
+			/* Light/dark appearance of the OS title bar: "System" follows the OS preference, "Dark" and "Light" force it. */
+			constexpr auto WindowTitleBarThemeKey{"Core/Video/Window/TitleBarTheme"};
+			constexpr auto DefaultWindowTitleBarTheme{"System"};
 			/* Windowed-mode X position in pixels. */
 			constexpr auto WindowXPositionKey{"Core/Video/Window/XPosition"};
 			constexpr auto DefaultWindowXPosition{64};

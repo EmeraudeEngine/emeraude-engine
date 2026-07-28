@@ -111,6 +111,12 @@ namespace EmEn
 
 	}
 
+	void
+	Window::applyTitleBarTheme () noexcept
+	{
+		// Nothing to do
+	}
+
 	bool
 	Window::initializeNativeWindow () noexcept
 	{

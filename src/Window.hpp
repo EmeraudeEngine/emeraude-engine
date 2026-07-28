@@ -703,6 +703,17 @@ namespace EmEn
 			void disableTitleBar () noexcept;
 
 			/**
+			 * @brief Applies the light/dark appearance of the OS title bar.
+			 * @note Driven by the "Core/Video/Window/TitleBarTheme" setting: "System" (default) follows
+			 * the OS light/dark preference, "Dark" and "Light" force it. Only the appearance is set,
+			 * the colors themselves stay the ones the OS theme dictates.
+			 * @note Implemented on Windows (DWM). No-op on macOS, where AppKit already follows the
+			 * system appearance, and on Linux, where the compositor owns the decorations.
+			 * @return void
+			 */
+			void applyTitleBarTheme () noexcept;
+
+			/**
 			 * @brief Returns the position, in screen coordinates of the window content area upper-left corner.
 			 * @param monitor A pointer to the monitor. Default primary.
 			 * @return std::array< int32_t, 2 >

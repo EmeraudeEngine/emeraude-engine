@@ -303,6 +303,10 @@ namespace EmEn
 
 		this->initializeState(false);
 
+		/* NOTE: Applied while the window is still hidden, otherwise the OS shows the default
+		 * (light) title bar for a frame before repainting it. */
+		this->applyTitleBarTheme();
+
 		/* NOTE: The window starts non-visible. */
 		glfwShowWindow(m_handle.get());
 

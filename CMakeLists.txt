@@ -239,6 +239,9 @@ if ( MSVC )
 
 	# Link Secur32 for GetUserNameExW (Extended Security API).
 	target_link_libraries(${PROJECT_NAME} PRIVATE Secur32)
+
+	# Link Dwmapi for DwmSetWindowAttribute (title bar light/dark appearance).
+	target_link_libraries(${PROJECT_NAME} PRIVATE Dwmapi)
 elseif ( APPLE )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
 

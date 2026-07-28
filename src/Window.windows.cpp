@@ -26,20 +26,66 @@
 
 #include "Window.hpp"
 
+/* STL inclusions. */
+#include <format>
+
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include "GLFW/glfw3native.h"
+#include <dwmapi.h>
 #include <shobjidl.h>
 #include <vulkan/vulkan_win32.h>
 
 /* Local inclusions. */
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Utility.hpp"
 
 namespace EmEn
 {
+	using namespace Base;
 	using namespace Vulkan;
+
+	namespace
+	{
+		/* DWMWA_USE_IMMERSIVE_DARK_MODE, documented since Windows 10 2004 (and Windows 11). */
+		constexpr DWORD DarkModeAttribute{20};
+		/* The same semantics under a different index on Windows 10 1809/1903. */
+		constexpr DWORD LegacyDarkModeAttribute{19};
+
+		/**
+		 * @brief Reads the OS-wide light/dark preference applications are asked to follow.
+		 * @note This is the value the Windows "Choose your mode" personalization setting writes.
+		 * @return bool True when the OS asks for a dark appearance.
+		 */
+		[[nodiscard]]
+		bool
+		isSystemUsingDarkAppearance () noexcept
+		{
+			DWORD appsUseLightTheme{1};
+			DWORD dataSize{sizeof(appsUseLightTheme)};
+
+			const auto result = RegGetValueW(
+				HKEY_CURRENT_USER,
+				L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+				L"AppsUseLightTheme",
+				RRF_RT_REG_DWORD,
+				nullptr,
+				&appsUseLightTheme,
+				&dataSize
+			);
+
+			/* NOTE: The value is absent on systems that never had a dark appearance, which is a light system. */
+			if ( result != ERROR_SUCCESS )
+			{
+				return false;
+			}
+
+			return appsUseLightTheme == 0;
+		}
+	}
 
 	bool
 	Window::createSurface (bool useNativeCode) noexcept
@@ -101,6 +147,68 @@ namespace EmEn
 	Window::disableTitleBar () noexcept
 	{
 
+	}
+
+	void
+	Window::applyTitleBarTheme () noexcept
+	{
+		if ( m_handle == nullptr )
+		{
+			return;
+		}
+
+		auto * hwnd = glfwGetWin32Window(m_handle.get());
+
+		if ( hwnd == nullptr )
+		{
+			Tracer::warning(ClassId, "Unable to get the Win32 window handle, the title bar keeps the default appearance.");
+
+			return;
+		}
+
+		const auto theme = String::toLower(m_primaryServices.settings().getOrSetDefault< std::string >(WindowTitleBarThemeKey, DefaultWindowTitleBarTheme));
+
+		bool useDarkAppearance = false;
+
+		if ( theme == "dark" )
+		{
+			useDarkAppearance = true;
+		}
+		else if ( theme == "light" )
+		{
+			useDarkAppearance = false;
+		}
+		else
+		{
+			if ( theme != "system" )
+			{
+				TraceWarning{ClassId} << "Unknown '" << WindowTitleBarThemeKey << "' value '" << theme << "', falling back to 'System'. Valid values are 'System', 'Dark' and 'Light'.";
+			}
+
+			useDarkAppearance = isSystemUsingDarkAppearance();
+		}
+
+		const BOOL attributeValue{useDarkAppearance ? TRUE : FALSE};
+
+		auto result = DwmSetWindowAttribute(hwnd, DarkModeAttribute, &attributeValue, sizeof(attributeValue));
+
+		/* NOTE: Windows 10 1809/1903 only knows the legacy index. */
+		if ( FAILED(result) )
+		{
+			result = DwmSetWindowAttribute(hwnd, LegacyDarkModeAttribute, &attributeValue, sizeof(attributeValue));
+		}
+
+		if ( FAILED(result) )
+		{
+			TraceWarning{ClassId} << "This system does not support a themed title bar (DwmSetWindowAttribute returned " << std::format("0x{:08X}", static_cast< uint32_t >(result)) << "), keeping the default appearance.";
+
+			return;
+		}
+
+		if ( this->showInformation() )
+		{
+			TraceInfo{ClassId} << "Title bar appearance set to " << ( useDarkAppearance ? "dark" : "light" ) << " (setting '" << WindowTitleBarThemeKey << "' is '" << theme << "').";
+		}
 	}
 
 	bool
