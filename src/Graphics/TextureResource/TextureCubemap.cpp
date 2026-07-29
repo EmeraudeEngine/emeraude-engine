@@ -76,12 +76,11 @@ namespace EmEn::Graphics::TextureResource
 			}
 		}
 
-		auto & settings = renderer.primaryServices().settings();
-
-		const auto mipLevels = std::min(
-			Image::getMIPLevels(m_localData->cubeSize(), m_localData->cubeSize()),
-			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
-		);
+		/* NOTE: Environment cubemaps always get their full mip chain, regardless of the global
+		 * texture mip setting: the IBL prefiltering samples the source chain by solid-angle
+		 * ratio (filtered importance sampling), and roughness-driven textureLod() reads need
+		 * real mip content. The memory cost is +33% on a handful of cubemaps. */
+		const auto mipLevels = Image::getMIPLevels(m_localData->cubeSize(), m_localData->cubeSize());
 
 		/* NOTE: An HDR cubemap is RGBA16F — the guaranteed-filterable HDR format, half the
 		 * memory of RGBA32F — and is inherently linear (no sRGB variant exists or is needed). */
@@ -137,7 +136,6 @@ namespace EmEn::Graphics::TextureResource
 			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
 			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
 			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
 			const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
 
 			// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
@@ -154,7 +152,9 @@ namespace EmEn::Graphics::TextureResource
 			//createInfo.compareEnable = VK_FALSE;
 			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 			//createInfo.minLod = 0.0F;
-			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+			/* NOTE: Cubemaps carry their full mip chain (see above) — never clamp the LOD
+			 * here, the old clamp to the global mip setting silenced every mip of the chain. */
+			createInfo.maxLod = VK_LOD_CLAMP_NONE;
 			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 			//createInfo.unnormalizedCoordinates = VK_FALSE;
 		});

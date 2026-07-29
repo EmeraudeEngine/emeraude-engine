@@ -543,8 +543,10 @@ void main()
 	else
 	{
 		/* Ray escaped the scene: reflect the environment cubemap (sky through
-		 * skylights, distant environment) instead of leaving a black hole. */
-		vec3 envColor = texture(envCubemap, reflDir).rgb;
+		 * skylights, distant environment) instead of leaving a black hole.
+		 * ENGINE CUBEMAP CONVENTION: world direction D samples at vec3(D.x, -D.y, D.z)
+		 * (engine UP = -Y, cubemap stored Y-up) — same as skybox/material reflections. */
+		vec3 envColor = texture(envCubemap, vec3(reflDir.x, -reflDir.y, reflDir.z)).rgb;
 		float confidence = fresnel * roughnessFade;
 
 		outReflection = vec4(envColor * confidence, confidence);

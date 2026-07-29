@@ -363,7 +363,9 @@ void main()
 		/* Reduce cubemap fallback for rough surfaces. */
 		float roughnessFallback = envFallbackIntensity * (1.0 - smoothstep(0.0, 0.4, roughness));
 
-		vec3 envColor = texture(envCubemap, worldReflDir).rgb;
+		/* ENGINE CUBEMAP CONVENTION: world direction D samples at vec3(D.x, -D.y, D.z)
+		 * (engine UP = -Y, cubemap stored Y-up) — same as skybox/material reflections. */
+		vec3 envColor = texture(envCubemap, vec3(worldReflDir.x, -worldReflDir.y, worldReflDir.z)).rgb;
 		outResolve = vec4(envColor, roughnessFallback);
 	}
 	else

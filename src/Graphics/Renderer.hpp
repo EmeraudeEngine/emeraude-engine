@@ -94,6 +94,7 @@ namespace EmEn
 	{
 		class DummyColorProjectionTexture;
 		class DummyShadowTexture;
+		class IBLTexture;
 
 		namespace Material
 		{
@@ -1073,6 +1074,19 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the split-sum BRDF LUT (IBL), baked once at boot.
+			 * @note The LUT lives in the bindless 2D table at BindlessTextureManager::BRDFLutSlot;
+			 * this accessor exists for effects binding it through their own descriptor sets.
+			 * @return const std::shared_ptr< IBLTexture > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< IBLTexture > &
+			brdfLUT () const noexcept
+			{
+				return m_brdfLUT;
+			}
+
+			/**
 			 * @brief Returns the dummy 2D shadow texture.
 			 * @note This texture is used for lights without shadow mapping to maintain unified descriptor set layouts.
 			 * @return std::shared_ptr< DummyShadowTexture >
@@ -1529,6 +1543,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTextureCube;
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTexture2D;
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTextureCube;
+			std::shared_ptr< IBLTexture > m_brdfLUT;
 			std::unique_ptr< GrabPass > m_grabPass;
 			const Vulkan::AccelerationStructure * m_currentTLAS{nullptr};
 			/** @brief Single ray-tracing acceleration structure builder, shared by all geometries (BLAS) and scenes (TLAS). Null when RT is off. */

@@ -1430,6 +1430,25 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 >
 > **Code reference:** `Effects/Framebuffer/AtmosphericFog.cpp` — shader inscattering section
 
+### Critical: Environment Cubemap Sampling Convention (Y negation)
+
+> [!CRITICAL]
+> **A world direction `D` samples any environment cubemap at `vec3(D.x, -D.y, D.z)` —
+> never the raw direction.** The engine world is Y-down (UP = -Y) while cubemaps are
+> stored Y-up.
+>
+> Reference sites (visually validated — celestial servoing reproduces star directions
+> within 1°): the skybox (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and
+> the material reflections (`PBRResource`/`StandardResource` bindless reflection GLSL).
+>
+> **Symptom of the raw-direction bug:** the sky is read upside-down — GI bounces tinted
+> by the ground where the sky should be, ray-miss reflections showing the wrong hemisphere.
+> Invisible on near-uniform skies, wrong on sunsets/HDR. RTGI, RTR and SSR all had it
+> (fixed Jul 2026, IBL lot 1).
+>
+> **Any new cubemap sampling site — and the IBL irradiance/prefiltered generation — must
+> apply the same negation.**
+
 ### POM GPU Stress on Large Surfaces
 
 Parallax Occlusion Mapping ray-marching is expensive at far distances, especially on large surfaces. The engine implements distance-based fade (8-18 world units) to mitigate this. See: `Graphics/AGENTS.md` (POM section).

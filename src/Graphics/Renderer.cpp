@@ -34,9 +34,11 @@
 #include <thread>
 
 /* Local inclusions. */
+#include "Compute/IBLBaker.hpp"
 #include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"
+#include "IBLTexture.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
 #include "Overlay/Manager.hpp"
@@ -259,6 +261,40 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Bake the split-sum BRDF LUT (IBL) and publish it to the bindless 2D table.
+		 * Environment-independent: baked once for the whole application lifetime. */
+		m_brdfLUT = std::make_shared< IBLTexture >(IBLTexture::Role::BRDFLut);
+
+		if ( m_brdfLUT->create(*this) )
+		{
+			const Compute::IBLBaker baker{m_device, m_shaderManager};
+
+			if ( baker.generateBRDFLut(*m_brdfLUT) )
+			{
+				if ( m_bindlessTextureManager.usable() && m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::BRDFLutSlot, *m_brdfLUT) )
+				{
+					TraceSuccess{ClassId} << "Bindless BRDF LUT slot initialized.";
+				}
+				else
+				{
+					TraceError{ClassId} << "Unable to publish the BRDF LUT to the bindless table !";
+				}
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to bake the BRDF LUT !";
+
+				m_brdfLUT->destroy();
+				m_brdfLUT.reset();
+			}
+		}
+		else
+		{
+			TraceError{ClassId} << "Unable to create the BRDF LUT texture !";
+
+			m_brdfLUT.reset();
+		}
+
 		/* Create dummy shadow textures for unified descriptor set layouts. */
 		m_dummyShadowTexture2D = std::make_shared< DummyShadowTexture >(false);
 
@@ -329,6 +365,12 @@ namespace EmEn::Graphics
 		{
 			m_dummyShadowTexture2D->destroy();
 			m_dummyShadowTexture2D.reset();
+		}
+
+		if ( m_brdfLUT != nullptr )
+		{
+			m_brdfLUT->destroy();
+			m_brdfLUT.reset();
 		}
 
 		m_defaultTextureCubemap.reset();

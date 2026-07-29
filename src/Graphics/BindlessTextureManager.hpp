@@ -69,13 +69,22 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"BindlessTextureManagerService"};
 
-			/** @brief Reserved slots for global resources (IBL, environment, etc.). */
+			/** @brief Reserved slots for global resources (IBL, environment, etc.).
+			 * @warning Each slot is an index into ONE typed array: cube slots index
+			 * texturesCube[] (TextureCubeBinding), 2D slots index textures2D[]
+			 * (Texture2DBinding). The numbering restarts per array. */
+
+			/* Cube array (texturesCube[]) reserved slots. */
 			static constexpr uint32_t EnvironmentCubemapSlot = 0;
 			static constexpr uint32_t IrradianceCubemapSlot = 1;
 			static constexpr uint32_t PrefilteredCubemapSlot = 2;
+
+			/* 2D array (textures2D[]) reserved slots. */
 			static constexpr uint32_t BRDFLutSlot = 3;
 			static constexpr uint32_t GrabPassSlot = 4;
 			static constexpr uint32_t GrabPassDepthSlot = 5;
+
+			/* First slot available for scene-dynamic textures (all arrays). */
 			static constexpr uint32_t FirstDynamicSlot = 16;
 
 			/** @brief Maximum texture counts per type. */

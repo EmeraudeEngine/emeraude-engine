@@ -454,13 +454,19 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 
 ### Reserved Slots
 
-| Slot | Constant | Purpose |
-|------|----------|---------|
-| 0 | `EnvironmentCubemapSlot` | Scene environment cubemap |
-| 1 | `IrradianceCubemapSlot` | IBL irradiance map |
-| 2 | `PrefilteredCubemapSlot` | IBL prefiltered environment |
-| 3 | `BRDFLutSlot` | BRDF lookup texture |
-| 16+ | `FirstDynamicSlot` | Dynamic texture allocation |
+> [!IMPORTANT]
+> Each slot is an index into **ONE typed array** — cube slots index `texturesCube[]`
+> (binding 3), 2D slots index `textures2D[]` (binding 1). The numbering restarts per array.
+
+| Slot | Array | Constant | Purpose | Written by |
+|------|-------|----------|---------|------------|
+| 0 | cube | `EnvironmentCubemapSlot` | Scene environment cubemap | `syncTextureSet()` per frame (default cubemap fallback) |
+| 1 | cube | `IrradianceCubemapSlot` | IBL diffuse irradiance (32² RGBA16F) | *(IBL lot 2 — reserved, not yet written)* |
+| 2 | cube | `PrefilteredCubemapSlot` | IBL GGX-prefiltered environment (128² RGBA16F, 6 mips) | *(IBL lot 2 — reserved, not yet written)* |
+| 3 | 2D | `BRDFLutSlot` | Split-sum BRDF LUT (128² RGBA16F, scale/bias on F0 in RG) | `Renderer::createDefaultResources()` at boot, baked by `Compute::IBLBaker` |
+| 4 | 2D | `GrabPassSlot` | Scene color grab pass | Renderer per frame |
+| 5 | 2D | `GrabPassDepthSlot` | Scene depth grab pass | Renderer per frame |
+| 16+ | all | `FirstDynamicSlot` | Dynamic texture allocation | per-scene `BindlessTextureSet` |
 
 ### Usage
 
@@ -1968,3 +1974,58 @@ Code references:
 - `Vulkan/ComputePipeline.hpp:setShaderModule()` — Shader stage initialization
 - `Vulkan/CommandBuffer.hpp:dispatch()` — vkCmdDispatch wrapper
 - `Vulkan/Buffer.hpp:setHostReadable()` — HOST_CACHED_BIT for fast CPU reads
+
+### Graphics/Compute/IBLBaker + Graphics/IBLTexture (IBL lot 1, Jul 2026)
+
+The image-based-lighting GPU bricks. `IBLTexture` (a `Vulkan::TextureInterface`) is an
+**engine-baked, GPU-only texture**: no CPU pixel data, image created with
+`STORAGE_BIT | SAMPLED_BIT`, always `RGBA16F` — the only 16F layout with **mandatory**
+`STORAGE_IMAGE` support (`R16G16_SFLOAT` storage is an optional Vulkan feature; never rely
+on it cross-platform). Three roles drive dimensions and sampler:
+
+| Role | Image | Sampler (cache name) |
+|------|-------|----------------------|
+| `BRDFLut` | 2D 128², 1 mip | `IBLBrdfLut` — clamp-to-edge both axes (NdotV × roughness) |
+| `IrradianceCubemap` | cube 32², 1 mip | `IBLIrradiance` — bilinear, single mip |
+| `PrefilteredCubemap` | cube 128², 6 mips (128→4) | `IBLPrefiltered` — trilinear, `maxLod = VK_LOD_CLAMP_NONE` |
+
+`IBLTexture::storageView(mip)` exposes per-mip **storage views** for compute `imageStore`
+(cube roles → `2D_ARRAY` views, 6 layers = faces; LUT → plain 2D).
+
+`Compute::IBLBaker` bakes the content. Lot 1 ships `generateBRDFLut()`: split-sum LUT
+(Karis 2013), 1024 Hammersley samples, Smith GGX with the **IBL k remap (`k = a²/2`)** —
+never the analytic-light Disney remap. Reconstruction in shaders:
+`specular = prefiltered * (F0 * lut.x + lut.y)`; the two channels also feed the
+Fdez-Agüera multi-scatter compensation (lot 3) with no extra resource.
+
+**Baking runs on the GRAPHICS queue** (one-shot, `waitIdle` at boot): the images are later
+sampled by fragment shaders on that same queue — using the compute queue would demand a
+queue-family ownership transfer on an EXCLUSIVE image. Barrier sequence:
+`UNDEFINED → GENERAL` (compute write) → dispatch → `GENERAL → SHADER_READ_ONLY_OPTIMAL`
+(fragment read), via `Vulkan::Sync::ImageMemoryBarrier`.
+
+Wiring: `Renderer::createDefaultResources()` creates + bakes the LUT once and publishes it
+with `updateTexture2D(BindlessTextureManager::BRDFLutSlot, …)`; `Renderer::brdfLUT()`
+exposes it for effects binding it through their own descriptor sets.
+
+> [!CRITICAL]
+> **Engine cubemap sampling convention (settled Jul 2026):** a world direction `D` samples
+> any environment cubemap at **`vec3(D.x, -D.y, D.z)`** — the engine world is Y-down
+> (UP = -Y) while cubemaps are stored Y-up. Reference sites: the skybox
+> (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and the material reflections
+> (`PBRResource`/`StandardResource`), both validated visually (celestial servoing within 1°).
+> RTGI/RTR/SSR sampled the RAW direction (sky upside-down in GI bounces and ray-miss
+> reflections) — fixed in lot 1. **The IBL generation (lot 2) MUST produce and consume
+> cubemaps under this same convention.**
+
+### Environment cubemap mip chains (IBL lot 1, Jul 2026)
+
+`TextureCubemap::createTexture()` now **always builds the full mip chain**
+(`Image::getMIPLevels`), ignoring the global `Core/Graphics/Texture/MipMappingLevels`
+setting (default 1 — which used to silently disable every cubemap mip in the engine), and
+the shared `"Cubemap"` sampler uses `maxLod = VK_LOD_CLAMP_NONE`. Rationale: the IBL
+prefiltering (filtered importance sampling) reads the source chain by solid-angle ratio,
+and roughness-driven `textureLod()` (PBR transmission) needs real mip content. Memory cost:
++33% on a handful of cubemaps. The upload blit chain (`ImageTransferOperation::finalizeForGPU`,
+per-layer × per-mip `vkCmdBlitImage`) is exercised for cubemaps since this change — LDR and
+HDR (RGBA16F) validated visually (water-world BlueSky reference frame).
