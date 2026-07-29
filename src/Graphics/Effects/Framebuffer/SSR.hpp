@@ -153,14 +153,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/**
 			 * @brief Constructs a screen-space reflexion effect.
+			 * @note The ray-miss environment fallback reads the scene's GGX-prefiltered
+			 * cubemap through the bindless table (reserved cube slot 2, always current).
 			 * @param renderer A reference to the graphics renderer.
 			 * @param parameters The initial parameters.
-			 * @param fallbackEnvCubemap The environment cubemap texture.
 			 */
-			SSR (Renderer & renderer, const Parameters & parameters, const std::shared_ptr< TextureResource::TextureCubemap > & fallbackEnvCubemap = nullptr) noexcept
+			SSR (Renderer & renderer, const Parameters & parameters) noexcept
 				: IndirectPostProcessEffect{renderer},
-				m_parameters{parameters},
-				m_fallbackEnvCubemap{fallbackEnvCubemap}
+				m_parameters{parameters}
 			{
 
 			}
@@ -230,21 +230,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return m_parameters;
 			}
 
-			/**
-			 * @brief Sets the environment cubemap used as fallback when SSR rays miss.
-			 * @param cubemap The environment cubemap texture.
-			 * @return void
-			 */
-			void
-			setEnvironmentCubemap (const std::shared_ptr< TextureResource::TextureCubemap > & cubemap) noexcept
-			{
-				m_fallbackEnvCubemap = cubemap;
-			}
-
 		private:
 
 			Parameters m_parameters;
-			std::shared_ptr< TextureResource::TextureCubemap > m_fallbackEnvCubemap;
 			/* IRTs: trace (half-res), resolve (half-res), blur H (half-res), blur V (half-res), composite (full-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_resolveTarget;

@@ -595,6 +595,12 @@ if ( materialType == PBRResource::ClassId )
 >
 > ⚠️ Remaining sibling caution: the LEGACY `setReflectionComponent(texture)` (explicit
 > texture) is still a static per-material capture — by design.
+>
+> SSR's ray-miss environment fallback (lot 4) also reads the bindless prefiltered slot
+> (set 1 of its resolve pipeline, roughness-driven LOD) — its old dedicated `envCubemap`
+> binding and the never-called `setEnvironmentCubemap()` are GONE, and
+> `IndirectPostProcessEffect::recordFullscreenPass()` gained an optional bindless-set
+> parameter any post effect can reuse.
 
 ### Fixed: SimplePass normal-mapped shader referenced an undeclared `N` — in BOTH quality levels (Jul 2026)
 

@@ -175,7 +175,7 @@ namespace EmEn::Graphics
 	/* ---- Shared fullscreen pass recording ---- */
 
 	void
-	IndirectPostProcessEffect::recordFullscreenPass (const CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const GraphicsPipeline & pipeline, const PipelineLayout & pipelineLayout, const DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize) noexcept
+	IndirectPostProcessEffect::recordFullscreenPass (const CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const GraphicsPipeline & pipeline, const PipelineLayout & pipelineLayout, const DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const DescriptorSet * bindlessSet) noexcept
 	{
 		target.beginRenderPass(commandBuffer);
 
@@ -211,6 +211,12 @@ namespace EmEn::Graphics
 		}
 
 		commandBuffer.bind(descriptorSet, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
+
+		/* Optional: the global bindless table (reserved IBL/environment slots) at set 1. */
+		if ( bindlessSet != nullptr )
+		{
+			commandBuffer.bind(*bindlessSet, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
+		}
 
 		commandBuffer.draw(3, 1);
 

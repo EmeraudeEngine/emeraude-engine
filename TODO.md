@@ -411,20 +411,13 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   Measured on `gltf-loader`, mean luma / crushed / blown / midtones: **124.8 / 0.0% / 0.0% /
   97.0%**, against 67.2 / 1.0% / 0.1% / 33.9% before the whole project.
 
-  IBL: WRITTEN, ⚠️ **UNVERIFIED — no demo exercises the path.** `AbstractBackground` carries a
-  `luminance()` in nits (default 8000, same value the skybox emits), `SceneRendering` passes it to
-  `LightGenerator::setEnvironmentLuminance()`, and the six additive IBL terms now multiply by it
-  through `scaledIBLIntensity()` — the surface's own `IBLIntensity` stays the artistic weight, the
-  luminance is the physical scale. Reason it is needed: the environment cubemap is a normalized
-  [0,1] source, so anything reflecting it contributes a fraction of a nit to a scene lit in
-  thousands, i.e. no visible reflections at all.
-  ⚠️ It could not be validated: a GLSL dump of `gltf-loader` AND `material-debug` shows **zero**
-  IBL terms generated (no `reflectedColor`, no `fresnelIBL`, no `IBLIntensity` in any uniform
-  block). No demo content calls `setReflectionComponentFromEnvironmentCubemap()` or sets an
-  `IBLIntensity`, so the whole cubemap-IBL path is dormant. The change is a no-op while the
-  environment luminance is 1, which is what it defaults to when a scene has no background.
-  TO VERIFY when such content exists: dump the GLSL and check the IBL terms carry the
-  `* <luminance>` factor, then confirm a reflective surface actually mirrors the sky.
+  IBL: **DONE AND VERIFIED (IBL work, lots 1-4, Jul 2026).** The environment luminance scale is
+  exercised for real now: the ambient pass reads the baked diffuse irradiance cubemap (E/π,
+  reserved bindless slot 1) and the split-sum specular reads the GGX-prefiltered chain (slot 2)
+  plus the BRDF LUT (2D slot 3), all scaled by the background luminance. Verified live on
+  geometry-loader: a star-less sky (Backrooms) models objects with zero analytic light.
+  See `src/Graphics/AGENTS.md` § "Graphics/Compute/IBLBaker" and `src/Saphir/AGENTS.md`
+  § "IBL Ambient Pass".
   ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
   light domain.** Two more sources feed the image and carry arbitrary units today:
     - **Emissive materials — RESOLVED BY THE SPEC ITSELF, no convention to invent.** The earlier

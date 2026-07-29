@@ -283,6 +283,7 @@ void main()
 	 * When confidence is zero (SSR miss), falls back to sampling the environment cubemap. */
 	static constexpr auto SSRResolveFragmentShader = R"GLSL(
 #version 450
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outResolve;
@@ -291,7 +292,14 @@ layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D traceTex;
 layout(set = 0, binding = 2) uniform sampler2D depthTex;
 layout(set = 0, binding = 3) uniform sampler2D normalTex;
-layout(set = 0, binding = 4) uniform samplerCube envCubemap;
+
+/* Bindless textures (set 1): the reserved cube slot 2 holds the ACTIVE SCENE's
+ * GGX-prefiltered environment, re-baked at every background switch (the old dedicated
+ * envCubemap binding never had a caller — the fallback was a black cubemap forever). */
+layout(set = 1, binding = 3) uniform samplerCube texturesCube[];
+
+const uint PrefilteredCubemapSlot = 2u;
+const float PrefilteredMaxLod = 5.0;
 
 layout(push_constant) uniform PushConstants
 {
@@ -360,13 +368,12 @@ void main()
 		mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
 		vec3 worldReflDir = invViewRot * reflDir;
 
-		/* Reduce cubemap fallback for rough surfaces. */
-		float roughnessFallback = envFallbackIntensity * (1.0 - smoothstep(0.0, 0.4, roughness));
-
 		/* ENGINE CUBEMAP CONVENTION: world direction D samples at vec3(D.x, -D.y, D.z)
-		 * (engine UP = -Y, cubemap stored Y-up) — same as skybox/material reflections. */
-		vec3 envColor = texture(envCubemap, vec3(worldReflDir.x, -worldReflDir.y, worldReflDir.z)).rgb;
-		outResolve = vec4(envColor, roughnessFallback);
+		 * (engine UP = -Y, cubemap stored Y-up) — same as skybox/material reflections.
+		 * The prefiltered chain handles the roughness (the old smoothstep attenuation
+		 * compensated a mirror-only sample); mip 0 is an exact environment copy. */
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], vec3(worldReflDir.x, -worldReflDir.y, worldReflDir.z), clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
+		outResolve = vec4(envColor, envFallbackIntensity);
 	}
 	else
 	{
@@ -491,7 +498,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			resolveInputLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 			resolveInputLayout->declareCombinedImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT);
 			resolveInputLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT);
-			resolveInputLayout->declareCombinedImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT);
+			/* NOTE: The environment fallback reads the bindless prefiltered slot (set 1). */
 
 			if ( !layoutManager.createDescriptorSetLayout(resolveInputLayout) )
 			{
@@ -518,8 +525,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
+			/* Resolve: set 0 = inputs, set 1 = bindless textures (prefiltered environment
+			 * fallback, reserved cube slot 2). */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(resolveInputLayout);
+			sets.emplace_back(this->renderer().bindlessTextureManager().descriptorSetLayout());
 
 			m_resolveLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ResolvePushConstants)}
@@ -589,13 +599,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Resolve: reads color (binding 0, per-frame), trace (binding 1, fixed),
-		 * depth (binding 2, per-frame), normals (binding 3, per-frame),
-		 * environment cubemap (binding 4, fixed). */
+		 * depth (binding 2, per-frame), normals (binding 3, per-frame); the environment
+		 * fallback reads the bindless prefiltered slot (set 1, always current). */
 		{
-			const auto & cubemap = m_fallbackEnvCubemap
-				? m_fallbackEnvCubemap
-				: renderer.getDefaultTextureCubemap();
-
 			m_resolvePerFrame = this->createPerFrameDescriptorSets(resolveInputLayout, ClassId, "Resolve_DescSet");
 
 			if ( m_resolvePerFrame.empty() )
@@ -609,15 +615,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				if ( !descriptorSet->writeCombinedImageSampler(1, m_traceTarget) )
 				{
 					return false;
-				}
-
-				/* Binding 4: environment cubemap (fixed). */
-				if ( cubemap != nullptr )
-				{
-					if ( !descriptorSet->writeCombinedImageSampler(4, *cubemap) )
-					{
-						return false;
-					}
 				}
 			}
 		}
@@ -797,7 +794,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				*m_resolveLayout,
 				*m_resolvePerFrame[frameIndex],
 				&resolvePC,
-				sizeof(ResolvePushConstants)
+				sizeof(ResolvePushConstants),
+				this->renderer().bindlessTextureManager().descriptorSet()
 			);
 		}
 

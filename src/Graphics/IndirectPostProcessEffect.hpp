@@ -394,9 +394,11 @@ void main()
 			 * @param descriptorSet The descriptor set to bind.
 			 * @param pushConstants Pointer to the push constants data.
 			 * @param pushConstantsSize Size of the push constants data in bytes.
+			 * @param bindlessSet The global bindless descriptor set, bound at set 1 when the
+			 * pass reads the reserved IBL/environment slots. Default none.
 			 * @return void
 			 */
-			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize) noexcept;
+			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const Vulkan::DescriptorSet * bindlessSet = nullptr) noexcept;
 
 			/* ---- Shared descriptor set layout helpers ---- */
 
