@@ -233,6 +233,14 @@ namespace EmEn::Graphics::Renderable
 	bool
 	SkyBoxResource::onDependenciesLoaded () noexcept
 	{
+		/* The default ambient illuminance follows the MEASURED sky, not the uniform-dome pi
+		 * (owner decision, Jul 2026): the cubemap pixels are final here. An explicit
+		 * "AmbientIlluminance" manifest key bypasses this entirely. */
+		if ( m_environmentCubemap != nullptr )
+		{
+			this->setAmbientIlluminanceFactor(m_environmentCubemap->hemisphereIlluminanceFactor());
+		}
+
 		if constexpr ( IsDebug )
 		{
 			/* NOTE: Check the geometry resource. */

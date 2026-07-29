@@ -27,6 +27,9 @@
 #include "TextureCubemap.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Photometry.hpp"
+
+/* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Resources/Manager.hpp"
 #include "Vulkan/Image.hpp"
@@ -210,6 +213,17 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		return m_localData->averageColor();
+	}
+
+	float
+	TextureCubemap::hemisphereIlluminanceFactor () const noexcept
+	{
+		if ( !this->isLoaded() || m_localData == nullptr )
+		{
+			return Photometry::UniformDomeIlluminanceFactor;
+		}
+
+		return m_localData->hemisphereIlluminanceFactor();
 	}
 
 	bool

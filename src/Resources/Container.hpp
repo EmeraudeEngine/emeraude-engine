@@ -27,16 +27,19 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <any>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "NameableTrait.hpp"
@@ -1400,6 +1403,32 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Returns the names of every resource known to the local store.
+			 * @note Sorted, for a stable iteration order.
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			std::vector< std::string >
+			resourceNames () const noexcept
+			{
+				std::vector< std::string > names;
+
+				if ( m_localStore != nullptr )
+				{
+					names.reserve(m_localStore->size());
+
+					for ( const auto & name : std::views::keys(*m_localStore) )
+					{
+						names.emplace_back(name);
+					}
+
+					std::sort(names.begin(), names.end());
+				}
+
+				return names;
+			}
+
+			/**
 			 * @brief Returns a randomly selected resource from the store.
 			 *
 			 * Selects a random resource from the available store entries using fast random number
@@ -1407,11 +1436,11 @@ namespace EmEn::Resources
 			 *
 			 * **Performance Note:**
 			 * Uses O(n) iteration through the unordered_map to access random element. For frequent
-			 * random access, consider caching the name list with getResourceNames().
+			 * random access, consider caching the name list with resourceNames().
 			 *
 			 * @param asyncLoad True for asynchronous loading (default), false for synchronous.
 			 * @return Shared pointer to randomly selected resource, or nullptr if store is empty.
-			 * @see getResourceNames() For getting all available resource names
+			 * @see resourceNames() For getting all available resource names
 			 * @note Thread-safe: locks m_resourcesAccess internally.
 			 * @version 0.8.35
 			 */

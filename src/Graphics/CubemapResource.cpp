@@ -802,4 +802,116 @@ namespace EmEn::Graphics
 
 		return {red, green, blue, 1.0F};
 	}
+	float
+	CubemapResource::hemisphereIlluminanceFactor () const noexcept
+	{
+		constexpr auto pi = std::numbers::pi_v< float >;
+
+		if ( m_hemisphereIlluminanceFactor > 0.0F )
+		{
+			return m_hemisphereIlluminanceFactor;
+		}
+
+		/* HDR: the D6 calibration normalizes the upper hemisphere to pi by construction. */
+		if ( m_isHDR )
+		{
+			m_hemisphereIlluminanceFactor = pi;
+
+			return m_hemisphereIlluminanceFactor;
+		}
+
+		if ( !this->isLoaded() || !m_faces[0].isValid() )
+		{
+			/* Uniform-dome fallback, the pre-measurement behavior. */
+			return pi;
+		}
+
+		/* sRGB -> linear LUT: the LDR texels are sRGB-encoded, the integral needs radiances. */
+		static const auto s_linearLUT = [] {
+			std::array< float, 256 > table{};
+
+			for ( size_t index = 0; index < table.size(); ++index )
+			{
+				const auto value = static_cast< float >(index) / 255.0F;
+
+				table[index] = value <= 0.04045F ? value / 12.92F : std::pow((value + 0.055F) / 1.055F, 2.4F);
+			}
+
+			return table;
+		}();
+
+		/* Integrate luma x cos(zenith) x dOmega over the SKY half of the six faces. In
+		 * face-space the sky lives toward +Y (empirically validated on content-rich sources).
+		 * Texel solid angle: (4 / N²) / (1 + s² + t²)^(3/2). A uniform white dome integrates
+		 * to pi, matching the analytic formula this measurement replaces. */
+		double illuminance = 0.0;
+
+		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+		{
+			const auto & face = m_faces.at(faceIndex);
+			const auto faceSize = face.width();
+			const auto colorCount = static_cast< size_t >(face.colorCount());
+			const auto * data = face.data().data();
+
+			/* NOTE: The nadir face never lights the ground. */
+			if ( faceIndex == 3 )
+			{
+				continue;
+			}
+
+			/* Subsample huge faces: the integral converges long before texel resolution. */
+			const uint32_t step = std::max(1U, faceSize / 512U);
+			const auto stepArea = static_cast< double >(step) * step;
+			const auto invSize = 1.0F / static_cast< float >(faceSize);
+
+			for ( uint32_t row = 0; row < faceSize; row += step )
+			{
+				const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+
+				for ( uint32_t col = 0; col < faceSize; col += step )
+				{
+					const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+
+					float dx, dy, dz;
+
+					switch ( faceIndex )
+					{
+						case 0: /* PositiveX */ dx =  1.0F; dy = -t;	dz = -s;	break;
+						case 1: /* NegativeX */ dx = -1.0F; dy = -t;	dz =  s;	break;
+						case 2: /* PositiveY */ dx =  s;	dy =  1.0F; dz =  t;	break;
+						case 4: /* PositiveZ */ dx =  s;	dy = -t;	dz =  1.0F; break;
+						default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
+					}
+
+					const auto lengthSquared = dx * dx + dy * dy + dz * dz;
+					const auto upCosine = dy / std::sqrt(lengthSquared);
+
+					if ( upCosine <= 0.0F )
+					{
+						continue;
+					}
+
+					const auto * texel = data + (static_cast< size_t >(row) * faceSize + col) * colorCount;
+
+					const auto luma =
+						0.2126F * s_linearLUT[texel[0]] +
+						0.7152F * s_linearLUT[texel[1]] +
+						0.0722F * s_linearLUT[texel[2]];
+
+					const auto solidAngle = (4.0F * invSize * invSize) / (lengthSquared * std::sqrt(lengthSquared));
+
+					illuminance += static_cast< double >(luma * upCosine * solidAngle) * stepArea;
+				}
+			}
+		}
+
+		m_hemisphereIlluminanceFactor = std::max(1e-4F, static_cast< float >(illuminance));
+
+		TraceInfo{ClassId} <<
+			"Cubemap '" << this->name() << "' measured hemisphere illuminance factor: " <<
+			m_hemisphereIlluminanceFactor << " (uniform dome = " << pi << ").";
+
+		return m_hemisphereIlluminanceFactor;
+	}
+
 }

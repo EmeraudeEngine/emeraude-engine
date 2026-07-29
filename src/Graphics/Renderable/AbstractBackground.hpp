@@ -160,15 +160,16 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Returns the illuminance the background pours on the scene, in lux.
-			 * @note When the manifest does not declare it, it is derived from the luminance
-			 * (E = pi * L, uniform dome — see Photometry::illuminanceFromSkyLuminance()).
+			 * @note When the manifest does not declare it, it is derived from the luminance and
+			 * the illuminance factor MEASURED on the actual source (`E = L x factor`, see
+			 * setAmbientIlluminanceFactor()); pi — the uniform dome — until a loader measures.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
 			ambientIlluminance () const noexcept
 			{
-				return m_ambientIlluminance < 0.0F ? Photometry::illuminanceFromSkyLuminance(m_luminance) : m_ambientIlluminance;
+				return m_ambientIlluminance < 0.0F ? m_luminance * m_ambientIlluminanceFactor : m_ambientIlluminance;
 			}
 
 			/**
@@ -250,6 +251,21 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
+			 * @brief Sets the factor deriving the default ambient illuminance from the luminance.
+			 * @note Loaders holding the actual pixels call this with the MEASURED upper-hemisphere
+			 * integral (owner decision, Jul 2026: the uniform-dome pi over-lit every sky whose
+			 * dome is partly dark — see CubemapResource::hemisphereIlluminanceFactor()). An
+			 * explicit "AmbientIlluminance" manifest key bypasses the derivation entirely.
+			 * @param factor The illuminance factor (pi = uniform dome).
+			 * @return void
+			 */
+			void
+			setAmbientIlluminanceFactor (float factor) noexcept
+			{
+				m_ambientIlluminanceFactor = std::max(1e-4F, factor);
+			}
+
+			/**
 			 * @brief Parses the photometric part of a background manifest — the SINGLE parsing
 			 * point shared by every background type (sky box, dynamic sky, color background).
 			 * @note Reads the optional keys "Luminance" (nits, defaults to a clear day),
@@ -276,5 +292,6 @@ namespace EmEn::Graphics::Renderable
 			Base::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};
 			float m_luminance{DefaultLuminance}; /**< Physical luminance of the background, in nits. */
 			float m_ambientIlluminance{-1.0F}; /**< Ambient illuminance, in lux. Negative means "derive from the luminance". */
+			float m_ambientIlluminanceFactor{Photometry::UniformDomeIlluminanceFactor}; /**< Derivation factor, measured by loaders. */
 	};
 }

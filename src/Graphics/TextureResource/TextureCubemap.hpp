@@ -174,6 +174,15 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			Base::PixelFactory::Color< float > averageColor () const noexcept override;
 
+			/**
+			 * @brief Returns the measured hemisphere illuminance factor of the local cubemap.
+			 * @note See CubemapResource::hemisphereIlluminanceFactor(). Falls back to the
+			 * uniform dome (pi) without local data.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float hemisphereIlluminanceFactor () const noexcept;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
 			const char *

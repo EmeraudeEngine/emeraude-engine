@@ -1095,7 +1095,11 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
 - `AverageColor` (sRGB, optional): authored/cheated average; absent = computed from the source
   (`CubemapResource::averageColor()`).
 - `AmbientIlluminance` (lux, optional): what the dome pours on the ground; absent = derived as
-  `E = π·L` (`Photometry::illuminanceFromSkyLuminance()`).
+  `E = L × factor` where the factor is MEASURED on the actual texels
+  (`CubemapResource::hemisphereIlluminanceFactor()`: sRGB-decoded luma × cos(zenith) integrated
+  over the sky hemisphere — π only for a uniform dome; Backrooms measures 0.11, its dome is
+  mostly dark ceiling). Owner decision (review session Jul 2026): the uniform-dome π over-lit
+  every non-uniform sky. HDR sources are calibrated to exactly π by construction.
 - `Stars` (optional, 0..N): celestial bodies (`Graphics::CelestialBody`) to derive analytic
   directional lights from — `Direction` points TOWARD the body (engine frame, UP = -Y),
   `Illuminance` in lux, `Temperature` in kelvins (industry-standard authoring; wins over a direct

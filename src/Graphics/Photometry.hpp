@@ -180,6 +180,10 @@ namespace EmEn::Graphics::Photometry
 		return 1.0F / (MeterCalibration * std::exp2(exposureValue100));
 	}
 
+	/** @brief Illuminance factor of a UNIFORM sky dome: `E = pi x L`. Real skies measure lower
+	 * (see CubemapResource::hemisphereIlluminanceFactor()). */
+	constexpr float UniformDomeIlluminanceFactor{std::numbers::pi_v< float >};
+
 	/**
  * @brief Returns the illuminance received on the ground from a uniform sky dome.
  * @note For a hemisphere of uniform luminance L, the horizontal illuminance is `E = pi * L`

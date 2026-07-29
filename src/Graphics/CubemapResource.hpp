@@ -234,6 +234,19 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			Base::PixelFactory::Color< float > averageColor () const noexcept;
 
+			/**
+			 * @brief Returns the factor F such as the illuminance a sky made of this cubemap
+			 * pours on the ground is `E = luminance x F`, in lux.
+			 * @note MEASURED on the actual texels (sRGB-decoded luma x cos(zenith), integrated
+			 * over the upper hemisphere): pi for a uniform dome, much less for a sky whose dome
+			 * is partly dark (owner decision, review session Jul 2026 — the uniform-dome pi
+			 * over-lit every non-uniform sky). HDR cubemaps are calibrated so their factor IS
+			 * pi by construction. Lazily computed, then cached.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float hemisphereIlluminanceFactor () const noexcept;
+
 		private:
 
 			/* JSON keys */
@@ -258,6 +271,7 @@ namespace EmEn::Graphics
 			CubemapPixmaps m_faces;
 			std::array< std::vector< uint16_t >, CubemapFaceCount > m_facesHDR{};
 			Base::PixelFactory::Color< float > m_averageColorHDR;
+			mutable float m_hemisphereIlluminanceFactor{-1.0F};
 			uint32_t m_cubeSize{0};
 			bool m_isHDR{false};
 	};
