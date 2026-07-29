@@ -38,6 +38,7 @@
 
 /* Local inclusions. */
 #include "Resources/Container.hpp"
+#include "IO/IO.hpp"
 #include "CubemapResource.hpp"
 #include "Algorithms/PerlinNoise.hpp"
 #include "Algorithms/VoronoiNoise.hpp"

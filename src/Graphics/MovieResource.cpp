@@ -37,6 +37,7 @@
 
 /* Local inclusions. */
 #include "Resources/Container.hpp"
+#include "IO/IO.hpp"
 #include "ImageResource.hpp"
 #include "Algorithms/PerlinNoise.hpp"
 #include "FastJSON.hpp"

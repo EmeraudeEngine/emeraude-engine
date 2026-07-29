@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 #include "String.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"

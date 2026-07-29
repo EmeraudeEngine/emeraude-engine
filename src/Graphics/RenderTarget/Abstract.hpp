@@ -31,9 +31,6 @@
 #include <memory>
 #include <string>
 
-/* Third-party inclusions. */
-#include <vulkan/vulkan.h>
-
 /* Local inclusions for inheritances. */
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 

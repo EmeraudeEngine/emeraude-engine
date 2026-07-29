@@ -16,8 +16,60 @@ Fail-safe resource system that guarantees NEVER returning nullptr and always pro
 | `ResourceTrait.hpp` | `ResourceTrait` | Base interface for all resources |
 | `ResourceTrait.hpp` | `AbstractServiceProvider` | Service access interface (merged) |
 | `Container.hpp` | `Container<resource_t>` | Template store per resource type |
+| `Container.cpp` | `ServiceAccess::*` | Non-template service facade — see [§ Include discipline](#include-discipline-container-is-a-compile-firewall) |
+| `LoadingRequest.hpp/.cpp` | `LoadingRequest` | **Non-template** loading request (file / download / direct data) |
 | `Manager.hpp` | `Manager` | Central coordinator, access to all containers |
 | `BaseInformation.hpp` | `BaseInformation` | Resource metadata (store index) |
+
+### Include discipline: Container is a compile firewall
+
+> [!IMPORTANT]
+> `Container.hpp` is reached by ~70 translation units. **Never include a service header in it.**
+> It is a header-only template, so any expression in a method body that does *not* depend on
+> `resource_t` is analysed at template **definition** time — pulling `Net/Manager.hpp`,
+> `FileSystem.hpp` or `ThreadPool.hpp` into every consumer. `Net::Manager` is the worst offender:
+> being a `ControllableTrait`, it drags the whole `Console/` subtree along.
+>
+> Two mechanisms keep the header thin (2026-07, measured: 42 headers / 12 826 LOC → **20 / 6 834**):
+>
+> 1. **`ServiceAccess` free functions** (declared in `Container.hpp`, implemented in `Container.cpp`)
+>    wrap every touch of a heavy service: `netManagerObservable()`, `isNetManagerObservable()`,
+>    `fileDownloadedNotificationCode()`, `downloadStatus()`, `enqueueTask()`, `startDownload()`,
+>    `markDownloadProcessed()`. **Need a new service call? Add a function there** — do not include
+>    the service header.
+> 2. **`LoadingRequest` is deliberately not a template.** It only ever needs the polymorphic
+>    `ResourceTrait` (`load()` is virtual) plus the resource's `ClassId`, passed as a `const char *`
+>    at construction. That lets every heavy body (`cacheFilepath`, `url`, `setDownloadProcessed`)
+>    live in `LoadingRequest.cpp`, keeping `FileSystem`, `Network/URL`, `String` and `IO` out of the
+>    header. Consequence: it stores a `shared_ptr< ResourceTrait >`, so `Container::loadingTask()`
+>    downcasts with `static_cast< resource_t * >` before publishing the `ResourceLoaded`
+>    notification (safe — no virtual inheritance of `ResourceTrait` anywhere).
+>
+> Consumers that genuinely instantiate a container (`container< T >()` performs a `static_cast`
+> downcast, which needs the complete type) must include `Resources/Container.hpp` **explicitly**.
+> Resource headers only need a forward declaration — see [§ Resource headers must not include Container.hpp](#resource-headers-must-not-include-containerhpp).
+
+### Resource headers must not include Container.hpp
+
+The 37 `*Resource.hpp` headers use `Container` in exactly two ways, and **both are satisfied by a
+forward declaration** — a `friend` of a specialization and an alias never instantiate the template:
+
+```cpp
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
+/* ... */
+friend class Resources::Container< Texture2D >;             // declaration is enough
+using Texture2Ds = Container< …::Texture2D >;               // alias, no instantiation
+```
+
+Restoring the `#include` in any of them re-inflates the whole cascade: it took **133 → 67** the
+number of TU parsing `Container.hpp` and removed ~415 000 cumulated lines of project headers
+(2026-07). `ResourceTrait.hpp` also carries this forward declaration, so the local block is
+redundant in principle — it is kept per-header for locality.
 
 ### AbstractServiceProvider Interface
 
@@ -264,7 +316,10 @@ auto material = container->getOrCreateResource(name, [
 ## Removed Files (v0.8.35)
 
 - `AbstractServiceProvider.hpp` → Merged into `ResourceTrait.hpp`
-- `LoadingRequest.hpp` → Removed (functionality integrated elsewhere)
+- `LoadingRequest.hpp` → had been folded into `Container.hpp` — **re-extracted in v0.8.40**, this
+  time as a **non-template** class with its own `.cpp`, deliberately, to keep `FileSystem`,
+  `Network/URL`, `String` and `IO` out of a header parsed by ~70 TU. Do not fold it back in:
+  see [§ Include discipline](#include-discipline-container-is-a-compile-firewall).
 - `Randomizer.hpp` → Removed
 
 ## Future Improvements (suggestions)

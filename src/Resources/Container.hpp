@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <any>
@@ -50,20 +53,103 @@
 /* Local inclusions for usages. */
 #include "BaseInformation.hpp"
 #include "BaseUtility.hpp"
-#include "FileSystem.hpp"
 #include "Hash/Hash.hpp"
-#include "IO/IO.hpp"
-#include "Network/URL.hpp"
+#include "LoadingRequest.hpp"
 #include "ObserverTrait.hpp"
-#include "String.hpp"
 #include "Tracer.hpp"
-#include "Net/Manager.hpp"
+#include "Net/Types.hpp"
 #include "PrimaryServices.hpp"
 #include "ResourceTrait.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Resources
 {
+	/**
+	 * @namespace EmEn::Resources::ServiceAccess
+	 * @brief Non-template access layer to the engine services used by Container.
+	 *
+	 * Container is a header-only template, so every expression in its method bodies that does
+	 * **not** depend on `resource_t` is analysed at template *definition* time — which would
+	 * force `Net/Manager.hpp`, `FileSystem.hpp` and `ThreadPool.hpp` to be complete right here,
+	 * in a header parsed by a large part of the engine (`Net::Manager` alone drags in the whole
+	 * `Console/` subtree, since it is a `ControllableTrait`).
+	 *
+	 * These free functions are declared here and implemented in `Container.cpp`, so the heavy
+	 * service headers stay in that single translation unit. Add a function here rather than
+	 * reaching for a service header from `Container.hpp`.
+	 *
+	 * @version 0.8.40
+	 */
+	namespace ServiceAccess
+	{
+		/** @brief startDownload() result: the request was not downloadable, the caller must fail. */
+		constexpr int DownloadNotStarted{-1};
+
+		/** @brief startDownload() result: the file was already cached locally, no ticket was issued. */
+		constexpr int DownloadCacheHit{0};
+
+		/**
+		 * @brief Returns the network manager as an observable, to be passed to ObserverTrait::observe().
+		 * @param primaryServices A reference to the primary services.
+		 * @return Base::ObservableTrait *
+		 */
+		[[nodiscard]]
+		EMEN_API Base::ObservableTrait * netManagerObservable (PrimaryServices & primaryServices) noexcept;
+
+		/**
+		 * @brief Checks whether an observable is the network manager.
+		 * @param observable A pointer to the observable that sent a notification.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		EMEN_API bool isNetManagerObservable (const Base::ObservableTrait * observable) noexcept;
+
+		/**
+		 * @brief Returns the network manager notification code for a completed file download.
+		 * @return int
+		 */
+		[[nodiscard]]
+		EMEN_API int fileDownloadedNotificationCode () noexcept;
+
+		/**
+		 * @brief Returns the current status of a download ticket.
+		 * @param primaryServices A reference to the primary services.
+		 * @param ticket The download ticket issued by the network manager.
+		 * @return Net::DownloadStatus
+		 */
+		[[nodiscard]]
+		EMEN_API Net::DownloadStatus downloadStatus (const PrimaryServices & primaryServices, int ticket) noexcept;
+
+		/**
+		 * @brief Enqueues a task in the engine thread pool.
+		 * @param primaryServices A reference to the primary services.
+		 * @param task The task to execute [std::move].
+		 */
+		EMEN_API void enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
+
+		/**
+		 * @brief Starts the download of an external resource, using the local cache when possible.
+		 *
+		 * When the file is already present in the cache, the request is marked as processed and
+		 * DownloadCacheHit is returned without contacting the network manager.
+		 *
+		 * @param primaryServices A reference to the primary services.
+		 * @param request A reference to the loading request, updated in place.
+		 * @return The download ticket, or DownloadCacheHit (0) when already cached,
+		 * or DownloadNotStarted (-1) when the request is not downloadable.
+		 */
+		[[nodiscard]]
+		EMEN_API int startDownload (PrimaryServices & primaryServices, LoadingRequest & request) noexcept;
+
+		/**
+		 * @brief Marks a download as processed on the request, resolving the filesystem for it.
+		 * @param primaryServices A reference to the primary services.
+		 * @param request A reference to the loading request, updated in place.
+		 * @param success Whether the download succeeded.
+		 */
+		EMEN_API void markDownloadProcessed (PrimaryServices & primaryServices, LoadingRequest & request, bool success) noexcept;
+	}
+
 	/**
 	 * @class ContainerInterface
 	 * @brief Abstract base interface for all resource containers in the Emeraude Engine.
@@ -252,321 +338,6 @@ namespace EmEn::Resources
 	};
 
 	/**
-	 * @class LoadingRequest
-	 * @brief Encapsulates a resource loading request with download state management.
-	 *
-	 * LoadingRequest handles the complete lifecycle of a resource loading operation, including
-	 * local file access, external URL downloads, and direct data loading. It manages download
-	 * tickets for asynchronous network operations and tracks the loading state through a
-	 * finite state machine.
-	 *
-	 * **Download Ticket States:**
-	 * - DownloadNotRequested (-4): No download needed (local or direct data)
-	 * - DownloadError (-3): Download failed
-	 * - DownloadSuccess (-2): Download completed successfully
-	 * - DownloadPending (-1): Waiting to be submitted to download manager
-	 * - Positive values: Active download ticket from the network manager
-	 *
-	 * **Source Types:**
-	 * - LocalData: Load from filesystem path
-	 * - ExternalData: Download from URL, cache locally, then load
-	 * - DirectData: Load from in-memory JSON data
-	 *
-	 * The request automatically determines the cache filepath for external resources and handles
-	 * the conversion from external URLs to cached local files after successful downloads.
-	 *
-	 * @tparam resource_t Resource type, must derive from ResourceTrait.
-	 * @see Container For the resource container that uses this request type
-	 * @see BaseInformation For resource metadata
-	 * @see SourceType Enum defining resource data sources
-	 * @version 0.8.35
-	 */
-	template< typename resource_t >
-	requires (std::is_base_of_v< ResourceTrait, resource_t >)
-	class LoadingRequest final
-	{
-		public:
-
-			/** @brief Class identifier. */
-			static constexpr auto ClassId{"LoadingRequest"};
-
-			/**
-			 * @brief Constructs a loading request with resource metadata.
-			 *
-			 * Initializes the loading request and sets the appropriate download ticket state based
-			 * on the source type. For external data sources, validates the URL and sets the ticket
-			 * to DownloadPending if valid, or DownloadError if invalid.
-			 *
-			 * @param baseInformation Resource metadata including source type and data location (moved).
-			 * @param resource Shared pointer to the target resource object that will be populated.
-			 * @version 0.8.35
-			 */
-			LoadingRequest (BaseInformation baseInformation, const std::shared_ptr< resource_t > & resource) noexcept
-				: m_baseInformation{std::move(baseInformation)},
-				m_resource{resource}
-			{
-				using namespace Base;
-
-				switch ( m_baseInformation.sourceType() )
-				{
-					case SourceType::Undefined :
-						Tracer::error(ClassId, "Undefined type for resource request !");
-						break;
-
-					case SourceType::LocalData :
-						break;
-
-					case SourceType::ExternalData :
-					{
-						const Network::URL resourceUrl{m_baseInformation.data().asString()};
-
-						if ( resourceUrl.isValid() )
-						{
-							m_downloadTicket = DownloadPending;
-						}
-						else
-						{
-							TraceError{ClassId} << "'" << resourceUrl << "' is not a valid URL ! Download cancelled ...";
-
-							m_downloadTicket = DownloadError;
-						}
-					}
-						break;
-
-					case SourceType::DirectData :
-						break;
-				}
-			}
-
-			/**
-			 * @brief Returns the cache file path for downloaded external resources.
-			 *
-			 * Constructs the filesystem path where downloaded external resources are cached locally.
-			 * The path structure is: `[cache_dir]/data/[resource_type]/[filename]`
-			 *
-			 * Example: `~/.cache/emeraude/data/Texture2D/albedo.png`
-			 *
-			 * @param fileSystem Reference to the filesystem service for cache directory location.
-			 * @return Full filesystem path to the cached resource file.
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			std::filesystem::path
-			cacheFilepath (const FileSystem & fileSystem) const noexcept
-			{
-				std::filesystem::path filepath{fileSystem.cacheDirectory()};
-				filepath.append("data");
-				filepath.append(resource_t::ClassId);
-				filepath.append(Base::String::extractFilename(m_baseInformation.data().asString()));
-
-				return filepath;
-			}
-
-			/**
-			 * @brief Returns the base information metadata for this request.
-			 *
-			 * @return Const reference to the resource's base information (name, source type, data location).
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			const BaseInformation &
-			baseInformation () const noexcept
-			{
-				return m_baseInformation;
-			}
-
-			/**
-			 * @brief Returns the target resource object for this loading request.
-			 *
-			 * @return Shared pointer to the resource that will be populated when loading completes.
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			std::shared_ptr< resource_t >
-			resource () const noexcept
-			{
-				return m_resource;
-			}
-
-			/**
-			 * @brief Returns the download manager ticket number.
-			 *
-			 * Returns the ticket assigned by the network download manager for tracking this download.
-			 * A return value of 0 indicates no active download (either not needed or already completed).
-			 *
-			 * @return Download ticket number, or 0 if no active download.
-			 * @see isDownloadable() To check if download is pending
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			int
-			downloadTicket () const noexcept
-			{
-				if ( m_downloadTicket < 0 )
-				{
-					return 0;
-				}
-
-				return m_downloadTicket;
-			}
-
-			/**
-			 * @brief Checks if the request is ready to be submitted for download.
-			 *
-			 * Returns true only if this is an external data request currently in the DownloadPending
-			 * state. Requests in this state are waiting to be submitted to the network download manager.
-			 *
-			 * @return True if the request can be submitted for download, false otherwise.
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			bool
-			isDownloadable () const noexcept
-			{
-				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
-				{
-					Tracer::error(ClassId, "This request is not external !");
-
-					return false;
-				}
-
-				return m_downloadTicket == DownloadPending;
-			}
-
-			/**
-			 * @brief Returns the download URL for external data requests.
-			 *
-			 * Extracts and returns the URL from the base information data field. Returns an
-			 * empty URL if this is not an external data request.
-			 *
-			 * @return URL object for the resource download, or empty URL for non-external requests.
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			Base::Network::URL
-			url () const noexcept
-			{
-				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
-				{
-					return {};
-				}
-
-				return Base::Network::URL{m_baseInformation.data().asString()};
-			}
-
-			/**
-			 * @brief Checks if the resource download is currently in progress.
-			 *
-			 * Returns true if this is an external data request with a positive download ticket,
-			 * indicating the download has been submitted to the network manager but not yet completed.
-			 *
-			 * @return True if download is active, false otherwise.
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			bool
-			isDownloading () const noexcept
-			{
-				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
-				{
-					Tracer::error(ClassId, "This request is not external !");
-
-					return false;
-				}
-
-				/* NOTE: Check the networkManager ticket.
-				 * If it's still present, the download
-				 * is not yet finished. */
-				if ( m_downloadTicket >= 0 )
-				{
-					return false;
-				}
-
-				return true;
-			}
-
-			/**
-			 * @brief Assigns a download manager ticket to this request.
-			 *
-			 * Updates the request's download ticket after successfully submitting it to the network
-			 * download manager. This transitions the state from DownloadPending to actively downloading.
-			 *
-			 * @param ticket Positive ticket number assigned by the network download manager.
-			 * @pre Request must be in DownloadPending state (ticket == -1).
-			 * @pre Request must be of SourceType::ExternalData.
-			 * @warning Calling with invalid preconditions generates error traces.
-			 * @version 0.8.35
-			 */
-			void
-			setDownloadTicket (int ticket) noexcept
-			{
-				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
-				{
-					Tracer::error(ClassId, "This request is not external !");
-
-					return;
-				}
-
-				if ( m_downloadTicket != DownloadPending ) [[unlikely]]
-				{
-					Tracer::error(ClassId, "Cannot set a ticket to a request which is not in 'DownloadPending' status !");
-
-					return;
-				}
-
-				m_downloadTicket = ticket;
-			}
-
-			/**
-			 * @brief Marks the download as completed (successfully or with error).
-			 *
-			 * Updates the request state after download completion. On success, updates the base
-			 * information to point to the cached local file instead of the original URL. On failure,
-			 * sets the ticket to DownloadError state.
-			 *
-			 * @param fileSystem Reference to filesystem service for cache path resolution.
-			 * @param success True if download succeeded, false if it failed.
-			 * @post On success: ticket becomes DownloadSuccess, baseInformation updated to cache path.
-			 * @post On failure: ticket becomes DownloadError.
-			 * @version 0.8.35
-			 */
-			void
-			setDownloadProcessed (const FileSystem & fileSystem, bool success) noexcept
-			{
-				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
-				{
-					Tracer::error(ClassId, "This request is not external !");
-
-					return;
-				}
-
-				/* Invalidate the networkManager ticket. */
-				if ( success ) [[likely]]
-				{
-					m_downloadTicket = DownloadSuccess;
-
-					m_baseInformation.updateFromDownload(this->cacheFilepath(fileSystem));
-				}
-				else
-				{
-					m_downloadTicket = DownloadError;
-				}
-			}
-
-		private:
-
-			/* Special ticket flags. */
-			static constexpr auto DownloadNotRequested{-4};
-			static constexpr auto DownloadError{-3};
-			static constexpr auto DownloadSuccess{-2};
-			static constexpr auto DownloadPending{-1};
-
-			BaseInformation m_baseInformation;
-			std::shared_ptr< resource_t > m_resource;
-			int m_downloadTicket{DownloadNotRequested};
-	};
-
-	/**
 	 * @class Container
 	 * @brief Thread-safe template container for managing resource lifecycle with async/sync loading.
 	 *
@@ -664,7 +435,7 @@ namespace EmEn::Resources
 				m_serviceProvider{serviceProvider},
 				m_localStore{store}
 			{
-				this->observe(&m_primaryServices.netManager());
+				this->observe(ServiceAccess::netManagerObservable(m_primaryServices));
 			}
 
 			/**
@@ -1383,7 +1154,7 @@ namespace EmEn::Resources
 					return this->getDefaultResourceUnlocked();
 				}
 
-				m_primaryServices.threadPool()->enqueue([createFunction, newResource] {
+				ServiceAccess::enqueueTask(m_primaryServices, [createFunction, newResource] {
 					if ( createFunction(*newResource) ) {
 						switch ( newResource->status() )
 						{
@@ -1475,9 +1246,9 @@ namespace EmEn::Resources
 			bool
 			onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
 			{
-				if ( observable->is(Net::Manager::getClassUID()) )
+				if ( ServiceAccess::isNetManagerObservable(observable) )
 				{
-					if ( notificationCode == Net::Manager::FileDownloaded )
+					if ( notificationCode == ServiceAccess::fileDownloadedNotificationCode() )
 					{
 						const std::scoped_lock scopeLock{m_resourcesAccess};
 
@@ -1487,7 +1258,7 @@ namespace EmEn::Resources
 
 						if ( requestIt != m_externalResources.end() )
 						{
-							switch ( m_primaryServices.netManager().downloadStatus(downloadTicket) )
+							switch ( ServiceAccess::downloadStatus(m_primaryServices, downloadTicket) )
 							{
 								case Net::DownloadStatus::Pending :
 								case Net::DownloadStatus::Transferring :
@@ -1498,12 +1269,12 @@ namespace EmEn::Resources
 								{
 									Tracer::success(resource_t::ClassId, "Resource downloaded.");
 
-									requestIt->second.setDownloadProcessed(m_primaryServices.fileSystem(), true);
+									ServiceAccess::markDownloadProcessed(m_primaryServices, requestIt->second, true);
 
 									/* Enqueue the resource loading in the thread pool. */
 									auto request = requestIt->second;
 
-									m_primaryServices.threadPool()->enqueue([this, request] {
+									ServiceAccess::enqueueTask(m_primaryServices, [this, request] {
 										this->loadingTask(request);
 									});
 								}
@@ -1512,7 +1283,11 @@ namespace EmEn::Resources
 								case Net::DownloadStatus::Error :
 									Tracer::error(resource_t::ClassId, "Resource failed to download.");
 
-									requestIt->second.setDownloadProcessed(m_primaryServices.fileSystem(), true);
+									/* FIXME: passes 'true' on a failed download, so the request is marked
+									 * as DownloadSuccess and its BaseInformation is rewritten to point at a
+									 * cache file that was never written. Behaviour preserved verbatim from
+									 * before the ServiceAccess extraction — fix separately. */
+									ServiceAccess::markDownloadProcessed(m_primaryServices, requestIt->second, true);
 									break;
 							}
 
@@ -1746,38 +1521,34 @@ namespace EmEn::Resources
 				/* Gets a reference to the smart pointer of the new resource. */
 				auto & newResource = result.first->second;
 
-				LoadingRequest< resource_t > request{baseInformation, newResource};
+				LoadingRequest request{baseInformation, newResource, resource_t::ClassId};
 
 				if ( asyncLoad )
 				{
 					/* NOTE: Check if we need to download the resource first. */
 					if ( baseInformation.sourceType() == SourceType::ExternalData )
 					{
-						if ( !request.isDownloadable() )
+						const auto ticket = ServiceAccess::startDownload(m_primaryServices, request);
+
+						if ( ticket == ServiceAccess::DownloadNotStarted )
 						{
 							return nullptr;
 						}
 
-						/* NOTE: Check the cache system before downloading. */
-						const auto cacheFile = request.cacheFilepath(m_primaryServices.fileSystem());
-
-						if ( Base::IO::fileExists(cacheFile) )
+						if ( ticket != ServiceAccess::DownloadCacheHit )
 						{
-							request.setDownloadProcessed(m_primaryServices.fileSystem(), true);
-						}
-						else
-						{
-							const auto ticket = m_primaryServices.netManager().download(request.url(), cacheFile, false);
-
-							request.setDownloadTicket(ticket);
-
 							m_externalResources.emplace(ticket, request);
 						}
+
+						/* NOTE: On a cache hit the request is already marked as processed and no
+						 * loading task is enqueued, so the resource stays unloaded until something
+						 * asks for it again. Behaviour preserved verbatim from before the
+						 * ServiceAccess extraction — fix separately. */
 					}
 					else
 					{
 						/* Enqueue the resource loading into the thread pool. */
-						m_primaryServices.threadPool()->enqueue([this, request] {
+						ServiceAccess::enqueueTask(m_primaryServices, [this, request] {
 							this->loadingTask(request);
 						});
 					}
@@ -1811,7 +1582,7 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			void
-			loadingTask (LoadingRequest< resource_t > request) noexcept
+			loadingTask (LoadingRequest request) noexcept
 			{
 				/* Notify the beginning of a loading process. */
 				this->notify(LoadingProcessStarted);
@@ -1862,7 +1633,10 @@ namespace EmEn::Resources
 						TraceSuccess{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' is loaded. [CONTAINER]";
 					}
 
-					this->notify(ResourceLoaded, request.resource().get());
+					/* NOTE: LoadingRequest stores the polymorphic base, but observers expect the
+					 * concrete resource pointer in the notification payload. The downcast is safe:
+					 * the request was built from a std::shared_ptr< resource_t > by this container. */
+					this->notify(ResourceLoaded, static_cast< resource_t * >(request.resource().get()));
 				}
 				else
 				{
@@ -1877,7 +1651,7 @@ namespace EmEn::Resources
 			AbstractServiceProvider & m_serviceProvider;										  ///< Service provider for resource loading operations.
 			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;  ///< Shared store of available resource metadata (name -> BaseInformation).
 			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;		///< Map of loaded resources (name -> resource).
-			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;		 ///< Active download requests (ticket -> request).
+			std::unordered_map< int, LoadingRequest > m_externalResources;					 ///< Active download requests (ticket -> request).
 			mutable std::mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
 			bool m_verboseEnabled{false};														 ///< Verbose logging flag for detailed trace output.
 	};

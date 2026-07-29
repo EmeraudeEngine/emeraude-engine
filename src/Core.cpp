@@ -56,6 +56,7 @@
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
 #include "IO/IO.hpp"
+#include "Net/Manager.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Time/Time.hpp"
 #include "Version.hpp"

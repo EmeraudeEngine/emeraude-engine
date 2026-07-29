@@ -10,7 +10,8 @@ This document provides detailed architecture for the resource management system,
 - **Top-Resource**: A resource at the top of a dependency chain (e.g., MeshResource that depends on MaterialResource, which depends on TextureResources). Has no parent resources waiting for it.
 - **Dependency Chain**: Hierarchical relationship where resources depend on sub-resources. Loading propagates from leaves to root.
 - **Neutral Resource**: Default/fallback version of a resource created without loading external data. Always functional and identifiable (e.g., checkerboard texture, gray cube).
-- **LoadingRequest**: Internal wrapper for asynchronous loading operations. Handles file loading, network downloads, and caching.
+- **LoadingRequest**: Internal wrapper for asynchronous loading operations. Handles file loading, network downloads, and caching. Lives in `LoadingRequest.hpp/.cpp` and is **deliberately not a template** — it only needs the polymorphic `ResourceTrait` plus the resource's `ClassId` — so that its heavy dependencies (`FileSystem`, `Network/URL`, `String`, `IO`) stay out of `Container.hpp`.
+- **ServiceAccess**: Non-template free functions declared in `Container.hpp` and implemented in `Container.cpp`, wrapping every engine-service call the container makes (thread pool, network manager, filesystem). They exist so the heavy service headers are parsed by one translation unit instead of ~70. See [`src/Resources/AGENTS.md § Include discipline`](../src/Resources/AGENTS.md#include-discipline-container-is-a-compile-firewall).
 - **Reference Counting**: Automatic memory management using `std::shared_ptr`. Resources are kept in memory as long as they're referenced.
 - **Garbage Collection**: Process of unloading resources when `use_count() == 1` (only Container holds reference).
 
