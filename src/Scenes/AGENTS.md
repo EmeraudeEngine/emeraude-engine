@@ -795,10 +795,18 @@ derives the scene lighting from the background photometric manifest — ambient 
 ambient illuminance, plus one `StaticEntity` + `DirectionalLight` per declared celestial body
 (`Graphics::CelestialBody`; the entity sits at `direction × 1000`, the component default shines
 along `-normalize(position)`). The first star becomes `mainDirectionalLight`. Options carry the
-NON-photometric choices only (shadow map resolution, classic coverage vs CSM cascades). If the
-background resource is still loading, application is deferred to its `LoadFinished` notification
-(one-shot observer wired in the Scene ctor / `setBackground()`). Scene JSON opt-in:
-`"ApplyLighting": true` in the `Background` block (`DefinitionResource::readBackground()`).
+NON-photometric choices only (shadow map resolution, classic coverage vs CSM cascades). Scene
+JSON opt-in: `"ApplyLighting": true` in the `Background` block; console:
+`setBackground(name, true)`.
+
+⚠️ **Threading contract (rewritten Jul 2026 after two live crashes)**: the entry point only
+RAISES a request (`m_backgroundLightingRequested`, atomic) — it may be called from ANY thread
+(console TCP thread, input callbacks, demo constructors). The actual application
+(`applyBackgroundLightingNow()`: entity/light creation, LightSet, view UBOs) happens exclusively
+at the top of `Scene::processLogics()` (logic thread), which POLLS the request and honors it once
+the background resource `isLoaded()` — no observer, no notification race. Re-application
+(background switch) first removes the star entities recorded in `m_backgroundStarEntities`, so
+switching skies never stacks directional lights.
 
 **Environment luminance is a View UBO value, not a baked literal**:
 `Scene::refreshAmbientLightProperties()` pushes ambient color + intensity + background luminance

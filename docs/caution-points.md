@@ -561,6 +561,39 @@ if ( materialType == PBRResource::ClassId )
 > **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
 > (shadowRayVisibility + gating + ambient push constants), `RTGI.cpp` (gating).
 
+### Fixed: removeStaticEntity() forgot the entity BEFORE unlinking its components — ghost lights, pure virtual crash (Jul 2026)
+
+> [!WARNING]
+> **Removing an entity that carries a light crashed the render thread with
+> `pure virtual method called`.** Core-dump backtrace: `Core::renderingTask()` →
+> `Scene::updateVideoMemory()` → `LightSet::updateVideoMemory()` →
+> `Component::Abstract::getWorldCoordinates()` → `__cxa_pure_virtual`.
+>
+> **Root cause:** `Scene::removeStaticEntity()` called `this->forget(entity)` FIRST, then let the
+> entity die. The component-destruction notifications (`DirectionalLightDestroyed`, ...) — the
+> mechanism that unregisters lights from the `LightSet` — fired while the scene was no longer
+> observing: they went into the void, the light stayed registered, and the render thread then
+> dereferenced a destroyed component.
+>
+> **Fix:** `staticEntity->clearComponents()` BEFORE `this->forget()` — every component unlink
+> notification is dispatched while the scene still listens.
+>
+> **Lesson:** an entity's components must be unlinked while its observers are still attached;
+> `forget()` is the LAST step of a removal, never the first.
+
+### Known limits: a sky without stars renders objects FLAT; material env reflections are a snapshot (Jul 2026)
+
+> [!CAUTION]
+> Two sibling limitations of the environment consumption, exposed by the sky-only lighting mode:
+> - **No analytic light in the scene → 2D-flat objects.** The light passes simply do not run and
+>   the engine ambient is a normal-independent scalar. A star-less sky (aurora, nebula, indoor
+>   dome) physically cannot model an object until the ambient reads the CUBEMAP
+>   (diffuse irradiance + prefiltered specular — the IBL brick, planned).
+> - **`setReflectionComponentFromEnvironmentCubemap()` captures the environment cubemap AT
+>   MATERIAL CREATION** — switching the background updates the bindless slot but not the
+>   material's captured texture: reflections show the PREVIOUS sky (seen live: Backrooms room,
+>   ViolentDays fire in the reflections). Materials must consume the LIVE scene environment.
+
 ### Fixed: SimplePass normal-mapped shader referenced an undeclared `N` — in BOTH quality levels (Jul 2026)
 
 > [!NOTE]

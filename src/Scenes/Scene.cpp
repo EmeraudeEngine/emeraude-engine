@@ -64,12 +64,9 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
 
-		/* An asynchronously loading background pushes its photometry (luminance, ambient,
-		 * stars) when its manifest is parsed — see the observer branch in onNotification(). */
-		if ( m_backgroundResource != nullptr && !m_backgroundResource->isLoaded() )
-		{
-			this->observe(m_backgroundResource.get());
-		}
+		/* An asynchronously loading background pushes its photometry (luminance) once
+		 * loaded — see the polling block at the top of processLogics(). */
+		m_backgroundPhotometryDirty = m_backgroundResource != nullptr;
 
 		auto & settings = graphicsRenderer.primaryServices().settings();
 
@@ -345,12 +342,16 @@ namespace EmEn::Scenes
 		m_lifetimeUS += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 		m_lifetimeMS += WorldPhysicsUpdateCycleDurationMS< uint32_t >;
 
-		/* Deferred background photometry (see onNotification()): the resource LoadFinished
-		 * notification fires on a LOADING thread, and deriving the lighting creates entities
-		 * and components — scene mutations that MUST happen here, on the logic thread. */
-		if ( m_backgroundPhotometryDirty.exchange(false) )
+		/* Deferred background photometry: requests come from ANY thread (console, input
+		 * callbacks, resource loading), the application mutates the scene (entities, lights,
+		 * view UBOs) and therefore only ever happens here, on the logic thread, once the
+		 * background resource is loaded. */
+		if ( m_backgroundResource != nullptr && m_backgroundResource->isLoaded() )
 		{
-			this->refreshAmbientLightProperties();
+			if ( m_backgroundPhotometryDirty.exchange(false) )
+			{
+				this->refreshAmbientLightProperties();
+			}
 
 			if ( m_backgroundLightingRequested )
 			{
@@ -704,19 +705,6 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-		if ( m_backgroundResource != nullptr && observable == m_backgroundResource.get() )
-		{
-			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
-			{
-				/* The manifest is parsed: the photometric description is final.
-				 * ⚠️ This notification fires on a LOADING thread — the actual application
-				 * (entity creation, light set, view UBOs) is deferred to processLogics(). */
-				m_backgroundPhotometryDirty = true;
-			}
-
-			/* One-shot: stop listening. */
-			return false;
-		}
 
 		if ( observable->is(StaticEntity::getClassUID()) )
 		{

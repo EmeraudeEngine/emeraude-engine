@@ -527,10 +527,27 @@ namespace EmEn::Scenes
 
 			m_activeScene->setBackground(skyBox);
 
+			/* Optional second argument: derive the scene lighting from the sky manifest. */
+			if ( arguments.size() >= 2 && arguments[1].asBoolean() )
+			{
+				if ( m_activeScene->applyBackgroundLighting() )
+				{
+					outputs.emplace_back(Severity::Success, std::stringstream{} << "Background set to '" << name << "' with sky-driven lighting (ambient: " <<
+						(skyBox->isLoaded() ? std::to_string(skyBox->ambientIlluminance()) : std::string{"deferred"}) << " lx, stars: " <<
+						(skyBox->isLoaded() ? std::to_string(skyBox->stars().size()) : std::string{"deferred"}) << ").");
+
+					return true;
+				}
+
+				outputs.emplace_back(Severity::Warning, "Background set, but the lighting derivation failed.");
+
+				return true;
+			}
+
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Background set to '" << name << "'.");
 
 			return true;
-		}, "Sets the scene background skybox. Usage: setBackground(skyboxName)");
+		}, "Sets the scene background skybox. Usage: setBackground(skyboxName [, applyLighting])");
 
 		this->bindCommand("listScenes", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			std::stringstream list;

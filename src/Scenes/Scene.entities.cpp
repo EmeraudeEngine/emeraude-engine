@@ -174,6 +174,13 @@ namespace EmEn::Scenes
 
 		const auto staticEntity = staticEntityIt->second;
 
+		/* ⚠️ Unlink the components while the scene still OBSERVES the entity: the destruction
+		 * notifications (DirectionalLightDestroyed, ...) are what unregister lights from the
+		 * LightSet. Forgetting first sent them into the void — the render thread then hit a
+		 * destroyed light component through the still-registered pointer (pure virtual call,
+		 * found via core dump on the geometry-loader background switch, Jul 2026). */
+		staticEntity->clearComponents();
+
 		this->forget(staticEntity.get());
 
 		if ( m_renderingOctree != nullptr && staticEntity->isRenderable() )
@@ -207,20 +214,17 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		m_backgroundLightingOptions = options;
-		m_backgroundLightingRequested = true;
-
 		/* ⚠️ Enable the light set NOW, not at application time: LightSet::initialize() runs
 		 * once at scene enabling and skips a disabled set — a deferred enable would leave the
 		 * whole scene without light buffers, hence without a single lighted render program. */
 		m_lightSet.enable();
 
-		/* NOTE: A still-loading background defers the application to the moment its manifest
-		 * is parsed (see the observer branch in Scene::onNotification()). */
-		if ( m_backgroundResource->isLoaded() )
-		{
-			this->applyBackgroundLightingNow();
-		}
+		/* ⚠️ NEVER apply from here: this entry point runs on the CALLER's thread (a console
+		 * TCP thread, an input event callback, a demo constructor...) while the application
+		 * creates entities and lights — logic-thread work. The request is polled and honored
+		 * by Scene::processLogics() as soon as the background resource is loaded. */
+		m_backgroundLightingOptions = options;
+		m_backgroundLightingRequested = true;
 
 		return true;
 	}
@@ -239,6 +243,15 @@ namespace EmEn::Scenes
 		m_backgroundLightingRequested = false;
 
 		m_lightSet.enable();
+
+		/* RE-APPLICATION (background switch): the stars of the previous sky must go away,
+		 * or every switch would stack directional lights. */
+		for ( const auto & entityName : m_backgroundStarEntities )
+		{
+			this->removeStaticEntity(entityName);
+		}
+
+		m_backgroundStarEntities.clear();
 
 		if ( options.applyAmbient )
 		{
@@ -290,6 +303,10 @@ namespace EmEn::Scenes
 				if ( component == nullptr )
 				{
 					TraceError{ClassId} << "Unable to create the directional light '" << entityName << "' from a background star !";
+				}
+				else
+				{
+					m_backgroundStarEntities.emplace_back(entityName);
 				}
 			}
 		}
@@ -344,8 +361,9 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* The IBL scale (environment luminance) follows the background. */
-		this->refreshAmbientLightProperties();
+		/* The IBL scale (environment luminance) follows the background — applied on the
+		 * logic thread once the resource is loaded (this can be called from any thread). */
+		m_backgroundPhotometryDirty = true;
 
 		this->registerSceneVisualComponents();
 	}

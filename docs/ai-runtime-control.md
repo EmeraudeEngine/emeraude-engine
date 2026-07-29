@@ -647,7 +647,7 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777  # List service co
 | | `listResources(containerNameOrId)` | JSON array of available resource names |
 | **SceneManagerService** | `createScene(name, boundary, camNode, x, y, z [, bg [, ground]])` | Create full scene |
 | | `setGround([material])` | Add/replace ground (default: "default") |
-| | `setBackground(skyboxName)` | Set skybox on active scene |
+| | `setBackground(skyboxName [, applyLighting])` | Set skybox on active scene; `true` as second argument derives the scene lighting (ambient + stars) from the sky's photometric manifest |
 | | `addMesh(meshResource, entityName, x, y, z [, scale])` | Place a 3D mesh |
 | | `createNode(name [, x, y, z])` | Create node in active scene |
 | | `destroyNode(name)` | Remove node |

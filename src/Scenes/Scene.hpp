@@ -2468,6 +2468,9 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_backgroundResource;
 			/** @brief Options of a requested background lighting derivation. */
 			BackgroundLightingOptions m_backgroundLightingOptions;
+			/** @brief Names of the star entities created by the last lighting derivation,
+			 * removed and rebuilt when the derivation is re-applied (background switch). */
+			std::vector< std::string > m_backgroundStarEntities;
 			/** @brief Current environment cubemap for IBL. Should never be null after initialization. */
 			std::shared_ptr< Graphics::TextureResource::TextureCubemap > m_environmentCubemap;
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
@@ -2593,12 +2596,13 @@ namespace EmEn::Scenes
 			mutable std::mutex m_renderToViewAccess;
 			/** @brief Mutex for double-buffer state copy operation. */
 			mutable std::mutex m_stateCopyLock;
-			/** @brief Set by the background LoadFinished notification (loading thread), consumed
-			 * by processLogics() (logic thread) to apply the photometry and derived lighting. */
+			/** @brief Raised from any thread (setBackground), consumed by processLogics()
+			 * (logic thread) to push the background photometry to the view UBOs. */
 			std::atomic_bool m_backgroundPhotometryDirty{false};
+			/** @brief Raised from any thread (applyBackgroundLighting), honored by
+			 * processLogics() once the background resource is loaded. */
+			std::atomic_bool m_backgroundLightingRequested{false};
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
-			/** @brief True when applyBackgroundLighting() waits for the background to load. */
-			bool m_backgroundLightingRequested{false};
 	};
 }
