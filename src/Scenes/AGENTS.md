@@ -815,6 +815,18 @@ to EVERY render target's view UBO (main, render-to-view, render-to-texture — o
 `Scene::setBackground()`, background `LoadFinished`, and by `applyBackgroundLightingNow()`.
 See `src/Graphics/AGENTS.md` § "Background photometric contract" for the manifest schema.
 
+**IBL ambient replaces the scalar under the applyAmbient contract (Jul 2026, IBL lot 3)**:
+when `applyBackgroundLighting({applyAmbient: true})` runs, `refreshAmbientLightProperties()`
+pushes a **ZERO** scalar ambient intensity to the view UBOs (the baked irradiance cubemap
+takes over in the ambient pass — a directional E(n) and a flat scalar would double-count
+the same sky) while the LightSet keeps the photometric values for effects reading it
+directly. With `applyAmbient: false` (RTGI demos, manual ambient) the irradiance slot is
+NOT published (parked on the default black cubemap) and the scalar path stands alone —
+`Scene::updateEnvironmentIBL()` re-evaluates that publication every tick, so a scene can
+switch lighting modes after the bake. `Scene::setBackground()` now writes the bindless SET
+directly when the cubemap is already created (the per-frame sync mirrors it; the late
+adoption covers async loads) — the IBL re-bake is keyed on that set identity.
+
 **Environment IBL follows the adopted cubemap (Jul 2026, IBL lot 2)**:
 `Scene::updateEnvironmentIBL()` is polled every `processLogics` tick (idle cost: one mutex
 lock + a pointer compare). When the identity of `BindlessTextureSet::environmentCubemap()`

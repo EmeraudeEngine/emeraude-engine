@@ -29,7 +29,9 @@
 /* Local inclusions. */
 #include "Code.hpp"
 #include "Declaration/Function.hpp"
+#include "Declaration/Sampler.hpp"
 #include "Generator/Abstract.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir
@@ -411,6 +413,19 @@ namespace EmEn::Saphir
 					}
 				}
 
+				/* World-space normal for the IBL diffuse irradiance lookup (see
+				 * generateAmbientFragmentShader). Only when the program carries the
+				 * bindless set — the legacy scalar ambient needs no normal. */
+				if ( generator.bindlessTexturesEnabled() )
+				{
+					if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace, VariableScope::ToNextStage) )
+					{
+						Tracer::error(ClassId, "Unable to synthesize NormalWorldSpace for the ambient pass IBL !");
+
+						return false;
+					}
+				}
+
 				return true;
 
 			case RenderPassType::DirectionalLightPassFullCSM :
@@ -541,7 +556,7 @@ namespace EmEn::Saphir
 				/* Note: the perturbed view-space normal "N" needed by the MRT normals output
 				 * is declared once at the top of this function. */
 
-				this->generateAmbientFragmentShader(fragmentShader);
+				this->generateAmbientFragmentShader(generator, fragmentShader);
 
 				if ( m_useOpacity )
 				{
@@ -643,8 +658,10 @@ namespace EmEn::Saphir
 	}
 
 	void
-	LightGenerator::generateAmbientFragmentShader (FragmentShader & fragmentShader) const noexcept
+	LightGenerator::generateAmbientFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
 	{
+		using Graphics::BindlessTextureManager;
+
 		/* Declare evalIridescence function if needed for ambient/IBL pass. */
 		if ( m_useIridescence )
 		{
@@ -676,6 +693,10 @@ namespace EmEn::Saphir
 		std::string surfaceColor{};
 		std::string intensity{};
 
+		/* The raw base color (albedo/diffuse, WITHOUT the Lambert 1/pi) — the IBL diffuse
+		 * irradiance term needs it as-is, since the irradiance cubemap stores E/pi. */
+		const auto & iblBaseColor = m_usePBRMode && !m_surfaceAlbedo.empty() ? m_surfaceAlbedo : m_surfaceDiffuseColor;
+
 		if ( m_surfaceAmbientColor.empty() )
 		{
 			/* PHOTOMETRIC AMBIENT. The ambient intensity is an ILLUMINANCE in lux (the sky and
@@ -684,8 +705,7 @@ namespace EmEn::Saphir
 			 * scale. It used to be a hard-coded 0.05 ("5% of the albedo"), which was a purely
 			 * artistic factor and made the ambient term incomparable with a light in candela.
 			 * In PBR mode, use albedo instead of diffuse. */
-			const auto & baseColor = m_usePBRMode && !m_surfaceAlbedo.empty() ? m_surfaceAlbedo : m_surfaceDiffuseColor;
-			surfaceColor = (std::stringstream{} << "(" << baseColor << " * 0.3183098862)").str();
+			surfaceColor = (std::stringstream{} << "(" << iblBaseColor << " * 0.3183098862)").str();
 		}
 		else
 		{
@@ -708,6 +728,59 @@ namespace EmEn::Saphir
 		else
 		{
 			intensity = this->ambientLightIntensity();
+		}
+
+		/* IBL AMBIENT (diffuse irradiance + split-sum specular). Available when the program
+		 * carries the bindless set: reserved cube slot 1 holds the scene's baked irradiance
+		 * (E/pi, parked on the default BLACK cubemap when the scene does not derive its
+		 * ambient from the sky — the term then contributes nothing), slot 2 the prefiltered
+		 * environment, 2D slot 3 the split-sum BRDF LUT. */
+		const bool useIBL = generator.bindlessTexturesEnabled();
+
+		if ( useIBL )
+		{
+			const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+			fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+			if ( !fragmentShader.declare(Declaration::Sampler{bindlessSetIndex, BindlessTextureManager::TextureCubeBinding, GLSL::SamplerCube, Bindless::TexturesCube, Declaration::Sampler::UnboundedArray}) )
+			{
+				return;
+			}
+
+			if ( !fragmentShader.declare(Declaration::Sampler{bindlessSetIndex, BindlessTextureManager::Texture2DBinding, GLSL::Sampler2D, Bindless::Textures2D, Declaration::Sampler::UnboundedArray}) )
+			{
+				return;
+			}
+
+			/* The GEOMETRIC world normal is enough for the irradiance lookup: a 32² cosine
+			 * convolved cubemap carries no frequency a normal map could reveal.
+			 * ENGINE CUBEMAP CONVENTION: world direction D samples at (D.x, -D.y, D.z). */
+			Code{fragmentShader} <<
+				"const vec3 iblAmbientNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
+				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], vec3(iblAmbientNormal.x, -iblAmbientNormal.y, iblAmbientNormal.z)).rgb;";
+		}
+
+		/* The tint of the IBL diffuse irradiance term is ALWAYS the raw base color
+		 * (albedo/diffuse): the irradiance is a physical light lighting the Lambertian
+		 * reflectance. The Phong ambient component (m_surfaceAmbientColor) is an artistic
+		 * constant-ambient hack — it stays on the legacy scalar path only (a light-grey
+		 * ka under a 17k lx sky would wash every material out). And NEVER the 1/pi-scaled
+		 * photometric surfaceColor — the irradiance cubemap already stores E/pi. */
+		const auto & iblDiffuseTint = iblBaseColor;
+
+		/* Baked ambient occlusion factor: it modulates the DIFFUSE ambient terms only —
+		 * occluding the specular IBL or the emission with the same cavity term is wrong
+		 * (the old global multiply did, and also darkened the emissive). */
+		std::string aoFactor{};
+
+		if ( m_useAmbientOcclusion && !m_surfaceAmbientOcclusion.empty() )
+		{
+			const auto aoIntensity = m_surfaceAOIntensity.empty() ? "1.0" : m_surfaceAOIntensity;
+
+			Code{fragmentShader} << "const float iblAmbientAO = mix(1.0, " << m_surfaceAmbientOcclusion << ", " << aoIntensity << ");";
+
+			aoFactor = " * iblAmbientAO";
 		}
 
 		if ( m_usePBRMode && m_useReflection && m_useRefraction && this->highQualityEnabled() )
@@ -869,6 +942,40 @@ namespace EmEn::Saphir
 					m_fragmentColor << ".rgb += reflectedColor * fresnelIBL * " << iblIntensity << ";").str();
 
 				Code{fragmentShader, Location::Output} << code;
+
+				/* Diffuse irradiance: what the iridescent Fresnel does not reflect feeds
+				 * the Lambertian lobe of the dielectric part. */
+				if ( useIBL )
+				{
+					const auto diffuseCode = (std::stringstream{} <<
+						"/* IBL diffuse irradiance (iridescence: energy left by the Fresnel). */" "\n" <<
+						m_fragmentColor << ".rgb += " << albedo << " * (1.0 - " << metalness << ") * (vec3(1.0) - fresnelIBL) * iblIrradiance * " << iblIntensity << aoFactor << ";").str();
+					Code{fragmentShader, Location::Output} << diffuseCode;
+				}
+			}
+			else if ( useIBL )
+			{
+				/* Split-sum reconstruction (Karis 2013): the prefiltered radiance times the
+				 * BRDF LUT (scale/bias on F0), completed by the Fdez-Agüera 2019 multi-scatter
+				 * energy compensation — no extra resource, the same two LUT channels. The
+				 * diffuse lobe takes what the specular did not (energy conservation). */
+				const auto roughness = m_surfaceRoughness.empty() ? "0.5" : m_surfaceRoughness;
+
+				const auto code = (std::stringstream{} <<
+					"/* PBR IBL - split-sum + multi-scatter energy compensation. */" "\n" <<
+					iblF0Computation << "\n"
+					"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
+					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+					"const vec2 iblEnvBRDF = texture(" << Bindless::Textures2D << "[" << Graphics::BindlessTextureManager::BRDFLutSlot << "], vec2(NdotV, clamp(" << roughness << ", 0.0, 1.0))).rg;" "\n"
+					"const vec3 iblFssEss = iblF0 * iblEnvBRDF.x + iblEnvBRDF.y;" "\n"
+					"const float iblEms = 1.0 - (iblEnvBRDF.x + iblEnvBRDF.y);" "\n"
+					"const vec3 iblFavg = iblF0 + (vec3(1.0) - iblF0) / 21.0;" "\n"
+					"const vec3 iblFmsEms = iblEms * iblFssEss * iblFavg / (vec3(1.0) - iblFavg * iblEms);" "\n"
+					"const vec3 iblKD = " << albedo << " * (1.0 - " << metalness << ") * max(vec3(1.0) - iblFssEss - iblFmsEms, vec3(0.0));" "\n" <<
+					m_fragmentColor << ".rgb += iblFssEss * reflectedColor * " << iblIntensity << ";" "\n" <<
+					m_fragmentColor << ".rgb += (iblFmsEms + iblKD" << aoFactor << ") * iblIrradiance * " << iblIntensity << ";").str();
+
+				Code{fragmentShader, Location::Output} << code;
 			}
 			else
 			{
@@ -936,6 +1043,15 @@ namespace EmEn::Saphir
 				m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * lqF0 * " << m_surfaceReflectionAmount << " * " << iblIntensity << ";").str();
 			Code{fragmentShader, Location::Output} << code;
 
+			/* Diffuse irradiance (LQ: plain energy split, no LUT). */
+			if ( useIBL )
+			{
+				const auto diffuseCode = (std::stringstream{} <<
+					"/* IBL diffuse irradiance (LQ). */" "\n" <<
+					m_fragmentColor << ".rgb += " << albedo << " * (1.0 - " << metalness << ") * (vec3(1.0) - lqF0) * iblIrradiance * " << iblIntensity << aoFactor << ";").str();
+				Code{fragmentShader, Location::Output} << diffuseCode;
+			}
+
 			/* Clear coat IBL - simplified constant attenuation (LQ, no reflectionNormal available). */
 			if ( m_useClearCoat )
 			{
@@ -987,15 +1103,38 @@ namespace EmEn::Saphir
 		}
 		else if ( m_useReflection )
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
+
+			/* IBL (non-PBR reflective, e.g. Standard): the same diffuse/reflection mix, lit
+			 * by the irradiance instead of the scalar — the reflection color is a prefiltered
+			 * sample in [0,1], the environment luminance turns both into nits. */
+			if ( useIBL )
+			{
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+			}
 		}
 		else if ( m_useRefraction )
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
+
+			if ( useIBL )
+			{
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+			}
 		}
 		else
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
+
+			/* IBL diffuse irradiance: the cubemap stores E/pi, so the raw base color
+			 * (no 1/pi) times the sample times the environment luminance is the outgoing
+			 * luminance of the Lambertian surface — it matches the scalar path exactly on
+			 * a uniform sky. The scalar term above is zeroed by the scene when the sky
+			 * drives the ambient (see Scene::refreshAmbientLightProperties). */
+			if ( useIBL )
+			{
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << ";";
+			}
 		}
 
 		/* Auto-Illumination (emissive) support. */
@@ -1027,14 +1166,10 @@ namespace EmEn::Saphir
 			}
 		}
 
-		/* Ambient Occlusion (baked texture) support - modulates the ambient contribution. */
-		if ( m_useAmbientOcclusion && !m_surfaceAmbientOcclusion.empty() )
-		{
-			const auto aoIntensity = m_surfaceAOIntensity.empty() ? "1.0" : m_surfaceAOIntensity;
-			/* NOTE: AO darkens ambient lighting. mix(1.0, ao, intensity) allows intensity control.
-			 * When intensity = 0, no AO effect. When intensity = 1, full AO effect. */
-			Code{fragmentShader} << m_fragmentColor << ".rgb *= mix(1.0, " << m_surfaceAmbientOcclusion << ", " << aoIntensity << ");";
-		}
+		/* NOTE: The baked ambient occlusion no longer multiplies the whole fragment here —
+		 * that darkened the emissive and the specular IBL with a diffuse cavity term. The
+		 * `aoFactor` computed at the top of this function now modulates each DIFFUSE
+		 * ambient contribution at its addition site. */
 
 		/* SSS ambient - scattered light fills shadow areas. */
 		if ( m_useSubsurface )

@@ -332,57 +332,67 @@ namespace EmEn::Scenes
 	{
 		/* The bindless set is the mutex-protected source of truth for the adopted
 		 * environment cubemap (setBackground can run on any thread and the late adoption
-		 * of an async-loaded cubemap happens on the render thread). */
+		 * of an async-loaded cubemap happens on the render thread). The engine default
+		 * black cubemap is never baked: the reserved IBL slots already park on it. */
 		const auto source = m_bindlessTextureSet.environmentCubemap();
 
-		if ( source == nullptr || !source->isCreated() || source.get() == m_iblBakedSource )
+		if ( source != nullptr && source->isCreated() && source.get() != m_iblBakedSource
+			&& source.get() != static_cast< const Vulkan::TextureInterface * >(m_graphicsRenderer.getDefaultTextureCubemap().get()) )
 		{
-			return;
+			auto & irradiance = m_iblIrradiance[m_iblWriteIndex];
+			auto & prefiltered = m_iblPrefiltered[m_iblWriteIndex];
+
+			if ( irradiance == nullptr )
+			{
+				irradiance = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::IrradianceCubemap);
+			}
+
+			if ( prefiltered == nullptr )
+			{
+				prefiltered = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::PrefilteredCubemap);
+			}
+
+			/* NOTE: Whatever happens below, do not retry every logic tick on the same source. */
+			m_iblBakedSource = source.get();
+
+			if ( irradiance->create(m_graphicsRenderer) && prefiltered->create(m_graphicsRenderer) )
+			{
+				if ( m_graphicsRenderer.iblBaker().bakeEnvironment(*source, *irradiance, *prefiltered) )
+				{
+					/* Publish the prefiltered environment (UPDATE_AFTER_BIND hot-swap at
+					 * the manager's next sync) and flip the pair: frames in flight keep
+					 * sampling the previous bake untouched. The irradiance publication is
+					 * decided below, by the applyAmbient contract. */
+					m_bindlessTextureSet.setPrefilteredCubemap(prefiltered);
+
+					m_iblBakedIrradiance = irradiance;
+
+					m_iblWriteIndex = (m_iblWriteIndex + 1) % 2;
+				}
+				else
+				{
+					TraceError{ClassId} << "Unable to bake the environment IBL from '" << m_environmentCubemap->name() << "' !";
+				}
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to create the environment IBL textures !";
+			}
 		}
 
-		/* No point baking the engine default black cubemap: the reserved IBL slots
-		 * already park on it. */
-		if ( source.get() == static_cast< const Vulkan::TextureInterface * >(m_graphicsRenderer.getDefaultTextureCubemap().get()) )
+		/* The irradiance SLOT publication follows the applyAmbient contract, even between
+		 * bakes (a scene can derive its lighting from the sky after the bake happened).
+		 * Unpublished, the slot parks on the default black cubemap: the ambient-pass IBL
+		 * diffuse term contributes nothing and the scalar ambient stands alone — that is
+		 * the anti-double-count contract of the manually-lit scenes (RTGI demos). */
+		const std::shared_ptr< Vulkan::TextureInterface > desiredIrradiance = m_iblAmbientEnabled ? m_iblBakedIrradiance : nullptr;
+
+		if ( desiredIrradiance != m_iblPublishedIrradiance )
 		{
-			return;
+			m_bindlessTextureSet.setIrradianceCubemap(desiredIrradiance);
+
+			m_iblPublishedIrradiance = desiredIrradiance;
 		}
-
-		auto & irradiance = m_iblIrradiance[m_iblWriteIndex];
-		auto & prefiltered = m_iblPrefiltered[m_iblWriteIndex];
-
-		if ( irradiance == nullptr )
-		{
-			irradiance = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::IrradianceCubemap);
-		}
-
-		if ( prefiltered == nullptr )
-		{
-			prefiltered = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::PrefilteredCubemap);
-		}
-
-		/* NOTE: Whatever happens below, do not retry every logic tick on the same source. */
-		m_iblBakedSource = source.get();
-
-		if ( !irradiance->create(m_graphicsRenderer) || !prefiltered->create(m_graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the environment IBL textures !";
-
-			return;
-		}
-
-		if ( !m_graphicsRenderer.iblBaker().bakeEnvironment(*source, *irradiance, *prefiltered) )
-		{
-			TraceError{ClassId} << "Unable to bake the environment IBL from '" << m_environmentCubemap->name() << "' !";
-
-			return;
-		}
-
-		/* Publish (UPDATE_AFTER_BIND hot-swap at the manager's next sync) and flip the
-		 * pair: frames in flight keep sampling the previous bake untouched. */
-		m_bindlessTextureSet.setIrradianceCubemap(irradiance);
-		m_bindlessTextureSet.setPrefilteredCubemap(prefiltered);
-
-		m_iblWriteIndex = (m_iblWriteIndex + 1) % 2;
 	}
 
 	void

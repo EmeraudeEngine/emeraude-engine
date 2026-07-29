@@ -253,6 +253,13 @@ namespace EmEn::Scenes
 
 		m_backgroundStarEntities.clear();
 
+		/* The applyAmbient contract gates the IBL diffuse: when the sky drives the ambient,
+		 * the baked irradiance cubemap replaces the flat scalar term in the ambient pass
+		 * (refreshAmbientLightProperties pushes a ZERO intensity to the view UBOs — a
+		 * directional E(n) and a flat scalar would double-count the same sky). The LightSet
+		 * still records the photometric values: post-process effects read them dynamically. */
+		m_iblAmbientEnabled = options.applyAmbient;
+
 		if ( options.applyAmbient )
 		{
 			m_lightSet.setAmbientLightColor(background.averageColor());
@@ -318,7 +325,11 @@ namespace EmEn::Scenes
 	Scene::refreshAmbientLightProperties () noexcept
 	{
 		const auto & color = m_lightSet.ambientLightColor();
-		const auto intensity = m_lightSet.ambientLightIntensity();
+		/* When the sky drives the ambient (applyAmbient), the ambient pass reads the baked
+		 * irradiance cubemap instead — push a zero scalar so the two never double-count.
+		 * The LightSet keeps the photometric values for the effects reading it directly. */
+		const auto intensity = m_iblAmbientEnabled ? 0.0F : m_lightSet.ambientLightIntensity();
+
 		/* NOTE: 1.0 is the neutral IBL scale when no background declares a luminance. */
 		const auto environmentLuminance = m_backgroundResource != nullptr ? m_backgroundResource->luminance() : 1.0F;
 
@@ -349,16 +360,15 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Update the bindless textures manager with the new environment cubemap. */
-		if ( m_environmentCubemap != nullptr )
+		/* Describe the new environment cubemap in the bindless SET — the per-frame
+		 * syncTextureSet mirrors it to the reserved slot, and updateEnvironmentIBL
+		 * (logic thread) re-bakes the IBL when the identity changes. A cubemap still
+		 * loading is adopted later by getRenderableInstanceReadyForRendering. */
+		if ( m_environmentCubemap != nullptr && m_environmentCubemap->isCreated() )
 		{
-			if ( const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager(); bindlessManager.usable() )
-			{
-				if ( bindlessManager.updateTextureCube(Graphics::BindlessTextureManager::EnvironmentCubemapSlot, *m_environmentCubemap) )
-				{
-					TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
-				}
-			}
+			m_bindlessTextureSet.setEnvironmentCubemap(m_environmentCubemap);
+
+			TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
 		}
 
 		/* The IBL scale (environment luminance) follows the background — applied on the

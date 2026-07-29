@@ -581,18 +581,20 @@ if ( materialType == PBRResource::ClassId )
 > **Lesson:** an entity's components must be unlinked while its observers are still attached;
 > `forget()` is the LAST step of a removal, never the first.
 
-### Known limits: a sky without stars renders objects FLAT; material env reflections are a snapshot (Jul 2026)
+### LIFTED (IBL lot 3, Jul 2026): star-less skies now model objects; reflections follow the live sky
 
-> [!CAUTION]
-> Two sibling limitations of the environment consumption, exposed by the sky-only lighting mode:
-> - **No analytic light in the scene → 2D-flat objects.** The light passes simply do not run and
->   the engine ambient is a normal-independent scalar. A star-less sky (aurora, nebula, indoor
->   dome) physically cannot model an object until the ambient reads the CUBEMAP
->   (diffuse irradiance + prefiltered specular — the IBL brick, planned).
-> - **`setReflectionComponentFromEnvironmentCubemap()` captures the environment cubemap AT
->   MATERIAL CREATION** — switching the background updates the bindless slot but not the
->   material's captured texture: reflections show the PREVIOUS sky (seen live: Backrooms room,
->   ViolentDays fire in the reflections). Materials must consume the LIVE scene environment.
+> [!NOTE]
+> The two July 2026 limitations of the environment consumption are **gone**:
+> - **A star-less sky models objects**: the ambient pass reads the baked diffuse irradiance
+>   cubemap (reserved slot 1) by the world normal — verified live (Backrooms room, zero
+>   analytic light: the model is shaded by the ceiling lights and pink walls).
+> - **Reflections follow the LIVE sky**: `setReflectionComponentFromEnvironmentCubemap()`
+>   never captured anything (it flags the bindless path); the shader now reads the
+>   GGX-prefiltered cubemap (reserved slot 2) which is RE-BAKED at every background switch
+>   (`Scene::updateEnvironmentIBL`). The old raw slot-0 mirror read is gone with it.
+>
+> ⚠️ Remaining sibling caution: the LEGACY `setReflectionComponent(texture)` (explicit
+> texture) is still a static per-material capture — by design.
 
 ### Fixed: SimplePass normal-mapped shader referenced an undeclared `N` — in BOTH quality levels (Jul 2026)
 

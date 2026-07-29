@@ -40,6 +40,7 @@
 #include "Component/Value.hpp"
 #include "GPURTMaterialData.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/IBLTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
@@ -1950,19 +1951,26 @@ namespace EmEn::Graphics::Material
 				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
 			}
 
+			/* Blinn-Phong shininess mapped onto the prefiltered chain (Beckmann relation):
+			 * roughness = sqrt(2 / (shininess + 2)) — a mirror-sharp material reads mip 0,
+			 * an exact copy of the environment. */
+			Code(fragmentShader, Location::Top) <<
+				"const float reflectionRoughness = clamp(sqrt(2.0 / (" << MaterialUB(UniformBlock::Component::Shininess) << " + 2.0)), 0.0, 1.0);";
+
 			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
 				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
-				"const vec4 " << SurfaceReflectionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", reflectionRoughness * " << (Graphics::IBLTexture::PrefilteredMipLevels - 1) << ".0);";
 		}
 		else
 		{
 			/* Low quality: use pre-computed reflection coordinates from vertex shader.
 			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates. */
 			Code(fragmentShader, Location::Top) <<
-				"const vec4 " << SurfaceReflectionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+				"const float reflectionRoughness = clamp(sqrt(2.0 / (" << MaterialUB(UniformBlock::Component::Shininess) << " + 2.0)), 0.0, 1.0);" << Line::End <<
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", reflectionRoughness * " << (Graphics::IBLTexture::PrefilteredMipLevels - 1) << ".0);";
 		}
 
 		return true;

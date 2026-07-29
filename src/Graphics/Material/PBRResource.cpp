@@ -38,6 +38,7 @@
 #include "Component/Value.hpp"
 #include "GPURTMaterialData.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/IBLTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
@@ -2303,6 +2304,30 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Roughness expression driving the prefiltered LOD — same source of truth as
+		 * setupLightGenerator(): the roughness texture component when present (declared at
+		 * Location::Top by the component generation, same precedent as SurfaceNormalVector
+		 * below), the material UBO value otherwise. */
+		const auto roughnessExpression = [this] () -> std::string {
+			const auto componentIt = m_components.find(ComponentType::Roughness);
+
+			if ( componentIt != m_components.cend() )
+			{
+				if ( m_invertRoughness )
+				{
+					return "(1.0 - " + componentIt->second->variableName() + ")";
+				}
+
+				return componentIt->second->variableName();
+			}
+
+			return MaterialUB(UniformBlock::Component::Roughness);
+		}();
+
+		/* The prefiltered chain maps roughness 0..1 onto its mip levels (mip 0 is an exact
+		 * copy of the environment: perfect mirrors keep their sharpness). */
+		const auto reflectionLOD = "clamp(" + roughnessExpression + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
+
 		/* Generate the reflection sampling code using bindless textures. */
 		if ( generator.highQualityEnabled() )
 		{
@@ -2320,14 +2345,14 @@ namespace EmEn::Graphics::Material
 				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
 				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
-				"const vec4 " << SurfaceReflectionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
 		}
 		else
 		{
 			/* Low quality: use pre-computed reflection coordinates from vertex shader.
 			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates. */
 			Code(fragmentShader, Location::Top) <<
-				"const vec4 " << SurfaceReflectionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
 		}
 
 		return true;
@@ -2470,20 +2495,21 @@ namespace EmEn::Graphics::Material
 				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
 			}
 
-			/* Sample prefiltered cubemap with LOD = roughness * 7.0 for frosted glass effect.
+			/* Sample the REAL prefiltered cubemap (reserved slot 2) — the frosted-glass LOD
+			 * used to read the raw environment whose mips did not even exist.
 			 * NOTE: Transmission goes through the surface (not reflected), so we use the view direction
 			 * but with Y flipped for cubemap convention. */
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 transmissionDir = vec3(reflectionI.x, -reflectionI.y, reflectionI.z);" << Line::End <<
-				"const float transmissionLod = " << MaterialUB(UniformBlock::Component::Roughness) << " * 7.0;" << Line::End <<
-				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", transmissionDir, transmissionLod).rgb;";
+				"const float transmissionLod = " << MaterialUB(UniformBlock::Component::Roughness) << " * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0;" << Line::End <<
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, transmissionLod).rgb;";
 		}
 		else
 		{
 			/* Low quality: sample at a fixed LOD using the reflection coordinates (view direction approximation). */
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 transmissionDir = vec3(" << ShaderVariable::ReflectionTextureCoordinates << ".x, -" << ShaderVariable::ReflectionTextureCoordinates << ".y, " << ShaderVariable::ReflectionTextureCoordinates << ".z);" << Line::End <<
-				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", transmissionDir, 4.0).rgb;";
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, 3.0).rgb;";
 		}
 
 		return true;

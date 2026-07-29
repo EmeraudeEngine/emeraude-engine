@@ -225,7 +225,11 @@ namespace EmEn::Graphics::RenderableInstance
 					materialLayoutHash = layout->getHash();
 				}
 
-				if ( programType == Renderable::ProgramType::Rendering && material->useEnvironmentCubemap() )
+				/* Bindless is required by the automatic environment reflections AND by every
+				 * lit program: the ambient pass reads the IBL reserved slots (irradiance,
+				 * prefiltered environment, BRDF LUT). Keep this condition in sync with the
+				 * generation site and the render-time set binding. */
+				if ( programType == Renderable::ProgramType::Rendering && (material->useEnvironmentCubemap() || this->isLightingEnabled()) )
 				{
 					if ( material->serviceProvider().graphicsRenderer().bindlessTextureManager().usable() )
 					{
@@ -473,9 +477,11 @@ namespace EmEn::Graphics::RenderableInstance
 				}
 
 				/* Enable bindless textures flag if:
-				 * 1. The material uses automatic reflection
+				 * 1. The material uses automatic reflection, OR the instance is lit (the
+				 *	ambient pass reads the IBL reserved slots — irradiance, prefiltered,
+				 *	BRDF LUT). Keep in sync with buildProgramCacheKey and the set binding.
 				 * 2. The bindless textures manager is initialized and available */
-				if ( const auto * material = m_renderable->material(layerIndex); material != nullptr && material->useEnvironmentCubemap() && renderer.bindlessTextureManager().usable() )
+				if ( const auto * material = m_renderable->material(layerIndex); material != nullptr && (material->useEnvironmentCubemap() || this->isLightingEnabled()) && renderer.bindlessTextureManager().usable() )
 				{
 					generator.enableBindlessTextures(true);
 				}
@@ -847,9 +853,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 		commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 
-		/* Bind bindless textures descriptor set if the material uses automatic reflection
-		 * or the light uses bindless color projection, and the manager is available. */
-		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || renderPassUsesColorProjection(renderPassType)) )
+		/* Bind bindless textures descriptor set if the material uses automatic reflection,
+		 * the instance is lit (ambient-pass IBL reserved slots), or the light uses bindless
+		 * color projection, and the manager is available. Must stay in sync with the
+		 * program-generation gating (buildProgramCacheKey / getReadyForRendering). */
+		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || this->isLightingEnabled() || renderPassUsesColorProjection(renderPassType)) )
 		{
 			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
 		}
@@ -1070,8 +1078,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 		setOffset++;
 
-		/* Bind bindless textures descriptor set if needed. */
-		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || renderPassUsesColorProjection(renderPassType)) )
+		/* Bind bindless textures descriptor set if needed (same condition as the
+		 * program-generation gating — see getReadyForRendering). */
+		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || this->isLightingEnabled() || renderPassUsesColorProjection(renderPassType)) )
 		{
 			const auto * bindlessDS = bindlessTexturesManager->descriptorSet();
 

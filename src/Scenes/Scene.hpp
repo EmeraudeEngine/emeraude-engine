@@ -2490,6 +2490,10 @@ namespace EmEn::Scenes
 			 * writes the back pair while frames in flight sample the published front pair. */
 			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_iblIrradiance{};
 			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_iblPrefiltered{};
+			/** @brief The irradiance of the last successful bake (published under the applyAmbient contract). */
+			std::shared_ptr< Graphics::IBLTexture > m_iblBakedIrradiance;
+			/** @brief The irradiance currently published to the bindless set (null = default black). */
+			std::shared_ptr< Vulkan::TextureInterface > m_iblPublishedIrradiance;
 			/** @brief Identity of the environment cubemap of the last bake attempt (see updateEnvironmentIBL()). */
 			const Vulkan::TextureInterface * m_iblBakedSource{nullptr};
 			/** @brief Ping-pong write index of the IBL pairs. */
@@ -2623,6 +2627,10 @@ namespace EmEn::Scenes
 			/** @brief Raised from any thread (applyBackgroundLighting), honored by
 			 * processLogics() once the background resource is loaded. */
 			std::atomic_bool m_backgroundLightingRequested{false};
+			/** @brief True when the sky drives the ambient (applyAmbient): the baked
+			 * irradiance is published and the scalar ambient pushed to the view UBOs is
+			 * zeroed (see refreshAmbientLightProperties / updateEnvironmentIBL). */
+			bool m_iblAmbientEnabled{false};
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
 	};

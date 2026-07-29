@@ -738,10 +738,14 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Generates the ambient component light which is the same for every light.
+			 * @note When the program carries the bindless set, this is where the IBL lands:
+			 * diffuse irradiance (reserved cube slot 1) and split-sum specular (BRDF LUT,
+			 * reserved 2D slot 3) with the Fdez-Agüera multi-scatter compensation.
+			 * @param generator A reference to the shader generator (bindless set access).
 			 * @param fragmentShader A reference to the fragment shader.
 			 * @return void
 			 */
-			void generateAmbientFragmentShader (FragmentShader & fragmentShader) const noexcept;
+			void generateAmbientFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept;
 
 			/**
 			 * @brief Common code to assemble light component results into the final fragment color.
