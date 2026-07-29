@@ -815,6 +815,18 @@ to EVERY render target's view UBO (main, render-to-view, render-to-texture — o
 `Scene::setBackground()`, background `LoadFinished`, and by `applyBackgroundLightingNow()`.
 See `src/Graphics/AGENTS.md` § "Background photometric contract" for the manifest schema.
 
+**Environment IBL follows the adopted cubemap (Jul 2026, IBL lot 2)**:
+`Scene::updateEnvironmentIBL()` is polled every `processLogics` tick (idle cost: one mutex
+lock + a pointer compare). When the identity of `BindlessTextureSet::environmentCubemap()`
+changes — `setBackground()` can run on any thread, the late adoption of an async-loaded
+cubemap runs on the render thread, so the mutex-protected set is the source of truth — the
+scene bakes irradiance + prefiltered cubemaps through `Renderer::iblBaker()` (blocking GPU
+job, ~1 ms) into a scene-owned **ping-pong pair** of `Graphics::IBLTexture` (frames in
+flight keep sampling the published pair), then publishes via
+`setIrradianceCubemap()/setPrefilteredCubemap()` (reserved bindless slots 1 and 2). The
+engine default black cubemap is never baked. Failures mark the source as attempted — no
+retry storm. See `src/Graphics/AGENTS.md` § "Graphics/Compute/IBLBaker".
+
 ## Shadow Mapping Integration
 
 The Scene handles shadow map rendering and lighting pass selection. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.

@@ -293,15 +293,27 @@ namespace EmEn::Graphics
 
 		const std::lock_guard< std::mutex > lock{m_indexMutex};
 
-		/* Environment cubemap occupies its reserved slot. Fall back to the engine default when the
-		 * active scene has none, so a scene switch never leaves the previous scene's cubemap bound. */
-		if ( snapshot.environmentCubemap != nullptr && snapshot.environmentCubemap->isCreated() )
+		/* Environment cubemap and its baked IBL derivatives occupy their reserved slots. Fall
+		 * back to the engine default when the active scene has none, so a scene switch never
+		 * leaves the previous scene's cubemaps bound. */
 		{
-			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *snapshot.environmentCubemap));
-		}
-		else if ( const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap(); defaultCubemap != nullptr && defaultCubemap->isCreated() )
-		{
-			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *defaultCubemap));
+			const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap();
+			const bool defaultUsable = defaultCubemap != nullptr && defaultCubemap->isCreated();
+
+			const auto writeReservedCube = [&] (uint32_t slot, const std::shared_ptr< Vulkan::TextureInterface > & texture) {
+				if ( texture != nullptr && texture->isCreated() )
+				{
+					static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, slot, *texture));
+				}
+				else if ( defaultUsable )
+				{
+					static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, slot, *defaultCubemap));
+				}
+			};
+
+			writeReservedCube(EnvironmentCubemapSlot, snapshot.environmentCubemap);
+			writeReservedCube(IrradianceCubemapSlot, snapshot.irradianceCubemap);
+			writeReservedCube(PrefilteredCubemapSlot, snapshot.prefilteredCubemap);
 		}
 
 		/* 2D textures. Animated textures expose their current-frame 2D view (the main view is a
@@ -391,7 +403,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Park each freed cube slot (and reset the reserved env slot) on the default cubemap. */
+		/* Park each freed cube slot (and reset the reserved env/IBL slots) on the default cubemap. */
 		if ( const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap(); defaultCubemap != nullptr && defaultCubemap->isCreated() )
 		{
 			for ( const auto & entry : snapshot.texturesCube )
@@ -400,6 +412,8 @@ namespace EmEn::Graphics
 			}
 
 			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *defaultCubemap));
+			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, IrradianceCubemapSlot, *defaultCubemap));
+			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, PrefilteredCubemapSlot, *defaultCubemap));
 		}
 
 		/* NOTE: cube-array slots (animated cubemap gobos) have no engine dummy; they are rare and

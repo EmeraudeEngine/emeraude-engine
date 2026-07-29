@@ -31,6 +31,8 @@
 
 /* Local inclusions. */
 #include "Audio/HardwareOutput.hpp"
+#include "Graphics/Compute/IBLBaker.hpp"
+#include "Graphics/IBLTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
 #include "Scenes/Component/Camera.hpp"
@@ -48,6 +50,7 @@ namespace EmEn::Scenes
 
 	Scene::Scene (Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & ground, const std::shared_ptr< SeaLevelInterface > & seaLevel, const SceneOctreeOptions & octreeOptions) noexcept
 		: NameableTrait{name},
+		m_graphicsRenderer{graphicsRenderer},
 		m_rootNode{std::make_shared< Node >(*this)},
 		m_backgroundResource{background},
 		m_environmentCubemap{graphicsRenderer.getDefaultTextureCubemap()},
@@ -325,6 +328,64 @@ namespace EmEn::Scenes
 	}
 
 	void
+	Scene::updateEnvironmentIBL () noexcept
+	{
+		/* The bindless set is the mutex-protected source of truth for the adopted
+		 * environment cubemap (setBackground can run on any thread and the late adoption
+		 * of an async-loaded cubemap happens on the render thread). */
+		const auto source = m_bindlessTextureSet.environmentCubemap();
+
+		if ( source == nullptr || !source->isCreated() || source.get() == m_iblBakedSource )
+		{
+			return;
+		}
+
+		/* No point baking the engine default black cubemap: the reserved IBL slots
+		 * already park on it. */
+		if ( source.get() == static_cast< const Vulkan::TextureInterface * >(m_graphicsRenderer.getDefaultTextureCubemap().get()) )
+		{
+			return;
+		}
+
+		auto & irradiance = m_iblIrradiance[m_iblWriteIndex];
+		auto & prefiltered = m_iblPrefiltered[m_iblWriteIndex];
+
+		if ( irradiance == nullptr )
+		{
+			irradiance = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::IrradianceCubemap);
+		}
+
+		if ( prefiltered == nullptr )
+		{
+			prefiltered = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::PrefilteredCubemap);
+		}
+
+		/* NOTE: Whatever happens below, do not retry every logic tick on the same source. */
+		m_iblBakedSource = source.get();
+
+		if ( !irradiance->create(m_graphicsRenderer) || !prefiltered->create(m_graphicsRenderer) )
+		{
+			TraceError{ClassId} << "Unable to create the environment IBL textures !";
+
+			return;
+		}
+
+		if ( !m_graphicsRenderer.iblBaker().bakeEnvironment(*source, *irradiance, *prefiltered) )
+		{
+			TraceError{ClassId} << "Unable to bake the environment IBL from '" << m_environmentCubemap->name() << "' !";
+
+			return;
+		}
+
+		/* Publish (UPDATE_AFTER_BIND hot-swap at the manager's next sync) and flip the
+		 * pair: frames in flight keep sampling the previous bake untouched. */
+		m_bindlessTextureSet.setIrradianceCubemap(irradiance);
+		m_bindlessTextureSet.setPrefilteredCubemap(prefiltered);
+
+		m_iblWriteIndex = (m_iblWriteIndex + 1) % 2;
+	}
+
+	void
 	Scene::disable (Input::Manager & inputManager) noexcept
 	{
 		/* FIXME: Find a better way to stop the node controller! */
@@ -358,6 +419,10 @@ namespace EmEn::Scenes
 				this->applyBackgroundLightingNow();
 			}
 		}
+
+		/* Environment IBL follows the adopted environment cubemap (any thread may have
+		 * changed the description; idle cost is one mutex lock + a pointer compare). */
+		this->updateEnvironmentIBL();
 
 		m_nodeController.update();
 

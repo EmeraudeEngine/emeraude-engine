@@ -461,8 +461,8 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 | Slot | Array | Constant | Purpose | Written by |
 |------|-------|----------|---------|------------|
 | 0 | cube | `EnvironmentCubemapSlot` | Scene environment cubemap | `syncTextureSet()` per frame (default cubemap fallback) |
-| 1 | cube | `IrradianceCubemapSlot` | IBL diffuse irradiance (32² RGBA16F) | *(IBL lot 2 — reserved, not yet written)* |
-| 2 | cube | `PrefilteredCubemapSlot` | IBL GGX-prefiltered environment (128² RGBA16F, 6 mips) | *(IBL lot 2 — reserved, not yet written)* |
+| 1 | cube | `IrradianceCubemapSlot` | IBL diffuse irradiance (32² RGBA16F, stores E/π) | `Scene::updateEnvironmentIBL()` → `BindlessTextureSet` → `syncTextureSet()` (default fallback) |
+| 2 | cube | `PrefilteredCubemapSlot` | IBL GGX-prefiltered environment (128² RGBA16F, 6 mips) | same path as slot 1 |
 | 3 | 2D | `BRDFLutSlot` | Split-sum BRDF LUT (128² RGBA16F, scale/bias on F0 in RG) | `Renderer::createDefaultResources()` at boot, baked by `Compute::IBLBaker` |
 | 4 | 2D | `GrabPassSlot` | Scene color grab pass | Renderer per frame |
 | 5 | 2D | `GrabPassDepthSlot` | Scene depth grab pass | Renderer per frame |
@@ -1992,11 +1992,40 @@ on it cross-platform). Three roles drive dimensions and sampler:
 `IBLTexture::storageView(mip)` exposes per-mip **storage views** for compute `imageStore`
 (cube roles → `2D_ARRAY` views, 6 layers = faces; LUT → plain 2D).
 
-`Compute::IBLBaker` bakes the content. Lot 1 ships `generateBRDFLut()`: split-sum LUT
+`Compute::IBLBaker` bakes the content. `generateBRDFLut()` (lot 1): split-sum LUT
 (Karis 2013), 1024 Hammersley samples, Smith GGX with the **IBL k remap (`k = a²/2`)** —
 never the analytic-light Disney remap. Reconstruction in shaders:
 `specular = prefiltered * (F0 * lut.x + lut.y)`; the two channels also feed the
 Fdez-Agüera multi-scatter compensation (lot 3) with no extra resource.
+
+`bakeEnvironment(source, irradiance, prefiltered)` (lot 2): per-environment assets in ONE
+blocking submission, re-baked at every sky change. Both passes use **filtered importance
+sampling** (Křivánek & Colbert, GPU Gems 3 ch. 20): each sample reads the SOURCE mip whose
+texel solid angle matches the sample solid angle — this is why environment cubemaps carry
+their full mip chain, and why 64-512 samples/texel suffice. Details:
+- Prefiltered: GGX importance sampling, N=V=R, cosθ weighting, roughness = mip/(mips−1),
+  **mip 0 = direct copy** (roughness-0 shortcut), samples = 64 + 32·mip.
+- Irradiance: cosine importance sampling, 512 samples, **+1 FIS mip bias** (without it the
+  near-normal samples read the detailed source mips and a sun disc prints the fixed
+  Hammersley sequence as a star-shaped artefact), stores **E/π** — ambient shading is then
+  `albedo * texture(irradiance, N) * environmentLuminance`, matching the scalar path on a
+  uniform sky.
+- The baker works entirely in **cubemap space** (identity face mapping, `faceDirection()`);
+  the world-to-cubemap Y negation stays a CONSUMER contract.
+- Measured on the RTX 3070 Ti: ~1 ms uncontended (submit+wait, 1024² source); up to a few
+  ms when the graphics queue is draining a frame — one-shot per sky change. Upgrade path
+  for per-frame dynamic skies: fence-polled async submit (documented in the code).
+- Debug: compile with `EMERAUDE_DEBUG_IBL_FACES` to dump every baked face as tonemapped
+  PNGs to `/tmp/ibl-*.png`.
+
+**Trigger & publication (Scenes side):** `Scene::updateEnvironmentIBL()` polls in
+`processLogics` (same pattern as the background photometry poll): when the mutex-protected
+`BindlessTextureSet::environmentCubemap()` identity changes (and is not the engine default),
+it bakes into a **ping-pong pair** of scene-owned `IBLTexture` (frames in flight keep
+sampling the published pair untouched), then publishes via
+`BindlessTextureSet::setIrradianceCubemap()/setPrefilteredCubemap()` — mirrored to the
+reserved slots by `syncTextureSet()` (UPDATE_AFTER_BIND hot-swap), parked on the default
+cubemap by `clearTextureSet()` on scene switch.
 
 **Baking runs on the GRAPHICS queue** (one-shot, `waitIdle` at boot): the images are later
 sampled by fragment shaders on that same queue — using the compute queue would demand a

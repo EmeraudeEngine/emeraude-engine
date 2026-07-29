@@ -154,6 +154,30 @@ namespace EmEn::Scenes
 		m_environmentCubemap = cubemap;
 	}
 
+	std::shared_ptr< Vulkan::TextureInterface >
+	BindlessTextureSet::environmentCubemap () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		return m_environmentCubemap;
+	}
+
+	void
+	BindlessTextureSet::setIrradianceCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		m_irradianceCubemap = cubemap;
+	}
+
+	void
+	BindlessTextureSet::setPrefilteredCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		m_prefilteredCubemap = cubemap;
+	}
+
 	BindlessTextureSet::Snapshot
 	BindlessTextureSet::snapshot () const noexcept
 	{
@@ -164,6 +188,8 @@ namespace EmEn::Scenes
 		snap.texturesCube = m_texturesCube;
 		snap.texturesCubeArray = m_texturesCubeArray;
 		snap.environmentCubemap = m_environmentCubemap;
+		snap.irradianceCubemap = m_irradianceCubemap;
+		snap.prefilteredCubemap = m_prefilteredCubemap;
 
 		return snap;
 	}

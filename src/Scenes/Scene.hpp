@@ -82,6 +82,7 @@ namespace EmEn
 	namespace Graphics
 	{
 		class BindlessTextureManager;
+		class IBLTexture;
 		class Renderer;
 	}
 
@@ -2166,6 +2167,16 @@ namespace EmEn::Scenes
 			void applyBackgroundLightingNow () noexcept;
 
 			/**
+			 * @brief Re-bakes the environment IBL (irradiance + prefiltered cubemaps) when the
+			 * scene has adopted a new environment cubemap, then publishes the pair through the
+			 * bindless texture set (reserved slots 1 and 2).
+			 * @note Runs on the logic thread (processLogics poll); the bake is a blocking GPU
+			 * job of a few hundred microseconds, acceptable at the sky-change rate.
+			 * @return void
+			 */
+			void updateEnvironmentIBL () noexcept;
+
+			/**
 			 * @brief Check if a renderable instance is ready for shadow casting.
 			 * @param renderTarget A reference to the render target smart-pointer.
 			 * @param renderableInstance A reference to the renderable instance smart-pointer.
@@ -2460,6 +2471,8 @@ namespace EmEn::Scenes
 			 * Core entity storage.
 			 * ============================================================ */
 
+			/** @brief The graphics renderer (device, sampler cache, IBL baker). */
+			Graphics::Renderer & m_graphicsRenderer;
 			/** @brief Root of the dynamic node hierarchy tree. Never null. */
 			std::shared_ptr< Node > m_rootNode;
 			/** @brief Map of static entities by name. O(log n) lookup. */
@@ -2473,6 +2486,14 @@ namespace EmEn::Scenes
 			std::vector< std::string > m_backgroundStarEntities;
 			/** @brief Current environment cubemap for IBL. Should never be null after initialization. */
 			std::shared_ptr< Graphics::TextureResource::TextureCubemap > m_environmentCubemap;
+			/** @brief Baked environment IBL (irradiance + prefiltered), ping-pong pairs: a bake
+			 * writes the back pair while frames in flight sample the published front pair. */
+			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_iblIrradiance{};
+			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_iblPrefiltered{};
+			/** @brief Identity of the environment cubemap of the last bake attempt (see updateEnvironmentIBL()). */
+			const Vulkan::TextureInterface * m_iblBakedSource{nullptr};
+			/** @brief Ping-pong write index of the IBL pairs. */
+			size_t m_iblWriteIndex{0};
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
 			std::shared_ptr< Graphics::Renderable::Abstract > m_groundLevelRenderable;
 			/** @brief Scene terrain/ground physics interface for collision. May be null. */

@@ -261,15 +261,17 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* The IBL baker is persistent: the LUT is baked once here, the per-environment
+		 * assets are re-baked at every sky change (Scene::updateEnvironmentIBL). */
+		m_iblBaker = std::make_unique< Compute::IBLBaker >(m_device, m_shaderManager);
+
 		/* Bake the split-sum BRDF LUT (IBL) and publish it to the bindless 2D table.
 		 * Environment-independent: baked once for the whole application lifetime. */
 		m_brdfLUT = std::make_shared< IBLTexture >(IBLTexture::Role::BRDFLut);
 
 		if ( m_brdfLUT->create(*this) )
 		{
-			const Compute::IBLBaker baker{m_device, m_shaderManager};
-
-			if ( baker.generateBRDFLut(*m_brdfLUT) )
+			if ( m_iblBaker->generateBRDFLut(*m_brdfLUT) )
 			{
 				if ( m_bindlessTextureManager.usable() && m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::BRDFLutSlot, *m_brdfLUT) )
 				{
@@ -372,6 +374,9 @@ namespace EmEn::Graphics
 			m_brdfLUT->destroy();
 			m_brdfLUT.reset();
 		}
+
+		/* NOTE: The baker holds cached pipelines/command objects on the device. */
+		m_iblBaker.reset();
 
 		m_defaultTextureCubemap.reset();
 	}

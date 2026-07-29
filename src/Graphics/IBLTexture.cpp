@@ -72,13 +72,14 @@ namespace EmEn::Graphics
 				break;
 		}
 
-		/* NOTE: RGBA16F is the only 16F format with mandatory STORAGE_IMAGE support. */
+		/* NOTE: RGBA16F is the only 16F format with mandatory STORAGE_IMAGE support.
+		 * TRANSFER_SRC allows the EMERAUDE_DEBUG_IBL_FACES readback dump. */
 		m_image = std::make_shared< Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
 			VK_FORMAT_R16G16B16A16_SFLOAT,
 			VkExtent3D{size, size, 1U},
-			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 			isCube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
 			mipLevels,
 			layerCount

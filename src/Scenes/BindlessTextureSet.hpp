@@ -83,6 +83,8 @@ namespace EmEn::Scenes
 				std::vector< Entry > texturesCube;
 				std::vector< Entry > texturesCubeArray;
 				std::shared_ptr< Vulkan::TextureInterface > environmentCubemap;
+				std::shared_ptr< Vulkan::TextureInterface > irradianceCubemap;
+				std::shared_ptr< Vulkan::TextureInterface > prefilteredCubemap;
 			};
 
 			/**
@@ -140,6 +142,27 @@ namespace EmEn::Scenes
 			void setEnvironmentCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
 
 			/**
+			 * @brief Returns the scene environment cubemap (thread-safe copy).
+			 * @return std::shared_ptr< Vulkan::TextureInterface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::TextureInterface > environmentCubemap () const noexcept;
+
+			/**
+			 * @brief Sets the baked IBL irradiance cubemap (reserved slot 1, written by the manager).
+			 * @param cubemap A reference to the cubemap smart pointer (may be null to clear).
+			 * @return void
+			 */
+			void setIrradianceCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
+
+			/**
+			 * @brief Sets the baked IBL prefiltered cubemap (reserved slot 2, written by the manager).
+			 * @param cubemap A reference to the cubemap smart pointer (may be null to clear).
+			 * @return void
+			 */
+			void setPrefilteredCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
+
+			/**
 			 * @brief Produces a thread-safe copy of the set for descriptor upload.
 			 * @return Snapshot
 			 */
@@ -183,5 +206,7 @@ namespace EmEn::Scenes
 			uint32_t m_nextCubeArray{Graphics::BindlessTextureManager::FirstDynamicSlot};
 
 			std::shared_ptr< Vulkan::TextureInterface > m_environmentCubemap;
+			std::shared_ptr< Vulkan::TextureInterface > m_irradianceCubemap;
+			std::shared_ptr< Vulkan::TextureInterface > m_prefilteredCubemap;
 	};
 }

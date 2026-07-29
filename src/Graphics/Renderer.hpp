@@ -96,6 +96,11 @@ namespace EmEn
 		class DummyShadowTexture;
 		class IBLTexture;
 
+		namespace Compute
+		{
+			class IBLBaker;
+		}
+
 		namespace Material
 		{
 			class Interface;
@@ -1087,6 +1092,19 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the IBL baker (persistent — cached environment pipelines).
+			 * @warning Only valid after createDefaultResources(); the scene environment IBL
+			 * update relies on it at every sky change.
+			 * @return Compute::IBLBaker &
+			 */
+			[[nodiscard]]
+			Compute::IBLBaker &
+			iblBaker () noexcept
+			{
+				return *m_iblBaker;
+			}
+
+			/**
 			 * @brief Returns the dummy 2D shadow texture.
 			 * @note This texture is used for lights without shadow mapping to maintain unified descriptor set layouts.
 			 * @return std::shared_ptr< DummyShadowTexture >
@@ -1544,6 +1562,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTexture2D;
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTextureCube;
 			std::shared_ptr< IBLTexture > m_brdfLUT;
+			std::unique_ptr< Compute::IBLBaker > m_iblBaker;
 			std::unique_ptr< GrabPass > m_grabPass;
 			const Vulkan::AccelerationStructure * m_currentTLAS{nullptr};
 			/** @brief Single ray-tracing acceleration structure builder, shared by all geometries (BLAS) and scenes (TLAS). Null when RT is off. */
