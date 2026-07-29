@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -35,7 +36,13 @@
 
 /* Local inclusions for usages. */
 #include "PixelFactory/Color.hpp"
-#include "Resources/Container.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Graphics
 {

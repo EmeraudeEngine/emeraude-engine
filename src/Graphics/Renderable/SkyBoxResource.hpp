@@ -35,8 +35,12 @@
 /* Local inclusions for inheritances. */
 #include "AbstractBackground.hpp"
 
-/* Local inclusions for usages. */
-#include "Resources/Container.hpp"
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Graphics::Renderable
 {

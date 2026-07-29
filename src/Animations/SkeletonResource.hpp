@@ -26,12 +26,21 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <utility>
+
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Animation/Skeleton.hpp"
-#include "Resources/Container.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Animations
 {

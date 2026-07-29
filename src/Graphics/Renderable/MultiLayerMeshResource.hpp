@@ -40,8 +40,14 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Resources/Container.hpp"
 #include "Types.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Resources
 {

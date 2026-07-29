@@ -28,8 +28,8 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
-#include "Tracer.hpp"
 #include "Types.hpp"
+#include "Resources/Container.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 
 namespace EmEn::Graphics::Renderable

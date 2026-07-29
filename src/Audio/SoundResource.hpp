@@ -33,7 +33,13 @@
 /* Local inclusions for usages. */
 #include "Buffer.hpp"
 #include "WaveFactory/Wave.hpp"
-#include "Resources/Container.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Audio
 {

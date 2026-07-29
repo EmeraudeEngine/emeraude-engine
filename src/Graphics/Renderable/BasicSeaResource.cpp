@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Material/BasicResource.hpp"
+#include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Renderable
 {

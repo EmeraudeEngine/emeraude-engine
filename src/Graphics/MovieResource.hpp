@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <ranges>
 #include <utility>
 
 /* Local inclusions for inheritances. */
@@ -36,9 +37,14 @@
 #include "json/json.h"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
-#include "Resources/Container.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
+
 namespace EmEn::Base
 {
 	class ThreadPool;

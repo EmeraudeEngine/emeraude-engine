@@ -37,6 +37,7 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Resources/Container.hpp"
 #include "CubemapResource.hpp"
 #include "Algorithms/PerlinNoise.hpp"
 #include "Algorithms/VoronoiNoise.hpp"

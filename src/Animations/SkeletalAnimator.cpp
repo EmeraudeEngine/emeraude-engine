@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 /* Local inclusions. */
 #include "AnimationClipResource.hpp"

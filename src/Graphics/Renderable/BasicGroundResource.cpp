@@ -27,6 +27,7 @@
 #include "BasicGroundResource.hpp"
 
 /* Local inclusions. */
+#include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"

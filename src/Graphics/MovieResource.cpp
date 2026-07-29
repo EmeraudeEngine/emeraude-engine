@@ -36,6 +36,7 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Resources/Container.hpp"
 #include "ImageResource.hpp"
 #include "Algorithms/PerlinNoise.hpp"
 #include "FastJSON.hpp"

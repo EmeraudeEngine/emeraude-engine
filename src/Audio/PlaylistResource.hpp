@@ -34,8 +34,12 @@
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
-/* Local inclusions for usages. */
-#include "Resources/Container.hpp"
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Audio
 {

@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Types.hpp"
 

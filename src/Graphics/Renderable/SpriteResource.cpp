@@ -30,6 +30,7 @@
 #include "emeraude_base_config.hpp"
 
 /* Local inclusions. */
+#include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"

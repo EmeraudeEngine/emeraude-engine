@@ -33,6 +33,7 @@
 #include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
+#include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"

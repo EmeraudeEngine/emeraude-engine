@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Resources/Container.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"

@@ -35,6 +35,7 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Resources/Container.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material::Component

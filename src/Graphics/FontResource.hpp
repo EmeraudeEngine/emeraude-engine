@@ -31,7 +31,13 @@
 
 /* Local inclusions for usages. */
 #include "PixelFactory/Font.hpp"
-#include "Resources/Container.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	template< typename resource_t >
+	class Container;
+}
 
 namespace EmEn::Graphics
 {
