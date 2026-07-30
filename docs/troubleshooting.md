@@ -8,6 +8,7 @@ Solutions for common engine-level issues in Emeraude Engine development.
 
 - [Material/Shader Issues](#materialshader-issues)
 - [Physics Issues](#physics-issues)
+- [macOS / MoltenVK Issues](#macos--moltenvk-issues)
 
 ---
 
@@ -126,6 +127,91 @@ The variable is generated in `StandardResource.cpp` around line 1459.
 **Solutions:**
 1. Verify both objects have collision-enabled physics traits
 2. Check collision masks and filters (ensure they overlap)
+
+---
+
+## macOS / MoltenVK Issues
+
+### Everything lit by IBL is black (ground, metals, reflections) — MoltenVK < 1.4
+
+**Symptoms:** On macOS the sky and the overlay render correctly, but the terrain is pure black
+and the chrome/gold spheres are invisible. Metals get their whole appearance from the specular
+IBL, so they vanish with it. No Vulkan error, no engine error — the frame is simply unlit.
+
+**Root cause:** a **MoltenVK driver bug**, not an engine bug. In MoltenVK 1.2.11 (the version
+shipped with the Vulkan SDK 1.2.296 installer) the **samplers** of a bindless descriptor array
+are not encoded into the Metal argument buffer. The textures are — which makes the failure
+mode confusing: the descriptors look correct from the Vulkan side.
+
+**How to diagnose it (the decisive test):** replace the fetch with `textureSize()` on the same
+bindless slot. `textureSize` needs no sampler:
+
+```glsl
+/* Returns the real size (e.g. 128) → the TEXTURE is bound, so only the SAMPLER is missing. */
+vec4 probe = vec4(vec2(textureSize(uBindlessTexturesCube[2], 0)) / 1024.0, 0.0, 1.0);
+```
+
+If `textureSize` returns the right size while `texture()` / `textureLod()` returns 0, the
+samplers of that set are unbound. Verified further: every slot of every binding of the bindless
+set was dead (cube 0/1/2 *and* the 2D BRDF LUT), while a per-material sampler in another set
+(the skybox, `set = 2`) worked — so the fault is set-wide, not per-slot.
+
+**Solution:** use **MoltenVK ≥ 1.4**. Verified fixed on 1.4.2 with the same Metal3
+argument-buffer path. To test without touching the Vulkan SDK install:
+
+```bash
+brew install molten-vk   # installs into its own prefix, SDK untouched
+VK_DRIVER_FILES=/opt/homebrew/Cellar/molten-vk/<version>/etc/vulkan/icd.d/MoltenVK_icd.json ./<app>
+```
+
+**Ruled out during the hunt** (all measured, so do not re-investigate): descriptor writes
+(sampler/view/layout all valid), the set index at bind time (`bindAtSet == shaderExpectsSet`),
+`nonuniformEXT`, `textureLod` vs `texture`, the sampling direction, the bindless array sizes
+(down to 80 descriptors), `UPDATE_AFTER_BIND`, and the generated MSL (correct and
+self-consistent). The IBL bake itself was verified with `EMERAUDE_DEBUG_IBL_FACES`: every face
+and every mip contained valid data.
+
+### Storage images must declare a format qualifier
+
+**Symptoms:** A compute shader writing to a storage image silently writes nothing on macOS.
+With the validation layers on: `VUID-VkShaderModuleCreateInfo-pCode-08740`, "SPIR-V Capability
+**StorageImageWriteWithoutFormat** was declared".
+
+**Root cause:** an unformatted `uniform writeonly image2D` makes glslang emit the
+`StorageImageWriteWithoutFormat` capability. That is a spec violation unless
+`shaderStorageImageWriteWithoutFormat` is enabled, and it leaves MoltenVK/SPIRV-Cross with no
+pixel format to translate the `imageStore()` to — Metal needs the format at shader-compile time.
+
+**Solution:** always give the qualifier, matching the `VkImage` format:
+
+```glsl
+layout(set = 0, binding = 0, rgba16f) uniform writeonly image2D brdfLut;  /* VK_FORMAT_R16G16B16A16_SFLOAT */
+```
+
+**Code reference:** `Graphics/Compute/IBLBaker.cpp` (BRDF LUT + environment shaders).
+
+### VK_KHR_portability_subset must be enabled whenever it is advertised
+
+Per the Vulkan spec, a device exposing `VK_KHR_portability_subset` **must** enable it — this is
+always the case for MoltenVK. Test the *extension*, never the platform: guarding the enable
+with `if constexpr ( !IsMacOS )` skips the one platform that always needs it and leaves the
+device created in a spec-violating state.
+
+**Code reference:** `Vulkan/Instance.cpp`, graphics device features configuration.
+
+### Shadow comparison samplers are not available (open)
+
+**Symptoms:** with the validation layers on, macOS reports
+`VUID-VkDescriptorImageInfo-mutableComparisonSamplers-04450`, "sampler comparison not
+available", on the shadow-map descriptor writes.
+
+**Root cause:** MoltenVK's portability subset reports `mutableComparisonSamplers = VK_FALSE`,
+but `DummyShadowTexture` and `RenderTarget/ShadowMap` create samplers with
+`compareEnable = VK_TRUE`. This affects the hand-authored dynamic-lighting path (shadow maps);
+the sky-driven path uses no shadow map and is unaffected.
+
+**Status:** not fixed. A portable shadow path has to sample the depth texture and do the
+comparison in the shader instead of relying on a hardware comparison sampler.
 
 ---
 
