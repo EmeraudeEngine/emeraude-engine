@@ -1067,6 +1067,58 @@ namespace EmEn::Input
 			return true;
 		}}, "Inject a key press+release event. Args: key, modifiers");
 
+		/* NOTE: Read-only probe. The pointer lock is expressed twice — as m_pointerLocked (which
+		 * selects relative "FPS" dispatch over absolute dispatch, see cursorPositionCallback) and
+		 * as the GLFW cursor mode (which decides whether the OS cursor is drawn and grabbed).
+		 * lockPointer()/unlockPointer() are the only writers and always set both, so the two MUST
+		 * agree; a disagreement means someone else moved the cursor mode, and the visible symptom
+		 * is "the mouse behaves like an FPS but the cursor is still displayed". This command is the
+		 * only way to observe that state — a screenshot captures the swap chain and never shows the
+		 * OS cursor. */
+		this->bindCommand("pointerState", {[this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) -> bool {
+			if ( m_windowLess || !m_window.usable() )
+			{
+				outputs.emplace_back(Severity::Error, "No usable window — pointer state is meaningless.");
+
+				return false;
+			}
+
+			const auto cursorMode = glfwGetInputMode(m_window.handle(), GLFW_CURSOR);
+
+			const auto * cursorModeLabel = [cursorMode] () -> const char * {
+				switch ( cursorMode )
+				{
+					case GLFW_CURSOR_NORMAL :
+						return "NORMAL (cursor visible, not grabbed)";
+
+					case GLFW_CURSOR_HIDDEN :
+						return "HIDDEN (cursor invisible, not grabbed)";
+
+					case GLFW_CURSOR_DISABLED :
+						return "DISABLED (cursor invisible, grabbed)";
+
+					case GLFW_CURSOR_CAPTURED :
+						return "CAPTURED (cursor visible, confined)";
+
+					default :
+						return "unknown";
+				}
+			}();
+
+			outputs.emplace_back(Severity::Info, std::stringstream{} <<
+				"isPointerLocked(): " << (m_pointerLocked ? "true" : "false") <<
+				" | GLFW cursor mode: " << cursorModeLabel <<
+				" | dispatch: " << (m_pointerLocked ? "relative (FPS)" : "absolute")
+			);
+
+			if ( m_pointerLocked != (cursorMode == GLFW_CURSOR_DISABLED) )
+			{
+				outputs.emplace_back(Severity::Error, "DESYNC — the lock flag and the GLFW cursor mode disagree. This is the defect, not a display quirk.");
+			}
+
+			return true;
+		}}, "Reports the pointer lock state and the GLFW cursor mode, and flags a desync between them.");
+
 		this->bindCommand("mouseClick", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
 			if ( arguments.size() < 2 )
 			{
