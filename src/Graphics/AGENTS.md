@@ -605,6 +605,27 @@ All material components follow the same parsing pattern via `parseComponentBase(
 }
 ```
 
+> [!CRITICAL]
+> **`"Shininess"` in a manifest is a GLOSSINESS in [0,1] — the C++ API takes an EXPONENT.**
+> The whole data store was authored as a perceptual glossiness (3834 material files of 3917 hold
+> `0.1`), while the shader uniform and every setter carry a real Blinn-Phong exponent. The conversion
+> happens at the parse boundary ONLY, in the two specular parse sites of
+> `StandardResource::parseSpecularComponent()`:
+>
+> ```
+> exponent = StandardResource::specularExponentFromGlossiness(gloss)   // exp2(1 + 10 * gloss)
+> // 0.0 -> 2 | 0.1 -> 4 | 0.2 -> 8 | 0.4 -> 32 | 0.5 -> 45 | 0.9 -> 1024 | 1.0 -> 2048
+> ```
+>
+> **Never apply it anywhere else.** `DefaultShininess` is `32`, `MaxPBRShininess` is `128`, and
+> `setRoughness()` reaches `setShininess()` through `pow(1 - roughness, 2) * 128` — all exponents.
+> Remapping one of those would produce `exp2(321)`. The absent-key fallback is `DefaultGlossiness{0.4F}`
+> for the same reason: it maps back to the historical 32.
+>
+> A value coming out of JSON is a glossiness; a value held by the resource or reaching the shader is an
+> exponent. See `docs/caution-points.md`, "The legacy specular was not energy-normalised, and
+> `Shininess` was authored as a glossiness".
+
 **Code references:**
 - `Graphics/Material/Helpers.cpp:parseComponentBase()` - Base parsing
 - `Graphics/Material/StandardResource.cpp:parseReflectionComponent()` - Automatic handling

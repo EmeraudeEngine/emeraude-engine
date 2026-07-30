@@ -619,6 +619,22 @@ namespace EmEn::Graphics::Material
 			void setAutoIlluminationColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
+			 * @brief Converts an authored GLOSSINESS into a Blinn-Phong specular EXPONENT.
+			 * @note This is the semantic boundary of the "Shininess" MANIFEST KEY: material JSON
+			 * files author a perceptual glossiness in [0, 1], while the whole C++ API and the
+			 * shader uniform carry a real Blinn-Phong exponent. The mapping is exponential
+			 * (UE3 convention) so the perceived change stays regular across the range:
+			 * 0.0 -> 2, 0.1 -> 4, 0.2 -> 8, 0.4 -> 32, 0.5 -> 45, 0.9 -> 1024, 1.0 -> 2048.
+			 * @warning Do NOT apply this to values coming from setShininess(), setSpecularComponent()
+			 * or the PBR-to-Phong conversion (setRoughness): those are ALREADY exponents. Remapping
+			 * an exponent of 32 as a glossiness would yield exp2(321).
+			 * @param glossiness The authored glossiness, clamped to [0, 1].
+			 * @return float The Blinn-Phong exponent.
+			 */
+			[[nodiscard]]
+			static float specularExponentFromGlossiness (float glossiness) noexcept;
+
+			/**
 			 * @brief Changes the specular shininess amount.
 			 * @note This is a dynamic property.
 			 * @param value A positive value.
@@ -881,7 +897,11 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultDiffuseColor{Base::PixelFactory::Grey};
 			static constexpr auto DefaultSpecularColor{Base::PixelFactory::White};
 			static constexpr auto DefaultAutoIlluminationColor{Base::PixelFactory::White};
-			static constexpr auto DefaultShininess{32.0F};
+			static constexpr auto DefaultShininess{32.0F}; /* Blinn-Phong EXPONENT (C++ API unit). */
+			/* Authored GLOSSINESS in [0,1] used when a manifest declares no "Shininess" key.
+			 * 0.4 maps to DefaultShininess through specularExponentFromGlossiness(), so an
+			 * absent key keeps the historical exponent of 32. */
+			static constexpr auto DefaultGlossiness{0.4F};
 			static constexpr auto DefaultOpacity{1.0F};
 			static constexpr auto DefaultAutoIlluminationAmount{1.0F};
 			static constexpr auto DefaultNormalScale{1.0F};

@@ -210,7 +210,13 @@ namespace EmEn::Graphics::Material
 			case FillingType::Color :
 			{
 				const auto color = parseColorComponent(componentData);
-				const auto shininess = FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultShininess);
+				/* ⚠️ The manifest key is an authored GLOSSINESS in [0,1], not an exponent — see
+				 * specularExponentFromGlossiness(). The whole data store was written this way (98% of
+				 * the material files declare 0.1), while the shader consumed the value directly as a
+				 * Blinn-Phong exponent: a lobe that never decayed. */
+				const auto shininess = StandardResource::specularExponentFromGlossiness(
+					FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultGlossiness)
+				);
 
 				if ( !this->setSpecularComponent(color, shininess) )
 				{
@@ -236,7 +242,10 @@ namespace EmEn::Graphics::Material
 				// FIXME: Check UVW channel number
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
-				this->setShininess(FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultShininess));
+				/* ⚠️ Authored GLOSSINESS in [0,1] — see specularExponentFromGlossiness(). */
+				this->setShininess(StandardResource::specularExponentFromGlossiness(
+					FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultGlossiness)
+				));
 			}
 				return true;
 
@@ -2754,6 +2763,16 @@ namespace EmEn::Graphics::Material
 		m_videoMemoryUpdated = true;
 	}
 	
+	float
+	StandardResource::specularExponentFromGlossiness (float glossiness) noexcept
+	{
+		/* Exponential mapping (UE3 convention): the perceptual step stays regular over the whole
+		 * [0,1] range, and the low end still DECAYS — a glossiness of 0.1 gives an exponent of 4,
+		 * so pow(0.8, 4) = 0.41 instead of the pow(0.8, 0.1) = 0.978 a raw 0.1 exponent produced
+		 * (a lobe covering the entire hemisphere: every surface behaved as a uniform mirror sheet). */
+		return std::exp2(1.0F + (10.0F * std::clamp(glossiness, 0.0F, 1.0F)));
+	}
+
 	void
 	StandardResource::setShininess (float value) noexcept
 	{

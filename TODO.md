@@ -34,37 +34,41 @@
   See `docs/shadow-mapping.md` (CSM status section). Until closed, demos should use the classic
   constructor; `lighten-marbles` and `basic-scenery` still use CSM but at 0.5 lx moonlight, where
   the loss is invisible.
-- LIGHTING AND SHADOWING: **Normalise the legacy SPECULAR term in ENERGY** (Jul 2026). The legacy
-  (non-PBR) specular is emitted as `specularColor * illuminance * pow(max(dot(N, H), 0), shininess)`
-  with **no normalisation factor**, while its diffuse sibling now carries the Lambertian `1/pi`
-  (see `docs/caution-points.md`). The highlight energy therefore grows without bound as `shininess`
-  rises instead of staying constant, and a legacy material still cannot be compared to a PBR one lit
-  by the same source.
-  - The model is now **Blinn-Phong** (half vector), switched Jul 2026 — see `docs/caution-points.md`,
-    "The legacy specular was Phong despite being named Blinn-Phong". The matching normalisation for a
-    half-vector BRDF is **`(n + 2) / (8 * pi)`** (the `/4` of the microfacet denominator folded in),
-    or the common `(n + 8) / (8 * pi)` approximation. ⚠️ **NOT** `(n + 2) / (2 * pi)` — that one
-    belongs either to the modified-Phong BRDF or to the Blinn NDF taken alone. Getting this wrong is
-    a factor of 4.
-  - Emission sites, all in `LightGenerator::generateFinalFragmentOutput()`: `LightGenerator.cpp`
-    reflection+refraction / reflection / refraction / plain (search `finaleSpecularFactor`). Mirror
-    what was done for the diffuse: build the scaled expression once next to `finaleSpecularFactor`,
-    and do NOT fold it into `finaleSpecularFactor` itself.
-  - ⚠️ With `shininess = 192` the factor is ~24, so normalising makes tight highlights **much
-    brighter**, not dimmer. Expect to re-tune `Shininess` and `Specular` across the material store,
-    and to re-check every demo's exposure afterwards. This compounds with the retune the Blinn-Phong
-    switch already calls for, so **do both in one pass**.
-  - ⚠️ Also unnormalised: the PBR low-quality specular approximation just below, which reuses the raw
-    N.L `finaleDiffuseFactor` inside its own `pow()`.
-  - **Owner decision required before implementing:** this changes the look of every legacy material in
-    every demo. Not a silent edit.
-- LIGHTING AND SHADOWING: Re-tune `Shininess` / `Specular` across the material store for Blinn-Phong
-  (Jul 2026). The legacy specular model moved from Phong to Blinn-Phong, and `dot(N, H) > dot(R, V)`
-  for the same geometry, so **every authored `shininess` now yields a WIDER highlight than intended**.
-  Rule of thumb: a Blinn exponent needs to be roughly 4x the Phong one for the same visual width, so
-  `Grounds/desert001`'s 192 wants something nearer 768. Verified live on `water-world`: the sand went
-  visibly glittery at unchanged values. Not urgent, but it is the reason legacy materials currently
-  look shinier than they used to.
+- LIGHTING AND SHADOWING: ~~Normalise the legacy SPECULAR term in ENERGY~~ + ~~Re-tune `Shininess` /
+  `Specular` across the material store~~ — **DONE AND VERIFIED (Jul 2026)**, both in one pass as this
+  entry required. `(n + 2) / (8 * pi)` plus the missing `N.L`, applied at the three factor sites
+  (`LightGenerator.PerVertex` / `.PerFragment` / `.PerFragment.NormalMap`) rather than next to
+  `finaleSpecularFactor` — the exponent and `N.L` are both in scope there. The retune did NOT become a
+  per-file sweep: `"Shininess"` in a manifest was always authored as a **glossiness in [0,1]**
+  (3834 files of 3917 hold `0.1`), so it is now converted at the parse boundary by
+  `StandardResource::specularExponentFromGlossiness()` = `exp2(1 + 10 * gloss)`. Only the 13 files
+  that genuinely held exponents were rewritten. Measured on `basic-scenery` / `Clouds`: rendered
+  ground/sky ratio 1.64 vs 1.65 computed. Full story and the do-not-remap-twice rule in
+  `docs/caution-points.md`, "The legacy specular was not energy-normalised, and `Shininess` was
+  authored as a glossiness".
+  - REMAINS: the **PBR low-quality specular approximation** (`lqSpecPower` in `LightGenerator.cpp`) is
+    still unnormalised and still multiplies the raw illuminance, reusing the raw `N.L`
+    `finaleDiffuseFactor` inside its own `pow()`. Same treatment needed, smaller blast radius (LQ path
+    only, `Core/Graphics/Shader/EnableHighQuality` false).
+- LIGHTING AND SHADOWING: **The sky lighting is applied only once the background resource reports
+  `isLoaded()`, and the environment cubemap identity is captured BEFORE that** (Jul 2026, observed,
+  root cause not yet isolated). At boot `Scene::setBackground()` logs
+  `Scene will use environment cubemap '+DefaultTextureCubemap'`; the real cubemap is adopted later and
+  the IBL bake follows. Two consequences to check: (a) the first frames run with an unpublished
+  irradiance while `applyBackgroundLightingNow()` has ALREADY zeroed the scalar ambient
+  (`m_iblAmbientEnabled`), so nothing fills the shadows in that window; (b) if the adoption never
+  fires, that state is permanent and every surface not reached by direct light renders pure black.
+  ⚠️ HYPOTHESIS, NOT PROVEN — the test is a run where both `Scene will use environment cubemap
+  '<name>'` and `Environment IBL baked` appear, then inspecting a face turned away from the sun.
+- LIGHTING AND SHADOWING: **The shadow pass ignores the opacity mask** (Jul 2026, observed). Alpha-cut
+  foliage casts the shadow of its QUAD: the palms of `basic-scenery` drop hard rectangular blocks on
+  the ground. The shadow-map program needs the same opacity discard as the colour passes.
+- GRAPHICS MATERIAL: **`Reflection: { "Type": "Automatic" }` does not create the component** (Jul 2026,
+  observed). `setReflectionComponentFromEnvironmentCubemap()` raises `m_isUsingEnvironmentCubemap` and
+  then calls `setReflectionAmount()`, which warns `The material 'X' has no reflection component !`
+  because no `ComponentType::Reflection` is ever emplaced. Either the bindless path should stop going
+  through `setReflectionAmount()`, or the warning is wrong — as it stands the log accuses four
+  materials that declared reflection correctly, which sent this session chasing a false lead.
 - LIGHTING AND SHADOWING: Fix the ambient light update against the render target which uses it.
 - LIGHTING AND SHADOWING: Re-enable the ambient light color generated by the averaging active light color.
 - LIGHTING AND SHADOWING: Check the ambient light color generated by a texture.

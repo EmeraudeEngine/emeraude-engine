@@ -154,11 +154,20 @@ namespace EmEn::Saphir
 				 * It is also a microfacet normal distribution over H, the same family as the PBR
 				 * path's GGX, so shininess and roughness can be related. Phong's lobe, parameterised
 				 * around R, cannot be.
-				 * ⚠️ dot(N, H) > dot(R, V) for the same geometry, so at an UNCHANGED shininess the
-				 * highlight is WIDER than the Phong one it replaces. Material shininess values were
-				 * authored against Phong and may want raising. */
+				 * ⚠️ dot(N, H) > dot(R, V) for the same geometry, so the highlight is WIDER than the
+				 * Phong one it replaces at an equal exponent.
+				 * ENERGY NORMALISATION (n+2)/(8.pi): without it the term was a raw multiple of the
+				 * ILLUMINANCE and commensurable with nothing — a 0.5 grey specular under a 50000 lx
+				 * sun returned 22350 nits, five times the sky's own luminance, which is what read as
+				 * "flashy" on every Standard surface. With the normalisation AND the cos(theta) term
+				 * below, the specular is a BRDF times an irradiance, exactly like the diffuse
+				 * (albedo/pi * E * N.L), so the two terms are finally comparable to each other and to
+				 * lights authored in lux/candela.
+				 * The exponent itself comes from the material uniform, which the manifest parser fills
+				 * through StandardResource::specularExponentFromGlossiness(). */
 				"	const vec3 H = normalize(V - " << RayDirectionViewSpace << ");" << Line::End <<
-				"	" << LightGenerator::variable(SpecularFactor) << " = pow(max(dot(" << ShaderVariable::NormalViewSpace << ", H), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
+				"	const float specularExponent = max(" << m_surfaceShininessAmount << ", 1.0);" << Line::End <<
+				"	" << LightGenerator::variable(SpecularFactor) << " = pow(max(dot(" << ShaderVariable::NormalViewSpace << ", H), 0.0), specularExponent) * ((specularExponent + 2.0) / 25.132741228718345) * " << LightGenerator::variable(DiffuseFactor) << ';' << Line::End <<
 				'}' << Line::End <<
 				"else" << Line::End <<
 				'{' << Line::End <<

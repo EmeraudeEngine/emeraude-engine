@@ -761,9 +761,77 @@ truthful, so nothing was renamed.
 > exponent needs roughly **4x** the Phong one for the same visual width (`Grounds/desert001`'s 192
 > wants something nearer 768). Tracked in `TODO.md`.
 >
-> The specular is also still **not energy-normalised** (no `(n+2)/(8*pi)`), unlike its diffuse sibling.
-> That is a separate, owner-gated change — and it should be done in the SAME pass as the shininess
-> retune, since both force the same sweep over the material store.
+> **RESOLVED (Jul 2026)** — both the normalisation and the shininess retune were done in one pass,
+> exactly as this note asked. See the next entry, "The legacy specular was not energy-normalised, and
+> `Shininess` was authored as a glossiness". The retune did NOT become a per-file sweep: the manifest
+> key was re-interpreted at the parse boundary instead.
+
+### Fixed: the legacy specular was not energy-normalised, and `Shininess` was authored as a glossiness (Jul 2026)
+
+**Two independent defects that compounded into one symptom** — every sunlit Standard surface read as
+a uniform bright sheet, and the sky it stood under looked washed out by comparison. Diagnosed on
+`basic-scenery` under `Clouds` (6000 nits dome, 50000 lx sun at 5000 K).
+
+**Defect 1 — the term was a raw multiple of the ILLUMINANCE.** The legacy specular was emitted as
+`specularColor * illuminance * pow(max(dot(N, H), 0), shininess)`: no `(n+2)/(8*pi)` normalisation
+and, less obviously, **no cos(theta)** either — `SpecularFactor` was multiplied by `LightFactor`
+(shadow/attenuation) but never by `N.L`. Its diffuse sibling had carried the Lambertian `1/pi` since
+the fix two entries up, so the two terms of the SAME material were on different scales, and neither
+could be compared to a light authored in lux or candela.
+
+**Defect 2 — the manifest key was never an exponent.** `"Shininess"` is consumed directly as the
+Blinn-Phong exponent, but the data store was authored as a perceptual glossiness in `[0,1]`:
+
+| Authored value | Files |
+|---|---|
+| `0.1` | **3834** of 3917 |
+| `0.5` | 37 |
+| `0.9` | 29 |
+| `2.0` / `9.0` / `10.0` / `20` / `160` | 13 |
+
+An exponent of `0.1` never decays: `pow(0.8, 0.1) = 0.978`, so the lobe covers the whole hemisphere
+and every surface behaves as a uniform mirror sheet. **Measured on the sand** (`Grounds/Dust001`,
+albedo 0.27, specular grey 0.5, shininess 0.5) under that sun:
+
+| Term | Value |
+|---|---|
+| Diffuse `0.27 * 35031 / pi` | 3 011 nits |
+| Specular `0.5 * 50000 * pow(0.8, 0.5)` | **22 350 nits** |
+| The sky's own bright cloud | ~4 000 nits |
+
+The ground outshone the sky by 5x, so the auto-ISO stopped down to hold it, and the sky lost its
+substance. That is the whole "flashy ground / flat sky" signature.
+
+**The fix, and where each half lives.**
+
+| Half | Site | Note |
+|---|---|---|
+| Energy normalisation + `N.L` | `LightGenerator.PerVertex.cpp`, `.PerFragment.cpp`, `.PerFragment.NormalMap.cpp` | `pow(N.H, n) * ((n + 2) / (8*pi)) * DiffuseFactor` — `DiffuseFactor` already carries `N.L * LightFactor`, so the attenuation is applied exactly once. `TODO.md` proposed scaling next to `finaleSpecularFactor` in `generateFinalFragmentOutput()` instead; the factor sites were chosen because the exponent AND `N.L` are both in scope there. |
+| Glossiness -> exponent | `StandardResource::specularExponentFromGlossiness()`, called ONLY from the two JSON parse sites | `exp2(1 + 10 * gloss)` (UE3 convention): `0.0 -> 2`, `0.1 -> 4`, `0.2 -> 8`, `0.4 -> 32`, `0.5 -> 45`, `0.9 -> 1024`. |
+
+> [!CAUTION]
+> **The remap belongs to the JSON boundary and NOWHERE else.** The C++ API carries real exponents:
+> `DefaultShininess` is `32`, `MaxPBRShininess` is `128`, and `setRoughness()` feeds `setShininess()`
+> through `pow(1 - roughness, 2) * 128` (roughness 0.5 -> 32). Remapping inside `setShininess()` would
+> turn that 32 into `exp2(321)`. For the same reason the absent-key fallback had to become
+> `DefaultGlossiness{0.4F}`, which maps BACK to 32 — using `DefaultShininess` there would have been
+> the same bug with a different trigger.
+>
+> **Do not remap twice.** A value read from a manifest is a glossiness; a value held by a
+> `StandardResource` or reaching the shader uniform is an exponent. The 13 files that legitimately
+> carried exponents were converted to glossiness in the data store (`gloss = (log2(n) - 1) / 10`), so
+> the key now has exactly ONE meaning everywhere.
+
+**Verified.** `basic-scenery`, ground + sky only, controlled camera. The rendered ground/sky mean
+luminance ratio landed at **1.64**, against **1.65** computed independently from the manifest
+(ground 3 070 nits = 3 011 diffuse + 59 specular; sky mean = linear(`AverageColor` 0.31) x 6000 =
+1 860 nits). The ground stopped clipping (band max 238 -> 194) and the sky mean ROSE 53 -> 79,
+because the exposure no longer had to absorb a 22 000-nit ground.
+
+> [!NOTE]
+> Still unnormalised, deliberately out of scope here: the **PBR low-quality specular approximation**
+> in `LightGenerator.cpp` (`lqSpecPower`), which multiplies the raw illuminance and reuses `N.L`
+> inside its own `pow()`. Tracked in `TODO.md`.
 
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
