@@ -99,7 +99,7 @@ The toolchain (CMake, compilers, Python, Git) is specified once, in the
 [emeraude-base requirements](https://github.com/EmeraudeEngine/emeraude-base/blob/main/README.md#requirements).
 On top of it, the engine needs:
 
-### Vulkan SDK — 1.4.309.0
+### Vulkan SDK — 1.4.357.0
 
 The SDK must be installed manually, at its default location.
 
@@ -111,11 +111,11 @@ sudo apt install libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-valid
     libfontconfig-dev libwayland-dev libxkbcommon-dev xorg-dev
 ```
 
-**macOS:** [vulkansdk-macos-1.4.309.0.zip](https://sdk.lunarg.com/sdk/download/1.4.309.0/mac/vulkansdk-macos-1.4.309.0.zip)
-→ installed in `~/VulkanSDK/1.4.309.0/`.
+**macOS:** [vulkansdk-macos-1.4.357.0.zip](https://sdk.lunarg.com/sdk/download/1.4.357.0/mac/vulkansdk-macos-1.4.357.0.zip)
+→ installed in `~/VulkanSDK/1.4.357.0/`.
 
-**Windows:** [VulkanSDK-1.4.309.0-Installer.exe](https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/VulkanSDK-1.4.309.0-Installer.exe)
-→ installed in `C:/VulkanSDK/1.4.309.0/`.
+**Windows:** [VulkanSDK-1.4.357.0-Installer.exe](https://sdk.lunarg.com/sdk/download/1.4.357.0/windows/VulkanSDK-1.4.357.0-Installer.exe)
+→ installed in `C:/VulkanSDK/1.4.357.0/`.
 
 CMake fails at configure time with the download URL if the SDK is not found.
 
@@ -341,7 +341,7 @@ python3 your_script.py capture.rdc
 
 ### macOS: correct sky, pure black terrain
 
-**MoltenVK 1.4 or newer is required.** SDK 1.4.309.0 bundles MoltenVK **1.2.11**, which fails to
+**MoltenVK 1.4 or newer is required.** SDK 1.4.357.0 bundles MoltenVK **1.2.11**, which fails to
 bind the samplers of a bindless descriptor array into its Metal argument buffer. The scene then
 renders with a correct sky but a **pure black terrain**, metal objects invisible — image-based
 lighting contributes nothing, and there is no error message.

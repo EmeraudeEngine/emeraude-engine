@@ -2,7 +2,7 @@ if ( NOT TARGET_BINARY_FOR_SETUP )
 	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
 endif ()
 
-set(VULKAN_SDK_VERSION "1.4.309.0")
+set(VULKAN_SDK_VERSION "1.4.357.0")
 
 if ( UNIX AND NOT APPLE )
 	find_package(Vulkan REQUIRED)
