@@ -32,6 +32,7 @@
 /* Local inclusions. */
 #include "Graphics/FontResource.hpp"
 #include "Resources/Manager.hpp"
+#include "Overlay/UIScreen.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn

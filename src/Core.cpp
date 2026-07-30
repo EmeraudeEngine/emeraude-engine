@@ -39,6 +39,10 @@
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
+#ifdef IMGUI_ENABLED
+#include "imgui.h"
+#include "Overlay/ImGUIScreen.hpp"
+#endif
 
 /* Local inclusions. */
 #include "Constants.hpp"
@@ -193,7 +197,7 @@ namespace EmEn
 		{
 			/* NOTE: Mutate the shared budget under the same mutex the rendering thread waits on,
 			 * to close the lost-wakeup window between the predicate test and the wait. */
-			const std::lock_guard< std::mutex > lock{m_redrawMutex};
+			const std::scoped_lock lock{m_redrawMutex};
 
 			m_pendingFrames.store(budget, std::memory_order_relaxed);
 		}
@@ -208,7 +212,7 @@ namespace EmEn
 
 		/* NOTE: On-demand safety re-check period (one 60 FPS frame). On timeout the thread merely
 		 * re-evaluates the predicate; it does not force a frame, so the GPU stays idle at rest. */
-		const std::chrono::duration< double > onDemandTimeout{1.0 / OnDemandRenderingSafetyRefreshHz< double >};
+		constexpr std::chrono::duration< double > onDemandTimeout{1.0 / OnDemandRenderingSafetyRefreshHz< double >};
 
 		while ( m_isRenderingLoopRunning )
 		{
@@ -967,7 +971,7 @@ namespace EmEn
 	Core::initializeCoreScreen () noexcept
 	{
 #ifdef IMGUI_ENABLED
-		const auto screen = m_overlayManager.createImGUIScreen("CoreScreen", [] () {
+		const auto screen = m_overlayManager.createImGUIScreen("CoreScreen", []  {
 			bool show = true;
 			ImGui::ShowDemoWindow(&show);
 		});
@@ -978,7 +982,7 @@ namespace EmEn
 		 * for the photographic behaviour of the image — optics, exposure triad, and the effects it
 		 * materializes — so a panel bound to it replaces a rebuild for every tweak. The EV100
 		 * readout at the bottom is the point: it makes the physics legible while you drag. */
-		m_cameraScreen = m_overlayManager.createImGUIScreen("PhysicalCameraScreen", [this] () {
+		m_cameraScreen = m_overlayManager.createImGUIScreen("PhysicalCameraScreen", [this] {
 			if ( !ImGui::Begin("Physical camera") )
 			{
 				ImGui::End();

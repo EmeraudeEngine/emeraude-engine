@@ -33,7 +33,6 @@
 #ifdef IMGUI_ENABLED
 
 /* STL inclusions. */
-#include <array>
 #include <string>
 #include <functional>
 

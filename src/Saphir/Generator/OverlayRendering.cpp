@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Hash/FNV1a.hpp"
-#include "SourceCodeParser.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Overlay/Manager.hpp"
 #include "Saphir/Code.hpp"
 #include "Vulkan/Framebuffer.hpp"

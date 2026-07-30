@@ -42,11 +42,13 @@
 #include "backends/imgui_impl_vulkan.h"
 #include "backends/imgui_impl_glfw.h"
 
+#include "IO/IO.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "ImGUIScreen.hpp"
 #endif
 
 /* Local inclusions. */
@@ -59,7 +61,6 @@
 #include "UIScreen.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/SwapChain.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Overlay
@@ -70,6 +71,16 @@ namespace EmEn::Overlay
 	using namespace Saphir;
 	using namespace Graphics;
 	using namespace Vulkan;
+
+	Manager::Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept
+		: ServiceInterface{ClassId},
+		KeyboardListenerInterface{false, true},
+		PointerListenerInterface{false, false, true},
+		m_primaryServices{primaryServices},
+		m_resourceManager{resourceManager}
+	{
+		this->observe(&m_resourceManager.graphicsRenderer().window());
+	}
 
 	std::shared_ptr< Program >
 	Manager::generateShaderProgram (bool premultipliedAlpha, bool isBGRASurface) const noexcept
@@ -754,8 +765,11 @@ namespace EmEn::Overlay
 
 		const auto & filesystem = m_primaryServices.fileSystem();
 
-		m_iniFilepath = filesystem.configDirectory("imgui.ini");
-		m_logFilepath = filesystem.cacheDirectory("imgui_log.txt");
+		/* NOTE: ImGui opens these itself with a UTF-8 → wide conversion on Windows
+		 * (ImFileOpen()), so the paths must be UTF-8 and not the ANSI code page that
+		 * std::filesystem::path::string() would yield there. */
+		m_iniFilepath = IO::toU8String(filesystem.configDirectory("imgui.ini"));
+		m_logFilepath = IO::toU8String(filesystem.cacheDirectory("imgui_log.txt"));
 
 		/* NOTE: Initialize ImGUI library. */
 		{
@@ -764,8 +778,8 @@ namespace EmEn::Overlay
 			ImGui::CreateContext();
 
 			ImGuiIO & io = ImGui::GetIO(); (void)io;
-			io.IniFilename = m_iniFilepath.c_str();
-			io.LogFilename = m_logFilepath.c_str();
+			io.IniFilename = m_iniFilepath.data();
+			io.LogFilename = m_logFilepath.data();
 			io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 			io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
@@ -802,17 +816,17 @@ namespace EmEn::Overlay
 			/* Create the descriptor pool.
 			 * FIXME: These are fancy numbers ! */
 			const auto sizes = std::vector< VkDescriptorPoolSize >{
-				{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-				{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-				{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-				{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-				{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-				{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-				{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}
+				{.type=VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, .descriptorCount=1000},
+				{.type=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, .descriptorCount=1000}
 			};
 
 			m_ImGUIDescriptorPool = std::make_shared< DescriptorPool >(device, sizes, 1000, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
@@ -845,7 +859,7 @@ namespace EmEn::Overlay
 			info.UseDynamicRendering = false;
 			info.Allocator = VK_NULL_HANDLE;
 			info.CheckVkResultFn = nullptr;
-			info.MinAllocationSize = 1024 * 1024; // Minimum allocation size. Set to 1024*1024 to satisfy zealous best practices validation layer and waste a little memory.
+			info.MinAllocationSize = 1024UL * 1024UL; // Minimum allocation size. Set to 1024*1024 to satisfy zealous best practices validation layer and waste a little memory.
 			//info.CustomShaderVertCreateInfo = ;
 			//info.CustomShaderFragCreateInfo = ;
 

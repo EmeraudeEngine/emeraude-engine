@@ -40,11 +40,6 @@
 #include <unordered_map>
 #include <vector>
 
-/* Third-party inclusions. */
-#ifdef IMGUI_ENABLED
-#include "imgui.h"
-#include "ImGUIScreen.hpp"
-#endif
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -56,12 +51,44 @@
 /* Local inclusions for usages. */
 #include "Input/Manager.hpp"
 #include "FramebufferProperties.hpp"
-#include "UIScreen.hpp"
 
 /* Forward declarations. */
-namespace EmEn::Graphics::Geometry
+namespace EmEn
 {
-	class IndexedVertexResource;
+	namespace Graphics::RenderTarget
+	{
+		class Abstract;
+	}
+	namespace Vulkan
+	{
+		class LayoutManager;
+		class DescriptorSetLayout;
+		class CommandBuffer;
+		class DescriptorPool;
+	}
+
+	namespace Resources
+	{
+		class Manager;
+	}
+
+	namespace Saphir
+	{
+		class Program;
+	}
+
+	namespace Graphics::Geometry
+	{
+		class IndexedVertexResource;
+	}
+
+	namespace Overlay
+	{
+		class UIScreen;
+#ifdef IMGUI_ENABLED
+		class ImGUIScreen;
+#endif
+	}
 }
 
 namespace EmEn::Overlay
@@ -98,15 +125,7 @@ namespace EmEn::Overlay
 			 * @param primaryServices A reference to primary services.
 			 * @param resourceManager A reference to the resource manager.
 			 */
-			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept
-				: ServiceInterface{ClassId},
-				KeyboardListenerInterface{false, true},
-				PointerListenerInterface{false, false, true},
-				m_primaryServices{primaryServices},
-				m_resourceManager{resourceManager}
-			{
-				this->observe(&m_resourceManager.graphicsRenderer().window());
-			}
+			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
@@ -476,6 +495,11 @@ namespace EmEn::Overlay
 			std::unordered_map< std::string, std::shared_ptr< UIScreen > > m_screens;
 			std::shared_ptr< UIScreen > m_inputExclusiveScreen;
 #ifdef IMGUI_ENABLED
+			/* NOTE: These own the UTF-8 bytes that ImGuiIO::IniFilename / ::LogFilename point
+			 * at. ImGui keeps the raw 'const char *' and dereferences it much later — up to
+			 * ImGui::DestroyContext(), which saves the .ini — so the buffer MUST outlive the
+			 * ImGui context. Never hand it a temporary, and never store a std::filesystem::path
+			 * here: path::string() is ANSI-encoded on Windows whereas ImGui expects UTF-8. */
 			std::string m_iniFilepath;
 			std::string m_logFilepath;
 			std::shared_ptr< Vulkan::DescriptorPool > m_ImGUIDescriptorPool;

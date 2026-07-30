@@ -1551,6 +1551,43 @@ misleading.
 - `PlatformSpecific/Helpers.hpp` — Declarations
 - `PlatformSpecific/Helpers.windows.cpp` — Implementations
 
+### Fixed: `std::filesystem::path` → `const char *` for a C library — encoding AND lifetime (Jul 2026)
+
+Handing a path to a C library that wants a `const char *` has **two** independent traps on Windows.
+Both were live in `Overlay/Manager.cpp` (`initImGUI()`), surfaced by the MSVC port.
+
+**Trap 1 — `path::string()` is NOT UTF-8 on Windows.** `path::value_type` is `wchar_t` there, so
+`path` has an implicit `operator std::wstring`, not `operator std::string`: assigning a `path` to a
+`std::string` compiles on Linux/macOS and is a **hard error** on MSVC (`C2679`). The reflex fix,
+adding `.string()`, compiles everywhere but converts through the **ANSI code page**, not UTF-8.
+Most C libraries the engine feeds paths to expect UTF-8 — ImGui says so in its own source
+(`imgui.cpp`, `ImFileOpen()`: *"We need a fopen() wrapper because MSVC/Windows fopen doesn't handle
+UTF-8 filenames"*, then `MultiByteToWideChar(CP_UTF8, …)`). With `.string()`, any user whose profile
+path leaves ASCII (`C:\Users\Sébastien\…`) silently gets a mangled filename and a lost `.ini`.
+
+**Use `EmEn::Base::IO::toU8String(path)`** (`emeraude-base`, `IO/IO.hpp`) — `u8string()` on Windows,
+`string()` on POSIX where native bytes are already UTF-8. Its mirror is `IO::u8path(std::string)`
+for the reverse direction. `toGenericU8String()` does the same with forward slashes.
+
+**Trap 2 — never `.string().c_str()` when the callee STORES the pointer.** `path::string()` returns a
+temporary `std::string`; `.c_str()` points into it; the temporary dies at the end of the full
+expression. `io.IniFilename = m_iniFilepath.string().c_str();` compiles clean, warning-free, and
+leaves a dangling pointer: ImGui keeps that raw pointer and dereferences it at
+`ImGui::DestroyContext()` → `SaveIniSettingsToDisk()` (`imgui.cpp:4487`), i.e. at engine shutdown.
+Read-after-free, garbage path, or crash — and nothing in the build says a word.
+
+**The rule:** if the C API stores the pointer, a **member must own the bytes** for at least as long
+as the API holds them. `Overlay::Manager` keeps `std::string m_iniFilepath` / `m_logFilepath`
+(explicitly *not* `std::filesystem::path`, which cannot expose UTF-8 `char` bytes on Windows), fills
+them once via `IO::toU8String()`, and hands ImGui `m_iniFilepath.data()`. The Manager outlives the
+ImGui context — `releaseImGUI()` is called from `Manager::onTerminate()`.
+
+`.string().c_str()` remains **safe** where the callee consumes the pointer within the call and keeps
+nothing: `FBXLoader.cpp:264` / `:1526` (`ufbx_load_file`) and the two `Dialog/*.mac.mm` sites. Those
+have no lifetime bug — but the two ufbx calls still carry **Trap 1** on Windows (ufbx expects UTF-8
+filenames), so they should move to `IO::toU8String()` too. Not done yet; no non-ASCII asset path has
+hit it.
+
 ### Video Capture — macOS First-Frame Timing
 
 AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::open()` waits up to 3 seconds for the first frame via `std::condition_variable`. Without this, the first `captureFrame()` call would always fail.
