@@ -76,7 +76,14 @@ namespace EmEn::Graphics::Compute
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(set = 0, binding = 0) uniform writeonly image2D brdfLut;
+/* NOTE: The format qualifier is MANDATORY, not decoration. Without it glslang emits the
+ * StorageImageWriteWithoutFormat capability, which (a) is a spec violation unless
+ * VkPhysicalDeviceFeatures::shaderStorageImageWriteWithoutFormat is enabled, and (b) leaves
+ * MoltenVK/SPIRV-Cross with no pixel format to translate the imageStore() to — Metal needs the
+ * format at shader-compile time to know how to convert the vec4. On macOS the store silently
+ * wrote nothing and the whole IBL chain came out black. It must match the VkImage format:
+ * IBLTexture uses VK_FORMAT_R16G16B16A16_SFLOAT. */
+layout(set = 0, binding = 0, rgba16f) uniform writeonly image2D brdfLut;
 
 const uint SampleCount = 1024u;
 const float PI = 3.14159265359;
@@ -181,7 +188,10 @@ void main ()
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform samplerCube sourceEnv;
-layout(set = 0, binding = 1) uniform writeonly image2DArray destFaces;
+/* NOTE: 'rgba16f' is mandatory here for the same reason as brdfLut above — see the comment on
+ * the BRDF LUT declaration. Both the irradiance and the prefiltered cubemaps are
+ * VK_FORMAT_R16G16B16A16_SFLOAT. */
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2DArray destFaces;
 
 layout(push_constant) uniform PushConstants
 {

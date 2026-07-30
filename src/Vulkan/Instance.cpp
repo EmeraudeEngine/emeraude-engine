@@ -876,16 +876,16 @@ namespace EmEn::Vulkan
 			};
 
 			/* NOTE: According to Vulkan spec, if a device exposes VK_KHR_portability_subset,
-			 * it MUST be enabled. This is required for MoltenVK on macOS, but some Windows
-			 * drivers or software renderers may also expose it. */
-			if constexpr ( !IsMacOS )
+			 * it MUST be enabled. This is the case for MoltenVK on macOS, but some Windows
+			 * drivers or software renderers may also expose it — so the test is on the
+			 * extension being advertised, NEVER on the platform. It used to be guarded by
+			 * "if constexpr ( !IsMacOS )", which skipped it on the one platform that always
+			 * needs it and left the device created in a spec-violating state. */
+			if ( hasExtension("VK_KHR_portability_subset") )
 			{
-				if ( hasExtension("VK_KHR_portability_subset") )
-				{
-					m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
+				m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
 
-					Tracer::info(ClassId, "VK_KHR_portability_subset extension detected and enabled.");
-				}
+				Tracer::info(ClassId, "VK_KHR_portability_subset extension detected and enabled.");
 			}
 
 			/* NOTE: Ray tracing extensions (VK_KHR_acceleration_structure + VK_KHR_ray_query).
