@@ -1,5 +1,233 @@
 # Development History Log
 
+## Beta version 0.9.51 (in development)
+ - Fix Vulkan validation errors.
+ - macOS: minor fixes.
+ - Docs: the macOS/MoltenVK section (bindless samplers require MoltenVK 1.4+), and what not to re-investigate.
+ - Rewrite the README as a layered, non-redundant set across the family: emeraude-base owns the toolchain, the compile policy and all external-dependency detail; the engine owns the Vulkan runtime, the SDK, its submodules and options; the applications own their own demonstration.
+
+## Beta version 0.9.5 (2026-07-30)
+ - Release of the photometric lighting + physical camera cycle (see 0.9.42).
+ - Cross-platform fixes from macOS and MSVC.
+
+## Beta version 0.9.42 (2026-07-22)
+ - **Photometric lighting, phase 1.** The unit vocabulary for lights: a directional light takes an illuminance in **lux**, a point/spot light a luminous power in **lumens**. Physical inverse-square attenuation for point and spot lights, light generators take photometric units, and the legacy compensation is dropped.
+ - **Photometric lighting, phase 2.** The ambient term becomes a photometric illuminance; middle grey is 0.18, not 0.5; the auto-exposure gets a photometric clamp range; materials carry an emissive strength and unlit materials apply their emission.
+ - **A sky is a light source.** A sky declares its luminance, and that luminance lights the scene. Photometric background contract, **sky-driven lighting**, and removal of the pre-photometry `StaticLighting` shortcut — `SimplePass` is now strictly unlit. Thread-safe `applyBackgroundLighting()`, poll-based background lighting, safe entity removal and sky re-derivation; the default ambient illuminance is **measured** on the sky texels.
+ - **Image-based lighting (4 lots).** GPU foundations (BRDF LUT, bakeable IBL textures, cubemap mips, Y convention), per-environment bake (GGX prefilter + irradiance, scene trigger, publication), shading (diffuse irradiance in the ambient pass, split-sum specular), and an SSR environment fallback on the bindless prefiltered slot. HDR environment cubemaps (Radiance RGBE, RGBA16F, D6 calibration).
+ - **Physical camera system.** Absolute APEX exposure metered on ISO from the camera triad; the focal length **is** the field of view (derived, not stored) and reframes; the sensor format is a constant-lens change; a style declares a format; camera presets keep the sensor (tone mapping is not a style); the photographic authority is a weak reference that heals to null when a camera dies. A physical camera panel on **Shift+F2**.
+ - **Lens effects are the camera's.** Bloom is materialized from the camera with a threshold in nits; depth of field uses the aperture diameter, not the f-number; motion blur joins the camera (McGuire reconstruction driven by the shutter speed). Scoped lens-effect locks, and the camera gets its chain whether or not the scene built one.
+ - **Motion vectors (4 steps) and TAA.** Per-instance transforms SSBO replaces the scene-pass matrix push constants, real previous model matrices, an RG16F velocity MRT attachment, and RTGI temporal reprojection by motion vectors; double skinning gives limb-level velocity for skinned meshes; the sky needs the previous INFINITY view-projection. Temporal anti-aliasing with per-draw sub-pixel jitter and filtered source reconstruction.
+ - Ray tracing: RTGI temporal accumulation & multi-bounce, RTR shadow rays at reflection hits ("reflections match the raster"), RTAO double-intensity fix with softened defaults, SSGI parameters exposed as settings keys.
+ - AssetLoaders: **WADLoader** — a classic Doom-engine map materializer.
+ - Lighting: the legacy specular becomes what its name already claimed, Blinn-Phong.
+ - Window: the title bar follows the OS appearance, on the only platform that allows it.
+
+## Beta version 0.9.41 (2026-07-22)
+ - Core: opt-in settings reset when the settings file predates the current build.
+
+## Beta version 0.9.40 (2026-07-16)
+ - macOS: implement `SystemInfo::getFreeMemory()` via `host_statistics64`.
+ - Linux: use `MemAvailable` for the free-memory probe.
+ - Fix the per-axis scale in `Window::getFramebufferSize()`.
+ - Overlay: scale-change notification + async-provider properties latch.
+ - Update the clang-tidy rules.
+
+## Beta version 0.9.39 (2026-07-13)
+ - Add `Core::scheduleMainLoopCycle()`, a thread-safe main-loop cycle scheduling contract.
+ - Linux: portable `INSTALL_RPATH` (`$ORIGIN`) on the shared library.
+ - Update the GLFW source.
+ - MSVC fixes; remove an excessive log.
+
+## Beta version 0.9.38 (2026-07-08)
+ - **Complete the explicit-export migration and enable the STL precompiled header on MSVC.** The public surface consumed by an application carries `EMERAUDE_API`; `EMERAUDE_USE_EXPLICIT_EXPORTS` becomes the default, which resolves the old `WINDOWS_EXPORT_ALL_SYMBOLS` + PCH incompatibility.
+ - Add the missing STL includes so the engine still builds with the PCH disabled.
+ - CI: add a PCH-OFF Linux lane to catch missing includes, trimmed to the compile-only dependency set, and clone emeraude-base from a configurable branch.
+ - Docs: note the macOS Objective-C++ PCH auto-skip.
+
+## Beta version 0.9.37 (2026-06-30)
+ - Add an **on-demand rendering mode** to Core (and fix it not redrawing on window resize).
+ - Vulkan: a central `DeferredDestructor` for the runtime destruction of GPU-visible objects.
+ - Fix BLAS builds racing buffer uploads across transfer queues.
+ - Fix the per-light binding: include the dynamic offset in the redundancy check.
+ - Two-sided lighting: orient the shading normal with `dot(N,V)`, not `gl_FrontFacing`.
+ - Light culling: test the light against the instance bounding sphere.
+ - Settings: per-effect ray-tracing sub-groups exposing all RTGI/RTAO parameters, plus a PixelDoubling option for RTR and RTAO; RTGI default sample count 16 → 8 (measured).
+ - Enable the overlay surface to use an external API.
+ - Windows: redefine the file dialog box ownership (TECH-1927), add DNS hostname retrieval, and fix desktop commands failing on paths containing spaces.
+ - Deliver the button release to press-observer surfaces under pointer capture; update the Linux dialog box and the settings key descriptions.
+
+## Beta version 0.9.36 (2026-06-23)
+ - Enable the configuration of the main loop update frequency.
+ - Change the `Core/Video/VulkanDevice/EnableFailSafe` setting default to `false`.
+ - Fix the pointer coordinate space on Wayland and on HiDPI monitor switches.
+ - Windows: fix the file dialog box centering (TECH-1838).
+ - Hotfix: mouse move tapping between surfaces.
+
+## Beta version 0.9.35 (2026-06-18)
+ - **Multi-scene robustness.** Fix the crash on unloading a scene and three render-resource lifetime bugs exposed by scene unload/switch; make the acceleration structure builder a single Renderer-owned instance; make scene switching hitch-free; fix the Overlay shared-sampler destruction; fix the device loss when deleting a scene that uses post-processing; stop the device-lost spam from the acceleration structure builder.
+ - **Vulkan debug object naming** (`vkSetDebugUtilsObjectNameEXT`) on every remaining Vulkan object, for validation and GPU captures; restore leak detection for `DescriptorSetLayout`.
+ - Include the pipeline layout in the graphics pipeline cache key.
+ - MDI: fix the shader generation plus draw-time descriptor and push-constant bugs.
+ - Fix `IntermediateRenderTarget` by-region dependency causing stale-frame block corruption.
+ - Honor the double-sided material flag in the glTF and FBX loaders, add `LoaderOptions::forceDoubleSided`, and flip the shading normal on back-facing fragments.
+ - Wire the `GISampleCount` setting to the RTGI trace (it was a dead key); replace the RTGI `sin()` noise hash with a PCG integer hash.
+ - Diamond-square ground/terrain: snap a non-power-of-two division instead of failing.
+ - Console: add the `triggerRenderDocCapture` command; fix Settings serialization emitting invalid JSON for empty stores.
+
+## Beta version 0.9.34 (2026-06-17)
+ - Update the identification usage.
+
+## Beta version 0.9.33 (2026-06-11)
+ - Fix the ImGui integration.
+ - Add a manual request to resize a Surface from an external source (such as CEF), a safe-guard for invalid overlay surfaces, and a new overlay surface transfer strategy.
+ - Windows: fix the dialog box latency (TECH-1838).
+ - Fixes for the PCH option; remove useless default parameters on Surface; overlay and CMake cleanup.
+
+## Beta version 0.9.32 (2026-06-02)
+ - **Enable precompiled headers** (the shared STL hot-set from emeraude-base).
+ - Uniformize `AARectangle` / `AACuboid`.
+ - CMakeLists cleanup; bug fixes.
+
+## Beta version 0.9.31 (2026-05-27)
+ - **Split the engine's foundation layer into the standalone [emeraude-base](https://github.com/EmeraudeEngine/emeraude-base) library** — `src/Libs/` (`EmEn::Libs`) becomes `EmEn::Base`, with its own repository, versioning and roadmap. The engine clones it (`cmake/InstallEmeraudeBase.cmake`) and consumes a pinned package; emeraude-base becomes the single source of truth for external dependencies and the compile policy. (Briefly numbered 0.9.4 before the version settled back on the 0.9.3x line.)
+ - "Ave robustus A.0": re-export `Severity` from emeraude-base in `CoreTypes`, and route the emeraude-base diagnostics through the Tracer.
+ - Improve mouse event tracking on a single UI surface.
+ - Remove `LOCAL_LIB_DIR`; CMakeLists cleanup.
+
+## Beta version 0.9.3 (2026-05-19)
+ - **Improve compilation time**: includes cleanup, and drop the usage of `__PRETTY_FUNCTION__`.
+ - **Large clang-tidy campaign**: tier 1 cleanup + math-parens auto-fix, redundant member-initializers removed, positional → designated initializers, tightened underlying types on bounded-value enums (bitmask `FlagBits` stay `uint32_t` via NOLINT), `OBJVertex` encapsulated, 24 const getters marked `[[nodiscard]]`, and west-const local variables.
+ - Improve the user application close policy.
+ - Fix the MSVC build: include `<Windows.h>` before other Windows headers.
+
+## Beta version 0.9.26 (2026-05-18)
+ - Ultimate fix for `TCPClient`; minor Linux fix.
+
+## Beta version 0.9.25 (2026-05-13)
+ - **Automatic download of the external dependencies from GitHub** at configure time, with the build type taken into account when selecting them.
+ - Unify the G-buffer.
+ - Ray-traced reflections: fix multi-layer objects, sprite display and alpha.
+ - Docs: caution-points entries for multi-geometry BLAS and the sprite RT pipeline.
+
+## Beta version 0.9.24 (2026-05-12)
+ - Clean up the external libraries to be compiled.
+
+## Beta version 0.9.23 (2026-04-23)
+ - Update the FBX loader with animations, fix its UVs, and add a renderable customization option.
+ - Network: add `TCPClient` and `TCPServer` — ASIO is now mandatory.
+ - OverlayManager: `UIScreen` can now sort surfaces naturally.
+ - Update the keyboard/pointer input debug; fix the config file in release mode; update the hash tools and the clang-tidy rules.
+
+## Beta version 0.9.22 (2026-04-21)
+ - Support RMID-wrapped MIDI files (Microsoft RIFF MIDI container); WaveFactory MIDI reader cleanup and documented quirks.
+ - Console: mandatory help, recursive help dump, MDI telemetry.
+ - Fix the Observer/Observable traits for a data race, and a crash in the overlay screen destructor.
+
+## Beta version 0.9.21 (2026-04-17)
+ - Add `PlaylistResource` and enhance the TrackMixer remote control; expose playlist management for a runtime UI (`currentPlaylist` + `PlaylistSwapped`).
+ - Fix lossy audio loading: VBR frame-count mismatch and int16 peak wraparound.
+ - Add a Win32 API fallback for user dialogs.
+
+## Beta version 0.9.2 (2026-04-17)
+ - Minor fixes.
+
+## Beta version 0.9.11 (2026-04-08)
+ - **Scene Editor system**: CPU picking, standalone gizmo rendering and remote input injection. Interactive **translate** gizmo (drag, hover highlight, local/world space), **rotate** gizmo (3 RGB torus rings, interactive drag), and **scale** gizmo (per-axis and uniform, `setScalingFactor` on `LocatableInterface`); all gizmos pre-created at editor activation, with `Shift+T` to switch back to translation.
+ - Geometry: add loading from raw buffers, with interleaved or separate attributes.
+ - Promote `SSDPClient` to a general `UDPClient`.
+ - Fix crashes caused by incorrect input manager usage.
+
+## Beta version 0.9.1 (2026-03-30)
+ - Network: add `SSDPClient`, serial port listening and Wi-Fi scanning (Windows switched from `netsh` to the native API).
+ - System: improve the CPU info, add storage info (`DiskInfo` renamed `StorageInfo`), and convert `UserInfo`/`SystemInfo` into services.
+ - Window: add monitor info. Core: add a way to specify the user exit code.
+ - Fix the TLAS instance transform to include the renderable instance scale.
+ - Add a setting to silence HWLOC; add colors in the Windows terminal.
+
+## Beta version 0.9.0 (2026-03-30)
+ - Milestone closing the 0.8.6x cycle: cross-platform compilation fixes.
+
+## Beta version 0.8.64 (2026-03-25)
+ - **Skeletal animation with GPU skinning**: animation data structures and loader integration, runtime and resource management, bone vertex attributes enabled in the VBO, VBO format bone handling, a `PerModel` descriptor set for the bone matrix SSBO, and generated vertex-shader skinning code.
+ - GLTFLoader: new node-mode API, normal generation, hierarchy flattening and crash fixes.
+ - MD5 loader rewrite: shared vertices, correct TBN, descriptor pool fix.
+ - LOD settings, ThreadPool integration, read-only skinning SSBO fix.
+ - Fix the `CartesianFrame` constructor ambiguity with `Quaternion`.
+
+## Beta version 0.8.63 (2026-03-17)
+ - **Enable the G-buffer** in the renderer.
+ - **Unified console command system** with clean TCP responses: scene creation with camera, node manipulation, window control, `createScene`/`deleteScene`/`setBackground`/`setGround`/`addMesh`, and JSON scene loading through the TCP `RemoteListener` (`SceneDefinition`, a complete JSON scene description format).
+ - Vulkan compute pipeline + GPU X-Ray volumetric scanner; fix the remote listener and add an `XRayAnalyzer` unpack option.
+ - Rendering: add LOD capability. VertexFactory: add `ShapeSplitter`.
+ - Resources: `ControllableTrait`, terrain types, and `ClassId` container identification in the console.
+ - Docs: the AI Runtime Control guide, promoted to a GOLD RULE.
+
+## Beta version 0.8.621 (2026-03-13)
+ - **Runtime BC7 texture compression**: the `bc7enc_rdo` library, a `TextureCompressor` for block compression, a compressed-texture upload pipeline for multi-mip data, wiring into the `Texture2D` pipeline, and a disk cache for instant loading on subsequent launches.
+ - Add sRGB texture format support for correct PBR color handling.
+ - **Indirect rendering (MDI)**: phase 1A, then phase 1B activating the dispatch with a full batch fallback.
+ - Ray tracing: eliminate the per-frame CPU stall from the synchronous TLAS rebuild, fix the pipeline barrier and TLAS/buffer lifetime for the async build, remove the legacy synchronous `buildTLAS` path, and add a pixel doubling option for RTGI.
+ - Renderable: an instance-local program cache eliminates per-draw hash lookups.
+ - Fix a race condition in the lazy `PostProcessStack` scene target creation, and a `GrabPass` use-after-free on lazy reconfiguration.
+ - Bloom: add a Karis anti-firefly filter and NaN protection.
+ - glTF: fix incorrect UV loading, fix scaling when loading as a `StaticEntity`, and defer `Texture2D` creation to material loading. ShadowMapping: fix loading with a mask.
+
+## Beta version 0.8.62 (2026-03-10)
+ - **Ray tracing enabled.**
+ - GLTFLoader completed.
+ - Minor fix for macOS when ray tracing is unavailable.
+
+## Beta version 0.8.611 (2026-03-05)
+ - Versioning scheme restructured (0.8.61 → 0.8.6xx) for the new development cycle.
+ - macOS: fix the dock icon disappearing when showing message dialogs, fix the duplicate file extension in the save dialog, and only strip an extension when it matches a declared filter.
+ - Manage the `not_allowed` cursor; fix a bug on enabling/disabling the post-processor.
+ - IO: file/stream decoupling for media formats.
+
+## Beta version 0.8.61 (2026-03-04)
+ - New development cycle structuration.
+ - Replace some `std::any` usage with `std::variant`.
+ - Add a dialog box for data input.
+ - Fix `Libs::IO::zipWriter` for MSVC and for multiple files.
+
+## Beta version 0.8.6 "Push It To The Limit 🤟" (2026-02-20)
+ - **New framebuffer post-processing family**, replacing the old `Scenes/Effect` lens effects: `ToneMapping`, `Bloom`, `SSR`, `SSAO`, `DepthOfField`, `FXAA` (+ `FXAASharpen`) and `AtmosphericFog`, with a reworked `PostProcessor` and a new `SceneRenderTarget`.
+ - **RenderDoc integration**: `SetupRenderDoc.cmake`, `BuildRenderDocPython.cmake` and the RenderDoc submodule, for in-application GPU frame capture and programmatic `.rdc` analysis.
+ - Massive `ShapeGenerator` expansion, and a reworked geometry `ResourceGenerator`.
+ - Add `CubemapMovieResource` and `DummyColorProjectionTexture`.
+ - Add `AI-COLLABORATION.md`.
+
+## Beta version 0.8.52 (2026-02-12)
+ - Recorder and `GrabPass` hardening; Vulkan `RenderPass` work.
+ - PBR material additions; audio `Recorder` and `ExternalInput` improvements; IO fixes.
+ - Add the `update-glfw.sh` helper.
+
+## Beta version 0.8.51 (2026-02-05)
+ - **Video capture devices** on Linux, macOS and Windows (`VideoCaptureDevice`), with libVPX and `SetupVideoDeviceCapture.cmake`.
+ - **Screen capture / video recording**: a `Graphics::Recorder` and a `GrabPass`.
+ - Audio: add a `Listener` and an `ExternalInput`; `AudioRecorder` becomes `Recorder`.
+ - Extend the PBR material resource and its light generator.
+ - New documentation: `caution-points.md`, `development-patterns.md`, `troubleshooting.md`, `trueglass-screen-capture-implementation.md`.
+
+## Beta version 0.8.5 (2026-01-20)
+ - **Bindless texture manager.**
+ - **Cascaded shadow maps**: `ViewMatricesCascadedUBO`, an extended `ShadowMap` render target, a shadow-map light generator and a dummy shadow texture — documented in `docs/shadow-mapping.md`.
+ - VertexFactory: split the mesh file formats into their own headers (MDx, STL) and rewrite the OBJ reader.
+
+## Beta version 0.8.46b (2026-01-19)
+ - Consolidate the platform-specific helpers: the Linux dialogs share a single implementation (~900 lines removed).
+ - macOS dialog fixes; update the `PlatformSpecific` documentation.
+
+## Beta version 0.8.46 (2026-01-15)
+ - **PBR material**: a full `Material::PBRResource` and its Saphir PBR light generator.
+ - Custom message dialogs on Linux, macOS and Windows.
+ - Document the pipeline caching system.
+
+## Beta version 0.8.45 (2026-01-12)
+ - **Desktop notifications** on Linux, macOS and Windows, behind a `SystemNotification` service.
+ - Rework the native dialogs (message, open file, save file), mainly on Linux.
+ - Add the project tooling: `build.py`, `format-code.py` (+ `format-code.json`) and `run_unit_tests.py`.
+
 ## Beta version 0.8.44 (2026-01-08)
  - Add swap-chain present mode selection.
  - Add software FPS limiter.
