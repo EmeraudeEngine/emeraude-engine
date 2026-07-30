@@ -128,7 +128,8 @@ namespace EmEn::Vulkan
 
 		if ( const auto result = vkFreeDescriptorSets(this->device()->handle(), m_handle, 1, &descriptorSetHandle); result != VK_SUCCESS )
 		{
-			TraceError{ClassId} << "Unable to allocate a descriptor set : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to free a descriptor set : " << vkResultToCString(result) << " ! "
+				"Was the pool created with VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT ?";
 
 			return false;
 		}

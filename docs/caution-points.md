@@ -9,6 +9,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 - [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
 - [Platform-Specific](#platform-specific)
+- [Vulkan Validation](#vulkan-validation)
 
 ---
 
@@ -1593,6 +1594,64 @@ hit it.
 AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::open()` waits up to 3 seconds for the first frame via `std::condition_variable`. Without this, the first `captureFrame()` call would always fail.
 
 **File:** `PlatformSpecific/VideoCaptureDevice.mac.mm:waitForFirstFrame:`
+
+---
+
+## Vulkan Validation
+
+### Fixed: ToneMapping auto-exposure readback — AdaptLum images lacked TRANSFER_SRC usage (Jul 2026)
+
+Enabling HDR on a camera (`Component::Camera::enableHDR(true)`) produced a storm of validation
+errors from the auto-exposure metering path — five distinct VUIDs, **one** root cause.
+
+`ToneMapping` reads its 1x1 adaptation target back to a host-visible buffer every frame: it
+barriers the image `SHADER_READ_ONLY_OPTIMAL` -> `TRANSFER_SRC_OPTIMAL`, calls
+`vkCmdCopyImageToBuffer`, then barriers it back. All of that was correct. But the images came
+from `IntermediateRenderTarget::create()`, which hardcoded
+`COLOR_ATTACHMENT_BIT | SAMPLED_BIT` — **no `TRANSFER_SRC_BIT`**.
+
+An image can only be transitioned to a layout its usage flags support, so the first barrier was
+rejected, the tracked layout stayed `SHADER_READ_ONLY_OPTIMAL`, and everything downstream
+cascaded off a stale layout:
+
+| VUID | What it was really reporting |
+|---|---|
+| `VkImageMemoryBarrier-oldLayout-01212` | the ROOT CAUSE: `newLayout` incompatible with the usage flags |
+| `vkCmdCopyImageToBuffer-srcImage-00186` | `srcImage` lacks `TRANSFER_SRC` usage |
+| `vkCmdCopyImageToBuffer-srcImageLayout-00189` | declared `TRANSFER_SRC`, actual `SHADER_READ_ONLY` |
+| `VkImageMemoryBarrier-oldLayout-01197` | the restore barrier's `oldLayout` matched nothing |
+
+**Fix:** `IntermediateRenderTarget::create()` gained a defaulted `extraUsageFlags` parameter
+(0 by default, so the other ~65 call sites are untouched), and `ToneMapping` passes
+`VK_IMAGE_USAGE_TRANSFER_SRC_BIT` for its two adaptation targets.
+
+> [!IMPORTANT]
+> **Behavioural consequence:** the metered-luminance readback was invalid before this, so the
+> auto-exposure loop was fed undefined data. It is now actually driven by the scene luminance —
+> expect the exposure of an HDR camera to differ from (and be correct, unlike) the old one.
+
+**Files:** `Graphics/IntermediateRenderTarget.{hpp,cpp}`,
+`Graphics/Effects/Framebuffer/ToneMapping.cpp:createEffect()`
+
+---
+
+### Fixed: transient compute descriptor pools missing FREE_DESCRIPTOR_SET_BIT (Jul 2026)
+
+`VUID-vkFreeDescriptorSets-descriptorPool-00312`, fired by the IBL bake on every sky change.
+`Vulkan::DescriptorSet::destroyFromHardware()` **unconditionally** calls
+`DescriptorPool::freeDescriptorSet()`, so *every* pool whose sets are wrapped in a
+`DescriptorSet` needs `VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT` — including the
+short-lived ones that were meant to be thrown away whole.
+
+Three pools were missing it: two in `IBLBaker` (the BRDF LUT bake and the per-environment
+prefilter/irradiance bake) and one in `XRayAnalyzer`.
+
+The failure also *looked* like something else: `DescriptorPool::freeDescriptorSet()` logged
+`"Unable to allocate a descriptor set"` on the free path (copy-paste), so the symptom read as an
+allocation failure. The message now says `free` and names the missing flag.
+
+**Files:** `Graphics/Compute/IBLBaker.cpp`, `Graphics/Compute/XRayAnalyzer.cpp`,
+`Vulkan/DescriptorPool.cpp:freeDescriptorSet()`. See `src/Vulkan/AGENTS.md`.
 
 ---
 

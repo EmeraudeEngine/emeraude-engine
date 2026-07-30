@@ -108,10 +108,14 @@ namespace EmEn::Graphics
 			 * @param height The height of the render target.
 			 * @param format The Vulkan image format (e.g. VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8_UNORM).
 			 * @param identifier A string identifier for debug labeling.
+			 * @param extraUsageFlags Extra image usage flags OR-ed with the color-attachment and
+			 * sampled ones every intermediate target needs. Pass VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+			 * when the target is read back with vkCmdCopyImageToBuffer, or the transition to
+			 * TRANSFER_SRC_OPTIMAL is invalid. Default none.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format, const std::string & identifier) noexcept;
+			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format, const std::string & identifier, VkImageUsageFlags extraUsageFlags = 0) noexcept;
 
 			/**
 			 * @brief Destroys the render target from the GPU.

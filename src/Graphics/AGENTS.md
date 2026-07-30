@@ -1450,6 +1450,25 @@ the LightSet, the ACTIVE CAMERA and the frame PushConstants. This replaced the f
 8-parameter signature across all 16 effects (the GBufferInputs refactor). Any new
 per-frame data belongs in FrameContext, NOT in a new parameter.
 
+### IntermediateRenderTarget usage flags (Jul 2026)
+
+`IntermediateRenderTarget::create()` gives every target `COLOR_ATTACHMENT_BIT | SAMPLED_BIT` —
+enough to render into it and sample it, which is what almost every effect wants. Anything beyond
+that must be requested through the trailing `extraUsageFlags` parameter.
+
+> [!WARNING]
+> **An image can only be TRANSITIONED to a layout its usage flags support.** If your effect reads
+> a target back with `vkCmdCopyImageToBuffer`, it MUST be created with
+> `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`, or the barrier to `TRANSFER_SRC_OPTIMAL` is silently
+> rejected and every later command runs against a **stale tracked layout** — the failure surfaces
+> as four unrelated-looking VUIDs pointing at the copy, not at the creation. `ToneMapping`'s
+> auto-exposure adaptation targets are the reference case; see
+> `docs/caution-points.md` § Vulkan Validation.
+
+```cpp
+m_adaptTargets[index].create(renderer, 1, 1, lumFormat, "AdaptLum0", VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+```
+
 ### Coding Conventions for Effects
 
 **Use engine types for semantic data, raw floats for GPU push constants.**

@@ -643,7 +643,9 @@ void main()
 			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4}
 		};
 
-		d.descriptorPool = std::make_shared< Vulkan::DescriptorPool >(d.device, poolSizes, 1);
+		/* ⚠️ FREE_DESCRIPTOR_SET_BIT: Vulkan::DescriptorSet frees its set individually in its
+		 * destructor. See src/Vulkan/AGENTS.md. */
+		d.descriptorPool = std::make_shared< Vulkan::DescriptorPool >(d.device, poolSizes, 1, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !d.descriptorPool->createOnHardware() )
 		{

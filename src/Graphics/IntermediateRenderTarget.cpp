@@ -38,7 +38,7 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	bool
-	IntermediateRenderTarget::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format, const std::string & identifier) noexcept
+	IntermediateRenderTarget::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format, const std::string & identifier, VkImageUsageFlags extraUsageFlags) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -51,13 +51,17 @@ namespace EmEn::Graphics
 
 		const auto device = renderer.device();
 
-		/* Create the color image with render target and sampled usage. */
+		/* Create the color image with render target and sampled usage, plus whatever the caller
+		 * needs on top. ⚠️ An image can only be TRANSITIONED to a layout its usage flags support:
+		 * a target read back on the CPU must be created with VK_IMAGE_USAGE_TRANSFER_SRC_BIT, or
+		 * the barrier to TRANSFER_SRC_OPTIMAL is rejected and every command depending on that
+		 * layout goes on to use a stale one. */
 		m_image = std::make_shared< Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
 			format,
 			VkExtent3D{width, height, 1},
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | extraUsageFlags
 		);
 		m_image->setIdentifier(ClassId, identifier, "Image");
 

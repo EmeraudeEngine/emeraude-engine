@@ -664,10 +664,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Create adaptation ping-pong targets (2x 1x1). */
+		/* Create adaptation ping-pong targets (2x 1x1). TRANSFER_SRC because the metered
+		 * luminance is copied back to a host-visible buffer every frame (see the readback ring
+		 * in execute()): without that usage the barrier to TRANSFER_SRC_OPTIMAL is invalid. */
 		for ( uint32_t index = 0; index < 2; ++index )
 		{
-			if ( !m_adaptTargets[index].create(renderer, 1, 1, lumFormat, "AdaptLum" + std::to_string(index)) )
+			if ( !m_adaptTargets[index].create(renderer, 1, 1, lumFormat, "AdaptLum" + std::to_string(index), VK_IMAGE_USAGE_TRANSFER_SRC_BIT) )
 			{
 				TraceError{ClassId} << "Failed to create adaptation target " << index << " !";
 

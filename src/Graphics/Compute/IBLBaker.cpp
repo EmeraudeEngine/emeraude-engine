@@ -466,7 +466,10 @@ void main ()
 			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}
 		};
 
-		const auto descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, poolSizes, 1);
+		/* ⚠️ FREE_DESCRIPTOR_SET_BIT is mandatory: Vulkan::DescriptorSet frees its set
+		 * individually in its destructor, and vkFreeDescriptorSets on a pool created without
+		 * that flag is invalid usage. See src/Vulkan/AGENTS.md. */
+		const auto descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, poolSizes, 1, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !descriptorPool->createOnHardware() )
 		{
@@ -715,7 +718,9 @@ void main ()
 			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, dispatchCount}
 		};
 
-		const auto descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, poolSizes, dispatchCount);
+		/* ⚠️ FREE_DESCRIPTOR_SET_BIT: same contract as above — the sets are freed one by one
+		 * when the descriptorSets vector unwinds. */
+		const auto descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, poolSizes, dispatchCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !descriptorPool->createOnHardware() )
 		{

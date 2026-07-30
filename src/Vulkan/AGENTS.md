@@ -253,7 +253,14 @@ void waitEvents(std::span< const VkEvent > events, ...);
 > );
 > ```
 >
-> **Known case:** Skinning SSBO descriptor pool in `RenderableInstance::Abstract::createSkinningResources()`.
+> ⚠️ This applies to **transient** pools too. `DescriptorSet::destroyFromHardware()` frees its
+> set unconditionally, so a pool you intended to throw away whole still gets a
+> `vkFreeDescriptorSets` call when its sets unwind — being short-lived is not an exemption.
+>
+> **Known cases (all carry the flag):** skinning SSBO pool in
+> `RenderableInstance::Abstract::createSkinningResources()`; the BRDF-LUT and per-environment
+> bake pools in `Graphics/Compute/IBLBaker.cpp`; the pool in `Graphics/Compute/XRayAnalyzer.cpp`.
+> The last three were fixed in Jul 2026 — see `docs/caution-points.md` § Vulkan Validation.
 
 ## Critical: Buffer Descriptor Offset
 
