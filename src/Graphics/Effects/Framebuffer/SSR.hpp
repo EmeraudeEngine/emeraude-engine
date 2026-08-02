@@ -37,6 +37,12 @@
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Vulkan/ComputePipeline.hpp"
+#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn
 {
@@ -93,11 +99,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float tanHalfFovY;
 				float aspectRatio;
 				float maxDistance;
-				float stride;
 				float thickness;
 				float fadeScreenEdge;
 				uint32_t maxSteps;
-				uint32_t binarySteps;
+				uint32_t hiZMaxLevel;
+				uint32_t padding;
+			};
+
+			/**
+			 * @brief Push constants for the Hi-Z pyramid build dispatches.
+			 */
+			struct EMEN_API HiZPushConstants
+			{
+				int32_t destWidth;
+				int32_t destHeight;
+				int32_t sourceMaxX;
+				int32_t sourceMaxY;
 			};
 
 			/**
@@ -109,6 +126,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float texelSizeY;
 				float directionX;
 				float directionY;
+				float depthSigma;
+				float normalSigma;
+				int32_t blurRadius;
+				float padding;
 			};
 
 			/**
@@ -258,8 +279,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
 			/* Descriptor sets (fixed — never updated after creation). */
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
-			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
+			/* Quality knobs, read from the Core/Graphics/ScreenSpace/Reflection/? settings at create(). */
+			uint32_t m_blurRadius{2U};
+			float m_depthSigma{0.5F};
+			float m_normalSigma{0.3F};
+			/* Hi-Z depth pyramid (min-reduction mip chain, R32F) for the hierarchical trace
+			 * (Uludag, GPU Pro 5 — the UE-class SSR traversal). Rebuilt every frame from the
+			 * scene depth by compute dispatches recorded ahead of the trace pass. */
+			std::shared_ptr< Vulkan::Image > m_hiZImage;
+			std::vector< std::shared_ptr< Vulkan::ImageView > > m_hiZMipViews;
+			std::shared_ptr< Vulkan::ImageView > m_hiZFullView;
+			std::shared_ptr< Vulkan::Sampler > m_hiZSampler;
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_hiZDSLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_hiZPipelineLayout;
+			std::unique_ptr< Vulkan::ComputePipeline > m_hiZCopyPipeline;
+			std::unique_ptr< Vulkan::ComputePipeline > m_hiZReducePipeline;
+			std::shared_ptr< Vulkan::DescriptorPool > m_hiZDescriptorPool;
+			/* Per frame-in-flight: the copy set (scene depth -> mip 0). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_hiZCopyPerFrame;
+			/* Fixed: one reduce set per destination mip (mip N-1 -> mip N). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_hiZReduceSets;
+			uint32_t m_hiZMipCount{0U};
 			/* Per-frame-in-flight descriptor sets (updated every frame). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_resolvePerFrame;

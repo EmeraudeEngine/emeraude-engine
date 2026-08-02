@@ -209,17 +209,23 @@ else
 
 Nothing in the engine forbids adding both; nothing hybridises them either.
 
-### 3.1 SSR — 5 passes
+### 3.1 SSR — Hi-Z hierarchical trace (Aug 2026, UE-class)
 
 | Pass | Target | What it does |
 |------|--------|--------------|
-| 1 Trace | half-res RGBA16F | linear ray march in reconstruction space, adaptive stride, ≤ `maxSteps` (128), then 8 binary refinement steps. Outputs `(hitUV.xy, confidence, 0)` |
-| 2 Resolve | half-res | converts `hitUV` → reflected colour by sampling the scene colour; on a miss, falls back to the **prefiltered** cubemap (reserved cube slot 2) weighted by `envFallbackIntensity` |
-| 3-4 Blur | half-res | separable 5-tap gaussian |
+| 0 Hi-Z build | R32F mip chain | compute: mip 0 = scene depth copy, mip N = MIN 2×2 of N-1 (conservative pyramid), ~log2(res) dispatches |
+| 1 Trace | RGBA16F | **Hi-Z traversal** (Uludag, GPU Pro 5): the ray climbs mips over empty cells (exponential skips), descends on potential hits, converges at mip 0 with pixel precision. IGN-jittered start. No linear stride — the hit/miss banding of the former linear march cannot exist by construction |
+| 2 Resolve | — | converts `hitUV` → reflected colour by sampling the scene colour; on a miss, falls back to the **prefiltered** cubemap (reserved cube slot 2) weighted by `envFallbackIntensity` |
+| 3-4 Blur | — | separable **bilateral** (depth/normal-aware), radius scaled per-pixel by roughness — a polished surface stays mirror-sharp |
 | 5 Composite | full-res | see section 4.3 |
 
-Confidence = `distFade · edgeFade · facingFade · roughnessFade`, with
+Working resolution is FULL-RES by default (owner decision) — `Core/Graphics/ScreenSpace/
+Reflection/PixelDoubling` (false), `BlurRadius`, `DepthSigma`, `NormalSigma` drive the quality.
+The remaining `thickness` parameter only CLASSIFIES behind-vs-contact at the final hit — it no
+longer drives the march. Confidence = `distFade · edgeFade · facingFade · roughnessFade`, with
 `roughnessFade = 1 - smoothstep(0, 0.4, roughness)` and an early-out at `roughness > 0.5`.
+References: Uludag, *Hi-Z Screen-Space Cone-Traced Reflections*, GPU Pro 5; McGuire & Mara,
+*Efficient GPU Screen-Space Ray Tracing*, JCGT 2014.
 
 ### 3.2 RTR — 4 passes
 
@@ -381,7 +387,6 @@ Stated explicitly so nobody looks for it:
   mirror-sharp whatever the roughness), per-face amortised update.
 - **No planar reflections.** Nothing in the code base; `grep -i planar` only matches UV mapping.
 - **No SSR/RTR hybrid.** No "screen-space first, ray-traced on miss" path.
-- **No Hi-Z marching** for SSR.
 - **No temporal accumulation on reflections.** RTGI has one; SSR and RTR have spatial blur only.
   No reprojection, no ray reuse, no dedicated variance-guided denoiser.
 - **No GGX lobe sampling.** One mirror ray, blurred afterwards. A post-hoc blur is not a lobe.

@@ -29,8 +29,11 @@
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -41,14 +44,90 @@ namespace
 {
 	using namespace EmEn;
 
+	/* Hi-Z pyramid: mip 0 = scene depth copy. */
+	static constexpr auto SSRHiZCopyComputeShader = R"GLSL(
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcDepth;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D dstMip;
+
+layout(push_constant) uniform PushConstants
+{
+	int destWidth;
+	int destHeight;
+	int sourceMaxX;
+	int sourceMaxY;
+};
+
+void main()
+{
+	ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+
+	if (p.x >= destWidth || p.y >= destHeight)
+	{
+		return;
+	}
+
+	imageStore(dstMip, p, vec4(texelFetch(srcDepth, min(p, ivec2(sourceMaxX, sourceMaxY)), 0).r));
+}
+)GLSL";
+
+	/* Hi-Z pyramid: mip N = MIN 2x2 of mip N-1. The MIN keeps the pyramid CONSERVATIVE:
+	 * a coarse cell can never report farther than its nearest content, so the hierarchical
+	 * traversal never tunnels through geometry (Uludag, GPU Pro 5). */
+	static constexpr auto SSRHiZReduceComputeShader = R"GLSL(
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcMip;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D dstMip;
+
+layout(push_constant) uniform PushConstants
+{
+	int destWidth;
+	int destHeight;
+	int sourceMaxX;
+	int sourceMaxY;
+};
+
+void main()
+{
+	ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+
+	if (p.x >= destWidth || p.y >= destHeight)
+	{
+		return;
+	}
+
+	ivec2 s = p * 2;
+	ivec2 sMax = ivec2(sourceMaxX, sourceMaxY);
+
+	float d0 = texelFetch(srcMip, min(s, sMax), 0).r;
+	float d1 = texelFetch(srcMip, min(s + ivec2(1, 0), sMax), 0).r;
+	float d2 = texelFetch(srcMip, min(s + ivec2(0, 1), sMax), 0).r;
+	float d3 = texelFetch(srcMip, min(s + ivec2(1, 1), sMax), 0).r;
+
+	imageStore(dstMip, p, vec4(min(min(d0, d1), min(d2, d3))));
+}
+)GLSL";
+
 	static constexpr auto SSRTraceFragmentShader = R"GLSL(
 #version 450
 
+/* Hi-Z screen-space ray tracing (Uludag, "Hi-Z Screen-Space Cone-Traced Reflections",
+ * GPU Pro 5 — the UE-class traversal). The ray walks a MIN-depth pyramid: coarse mips are
+ * skipped in exponential steps while the ray is in front of everything, refinement descends
+ * only where a hit is possible, convergence lands at mip 0 with pixel precision. No linear
+ * stride, no per-step thickness heuristic — the banding of the former linear march cannot
+ * exist by construction. */
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outHit;
 
-layout(set = 0, binding = 0) uniform sampler2D depthTex;
-layout(set = 0, binding = 1) uniform sampler2D normalTex;
+layout(set = 0, binding = 0) uniform sampler2D normalTex;
+layout(set = 0, binding = 1) uniform sampler2D hiZTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -59,17 +138,23 @@ layout(push_constant) uniform PushConstants
 	float tanHalfFovY;
 	float aspectRatio;
 	float maxDistance;
-	float stride;
 	float thickness;
 	float fadeScreenEdge;
 	uint maxSteps;
-	uint binarySteps;
+	uint hiZMaxLevel;
+	uint padding;
 };
 
 /* Linearize depth from [0,1] range (Vulkan [0,1] depth convention). */
 float linearizeDepth (float depth)
 {
 	return (nearPlane * farPlane) / (farPlane - depth * (farPlane - nearPlane));
+}
+
+/* Inverse of linearizeDepth: view-space Z to [0,1] depth-buffer value. */
+float delinearizeDepth (float viewZ)
+{
+	return (farPlane * (viewZ - nearPlane)) / (viewZ * (farPlane - nearPlane));
 }
 
 /* Reconstruct view-space position from UV and depth. */
@@ -97,9 +182,20 @@ float screenEdgeFade (vec2 uv)
 	return fade.x * fade.y;
 }
 
+/* Interleaved gradient noise (Jimenez) — per-pixel ray start jitter. */
+float interleavedGradientNoise (vec2 pixel)
+{
+	return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
+}
+
 void main()
 {
-	float centerDepth = texture(depthTex, vUV).r;
+	vec2 mip0Size = vec2(textureSize(hiZTex, 0));
+
+	/* texelFetch (no bilinear filtering): depth/normals interpolated across geometric
+	 * edges produce smeared silhouettes. Mip 0 of the pyramid IS the scene depth. */
+	ivec2 centerCoord = ivec2(vUV * mip0Size);
+	float centerDepth = texelFetch(hiZTex, centerCoord, 0).r;
 
 	/* Skip far-plane fragments. */
 	if (centerDepth >= 1.0)
@@ -113,7 +209,7 @@ void main()
 	/* Read view-space normal and packed roughness+metalness from MRT.
 	 * Alpha encoding: alpha = roughness + metalness * 2.0
 	 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0; */
-	vec4 normalData = texture(normalTex, vUV);
+	vec4 normalData = texelFetch(normalTex, ivec2(vUV * vec2(textureSize(normalTex, 0))), 0);
 	vec3 rawN = normalData.rgb;
 	float packedRM = normalData.a;
 	float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
@@ -124,7 +220,7 @@ void main()
 		return;
 	}
 
-	/* Skip expensive ray march for very rough surfaces (no visible reflection). */
+	/* Skip expensive traversal for very rough surfaces (no visible reflection). */
 	if (roughness > 0.5)
 	{
 		outHit = vec4(0.0);
@@ -137,96 +233,134 @@ void main()
 	vec3 viewDir = normalize(viewPos);
 	vec3 reflDir = reflect(viewDir, normal);
 
-	/* Skip reflections pointing towards the camera. */
+	/* Rays toward the camera cannot be resolved against a single depth layer. */
 	if (reflDir.z < 0.0)
 	{
 		outHit = vec4(0.0);
 		return;
 	}
 
-	/* Offset the ray origin along the normal to prevent self-intersection.
-	 * Use a depth-proportional bias so distant surfaces get a larger offset. */
-	float bias = max(stride * 3.0, viewPos.z * 0.002);
-	vec3 rayOrigin = viewPos + normal * bias;
+	/* ---- Ray endpoints in Hi-Z space: xy in mip-0 TEXELS, z in [0,1] depth. A projective
+	 * transform maps 3D lines to lines, so linear interpolation here is exact. ---- */
+	vec3 viewEnd = viewPos + reflDir * maxDistance;
 
-	/* Adaptive stride: scale step size proportional to depth so that
-	 * distant reflections cover more ground per step. */
-	float adaptiveStride = stride * max(1.0, viewPos.z * 0.1);
+	vec3 P0 = vec3(vUV * mip0Size, centerDepth);
+	vec3 P1 = vec3(projectToUV(viewEnd) * mip0Size, delinearizeDepth(viewEnd.z));
+	vec3 D = P1 - P0;
 
-	/* Linear ray march in reconstruction space. */
-	vec3 rayPos = rayOrigin;
-	vec2 hitUV = vec2(0.0);
+	/* Guard against degenerate screen motion. */
+	vec2 absD = abs(D.xy);
+	if (max(absD.x, absD.y) < 0.01)
+	{
+		outHit = vec4(0.0);
+		return;
+	}
+
+	vec2 invD = vec2(
+		abs(D.x) > 1e-6 ? 1.0 / D.x : 1e18,
+		abs(D.y) > 1e-6 ? 1.0 / D.y : 1e18
+	);
+	/* Epsilon nudging the parametric point into the NEXT cell at a boundary crossing. */
+	float tEpsilon = 0.05 / max(absD.x, absD.y);
+
+	/* Start offset: 1-2 texels along the ray, jittered per pixel (interleaved gradient
+	 * noise) — avoids self-intersection and breaks sub-pixel aliasing into fine noise
+	 * the bilateral blur absorbs. */
+	float t = (1.0 + interleavedGradientNoise(gl_FragCoord.xy)) / max(absD.x, absD.y);
+
+	int level = 1;
+	const int maxLevel = int(hiZMaxLevel);
 	bool hit = false;
+	vec3 P = P0 + D * t;
 
 	for (uint i = 0u; i < maxSteps; ++i)
 	{
-		rayPos += reflDir * adaptiveStride;
-
-		/* Check max distance. */
-		float travelDist = length(rayPos - viewPos);
-
-		if (travelDist > maxDistance)
+		if (t > 1.0 || level < 0)
 		{
 			break;
 		}
 
-		/* Project to screen space. */
-		vec2 sampleUV = projectToUV(rayPos);
+		P = P0 + D * t;
 
-		/* Out of screen bounds. */
-		if (any(lessThan(sampleUV, vec2(0.0))) || any(greaterThan(sampleUV, vec2(1.0))))
+		if (P.x < 0.0 || P.y < 0.0 || P.x >= mip0Size.x || P.y >= mip0Size.y)
 		{
 			break;
 		}
 
-		/* Compare depths.  Use a depth-proportional thickness so thin
-		 * features far from the camera are not missed. */
-		float sampleDepth = linearizeDepth(texture(depthTex, sampleUV).r);
-		float diff = rayPos.z - sampleDepth;
-		float adaptiveThickness = thickness * max(1.0, sampleDepth * 0.05);
+		float cell = float(1 << level);
+		vec2 cellIdx = floor(P.xy / cell);
+		float minZ = texelFetch(hiZTex, ivec2(cellIdx), level).r;
 
-		if (diff > 0.0 && diff < adaptiveThickness)
+		/* Parametric exit of the current cell. */
+		vec2 boundary = (cellIdx + step(vec2(0.0), D.xy)) * cell;
+		vec2 tB2 = (boundary - P0.xy) * invD;
+		float tBoundary = min(tB2.x, tB2.y) + tEpsilon;
+
+		/* Parametric crossing of this cell's min-depth plane. */
+		float tPlane = D.z > 1e-12 ? (minZ - P0.z) / D.z : 1e18;
+
+		if (P.z < minZ && tPlane >= tBoundary)
 		{
-			hitUV = sampleUV;
+			/* The whole span through this cell stays in FRONT of everything it contains:
+			 * free flight — jump to the cell exit and coarsen. */
+			t = tBoundary;
+			level = min(level + 1, maxLevel);
+
+			continue;
+		}
+
+		if (level > 0)
+		{
+			/* Potential intersection inside this cell: advance to the min-depth crossing
+			 * (never past the cell exit) and REFINE. */
+			if (P.z < minZ)
+			{
+				t = clamp(tPlane, t, tBoundary - tEpsilon);
+			}
+
+			level--;
+
+			continue;
+		}
+
+		/* Level 0: exact texel. Advance to the crossing and classify with the
+		 * view-space thickness (the only heuristic left — it classifies BEHIND
+		 * from IN CONTACT, it no longer drives the march). */
+		if (P.z < minZ)
+		{
+			t = clamp(tPlane, t, tBoundary - tEpsilon);
+			P = P0 + D * t;
+		}
+
+		float rayLin = linearizeDepth(P.z);
+		float sceneLin = linearizeDepth(minZ);
+		float diff = rayLin - sceneLin;
+		float adaptiveThickness = thickness * max(1.0, sceneLin * 0.05);
+
+		if (diff >= -0.001 && diff <= adaptiveThickness)
+		{
 			hit = true;
+
 			break;
 		}
-	}
 
-	/* Binary refinement at hit point for sub-step precision. */
-	if (hit)
-	{
-		vec3 refinePos = rayPos;
-		float refineStep = adaptiveStride * 0.5;
-
-		for (uint b = 0u; b < binarySteps; ++b)
-		{
-			vec2 sampleUV = projectToUV(refinePos);
-			float sampleDepth = linearizeDepth(texture(depthTex, sampleUV).r);
-			float diff = refinePos.z - sampleDepth;
-
-			if (diff > 0.0)
-			{
-				refinePos -= reflDir * refineStep;
-			}
-			else
-			{
-				refinePos += reflDir * refineStep;
-			}
-
-			refineStep *= 0.5;
-		}
-
-		hitUV = projectToUV(refinePos);
+		/* Passed BEHIND thick geometry: step out of this texel and resume coarse. */
+		t = tBoundary;
+		level = 1;
 	}
 
 	/* Compute confidence from multiple fade factors. */
 	float confidence = 0.0;
+	vec2 hitUV = vec2(0.0);
 
 	if (hit)
 	{
+		hitUV = P.xy / mip0Size;
+
+		vec3 viewHit = reconstructPosition(hitUV, P.z);
+		float rayDist = distance(viewHit, viewPos);
+
 		/* Distance fade. */
-		float rayDist = length(rayPos - viewPos);
 		float distFade = 1.0 - clamp(rayDist / maxDistance, 0.0, 1.0);
 
 		/* Screen edge fade. */
@@ -248,10 +382,16 @@ void main()
 	static constexpr auto SSRBlurFragmentShader = R"GLSL(
 #version 450
 
+/* Bilateral blur — depth/normal-aware separable filter, radius scaled by the surface
+ * roughness (ported from RTR): a polished surface keeps a mirror-sharp reflection, a rough
+ * one gets the full spread. Replaces the former fixed 5-tap gaussian that smeared everything
+ * equally whatever the material. */
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outBlur;
 
 layout(set = 0, binding = 0) uniform sampler2D inputTex;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2) uniform sampler2D normalTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -259,6 +399,10 @@ layout(push_constant) uniform PushConstants
 	float texelSizeY;
 	float directionX;
 	float directionY;
+	float depthSigma;
+	float normalSigma;
+	int blurRadius;
+	float padding;
 };
 
 void main()
@@ -266,14 +410,47 @@ void main()
 	vec2 texelSize = vec2(texelSizeX, texelSizeY);
 	vec2 dir = vec2(directionX, directionY);
 
-	vec4 result = vec4(0.0);
-	result += texture(inputTex, vUV - 2.0 * dir * texelSize) * 0.06136;
-	result += texture(inputTex, vUV - 1.0 * dir * texelSize) * 0.24477;
-	result += texture(inputTex, vUV) * 0.38774;
-	result += texture(inputTex, vUV + 1.0 * dir * texelSize) * 0.24477;
-	result += texture(inputTex, vUV + 2.0 * dir * texelSize) * 0.06136;
+	vec4 centerVal = texture(inputTex, vUV);
+	float centerDepth = texture(depthTex, vUV).r;
+	vec3 centerNormal = texture(normalTex, vUV).rgb;
 
-	outBlur = result;
+	if (centerDepth >= 1.0)
+	{
+		outBlur = centerVal;
+		return;
+	}
+
+	vec4 result = vec4(0.0);
+	float totalWeight = 0.0;
+
+	/* Roughness-scaled radius: polished surfaces keep mirror-sharp reflections. */
+	float packedRM = texture(normalTex, vUV).a;
+	float centerRoughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
+	int effectiveRadius = max(1, int(float(blurRadius) * smoothstep(0.02, 0.5, centerRoughness)));
+
+	float spatialSigma = float(effectiveRadius) * 0.5;
+	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
+	float invDepthSigma2 = 1.0 / (2.0 * depthSigma * depthSigma);
+
+	for (int i = -effectiveRadius; i <= effectiveRadius; i++)
+	{
+		vec2 sampleUV = vUV + dir * texelSize * float(i);
+		vec4 sampleVal = texture(inputTex, sampleUV);
+		float sampleDepth = texture(depthTex, sampleUV).r;
+		vec3 sampleNormal = texture(normalTex, sampleUV).rgb;
+
+		float spatialW = exp(-float(i * i) * invSpatialSigma2);
+		float depthDiff = abs(centerDepth - sampleDepth);
+		float depthW = exp(-depthDiff * depthDiff * invDepthSigma2);
+		float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
+		float normalW = pow(normalDot, 1.0 / max(normalSigma, 0.001));
+
+		float w = spatialW * depthW * normalW;
+		result += sampleVal * w;
+		totalWeight += w;
+	}
+
+	outBlur = (totalWeight > 0.0) ? result / totalWeight : centerVal;
 }
 )GLSL";
 
@@ -437,8 +614,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
-		const auto halfW = (width > 1) ? width / 2 : 1U;
-		const auto halfH = (height > 1) ? height / 2 : 1U;
+		auto & settings = renderer.primaryServices().settings();
+
+		/* Pixel doubling: half-res working targets to save performance. Default FALSE
+		 * (owner decision): screen-space effects run full-res — they are the cheap tier of
+		 * the reflection ladder, definition is their selling point. */
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsScreenSpaceReflectionPixelDoublingKey, DefaultGraphicsScreenSpaceReflectionPixelDoubling);
+		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
+		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+
+		/* Bilateral blur quality knobs. */
+		m_blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceReflectionBlurRadiusKey, DefaultGraphicsScreenSpaceReflectionBlurRadius);
+		m_depthSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceReflectionDepthSigmaKey, DefaultGraphicsScreenSpaceReflectionDepthSigma);
+		m_normalSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceReflectionNormalSigmaKey, DefaultGraphicsScreenSpaceReflectionNormalSigma);
 
 		/* Trace target (half-res, RGBA16F: hitUV.xy + confidence.z). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "SSR_Trace") )
@@ -482,11 +670,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (depth + normals): 2 combined image samplers at bindings 0,1. */
+		/* Trace input (normals + Hi-Z pyramid): 2 combined image samplers at bindings 0,1. */
 		auto traceInputLayout = this->getInputLayout(2);
 
-		/* Single input (SSR trace result for blur): 1 combined image sampler at binding 0. */
-		auto singleLayout = this->getInputLayout(1);
+		/* Blur input (color + depth + normals for the bilateral filter): 3 combined image samplers. */
+		auto blurInputLayout = this->getInputLayout(3);
 
 		/* Resolve input (color + trace + depth + normals + env cubemap): 5 bindings, custom. */
 		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInput");
@@ -510,7 +698,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Composite input (color + blurred SSR + material properties): 3 combined image samplers at bindings 0,1,2. */
 		auto compositeLayout = this->getInputLayout(3);
 
-		if ( traceInputLayout == nullptr || singleLayout == nullptr || resolveInputLayout == nullptr || compositeLayout == nullptr )
+		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || resolveInputLayout == nullptr || compositeLayout == nullptr )
 		{
 			return false;
 		}
@@ -539,7 +727,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(singleLayout);
+			sets.emplace_back(blurInputLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
@@ -620,32 +808,36 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Blur H: reads resolve result. */
-		m_blurHDescSet = std::make_unique< DescriptorSet >(pool, singleLayout);
-		m_blurHDescSet->setIdentifier(ClassId, "BlurH_DescSet", "DescriptorSet");
+		/* Blur H: reads resolve result (fixed) + depth/normals (per-frame, bilateral filter). */
+		m_blurHPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurH_DescSet");
 
-		if ( !m_blurHDescSet->create() )
+		if ( m_blurHPerFrame.empty() )
 		{
 			return false;
 		}
 
-		if ( !m_blurHDescSet->writeCombinedImageSampler(0, m_resolveTarget) )
+		for ( const auto & descriptorSet : m_blurHPerFrame )
+		{
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_resolveTarget) )
+			{
+				return false;
+			}
+		}
+
+		/* Blur V: reads blur H result (fixed) + depth/normals (per-frame). */
+		m_blurVPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurV_DescSet");
+
+		if ( m_blurVPerFrame.empty() )
 		{
 			return false;
 		}
 
-		/* Blur V: reads blur H result. */
-		m_blurVDescSet = std::make_unique< DescriptorSet >(pool, singleLayout);
-		m_blurVDescSet->setIdentifier(ClassId, "BlurV_DescSet", "DescriptorSet");
-
-		if ( !m_blurVDescSet->create() )
+		for ( const auto & descriptorSet : m_blurVPerFrame )
 		{
-			return false;
-		}
-
-		if ( !m_blurVDescSet->writeCombinedImageSampler(0, m_blurHTarget) )
-		{
-			return false;
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
+			{
+				return false;
+			}
 		}
 
 		/* Composite: reads color (updated per-frame) + blurred SSR (fixed). */
@@ -665,6 +857,257 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
+		/* ---- Hi-Z depth pyramid (min-reduction mip chain) ---- */
+		{
+			const auto & device = renderer.device();
+
+			m_hiZMipCount = 1U;
+
+			for ( uint32_t size = std::max(halfW, halfH); size > 1U; size >>= 1U )
+			{
+				m_hiZMipCount++;
+			}
+
+			m_hiZImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				VK_FORMAT_R32_SFLOAT,
+				VkExtent3D{halfW, halfH, 1U},
+				VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				0,
+				m_hiZMipCount
+			);
+			m_hiZImage->setIdentifier(ClassId, "HiZPyramid", "Image");
+
+			if ( !m_hiZImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Failed to create the Hi-Z pyramid image !";
+
+				return false;
+			}
+
+			/* Per-mip views (storage writes + reduce reads) and the full-chain view (trace). */
+			m_hiZMipViews.reserve(m_hiZMipCount);
+
+			for ( uint32_t mip = 0; mip < m_hiZMipCount; mip++ )
+			{
+				auto view = std::make_shared< ImageView >(
+					m_hiZImage,
+					VK_IMAGE_VIEW_TYPE_2D,
+					VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, mip, 1U, 0U, 1U}
+				);
+				view->setIdentifier(ClassId, "HiZMip" + std::to_string(mip), "ImageView");
+
+				if ( !view->createOnHardware() )
+				{
+					return false;
+				}
+
+				m_hiZMipViews.emplace_back(view);
+			}
+
+			m_hiZFullView = std::make_shared< ImageView >(
+				m_hiZImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0U, m_hiZMipCount, 0U, 1U}
+			);
+			m_hiZFullView->setIdentifier(ClassId, "HiZFull", "ImageView");
+
+			if ( !m_hiZFullView->createOnHardware() )
+			{
+				return false;
+			}
+
+			/* NEAREST/clamp sampler: the traversal reads exact texels per mip. */
+			m_hiZSampler = renderer.getSampler("SSRHiZ", [this] (Settings &, VkSamplerCreateInfo & createInfo) {
+				createInfo.magFilter = VK_FILTER_NEAREST;
+				createInfo.minFilter = VK_FILTER_NEAREST;
+				createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.anisotropyEnable = VK_FALSE;
+				createInfo.maxLod = static_cast< float >(m_hiZMipCount);
+			});
+
+			if ( m_hiZSampler == nullptr )
+			{
+				return false;
+			}
+
+			/* Compute pipelines (IBLBaker pattern): binding 0 = source sampler, 1 = dest storage. */
+			m_hiZDSLayout = std::make_shared< DescriptorSetLayout >(device, "SSRHiZDSLayout");
+
+			{
+				VkDescriptorSetLayoutBinding binding{};
+				binding.binding = 0;
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				binding.descriptorCount = 1;
+				binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+				m_hiZDSLayout->declare(binding);
+			}
+
+			{
+				VkDescriptorSetLayoutBinding binding{};
+				binding.binding = 1;
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				binding.descriptorCount = 1;
+				binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+				m_hiZDSLayout->declare(binding);
+			}
+
+			if ( !m_hiZDSLayout->createOnHardware() )
+			{
+				return false;
+			}
+
+			VkPushConstantRange pushConstantRange{};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			pushConstantRange.offset = 0;
+			pushConstantRange.size = sizeof(HiZPushConstants);
+
+			m_hiZPipelineLayout = std::make_shared< PipelineLayout >(
+				device, "SSRHiZPipelineLayout",
+				StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 >{m_hiZDSLayout},
+				StaticVector< VkPushConstantRange, 4 >{pushConstantRange}
+			);
+
+			if ( !m_hiZPipelineLayout->createOnHardware() )
+			{
+				return false;
+			}
+
+			const auto copyModule = shaderManager.getShaderModuleFromSourceCode(device, "SSR_HiZCopy_CS", ShaderType::ComputeShader, SSRHiZCopyComputeShader);
+			const auto reduceModule = shaderManager.getShaderModuleFromSourceCode(device, "SSR_HiZReduce_CS", ShaderType::ComputeShader, SSRHiZReduceComputeShader);
+
+			if ( copyModule == nullptr || reduceModule == nullptr )
+			{
+				TraceError{ClassId} << "Failed to compile the Hi-Z compute shaders !";
+
+				return false;
+			}
+
+			m_hiZCopyPipeline = std::make_unique< ComputePipeline >(m_hiZPipelineLayout);
+			m_hiZCopyPipeline->setShaderModule(copyModule->handle());
+
+			m_hiZReducePipeline = std::make_unique< ComputePipeline >(m_hiZPipelineLayout);
+			m_hiZReducePipeline->setShaderModule(reduceModule->handle());
+
+			if ( !m_hiZCopyPipeline->createOnHardware() || !m_hiZReducePipeline->createOnHardware() )
+			{
+				return false;
+			}
+
+			/* Descriptor sets: per-frame copy set (scene depth changes descriptor per frame),
+			 * fixed reduce set per destination mip. */
+			const auto framesInFlight = renderer.framesInFlight();
+
+			const std::vector< VkDescriptorPoolSize > poolSizes{
+				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, framesInFlight + m_hiZMipCount},
+				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, framesInFlight + m_hiZMipCount}
+			};
+
+			m_hiZDescriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, framesInFlight + m_hiZMipCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+
+			if ( !m_hiZDescriptorPool->createOnHardware() )
+			{
+				return false;
+			}
+
+			/* Raw descriptor writes (IBLBaker pattern): the storage destination has no
+			 * helper, and the pyramid is SAMPLED in GENERAL layout during the reduction
+			 * chain — the layouts must be exact. */
+			const auto writeStorageDest = [&device] (const DescriptorSet & descriptorSet, const ImageView & destView) {
+				VkDescriptorImageInfo destInfo{};
+				destInfo.sampler = VK_NULL_HANDLE;
+				destInfo.imageView = destView.handle();
+				destInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+				VkWriteDescriptorSet write{};
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = descriptorSet.handle();
+				write.dstBinding = 1;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				write.descriptorCount = 1;
+				write.pImageInfo = &destInfo;
+
+				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+			};
+
+			const auto writeSampledSource = [&device, this] (const DescriptorSet & descriptorSet, const ImageView & sourceView, VkImageLayout layout) {
+				VkDescriptorImageInfo sourceInfo{};
+				sourceInfo.sampler = m_hiZSampler->handle();
+				sourceInfo.imageView = sourceView.handle();
+				sourceInfo.imageLayout = layout;
+
+				VkWriteDescriptorSet write{};
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = descriptorSet.handle();
+				write.dstBinding = 0;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				write.descriptorCount = 1;
+				write.pImageInfo = &sourceInfo;
+
+				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+			};
+
+			m_hiZCopyPerFrame.reserve(framesInFlight);
+
+			for ( uint32_t frame = 0; frame < framesInFlight; frame++ )
+			{
+				auto descriptorSet = std::make_unique< DescriptorSet >(m_hiZDescriptorPool, m_hiZDSLayout);
+				descriptorSet->setIdentifier(ClassId, "HiZCopy_DescSet" + std::to_string(frame), "DescriptorSet");
+
+				if ( !descriptorSet->create() )
+				{
+					return false;
+				}
+
+				writeStorageDest(*descriptorSet, *m_hiZMipViews[0]);
+
+				m_hiZCopyPerFrame.emplace_back(std::move(descriptorSet));
+			}
+
+			m_hiZReduceSets.reserve(m_hiZMipCount);
+
+			for ( uint32_t mip = 1; mip < m_hiZMipCount; mip++ )
+			{
+				auto descriptorSet = std::make_unique< DescriptorSet >(m_hiZDescriptorPool, m_hiZDSLayout);
+				descriptorSet->setIdentifier(ClassId, "HiZReduce_DescSet" + std::to_string(mip), "DescriptorSet");
+
+				if ( !descriptorSet->create() )
+				{
+					return false;
+				}
+
+				/* The reduction samples the previous mip while the image is in GENERAL. */
+				writeSampledSource(*descriptorSet, *m_hiZMipViews[mip - 1], VK_IMAGE_LAYOUT_GENERAL);
+				writeStorageDest(*descriptorSet, *m_hiZMipViews[mip]);
+
+				m_hiZReduceSets.emplace_back(std::move(descriptorSet));
+			}
+
+			/* The trace reads the full pyramid chain (binding 1) after the final
+			 * GENERAL -> SHADER_READ_ONLY transition, same for every frame. */
+			for ( const auto & descriptorSet : m_tracePerFrame )
+			{
+				VkDescriptorImageInfo pyramidInfo{};
+				pyramidInfo.sampler = m_hiZSampler->handle();
+				pyramidInfo.imageView = m_hiZFullView->handle();
+				pyramidInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+				VkWriteDescriptorSet write{};
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = descriptorSet->handle();
+				write.dstBinding = 1;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				write.descriptorCount = 1;
+				write.pImageInfo = &pyramidInfo;
+
+				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+			}
+		}
+
 		return true;
 	}
 
@@ -674,8 +1117,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_compositePerFrame.clear();
 		m_resolvePerFrame.clear();
 		m_tracePerFrame.clear();
-		m_blurVDescSet.reset();
-		m_blurHDescSet.reset();
+		m_blurVPerFrame.clear();
+		m_blurHPerFrame.clear();
+		m_hiZCopyPerFrame.clear();
+		m_hiZReduceSets.clear();
+		m_hiZDescriptorPool.reset();
+		m_hiZCopyPipeline.reset();
+		m_hiZReducePipeline.reset();
+		m_hiZPipelineLayout.reset();
+		m_hiZDSLayout.reset();
+		m_hiZSampler.reset();
+		m_hiZFullView.reset();
+		m_hiZMipViews.clear();
+		m_hiZImage.reset();
 		
 		m_compositePipeline.reset();
 		m_blurPipeline.reset();
@@ -704,15 +1158,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		/* Update depth + normals descriptors for this frame's trace pass. */
-		if ( inputDepth != nullptr )
-		{
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(0, *inputDepth));
-		}
-
+		/* Update the normals descriptor for this frame's trace pass (binding 1, the Hi-Z
+		 * pyramid, is fixed — written at creation). */
 		if ( inputNormals != nullptr )
 		{
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(0, *inputNormals));
 		}
 
 		/* Update color descriptor for composite pass (this frame's copy). */
@@ -724,7 +1174,91 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
-		/* ---- Pass 1: Trace ---- */
+		/* ---- Pass 0: Hi-Z pyramid build (compute) ---- */
+		if ( inputDepth != nullptr )
+		{
+			/* This frame's copy set: scene depth -> mip 0. */
+			static_cast< void >(m_hiZCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputDepth));
+
+			/* Whole pyramid: UNDEFINED -> GENERAL (previous content discarded, fully rewritten). */
+			{
+				Sync::ImageMemoryBarrier barrier{
+					*m_hiZImage,
+					0,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+			}
+
+			const auto mip0Width = static_cast< int32_t >(m_traceTarget.width());
+			const auto mip0Height = static_cast< int32_t >(m_traceTarget.height());
+
+			commandBuffer.bind(*m_hiZCopyPipeline);
+			commandBuffer.bind(*m_hiZCopyPerFrame[frameIndex], *m_hiZPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+
+			{
+				const HiZPushConstants pc{
+					.destWidth = mip0Width,
+					.destHeight = mip0Height,
+					.sourceMaxX = static_cast< int32_t >(inputDepth->image()->createInfo().extent.width) - 1,
+					.sourceMaxY = static_cast< int32_t >(inputDepth->image()->createInfo().extent.height) - 1
+				};
+
+				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
+				commandBuffer.dispatch((mip0Width + 7) / 8, (mip0Height + 7) / 8, 1);
+			}
+
+			commandBuffer.bind(*m_hiZReducePipeline);
+
+			for ( uint32_t mip = 1; mip < m_hiZMipCount; mip++ )
+			{
+				/* Previous mip written -> readable by this reduction. */
+				Sync::ImageMemoryBarrier barrier{
+					*m_hiZImage,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_LAYOUT_GENERAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+				const auto destWidth = std::max(1, mip0Width >> mip);
+				const auto destHeight = std::max(1, mip0Height >> mip);
+				const auto sourceWidth = std::max(1, mip0Width >> (mip - 1));
+				const auto sourceHeight = std::max(1, mip0Height >> (mip - 1));
+
+				const HiZPushConstants pc{
+					.destWidth = destWidth,
+					.destHeight = destHeight,
+					.sourceMaxX = sourceWidth - 1,
+					.sourceMaxY = sourceHeight - 1
+				};
+
+				commandBuffer.bind(*m_hiZReduceSets[mip - 1], *m_hiZPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
+				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
+			}
+
+			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the trace fragment shader
+			 * (next frame's first barrier discards from UNDEFINED, so the cycle is closed). */
+			{
+				Sync::ImageMemoryBarrier barrier{
+					*m_hiZImage,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			}
+		}
+
+		/* ---- Pass 1: Trace (Hi-Z hierarchical traversal) ---- */
 		{
 			const TracePushConstants pc{
 				.texelSizeX = 1.0F / static_cast< float >(m_traceTarget.width()),
@@ -734,11 +1268,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.tanHalfFovY = constants.tanHalfFovY,
 				.aspectRatio = constants.frameWidth / constants.frameHeight,
 				.maxDistance = m_parameters.maxDistance,
-				.stride = m_parameters.stride,
 				.thickness = m_parameters.thickness,
 				.fadeScreenEdge = m_parameters.fadeScreenEdge,
 				.maxSteps = m_parameters.maxSteps,
-				.binarySteps = m_parameters.binarySteps
+				.hiZMaxLevel = m_hiZMipCount - 1U,
+				.padding = 0U
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -800,13 +1334,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			);
 		}
 
-		/* ---- Pass 3: Blur Horizontal (on resolved reflected colors) ---- */
+		/* ---- Pass 3: Bilateral Blur Horizontal (roughness-scaled radius) ---- */
 		{
+			if ( inputDepth != nullptr )
+			{
+				static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+			}
+
+			if ( inputNormals != nullptr )
+			{
+				static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
+			}
+
 			const BlurPushConstants blurH{
 				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
 				.directionX = 1.0F,
-				.directionY = 0.0F
+				.directionY = 0.0F,
+				.depthSigma = m_depthSigma,
+				.normalSigma = m_normalSigma,
+				.blurRadius = static_cast< int32_t >(m_blurRadius),
+				.padding = 0.0F
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -814,19 +1362,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				m_blurHTarget,
 				*m_blurPipeline,
 				*m_blurLayout,
-				*m_blurHDescSet,
+				*m_blurHPerFrame[frameIndex],
 				&blurH,
 				sizeof(BlurPushConstants)
 			);
 		}
 
-		/* ---- Pass 4: Blur Vertical ---- */
+		/* ---- Pass 4: Bilateral Blur Vertical ---- */
 		{
+			if ( inputDepth != nullptr )
+			{
+				static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+			}
+
+			if ( inputNormals != nullptr )
+			{
+				static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
+			}
+
 			const BlurPushConstants blurV{
 				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
 				.directionX = 0.0F,
-				.directionY = 1.0F
+				.directionY = 1.0F,
+				.depthSigma = m_depthSigma,
+				.normalSigma = m_normalSigma,
+				.blurRadius = static_cast< int32_t >(m_blurRadius),
+				.padding = 0.0F
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -834,7 +1396,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				m_blurVTarget,
 				*m_blurPipeline,
 				*m_blurLayout,
-				*m_blurVDescSet,
+				*m_blurVPerFrame[frameIndex],
 				&blurV,
 				sizeof(BlurPushConstants)
 			);

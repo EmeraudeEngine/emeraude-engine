@@ -551,6 +551,23 @@ namespace EmEn
 			constexpr auto GraphicsScreenSpaceGINormalSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/NormalSigma"};
 			constexpr auto DefaultGraphicsScreenSpaceGINormalSigma{0.5F};
 
+			/* Screen-space reflections (SSR). */
+			/* Compute reflections at half resolution (pixel doubling) to save performance.
+			 * Default FALSE (owner decision): screen-space effects run full-res by default —
+			 * they are the cheap tier of the reflection ladder, quality is their selling point. */
+			constexpr auto GraphicsScreenSpaceReflectionPixelDoublingKey{"Core/Graphics/ScreenSpace/Reflection/PixelDoubling"};
+			constexpr auto DefaultGraphicsScreenSpaceReflectionPixelDoubling{false};
+			/* Bilateral blur radius, in pixels — scaled per-pixel by the surface roughness
+			 * (a polished surface keeps a mirror-sharp reflection). */
+			constexpr auto GraphicsScreenSpaceReflectionBlurRadiusKey{"Core/Graphics/ScreenSpace/Reflection/BlurRadius"};
+			constexpr auto DefaultGraphicsScreenSpaceReflectionBlurRadius{2U};
+			/* Depth edge-stopping sigma for the reflection bilateral blur. */
+			constexpr auto GraphicsScreenSpaceReflectionDepthSigmaKey{"Core/Graphics/ScreenSpace/Reflection/DepthSigma"};
+			constexpr auto DefaultGraphicsScreenSpaceReflectionDepthSigma{0.5F};
+			/* Normal edge-stopping sigma for the reflection bilateral blur. */
+			constexpr auto GraphicsScreenSpaceReflectionNormalSigmaKey{"Core/Graphics/ScreenSpace/Reflection/NormalSigma"};
+			constexpr auto DefaultGraphicsScreenSpaceReflectionNormalSigma{0.3F};
+
 			/* Level of Detail */
 			/* Automatically generate levels of detail for meshes. */
 			constexpr auto GraphicsLODEnableAutomaticGenerationKey{"Core/Graphics/LOD/EnableAutomaticGeneration"};
