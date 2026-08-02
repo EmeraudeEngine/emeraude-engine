@@ -127,6 +127,7 @@ layout(push_constant) uniform PushConstants
 
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture   = 1u << 0;
+const uint HasNormalTexture   = 1u << 1;
 const uint HasRoughnessTexture = 1u << 2;
 const uint HasMetalnessTexture = 1u << 3;
 const uint HasEmissionTexture = 1u << 4;
@@ -248,14 +249,20 @@ uint getHitMaterialIndex (uint instanceIndex, uint geomIdx)
 	return meshSSBO.meshEntries[instanceIndex * 3u + 2u][effectiveIdx];
 }
 
+/* Interpolate a vec3 vertex attribute at the hit point (barycentric). */
+vec3 getHitAttributeVec3 (MeshAccessor m, vec2 bary, uint offsetFloats)
+{
+	vec3 a0 = readVertexVec3(m.vb, m.idx0, m.strideFloats, offsetFloats);
+	vec3 a1 = readVertexVec3(m.vb, m.idx1, m.strideFloats, offsetFloats);
+	vec3 a2 = readVertexVec3(m.vb, m.idx2, m.strideFloats, offsetFloats);
+
+	return a0 * (1.0 - bary.x - bary.y) + a1 * bary.x + a2 * bary.y;
+}
+
 /* Interpolate geometric normal at hit point. */
 vec3 getHitNormal (MeshAccessor m, vec2 bary)
 {
-	vec3 n0 = readVertexVec3(m.vb, m.idx0, m.strideFloats, m.normalOffsetFloats);
-	vec3 n1 = readVertexVec3(m.vb, m.idx1, m.strideFloats, m.normalOffsetFloats);
-	vec3 n2 = readVertexVec3(m.vb, m.idx2, m.strideFloats, m.normalOffsetFloats);
-
-	return normalize(n0 * (1.0 - bary.x - bary.y) + n1 * bary.x + n2 * bary.y);
+	return normalize(getHitAttributeVec3(m, bary, m.normalOffsetFloats));
 }
 
 /* Interpolate UV at hit point. */
@@ -580,6 +587,30 @@ void main()
 		/* ---- Enriched hit shading (uber-shader): the FULL material model, data-driven
 		 * from the RT material SSBO — no program duplication, one parametric BRDF. ---- */
 		vec2 hitUV = getHitUV(mesh, barycentrics);
+
+		/* Normal mapping at the hit: perturb the geometric normal through the material's
+		 * normal texture when the mesh carries tangent space. The engine vertex layout is
+		 * Position(3)-Tangent(3)-Binormal(3)-Normal(3) whenever TBN is present, so
+		 * normalOffsetFloats == 9 IS the TBN presence signal — the same layout contract
+		 * SceneMetaData's offset computation and the skinning mirror already rely on
+		 * (tangent at float 3, binormal at float 6). Decode matches the raster
+		 * (StandardResource): raw = rgb * 2 - 1, XY scaled by the material normalScale. */
+		if ((flags & HasNormalTexture) != 0u && mesh.normalOffsetFloats == 9u)
+		{
+			int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].y);
+
+			if (texIndex >= 0)
+			{
+				vec3 rawNormal = texture(textures2D[nonuniformEXT(texIndex)], hitUV).rgb * 2.0 - 1.0;
+				float normalScale = materialSSBO.materials[matBase + 6u].w;
+				vec3 tangentSpaceNormal = normalize(vec3(rawNormal.xy * normalScale, rawNormal.z));
+
+				vec3 hitTangent = normalize(mat3(objectToWorld) * getHitAttributeVec3(mesh, barycentrics, 3u));
+				vec3 hitBinormal = normalize(mat3(objectToWorld) * getHitAttributeVec3(mesh, barycentrics, 6u));
+
+				hitNormal = normalize(hitTangent * tangentSpaceNormal.x + hitBinormal * tangentSpaceNormal.y + hitNormal * tangentSpaceNormal.z);
+			}
+		}
 
 		/* Roughness / metalness: scalar, overridden by their textures when present. */
 		float hitRoughness = materialSSBO.materials[matBase + 1u].x;

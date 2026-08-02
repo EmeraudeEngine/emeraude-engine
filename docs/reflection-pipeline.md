@@ -257,10 +257,20 @@ The trace pass is the interesting one:
   diffuse + GGX/Smith/Schlick specular from the hit material's roughness/metalness (scalar or
   textured). Ambient at hit: scene scalar + sky IBL (irradiance slot 1 diffuse, prefiltered
   slot 2 specular tap) × sky luminance. Emission honored (color × strength × texture).
-  **Still missing at the hit: the normal map** — `GPUMeshMetaData` carries no tangent offset
-  (would need a 4th uvec4); reflected surfaces use the interpolated vertex normal. And no
-  multi-bounce. The long-term path for full fidelity is a Saphir-generated SBT
-  (`VK_KHR_ray_tracing_pipeline`) — the per-material codegen already exists for raster.
+- **Normal mapping at the hit** (Aug 2026): when the material has a normal texture AND the
+  mesh carries tangent space, the geometric normal is perturbed before all lighting.
+  No `GPUMeshMetaData` extension was needed: the engine vertex layout is
+  `Position(3)-Tangent(3)-Binormal(3)-Normal(3)` whenever TBN is present, so
+  `normalOffsetFloats == 9` IS the TBN presence signal (the same layout contract the
+  metadata offsets and the skinning mirror already rely on) — tangent at float 3, binormal
+  at float 6, both barycentrically interpolated and taken through `objectToWorld`. The
+  decode matches the raster exactly: `raw = rgb·2−1`, XY scaled by the material's
+  **`normalScale`** — exported to the RT material SSBO in the former std430 padding slot
+  (`matBase+6.w`, stride unchanged, RTGI untouched). Validated: specular glints on the
+  pavement relief inside the reflection, absent before.
+  **Still missing at the hit**: multi-bounce. The long-term path for full fidelity is a
+  Saphir-generated SBT (`VK_KHR_ray_tracing_pipeline`) — the per-material codegen already
+  exists for raster.
 
 > [!NOTE]
 > **Engine cubemap convention.** A world direction `D` samples the cubemap at

@@ -1143,6 +1143,9 @@ namespace EmEn::Graphics::Material
 			outData.alphaCutoff = 0.5F;
 		}
 
+		/* Normal map intensity for the RT hit shading (same value the raster uses). */
+		outData.normalScale = m_materialProperties[NormalScaleOffset];
+
 		/* NOTE: Texture bindless indices are set by SceneMetaData during material collection.
 		 * The textures are accessible via m_components[ComponentType::Diffuse], etc. */
 	}

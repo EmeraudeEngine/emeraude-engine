@@ -105,8 +105,10 @@ namespace EmEn::Graphics::Material
 		 * rejected by the RT trace shader (the ray continues past the hit). */
 		float alphaCutoff{0.5F};
 
-		/* Padding to align to 16 bytes (std430). */
-		int32_t _padding{0};
+		/* Normal map intensity (matches the raster's NormalScale uniform): the decoded
+		 * tangent-space normal's XY is scaled by this before renormalization. 1 = as
+		 * authored. Occupies the former std430 padding slot (matBase+6.w in shaders). */
+		float normalScale{1.0F};
 
 		/* Flag bits for the 'flags' field. */
 		static constexpr uint32_t HasAlbedoTexture	   = 1U << 0;
