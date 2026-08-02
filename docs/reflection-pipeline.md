@@ -161,9 +161,13 @@ every frame whatever its flags):
 >    render target list mutex — walking the lists there self-deadlocked the render thread.
 >    Validated: once-probe shows the full scene with the animated dragon FROZEN in its
 >    last-event pose while the live one animates beside it.
-> 4. **The subject is rendered into its own probe** (no exclusion list): a reflective object
->    re-samples itself across frames — the "inception" feedback visible in
->    `offscreen-rendering`.
+> 4. ✅ **FIXED — the subject was rendered into its own probe** (inception feedback, visible in
+>    `offscreen-rendering`). `RenderTarget::Abstract` now carries a rendering EXCLUSION LIST
+>    (opaque renderable-instance keys, `excludeFromRendering()`), consulted by the single
+>    populate gate (`Scene::checkRenderableInstanceForRendering`). The caller registers its
+>    subject after creation — first brick of the future probe system. ⚠️ Lifetime is the
+>    caller's: exclusions are not cleaned when an instance dies. Validated: the city crosses
+>    the offscreen-rendering bronze sphere's reflection continuously, no inception disc.
 >
 > Still true besides: **no roughness response** (bare `texture()`, no mip chain, no GGX
 > convolution — a `roughness = 0.35` metal reflects like polished chrome), no per-face
@@ -370,9 +374,11 @@ ambient pass.
 
 Stated explicitly so nobody looks for it:
 
-- **No reflection probe system.** `createRenderToCubemap` is a raw primitive: no placement
-  policy, no parallax correction (box/sphere projection), no blending between probes, no GGX
-  convolution of the result, no amortised update.
+- **No reflection probe SYSTEM yet** — but the primitives are no longer raw (Aug 2026): HDR
+  target, once/continuous/event-refresh policies, SSR/RTR suspension, per-target exclusion
+  list. Still missing for a real system: placement policy, parallax correction (box/sphere
+  projection), blending between probes, GGX convolution of the result (a probe reflection is
+  mirror-sharp whatever the roughness), per-face amortised update.
 - **No planar reflections.** Nothing in the code base; `grep -i planar` only matches UV mapping.
 - **No SSR/RTR hybrid.** No "screen-space first, ray-traced on miss" path.
 - **No Hi-Z marching** for SSR.

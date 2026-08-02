@@ -990,6 +990,13 @@ namespace EmEn::Scenes
 	bool
 	Scene::checkRenderableInstanceForRendering (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept
 	{
+		/* Excluded from THIS target (probe self-inclusion fix): a reflective subject must not
+		 * be rendered into its own probe — inception feedback otherwise. */
+		if ( renderTarget->isExcludedFromRendering(renderableInstance.get()) )
+		{
+			return true; // Continue
+		}
+
 		/* Check whether the renderable instance is ready for shadow casting. */
 		if ( renderableInstance->isReadyToRender(renderTarget) )
 		{

@@ -27,9 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
@@ -252,6 +254,53 @@ namespace EmEn::Graphics::RenderTarget
 			markRendered () noexcept
 			{
 				m_hasBeenRendered = true;
+			}
+
+			/**
+			 * @brief Excludes a renderable instance from this target's rendering.
+			 * @note The probe self-inclusion fix: a reflective subject rendered into its OWN
+			 * probe re-samples itself across frames (inception feedback). The key is opaque
+			 * (the RenderableInstance address) to keep the Graphics render target free of any
+			 * scene dependency.
+			 * @warning The caller owns the lifetime coherence: exclusions are not cleaned when
+			 * an instance dies — clear and re-register on scene content changes if needed.
+			 * @param renderableInstance The renderable instance address.
+			 * @return void
+			 */
+			void
+			excludeFromRendering (const void * renderableInstance) noexcept
+			{
+				if ( renderableInstance != nullptr )
+				{
+					m_renderingExclusions.emplace_back(renderableInstance);
+				}
+			}
+
+			/**
+			 * @brief Returns whether a renderable instance is excluded from this target.
+			 * @param renderableInstance The renderable instance address.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isExcludedFromRendering (const void * renderableInstance) const noexcept
+			{
+				if ( m_renderingExclusions.empty() )
+				{
+					return false;
+				}
+
+				return std::ranges::find(m_renderingExclusions, renderableInstance) != m_renderingExclusions.cend();
+			}
+
+			/**
+			 * @brief Clears the rendering exclusion list.
+			 * @return void
+			 */
+			void
+			clearRenderingExclusions () noexcept
+			{
+				m_renderingExclusions.clear();
 			}
 
 			/**
@@ -609,6 +658,8 @@ namespace EmEn::Graphics::RenderTarget
 			VkRect2D m_renderArea{};
 			RenderTargetType m_renderType;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
+			/** @brief Renderable instances excluded from this target (probe self-inclusion fix). */
+			std::vector< const void * > m_renderingExclusions;
 			bool m_isOrthographicProjection{false};
 			bool m_enableSyncPrimitive{false};
 			bool m_renderOutOfDate{false};
