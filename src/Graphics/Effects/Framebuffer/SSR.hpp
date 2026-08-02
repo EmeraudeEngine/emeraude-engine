@@ -208,6 +208,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::PostProcessEffect::providesReflections() */
+			[[nodiscard]]
+			bool
+			providesReflections () const noexcept override
+			{
+				return true;
+			}
+
 			/**
 			 * @brief Sets the SSR parameters.
 			 * @param parameters The new parameters.

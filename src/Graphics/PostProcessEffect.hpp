@@ -94,6 +94,22 @@ namespace EmEn::Graphics
 				return m_enabled;
 			}
 
+			/**
+			 * @brief Returns whether this effect provides SCENE reflections (SSR, RTR).
+			 * @note Drives the reflection cost ladder: while an enabled reflection provider is
+			 * in the scene stack, the Renderer suspends the continuous reflection probes
+			 * (render-to-cubemap) — paying a probe AND a traced reflection for the same
+			 * surfaces would evaluate the same lobe twice.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			providesReflections () const noexcept
+			{
+				return false;
+			}
+
 		protected:
 
 			/**

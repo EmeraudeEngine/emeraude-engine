@@ -173,6 +173,10 @@ namespace EmEn::Scenes
 		 * TODO: Get the view distance value from settings. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, viewDistance, isOrthographicProjection);
 
+		/* Historical behavior: re-rendered every frame. Callers wanting a one-shot or
+		 * on-demand target flip it via setAutomaticRenderingState(false) + setRenderOutOfDate(). */
+		renderTarget->setAutomaticRenderingState(true);
+
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to texture 2D '" << name << "' !";
@@ -209,6 +213,13 @@ namespace EmEn::Scenes
 		/* Create the render target.
 		 * TODO: Get the view distance value from settings. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, viewDistance, isOrthographicProjection);
+
+		/* An environment probe: continuous by default (callers flip to "once" via
+		 * setAutomaticRenderingState(false) + setRenderOutOfDate()), and SUSPENDED while an
+		 * enabled scene-reflection provider (SSR/RTR) covers the same job — see the
+		 * reflection cost ladder in docs/reflection-pipeline.md. */
+		renderTarget->setAutomaticRenderingState(true);
+		renderTarget->setSuspendableByPostProcessReflections(true);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{

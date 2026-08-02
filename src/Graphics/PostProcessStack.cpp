@@ -70,6 +70,14 @@ namespace EmEn::Graphics
 	}
 
 	bool
+	PostProcessStack::hasEnabledReflectionProvider () const noexcept
+	{
+		return std::ranges::any_of(m_effects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->providesReflections();
+		});
+	}
+
+	bool
 	PostProcessStack::syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept
 	{
 		const bool wantDepthOfField = camera != nullptr && camera->isDepthOfFieldEnabled();

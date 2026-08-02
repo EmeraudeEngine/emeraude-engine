@@ -324,6 +324,22 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the surface reflection as ARTISTIC: an explicitly authored
+			 * cubemap texture the post-processing must never replace.
+			 * @note The material then publishes a ZERO reflectivity to the G-buffer nibble,
+			 * keeping SSR/RTR off this surface. The scene-coherent modes (environment "auto",
+			 * render-target probe) stay overridable — see docs/reflection-pipeline.md
+			 * ("reflection cost ladder"). An explicit ReflectivityMap keeps priority over
+			 * this flag: an artist asking for per-pixel post-process control is obeyed.
+			 * @return void
+			 */
+			void
+			declareReflectionArtistic () noexcept
+			{
+				m_reflectionArtistic = true;
+			}
+
+			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface refraction map sampler and amount.
 			 * @param colorVariableName A reference to string for the GLSL variable holding the surface refraction sample.
 			 * @param amountVariableName A reference to string for the GLSL variable holding the refraction amount. Default 0.5.
@@ -1061,6 +1077,8 @@ namespace EmEn::Saphir
 			bool m_useNormalMapping{false};
 			bool m_useOpacity{false};
 			bool m_useReflection{false};
+			/** @brief Explicitly authored cubemap reflection: never replaced by SSR/RTR (zero nibble). */
+			bool m_reflectionArtistic{false};
 			bool m_useRefraction{false};
 			bool m_enableAmbientNoise{false};
 			bool m_usePBRMode{false};

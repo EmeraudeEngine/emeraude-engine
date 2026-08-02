@@ -129,6 +129,12 @@ namespace EmEn::Saphir
 			/* Dedicated reflectivity map: per-pixel control, highest priority. */
 			reflectivity = "clamp(" + m_surfaceReflectivityMap + ", 0.0, 1.0)";
 		}
+		else if ( m_reflectionArtistic )
+		{
+			/* Artistic reflection (explicit cubemap texture): the author's look, never
+			 * replaced by the post-process reflections — zero reflectivity published. */
+			reflectivity = "0.0";
+		}
 		else if ( m_usePBRMode && !m_surfaceIBLIntensity.empty() && m_useReflection )
 		{
 			/* PBR with environment reflection: IBL intensity scaled by smoothness.

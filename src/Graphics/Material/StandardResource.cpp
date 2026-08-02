@@ -505,6 +505,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
+				/* Explicitly authored cubemap: artistic intent, never replaced by SSR/RTR. */
+				m_reflectionIsArtistic = true;
+
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
@@ -1263,6 +1266,11 @@ namespace EmEn::Graphics::Material
 			if ( componentIt != m_components.cend() )
 			{
 				lightGenerator.declareSurfaceReflection(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::ReflectionAmount));
+
+				if ( m_reflectionIsArtistic )
+				{
+					lightGenerator.declareReflectionArtistic();
+				}
 			}
 			else if ( m_isUsingEnvironmentCubemap )
 			{
@@ -2601,6 +2609,10 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
+
+		/* Explicitly authored cubemap: artistic intent, never replaced by SSR/RTR. The
+		 * render-target variant below stays overridable — a probe is scene-coherent. */
+		m_reflectionIsArtistic = true;
 
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);

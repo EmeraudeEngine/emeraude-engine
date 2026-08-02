@@ -203,6 +203,58 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
+			 * @brief Returns whether this target is an environment reflection probe the
+			 * Renderer suspends while an enabled scene-reflection provider (SSR, RTR) runs.
+			 * @note Reflection cost ladder: the traced reflection does the probe's job
+			 * better — keeping the probe re-render would pay the same lobe twice. A "once"
+			 * probe (automatic rendering OFF, already baked) is unaffected: its cost is
+			 * already paid. Default false; Scene::createRenderToCubemap() enables it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSuspendableByPostProcessReflections () const noexcept
+			{
+				return m_suspendableByPostProcessReflections;
+			}
+
+			/**
+			 * @brief Sets whether this target is suspended while a scene-reflection
+			 * post-process effect is enabled.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			setSuspendableByPostProcessReflections (bool state) noexcept
+			{
+				m_suspendableByPostProcessReflections = state;
+			}
+
+			/**
+			 * @brief Returns whether this target has been rendered at least once.
+			 * @note The suspension rule requires it: a suspendable probe gets ONE guaranteed
+			 * render before being suspended, so the materials sampling it hold a stale-but-real
+			 * bake instead of an undefined (black) image.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasBeenRendered () const noexcept
+			{
+				return m_hasBeenRendered;
+			}
+
+			/**
+			 * @brief Marks this target as rendered at least once (Renderer bookkeeping).
+			 * @return void
+			 */
+			void
+			markRendered () noexcept
+			{
+				m_hasBeenRendered = true;
+			}
+
+			/**
 			 * @brief Returns the precisions of the framebuffer.
 			 * @return const FramebufferPrecisions &
 			 */
@@ -561,5 +613,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool m_enableSyncPrimitive{false};
 			bool m_renderOutOfDate{false};
 			bool m_automaticRendering{false};
+			bool m_suspendableByPostProcessReflections{false};
+			bool m_hasBeenRendered{false};
 	};
 }

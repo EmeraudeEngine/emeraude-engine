@@ -2019,12 +2019,36 @@ namespace EmEn::Graphics
 	{
 		bool primaryConsumed = false;
 
+		/* Reflection cost ladder: while an ENABLED scene-reflection provider (SSR, RTR) is in
+		 * the scene stack, the continuous environment probes are suspended — the traced
+		 * reflection does their job better, re-rendering them would pay the same lobe twice.
+		 * NOTE: benign read race on the effects' enabled flags (logic-thread toggles), same
+		 * class as the executor's own isEnabled() skip. */
+		const auto * postProcessStack = scene.postProcessStack();
+		const bool suspendReflectionProbes = postProcessStack != nullptr && postProcessStack->hasEnabledReflectionProvider();
+
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{
 			if ( !renderToTexture->isReadyForRendering() )
 			{
 				TraceDebug{ClassId} << "The render-to-texture " << renderToTexture->id() << " is not yet ready for rendering!";
 
+				return;
+			}
+
+			/* Honors the update policy: with automatic rendering OFF, the target renders only
+			 * while flagged out-of-date ("once" probes, on-demand re-bakes via
+			 * setRenderOutOfDate()). This contract existed on the render target but had no
+			 * consumer — every target used to re-render every frame whatever its flags. */
+			if ( !renderToTexture->isAutomaticRendering() && !renderToTexture->isRenderOutOfDate() )
+			{
+				return;
+			}
+
+			/* A suspendable probe gets ONE guaranteed render before suspension: the materials
+			 * sampling it then hold a stale-but-real bake instead of an undefined (black) image. */
+			if ( suspendReflectionProbes && renderToTexture->isSuspendableByPostProcessReflections() && renderToTexture->hasBeenRendered() )
+			{
 				return;
 			}
 
@@ -2092,6 +2116,12 @@ namespace EmEn::Graphics
 
 				return;
 			}
+
+			/* Update-policy bookkeeping: a "once"/on-demand target is now up to date
+			 * (no-op with automatic rendering ON), and the guaranteed-first-render rule of
+			 * the suspension is satisfied. */
+			renderToTexture->setRenderFinished();
+			renderToTexture->markRendered();
 
 			currentFrameScope.declareSemaphore(renderToTexture->semaphore(), false);
 		});

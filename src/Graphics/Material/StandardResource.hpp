@@ -967,6 +967,8 @@ namespace EmEn::Graphics::Material
 			float m_pbrMetalness{DefaultPBRMetalness};
 			bool m_videoMemoryUpdated{false};
 			bool m_isUsingEnvironmentCubemap{false};
+			/** @brief Explicitly authored cubemap reflection (texture mode): never replaced by SSR/RTR. */
+			bool m_reflectionIsArtistic{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_useParallaxOcclusionMapping{false};
 			mutable bool m_pomGenerationActive{false};

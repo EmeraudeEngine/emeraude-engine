@@ -154,6 +154,16 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether an ENABLED scene-reflection provider (SSR, RTR) is in
+			 * the chain.
+			 * @note Read by the Renderer to suspend the continuous reflection probes while a
+			 * traced reflection covers the same job (reflection cost ladder).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasEnabledReflectionProvider () const noexcept;
+
+			/**
 			 * @brief Creates GPU resources for all effects.
 			 * @param width The framebuffer width.
 			 * @param height The framebuffer height.

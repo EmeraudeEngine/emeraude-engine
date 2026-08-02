@@ -484,6 +484,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
+				/* Explicitly authored cubemap: artistic intent, never replaced by SSR/RTR. */
+				m_reflectionIsArtistic = true;
+
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 			}
@@ -1780,6 +1783,11 @@ namespace EmEn::Graphics::Material
 				/* NOTE: For PBR, reflection amount is controlled by roughness/metalness, not a separate uniform.
 				 * We pass "1.0" as the amount since IBL contribution is computed in the BRDF. */
 				lightGenerator.declareSurfaceReflection(componentIt->second->variableName(), "1.0");
+
+				if ( m_reflectionIsArtistic )
+				{
+					lightGenerator.declareReflectionArtistic();
+				}
 			}
 			else if ( m_isUsingEnvironmentCubemap )
 			{
@@ -3330,6 +3338,10 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
+
+		/* Explicitly authored cubemap: artistic intent, never replaced by SSR/RTR. The
+		 * render-target variant below stays overridable — a probe is scene-coherent. */
+		m_reflectionIsArtistic = true;
 
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);

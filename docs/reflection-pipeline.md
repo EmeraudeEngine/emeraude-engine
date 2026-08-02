@@ -118,15 +118,55 @@ material.setReflectionComponentFromRenderTarget(probe.second);
 `Toolkit::generateEnvironmentCubemapRenderer()` pairs a 6-face cubemap camera with a
 `RenderTarget::Texture< ViewMatrices3DUBO >` registered in the scene's render-to-texture set.
 `Renderer::renderRenderToTextures()` replays **opaque + translucent + translucentGB** on all six
-faces, **every frame**.
+faces.
+
+**Update policy (Aug 2026).** The render target's `automaticRendering` / `renderOutOfDate`
+contract is now HONORED by the Renderer (it existed with no consumer — every target re-rendered
+every frame whatever its flags):
+
+| Policy | Setup | Behaviour |
+|--------|-------|-----------|
+| Continuous (default) | `setAutomaticRenderingState(true)` — set by `createRenderToCubemap` | re-rendered every frame |
+| Once | `setAutomaticRenderingState(false)` + `setRenderOutOfDate()` | one bake, then stops; `setRenderOutOfDate()` re-bakes on demand |
+| Suspension | `setSuspendableByPostProcessReflections(true)` — default for cubemap probes | while an ENABLED reflection provider (SSR/RTR, `providesReflections()`) is in the scene stack, the probe is suspended AFTER one guaranteed render — the traced reflection does its job better; the materials keep a stale-but-real bake |
 
 > [!CAUTION]
-> This path has **no roughness response**: the generated GLSL is a bare
-> `texture(uReflectionSampler, reflDir)` (`PBRResource.cpp` / `StandardResource.cpp`, explicit
-> Reflection component branch). The probe has no mip chain and is never GGX-convolved, so a
-> `roughness = 0.35` metal reflects like polished chrome and aliases on high frequencies.
-> There is also **no update budget**: no amortisation across frames, no per-face round-robin,
-> no LOD, no exclusion list. Six full scene passes per frame per probe.
+> **Four measured defects of this path (Aug 2026, `reflexion-debug` + `offscreen-rendering`
+> benches — diagnosis owner-driven), fix lot planned:**
+> 1. **The reflection sample is re-multiplied by `environmentLuminance`.** A probe's content is
+>    the RENDERED SCENE — already an absolute luminance — but the shader applies the
+>    normalized-cubemap contract. Under an 8000-nit sky the reflection burns to a flat white
+>    veil; under a dark manifest the probe content becomes readable but still over-scaled
+>    (measured: Backrooms, grid visible and blown out). The rule already existed for grab
+>    passes: only what comes out of the SKY cubemap gets the luminance scale.
+> 2. **The probe target is LDR (RGBA8).** A photometric scene clamps to 1.0 wholesale — even
+>    with defect 1 fixed, a sunlit scene bakes to flat white. The probe must be RGBA16F.
+> 3. **A "once" bake fires at frame 1**, before async resources (sky) and the deferred
+>    `applyBackgroundLighting` poll have landed — it freezes a black, unlit scene forever.
+>    The bake must wait for the scene to settle.
+> 4. **The subject is rendered into its own probe** (no exclusion list): a reflective object
+>    re-samples itself across frames — the "inception" feedback visible in
+>    `offscreen-rendering`.
+>
+> Still true besides: **no roughness response** (bare `texture()`, no mip chain, no GGX
+> convolution — a `roughness = 0.35` metal reflects like polished chrome), no per-face
+> amortisation, no LOD.
+
+### 2.4 The reflection cost ladder (owner design)
+
+The material-side modes order themselves by GPU cost, and the arbitration with the
+post-process rungs is SEMANTIC, not additive — one specular lobe, one radiance source per
+pixel, cheapest source that contains the needed information:
+
+| Mode | Source | Overridable by SSR/RTR? |
+|------|--------|--------------------------|
+| Texture (explicit cubemap) | authored texture | **NEVER** — artistic intent, publishes a ZERO reflectivity nibble (`LightGenerator::declareReflectionArtistic()`) |
+| Auto (scene environment) | prefiltered sky IBL | yes — the trace is MORE scene-coherent than the cubemap |
+| Camera probe (once / continuous) | rendered scene probe | yes — same information, better evaluated; the probe re-render is suspended meanwhile |
+| Post-process (SSR/RTR) | traced scene | — (falls back to the environment on miss) |
+
+An explicit `ReflectivityMap` keeps priority over the artistic rule: an artist asking for
+per-pixel post-process control is obeyed.
 
 ---
 
