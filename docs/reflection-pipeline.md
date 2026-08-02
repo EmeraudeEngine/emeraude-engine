@@ -133,12 +133,16 @@ every frame whatever its flags):
 > [!CAUTION]
 > **Four measured defects of this path (Aug 2026, `reflexion-debug` + `offscreen-rendering`
 > benches — diagnosis owner-driven), fix lot planned:**
-> 1. **The reflection sample is re-multiplied by `environmentLuminance`.** A probe's content is
->    the RENDERED SCENE — already an absolute luminance — but the shader applies the
->    normalized-cubemap contract. Under an 8000-nit sky the reflection burns to a flat white
->    veil; under a dark manifest the probe content becomes readable but still over-scaled
->    (measured: Backrooms, grid visible and blown out). The rule already existed for grab
->    passes: only what comes out of the SKY cubemap gets the luminance scale.
+> 1. ✅ **FIXED — the reflection sample was re-multiplied by `environmentLuminance`.** A probe's
+>    content is the RENDERED SCENE — already an absolute luminance — but the shader applied the
+>    normalized-cubemap contract (the rule already existed for grab-pass transmission:
+>    `m_transmissionIsSceneRadiance`). Now the materials flag a render-target source
+>    (`declareReflectionSourceAbsolute()` / refraction variant) and every reflected/refracted
+>    leg goes through `LightGenerator::reflectionIntensity()` / `refractionIntensity()` —
+>    artistic weight alone for an absolute source, weight × environment luminance for a
+>    normalized cubemap. The sky-derived legs (irradiance, split-sum compensation) keep the
+>    scale. Measured on the Backrooms bench: sphere saturation 47 % → 0 %, luminance coherent
+>    with the scene, reflected ceiling grid visible at the right energy.
 > 2. **The probe target is LDR (RGBA8).** A photometric scene clamps to 1.0 wholesale — even
 >    with defect 1 fixed, a sunlit scene bakes to flat white. The probe must be RGBA16F.
 > 3. **A "once" bake fires at frame 1**, before async resources (sky) and the deferred

@@ -969,6 +969,10 @@ namespace EmEn::Graphics::Material
 			bool m_isUsingEnvironmentCubemap{false};
 			/** @brief Explicitly authored cubemap reflection (texture mode): never replaced by SSR/RTR. */
 			bool m_reflectionIsArtistic{false};
+			/** @brief Reflection source is a render target (probe/mirror): absolute luminance, no environment luminance scale. */
+			bool m_reflectionSourceIsAbsolute{false};
+			/** @brief Refraction source is a render target: absolute luminance, no environment luminance scale. */
+			bool m_refractionSourceIsAbsolute{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_useParallaxOcclusionMapping{false};
 			mutable bool m_pomGenerationActive{false};

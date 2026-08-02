@@ -796,16 +796,16 @@ namespace EmEn::Saphir
 			 * IBL is the main contribution for glass - it shows the environment, not ambient light.
 			 * IBLIntensity allows dynamic control over the cubemap contribution.
 			 * Requires high-quality mode for reflectionNormal and reflectionI variables. */
-			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
-			 * without this the reflections contribute a fraction of a nit to a scene lit in
-			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
-			const auto iblIntensity = this->scaledIBLIntensity();
+			/* NOTE: The reflected/refracted legs are pre-scaled at their definition by
+			 * reflectionIntensity()/refractionIntensity(): a normalized cubemap source gets the
+			 * environment luminance, a render-target source (probe/mirror) is already an
+			 * absolute luminance and only takes the artistic weight. */
 			const auto code = (std::stringstream{} <<
 				"/* PBR Glass IBL - Fresnel-Schlick approximation. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 				"const float fresnelFactor = 0.04 + (1.0 - 0.04) * pow(1.0 - NdotV, 5.0);" "\n"
-				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
-				"vec3 refractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << ";" "\n").str();
+				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
+				"vec3 refractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * " << this->refractionIntensity() << ";" "\n").str();
 
 			Code{fragmentShader, Location::Output} << code;
 
@@ -822,7 +822,7 @@ namespace EmEn::Saphir
 			{
 				const auto blendCode = (std::stringstream{} <<
 					"/* Blend reflection and refraction based on Fresnel, modulated by IBL intensity. */" "\n" <<
-					m_fragmentColor << ".rgb += mix(refractedColor, reflectedColor, fresnelFactor) * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += mix(refractedColor, reflectedColor, fresnelFactor);").str();
 				Code{fragmentShader, Location::Output} << blendCode;
 			}
 
@@ -835,7 +835,7 @@ namespace EmEn::Saphir
 					"const float ccNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 ccFresnel = vec3(0.04) + (vec3(1.0) - vec3(0.04)) * pow(1.0 - ccNdotV, 5.0);" "\n" <<
 					m_fragmentColor << ".rgb *= (vec3(1.0) - ccFactor * ccFresnel);" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel;").str();
 				Code{fragmentShader, Location::Output} << ccCode;
 			}
 		}
@@ -876,12 +876,12 @@ namespace EmEn::Saphir
 						  "const float fresnelDielectric = materialF0 + (1.0 - materialF0) * pow(1.0 - NdotV, 5.0);\n")
 					: "/* Dielectric F0=0.04 for accurate glass Fresnel split. */\n"
 					  "const float fresnelDielectric = 0.04 + 0.96 * pow(1.0 - NdotV, 5.0);\n") <<
-				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 				"/* Beer's law absorption for transmission. */" "\n"
 				"const vec3 transAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
 				"const vec3 transmittedLight = " << m_surfaceTransmissionColor << " * transAbsorption;" "\n"
 				"/* F = reflection, (1-F)*transmissionFactor = transmission. */" "\n" <<
-				m_fragmentColor << ".rgb += reflectedColor * fresnelDielectric * " << iblIntensity << ";" "\n" <<
+				m_fragmentColor << ".rgb += reflectedColor * fresnelDielectric;" "\n" <<
 				m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (1.0 - fresnelDielectric)" << transmissionScale << ";").str();
 
 			Code{fragmentShader, Location::Output} << code;
@@ -895,7 +895,7 @@ namespace EmEn::Saphir
 					"const float ccNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 ccFresnel = vec3(0.04) + (vec3(1.0) - vec3(0.04)) * pow(1.0 - ccNdotV, 5.0);" "\n" <<
 					m_fragmentColor << ".rgb *= (vec3(1.0) - ccFactor * ccFresnel);" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel;").str();
 				Code{fragmentShader, Location::Output} << ccCode;
 			}
 		}
@@ -943,9 +943,9 @@ namespace EmEn::Saphir
 					"const float iridescenceThickness = mix(" << m_surfaceIridescenceThicknessMin << ", " << m_surfaceIridescenceThicknessMax << ", 0.5);" "\n"
 					"const vec3 fresnelIBL_iridescence = evalIridescence(1.0, " << m_surfaceIridescenceIOR << ", NdotV, iridescenceThickness, iblF0);" "\n"
 					"const vec3 fresnelIBL = mix(fresnelIBL_base, fresnelIBL_iridescence, " << m_surfaceIridescenceFactor << ");" "\n"
-					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 					"/* IBL contribution modulated by Fresnel and IBL intensity. */" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * fresnelIBL * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += reflectedColor * fresnelIBL;").str();
 
 				Code{fragmentShader, Location::Output} << code;
 
@@ -971,14 +971,14 @@ namespace EmEn::Saphir
 					"/* PBR IBL - split-sum + multi-scatter energy compensation. */" "\n" <<
 					iblF0Computation << "\n"
 					"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
-					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 					"const vec2 iblEnvBRDF = texture(" << Bindless::Textures2D << "[" << Graphics::BindlessTextureManager::BRDFLutSlot << "], vec2(NdotV, clamp(" << roughness << ", 0.0, 1.0))).rg;" "\n"
 					"const vec3 iblFssEss = iblF0 * iblEnvBRDF.x + iblEnvBRDF.y;" "\n"
 					"const float iblEms = 1.0 - (iblEnvBRDF.x + iblEnvBRDF.y);" "\n"
 					"const vec3 iblFavg = iblF0 + (vec3(1.0) - iblF0) / 21.0;" "\n"
 					"const vec3 iblFmsEms = iblEms * iblFssEss * iblFavg / (vec3(1.0) - iblFavg * iblEms);" "\n"
 					"const vec3 iblKD = " << albedo << " * (1.0 - " << metalness << ") * max(vec3(1.0) - iblFssEss - iblFmsEms, vec3(0.0));" "\n" <<
-					m_fragmentColor << ".rgb += iblFssEss * reflectedColor * " << iblIntensity << ";" "\n" <<
+					m_fragmentColor << ".rgb += iblFssEss * reflectedColor;" "\n" <<
 					m_fragmentColor << ".rgb += (iblFmsEms + iblKD" << aoFactor << ") * iblIrradiance * " << iblIntensity << ";").str();
 
 				Code{fragmentShader, Location::Output} << code;
@@ -990,9 +990,9 @@ namespace EmEn::Saphir
 					iblF0Computation << "\n"
 					"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 fresnelIBL = iblF0 + (1.0 - iblF0) * pow(1.0 - NdotV, 5.0);" "\n"
-					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 					"/* IBL contribution modulated by Fresnel and IBL intensity. */" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * fresnelIBL * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += reflectedColor * fresnelIBL;").str();
 
 				Code{fragmentShader, Location::Output} << code;
 			}
@@ -1006,7 +1006,7 @@ namespace EmEn::Saphir
 					"const float ccNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 ccFresnel = vec3(0.04) + (vec3(1.0) - vec3(0.04)) * pow(1.0 - ccNdotV, 5.0);" "\n" <<
 					m_fragmentColor << ".rgb *= (vec3(1.0) - ccFactor * ccFresnel);" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel;").str();
 				Code{fragmentShader, Location::Output} << ccCode;
 			}
 		}
@@ -1046,7 +1046,7 @@ namespace EmEn::Saphir
 			const auto code = (std::stringstream{} <<
 				"/* Low-quality PBR IBL - F0 approximation without Fresnel. */" "\n" <<
 				lqF0Code << "\n" <<
-				m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * lqF0 * " << m_surfaceReflectionAmount << " * " << iblIntensity << ";").str();
+				m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * lqF0 * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";").str();
 			Code{fragmentShader, Location::Output} << code;
 
 			/* Diffuse irradiance (LQ: plain energy split, no LUT). */
@@ -1065,7 +1065,7 @@ namespace EmEn::Saphir
 					"/* Clear coat IBL - simplified constant attenuation (LQ). */" "\n"
 					"const float ccFactor = " << m_surfaceClearCoatFactor << ";" "\n" <<
 					m_fragmentColor << ".rgb *= (1.0 - ccFactor * 0.04);" "\n" <<
-					m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * ccFactor * 0.04 * " << m_surfaceReflectionAmount << " * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * ccFactor * 0.04 * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";").str();
 				Code{fragmentShader, Location::Output} << ccCode;
 			}
 		}
@@ -1073,11 +1073,8 @@ namespace EmEn::Saphir
 		{
 			/* NOTE: PBR low-quality fallback for refraction-only materials.
 			 * Refraction is less affected by F0 - use a subtle blend. */
-			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
-			 * without this the reflections contribute a fraction of a nit to a scene lit in
-			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
-			const auto iblIntensity = this->scaledIBLIntensity();
-
+			/* NOTE: The refracted leg takes refractionIntensity(): environment luminance for a
+			 * normalized cubemap source, artistic weight alone for a render-target source. */
 			if ( m_useTransmission )
 			{
 				const auto code = (std::stringstream{} <<
@@ -1085,12 +1082,12 @@ namespace EmEn::Saphir
 					"const vec3 beerAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
 					"vec3 refrRefractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * 0.96;" "\n"
 					"refrRefractedColor *= beerAbsorption * " << m_surfaceTransmissionFactor << " + (1.0 - " << m_surfaceTransmissionFactor << ");" "\n" <<
-					m_fragmentColor << ".rgb += refrRefractedColor * " << iblIntensity << ";").str();
+					m_fragmentColor << ".rgb += refrRefractedColor * " << this->refractionIntensity() << ";").str();
 				Code{fragmentShader} << code;
 			}
 			else
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * 0.96 * " << iblIntensity << ";";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * 0.96 * " << this->refractionIntensity() << ";";
 			}
 		}
 		else if ( m_useReflection && m_useRefraction )
@@ -1116,7 +1113,16 @@ namespace EmEn::Saphir
 			 * sample in [0,1], the environment luminance turns both into nits. */
 			if ( useIBL )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+				if ( m_reflectionSourceAbsolute )
+				{
+					/* Render-target reflection: already an absolute luminance — only the
+					 * sky-derived diffuse leg takes the environment luminance. */
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ");";
+				}
+				else
+				{
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+				}
 			}
 		}
 		else if ( m_useRefraction )
@@ -1125,7 +1131,16 @@ namespace EmEn::Saphir
 
 			if ( useIBL )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+				if ( m_refractionSourceAbsolute )
+				{
+					/* Render-target refraction: already an absolute luminance — only the
+					 * sky-derived diffuse leg takes the environment luminance. */
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ");";
+				}
+				else
+				{
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+				}
 			}
 		}
 		else

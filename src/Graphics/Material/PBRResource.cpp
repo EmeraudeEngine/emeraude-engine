@@ -1788,6 +1788,11 @@ namespace EmEn::Graphics::Material
 				{
 					lightGenerator.declareReflectionArtistic();
 				}
+
+				if ( m_reflectionSourceIsAbsolute )
+				{
+					lightGenerator.declareReflectionSourceAbsolute();
+				}
 			}
 			else if ( m_isUsingEnvironmentCubemap )
 			{
@@ -1805,6 +1810,11 @@ namespace EmEn::Graphics::Material
 				/* NOTE: For PBR glass materials, Fresnel will automatically blend between reflection and refraction.
 				 * We pass "1.0" as the amount since the Fresnel equation handles the blend ratio. */
 				lightGenerator.declareSurfaceRefraction(componentIt->second->variableName(), "1.0", MaterialUB(UniformBlock::Component::RefractionIOR));
+
+				if ( m_refractionSourceIsAbsolute )
+				{
+					lightGenerator.declareRefractionSourceAbsolute();
+				}
 			}
 			else if ( m_isUsingEnvironmentCubemapForRefraction )
 			{
@@ -3371,6 +3381,10 @@ namespace EmEn::Graphics::Material
 
 		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
 
+		/* A render target is the RENDERED SCENE: an absolute luminance — the shader must not
+		 * re-apply the environment luminance to it (see LightGenerator::reflectionIntensity()). */
+		m_reflectionSourceIsAbsolute = true;
+
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
@@ -3492,6 +3506,9 @@ namespace EmEn::Graphics::Material
 
 		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
 
+
+		/* Absolute luminance source — see the reflection variant above. */
+		m_refractionSourceIsAbsolute = true;
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 

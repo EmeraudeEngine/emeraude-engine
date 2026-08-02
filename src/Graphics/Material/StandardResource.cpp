@@ -1271,6 +1271,11 @@ namespace EmEn::Graphics::Material
 				{
 					lightGenerator.declareReflectionArtistic();
 				}
+
+				if ( m_reflectionSourceIsAbsolute )
+				{
+					lightGenerator.declareReflectionSourceAbsolute();
+				}
 			}
 			else if ( m_isUsingEnvironmentCubemap )
 			{
@@ -1286,6 +1291,11 @@ namespace EmEn::Graphics::Material
 			if ( componentIt != m_components.cend() )
 			{
 				lightGenerator.declareSurfaceRefraction(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::RefractionAmount), MaterialUB(UniformBlock::Component::RefractionIOR));
+
+				if ( m_refractionSourceIsAbsolute )
+				{
+					lightGenerator.declareRefractionSourceAbsolute();
+				}
 			}
 			else if ( m_isUsingEnvironmentCubemapForRefraction )
 			{
@@ -2644,6 +2654,10 @@ namespace EmEn::Graphics::Material
 
 		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
 
+
+		/* A render target is the RENDERED SCENE: an absolute luminance — the shader must not
+		 * re-apply the environment luminance to it (see LightGenerator::reflectionIntensity()). */
+		m_reflectionSourceIsAbsolute = true;
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
@@ -2945,6 +2959,9 @@ namespace EmEn::Graphics::Material
 
 		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
 
+
+		/* Absolute luminance source — see the reflection variant above. */
+		m_refractionSourceIsAbsolute = true;
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 

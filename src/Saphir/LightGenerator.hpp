@@ -340,6 +340,31 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the surface reflection source as an ABSOLUTE luminance — a
+			 * render target (probe/mirror), i.e. the RENDERED SCENE re-read.
+			 * @note The environment luminance scale then NEVER applies to the reflected
+			 * color: only what comes out of the normalized SKY cubemap gets it. Measured
+			 * before this: a probe reflection burned to 8000 nits under a clear-sky manifest.
+			 * @return void
+			 */
+			void
+			declareReflectionSourceAbsolute () noexcept
+			{
+				m_reflectionSourceAbsolute = true;
+			}
+
+			/**
+			 * @brief Declares the surface refraction source as an ABSOLUTE luminance (render target).
+			 * @copydetails declareReflectionSourceAbsolute()
+			 * @return void
+			 */
+			void
+			declareRefractionSourceAbsolute () noexcept
+			{
+				m_refractionSourceAbsolute = true;
+			}
+
+			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface refraction map sampler and amount.
 			 * @param colorVariableName A reference to string for the GLSL variable holding the surface refraction sample.
 			 * @param amountVariableName A reference to string for the GLSL variable holding the refraction amount. Default 0.5.
@@ -1079,6 +1104,10 @@ namespace EmEn::Saphir
 			bool m_useReflection{false};
 			/** @brief Explicitly authored cubemap reflection: never replaced by SSR/RTR (zero nibble). */
 			bool m_reflectionArtistic{false};
+			/** @brief Reflection source is a render target: absolute luminance, no environment luminance scale. */
+			bool m_reflectionSourceAbsolute{false};
+			/** @brief Refraction source is a render target: absolute luminance, no environment luminance scale. */
+			bool m_refractionSourceAbsolute{false};
 			bool m_useRefraction{false};
 			bool m_enableAmbientNoise{false};
 			bool m_usePBRMode{false};
@@ -1113,6 +1142,46 @@ namespace EmEn::Saphir
 				const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
 
 				return '(' + weight + " * " + ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) + ')';
+			}
+
+			/**
+			 * @brief Returns the GLSL intensity factor for the REFLECTED color leg.
+			 * @note A render-target source (probe/mirror) is the rendered scene — already an
+			 * absolute luminance: only the artistic weight applies. A cubemap source is a
+			 * normalized [0,1] texture: the environment luminance turns it into nits.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			reflectionIntensity () const noexcept
+			{
+				if ( m_reflectionSourceAbsolute )
+				{
+					const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
+
+					return '(' + weight + ')';
+				}
+
+				return this->scaledIBLIntensity();
+			}
+
+			/**
+			 * @brief Returns the GLSL intensity factor for the REFRACTED color leg.
+			 * @copydetails reflectionIntensity()
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			refractionIntensity () const noexcept
+			{
+				if ( m_refractionSourceAbsolute )
+				{
+					const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
+
+					return '(' + weight + ')';
+				}
+
+				return this->scaledIBLIntensity();
 			}
 
 	};
