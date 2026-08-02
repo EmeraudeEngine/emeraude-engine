@@ -2663,6 +2663,27 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::setPostProcessReflectivity (float amount) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the reflection component.";
+
+			return false;
+		}
+
+		/* NOTE: No cubemap, no sampler, no Reflection component: the value only reaches
+		 * LightGenerator::declareSurfaceReflectivityMap() as a GLSL literal, which puts it in the
+		 * material-properties G-buffer for SSR/RTR to read. Mirror of the "Value" filling type
+		 * handled in parseReflectionComponent(). */
+		m_postProcessReflectivityAmount = std::clamp(amount, 0.0F, 1.0F);
+
+		return true;
+	}
+
+	bool
 	StandardResource::setRefractionComponentFromEnvironmentCubemap (float ior, float amount) noexcept
 	{
 		if ( this->isCreated() )

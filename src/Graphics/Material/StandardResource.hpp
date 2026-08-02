@@ -538,6 +538,19 @@ namespace EmEn::Graphics::Material
 			bool setReflectionComponentFromEnvironmentCubemap (float amount = DefaultReflectionAmount) noexcept;
 
 			/**
+			 * @brief Sets a post-process-only reflection: no cubemap is sampled, the material
+			 * merely publishes a reflectivity in the material-properties G-buffer so the
+			 * screen-space/ray-traced effects (SSR, RTR) can reflect it.
+			 * @note This is the C++ mirror of the @code {"Reflection": {"Type": "Value", "Amount": x}} @endcode
+			 * manifest filling type. It is the isolation switch of the reflection pipeline: with it,
+			 * anything visible in the reflection comes from the post-process stack and nothing else.
+			 * @warning This function is available before creation time.
+			 * @param amount The reflectivity published to the G-buffer, in [0,1]. Default 50%.
+			 * @return bool
+			 */
+			bool setPostProcessReflectivity (float amount = 0.5F) noexcept;
+
+			/**
 			 * @brief Sets the refraction component using the scene's environment cubemap.
 			 * @note When enabled, the material will use the scene's environment cubemap for refraction
 			 * instead of a material-specific texture. This is resolved at render time.
