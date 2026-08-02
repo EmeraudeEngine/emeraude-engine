@@ -107,8 +107,10 @@ layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
 layout(set = 1, binding = 2) uniform samplerCube envCubemap;
 
-/* Bindless textures (set 2). Binding 1 = 2D texture array. */
+/* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cube array
+ * (reserved slots: 1 = scene irradiance E/pi, 2 = GGX-prefiltered environment). */
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
+layout(set = 2, binding = 3) uniform samplerCube texturesCube[];
 
 layout(push_constant) uniform PushConstants
 {
@@ -125,8 +127,46 @@ layout(push_constant) uniform PushConstants
 
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture   = 1u << 0;
+const uint HasRoughnessTexture = 1u << 2;
+const uint HasMetalnessTexture = 1u << 3;
+const uint HasEmissionTexture = 1u << 4;
+const uint IsEmissive		 = 1u << 6;
 const uint HasOpacityTexture  = 1u << 7;
 const uint IsAlphaTest		= 1u << 8;
+
+const float PI = 3.14159265359;
+/* Prefiltered environment mip count - 1 (IBLTexture::PrefilteredMipLevels). */
+const float PrefilteredMaxLod = 5.0;
+
+/* ENGINE CUBEMAP CONVENTION: world direction D samples at (D.x, -D.y, D.z). */
+vec3 cubeDir (vec3 d)
+{
+	return vec3(d.x, -d.y, d.z);
+}
+
+/* GGX/Smith/Schlick — the same microfacet family as the raster PBR pass, so a
+ * reflected surface matches the directly rendered one. */
+float distributionGGX (float NdotH, float roughness)
+{
+	float a = roughness * roughness;
+	float a2 = a * a;
+	float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
+	return a2 / max(PI * d * d, 0.0001);
+}
+
+float geometrySmith (float NdotV, float NdotL, float roughness)
+{
+	float r = roughness + 1.0;
+	float k = (r * r) / 8.0;
+	float gv = NdotV / (NdotV * (1.0 - k) + k);
+	float gl = NdotL / (NdotL * (1.0 - k) + k);
+	return gv * gl;
+}
+
+vec3 fresnelSchlick (float cosTheta, vec3 F0)
+{
+	return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
 /* Light type constants. */
 const float LIGHT_DIRECTIONAL = 0.0;
@@ -249,7 +289,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit point
  * received the light straight through walls — shadows simply did not exist INSIDE the
  * reflections (a reflected shadowed area looked fully lit). Same fix as RTGI. */
-vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
+vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, float roughnessHit, float metalnessHit, vec3 F0)
 {
 	/* Shadow ray origin offset along the hit normal (no bias push constant in RTR). */
 	const float ShadowRayBias = 0.01;
@@ -309,7 +349,6 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 			}
 		}
 
-		/* Lambert diffuse. */
 		float NdotL = max(dot(hitNormal, L), 0.0);
 
 		/* Skip the shadow ray when the light cannot contribute anyway. */
@@ -330,7 +369,20 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal)
 			visibility = shadowRayVisibility(shadowOrigin, L, shadowDistance);
 		}
 
-		totalLight += lightColor * NdotL * attenuation * visibility;
+		/* Lambert diffuse + GGX specular (Cook-Torrance), energy split by metalness. */
+		vec3 H = normalize(L + V);
+		float NdotH = max(dot(hitNormal, H), 0.0);
+		float NdotV = max(dot(hitNormal, V), 0.0001);
+		float VdotH = max(dot(V, H), 0.0);
+
+		float D = distributionGGX(NdotH, roughnessHit);
+		float G = geometrySmith(NdotV, NdotL, roughnessHit);
+		vec3 F = fresnelSchlick(VdotH, F0);
+
+		vec3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.0001);
+		vec3 diffuse = albedo * (1.0 - metalnessHit) * (vec3(1.0) - F);
+
+		totalLight += lightColor * (diffuse + specular) * NdotL * attenuation * visibility;
 	}
 
 	return totalLight;
@@ -525,13 +577,74 @@ void main()
 			return;
 		}
 
-		/* Compute direct lighting at hit point (Lambert diffuse over all scene lights),
-		 * plus the actual scene ambient (raster surfaces receive it too — a hardcoded
-		 * vec3(0.15) used to stand in for it and desynced reflections from the image). */
-		vec3 lighting = computeDirectLighting(hitPos, hitNormal);
-		lighting += ambientLight.rgb;
+		/* ---- Enriched hit shading (uber-shader): the FULL material model, data-driven
+		 * from the RT material SSBO — no program duplication, one parametric BRDF. ---- */
+		vec2 hitUV = getHitUV(mesh, barycentrics);
 
-		vec3 litColor = albedo * lighting;
+		/* Roughness / metalness: scalar, overridden by their textures when present. */
+		float hitRoughness = materialSSBO.materials[matBase + 1u].x;
+		float hitMetalness = materialSSBO.materials[matBase + 1u].y;
+
+		if ((flags & HasRoughnessTexture) != 0u)
+		{
+			int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].z);
+
+			if (texIndex >= 0)
+			{
+				hitRoughness = texture(textures2D[nonuniformEXT(texIndex)], hitUV).r;
+			}
+		}
+
+		if ((flags & HasMetalnessTexture) != 0u)
+		{
+			int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].w);
+
+			if (texIndex >= 0)
+			{
+				hitMetalness = texture(textures2D[nonuniformEXT(texIndex)], hitUV).r;
+			}
+		}
+
+		vec3 hitF0 = mix(vec3(0.04), albedo, hitMetalness);
+		vec3 hitV = -reflDir;
+		float hitNdotV = max(dot(hitNormal, hitV), 0.0001);
+
+		/* Direct lighting: Lambert diffuse + GGX specular per light, shadow-ray gated
+		 * (same microfacet family as the raster pass — the reflection matches the image). */
+		vec3 litColor = computeDirectLighting(hitPos, hitNormal, hitV, albedo, hitRoughness, hitMetalness, hitF0);
+
+		/* Ambient at hit: the scene scalar ambient PLUS the sky IBL — diffuse irradiance
+		 * (reserved cube slot 1, stores E/pi) and a prefiltered specular tap (slot 2,
+		 * roughness-driven LOD), both scaled by the sky luminance (normalized sources). */
+		{
+			vec3 irradiance = texture(texturesCube[nonuniformEXT(1)], cubeDir(hitNormal)).rgb;
+			vec3 iblDiffuse = albedo * (1.0 - hitMetalness) * irradiance;
+
+			vec3 hitR = reflect(reflDir, hitNormal);
+			vec3 prefiltered = textureLod(texturesCube[nonuniformEXT(2)], cubeDir(hitR), clamp(hitRoughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
+			vec3 iblSpecular = prefiltered * fresnelSchlick(hitNdotV, hitF0);
+
+			litColor += albedo * ambientLight.rgb;
+			litColor += (iblDiffuse + iblSpecular) * ambientLight.w;
+		}
+
+		/* Emission: the material's own light, texture-modulated when present. */
+		if ((flags & IsEmissive) != 0u)
+		{
+			vec3 emission = materialSSBO.materials[matBase + 3u].rgb * materialSSBO.materials[matBase + 4u].x;
+
+			if ((flags & HasEmissionTexture) != 0u)
+			{
+				int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 6u].x);
+
+				if (texIndex >= 0)
+				{
+					emission *= texture(textures2D[nonuniformEXT(texIndex)], hitUV).rgb;
+				}
+			}
+
+			litColor += emission;
+		}
 
 		/* Distance fade: reflection fades as hit gets further from the surface. */
 		float distFade = 1.0 - clamp(hitT / maxDistance, 0.0, 1.0);
@@ -542,11 +655,12 @@ void main()
 	}
 	else
 	{
-		/* Ray escaped the scene: reflect the environment cubemap (sky through
-		 * skylights, distant environment) instead of leaving a black hole.
-		 * ENGINE CUBEMAP CONVENTION: world direction D samples at vec3(D.x, -D.y, D.z)
-		 * (engine UP = -Y, cubemap stored Y-up) — same as skybox/material reflections. */
-		vec3 envColor = texture(envCubemap, vec3(reflDir.x, -reflDir.y, reflDir.z)).rgb;
+		/* Ray escaped the scene: reflect the ACTIVE SCENE's prefiltered environment
+		 * (bindless reserved cube slot 2, always current), roughness-driven LOD, scaled
+		 * by the sky luminance — a normalized source becomes nits. The former dedicated
+		 * envCubemap binding fell back to the renderer DEFAULT cubemap when the caller
+		 * passed none (dark sky in every reflection, measured on the bench). */
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], vec3(reflDir.x, -reflDir.y, reflDir.z), clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
 		float confidence = fresnel * roughnessFade;
 
 		outReflection = vec4(envColor * confidence, confidence);
@@ -1035,7 +1149,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.ambientR = ambientColor.red() * ambientIntensity,
 				.ambientG = ambientColor.green() * ambientIntensity,
 				.ambientB = ambientColor.blue() * ambientIntensity,
-				.ambientPad = 0.0F
+				.skyLuminance = context.skyLuminance
 			};
 
 			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures) per-frame. */

@@ -90,7 +90,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float ambientR;
 				float ambientG;
 				float ambientB;
-				float ambientPad;
+				/** @brief Sky luminance (nits): scales the NORMALIZED bindless environment
+				 * sources sampled at hit/miss (irradiance, prefiltered) into absolute light. */
+				float skyLuminance;
 			};
 
 			/**

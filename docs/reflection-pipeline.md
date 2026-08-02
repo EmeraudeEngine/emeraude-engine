@@ -248,7 +248,19 @@ The trace pass is the interesting one:
   contribution is gated by a shadow ray, but **only for lights that cast shadows in the raster
   passes** — a light without a shadow map deliberately shines through geometry on screen, and
   the reflection must match the image.
-- **On a miss**, the environment cubemap is sampled along `reflDir`.
+- **On a miss**, the ACTIVE SCENE's prefiltered environment is sampled (bindless reserved
+  cube slot 2, roughness-driven LOD) × the sky luminance. The former dedicated `envCubemap`
+  binding fell back to the renderer DEFAULT cubemap when the caller passed none — dark sky
+  in every reflection (measured, fixed Aug 2026).
+- **Hit shading is the ENRICHED UBER-SHADER** (Aug 2026): one parametric BRDF, data-driven
+  from `GPURTMaterialData` — no program duplication. Per light (shadow-ray gated): Lambert
+  diffuse + GGX/Smith/Schlick specular from the hit material's roughness/metalness (scalar or
+  textured). Ambient at hit: scene scalar + sky IBL (irradiance slot 1 diffuse, prefiltered
+  slot 2 specular tap) × sky luminance. Emission honored (color × strength × texture).
+  **Still missing at the hit: the normal map** — `GPUMeshMetaData` carries no tangent offset
+  (would need a 4th uvec4); reflected surfaces use the interpolated vertex normal. And no
+  multi-bounce. The long-term path for full fidelity is a Saphir-generated SBT
+  (`VK_KHR_ray_tracing_pipeline`) — the per-material codegen already exists for raster.
 
 > [!NOTE]
 > **Engine cubemap convention.** A world direction `D` samples the cubemap at
