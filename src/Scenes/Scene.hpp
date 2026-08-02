@@ -1445,7 +1445,7 @@ namespace EmEn::Scenes
 			 * @see createRenderToTexture2D() For planar reflections.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection, uint32_t colorBits = 16U) noexcept;
 
 			/**
 			 * @brief Creates a 2D view render target for final output.

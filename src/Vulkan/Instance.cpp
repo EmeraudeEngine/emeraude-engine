@@ -587,8 +587,22 @@ namespace EmEn::Vulkan
 	}
 
 	VkFormat
-	Instance::findColorFormat (const std::shared_ptr< Device > & device, uint32_t /*redBits*/, uint32_t /*greenBits*/, uint32_t /*blueBits*/, uint32_t /*alphaBits*/) noexcept
+	Instance::findColorFormat (const std::shared_ptr< Device > & device, uint32_t redBits, uint32_t greenBits, uint32_t blueBits, uint32_t alphaBits) noexcept
 	{
+		/* HDR request (the bits used to be IGNORED — every render target was locked to
+		 * R8G8B8A8_SRGB, which clamped photometric scenes to 1.0 in reflection probes). */
+		if ( std::max({redBits, greenBits, blueBits, alphaBits}) >= 16U )
+		{
+			return device->findSupportedFormat(
+				{
+					VK_FORMAT_R16G16B16A16_SFLOAT,
+					VK_FORMAT_R8G8B8A8_SRGB
+				},
+				VK_IMAGE_TILING_OPTIMAL,
+				VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+			);
+		}
+
 		return device->findSupportedFormat(
 			{
 				VK_FORMAT_R8G8B8A8_SRGB

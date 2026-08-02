@@ -99,11 +99,14 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param colorCount The number of color channels desired.
 			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
+			 * @param colorBits Per-channel color precision. 16+ requests an HDR float target —
+			 * REQUIRED for an environment probe in a photometric scene, an 8-bit target clamps
+			 * everything above 1.0 (measured: a sunlit probe baked to a flat white veil). Default 8.
 			 */
-			Texture (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+			Texture (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection, uint32_t colorBits = 8U) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
 				: Abstract{
 					name,
-					{colorCount, 8U, 32U, 0U, 1U},
+					{colorCount, colorBits, 32U, 0U, 1U},
 					{size, size, 1U},
 					viewDistance,
 					RenderTargetType::Cubemap,

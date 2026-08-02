@@ -143,8 +143,13 @@ every frame whatever its flags):
 >    normalized cubemap. The sky-derived legs (irradiance, split-sum compensation) keep the
 >    scale. Measured on the Backrooms bench: sphere saturation 47 % → 0 %, luminance coherent
 >    with the scene, reflected ceiling grid visible at the right energy.
-> 2. **The probe target is LDR (RGBA8).** A photometric scene clamps to 1.0 wholesale — even
->    with defect 1 fixed, a sunlit scene bakes to flat white. The probe must be RGBA16F.
+> 2. ✅ **FIXED — the probe target was LDR (RGBA8_SRGB).** `Instance::findColorFormat()` IGNORED
+>    the requested bits (commented-out parameters) and locked every render target to
+>    `R8G8B8A8_SRGB`: a photometric scene clamped to 1.0 wholesale. It now honors a 16+ bit
+>    request (`R16G16B16A16_SFLOAT`, SRGB fallback), the cubemap `RenderTarget::Texture` ctor
+>    takes the color bits, and `Scene::createRenderToCubemap()` defaults probes to **16-bit HDR**.
+>    Validated under the 100 klx BlueSky: full scene (ground, palm, dragon, sun) in the probe
+>    reflection at the right energy, instead of the flat white veil. Owner-validated.
 > 3. **A "once" bake fires at frame 1**, before async resources (sky) and the deferred
 >    `applyBackgroundLighting` poll have landed — it freezes a black, unlit scene forever.
 >    The bake must wait for the scene to settle.

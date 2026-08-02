@@ -197,7 +197,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
-	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept
+	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection, uint32_t colorBits) noexcept
 	{
 		const std::scoped_lock lock{m_renderToTextureAccess};
 
@@ -212,7 +212,7 @@ namespace EmEn::Scenes
 
 		/* Create the render target.
 		 * TODO: Get the view distance value from settings. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, viewDistance, isOrthographicProjection);
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, viewDistance, isOrthographicProjection, colorBits);
 
 		/* An environment probe: continuous by default (callers flip to "once" via
 		 * setAutomaticRenderingState(false) + setRenderOutOfDate()), and SUSPENDED while an
