@@ -100,6 +100,7 @@ namespace EmEn
 		class IBLTexture;
 		class GrabPass;
 		class SceneRenderTarget;
+		class SkinnedGeometryProcessor;
 
 		namespace Compute
 		{
@@ -471,6 +472,18 @@ namespace EmEn::Graphics
 			accelerationStructureBuilder () const noexcept
 			{
 				return m_accelerationStructureBuilder.get();
+			}
+
+			/**
+			 * @brief Returns the skinned geometry processor (RT skinned-mirror compute for
+			 * per-frame BLAS refit), or nullptr when ray tracing is unavailable/disabled.
+			 * @return const SkinnedGeometryProcessor *
+			 */
+			[[nodiscard]]
+			const SkinnedGeometryProcessor *
+			skinnedGeometryProcessor () const noexcept
+			{
+				return m_skinnedGeometryProcessor.get();
 			}
 
 			/**
@@ -1580,6 +1593,7 @@ namespace EmEn::Graphics
 			const Vulkan::AccelerationStructure * m_currentTLAS{nullptr};
 			/** @brief Single ray-tracing acceleration structure builder, shared by all geometries (BLAS) and scenes (TLAS). Null when RT is off. */
 			std::unique_ptr< Vulkan::AccelerationStructureBuilder > m_accelerationStructureBuilder;
+			std::unique_ptr< SkinnedGeometryProcessor > m_skinnedGeometryProcessor;
 			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;

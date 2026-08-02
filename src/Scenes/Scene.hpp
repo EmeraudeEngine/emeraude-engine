@@ -1724,12 +1724,14 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Records the pending TLAS build into the given command buffer.
 			 * @note Must be called after prepareRender() and before render passes that use RT.
+			 * Skinned-mirror dispatches and per-instance BLAS refits are recorded first.
 			 * @param cmdBuf The Vulkan command buffer (must be in recording state).
+			 * @param skinnedGeometryProcessor The renderer's skinned geometry processor, or nullptr.
 			 */
 			void
-			recordTLASBuild (VkCommandBuffer cmdBuf) noexcept
+			recordTLASBuild (VkCommandBuffer cmdBuf, const Graphics::SkinnedGeometryProcessor * skinnedGeometryProcessor) noexcept
 			{
-				m_sceneMetaData.recordTLASBuild(cmdBuf);
+				m_sceneMetaData.recordTLASBuild(cmdBuf, skinnedGeometryProcessor);
 			}
 
 			/**

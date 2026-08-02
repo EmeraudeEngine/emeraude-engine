@@ -37,6 +37,8 @@
 #include "BindlessTextureSet.hpp"
 #include "Graphics/Geometry/Helpers.hpp"
 #include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/SkinnedGeometryProcessor.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
@@ -130,6 +132,7 @@ namespace EmEn::Scenes
 		m_rebuildMeshEntries.clear();
 		m_rebuildMaterialMap.clear();
 		m_rebuildMaterialEntries.clear();
+		m_pendingSkinnedInstances.clear();
 
 		auto & instances = m_rebuildInstances;
 		auto & meshEntries = m_rebuildMeshEntries;
@@ -190,25 +193,44 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				/* Skinned geometry is excluded from the TLAS for now (bind-pose statue at the
-				 * wrong scale — see Geometry::Interface::buildAccelerationStructure()). Skip
-				 * BEFORE the on-demand build attempt so we don't retry it every frame. */
-				if ( geometry->influenceEnabled() )
+				/* Skinned geometry takes the per-INSTANCE path: a static BLAS would freeze
+				 * the bind pose at the mesh node's scale (see the guard in
+				 * Geometry::Interface::buildAccelerationStructure()), so each instance owns
+				 * a refit-able BLAS fed by its compute-skinned mirror buffer — two instances
+				 * sharing the mesh have different poses, hence per instance, like the bone
+				 * matrices SSBO. The refit itself is recorded by recordTLASBuild(). */
+				const bool isSkinned = geometry->influenceEnabled();
+				const AccelerationStructure * blas = nullptr;
+
+				if ( isSkinned )
 				{
-					continue;
+					auto * mutableInstance = const_cast< RenderableInstance::Abstract * >(batch.renderableInstance().get());
+
+					if ( !mutableInstance->createRTSkinnedGeometryResources(*m_accelerationStructureBuilder, *geometry) )
+					{
+						/* Not refit-able (no bone matrices SSBO yet, strip topology...):
+						 * keep it OUT of the TLAS rather than showing a bind-pose statue. */
+						continue;
+					}
+
+					blas = mutableInstance->rtSkinnedBLAS();
+
+					m_pendingSkinnedInstances.emplace_back(batch.renderableInstance());
 				}
-
-				auto * blas = geometry->accelerationStructure();
-
-				/* Build BLAS on-demand for geometries loaded before the RT builder was set. */
-				if ( blas == nullptr )
+				else
 				{
-					const_cast< Geometry::Interface * >(geometry)->buildAccelerationStructure();
 					blas = geometry->accelerationStructure();
 
+					/* Build BLAS on-demand for geometries loaded before the RT builder was set. */
 					if ( blas == nullptr )
 					{
-						continue;
+						const_cast< Geometry::Interface * >(geometry)->buildAccelerationStructure();
+						blas = geometry->accelerationStructure();
+
+						if ( blas == nullptr )
+						{
+							continue;
+						}
 					}
 				}
 
@@ -238,7 +260,12 @@ namespace EmEn::Scenes
 
 				if ( const auto * VBO = geometry->vertexBufferObject(); VBO != nullptr )
 				{
-					meshMeta.vertexBufferAddress = m_accelerationStructureBuilder->getBufferDeviceAddress(VBO->handle());
+					/* Skinned instances: hit shading must fetch the CURRENT pose (normals,
+					 * UVs at skinned positions), i.e. the mirror buffer — not the bind-pose
+					 * VBO. Same layout, same stride, same attribute offsets. */
+					meshMeta.vertexBufferAddress = isSkinned
+						? batch.renderableInstance()->rtMirrorBufferAddress()
+						: m_accelerationStructureBuilder->getBufferDeviceAddress(VBO->handle());
 					meshMeta.vertexStride = VBO->vertexElementCount() * static_cast< uint32_t >(sizeof(float));
 				}
 
@@ -555,11 +582,95 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneMetaData::recordTLASBuild (VkCommandBuffer cmdBuf) noexcept
+	SceneMetaData::recordTLASBuild (VkCommandBuffer cmdBuf, const SkinnedGeometryProcessor * skinnedGeometryProcessor) noexcept
 	{
 		if ( m_pendingTLASBuild == nullptr || m_accelerationStructureBuilder == nullptr )
 		{
 			return;
+		}
+
+		/* Skinned instances: mirror this frame's pose (compute skinning) then refit each
+		 * per-instance BLAS, BEFORE the TLAS build that references them. */
+		if ( skinnedGeometryProcessor != nullptr && skinnedGeometryProcessor->usable() && !m_pendingSkinnedInstances.empty() )
+		{
+			/* Barrier A: the previous frame may still be ray-querying through the OLD TLAS
+			 * into these same BLAS (refit is in-place), and its AS builds read the mirror
+			 * buffers this pass overwrites. A pipeline barrier orders against ALL earlier
+			 * commands on the queue, across submissions.
+			 * NOTE: ray queries run in fragment/compute shaders — never use the RT-pipeline
+			 * stage bit here (VK_KHR_ray_query only, no RT pipeline on this engine). */
+			{
+				VkMemoryBarrier barrier{};
+				barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_SHADER_READ_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+
+				vkCmdPipelineBarrier(
+					cmdBuf,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					0,
+					1, &barrier,
+					0, nullptr,
+					0, nullptr
+				);
+			}
+
+			for ( const auto & instance : m_pendingSkinnedInstances )
+			{
+				/* Uploads the staged pose into this frame's section (if not already done)
+				 * and returns its descriptor set — the raster passes will bind the SAME
+				 * section, so RT and raster skin with the exact same pose. */
+				const auto * bonesDescriptorSet = instance->flushSkinningMatrices();
+
+				if ( bonesDescriptorSet == nullptr )
+				{
+					continue;
+				}
+
+				skinnedGeometryProcessor->recordDispatch(cmdBuf, instance->rtSkinningPushConstants(), bonesDescriptorSet->handle());
+			}
+
+			/* Barrier B: mirror writes -> BLAS refit reads. */
+			{
+				VkMemoryBarrier barrier{};
+				barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+				vkCmdPipelineBarrier(
+					cmdBuf,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					0,
+					1, &barrier,
+					0, nullptr,
+					0, nullptr
+				);
+			}
+
+			for ( const auto & instance : m_pendingSkinnedInstances )
+			{
+				m_accelerationStructureBuilder->recordBLASRefit(cmdBuf, *instance->rtSkinnedBLAS(), instance->rtRefitInputs(), instance->rtRefitScratchAddress());
+			}
+
+			/* Barrier C: BLAS refit writes -> TLAS build reads. */
+			{
+				VkMemoryBarrier barrier{};
+				barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+				barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+				vkCmdPipelineBarrier(
+					cmdBuf,
+					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					0,
+					1, &barrier,
+					0, nullptr,
+					0, nullptr
+				);
+			}
 		}
 
 		m_accelerationStructureBuilder->recordTLASBuild(cmdBuf, *m_pendingTLASBuild);

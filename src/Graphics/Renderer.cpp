@@ -40,6 +40,7 @@
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"
 #include "IBLTexture.hpp"
+#include "SkinnedGeometryProcessor.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
 #include "MDI/BatchBuilder.hpp"
@@ -631,6 +632,21 @@ namespace EmEn::Graphics
 				Tracer::warning(ClassId, "Unable to initialize the acceleration structure builder. Ray tracing will be unavailable.");
 
 				m_accelerationStructureBuilder.reset();
+			}
+
+			/* Skinned geometry RT support: compute pass skinning vertices into per-instance
+			 * mirror buffers for the per-frame BLAS refit. Optional: without it, skinned
+			 * meshes are simply absent from the TLAS. */
+			if ( m_accelerationStructureBuilder != nullptr )
+			{
+				m_skinnedGeometryProcessor = std::make_unique< SkinnedGeometryProcessor >();
+
+				if ( !m_skinnedGeometryProcessor->initialize(*this) )
+				{
+					Tracer::warning(ClassId, "Unable to initialize the skinned geometry processor. Skinned meshes will be absent from ray-traced effects.");
+
+					m_skinnedGeometryProcessor.reset();
+				}
 			}
 		}
 
@@ -1686,7 +1702,7 @@ namespace EmEn::Graphics
 		{
 			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
-			scenePtr->recordTLASBuild(commandBuffer->handle());
+			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
 		}
 
 		/* Render pass 1: Scene rendering (clears buffers). */
@@ -1800,7 +1816,7 @@ namespace EmEn::Graphics
 		{
 			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
-			scenePtr->recordTLASBuild(commandBuffer->handle());
+			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
 		}
 
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.

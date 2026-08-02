@@ -42,6 +42,7 @@
 #include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -261,6 +262,162 @@ namespace EmEn::Graphics::RenderableInstance
 		m_skinningUploadedFrame = frameCursor;
 
 		return m_skinningDescriptorSets[section].get();
+	}
+
+	bool
+	Abstract::createRTSkinnedGeometryResources (Vulkan::AccelerationStructureBuilder & builder, const Geometry::Interface & geometry) noexcept
+	{
+		/* Idempotent: resources already exist. */
+		if ( m_rtSkinnedBLAS != nullptr )
+		{
+			return true;
+		}
+
+		/* The compute pass reads the bone matrices SSBO: without skinning resources there
+		 * is no pose to mirror (the bind-pose statue problem this path exists to solve). */
+		if ( !this->hasSkinningResources() )
+		{
+			return false;
+		}
+
+		/* Skinned geometry is always a TriangleList (the TriangleStrip CPU-indices
+		 * conversion path is not supported by the refit). */
+		if ( geometry.topology() != Topology::TriangleList )
+		{
+			return false;
+		}
+
+		const auto * vbo = geometry.vertexBufferObject();
+
+		if ( vbo == nullptr || !vbo->isCreated() )
+		{
+			return false;
+		}
+
+		const auto * ibo = geometry.indexBufferObject();
+		const bool hasIndices = ibo != nullptr && ibo->isCreated();
+		const auto device = vbo->device();
+
+		/* Mirror buffer: full vertex layout copy (same stride and attribute offsets), so
+		 * GPUMeshMetaData offsets stay valid and the trace shaders need no special case. */
+		const auto floatsPerVertex = vbo->vertexElementCount();
+		const auto mirrorSize = static_cast< VkDeviceSize >(vbo->vertexCount()) * floatsPerVertex * sizeof(float);
+
+		m_rtSkinnedMirrorBuffer = std::make_unique< Vulkan::Buffer >(
+			device, 0, mirrorSize,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+			false
+		);
+		m_rtSkinnedMirrorBuffer->setIdentifier(TracerTag, "RTSkinnedMirror", "Buffer");
+
+		if ( !m_rtSkinnedMirrorBuffer->createOnHardware() )
+		{
+			Tracer::error(TracerTag, "Unable to create the RT skinned mirror buffer !");
+
+			m_rtSkinnedMirrorBuffer.reset();
+
+			return false;
+		}
+
+		/* Refit inputs: same sub-geometry partition as the static BLAS path
+		 * (Geometry::Interface::buildAccelerationStructure), vertex data = mirror. */
+		Vulkan::BLASGeometryInput sharedHeader{};
+		sharedHeader.vertexBuffer = m_rtSkinnedMirrorBuffer->handle();
+		sharedHeader.vertexCount = vbo->vertexCount();
+		sharedHeader.vertexStride = floatsPerVertex * static_cast< uint32_t >(sizeof(float));
+
+		const auto totalIndexCount = hasIndices ? ibo->indexCount() : 0U;
+
+		if ( hasIndices )
+		{
+			sharedHeader.indexBuffer = ibo->handle();
+			sharedHeader.indexType = VK_INDEX_TYPE_UINT32;
+		}
+
+		m_rtRefitInputs.clear();
+
+		if ( const auto subGeoCount = geometry.subGeometryCount(); subGeoCount <= 1 )
+		{
+			Vulkan::BLASGeometryInput single = sharedHeader;
+			single.firstIndex = 0;
+			single.indexCount = totalIndexCount;
+			m_rtRefitInputs.emplace_back(single);
+		}
+		else
+		{
+			m_rtRefitInputs.reserve(subGeoCount);
+
+			for ( uint32_t subGeoIndex = 0; subGeoIndex < subGeoCount; ++subGeoIndex )
+			{
+				const auto range = geometry.subGeometryRange(subGeoIndex); /* {firstIndex, indexCount} */
+				Vulkan::BLASGeometryInput sub = sharedHeader;
+				sub.firstIndex = range[0];
+				sub.indexCount = range[1];
+				m_rtRefitInputs.emplace_back(sub);
+			}
+		}
+
+		/* Initial build from the SOURCE VBO: the bind pose is valid vertex data, while
+		 * the mirror is garbage until the first compute dispatch — feeding garbage AABBs
+		 * to the AS unit is exactly the class of fault behind Xid-style GPU stalls. */
+		auto initialInputs = m_rtRefitInputs;
+
+		for ( auto & input : initialInputs )
+		{
+			input.vertexBuffer = vbo->handle();
+		}
+
+		m_rtSkinnedBLAS = builder.buildBLAS(initialInputs, true);
+
+		if ( m_rtSkinnedBLAS == nullptr )
+		{
+			Tracer::error(TracerTag, "Unable to build the refit-able BLAS for skinned geometry !");
+
+			m_rtSkinnedMirrorBuffer.reset();
+			m_rtRefitInputs.clear();
+
+			return false;
+		}
+
+		/* Update scratch buffer (over-allocated for alignment, like the builder's own). */
+		constexpr VkDeviceSize ScratchAlignment = 256;
+
+		m_rtRefitScratchBuffer = std::make_unique< Vulkan::Buffer >(
+			device, 0, m_rtSkinnedBLAS->updateScratchSize() + ScratchAlignment,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			false
+		);
+		m_rtRefitScratchBuffer->setIdentifier(TracerTag, "RTRefitScratch", "Buffer");
+
+		if ( !m_rtRefitScratchBuffer->createOnHardware() )
+		{
+			Tracer::error(TracerTag, "Unable to create the BLAS refit scratch buffer !");
+
+			m_rtSkinnedBLAS.reset();
+			m_rtSkinnedMirrorBuffer.reset();
+			m_rtRefitScratchBuffer.reset();
+			m_rtRefitInputs.clear();
+
+			return false;
+		}
+
+		m_rtRefitScratchAddress = (builder.getBufferDeviceAddress(m_rtRefitScratchBuffer->handle()) + ScratchAlignment - 1) & ~(ScratchAlignment - 1);
+
+		/* Ready-made dispatch description. The influence vec4 and weight vec4 are always
+		 * the LAST 8 floats of the vertex layout (see Geometry::getElementCountFromFlags). */
+		m_rtSkinningPushConstants.srcAddress = builder.getBufferDeviceAddress(vbo->handle());
+		m_rtSkinningPushConstants.dstAddress = builder.getBufferDeviceAddress(m_rtSkinnedMirrorBuffer->handle());
+		m_rtSkinningPushConstants.vertexCount = vbo->vertexCount();
+		m_rtSkinningPushConstants.floatsPerVertex = floatsPerVertex;
+		m_rtSkinningPushConstants.tbnMode = geometry.tangentSpaceEnabled() ? 2U : (geometry.normalEnabled() ? 1U : 0U);
+		m_rtSkinningPushConstants.influenceOffset = floatsPerVertex - 8U;
+
+		TraceInfo{TracerTag} <<
+			"RT skinned geometry resources created for '" << geometry.name() << "': " <<
+			vbo->vertexCount() << " vertices, " << m_rtRefitInputs.size() << " sub-geometries, "
+			"mirror " << mirrorSize << " bytes, update scratch " << m_rtSkinnedBLAS->updateScratchSize() << " bytes.";
+
+		return true;
 	}
 
 	Renderable::ProgramCacheKey

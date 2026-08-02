@@ -268,6 +268,44 @@ The trace pass is the interesting one:
 > in the material reflection code and in both post-process miss branches. Get it wrong and the
 > reflection is vertically mirrored.
 
+### 3.3 Skinned geometry in the TLAS — per-frame BLAS refit (Aug 2026)
+
+A skinned mesh's VBO holds the **bind pose**; the visible shape only exists through the bone
+matrices applied in the vertex shader. A geometry-level static BLAS therefore puts a frozen
+mannequin in the TLAS — and at the WRONG scale: the TLAS instance transform is
+`nodeWorld × instanceMatrix`, but for a skinned mesh the real size comes out of the joint
+matrices, not out of `bindPose × nodeWorld`. Measured on ReflexionDebug's glTF dragon: a
+36 cm statuette (raw bind span 119 units × 0.12 demo scale × 0.0254 inch-to-metre export
+node) versus the metres-tall raster dragon — i.e. **totally invisible** in any reflection.
+
+The engine therefore runs the industry-standard refit path (UE/Unity equivalent):
+
+| Piece | Where | Role |
+|-------|-------|------|
+| Guard | `Geometry::Interface::buildAccelerationStructure()` | refuses to build a static BLAS for `influenceEnabled()` geometry |
+| Mirror + BLAS | `RenderableInstance::Abstract::createRTSkinnedGeometryResources()` | **per INSTANCE** (two actors sharing a mesh have different poses): a full-layout mirror vertex buffer, an `ALLOW_UPDATE` BLAS (initial build from the SOURCE VBO — bind pose is valid data, the mirror is garbage until the first dispatch), and the update scratch |
+| Compute skinning | `Graphics::SkinnedGeometryProcessor` (renderer-owned, beside the AS builder) | one dispatch per skinned instance per frame: copies the whole vertex, then overwrites position and normal/TBN with the CURRENT-pose skinning (same math as `Saphir::VertexShader`, interleaved `{current, previous}` bones, even slots) |
+| Refit | `AccelerationStructureBuilder::recordBLASRefit()` | `vkCmdBuildAccelerationStructuresKHR` mode UPDATE, src = dst, flags matching the original build |
+| Orchestration | `SceneMetaData::recordTLASBuild()` | barriers A (previous ray-query reads → compute writes), dispatches, B (mirror writes → AS build reads), refits, C (BLAS writes → TLAS build reads), then the TLAS build |
+
+Load-bearing details:
+
+- **The mirror clones the source layout** (same stride, same attribute offsets), so
+  `GPUMeshMetaData` needs no special case — `vertexBufferAddress` simply points at the mirror
+  and hit shading reads current-pose normals/UVs. The influence/weight vec4s are always the
+  LAST 8 floats of the layout (`influenceOffset = floatsPerVertex - 8`).
+- **The bone descriptor sets are SHARED with the raster**: the skinning DS layout declares
+  `VERTEX | COMPUTE`, and `flushSkinningMatrices()` (upload deduplicated on the frame cursor)
+  is called from the RT recording first — RT and raster skin with the exact same pose section.
+- **Pose sync**: the reflection shows the same animation frame as the raster dragon standing
+  next to the sphere. If they ever diverge, suspect the flush/cursor contract, not the BLAS.
+- Refit-ineligible skinned instances (no bone SSBO yet, TriangleStrip) are kept OUT of the
+  TLAS rather than shown as statues.
+- Barriers use `FRAGMENT | COMPUTE` for ray-query reads — **never** the RT-pipeline stage bit
+  (the engine is `VK_KHR_ray_query` only).
+- `SceneMetaData` logs the TLAS content (name, position, scale, alpha-test) whenever the
+  instance count changes — first thing to read when something is missing from a reflection.
+
 ---
 
 ## 4. Arbitration — the part that is not obvious

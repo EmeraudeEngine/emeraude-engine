@@ -154,10 +154,30 @@ namespace EmEn::Vulkan
 			 * entries). The shader uses rayQueryGetIntersectionGeometryIndexEXT to know
 			 * which sub-geometry was hit and look up its specific material.
 			 * @param geometries The sub-geometry inputs.
+			 * @param allowUpdate Build with ALLOW_UPDATE so the BLAS can be refit per frame
+			 * (skinned geometry). The update scratch size is recorded on the returned structure.
+			 * Default false.
 			 * @return std::unique_ptr< AccelerationStructure > The built BLAS, or nullptr on failure.
 			 */
 			[[nodiscard]]
-			std::unique_ptr< AccelerationStructure > buildBLAS (const std::vector< BLASGeometryInput > & geometries) noexcept;
+			std::unique_ptr< AccelerationStructure > buildBLAS (const std::vector< BLASGeometryInput > & geometries, bool allowUpdate = false) noexcept;
+
+			/**
+			 * @brief Records an UPDATE-mode BLAS rebuild (refit) into an external command buffer.
+			 * @note The BLAS must have been built with allowUpdate=true and the geometry inputs
+			 * must match the original build STRUCTURALLY (same sub-geometry count, primitive
+			 * counts, index buffers) — only the vertex data address may differ (that is the
+			 * point: it targets the skinned-mirror vertex buffer refreshed by compute).
+			 * No barriers are recorded here; the caller owns the synchronization (compute
+			 * write -> build read before, build write -> TLAS build read after).
+			 * @param cmdBuf The Vulkan command buffer to record into (must be in recording state).
+			 * @param blas The acceleration structure to refit (source and destination).
+			 * @param geometries The sub-geometry inputs (vertex data may point to the mirror buffer).
+			 * @param scratchAddress The device address of a scratch buffer of at least
+			 * blas.updateScratchSize() bytes (256-byte aligned).
+			 * @return void
+			 */
+			void recordBLASRefit (VkCommandBuffer cmdBuf, const AccelerationStructure & blas, const std::vector< BLASGeometryInput > & geometries, VkDeviceAddress scratchAddress) noexcept;
 
 			/**
 			 * @brief Returns whether the device was lost during a build (sticky flag).

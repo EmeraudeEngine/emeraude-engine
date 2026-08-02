@@ -163,12 +163,36 @@ namespace EmEn::Vulkan
 				return m_backingBuffer;
 			}
 
+			/**
+			 * @brief Sets the scratch size required for an UPDATE-mode rebuild (refit).
+			 * @note Recorded by the builder when the structure is built with ALLOW_UPDATE.
+			 * @param size The update scratch size in bytes.
+			 * @return void
+			 */
+			void
+			setUpdateScratchSize (VkDeviceSize size) noexcept
+			{
+				m_updateScratchSize = size;
+			}
+
+			/**
+			 * @brief Returns the scratch size required for an UPDATE-mode rebuild (refit).
+			 * @return VkDeviceSize Zero when the structure was not built with ALLOW_UPDATE.
+			 */
+			[[nodiscard]]
+			VkDeviceSize
+			updateScratchSize () const noexcept
+			{
+				return m_updateScratchSize;
+			}
+
 		private:
 
 			VkAccelerationStructureKHR m_handle{VK_NULL_HANDLE};
 			VkAccelerationStructureTypeKHR m_type{VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR};
 			VkDeviceSize m_size{0};
 			VkDeviceAddress m_deviceAddress{0};
+			VkDeviceSize m_updateScratchSize{0};
 			PFN_vkDestroyAccelerationStructureKHR m_fpDestroyAccelerationStructure{nullptr};
 			Buffer m_backingBuffer;
 	};

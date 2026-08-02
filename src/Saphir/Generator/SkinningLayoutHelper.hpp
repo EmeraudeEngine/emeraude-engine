@@ -30,6 +30,7 @@
 #include <memory>
 
 /* Local inclusions for usages. */
+#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -53,8 +54,10 @@ namespace EmEn::Saphir::Generator
 			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(UUID);
 			descriptorSetLayout->setIdentifier("SkeletalAnimation", "SkinningMatrices", "DescriptorSetLayout");
 
-			/* Binding 0: Skinning matrices SSBO (host-visible, updated per frame). */
-			descriptorSetLayout->declareStorageBuffer(0, VK_SHADER_STAGE_VERTEX_BIT);
+			/* Binding 0: Skinning matrices SSBO (host-visible, updated per frame).
+			 * COMPUTE stage: the RT skinned-mirror pass (SkinnedGeometryProcessor) binds
+			 * the SAME per-section descriptor sets to skin vertices for BLAS refit. */
+			descriptorSetLayout->declareStorageBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 
 			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
 			{

@@ -293,7 +293,7 @@ how to add new commands.
 -   **Scene Graph:** [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) (Entity-Component hierarchy).
 -   **Multi-Scene Resource Ownership:** [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) (**Code-generation doctrine** — who owns what across scene load/switch/delete; read before writing resource code).
 -   **Shadow Mapping:** [`docs/shadow-mapping.md`](docs/shadow-mapping.md) (PCF, color projection, render pass types).
--   **Reflection Pipeline:** [`docs/reflection-pipeline.md`](docs/reflection-pipeline.md) (**the seven reflection paths and how they arbitrate** — reflectivity nibble, normals-buffer alpha packing, `mix()` composite. Read before touching SSR/RTR/IBL or any `Reflection` material component).
+-   **Reflection Pipeline:** [`docs/reflection-pipeline.md`](docs/reflection-pipeline.md) (**the seven reflection paths and how they arbitrate** — reflectivity nibble, normals-buffer alpha packing, `mix()` composite, skinned-geometry BLAS refit. Read before touching SSR/RTR/IBL, any `Reflection` material component, or anything skinned that must appear in ray-traced effects).
 -   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
 -   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
 -   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).

@@ -55,10 +55,16 @@ namespace EmEn
 	namespace Graphics
 	{
 		class BindlessTextureManager;
+		class SkinnedGeometryProcessor;
 
 		namespace Material
 		{
 			class Interface;
+		}
+
+		namespace RenderableInstance
+		{
+			class Abstract;
 		}
 	}
 
@@ -159,9 +165,14 @@ namespace EmEn::Scenes
 			 * @brief Records the pending TLAS build into an external command buffer.
 			 * @note Must be called after rebuild() and before render passes that use RT.
 			 * No-op if there is no pending build (RT disabled or empty scene).
+			 * When skinned instances were collected, the skinned-mirror compute dispatches
+			 * and the per-instance BLAS refits are recorded FIRST (with the required
+			 * barriers) so the TLAS references this frame's pose.
 			 * @param cmdBuf The Vulkan command buffer to record into (must be in recording state).
+			 * @param skinnedGeometryProcessor The renderer's skinned geometry processor, or
+			 * nullptr (skinned instances then keep their last refit pose this frame).
 			 */
-			void recordTLASBuild (VkCommandBuffer cmdBuf) noexcept;
+			void recordTLASBuild (VkCommandBuffer cmdBuf, const Graphics::SkinnedGeometryProcessor * skinnedGeometryProcessor) noexcept;
 
 			/**
 			 * @brief Returns whether a TLAS build is pending and needs to be recorded.
@@ -266,6 +277,10 @@ namespace EmEn::Scenes
 			std::unordered_map< const Graphics::Material::Interface *, uint32_t > m_rebuildMaterialMap;
 			std::vector< Graphics::Material::GPURTMaterialData > m_rebuildMaterialEntries;
 			std::unordered_set< const Vulkan::TextureInterface * > m_rebuildActiveTextures;
+			/** @brief Skinned instances collected this frame: their mirror dispatch + BLAS
+			 * refit are recorded by recordTLASBuild() ahead of the TLAS build. The shared
+			 * pointers keep the per-instance RT resources alive until recording. */
+			std::vector< std::shared_ptr< const Graphics::RenderableInstance::Abstract > > m_pendingSkinnedInstances;
 			/** @brief Number of active RT instances this frame. */
 			size_t m_instanceCount{0};
 			/** @brief Number of unique RT materials this frame. */

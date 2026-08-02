@@ -45,11 +45,13 @@
 /* Local inclusions for usages. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/SkinnedGeometryProcessor.hpp"
 #include "Graphics/Types.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
 #include "RenderContext.hpp"
 #include "RenderStateTracker.hpp"
+#include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
@@ -557,6 +559,103 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Creates the per-instance ray-tracing resources for skinned geometry:
+			 * the skinned-mirror vertex buffer, the refit-able BLAS and its update scratch.
+			 * @details The BLAS is initially built from the SOURCE VBO (bind pose — valid
+			 * data; the mirror holds garbage until the first compute dispatch), then refit
+			 * every frame from the mirror buffer. Idempotent: returns true when already created.
+			 * @note Requires skinning resources (bone matrices SSBO) and an indexed or
+			 * non-indexed TriangleList geometry. Two instances sharing the same geometry
+			 * each get their own mirror and BLAS (different poses).
+			 * @param builder A reference to the renderer's acceleration structure builder.
+			 * @param geometry A reference to the instance's geometry.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createRTSkinnedGeometryResources (Vulkan::AccelerationStructureBuilder & builder, const Geometry::Interface & geometry) noexcept;
+
+			/**
+			 * @brief Returns whether the per-instance RT skinned geometry resources exist.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasRTSkinnedGeometry () const noexcept
+			{
+				return m_rtSkinnedBLAS != nullptr;
+			}
+
+			/**
+			 * @brief Returns the per-instance refit-able BLAS (skinned geometry), or nullptr.
+			 * @return const Vulkan::AccelerationStructure *
+			 */
+			[[nodiscard]]
+			const Vulkan::AccelerationStructure *
+			rtSkinnedBLAS () const noexcept
+			{
+				return m_rtSkinnedBLAS.get();
+			}
+
+			/**
+			 * @brief Returns the BLAS refit geometry inputs (vertex data = mirror buffer).
+			 * @return const std::vector< Vulkan::BLASGeometryInput > &
+			 */
+			[[nodiscard]]
+			const std::vector< Vulkan::BLASGeometryInput > &
+			rtRefitInputs () const noexcept
+			{
+				return m_rtRefitInputs;
+			}
+
+			/**
+			 * @brief Returns the aligned device address of the BLAS update scratch buffer.
+			 * @return VkDeviceAddress
+			 */
+			[[nodiscard]]
+			VkDeviceAddress
+			rtRefitScratchAddress () const noexcept
+			{
+				return m_rtRefitScratchAddress;
+			}
+
+			/**
+			 * @brief Returns the device address of the skinned-mirror vertex buffer.
+			 * @note This is what GPUMeshMetaData.vertexBufferAddress must point to for
+			 * skinned instances (RT hit shading reads the CURRENT pose, not the bind pose).
+			 * @return VkDeviceAddress
+			 */
+			[[nodiscard]]
+			VkDeviceAddress
+			rtMirrorBufferAddress () const noexcept
+			{
+				return m_rtSkinningPushConstants.dstAddress;
+			}
+
+			/**
+			 * @brief Returns the ready-made push constants for the skinning mirror dispatch.
+			 * @return const SkinnedGeometryProcessor::PushConstants &
+			 */
+			[[nodiscard]]
+			const SkinnedGeometryProcessor::PushConstants &
+			rtSkinningPushConstants () const noexcept
+			{
+				return m_rtSkinningPushConstants;
+			}
+
+			/**
+			 * @brief Uploads the staged pose into the SSBO section of the frame being recorded,
+			 * once per frame (deduplicated on the frame cursor), and selects the descriptor set
+			 * to bind. Render thread only, called by the bind sites (scene, shadow, TBN passes)
+			 * and by the RT skinned-mirror recording (SceneMetaData::recordTLASBuild) — the
+			 * dedup guarantees RT and raster skin with the exact same pose.
+			 * @note Uploading once per frame is the WHOLE fix: every pass of a frame then reads
+			 * the same section, whatever the logic thread stages meanwhile.
+			 * @return const Vulkan::DescriptorSet *
+			 */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet * flushSkinningMatrices () const noexcept;
+
+			/**
 			 * @brief Prepares the renderable instance for shadow casting.
 			 *
 			 * Generates shadow casting shader programs for each material layer.
@@ -952,17 +1051,6 @@ namespace EmEn::Graphics::RenderableInstance
 			[[nodiscard]]
 			std::shared_ptr< Saphir::Program > resolveProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderable::ProgramCacheKey & cacheKey) const noexcept;
 
-			/**
-			 * @brief Uploads the staged pose into the SSBO section of the frame being recorded,
-			 * once per frame (deduplicated on the frame cursor), and selects the descriptor set
-			 * to bind. Render thread only, called by the bind sites (scene, shadow, TBN passes).
-			 * @note Uploading once per frame is the WHOLE fix: every pass of a frame then reads
-			 * the same section, whatever the logic thread stages meanwhile.
-			 * @return const Vulkan::DescriptorSet *
-			 */
-			[[nodiscard]]
-			const Vulkan::DescriptorSet * flushSkinningMatrices () const noexcept;
-
 			/** @brief Entry in the instance-local resolved program cache. */
 			struct ResolvedProgram final
 			{
@@ -999,6 +1087,17 @@ namespace EmEn::Graphics::RenderableInstance
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_skinningDescriptorSets;
 			/** @brief Protects m_skinningStaging between the logic thread (staging) and the render thread (upload). */
 			mutable std::mutex m_skinningStagingMutex;
+			/* Ray-tracing skinned geometry resources (per-instance).
+			 * The mirror buffer receives the compute-skinned vertices (same layout as the
+			 * source VBO) and feeds both the per-frame BLAS refit and the RT hit shading. */
+			std::unique_ptr< Vulkan::Buffer > m_rtSkinnedMirrorBuffer;
+			std::unique_ptr< Vulkan::Buffer > m_rtRefitScratchBuffer;
+			std::unique_ptr< Vulkan::AccelerationStructure > m_rtSkinnedBLAS;
+			/** @brief Refit geometry inputs (vertex data = mirror buffer), fixed at creation. */
+			std::vector< Vulkan::BLASGeometryInput > m_rtRefitInputs;
+			/** @brief Ready-made dispatch description for the skinning mirror compute pass. */
+			SkinnedGeometryProcessor::PushConstants m_rtSkinningPushConstants;
+			VkDeviceAddress m_rtRefitScratchAddress{0};
 			/** @brief Frame cursor of the last pose upload (render thread only). */
 			mutable uint64_t m_skinningUploadedFrame{std::numeric_limits< uint64_t >::max()};
 			/** @brief Aligned byte size of one SSBO section. */

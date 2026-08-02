@@ -129,7 +129,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::unique_ptr< AccelerationStructure >
-	AccelerationStructureBuilder::buildBLAS (const std::vector< BLASGeometryInput > & geometries) noexcept
+	AccelerationStructureBuilder::buildBLAS (const std::vector< BLASGeometryInput > & geometries, bool allowUpdate) noexcept
 	{
 		if ( geometries.empty() )
 		{
@@ -283,6 +283,12 @@ namespace EmEn::Vulkan
 		buildGeometryInfo.pNext = nullptr;
 		buildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 		buildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+
+		if ( allowUpdate )
+		{
+			buildGeometryInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+		}
+
 		buildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 		buildGeometryInfo.geometryCount = static_cast< uint32_t >(asGeometries.size());
 		buildGeometryInfo.pGeometries = asGeometries.data();
@@ -300,6 +306,11 @@ namespace EmEn::Vulkan
 			TraceError{ClassId} << "Unable to create BLAS (" << buildSizesInfo.accelerationStructureSize << " bytes) !";
 
 			return nullptr;
+		}
+
+		if ( allowUpdate )
+		{
+			blas->setUpdateScratchSize(buildSizesInfo.updateScratchSize);
 		}
 
 		/* Create scratch buffer (over-allocate for alignment padding). */
@@ -412,6 +423,98 @@ namespace EmEn::Vulkan
 		TraceDebug{ClassId} << "BLAS built successfully (" << asGeometries.size() << " sub-geometries, " << totalPrimitives << " triangles, " << buildSizesInfo.accelerationStructureSize << " bytes).";
 
 		return blas;
+	}
+
+	void
+	AccelerationStructureBuilder::recordBLASRefit (VkCommandBuffer cmdBuf, const AccelerationStructure & blas, const std::vector< BLASGeometryInput > & geometries, VkDeviceAddress scratchAddress) noexcept
+	{
+		if ( m_deviceLost || geometries.empty() )
+		{
+			return;
+		}
+
+		const auto deviceHandle = m_device->handle();
+
+		/* NOTE: These arrays are consumed by vkCmdBuildAccelerationStructuresKHR at RECORD
+		 * time (the driver copies the build description into the command buffer), so
+		 * stack-local storage is sufficient here. */
+		std::vector< VkAccelerationStructureGeometryKHR > asGeometries;
+		std::vector< VkAccelerationStructureBuildRangeInfoKHR > buildRangeInfos;
+		asGeometries.reserve(geometries.size());
+		buildRangeInfos.reserve(geometries.size());
+
+		for ( const auto & geometry : geometries )
+		{
+			/* The refit path does not support CPU-converted indices (TriangleStrip):
+			 * skinned geometry is always an indexed TriangleList. */
+			if ( geometry.cpuIndices != nullptr )
+			{
+				Tracer::error(ClassId, "BLAS refit does not support CPU-side indices !");
+
+				return;
+			}
+
+			VkBufferDeviceAddressInfo vertexAddressInfo{};
+			vertexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+			vertexAddressInfo.buffer = geometry.vertexBuffer;
+			const auto vertexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &vertexAddressInfo);
+
+			VkDeviceAddress indexAddress = 0;
+
+			if ( geometry.indexBuffer != VK_NULL_HANDLE )
+			{
+				VkBufferDeviceAddressInfo indexAddressInfo{};
+				indexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+				indexAddressInfo.buffer = geometry.indexBuffer;
+				indexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &indexAddressInfo);
+			}
+
+			const bool hasIndices = indexAddress != 0;
+
+			VkAccelerationStructureGeometryTrianglesDataKHR trianglesData{};
+			trianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+			trianglesData.pNext = nullptr;
+			trianglesData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+			trianglesData.vertexData.deviceAddress = vertexAddress;
+			trianglesData.vertexStride = geometry.vertexStride;
+			trianglesData.maxVertex = geometry.vertexCount - 1;
+			trianglesData.indexType = hasIndices ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_NONE_KHR;
+			trianglesData.indexData.deviceAddress = indexAddress;
+			trianglesData.transformData.deviceAddress = 0;
+
+			VkAccelerationStructureGeometryKHR asGeometry{};
+			asGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+			asGeometry.pNext = nullptr;
+			asGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+			asGeometry.geometry.triangles = trianglesData;
+			asGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+			VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo{};
+			buildRangeInfo.primitiveCount = (hasIndices ? geometry.indexCount : geometry.vertexCount) / 3;
+			buildRangeInfo.primitiveOffset = geometry.firstIndex * static_cast< uint32_t >(sizeof(uint32_t));
+			buildRangeInfo.firstVertex = 0;
+			buildRangeInfo.transformOffset = 0;
+
+			asGeometries.emplace_back(asGeometry);
+			buildRangeInfos.emplace_back(buildRangeInfo);
+		}
+
+		/* Flags MUST match the original build (PREFER_FAST_TRACE | ALLOW_UPDATE). */
+		VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo{};
+		buildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		buildGeometryInfo.pNext = nullptr;
+		buildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+		buildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+		buildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		buildGeometryInfo.srcAccelerationStructure = blas.handle();
+		buildGeometryInfo.dstAccelerationStructure = blas.handle();
+		buildGeometryInfo.geometryCount = static_cast< uint32_t >(asGeometries.size());
+		buildGeometryInfo.pGeometries = asGeometries.data();
+		buildGeometryInfo.scratchData.deviceAddress = scratchAddress;
+
+		const auto * pSingleBuildRangeArray = buildRangeInfos.data();
+
+		m_fpCmdBuild(cmdBuf, 1, &buildGeometryInfo, &pSingleBuildRangeArray);
 	}
 
 	std::unique_ptr< TLASBuildRequest >
