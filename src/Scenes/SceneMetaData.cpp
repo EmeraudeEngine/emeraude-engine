@@ -27,7 +27,9 @@
 #include "SceneMetaData.hpp"
 
 /* STL inclusions. */
+#include <limits>
 #include <ranges>
+#include <sstream>
 #include <unordered_map>
 
 /* Local inclusions. */
@@ -167,6 +169,9 @@ namespace EmEn::Scenes
 			return offset * static_cast< uint32_t >(sizeof(float));
 		};
 
+		/* Human-readable TLAS content description, logged when the instance count changes. */
+		std::ostringstream tlasDump;
+
 		/* Collect instances from a render list. */
 		const auto collectFromList = [&] (const RenderBatch::List & renderList) {
 			for ( const auto & batch : renderList | std::views::values )
@@ -181,6 +186,14 @@ namespace EmEn::Scenes
 				const auto * geometry = renderable->geometry(0);
 
 				if ( geometry == nullptr )
+				{
+					continue;
+				}
+
+				/* Skinned geometry is excluded from the TLAS for now (bind-pose statue at the
+				 * wrong scale — see Geometry::Interface::buildAccelerationStructure()). Skip
+				 * BEFORE the on-demand build attempt so we don't retry it every frame. */
+				if ( geometry->influenceEnabled() )
 				{
 					continue;
 				}
@@ -365,11 +378,38 @@ namespace EmEn::Scenes
 				}
 
 				instances.emplace_back(instance);
+
+				/* Describe the instance for the TLAS content log below. */
+				{
+					const auto & rm = instance.transform.matrix;
+					const float colScale = std::sqrt(rm[0][0] * rm[0][0] + rm[1][0] * rm[1][0] + rm[2][0] * rm[2][0]);
+
+					tlasDump << "\n\t#" << instanceIndex
+						<< " '" << renderable->name() << "'"
+						<< " subGeo=" << subGeoCount
+						<< " pos=(" << rm[0][3] << ", " << rm[1][3] << ", " << rm[2][3] << ")"
+						<< " scale=" << colScale
+						<< (anyAlphaTest ? " [alphaTest]" : "");
+				}
 			}
 		};
 
 		collectFromList(opaqueList);
 		collectFromList(opaqueLightedList);
+
+		/* Log the TLAS content whenever the instance count changes — catches async-loaded
+		 * renderables arriving late, and instantly answers "is X in the TLAS, where, at
+		 * what scale?" (the exact questions of any missing-reflection investigation). */
+		{
+			static size_t s_lastTLASInstanceCount{std::numeric_limits< size_t >::max()};
+
+			if ( instances.size() != s_lastTLASInstanceCount )
+			{
+				s_lastTLASInstanceCount = instances.size();
+
+				TraceInfo{ClassId} << "[TLAS-DUMP] " << instances.size() << " instance(s):" << tlasDump.str();
+			}
+		}
 
 
 		/* --- Resolve bindless texture indices for RT materials --- */

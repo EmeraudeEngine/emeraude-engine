@@ -126,6 +126,17 @@ namespace EmEn::Graphics::Geometry
 			return;
 		}
 
+		/* Skinned geometry: the VBO holds the BIND POSE — the visible shape only exists
+		 * through the per-frame bone matrices applied by the vertex shader, which a static
+		 * BLAS knows nothing about. Building one would put a frozen mannequin (at the mesh
+		 * node's scale, not the skeleton's) into the TLAS: ghost imprints in RTGI, wrong
+		 * statues in RTR. Excluded until the per-frame BLAS refit path lands (compute
+		 * skinning into a dedicated RT vertex buffer + ALLOW_UPDATE rebuild each frame). */
+		if ( this->influenceEnabled() )
+		{
+			return;
+		}
+
 		const auto * vbo = this->vertexBufferObject();
 
 		if ( vbo == nullptr || !vbo->isCreated() )
