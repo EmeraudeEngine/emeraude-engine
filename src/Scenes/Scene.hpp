@@ -1659,6 +1659,21 @@ namespace EmEn::Scenes
 			void updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept;
 
 			/**
+			 * @brief Flags every ON-DEMAND render target (a "once" probe, an on-demand view)
+			 * as out-of-date — the scene content visibly changed.
+			 *
+			 * The on-demand contract (owner decision, Aug 2026): "once" means "not every
+			 * frame", not "never again". The ENGINE fires this signal on its own events —
+			 * a renderable instance becoming ready (an async load materialized) and a
+			 * background switch; the APPLICATION signals its specific changes (a particular
+			 * movement) by calling setRenderOutOfDate() on the target itself.
+			 *
+			 * @note A no-op on automatic (continuous) targets.
+			 * @return void
+			 */
+			void signalOnDemandRenderTargets () const noexcept;
+
+			/**
 			 * @brief Performs the shadow map rendering pass.
 			 *
 			 * Renders the scene from a light's point of view to generate shadow maps.
@@ -2624,6 +2639,8 @@ namespace EmEn::Scenes
 			/** @brief Raised from any thread (setBackground), consumed by processLogics()
 			 * (logic thread) to push the background photometry to the view UBOs. */
 			std::atomic_bool m_backgroundPhotometryDirty{false};
+			/** @brief Deferred on-demand render target refresh (set anywhere, consumed by beginRenderFrame() outside any lock). */
+			mutable std::atomic_bool m_onDemandRefreshPending{false};
 			/** @brief Raised from any thread (applyBackgroundLighting), honored by
 			 * processLogics() once the background resource is loaded. */
 			std::atomic_bool m_backgroundLightingRequested{false};

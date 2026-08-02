@@ -351,6 +351,9 @@ namespace EmEn::Scenes
 	{
 		m_backgroundResource = background;
 
+		/* The sky IS scene content for a probe: on-demand render targets are re-baked. */
+		this->signalOnDemandRenderTargets();
+
 		/* Extract environment cubemap from background if available. */
 		if ( background != nullptr )
 		{

@@ -150,9 +150,17 @@ every frame whatever its flags):
 >    takes the color bits, and `Scene::createRenderToCubemap()` defaults probes to **16-bit HDR**.
 >    Validated under the 100 klx BlueSky: full scene (ground, palm, dragon, sun) in the probe
 >    reflection at the right energy, instead of the flat white veil. Owner-validated.
-> 3. **A "once" bake fires at frame 1**, before async resources (sky) and the deferred
->    `applyBackgroundLighting` poll have landed — it freezes a black, unlit scene forever.
->    The bake must wait for the scene to settle.
+> 3. ✅ **FIXED — the "once" bake fired at frame 1** (black, unlit scene frozen forever) and
+>    "once" had no refresh story. The contract is now EVENT-DRIVEN (owner decision): "once"
+>    means "not every frame", not "never again". The ENGINE signals a re-bake on its own
+>    events — a renderable instance becoming ready (async load materialized,
+>    `Scene::signalOnDemandRenderTargets()`) and a background switch; the APPLICATION signals
+>    its specific changes (a particular movement) via `setRenderOutOfDate()` on the target.
+>    ⚠️ The signal is DEFERRED (atomic flag consumed by `beginRenderFrame()`, outside any
+>    lock): it fires from inside the Renderer's render-to-textures loop, which holds the
+>    render target list mutex — walking the lists there self-deadlocked the render thread.
+>    Validated: once-probe shows the full scene with the animated dragon FROZEN in its
+>    last-event pose while the live one animates beside it.
 > 4. **The subject is rendered into its own probe** (no exclusion list): a reflective object
 >    re-samples itself across frames — the "inception" feedback visible in
 >    `offscreen-rendering`.

@@ -1442,12 +1442,18 @@ entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` 
 `updateEntityProperties()`).
 
 > [!CAUTION]
-> **`notify()` from `Component::processLogics()` runs UNDER `m_componentsMutex`.**
-> `AbstractEntity::processLogics()` holds the components mutex while calling each component's
-> `processLogics()`. A notification handler that re-locks it (any component walk) is a
-> self-deadlock — `ComponentBoundariesModified` therefore only sets a dirty flag, consumed at
-> the END of `AbstractEntity::processLogics()`, outside the lock. Any future per-tick component
-> notification must follow the same deferred pattern.
+> **GENERAL RULE — a signal fired from inside an iteration must be DEFERRED (twice lived,
+> same day, Aug 2026).** The engine walks its collections under non-recursive mutexes; any
+> callback fired DURING such a walk that re-enters the collection (directly or through a
+> handler) self-deadlocks the calling thread. Pattern: the signal sets an atomic/dirty flag,
+> a well-defined point OUTSIDE the lock consumes it.
+> 1. `notify()` from `Component::processLogics()` runs UNDER `m_componentsMutex`
+>    (`AbstractEntity::processLogics()` holds it while calling each component) —
+>    `ComponentBoundariesModified` sets a dirty flag consumed at the END of processLogics.
+> 2. `Scene::signalOnDemandRenderTargets()` fires from
+>    `getRenderableInstanceReadyForRendering()`, i.e. INSIDE the Renderer's render-to-textures
+>    loop which holds the render target list mutex — walking the lists there froze the render
+>    thread (black screen). Atomic flag consumed by `Scene::beginRenderFrame()`.
 
 ## Shader/GLSL Pitfalls
 

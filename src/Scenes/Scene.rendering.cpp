@@ -312,6 +312,16 @@ namespace EmEn::Scenes
 	}
 
 	void
+	Scene::signalOnDemandRenderTargets () const noexcept
+	{
+		/* ⚠️ DEFERRED: this fires from getRenderableInstanceReadyForRendering(), i.e. INSIDE
+		 * the Renderer's render-to-textures loop which already holds the render target list
+		 * mutex — walking the lists here re-locks it on the render thread (self-deadlock,
+		 * black screen, lived). The flag is consumed by beginRenderFrame(), outside any lock. */
+		m_onDemandRefreshPending.store(true, std::memory_order_release);
+	}
+
+	void
 	Scene::updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept
 	{
 		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
@@ -383,6 +393,18 @@ namespace EmEn::Scenes
 	void
 	Scene::beginRenderFrame () noexcept
 	{
+		/* Deferred on-demand refresh (owner contract): consumed here, before any render
+		 * target loop holds its lock. A no-op on automatic (continuous) targets. */
+		if ( m_onDemandRefreshPending.exchange(false, std::memory_order_acq_rel) )
+		{
+			const auto flagTarget = [] (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) {
+				renderTarget->setRenderOutOfDate();
+			};
+
+			this->forEachRenderToTexture(flagTarget);
+			this->forEachRenderToView(flagTarget);
+		}
+
 		m_instanceTransforms.beginFrame(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
 	}
 
@@ -1743,6 +1765,12 @@ namespace EmEn::Scenes
 		{
 			return false;
 		}
+
+		/* CONTENT APPEARED (owner contract for on-demand render targets): this instance just
+		 * became renderable — an async load materialized, the scene visibly changed. Every
+		 * on-demand target (a "once" probe) is flagged for a re-bake; the app signals its own
+		 * specific changes (movements) through setRenderOutOfDate() itself. */
+		this->signalOnDemandRenderTargets();
 
 		/* Generate MDI shader variants for standard opaque non-lighted objects when MDI is enabled.
 		 * Sprites, InfinityView, and other special objects are excluded — they need per-object
