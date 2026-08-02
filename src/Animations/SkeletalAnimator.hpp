@@ -41,6 +41,7 @@
 #include "Animation/Skin.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Quaternion.hpp"
+#include "Math/Space3D/AACuboid.hpp"
 #include "Math/Vector.hpp"
 
 /* Forward declarations. */
@@ -208,6 +209,21 @@ namespace EmEn::Animations
 			}
 
 			/**
+			 * @brief Returns the model-space bounding box of the animated skeleton joints,
+			 * recomputed at every pose update.
+			 * @note This is the JOINT box: the flesh (skinned vertices) extends beyond it.
+			 * Consumers wanting a culling volume must expand it by a margin — see
+			 * Scenes::Component::Visual, which measures that margin on the asset itself.
+			 * @return const Base::Math::Space3D::AACuboid< float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Space3D::AACuboid< float > &
+			jointsBoundingBox () const noexcept
+			{
+				return m_jointsBoundingBox;
+			}
+
+			/**
 			 * @brief Returns true if skinning matrices have been computed at least once.
 			 * @return bool
 			 */
@@ -278,6 +294,8 @@ namespace EmEn::Animations
 			/* ---- Evaluated pose buffers ---- */
 			std::vector< JointPose > m_localPoses;
 			std::vector< Base::Math::Matrix< 4, float > > m_worldMatrices;
+			/** @brief Model-space AABB of the animated joints, recomputed at every pose update. */
+			Base::Math::Space3D::AACuboid< float > m_jointsBoundingBox;
 			std::vector< Base::Math::Matrix< 4, float > > m_skinningMatrices;
 	};
 }

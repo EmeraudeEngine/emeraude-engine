@@ -111,6 +111,14 @@ namespace EmEn::Scenes::Component
 			const Base::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept override
 			{
+				/* Skinned mesh with a live pose: the ANIMATED box (joints + flesh margin,
+				 * see updateAnimatedBoundingBox), because the bind-pose box culls whatever
+				 * the animation moves outside of it. */
+				if ( m_animatedBoundingBox.isValid() )
+				{
+					return m_animatedBoundingBox;
+				}
+
 				return m_renderableInstance->renderable()->boundingBox();
 			}
 
@@ -156,7 +164,20 @@ namespace EmEn::Scenes::Component
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			std::weak_ptr< Graphics::Renderable::Abstract > m_renderableInterface;
+			/**
+			 * @brief Refreshes the animated bounding box from the animator's joints box and
+			 * notifies the entity (ComponentBoundariesModified) so the collision model —
+			 * hence the frustum culling — follows the pose.
+			 * @return void
+			 */
+			void updateAnimatedBoundingBox () noexcept;
+
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 			std::unique_ptr< Animations::SkeletalAnimator > m_skeletalAnimator;
+			/** @brief Bounding box following the animated pose (invalid until the first pose). */
+			Base::Math::Space3D::AACuboid< float > m_animatedBoundingBox;
+			/** @brief Per-axis flesh margin beyond the joints, measured once on the asset. */
+			Base::Math::Vector< 3, float > m_fleshMargin;
+			bool m_fleshMarginComputed{false};
 	};
 }

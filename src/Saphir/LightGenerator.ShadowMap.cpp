@@ -43,6 +43,14 @@ namespace EmEn::Saphir
 	bool
 	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept
 	{
+		/* The shadow term MUST be evaluated at the SKINNED position: the shadow map holds the
+		 * ANIMATED mesh depth (the shadow pass skins), so sampling it at the bind-pose vertex
+		 * position made every animated pose self-occlude — the whole body flickered down to the
+		 * ambient term on fast animation frames (measured on the reflexion-debug dragon). */
+		const std::string localPosition = vertexShader.isSkinningEnabled()
+			? "vec4(skinnedPosition, 1.0)"
+			: "vec4(" + std::string{Attribute::Position} + ", 1.0)";
+
 		/* NOTE: For point light. */
 		if ( shadowCubemap )
 		{
@@ -58,24 +66,24 @@ namespace EmEn::Saphir
 					/* Billboard sprite: the model matrix is computed in-shader
 					 * (SpriteModelMatrix) from the per-instance position/scaling, not
 					 * supplied as the vaModelMatrix vertex attribute. */
-					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << ShaderVariable::SpriteModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << ShaderVariable::SpriteModelMatrix << " * " << localPosition << ";";
 				}
 				else
 				{
 					/* Get the model matrix from VBO. */
-					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+					Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << Attribute::ModelMatrix << " * " << localPosition << ";";
 				}
 			}
 			else if ( vertexShader.isInstanceTransformsEnabled() )
 			{
 				/* Get the model matrix from the InstanceTransforms SSBO entry.
 				 * NOTE: The preparation is guaranteed requested by the MVP synthesis. */
-				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << ShaderVariable::InstanceModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << ShaderVariable::InstanceModelMatrix << " * " << localPosition << ";";
 			}
 			else
 			{
 				/* Get the model matrix from the push constants. */
-				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << Attribute::Position << ", 1.0);";
+				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << MatrixPC(PushConstant::Component::ModelMatrix) << " * " << localPosition << ";";
 			}
 		}
 		/* NOTE: For directional and spot-light. */
@@ -93,22 +101,22 @@ namespace EmEn::Saphir
 					/* Billboard sprite: the model matrix is computed in-shader
 					 * (SpriteModelMatrix) from the per-instance position/scaling, not
 					 * supplied as the vaModelMatrix vertex attribute. */
-					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << ShaderVariable::SpriteModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << ShaderVariable::SpriteModelMatrix << " * " << localPosition << ";";
 				}
 				else
 				{
-					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+					Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << " * " << localPosition << ";";
 				}
 			}
 			else if ( vertexShader.isInstanceTransformsEnabled() )
 			{
 				/* Get the model matrix from the InstanceTransforms SSBO entry.
 				 * NOTE: The preparation is guaranteed requested by the MVP synthesis. */
-				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << ShaderVariable::InstanceModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
+				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << ShaderVariable::InstanceModelMatrix << " * " << localPosition << ";";
 			}
 			else
 			{
-				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << Attribute::Position << ", 1.0);";
+				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << MatrixPC(PushConstant::Component::ModelMatrix) << " * " << localPosition << ";";
 			}
 		}
 

@@ -43,6 +43,7 @@
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
@@ -56,6 +57,9 @@ namespace EmEn::Graphics::RenderableInstance
 	using namespace Saphir::Keys;
 
 	constexpr auto TracerTag{"RenderableInstance"};
+
+	/* Rendered-frame cursor for the skinning per-frame upload (render thread only). */
+	uint64_t Abstract::s_skinningFrameCursor{0};
 
 	void
 	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept
@@ -94,18 +98,24 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Abstract::createSkinningResources (const std::shared_ptr< Device > & device, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept
+	Abstract::createSkinningResources (const std::shared_ptr< Device > & device, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount, uint32_t sectionCount) noexcept
 	{
-		if ( boneCount == 0 || device == nullptr || descriptorSetLayout == nullptr )
+		if ( boneCount == 0 || sectionCount == 0 || device == nullptr || descriptorSetLayout == nullptr )
 		{
 			return false;
 		}
 
 		/* NOTE: Interleaved {current, previous} bone matrices (stride 2) for the
 		 * motion-vectors double skinning — twice the bind-pose-only size. */
-		const auto bufferSize = static_cast< VkDeviceSize >(boneCount * 2UL * 16UL * sizeof(float));
+		m_skinningPoseSize = static_cast< VkDeviceSize >(boneCount * 2UL * 16UL * sizeof(float));
 
-		/* Create the SSBO (host-visible for CPU write each frame). */
+		/* One section per frame in flight, each aligned for a descriptor buffer offset. */
+		const auto minAlignment = device->physicalDevice()->propertiesVK10().limits.minStorageBufferOffsetAlignment;
+		m_skinningSectionSize = minAlignment * Math::alignCount(m_skinningPoseSize, minAlignment);
+
+		const auto bufferSize = m_skinningSectionSize * sectionCount;
+
+		/* Create the SSBO (host-visible; the render thread writes ONE section per frame). */
 		m_skinningSSBO = std::make_unique< ShaderStorageBufferObject >(device, bufferSize, true);
 		m_skinningSSBO->setIdentifier(TracerTag, "SkinningMatrices", "SSBO");
 
@@ -118,11 +128,11 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* Create descriptor pool (1 SSBO descriptor, 1 set, free-able). */
+		/* Create descriptor pool (one SSBO descriptor set per section, free-able). */
 		m_skinningDescriptorPool = std::make_shared< DescriptorPool >(
 			device,
-			std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}},
-			1,
+			std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, sectionCount}},
+			sectionCount,
 			VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT
 		);
 
@@ -136,43 +146,48 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* Allocate descriptor set. */
-		m_skinningDescriptorSet = std::make_unique< DescriptorSet >(m_skinningDescriptorPool, descriptorSetLayout);
+		/* Allocate one descriptor set per section, each on its fixed offset/range. The shader
+		 * still sees bones[] from index 0 — the section split is invisible to the pipeline. */
+		m_skinningDescriptorSets.reserve(sectionCount);
 
-		if ( !m_skinningDescriptorSet->create() )
+		for ( uint32_t section = 0; section < sectionCount; ++section )
 		{
-			Tracer::error(TracerTag, "Unable to allocate skinning descriptor set !");
+			auto descriptorSet = std::make_unique< DescriptorSet >(m_skinningDescriptorPool, descriptorSetLayout);
 
-			m_skinningSSBO.reset();
-			m_skinningDescriptorPool.reset();
-			m_skinningDescriptorSet.reset();
+			const VkDescriptorBufferInfo bufferInfo{
+				.buffer = m_skinningSSBO->handle(),
+				.offset = m_skinningSectionSize * section,
+				.range = m_skinningPoseSize
+			};
 
-			return false;
+			if ( !descriptorSet->create() || !descriptorSet->writeStorageBuffer(0, bufferInfo) )
+			{
+				Tracer::error(TracerTag, "Unable to allocate/write a skinning descriptor set !");
+
+				m_skinningSSBO.reset();
+				m_skinningDescriptorPool.reset();
+				m_skinningDescriptorSets.clear();
+
+				return false;
+			}
+
+			m_skinningDescriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
-		/* Write descriptor: bind the SSBO to binding 0. */
-		const VkDescriptorBufferInfo bufferInfo{
-			.buffer = m_skinningSSBO->handle(),
-			.offset = 0,
-			.range = VK_WHOLE_SIZE
-		};
-
-		if ( !m_skinningDescriptorSet->writeStorageBuffer(0, bufferInfo) )
-		{
-			Tracer::error(TracerTag, "Unable to write skinning descriptor set !");
-
-			return false;
-		}
-
-		/* Initialize SSBO with identity matrices (current AND previous slots) so the
+		/* Initialize EVERY section with identity matrices (current AND previous slots) so the
 		 * mesh renders in bind pose with zero pose velocity until the first animation
 		 * frame uploads real skinning matrices. */
 		{
 			std::vector< Matrix< 4, float > > identityMatrices(static_cast< size_t >(boneCount) * 2UL);
-			m_skinningSSBO->writeData(MemoryRegion{
-				identityMatrices.data(),
-				identityMatrices.size() * sizeof(Matrix< 4, float >)
-			});
+
+			for ( uint32_t section = 0; section < sectionCount; ++section )
+			{
+				m_skinningSSBO->writeData(MemoryRegion{
+					identityMatrices.data(),
+					identityMatrices.size() * sizeof(Matrix< 4, float >),
+					static_cast< size_t >(m_skinningSectionSize * section)
+				});
+			}
 		}
 
 		return true;
@@ -185,6 +200,8 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			return false;
 		}
+
+		const std::lock_guard< std::mutex > lock{m_skinningStagingMutex};
 
 		/* First pose (or bone count change): previous == current, zero pose velocity. */
 		if ( m_previousSkinningMatrices.size() != matrices.size() )
@@ -205,10 +222,45 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Archive the pose for the next update (one history step per logic update). */
 		m_previousSkinningMatrices = matrices;
 
-		return m_skinningSSBO->writeData(MemoryRegion{
-			m_skinningStaging.data(),
-			m_skinningStaging.size() * sizeof(Matrix< 4, float >)
-		});
+		/* NOTE: No GPU write here — the logic thread only STAGES. The render thread uploads
+		 * once per rendered frame into the section of the frame being recorded
+		 * (flushSkinningMatrices), so every pass of a frame skins with the same pose. */
+		return true;
+	}
+
+	const DescriptorSet *
+	Abstract::flushSkinningMatrices () const noexcept
+	{
+		const auto frameCursor = s_skinningFrameCursor;
+
+		/* Already flushed for this frame: every subsequent pass (shadow, ambient, lights, TBN)
+		 * binds the SAME section — that invariant is the fix for the pose desynchronization. */
+		if ( m_skinningUploadedFrame == frameCursor )
+		{
+			return m_skinningDescriptorSets[m_skinningBoundSection].get();
+		}
+
+		const auto section = static_cast< uint32_t >(frameCursor % m_skinningDescriptorSets.size());
+
+		{
+			const std::lock_guard< std::mutex > lock{m_skinningStagingMutex};
+
+			/* Empty staging (no animation played yet): the sections hold the identity poses
+			 * written at creation, binding the section as-is is correct. */
+			if ( !m_skinningStaging.empty() )
+			{
+				m_skinningSSBO->writeData(MemoryRegion{
+					m_skinningStaging.data(),
+					m_skinningStaging.size() * sizeof(Matrix< 4, float >),
+					static_cast< size_t >(m_skinningSectionSize * section)
+				});
+			}
+		}
+
+		m_skinningBoundSection = section;
+		m_skinningUploadedFrame = frameCursor;
+
+		return m_skinningDescriptorSets[section].get();
 	}
 
 	Renderable::ProgramCacheKey
@@ -712,7 +764,8 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
 		if ( this->hasSkinningResources() )
 		{
-			commandBuffer.bind(*m_skinningDescriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
+			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 		}
 
 		/* Bind material descriptor set for alpha-tested shadows. */
@@ -846,7 +899,8 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
 		if ( this->hasSkinningResources() )
 		{
-			commandBuffer.bind(*m_skinningDescriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
+			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 		}
 
 		/* Bind material UBO and samplers. */
@@ -1058,7 +1112,8 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
 		if ( this->hasSkinningResources() )
 		{
-			commandBuffer.bind(*m_skinningDescriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
+			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 		}
 
 		/* Bind material UBO and samplers (skip if already bound). */

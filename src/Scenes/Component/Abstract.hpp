@@ -92,6 +92,11 @@ namespace EmEn::Scenes::Component
 			enum NotificationCode : std::uint8_t
 			{
 				ComponentContentModified,
+				/** @brief Only the component's bounding volume changed (e.g. skeletal animation
+				 * pose update). The entity refreshes its collision model SHAPE without paying
+				 * the full physical properties re-derivation — this fires every logic tick on
+				 * animated skinned meshes. */
+				ComponentBoundariesModified,
 				MaxEnum
 			};
 

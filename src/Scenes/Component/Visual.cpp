@@ -65,6 +65,9 @@ namespace EmEn::Scenes::Component
 			if ( m_skeletalAnimator->hasPose() && m_renderableInstance->hasSkinningResources() )
 			{
 				m_renderableInstance->updateSkinningMatrices(m_skeletalAnimator->skinningMatrices());
+
+				/* The culling volume follows the pose (joints box + flesh margin). */
+				this->updateAnimatedBoundingBox();
 			}
 		}
 		else if ( !m_renderableInterface.expired() )
@@ -96,13 +99,51 @@ namespace EmEn::Scenes::Component
 						auto & renderer = skeletalData->skeletonResource()->serviceProvider().graphicsRenderer();
 						auto descriptorSetLayout = Saphir::Generator::getSkinningDescriptorSetLayout(renderer.layoutManager());
 
-						m_renderableInstance->createSkinningResources(renderer.device(), descriptorSetLayout, boneCount);
+						m_renderableInstance->createSkinningResources(renderer.device(), descriptorSetLayout, boneCount, renderer.framesInFlight());
 					}
 				}
 			}
 		}
 
 		this->updateAnimations(scene.cycle());
+	}
+
+	void
+	Visual::updateAnimatedBoundingBox () noexcept
+	{
+		const auto & jointsBox = m_skeletalAnimator->jointsBoundingBox();
+
+		if ( !jointsBox.isValid() )
+		{
+			return;
+		}
+
+		/* Flesh margin, measured ONCE on the asset itself: how far the bind-pose MESH box
+		 * exceeds the first joints box, per axis. The joints are the skeleton — the skinned
+		 * vertices (wing membranes, muscles) extend beyond them by roughly this much in any
+		 * pose. Computed from the first pose (≈ frame 0), a deliberate approximation. */
+		if ( !m_fleshMarginComputed )
+		{
+			const auto & bindBox = m_renderableInstance->renderable()->boundingBox();
+
+			if ( bindBox.isValid() )
+			{
+				for ( size_t axis = 0; axis < 3; ++axis )
+				{
+					const auto bindSize = bindBox.maximum(axis) - bindBox.minimum(axis);
+					const auto jointsSize = jointsBox.maximum(axis) - jointsBox.minimum(axis);
+
+					m_fleshMargin[axis] = std::max(0.0F, (bindSize - jointsSize) * 0.5F);
+				}
+			}
+
+			m_fleshMarginComputed = true;
+		}
+
+		m_animatedBoundingBox.set(jointsBox.maximum() + m_fleshMargin, jointsBox.minimum() - m_fleshMargin);
+
+		/* The entity refreshes its collision model shape (the frustum culling volume). */
+		this->notify(ComponentBoundariesModified);
 	}
 
 	bool

@@ -1277,7 +1277,11 @@ namespace EmEn::Graphics
 		if ( scene != nullptr )
 		{
 			/* Frame-begin contract: resets the scene's frame-linear instance transforms
-			 * staging BEFORE any prepareRender() of this frame (render-to-textures included). */
+			 * staging BEFORE any prepareRender() of this frame (render-to-textures included).
+			 * The skinning frame cursor selects the skinning SSBO section of this frame and
+			 * deduplicates the per-frame pose upload (see RenderableInstance::Abstract). */
+			RenderableInstance::Abstract::setSkinningFrameCursor(++m_skinningFrameCursor);
+
 			scene->beginRenderFrame();
 
 			if ( this->isShadowMapsEnabled() )
@@ -1488,7 +1492,11 @@ namespace EmEn::Graphics
 		if ( scene != nullptr )
 		{
 			/* Frame-begin contract: resets the scene's frame-linear instance transforms
-			 * staging BEFORE any prepareRender() of this frame (render-to-textures included). */
+			 * staging BEFORE any prepareRender() of this frame (render-to-textures included).
+			 * The skinning frame cursor selects the skinning SSBO section of this frame and
+			 * deduplicates the per-frame pose upload (see RenderableInstance::Abstract). */
+			RenderableInstance::Abstract::setSkinningFrameCursor(++m_skinningFrameCursor);
+
 			scene->beginRenderFrame();
 
 			if ( this->isShadowMapsEnabled() )

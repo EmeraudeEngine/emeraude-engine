@@ -1408,6 +1408,47 @@ the program cache key. See `TODO.md` § "Infinity-view renderables wrote a garba
 
 ---
 
+### Skinned Meshes: Three Traps Paid For On The Same Dragon (Aug 2026)
+
+All three were found on the `reflexion-debug` animated dragon (projet-alpha) and fixed in the
+engine. Symptoms first, because that is how they will come back:
+
+**1. Whole-body lighting flicker on animation frames (shadow mapping ON only).**
+The shadow map holds the ANIMATED mesh depth (the shadow pass skins), but
+`LightGenerator::generateVertexShaderShadowMapCode()` computed `PositionLightSpace` /
+`DirectionWorldSpace` from the raw `Attribute::Position` — the BIND POSE. Sampling the animated
+shadow map at bind-pose positions self-occludes the whole body on any pose far from bind, so the
+model collapsed to the ambient term, deterministically per pose. **The shadow term must be
+evaluated at `skinnedPosition`** whenever `vertexShader.isSkinningEnabled()` — all 8 generation
+sites now go through the `localPosition` expression. Measured before/after with a 10-capture
+burst on the dragon crop (dark-pixel fraction 38-81 % bimodal → 47-62 % continuous).
+
+**2. Skinning SSBO was a single copy written by the logic thread.**
+`updateSkinningMatrices()` used to `writeData()` immediately from `Visual::processLogics()`
+while the GPU read the same buffer for in-flight frames — the per-frame SSBO rule
+(`framesInFlight()` copies) applied here too. Now: the SSBO holds one ALIGNED section per frame
+in flight (`minStorageBufferOffsetAlignment`), one descriptor set per section, the logic thread
+only stages (mutex), and the render thread uploads ONCE per frame at first bind
+(`flushSkinningMatrices()`, deduplicated on a monotonic frame cursor set by the Renderer). The
+invariant that matters: every pass of a frame (shadow, ambient, lights, TBN) binds the SAME
+section.
+
+**3. Skinned visuals were culled on a volume that never followed the animation.**
+Wings vanished at the screen edge. The frustum culling reads the entity's collision-model AABB
+(or the bare position without one). Fix: `SkeletalAnimator` recomputes a model-space joints AABB
+at every pose update; `Visual` expands it by a per-axis "flesh margin" measured ONCE on the
+asset (bind mesh box vs first joints box) and publishes `ComponentBoundariesModified`; the
+entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` — not the full
+`updateEntityProperties()`).
+
+> [!CAUTION]
+> **`notify()` from `Component::processLogics()` runs UNDER `m_componentsMutex`.**
+> `AbstractEntity::processLogics()` holds the components mutex while calling each component's
+> `processLogics()`. A notification handler that re-locks it (any component walk) is a
+> self-deadlock — `ComponentBoundariesModified` therefore only sets a dirty flag, consumed at
+> the END of `AbstractEntity::processLogics()`, outside the lock. Any future per-tick component
+> notification must follow the same deferred pattern.
+
 ## Shader/GLSL Pitfalls
 
 ### Push Constants: the 128-Byte Minimum Guarantee (Jul 2026)

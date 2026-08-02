@@ -32,10 +32,12 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <source_location>
 #include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "FlagTrait.hpp"
@@ -502,21 +504,30 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Creates GPU resources for skeletal skinning (SSBO, descriptor pool, descriptor set).
+			 * @brief Creates GPU resources for skeletal skinning (SSBO, descriptor pool, descriptor sets).
+			 * @note The SSBO is split into @a sectionCount sections (one per frame in flight), each
+			 * with its own descriptor set on a fixed offset/range. The pose is uploaded ONCE per
+			 * rendered frame into the section of the frame being recorded, so the shadow pass and
+			 * the scene pass of a same frame always skin with the SAME pose — a single-copy SSBO
+			 * written from the logic thread used to desynchronize them (whole-body self-shadowing
+			 * flicker on fast animations).
 			 * @param device A reference to the Vulkan device.
 			 * @param descriptorSetLayout The descriptor set layout (must match the pipeline layout).
 			 * @param boneCount The number of bone matrices.
+			 * @param sectionCount The number of buffer sections, i.e. Renderer::framesInFlight().
 			 * @return bool
 			 */
-			bool createSkinningResources (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Vulkan::DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount) noexcept;
+			bool createSkinningResources (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Vulkan::DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount, uint32_t sectionCount) noexcept;
 
 			/**
-			 * @brief Uploads skinning matrices to the SSBO.
-			 * @param matrices The skinning matrices to upload.
+			 * @brief Stages the skinning matrices for the next rendered frame (CPU side only).
+			 * @note Called from the logic thread. The GPU upload is deferred to the render thread
+			 * (flushSkinningMatrices()), into the section of the frame being recorded.
+			 * @param matrices The skinning matrices to stage.
 			 * @return bool
 			 */
 			/* NOTE: Non-const — archives the previous pose for the motion-vectors double
-			 * skinning (the SSBO interleaves {current, previous} matrices, stride 2). */
+			 * skinning (the staging interleaves {current, previous} matrices, stride 2). */
 			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept;
 
 			/**
@@ -527,18 +538,22 @@ namespace EmEn::Graphics::RenderableInstance
 			bool
 			hasSkinningResources () const noexcept
 			{
-				return m_skinningDescriptorSet != nullptr;
+				return !m_skinningDescriptorSets.empty();
 			}
 
 			/**
-			 * @brief Returns the skinning descriptor set for binding during rendering.
-			 * @return const Vulkan::DescriptorSet *
+			 * @brief Sets the frame cursor used to select the skinning SSBO section of the frame
+			 * being recorded and to deduplicate the per-frame pose upload.
+			 * @note Called ONCE per frame by the Renderer, on the render thread, before any
+			 * command recording. Read on the same thread by flushSkinningMatrices().
+			 * @param frameCursor A monotonic rendered-frame counter (NOT the cyclic in-flight index).
+			 * @return void
 			 */
-			[[nodiscard]]
-			const Vulkan::DescriptorSet *
-			skinningDescriptorSet () const noexcept
+			static
+			void
+			setSkinningFrameCursor (uint64_t frameCursor) noexcept
 			{
-				return m_skinningDescriptorSet.get();
+				s_skinningFrameCursor = frameCursor;
 			}
 
 			/**
@@ -937,6 +952,17 @@ namespace EmEn::Graphics::RenderableInstance
 			[[nodiscard]]
 			std::shared_ptr< Saphir::Program > resolveProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderable::ProgramCacheKey & cacheKey) const noexcept;
 
+			/**
+			 * @brief Uploads the staged pose into the SSBO section of the frame being recorded,
+			 * once per frame (deduplicated on the frame cursor), and selects the descriptor set
+			 * to bind. Render thread only, called by the bind sites (scene, shadow, TBN passes).
+			 * @note Uploading once per frame is the WHOLE fix: every pass of a frame then reads
+			 * the same section, whatever the logic thread stages meanwhile.
+			 * @return const Vulkan::DescriptorSet *
+			 */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet * flushSkinningMatrices () const noexcept;
+
 			/** @brief Entry in the instance-local resolved program cache. */
 			struct ResolvedProgram final
 			{
@@ -960,14 +986,29 @@ namespace EmEn::Graphics::RenderableInstance
 			uint32_t m_frameIndex{0};
 			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
 			uint32_t m_instanceTransformsSlot{0};
-			/* Skeletal skinning GPU resources (per-instance). */
+			/* Skeletal skinning GPU resources (per-instance).
+			 * The SSBO holds one section per frame in flight; each descriptor set targets its
+			 * section (fixed offset/range, same layout). See createSkinningResources(). */
 			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;
 			/** @brief Previous-pose bone matrices (motion vectors double skinning). */
 			std::vector< Base::Math::Matrix< 4, float > > m_previousSkinningMatrices;
-			/** @brief Interleaved {current, previous} staging reused across updates. */
+			/** @brief Interleaved {current, previous} staging reused across updates (guarded by m_skinningStagingMutex). */
 			std::vector< Base::Math::Matrix< 4, float > > m_skinningStaging;
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
-			std::unique_ptr< Vulkan::DescriptorSet > m_skinningDescriptorSet;
+			/** @brief One descriptor set per SSBO section (frame in flight). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_skinningDescriptorSets;
+			/** @brief Protects m_skinningStaging between the logic thread (staging) and the render thread (upload). */
+			mutable std::mutex m_skinningStagingMutex;
+			/** @brief Frame cursor of the last pose upload (render thread only). */
+			mutable uint64_t m_skinningUploadedFrame{std::numeric_limits< uint64_t >::max()};
+			/** @brief Aligned byte size of one SSBO section. */
+			VkDeviceSize m_skinningSectionSize{0};
+			/** @brief Byte size of one pose (boneCount x 2 matrices). */
+			VkDeviceSize m_skinningPoseSize{0};
+			/** @brief SSBO section bound for the frame being recorded (render thread only). */
+			mutable uint32_t m_skinningBoundSection{0};
+			/** @brief Rendered-frame cursor, set once per frame by the Renderer (render thread only). */
+			static uint64_t s_skinningFrameCursor;
 			/** @brief Whether m_lastModelMatrix holds a valid previous-frame matrix (false until the first primary staging). */
 			bool m_hasModelHistory{false};
 	};

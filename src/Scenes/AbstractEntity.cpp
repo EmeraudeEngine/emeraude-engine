@@ -72,6 +72,16 @@ namespace EmEn::Scenes
 					this->updateEntityProperties();
 					break;
 
+				/* NOTE: Per-tick signal from animated skinned visuals — shape only, no
+				 * physical properties re-derivation.
+				 * ⚠️ DEFERRED: this notification fires from component->processLogics(), i.e.
+				 * UNDER m_componentsMutex — refreshing here would self-deadlock. The flag is
+				 * consumed at the end of AbstractEntity::processLogics(), outside the lock
+				 * (which also deduplicates multiple visuals notifying in the same tick). */
+				case Component::Abstract::ComponentBoundariesModified :
+					m_collisionBoundariesDirty = true;
+					break;
+
 				default:
 					break;
 			}
@@ -199,6 +209,38 @@ namespace EmEn::Scenes
 		this->updateVisualDebug();
 
 		this->onContentModified();
+	}
+
+	void
+	AbstractEntity::refreshCollisionBoundaries () noexcept
+	{
+		if ( m_collisionModel == nullptr || m_collisionModel->areShapeParametersOverridden() )
+		{
+			return;
+		}
+
+		m_collisionModel->resetShapeParameters();
+
+		const std::lock_guard< std::mutex > lock{m_componentsMutex};
+
+		for ( const auto & component : m_components )
+		{
+			switch ( m_collisionModel->modelType() )
+			{
+				case CollisionModelType::Point :
+					/* Nothing to do ... */
+					break;
+
+				case CollisionModelType::Sphere :
+					m_collisionModel->mergeShapeParameters(component->localBoundingSphere());
+					break;
+
+				case CollisionModelType::AABB :
+				case CollisionModelType::Capsule :
+					m_collisionModel->mergeShapeParameters(component->localBoundingBox());
+					break;
+			}
+		}
 	}
 
 	void
@@ -460,6 +502,15 @@ namespace EmEn::Scenes
 					++componentIt;
 				}
 			}
+		}
+
+		/* Deferred collision shape refresh (ComponentBoundariesModified): consumed here,
+		 * OUTSIDE the components lock — the notification fires under it. */
+		if ( m_collisionBoundariesDirty )
+		{
+			m_collisionBoundariesDirty = false;
+
+			this->refreshCollisionBoundaries();
 		}
 
 		/* NOTE: If the entity has move, we save the cycle number. */

@@ -1015,6 +1015,22 @@ namespace EmEn::Scenes
 			void updateEntityProperties () noexcept;
 
 			/**
+			 * @brief Refreshes ONLY the collision model shape from the component bounding
+			 * volumes — the cheap subset of updateEntityProperties() for per-tick callers.
+			 *
+			 * Fired by the ComponentBoundariesModified notification: an animated skinned
+			 * Visual publishes a new bounding box at every pose update, and the frustum
+			 * culling (isVisibleTo) reads the collision model AABB — a stale shape culls
+			 * body parts the animation moved outside of it.
+			 *
+			 * @note Overridden shape parameters are respected (no-op), like everywhere else.
+			 * @note [THREAD-SAFETY] Runs on the logic thread while the render thread may read
+			 * the collision model live in isVisibleTo() — same benign one-frame race as the
+			 * live getWorldCoordinates() read already in that path.
+			 */
+			void refreshCollisionBoundaries () noexcept;
+
+			/**
 			 * @brief Links a component to the entity (internal).
 			 *
 			 * Called by ComponentBuilder::build(). Adds component to m_components, registers
@@ -1164,6 +1180,7 @@ namespace EmEn::Scenes
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
+			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).
 	};
 
 	template< typename component_t >

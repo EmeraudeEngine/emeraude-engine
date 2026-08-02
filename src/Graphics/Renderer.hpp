@@ -1563,6 +1563,8 @@ namespace EmEn::Graphics
 			std::chrono::high_resolution_clock::time_point m_frameStartTime;
 			std::chrono::nanoseconds m_frameDuration{0}; // 0 = frame limiter disabled
 			uint32_t m_frameRateLimit{0}; // 0 = disabled, otherwise FPS target
+			/** @brief Monotonic rendered-frame counter feeding the skinning frame cursor (render thread only). */
+			uint64_t m_skinningFrameCursor{0};
 			uint32_t m_pipelineBuiltCount{0};
 			uint32_t m_pipelineReusedCount{0};
 			uint32_t m_programBuiltCount{0};

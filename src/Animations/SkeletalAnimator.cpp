@@ -357,6 +357,16 @@ namespace EmEn::Animations
 				m_worldMatrices[i] = m_worldMatrices[static_cast< size_t >(parentIndex)] * localMatrix;
 			}
 		}
+
+		/* Animated joints bounding box (model space): the culling volume of a skinned mesh
+		 * must FOLLOW the animation — a bind-pose volume culls the parts the pose moved
+		 * outside of it (wings vanishing at the screen edge, measured on the dragon). */
+		m_jointsBoundingBox.reset();
+
+		for ( size_t i = 0; i < jointCount; ++i )
+		{
+			m_jointsBoundingBox.merge(m_worldMatrices[i].column(3));
+		}
 	}
 
 	void
