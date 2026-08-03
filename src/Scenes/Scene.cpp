@@ -368,6 +368,11 @@ namespace EmEn::Scenes
 					m_iblBakedIrradiance = irradiance;
 
 					m_iblWriteIndex = (m_iblWriteIndex + 1) % 2;
+
+					/* The environment IBL is scene LIGHT for every material (ambient-pass
+					 * irradiance, prefiltered reflections): a once-probe baked before this
+					 * point captured a darker world — re-bake it (deferred flag, thread-safe). */
+					this->signalOnDemandRenderTargets();
 				}
 				else
 				{

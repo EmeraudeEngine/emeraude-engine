@@ -319,6 +319,14 @@ namespace EmEn::Scenes
 		}
 
 		this->refreshAmbientLightProperties();
+
+		/* The lighting derivation IS scene content for a probe: the sun and the ambient
+		 * just arrived (possibly SECONDS after scene build — this waits on the async
+		 * background resource load), so everything a once-probe baked before this point
+		 * was captured UNLIT (measured: pitch-black floor in the reflexion-debug once-probe
+		 * when the bake won the race against the BlueSky load). Same contract as
+		 * setBackground(): re-bake the on-demand targets (deferred flag, thread-safe). */
+		this->signalOnDemandRenderTargets();
 	}
 
 	void

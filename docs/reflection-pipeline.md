@@ -178,11 +178,16 @@ probe blurs palm/dragon/floor physically, the polished one keeps the mirror.
 >    render target list mutex — walking the lists there self-deadlocked the render thread.
 >    Validated: once-probe shows the full scene with the animated dragon FROZEN in its
 >    last-event pose while the live one animates beside it.
->    ⚠️ **OPEN (Aug 2026): the GROUND can miss the bake.** Measured on the reflexion-debug
->    automated tour (mode 3): the once-probe held palm + dragon but a BLACK lower hemisphere —
->    the bake fired before the ground scene-visual was ready and no re-bake followed. The
->    readiness signal covers ordinary renderable instances; the scene-visual path (basic
->    ground, background) apparently does not re-signal. To investigate.
+>    ✅ **FIXED — the once-bake could capture an UNLIT world** (measured on the automated
+>    tour: pitch-black floor in the mode-3 probe, palm and dragon fine). Two lighting
+>    events were NOT part of the re-bake contract: `applyBackgroundLightingNow()` (sun +
+>    ambient — deferred until the ASYNC background resource loads, a window of seconds)
+>    and the environment IBL bake/publication (the ambient pass reads the irradiance slot;
+>    before publication it parks on the default BLACK cubemap while the applyAmbient
+>    contract zeroes the scalar — a bake in that window records a black floor with ZERO
+>    warnings, every program exists). Both now fire `signalOnDemandRenderTargets()`:
+>    whatever the load race, the LAST re-bake always happens with the sun, the ambient
+>    and the IBL in place.
 > 4. ✅ **FIXED — the subject was rendered into its own probe** (inception feedback, visible in
 >    `offscreen-rendering`). `RenderTarget::Abstract` now carries a rendering EXCLUSION LIST
 >    (opaque renderable-instance keys, `excludeFromRendering()`), consulted by the single
