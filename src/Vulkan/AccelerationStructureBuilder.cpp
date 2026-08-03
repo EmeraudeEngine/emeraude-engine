@@ -91,7 +91,6 @@ namespace EmEn::Vulkan
 
 		/* 2. Cache queue family indices for ownership transfer barriers. */
 		m_graphicsFamilyIndex = m_device->getGraphicsFamilyIndex();
-		m_transferFamilyIndex = m_device->getGraphicsTransferFamilyIndex();
 
 		/* 3. Create command pool for graphics queue (AS builds require graphics or compute queue). */
 		m_commandPool = std::make_shared< CommandPool >(m_device, m_graphicsFamilyIndex, true, true, false);
@@ -179,11 +178,6 @@ namespace EmEn::Vulkan
 		std::vector< Buffer > cpuIndexBuffers;
 		cpuIndexBuffers.reserve(geometries.size());
 
-		/* Track shared buffer handles for the post-build acquire-barrier (assume all
-		 * sub-geometries share the same VB/IB, which is the case for our sub-geometry
-		 * partitioning of a single Geometry::Interface). */
-		VkBuffer sharedVertexBuffer = VK_NULL_HANDLE;
-		VkBuffer sharedIndexBuffer = VK_NULL_HANDLE;
 		uint32_t totalPrimitives = 0;
 
 		for ( const auto & geometry : geometries )
@@ -193,7 +187,6 @@ namespace EmEn::Vulkan
 			vertexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 			vertexAddressInfo.buffer = geometry.vertexBuffer;
 			const auto vertexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &vertexAddressInfo);
-			sharedVertexBuffer = geometry.vertexBuffer;
 
 			/* Handle index buffer: either from CPU indices (temporary upload) or existing GPU buffer. */
 			VkDeviceAddress indexAddress = 0;
@@ -236,7 +229,6 @@ namespace EmEn::Vulkan
 				indexAddress = m_fpGetBufferDeviceAddress(deviceHandle, &indexAddressInfo);
 				effectiveIndexCount = geometry.indexCount;
 				effectiveFirstIndex = geometry.firstIndex;
-				sharedIndexBuffer = geometry.indexBuffer;
 			}
 
 			const bool hasIndices = indexAddress != 0;
@@ -353,64 +345,29 @@ namespace EmEn::Vulkan
 			" scratchSize=" << buildSizesInfo.buildScratchSize <<
 			" asSize=" << buildSizesInfo.accelerationStructureSize;
 
-		/* Record and submit the build command. */
+		/* Record and submit the build command.
+		 * NOTE: NO queue family ownership acquire here. A release is a ONE-SHOT token, and this
+		 * build is not necessarily the first graphics-queue reader of these buffers (two
+		 * instances of the same skeletal mesh each build their own refit-able BLAS from the very
+		 * same vertex buffer — the second acquire had nothing to match,
+		 * VUID-vkQueueSubmit-pSubmits-02207, and the whole submission was rejected). The
+		 * ownership is acquired ONCE, at upload time, by BufferTransferOperation: an uploaded
+		 * buffer already belongs to the graphics family when it gets here. */
 		if ( !this->submitOneShot([&] (VkCommandBuffer cmdBuf) {
-			if ( m_transferFamilyIndex != m_graphicsFamilyIndex )
-			{
-				/* Acquire queue family ownership for the SHARED vertex/index buffers. */
-				VkBufferMemoryBarrier acquireBarriers[2]{};
-				uint32_t barrierCount = 0;
+			VkMemoryBarrier memoryBarrier{};
+			memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+			memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+			memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_SHADER_READ_BIT;
 
-				acquireBarriers[barrierCount].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-				acquireBarriers[barrierCount].srcAccessMask = 0;
-				acquireBarriers[barrierCount].dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-				acquireBarriers[barrierCount].srcQueueFamilyIndex = m_transferFamilyIndex;
-				acquireBarriers[barrierCount].dstQueueFamilyIndex = m_graphicsFamilyIndex;
-				acquireBarriers[barrierCount].buffer = sharedVertexBuffer;
-				acquireBarriers[barrierCount].offset = 0;
-				acquireBarriers[barrierCount].size = VK_WHOLE_SIZE;
-				barrierCount++;
-
-				if ( sharedIndexBuffer != VK_NULL_HANDLE )
-				{
-					acquireBarriers[barrierCount].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-					acquireBarriers[barrierCount].srcAccessMask = 0;
-					acquireBarriers[barrierCount].dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-					acquireBarriers[barrierCount].srcQueueFamilyIndex = m_transferFamilyIndex;
-					acquireBarriers[barrierCount].dstQueueFamilyIndex = m_graphicsFamilyIndex;
-					acquireBarriers[barrierCount].buffer = sharedIndexBuffer;
-					acquireBarriers[barrierCount].offset = 0;
-					acquireBarriers[barrierCount].size = VK_WHOLE_SIZE;
-					barrierCount++;
-				}
-
-				vkCmdPipelineBarrier(
-					cmdBuf,
-					VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-					0,
-					0, nullptr,
-					barrierCount, acquireBarriers,
-					0, nullptr
-				);
-			}
-			else
-			{
-				VkMemoryBarrier memoryBarrier{};
-				memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-				memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-				memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_SHADER_READ_BIT;
-
-				vkCmdPipelineBarrier(
-					cmdBuf,
-					VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-					0,
-					1, &memoryBarrier,
-					0, nullptr,
-					0, nullptr
-				);
-			}
+			vkCmdPipelineBarrier(
+				cmdBuf,
+				VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+				VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+				0,
+				1, &memoryBarrier,
+				0, nullptr,
+				0, nullptr
+			);
 
 			m_fpCmdBuild(cmdBuf, 1, &buildGeometryInfo, &pSingleBuildRangeArray);
 		}) )

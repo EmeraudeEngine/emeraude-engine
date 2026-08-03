@@ -1967,6 +1967,53 @@ validation layers on; the errors fire in the first second, then never again.
 `isMissingSkinningResources`, `traceMissingDescriptorSet`, the 3 binding paths),
 `Scenes/Component/Visual.cpp:processLogics()`
 
+### Fixed: a queue family release is a ONE-SHOT token (Aug 2026)
+
+`VUID-vkQueueSubmit-pSubmits-02207` ×20 in `animation-debug`, each one killing its submission
+with `VK_ERROR_VALIDATION_FAILED_EXT`:
+
+```
+contains a VkBufferMemoryBarrier that acquires ownership of VkBuffer 0xaa… for destination
+queue family 0, but no matching release operation was queued for execution from source
+queue family 1.
+  → Queue submit failed ! → BLAS build command submission failed !
+  → Unable to build the refit-able BLAS for skinned geometry !
+```
+
+Instrumenting `buildBLAS()` gave the answer in one line: the SAME vertex/index buffer pair
+built twice, the first build succeeding, the second failing forever (retried every frame).
+Two instances of the same skeletal mesh (the two foxes) each build their own refit-able BLAS
+from the same source vertex buffer.
+
+`BufferTransferOperation` recorded the ownership RELEASE at upload and left the ACQUIRE to
+"whatever command first reads this buffer on the graphics queue" — while
+`AccelerationStructureBuilder::buildBLAS()` recorded that acquire **unconditionally, on every
+call**. The first consumer matched the release; every consumer after it acquired into the void.
+
+**Fix** (`Vulkan/BufferTransferOperation.{hpp,cpp}`, `Vulkan/TransferManager.cpp`,
+`Vulkan/AccelerationStructureBuilder.{hpp,cpp}`): both halves now live in the SAME operation,
+in the two-step shape `ImageTransferOperation` already used — transfer queue copies and
+releases (signals a semaphore), graphics queue acquires (waits that semaphore, signals the
+operation fence). `buildBLAS()` records a plain memory barrier and no acquire at all.
+
+> [!IMPORTANT]
+> **Rule:** a queue family ownership transfer is a PAIR, and the pair belongs to one operation.
+> Never leave the acquire to an unnamed "first reader" — nothing enforces "first", and the
+> second reader is a validation error that costs you the whole submission. The invariant to
+> hold on to: *once uploaded, a buffer belongs to the graphics family.*
+
+**Bonus fact the fix exposed:** the raster path reads those same buffers on the graphics queue
+and never acquired anything — it was relying on the ownership being transferred by someone
+else. Pairing at upload time closes that hole too.
+
+**Measured:** `animation-debug` goes from 20 validation errors to 0, both foxes get their
+skinned BLAS (they now log twice instead of once), and terrain load time is unchanged
+(6.89/7.10/6.89 s with the fix vs 7.09/7.09/6.88 s without — the extra graphics submission per
+upload does not show).
+
+**Files:** `Vulkan/BufferTransferOperation.cpp:transfer()`,
+`Vulkan/AccelerationStructureBuilder.cpp:buildBLAS()`
+
 ---
 
 ## Related Documentation

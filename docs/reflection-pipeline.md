@@ -373,6 +373,15 @@ Load-bearing details:
   is called from the RT recording first — RT and raster skin with the exact same pose section.
 - **Pose sync**: the reflection shows the same animation frame as the raster dragon standing
   next to the sphere. If they ever diverge, suspect the flush/cursor contract, not the BLAS.
+- ⚠️ **Two instances of the same skeletal mesh build TWO BLAS from the SAME source vertex
+  buffer.** That is by design (one pose each) — and it is what exposed the queue family
+  ownership defect (Aug 2026): the upload released the buffer ownership once, but every BLAS
+  build acquired it, so the second instance's build was rejected outright
+  (`VUID-vkQueueSubmit-pSubmits-02207`) and its skinned BLAS never existed. The release and
+  the acquire now both live in `BufferTransferOperation`. See
+  [`caution-points.md`](caution-points.md) § Vulkan Validation. Symptom to recognize: ONE
+  actor of a duplicated skeletal mesh is a bind-pose statue in the reflections, the other is
+  fine.
 - Refit-ineligible skinned instances (no bone SSBO yet, TriangleStrip) are kept OUT of the
   TLAS rather than shown as statues.
 - Barriers use `FRAGMENT | COMPUTE` for ray-query reads — **never** the RT-pipeline stage bit

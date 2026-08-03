@@ -30,6 +30,7 @@
 #include "Buffer.hpp"
 #include "CommandBuffer.hpp"
 #include "Sync/Fence.hpp"
+#include "Sync/Semaphore.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -84,12 +85,17 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Creates the staging buffer and synchronization primitives on the device.
-			 * @param commandPool A reference to the command pool smart-point for transfer.
+			 * @note When the transfer and graphics queues belong to different families, the
+			 * operation also owns a GRAPHICS-family command buffer and a semaphore: the queue
+			 * family ownership release recorded on the transfer queue is paired, in the same
+			 * operation, with its acquire on the graphics queue (see transfer()).
+			 * @param transferCommandPool A reference to the command pool smart-pointer for transfer.
+			 * @param graphicsCommandPool A reference to the command pool smart-pointer for graphics. Can be null on a single-queue-family device.
 			 * @param initialReservedBytes The reserved bytes for the initial staging buffer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createOnHardware (const std::shared_ptr< CommandPool > & commandPool, size_t initialReservedBytes) noexcept;
+			bool createOnHardware (const std::shared_ptr< CommandPool > & transferCommandPool, const std::shared_ptr< CommandPool > & graphicsCommandPool, size_t initialReservedBytes) noexcept;
 
 			/**
 			 * @brief Destroys the staging buffer and synchronization primitives from the device.
@@ -167,6 +173,11 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
+				if ( m_graphicsCommandBuffer != nullptr && !m_graphicsCommandBuffer->reset() )
+				{
+					return false;
+				}
+
 				return m_operationFence->reset();
 			}
 
@@ -218,6 +229,10 @@ namespace EmEn::Vulkan
 
 			std::unique_ptr< Buffer > m_stagingBuffer;
 			std::unique_ptr< CommandBuffer > m_transferCommandBuffer;
+			/** @brief Ownership acquire on the graphics queue. Only created when the transfer and graphics families differ. */
+			std::unique_ptr< CommandBuffer > m_graphicsCommandBuffer;
 			std::unique_ptr< Sync::Fence > m_operationFence;
+			/** @brief Orders the acquire submission after the release one. Created alongside the graphics command buffer. */
+			std::unique_ptr< Sync::Semaphore > m_semaphore;
 	};
 }

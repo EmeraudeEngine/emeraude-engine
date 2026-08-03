@@ -661,7 +661,7 @@ namespace EmEn::Vulkan
 
 			auto & transferOperation = m_bufferTransferOperations.emplace_back();
 
-			if ( !transferOperation.createOnHardware(m_transferCommandPool, requiredBytes) )
+			if ( !transferOperation.createOnHardware(m_transferCommandPool, m_graphicsCommandPool, requiredBytes) )
 			{
 				TraceError{ClassId} << "Unable to create a new staging buffer of " << requiredBytes << " bytes !";
 
