@@ -1024,6 +1024,16 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether ray tracing effects can be consumed this frame.
+			 * @note False during the first frames of a scene (the TLAS is built asynchronously)
+			 *	   or when the scene has no RT geometry: RT effects must be skipped, otherwise
+			 *	   they draw with an unbound/never-written TLAS descriptor (undefined behavior).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isRayTracingReady () const noexcept;
+
+			/**
 			 * @brief Returns the number of active lights in the RT light SSBO.
 			 * @return uint32_t
 			 */

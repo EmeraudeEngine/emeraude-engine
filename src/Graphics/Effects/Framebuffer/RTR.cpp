@@ -65,7 +65,7 @@ namespace
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
 	 */
-	static constexpr auto RTRTraceFragmentShader = R"GLSL(
+	constexpr auto RTRTraceFragmentShader = R"GLSL(
 #version 460
 #extension GL_EXT_ray_query : require
 #extension GL_EXT_buffer_reference2 : require
@@ -709,7 +709,7 @@ void main()
 	/* Blur shader — identical to SSR blur. */
 	/* Bilateral blur shader — depth/normal-aware separable filter for reflections.
 	 * Preserves sharp reflection edges at geometric boundaries. */
-	static constexpr auto RTRBlurFragmentShader = R"GLSL(
+	constexpr auto RTRBlurFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -791,7 +791,7 @@ void main()
 	 * chain (same pre-convolution as the SSR color pyramid). Operates on the
 	 * PREMULTIPLIED trace output (color·confidence, confidence): the composite's
 	 * division by the filtered confidence renormalizes edge bleed. */
-	static constexpr auto RTRPyramidDownsampleComputeShader = R"GLSL(
+	constexpr auto RTRPyramidDownsampleComputeShader = R"GLSL(
 #version 450
 
 layout(local_size_x = 8, local_size_y = 8) in;
@@ -841,7 +841,7 @@ void main()
 
 	/* Composite shader — blends ray-traced reflections with the scene,
 	 * modulated by the per-pixel reflectivity from the material properties G-buffer. */
-	static constexpr auto RTRCompositeFragmentShader = R"GLSL(
+	constexpr auto RTRCompositeFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -940,8 +940,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
 		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsRayTracingReflectionPixelDoublingKey, DefaultGraphicsRayTracingReflectionPixelDoubling);
-		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
+		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
 
 		/* Trace target (half-res by default, RGBA16F: reflected color RGB + confidence A). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Trace") )
@@ -1020,7 +1020,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(bindlessLayout);
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset  =0,
+					.size = sizeof(TracePushConstants)
+				}
 			});
 		}
 
@@ -1029,7 +1033,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(blurInputLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(BlurPushConstants)
+				}
 			});
 		}
 
@@ -1038,7 +1046,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(compositeLayout);
 
 			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(CompositePushConstants)
+				}
 			});
 		}
 
@@ -1158,17 +1170,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Pre-convolved reflection pyramid (glossy cone approximation) ---- */
 		{
-			const auto device = renderer.device();
+			const auto localDevice = renderer.device();
 
-			const uint32_t pyramidBaseW = std::max(1U, static_cast< uint32_t >(m_traceTarget.width()) / 2U);
-			const uint32_t pyramidBaseH = std::max(1U, static_cast< uint32_t >(m_traceTarget.height()) / 2U);
+			const uint32_t pyramidBaseW = std::max(1U, m_traceTarget.width() / 2U);
+			const uint32_t pyramidBaseH = std::max(1U, m_traceTarget.height() / 2U);
 			m_pyramidMipCount = std::clamp(static_cast< uint32_t >(std::bit_width(std::min(pyramidBaseW, pyramidBaseH))) - 3U, 1U, 8U);
 
 			m_pyramidImage = std::make_shared< Image >(
-				device,
+				localDevice,
 				VK_IMAGE_TYPE_2D,
 				VK_FORMAT_R16G16B16A16_SFLOAT,
-				VkExtent3D{pyramidBaseW, pyramidBaseH, 1U},
+				VkExtent3D{
+					.width = pyramidBaseW,
+					.height = pyramidBaseH,
+					.depth = 1U
+				},
 				VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 				0,
 				m_pyramidMipCount
@@ -1189,7 +1205,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				auto view = std::make_shared< ImageView >(
 					m_pyramidImage,
 					VK_IMAGE_VIEW_TYPE_2D,
-					VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, mip, 1U, 0U, 1U}
+					VkImageSubresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = mip,
+						.levelCount = 1U,
+						.baseArrayLayer = 0U,
+						.layerCount = 1U
+					}
 				);
 				view->setIdentifier(ClassId, "ReflectionPyramidMip" + std::to_string(mip), "ImageView");
 
@@ -1204,7 +1226,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_pyramidFullView = std::make_shared< ImageView >(
 				m_pyramidImage,
 				VK_IMAGE_VIEW_TYPE_2D,
-				VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0U, m_pyramidMipCount, 0U, 1U}
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0U,
+					.levelCount = m_pyramidMipCount,
+					.baseArrayLayer = 0U,
+					.layerCount = 1U
+				}
 			);
 			m_pyramidFullView->setIdentifier(ClassId, "ReflectionPyramidFull", "ImageView");
 
@@ -1230,7 +1258,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 
 			/* Compute DS layout: binding 0 = sampled source, binding 1 = storage dest. */
-			m_pyramidDSLayout = std::make_shared< DescriptorSetLayout >(device, "RTRPyramidDSLayout");
+			m_pyramidDSLayout = std::make_shared< DescriptorSetLayout >(localDevice, "RTRPyramidDSLayout");
 
 			{
 				VkDescriptorSetLayoutBinding binding{};
@@ -1261,7 +1289,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			pushConstantRange.size = sizeof(PyramidPushConstants);
 
 			m_pyramidPipelineLayout = std::make_shared< PipelineLayout >(
-				device, "RTRPyramidPipelineLayout",
+				localDevice,
+				"RTRPyramidPipelineLayout",
 				StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 >{m_pyramidDSLayout},
 				StaticVector< VkPushConstantRange, 4 >{pushConstantRange}
 			);
@@ -1271,7 +1300,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return false;
 			}
 
-			const auto downsampleModule = renderer.shaderManager().getShaderModuleFromSourceCode(device, "RTR_PyramidDownsample_CS", ShaderType::ComputeShader, RTRPyramidDownsampleComputeShader);
+			const auto downsampleModule = renderer.shaderManager().getShaderModuleFromSourceCode(localDevice, "RTR_PyramidDownsample_CS", ShaderType::ComputeShader, RTRPyramidDownsampleComputeShader);
 
 			if ( downsampleModule == nullptr )
 			{
@@ -1289,18 +1318,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 
 			const std::vector< VkDescriptorPoolSize > poolSizes{
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_pyramidMipCount},
-				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, m_pyramidMipCount}
+				{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_pyramidMipCount},
+				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = m_pyramidMipCount}
 			};
 
-			m_pyramidDescriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, m_pyramidMipCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+			m_pyramidDescriptorPool = std::make_shared< DescriptorPool >(localDevice, poolSizes, m_pyramidMipCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 			if ( !m_pyramidDescriptorPool->createOnHardware() )
 			{
 				return false;
 			}
 
-			const auto writeComputeSet = [&device, this] (const DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const ImageView & destView) {
+			const auto writeComputeSet = [&localDevice] (const DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const ImageView & destView) {
 				VkDescriptorImageInfo sourceInfo{};
 				sourceInfo.sampler = sourceSampler;
 				sourceInfo.imageView = sourceView;
@@ -1327,7 +1356,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				writes[1].descriptorCount = 1;
 				writes[1].pImageInfo = &destInfo;
 
-				vkUpdateDescriptorSets(device->handle(), static_cast< uint32_t >(writes.size()), writes.data(), 0, nullptr);
+				vkUpdateDescriptorSets(localDevice->handle(), static_cast< uint32_t >(writes.size()), writes.data(), 0, nullptr);
 			};
 
 			m_pyramidSets.reserve(m_pyramidMipCount);
@@ -1372,7 +1401,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				write.descriptorCount = 1;
 				write.pImageInfo = &pyramidInfo;
 
-				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+				vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
 			}
 		}
 
@@ -1519,12 +1548,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.minDepth = 0.0F,
 				.maxDepth = 1.0F
 			};
+
 			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
 
 			const VkRect2D scissor{
-				.offset = {0, 0},
-				.extent = {m_traceTarget.width(), m_traceTarget.height()}
+				.offset = {
+					.x = 0,
+					.y = 0
+				},
+				.extent = {
+					.width = m_traceTarget.width(),
+					.height = m_traceTarget.height()
+				}
 			};
+
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
 			vkCmdPushConstants(
@@ -1579,7 +1616,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Whole pyramid: UNDEFINED -> GENERAL (previous content discarded, fully rewritten). */
 			{
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_pyramidImage,
 					0,
 					VK_ACCESS_SHADER_WRITE_BIT,
@@ -1601,7 +1638,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				if ( mip > 0 )
 				{
 					/* Previous mip written -> readable by this downsample. */
-					Sync::ImageMemoryBarrier barrier{
+					const Sync::ImageMemoryBarrier barrier{
 						*m_pyramidImage,
 						VK_ACCESS_SHADER_WRITE_BIT,
 						VK_ACCESS_SHADER_READ_BIT,
@@ -1631,7 +1668,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the composite fragment shader. */
 			{
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_pyramidImage,
 					VK_ACCESS_SHADER_WRITE_BIT,
 					VK_ACCESS_SHADER_READ_BIT,
@@ -1711,7 +1748,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/* Cone width per unit of GGX alpha: 2 x assumed hit fraction (0.15 of the
 				 * trace height). v1 — no per-pixel hit distance available. */
 				.coneWidthScale = 0.3F * static_cast< float >(m_traceTarget.height()),
-				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : static_cast< uint32_t >(m_traceTarget.width())))),
+				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : m_traceTarget.width()))),
 				.pyramidMaxLod = static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U)
 			};
 

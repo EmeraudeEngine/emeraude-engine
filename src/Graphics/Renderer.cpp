@@ -2376,6 +2376,12 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	bool
+	Renderer::isRayTracingReady () const noexcept
+	{
+		return m_currentTLAS != nullptr && m_currentTLAS->isCreated() && !m_rtDescriptorSets.empty();
+	}
+
 	void
 	Renderer::updateRTDescriptorSet (const Scenes::SceneMetaData & sceneMetaData, const Scenes::LightSet & lightSet) noexcept
 	{

@@ -49,7 +49,7 @@ namespace
 	using namespace EmEn;
 
 	/* Hi-Z pyramid: mip 0 = scene depth copy. */
-	static constexpr auto SSRHiZCopyComputeShader = R"GLSL(
+	constexpr auto SSRHiZCopyComputeShader = R"GLSL(
 #version 450
 
 layout(local_size_x = 8, local_size_y = 8) in;
@@ -81,7 +81,7 @@ void main()
 	/* Hi-Z pyramid: mip N = MIN 2x2 of mip N-1. The MIN keeps the pyramid CONSERVATIVE:
 	 * a coarse cell can never report farther than its nearest content, so the hierarchical
 	 * traversal never tunnels through geometry (Uludag, GPU Pro 5). */
-	static constexpr auto SSRHiZReduceComputeShader = R"GLSL(
+	constexpr auto SSRHiZReduceComputeShader = R"GLSL(
 #version 450
 
 layout(local_size_x = 8, local_size_y = 8) in;
@@ -122,7 +122,7 @@ void main()
 	 * source footprint — a 4x4 tent. Repeated across the chain it converges toward the
 	 * gaussian pre-convolution the cone lookup interpolates (Uludag, GPU Pro 5). The same
 	 * shader builds mip 0 (input color -> half res) and every subsequent mip. */
-	static constexpr auto SSRColorDownsampleComputeShader = R"GLSL(
+	constexpr auto SSRColorDownsampleComputeShader = R"GLSL(
 #version 450
 
 layout(local_size_x = 8, local_size_y = 8) in;
@@ -162,7 +162,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto SSRTraceFragmentShader = R"GLSL(
+	constexpr auto SSRTraceFragmentShader = R"GLSL(
 #version 450
 
 /* Hi-Z screen-space ray tracing (Uludag, "Hi-Z Screen-Space Cone-Traced Reflections",
@@ -431,7 +431,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto SSRBlurFragmentShader = R"GLSL(
+	constexpr auto SSRBlurFragmentShader = R"GLSL(
 #version 450
 
 /* Bilateral blur — depth/normal-aware separable filter, radius scaled by the surface
@@ -511,7 +511,7 @@ void main()
 	 * This converts (hitUV, confidence) into (reflectedColor * confidence, confidence)
 	 * so that the subsequent blur operates on colors, not UV coordinates.
 	 * When confidence is zero (SSR miss), falls back to sampling the environment cubemap. */
-	static constexpr auto SSRResolveFragmentShader = R"GLSL(
+	constexpr auto SSRResolveFragmentShader = R"GLSL(
 #version 450
 #extension GL_EXT_nonuniform_qualifier : require
 
@@ -643,7 +643,7 @@ void main()
 
 	/* Composite pass: blends the blurred reflected color with the scene,
 	 * modulated by the per-pixel reflectivity from the material properties G-buffer. */
-	static constexpr auto SSRCompositeFragmentShader = R"GLSL(
+	constexpr auto SSRCompositeFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -701,8 +701,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * (owner decision): screen-space effects run full-res — they are the cheap tier of
 		 * the reflection ladder, definition is their selling point. */
 		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsScreenSpaceReflectionPixelDoublingKey, DefaultGraphicsScreenSpaceReflectionPixelDoubling);
-		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
+		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
 
 		/* Bilateral blur quality knobs. */
 		m_blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceReflectionBlurRadiusKey, DefaultGraphicsScreenSpaceReflectionBlurRadius);
@@ -792,7 +792,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(traceInputLayout);
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(TracePushConstants)
+				}
 			});
 		}
 
@@ -804,7 +808,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(this->renderer().bindlessTextureManager().descriptorSetLayout());
 
 			m_resolveLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ResolvePushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(ResolvePushConstants)
+				}
 			});
 		}
 
@@ -813,7 +821,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(blurInputLayout);
 
 			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(BlurPushConstants)
+				}
 			});
 		}
 
@@ -822,7 +834,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(compositeLayout);
 
 			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
+				VkPushConstantRange{
+					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					.offset = 0,
+					.size = sizeof(CompositePushConstants)
+				}
 			});
 		}
 
@@ -860,8 +876,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create descriptor sets ---- */
-		const auto & pool = renderer.descriptorPool();
-
 		/* Trace: reads depth + normals (updated per-frame). */
 		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
@@ -942,7 +956,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Hi-Z depth pyramid (min-reduction mip chain) ---- */
 		{
-			const auto & device = renderer.device();
+			const auto & localDevice = renderer.device();
 
 			m_hiZMipCount = 1U;
 
@@ -952,10 +966,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 
 			m_hiZImage = std::make_shared< Image >(
-				device,
+				localDevice,
 				VK_IMAGE_TYPE_2D,
 				VK_FORMAT_R32_SFLOAT,
-				VkExtent3D{halfW, halfH, 1U},
+				VkExtent3D{
+					.width = halfW,
+					.height = halfH,
+					.depth = 1U
+				},
 				VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 				0,
 				m_hiZMipCount
@@ -977,7 +995,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				auto view = std::make_shared< ImageView >(
 					m_hiZImage,
 					VK_IMAGE_VIEW_TYPE_2D,
-					VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, mip, 1U, 0U, 1U}
+					VkImageSubresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = mip,
+						.levelCount = 1U,
+						.baseArrayLayer = 0U,
+						.layerCount = 1U
+					}
 				);
 				view->setIdentifier(ClassId, "HiZMip" + std::to_string(mip), "ImageView");
 
@@ -992,7 +1016,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_hiZFullView = std::make_shared< ImageView >(
 				m_hiZImage,
 				VK_IMAGE_VIEW_TYPE_2D,
-				VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0U, m_hiZMipCount, 0U, 1U}
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0U,
+					.levelCount = m_hiZMipCount,
+					.baseArrayLayer = 0U,
+					.layerCount = 1U
+				}
 			);
 			m_hiZFullView->setIdentifier(ClassId, "HiZFull", "ImageView");
 
@@ -1019,7 +1049,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 
 			/* Compute pipelines (IBLBaker pattern): binding 0 = source sampler, 1 = dest storage. */
-			m_hiZDSLayout = std::make_shared< DescriptorSetLayout >(device, "SSRHiZDSLayout");
+			m_hiZDSLayout = std::make_shared< DescriptorSetLayout >(localDevice, "SSRHiZDSLayout");
 
 			{
 				VkDescriptorSetLayoutBinding binding{};
@@ -1050,7 +1080,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			pushConstantRange.size = sizeof(HiZPushConstants);
 
 			m_hiZPipelineLayout = std::make_shared< PipelineLayout >(
-				device, "SSRHiZPipelineLayout",
+				localDevice, "SSRHiZPipelineLayout",
 				StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 >{m_hiZDSLayout},
 				StaticVector< VkPushConstantRange, 4 >{pushConstantRange}
 			);
@@ -1060,8 +1090,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return false;
 			}
 
-			const auto copyModule = shaderManager.getShaderModuleFromSourceCode(device, "SSR_HiZCopy_CS", ShaderType::ComputeShader, SSRHiZCopyComputeShader);
-			const auto reduceModule = shaderManager.getShaderModuleFromSourceCode(device, "SSR_HiZReduce_CS", ShaderType::ComputeShader, SSRHiZReduceComputeShader);
+			const auto copyModule = shaderManager.getShaderModuleFromSourceCode(localDevice, "SSR_HiZCopy_CS", ShaderType::ComputeShader, SSRHiZCopyComputeShader);
+			const auto reduceModule = shaderManager.getShaderModuleFromSourceCode(localDevice, "SSR_HiZReduce_CS", ShaderType::ComputeShader, SSRHiZReduceComputeShader);
 
 			if ( copyModule == nullptr || reduceModule == nullptr )
 			{
@@ -1089,16 +1119,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Color pyramid dimensioning: half-res base, chain down to ~8 px. */
 			const uint32_t pyramidBaseW = std::max(1U, width / 2U);
 			const uint32_t pyramidBaseH = std::max(1U, height / 2U);
+
 			m_colorPyramidMipCount = std::clamp(static_cast< uint32_t >(std::bit_width(std::min(pyramidBaseW, pyramidBaseH))) - 3U, 1U, 8U);
 
 			const uint32_t computeSetCount = (framesInFlight * 2U) + m_hiZMipCount + m_colorPyramidMipCount;
 
 			const std::vector< VkDescriptorPoolSize > poolSizes{
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, computeSetCount},
-				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, computeSetCount}
+				{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = computeSetCount},
+				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = computeSetCount}
 			};
 
-			m_hiZDescriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, computeSetCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+			m_hiZDescriptorPool = std::make_shared< DescriptorPool >(localDevice, poolSizes, computeSetCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 			if ( !m_hiZDescriptorPool->createOnHardware() )
 			{
@@ -1108,7 +1139,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Raw descriptor writes (IBLBaker pattern): the storage destination has no
 			 * helper, and the pyramid is SAMPLED in GENERAL layout during the reduction
 			 * chain — the layouts must be exact. */
-			const auto writeStorageDest = [&device] (const DescriptorSet & descriptorSet, const ImageView & destView) {
+			const auto writeStorageDest = [&localDevice] (const DescriptorSet & descriptorSet, const ImageView & destView) {
 				VkDescriptorImageInfo destInfo{};
 				destInfo.sampler = VK_NULL_HANDLE;
 				destInfo.imageView = destView.handle();
@@ -1122,10 +1153,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				write.descriptorCount = 1;
 				write.pImageInfo = &destInfo;
 
-				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+				vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
 			};
 
-			const auto writeSampledSource = [&device, this] (const DescriptorSet & descriptorSet, const ImageView & sourceView, VkImageLayout layout) {
+			const auto writeSampledSource = [&localDevice, this] (const DescriptorSet & descriptorSet, const ImageView & sourceView, VkImageLayout layout) {
 				VkDescriptorImageInfo sourceInfo{};
 				sourceInfo.sampler = m_hiZSampler->handle();
 				sourceInfo.imageView = sourceView.handle();
@@ -1139,7 +1170,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				write.descriptorCount = 1;
 				write.pImageInfo = &sourceInfo;
 
-				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+				vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
 			};
 
 			m_hiZCopyPerFrame.reserve(framesInFlight);
@@ -1195,16 +1226,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				write.descriptorCount = 1;
 				write.pImageInfo = &pyramidInfo;
 
-				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+				vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
 			}
 
 			/* ---- Pre-convolved color pyramid (cone-traced glossy, Uludag GPU Pro 5) ---- */
 			{
 				m_colorPyramidImage = std::make_shared< Image >(
-					device,
+					localDevice,
 					VK_IMAGE_TYPE_2D,
 					VK_FORMAT_R16G16B16A16_SFLOAT,
-					VkExtent3D{pyramidBaseW, pyramidBaseH, 1U},
+					VkExtent3D{
+						.width = pyramidBaseW,
+						.height = pyramidBaseH,
+						.depth = 1U
+					},
 					VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 					0,
 					m_colorPyramidMipCount
@@ -1225,7 +1260,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					auto view = std::make_shared< ImageView >(
 						m_colorPyramidImage,
 						VK_IMAGE_VIEW_TYPE_2D,
-						VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, mip, 1U, 0U, 1U}
+						VkImageSubresourceRange{
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = mip,
+							.levelCount = 1U,
+							.baseArrayLayer = 0U,
+							.layerCount = 1U
+						}
 					);
 					view->setIdentifier(ClassId, "ColorPyramidMip" + std::to_string(mip), "ImageView");
 
@@ -1240,7 +1281,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				m_colorPyramidFullView = std::make_shared< ImageView >(
 					m_colorPyramidImage,
 					VK_IMAGE_VIEW_TYPE_2D,
-					VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0U, m_colorPyramidMipCount, 0U, 1U}
+					VkImageSubresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = 0U,
+						.levelCount = m_colorPyramidMipCount,
+						.baseArrayLayer = 0U,
+						.layerCount = 1U
+					}
 				);
 				m_colorPyramidFullView->setIdentifier(ClassId, "ColorPyramidFull", "ImageView");
 
@@ -1267,7 +1314,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					return false;
 				}
 
-				const auto downsampleModule = shaderManager.getShaderModuleFromSourceCode(device, "SSR_ColorDownsample_CS", ShaderType::ComputeShader, SSRColorDownsampleComputeShader);
+				const auto downsampleModule = shaderManager.getShaderModuleFromSourceCode(localDevice, "SSR_ColorDownsample_CS", ShaderType::ComputeShader, SSRColorDownsampleComputeShader);
 
 				if ( downsampleModule == nullptr )
 				{
@@ -1285,7 +1332,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					return false;
 				}
 
-				const auto writePyramidSource = [&device, this] (const DescriptorSet & descriptorSet, const ImageView & sourceView, VkImageLayout layout) {
+				const auto writePyramidSource = [&localDevice, this] (const DescriptorSet & descriptorSet, const ImageView & sourceView, VkImageLayout layout) {
 					VkDescriptorImageInfo sourceInfo{};
 					sourceInfo.sampler = m_colorPyramidSampler->handle();
 					sourceInfo.imageView = sourceView.handle();
@@ -1299,7 +1346,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					write.descriptorCount = 1;
 					write.pImageInfo = &sourceInfo;
 
-					vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+					vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
 				};
 
 				m_colorCopyPerFrame.reserve(framesInFlight);
@@ -1354,7 +1401,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					write.descriptorCount = 1;
 					write.pImageInfo = &pyramidInfo;
 
-					vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+					vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
 				}
 			}
 		}
@@ -1440,7 +1487,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Whole pyramid: UNDEFINED -> GENERAL (previous content discarded, fully rewritten). */
 			{
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_hiZImage,
 					0,
 					VK_ACCESS_SHADER_WRITE_BIT,
@@ -1474,7 +1521,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			for ( uint32_t mip = 1; mip < m_hiZMipCount; mip++ )
 			{
 				/* Previous mip written -> readable by this reduction. */
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_hiZImage,
 					VK_ACCESS_SHADER_WRITE_BIT,
 					VK_ACCESS_SHADER_READ_BIT,
@@ -1504,7 +1551,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the trace fragment shader
 			 * (next frame's first barrier discards from UNDEFINED, so the cycle is closed). */
 			{
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_hiZImage,
 					VK_ACCESS_SHADER_WRITE_BIT,
 					VK_ACCESS_SHADER_READ_BIT,
@@ -1524,7 +1571,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Whole pyramid: UNDEFINED -> GENERAL (previous content discarded, fully rewritten). */
 			{
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_colorPyramidImage,
 					0,
 					VK_ACCESS_SHADER_WRITE_BIT,
@@ -1557,7 +1604,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			for ( uint32_t mip = 1; mip < m_colorPyramidMipCount; mip++ )
 			{
 				/* Previous mip written -> readable by this downsample. */
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_colorPyramidImage,
 					VK_ACCESS_SHADER_WRITE_BIT,
 					VK_ACCESS_SHADER_READ_BIT,
@@ -1586,7 +1633,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the resolve fragment shader. */
 			{
-				Sync::ImageMemoryBarrier barrier{
+				const Sync::ImageMemoryBarrier barrier{
 					*m_colorPyramidImage,
 					VK_ACCESS_SHADER_WRITE_BIT,
 					VK_ACCESS_SHADER_READ_BIT,

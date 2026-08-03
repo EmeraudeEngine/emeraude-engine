@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <cstring>
 #include <variant>
 
 /* Third-party inclusions. */
@@ -118,17 +117,17 @@ namespace EmEn::AssetLoaders
 
 			/* 4x4 rotation matrix (column-major). */
 			Matrix< 4, float > rotMatrix;
-			rotMatrix[0]  = 1.0F - 2.0F * (yy + zz);
+			rotMatrix[0]  = 1.0F - (2.0F * (yy + zz));
 			rotMatrix[1]  = 2.0F * (xy + wz);
 			rotMatrix[2]  = 2.0F * (xz - wy);
 			rotMatrix[3]  = 0.0F;
 			rotMatrix[4]  = 2.0F * (xy - wz);
-			rotMatrix[5]  = 1.0F - 2.0F * (xx + zz);
+			rotMatrix[5]  = 1.0F - (2.0F * (xx + zz));
 			rotMatrix[6]  = 2.0F * (yz + wx);
 			rotMatrix[7]  = 0.0F;
 			rotMatrix[8]  = 2.0F * (xz + wy);
 			rotMatrix[9]  = 2.0F * (yz - wx);
-			rotMatrix[10] = 1.0F - 2.0F * (xx + yy);
+			rotMatrix[10] = 1.0F - (2.0F * (xx + yy));
 			rotMatrix[11] = 0.0F;
 			rotMatrix[12] = 0.0F;
 			rotMatrix[13] = 0.0F;
@@ -201,9 +200,9 @@ namespace EmEn::AssetLoaders
 			fastgltf::Options::DecomposeNodeMatrices |
 			fastgltf::Options::GenerateMeshIndices;
 
-		auto result = (filepath.extension() == ".glb")
-			? parser.loadGltfBinary(gltfFile.get(), parentPath, options)
-			: parser.loadGltf(gltfFile.get(), parentPath, options);
+		auto result = filepath.extension() == ".glb" ?
+			parser.loadGltfBinary(gltfFile.get(), parentPath, options) :
+			parser.loadGltf(gltfFile.get(), parentPath, options);
 
 		if ( result.error() != fastgltf::Error::None )
 		{
@@ -215,21 +214,15 @@ namespace EmEn::AssetLoaders
 		const auto & asset = result.get();
 
 		/* Load pipeline: Images → Materials → Meshes → Skins → Animations → Node descriptors. */
-		TraceInfo{ClassId} << "Phase 1: Loading " << asset.images.size() << " images...";
-
 		if ( !this->loadImages(asset, parentPath) )
 		{
 			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
 		}
 
-		TraceInfo{ClassId} << "Phase 2: Loading " << asset.materials.size() << " materials...";
-
 		if ( !this->loadMaterials(asset) )
 		{
 			Tracer::warning(ClassId, "Some materials failed to load, continuing with defaults.");
 		}
-
-		TraceInfo{ClassId} << "Phase 3: Loading " << asset.meshes.size() << " meshes...";
 
 		if ( !this->loadMeshes(asset, output) )
 		{
@@ -242,15 +235,11 @@ namespace EmEn::AssetLoaders
 		{
 			if ( !asset.skins.empty() )
 			{
-				TraceInfo{ClassId} << "Phase 4: Loading " << asset.skins.size() << " skins...";
-
 				this->loadSkins(asset, output);
 			}
 
 			if ( !asset.animations.empty() )
 			{
-				TraceInfo{ClassId} << "Phase 5: Loading " << asset.animations.size() << " animations...";
-
 				this->loadAnimations(asset, output);
 			}
 
@@ -270,8 +259,6 @@ namespace EmEn::AssetLoaders
 				if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(m_meshes[meshIdx].get()) )
 				{
 					skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
-
-					TraceInfo{ClassId} << "Attached skeletal data to mesh " << meshIdx << ".";
 				}
 			}
 		}
@@ -290,16 +277,12 @@ namespace EmEn::AssetLoaders
 		}
 
 		/* Build format-agnostic node descriptors. */
-		TraceInfo{ClassId} << "Phase 6: Building node descriptors...";
-
 		this->buildNodeDescriptors(asset, output);
 
 		/* Populate output with loaded resources. */
 		output.skeletons = m_skeletons;
 		output.animationClips = m_animationClips;
 		output.skinJointNodeIndices = m_skinJointNodeIndices;
-
-		TraceInfo{ClassId} << "Loading complete.";
 
 		return true;
 	}
@@ -320,9 +303,13 @@ namespace EmEn::AssetLoaders
 			name = m_resourcePrefix;
 			name += "Image/";
 			if ( glTFImage.name.empty() )
+			{
 				name += std::to_string(imageIndex);
+			}
 			else
+			{
 				name.append(glTFImage.name.data(), glTFImage.name.size());
+			}
 
 			auto image = std::visit(fastgltf::visitor{
 				/* File-based image (external .gltf). */
@@ -445,9 +432,13 @@ namespace EmEn::AssetLoaders
 			name = m_resourcePrefix;
 			name += "Material/";
 			if ( glTFMaterial.name.empty() )
+			{
 				name += std::to_string(materialIndex);
+			}
 			else
+			{
 				name.append(glTFMaterial.name.data(), glTFMaterial.name.size());
+			}
 
 			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand. */
 			const auto resolveTexture = [&] (size_t textureIndex, bool sRGB = false) -> std::shared_ptr< TextureResource::Texture2D > {
@@ -791,7 +782,7 @@ namespace EmEn::AssetLoaders
 					continue;
 				}
 
-				const auto positionIt = primitive.findAttribute("POSITION");
+				const auto * const positionIt = primitive.findAttribute("POSITION");
 
 				if ( positionIt == primitive.attributes.end() )
 				{
@@ -838,16 +829,14 @@ namespace EmEn::AssetLoaders
 				uint32_t globalVertexOffset = 0;
 				bool firstPrimitive = true;
 
-				for ( size_t primitiveIndex = 0; primitiveIndex < glTFMesh.primitives.size(); ++primitiveIndex )
+				for ( const auto & glTFPrimitive : glTFMesh.primitives )
 				{
-					const auto & glTFPrimitive = glTFMesh.primitives[primitiveIndex];
-
 					if ( glTFPrimitive.type != fastgltf::PrimitiveType::Triangles )
 					{
 						continue;
 					}
 
-					const auto positionIt = glTFPrimitive.findAttribute("POSITION");
+					const auto * const positionIt = glTFPrimitive.findAttribute("POSITION");
 
 					if ( positionIt == glTFPrimitive.attributes.end() )
 					{
@@ -876,7 +865,7 @@ namespace EmEn::AssetLoaders
 					}
 
 					/* Read normals directly into vertex array. */
-					const auto normalIt = glTFPrimitive.findAttribute("NORMAL");
+					const auto * const normalIt = glTFPrimitive.findAttribute("NORMAL");
 
 					if ( normalIt != glTFPrimitive.attributes.end() )
 					{
@@ -890,7 +879,7 @@ namespace EmEn::AssetLoaders
 					}
 
 					/* Read texture coordinates directly into vertex array. */
-					const auto textureCoordinatesIt = glTFPrimitive.findAttribute("TEXCOORD_0");
+					const auto * const textureCoordinatesIt = glTFPrimitive.findAttribute("TEXCOORD_0");
 
 					if ( textureCoordinatesIt != glTFPrimitive.attributes.end() )
 					{
@@ -906,7 +895,7 @@ namespace EmEn::AssetLoaders
 					if ( !m_options.skipSkinning )
 					{
 						/* Read bone joint indices (JOINTS_0) for skeletal animation. */
-						const auto jointsIt = glTFPrimitive.findAttribute("JOINTS_0");
+						const auto * const jointsIt = glTFPrimitive.findAttribute("JOINTS_0");
 
 						if ( jointsIt != glTFPrimitive.attributes.end() )
 						{
@@ -926,7 +915,7 @@ namespace EmEn::AssetLoaders
 						}
 
 						/* Read bone weights (WEIGHTS_0) for skeletal animation. */
-						const auto weightsIt = glTFPrimitive.findAttribute("WEIGHTS_0");
+						const auto * const weightsIt = glTFPrimitive.findAttribute("WEIGHTS_0");
 
 						if ( weightsIt != glTFPrimitive.attributes.end() )
 						{
@@ -950,11 +939,11 @@ namespace EmEn::AssetLoaders
 						 * glTF is Y-up CCW; the 180° X rotation applied to
 						 * the scene root (Y-up → Y-down) inverts the winding,
 						 * so we swap indices 1 and 2 to keep front-faces correct. */
-						uint32_t triangleBuffer[3];
+						std::array< uint32_t, 3 > triangleBuffer{};
 						uint32_t triangleSlot = 0;
 
 						fastgltf::iterateAccessor< uint32_t >(asset, indexAccessor, [&] (uint32_t value) {
-							triangleBuffer[triangleSlot++] = globalVertexOffset + value;
+							triangleBuffer.at(triangleSlot++) = globalVertexOffset + value;
 
 							if ( triangleSlot == 3 )
 							{
@@ -994,7 +983,7 @@ namespace EmEn::AssetLoaders
 				shape->computeTriangleNormal(true);
 				shape->computeVertexNormal();
 
-				TraceInfo{ClassId} << "Generated smooth normals for mesh '" << glTFMesh.name << "' (not provided by glTF).";
+				TraceDebug{ClassId} << "Generated smooth normals for mesh '" << glTFMesh.name << "' (not provided by glTF).";
 			}
 			else
 			{
@@ -1180,7 +1169,7 @@ namespace EmEn::AssetLoaders
 					{
 						for ( size_t row = 0; row < 4; ++row )
 						{
-							data[col * 4 + row] = m.col(col)[row];
+							data.at((col * 4) + row) = m.col(col)[row];
 						}
 					}
 
@@ -1246,26 +1235,21 @@ namespace EmEn::AssetLoaders
 			Skin< float > skin{std::move(skinJointIndices), std::move(inverseBindMatrices)};
 
 			/* Register the skeleton as a managed resource. */
-			const auto skinName = glTFSkin.name.empty()
-				? "skin_" + std::to_string(skinIndex)
-				: std::string{glTFSkin.name};
+			const auto skinName = glTFSkin.name.empty() ?
+				"skin_" + std::to_string(skinIndex) :
+				std::string{glTFSkin.name};
 
 			auto skeletonResource = m_resources.container< Animations::SkeletonResource >()
-				->getOrCreateResourceSync(
-					m_resourcePrefix + "/skeleton/" + skinName,
-					[&skeleton] (auto & resource) {
-						return resource.load(std::move(skeleton));
-					}
-				);
+				->getOrCreateResourceSync(m_resourcePrefix + "/skeleton/" + skinName, [&skeleton] (auto & resource) {
+					return resource.load(std::move(skeleton));
+				});
 
 			m_skeletons.push_back(std::move(skeletonResource));
 			m_skins.push_back(std::move(skin));
 
 			/* Record which meshes reference this skin for later association with renderables. */
-			for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
+			for ( const auto & node : asset.nodes )
 			{
-				const auto & node = asset.nodes[nodeIdx];
-
 				if ( node.skinIndex.has_value() && node.skinIndex.value() == skinIndex && node.meshIndex.has_value() )
 				{
 					m_meshToSkinIndex[node.meshIndex.value()] = skinIndex;
@@ -1371,7 +1355,7 @@ namespace EmEn::AssetLoaders
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
 							if ( index < timestamps.size() )
 							{
-								channel.vectorKeyFrames[index] = {timestamps[index], {v.x(), v.y(), v.z()}};
+								channel.vectorKeyFrames[index] = {.time=timestamps[index], .value={v.x(), v.y(), v.z()}};
 								index++;
 							}
 						});
@@ -1389,7 +1373,11 @@ namespace EmEn::AssetLoaders
 						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, outputAccessor, [&] (const fastgltf::math::fvec4 & v) {
 							if ( index < timestamps.size() )
 							{
-								channel.quaternionKeyFrames[index] = {timestamps[index], Quaternion< float >{v.x(), v.y(), v.z(), v.w()}};
+								channel.quaternionKeyFrames[index] = {
+									.time = timestamps[index],
+									.value = Quaternion< float >{v.x(), v.y(), v.z(), v.w()}
+								};
+
 								index++;
 							}
 						});
@@ -1407,7 +1395,7 @@ namespace EmEn::AssetLoaders
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
 							if ( index < timestamps.size() )
 							{
-								channel.vectorKeyFrames[index] = {timestamps[index], {v.x(), v.y(), v.z()}};
+								channel.vectorKeyFrames[index] = {.time=timestamps[index], .value={v.x(), v.y(), v.z()}};
 								index++;
 							}
 						});
@@ -1444,12 +1432,12 @@ namespace EmEn::AssetLoaders
 
 		if ( !m_animationClips.empty() )
 		{
-			TraceInfo{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
+			TraceDebug{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
 		}
 	}
 
 	void
-	GLTFLoader::buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) noexcept
+	GLTFLoader::buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) const noexcept
 	{
 		/* Determine the default scene. */
 		size_t sceneIndex = 0;

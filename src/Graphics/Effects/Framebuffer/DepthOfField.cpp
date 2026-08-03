@@ -442,10 +442,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto halfWidth = width > 1 ? width / 2 : 1U;
 		const auto halfHeight = height > 1 ? height / 2 : 1U;
 
-		/* Auto-focus history (1x1 RG32F ping-pong: focus distance + timestamp). */
+		/* Auto-focus history (1x1 RG32F ping-pong: focus distance + timestamp). TRANSFER_SRC
+		 * because the metered focus distance is read back with vkCmdCopyImageToBuffer (see
+		 * execute()): without that usage the barrier to TRANSFER_SRC_OPTIMAL is invalid. */
 		for ( size_t index = 0; index < 2; ++index )
 		{
-			if ( !m_focusTargets[index].create(renderer, 1, 1, VK_FORMAT_R32G32_SFLOAT, "DoF_Focus" + std::to_string(index)) )
+			if ( !m_focusTargets[index].create(renderer, 1, 1, VK_FORMAT_R32G32_SFLOAT, "DoF_Focus" + std::to_string(index), VK_IMAGE_USAGE_TRANSFER_SRC_BIT) )
 			{
 				TraceError{TracerTag} << "Failed to create DoF focus target #" << index << " !";
 

@@ -148,8 +148,6 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		TraceSuccess{ClassId} << "IRT '" << identifier << "' created (" << width << "x" << height << ").";
-
 		return true;
 	}
 

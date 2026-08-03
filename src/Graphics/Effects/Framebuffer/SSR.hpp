@@ -44,19 +44,6 @@
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
 
-namespace EmEn
-{
-	namespace Graphics
-	{
-		class TextureCubemap;
-	}
-
-	namespace Vulkan::TextureResource
-	{
-		class TextureCubemap;
-	}
-}
-
 namespace EmEn::Graphics::Effects::Framebuffer
 {
 	/**
@@ -137,9 +124,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			struct EMEN_API ResolvePushConstants
 			{
-				float invViewCol0[4];
-				float invViewCol1[4];
-				float invViewCol2[4];
+				std::array< float, 4 > invViewCol0;
+				std::array< float, 4 > invViewCol1;
+				std::array< float, 4 > invViewCol2;
 				float texelSizeX;
 				float texelSizeY;
 				float nearPlane;

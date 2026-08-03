@@ -125,7 +125,7 @@ namespace EmEn::AssetLoaders
 
 			void loadAnimations (const fastgltf::Asset & asset, AssetData & output) noexcept;
 
-			void buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) noexcept;
+			void buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) const noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

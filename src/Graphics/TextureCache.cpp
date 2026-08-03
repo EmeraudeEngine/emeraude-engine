@@ -51,9 +51,7 @@ namespace EmEn::Graphics
 
 		s_cacheDirectory = baseCacheDirectory / "TextureCache";
 
-		std::error_code ec;
-
-		if ( !std::filesystem::exists(s_cacheDirectory, ec) )
+		if ( std::error_code ec; !std::filesystem::exists(s_cacheDirectory, ec) )
 		{
 			if ( !std::filesystem::create_directories(s_cacheDirectory, ec) )
 			{
@@ -64,16 +62,10 @@ namespace EmEn::Graphics
 		}
 
 		s_initialized = true;
-
-		TraceSuccess{ClassId} << "Texture cache directory: " << s_cacheDirectory;
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCache::tryLoad (
-		const std::string & resourceName,
-		uint64_t sourceFileSize,
-		uint64_t sourceModTime
-	) noexcept
+	TextureCache::tryLoad (const std::string & resourceName, uint64_t sourceFileSize,  uint64_t sourceModTime) noexcept
 	{
 		if ( !s_initialized )
 		{
@@ -137,18 +129,13 @@ namespace EmEn::Graphics
 			result.emplace_back(std::move(mip));
 		}
 
-		TraceInfo{ClassId} << "Cache hit: " << resourceName;
+		TraceDebug{ClassId} << "Cache hit: " << resourceName;
 
 		return result;
 	}
 
 	bool
-	TextureCache::store (
-		const std::string & resourceName,
-		uint64_t sourceFileSize,
-		uint64_t sourceModTime,
-		const std::vector< CompressedMipLevel > & mipLevels
-	) noexcept
+	TextureCache::store (const std::string & resourceName, uint64_t sourceFileSize, uint64_t sourceModTime, const std::vector< CompressedMipLevel > & mipLevels) noexcept
 	{
 		if ( !s_initialized || mipLevels.empty() )
 		{
@@ -197,11 +184,7 @@ namespace EmEn::Graphics
 	}
 
 	std::filesystem::path
-	TextureCache::cacheFilePath (
-		const std::string & resourceName,
-		uint64_t sourceFileSize,
-		uint64_t sourceModTime
-	) noexcept
+	TextureCache::cacheFilePath (const std::string & resourceName, uint64_t sourceFileSize, uint64_t sourceModTime) noexcept
 	{
 		/* Build a unique key from resource name + file size + modification time. */
 		std::ostringstream key;

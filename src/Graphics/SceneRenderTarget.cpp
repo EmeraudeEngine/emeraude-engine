@@ -764,7 +764,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Velocity image: color attachment + sampleable (motion vectors for temporal effects). */
+		/* Velocity image: color attachment + transfer source + sampleable (motion vectors for temporal effects, copied to the grab pass). */
 		if ( m_velocityFormat != VK_FORMAT_UNDEFINED )
 		{
 			m_velocityImage = std::make_shared< Vulkan::Image >(
@@ -772,7 +772,7 @@ namespace EmEn::Graphics
 				VK_IMAGE_TYPE_2D,
 				m_velocityFormat,
 				this->extent(),
-				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 			);
 			m_velocityImage->setIdentifier(ClassId, this->id(), "VelocityImage");
 

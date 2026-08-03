@@ -27,6 +27,7 @@
 #include "SceneMetaData.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <limits>
 #include <ranges>
 #include <sstream>
@@ -173,8 +174,10 @@ namespace EmEn::Scenes
 			return offset * static_cast< uint32_t >(sizeof(float));
 		};
 
+#ifdef DEBUG
 		/* Human-readable TLAS content description, logged when the instance count changes. */
-		std::ostringstream tlasDump;
+		std::ostringstream TLASDump;
+#endif
 
 		/* Collect instances from a render list. */
 		const auto collectFromList = [&] (const RenderBatch::List & renderList) {
@@ -226,6 +229,7 @@ namespace EmEn::Scenes
 					if ( blas == nullptr )
 					{
 						const_cast< Geometry::Interface * >(geometry)->buildAccelerationStructure();
+
 						blas = geometry->accelerationStructure();
 
 						if ( blas == nullptr )
@@ -264,9 +268,9 @@ namespace EmEn::Scenes
 					/* Skinned instances: hit shading must fetch the CURRENT pose (normals,
 					 * UVs at skinned positions), i.e. the mirror buffer — not the bind-pose
 					 * VBO. Same layout, same stride, same attribute offsets. */
-					meshMeta.vertexBufferAddress = isSkinned
-						? batch.renderableInstance()->rtMirrorBufferAddress()
-						: m_accelerationStructureBuilder->getBufferDeviceAddress(VBO->handle());
+					meshMeta.vertexBufferAddress = isSkinned ?
+						batch.renderableInstance()->rtMirrorBufferAddress() :
+						m_accelerationStructureBuilder->getBufferDeviceAddress(VBO->handle());
 					meshMeta.vertexStride = VBO->vertexElementCount() * static_cast< uint32_t >(sizeof(float));
 				}
 
@@ -374,14 +378,14 @@ namespace EmEn::Scenes
 
 					/* Recover uniform scale from the first column's magnitude — sprites
 					 * are always uniformly scaled via SpriteResource's UniformScale. */
-					const float scale = std::sqrt(rm[0][0] * rm[0][0] + rm[1][0] * rm[1][0] + rm[2][0] * rm[2][0]);
+					const float scale = std::sqrt((rm[0][0] * rm[0][0]) + (rm[1][0] * rm[1][0]) + (rm[2][0] * rm[2][0]));
 
 					const float dx = cameraPosition[0] - rm[0][3];
 					const float dz = cameraPosition[2] - rm[2][3];
-					const float horizLen = std::sqrt(dx * dx + dz * dz);
+					const float horizLen = std::sqrt((dx * dx) + (dz * dz));
 
-					float fx;
-					float fz;
+					float fx = 0.0F;
+					float fz = 0.0F;
 
 					if ( horizLen > 0.0001F )
 					{
@@ -408,17 +412,19 @@ namespace EmEn::Scenes
 				instances.emplace_back(instance);
 
 				/* Describe the instance for the TLAS content log below. */
+#ifdef DEBUG
 				{
 					const auto & rm = instance.transform.matrix;
 					const float colScale = std::sqrt(rm[0][0] * rm[0][0] + rm[1][0] * rm[1][0] + rm[2][0] * rm[2][0]);
 
-					tlasDump << "\n\t#" << instanceIndex
+					TLASDump << "\n\t#" << instanceIndex
 						<< " '" << renderable->name() << "'"
 						<< " subGeo=" << subGeoCount
 						<< " pos=(" << rm[0][3] << ", " << rm[1][3] << ", " << rm[2][3] << ")"
 						<< " scale=" << colScale
 						<< (anyAlphaTest ? " [alphaTest]" : "");
 				}
+#endif
 			}
 		};
 
@@ -438,7 +444,9 @@ namespace EmEn::Scenes
 			m_lastTLASInstanceCounts[1] = m_lastTLASInstanceCounts[0];
 			m_lastTLASInstanceCounts[0] = instances.size();
 
-			TraceInfo{ClassId} << "[TLAS-DUMP] " << instances.size() << " instance(s):" << tlasDump.str();
+#ifdef DEBUG
+			TraceInfo{ClassId} << "[TLAS-DUMP] " << instances.size() << " instance(s):" << TLASDump.str();
+#endif
 		}
 		else if ( instances.size() != m_lastTLASInstanceCounts[0] )
 		{
@@ -452,6 +460,7 @@ namespace EmEn::Scenes
 		{
 			/* Reuse persistent set (clear but keep allocated memory). */
 			m_rebuildActiveTextures.clear();
+
 			auto & activeTextures = m_rebuildActiveTextures;
 
 			for ( auto & [material, matIndex] : materialMap )
@@ -472,7 +481,7 @@ namespace EmEn::Scenes
 					activeTextures.insert(texturePtr);
 
 					/* Look up or register in the bindless texture manager. */
-					uint32_t bindlessIndex;
+					uint32_t bindlessIndex = 0;
 
 					if ( auto cacheIt = m_textureRegistrationCache.find(texturePtr); cacheIt != m_textureRegistrationCache.end() )
 					{
