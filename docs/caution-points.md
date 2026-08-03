@@ -1770,6 +1770,83 @@ allocation failure. The message now says `free` and names the missing flag.
 
 ---
 
+### Fixed: velocity G-buffer image and DoF focus targets lacked TRANSFER_SRC (Aug 2026)
+
+Two more instances of the exact failure documented in the ToneMapping entry above (read that one
+first — same root cause, same VUID cascade off a stale tracked layout):
+
+- **`SceneRenderTarget` velocity image** (`SceneRenderTarget.cpp:createImages()`): it was the
+  ONLY G-buffer attachment created without `TRANSFER_SRC_BIT` (color, normals, material
+  properties, albedo and depth all had it), yet `PostProcessor::recordBlit()` copies it to the
+  grab pass every frame like the others. An oversight from the motion-vectors work: the copy was
+  added, the creation flags were not.
+- **`DepthOfField` focus targets** (`DepthOfField.cpp:createEffect()`): the 1x1 rack-focus
+  ping-pong targets are read back per frame with `vkCmdCopyImageToBuffer` (metered focus
+  distance), but the `IntermediateRenderTarget::create()` call did not pass
+  `VK_IMAGE_USAGE_TRANSFER_SRC_BIT` — the exact pitfall the `extraUsageFlags` parameter was
+  added for, and which `ToneMapping` already did correctly for its twin AdaptLum readback.
+
+> [!WARNING]
+> On the NVIDIA driver both paths "worked" silently — the errors only surface with validation
+> layers on. When adding ANY readback or image-to-image copy, grep the creation site for
+> `TRANSFER_SRC` before assuming the copy is legal. Checklist: readback → `TRANSFER_SRC_BIT` at
+> creation, out-of-render-pass barriers around the copy, restore barrier to the layout the next
+> consumer expects.
+
+**Files:** `Graphics/SceneRenderTarget.cpp`, `Graphics/Effects/Framebuffer/DepthOfField.cpp`
+
+---
+
+### Fixed: RT post-process effects drew before the TLAS existed (Aug 2026)
+
+During the first frames of a scene (the TLAS is built asynchronously) — or in a scene with no
+RT-eligible geometry at all — the four RT effects (RTR, RTGI, RTAO, ContactShadows) still
+recorded their trace passes:
+
+- RTR/RTGI/RTAO bind set 0 from `Renderer::rtDescriptorSet()` **only if non-null**, then drew
+  anyway → `VUID-vkCmdDraw-None-08600` (set #0 never bound), undefined behavior in the shader's
+  ray queries.
+- ContactShadows binds its own per-frame set but only WRITES the TLAS binding when the TLAS
+  exists → `VUID-vkCmdDraw-None-08114` (descriptor never updated).
+
+**Fix — contract improvement, single site:** `Renderer::isRayTracingReady()` (TLAS non-null,
+created, RT descriptor sets allocated) joined the `requiresRayTracing()` skip gate in
+`PostProcessor::executeIndirectPostProcessEffects()`. When not ready, RT effects are skipped for
+the frame exactly like the existing device/settings gates: the chain forwards the previous
+output, and the effects contribute from the first frame the TLAS is consumable.
+
+> [!NOTE]
+> The per-effect `if (rtDescSet != nullptr)` binds remain as defense in depth, but the chain
+> gate is the contract: an RT effect's `execute()` can assume a consumable TLAS.
+
+**Files:** `Graphics/Renderer.{hpp,cpp}:isRayTracingReady()`,
+`Graphics/PostProcessor.cpp:executeIndirectPostProcessEffects()`
+
+---
+
+### Fixed: SkinnedGeometryProcessor leaked its compute pipeline at device destroy (Aug 2026)
+
+At shutdown, validation reported `VUID-vkDestroyDevice-device-05137` for a
+DescriptorSetLayout + PipelineLayout + Pipeline trio, the engine reported 4 live references on
+the device smart pointer, and — the giveaway — the wrappers logged
+`"No device to destroy ..."` **after** `*** Core level terminated ***`.
+
+`Renderer::onTerminate()` released the acceleration-structure builder, RT descriptor sets, MDI,
+swap chain... but never `m_skinnedGeometryProcessor` (which owns the RT-skinning compute
+pipeline + layouts). The unique_ptr survived until `~Renderer` — long after `m_device.reset()` —
+so its Vulkan objects had no device to be destroyed against.
+
+> [!IMPORTANT]
+> **Rule:** every Renderer member that owns Vulkan objects MUST be explicitly reset in
+> `Renderer::onTerminate()` (after the `waitIdle` + deferred-destructor flush, before
+> `m_device.reset()`). Leaving it to the destructor is a guaranteed device-child leak. Symptom
+> signature to recognize it instantly: `05137` at `vkDestroyDevice` + wrapper errors printed
+> AFTER Core termination.
+
+**Files:** `Graphics/Renderer.cpp:onTerminate()`
+
+---
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

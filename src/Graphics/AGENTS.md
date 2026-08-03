@@ -887,6 +887,13 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
 - `requiresHDR()` / `requiresDepth()` / `requiresNormals()` / `requiresVelocity()`
 - The Renderer queries these methods to decide scene target format, MRT attachments, etc.
 - No manual toggle (the old `enableHDR()` has been removed). Requirements are inferred from the active effect chain.
+- `requiresRayTracing()` effects are additionally gated per frame on
+  `Renderer::isRayTracingReady()` (TLAS built AND RT descriptor sets live): during the async
+  TLAS build of a scene's first frames — or in a scene with no RT geometry — the chain skips
+  them and forwards the previous output. An RT effect's `execute()` can therefore assume a
+  consumable TLAS; never record a trace pass behind a `if (rtDescSet != nullptr)` bind alone
+  (drawing with set 0 unbound is what that guard silently allowed before Aug 2026 — see
+  `docs/caution-points.md` § Vulkan Validation).
 - `requiresJitter()` (temporal anti-aliasing) — when any effect in the active stack declares
   it, `Renderer::prepareFrameJitter()` advances a Halton (2,3) sub-pixel sequence and applies
   it to the MAIN view only, once per rendered frame, before the video-memory update. Implies
@@ -1492,12 +1499,16 @@ that must be requested through the trailing `extraUsageFlags` parameter.
 > `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`, or the barrier to `TRANSFER_SRC_OPTIMAL` is silently
 > rejected and every later command runs against a **stale tracked layout** — the failure surfaces
 > as four unrelated-looking VUIDs pointing at the copy, not at the creation. `ToneMapping`'s
-> auto-exposure adaptation targets are the reference case; see
-> `docs/caution-points.md` § Vulkan Validation.
+> auto-exposure adaptation targets and `DepthOfField`'s rack-focus targets (both 1x1 per-frame
+> readbacks) are the reference cases; see `docs/caution-points.md` § Vulkan Validation.
 
 ```cpp
 m_adaptTargets[index].create(renderer, 1, 1, lumFormat, "AdaptLum0", VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 ```
+
+The same rule applies outside `IntermediateRenderTarget`: any `SceneRenderTarget` attachment
+copied to the grab pass by `PostProcessor::recordBlit()` needs `TRANSFER_SRC_BIT` at creation
+(all six attachments — color, normals, material properties, albedo, velocity, depth — have it).
 
 ### Coding Conventions for Effects
 

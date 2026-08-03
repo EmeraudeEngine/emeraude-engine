@@ -753,6 +753,10 @@ namespace EmEn::Graphics
 		 * These textures have VMA allocations that must be freed before the device is destroyed. */
 		this->clearDefaultResources();
 
+		/* NOTE: The skinned geometry processor owns a compute pipeline + layouts: it must be
+		 * released while the device still exists, or its Vulkan objects leak at device destroy. */
+		m_skinnedGeometryProcessor.reset();
+
 		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
 		m_rtDescriptorSetLayout.reset();
