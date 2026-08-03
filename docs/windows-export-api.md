@@ -1,10 +1,10 @@
-# Windows DLL export API (`EMERAUDE_API`) — migration guide
+# Windows DLL export API (`EMEN_API`) — migration guide
 
 > Status: **migration complete (2026-07).** `EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to **ON**
-> (explicit `EMERAUDE_API` boundary, `WINDOWS_EXPORT_ALL_SYMBOLS` dropped) and
+> (explicit `EMEN_API` boundary, `WINDOWS_EXPORT_ALL_SYMBOLS` dropped) and
 > `EMERAUDE_ENABLE_PCH` defaults to **ON**. The full MSVC cascade (base → engine → a consumer library →
 > consumer executables) builds and links with the PCH enabled. New public API that a consumer
-> references out-of-line must carry `EMERAUDE_API` — the consumer's linker (`LNK2019` on
+> references out-of-line must carry `EMEN_API` — the consumer's linker (`LNK2019` on
 > `__imp_...`) names any omission.
 
 ## 1. Why this exists
@@ -24,13 +24,13 @@ Emeraude.lib : fatal error LNK1120: 1 unresolved externals
 ```
 
 GCC/Clang are unaffected (no `.def`; ELF/Mach-O export via symbol visibility). The fix is to stop
-auto-exporting and declare the public boundary explicitly with the `EMERAUDE_API` macro.
+auto-exporting and declare the public boundary explicitly with the `EMEN_API` macro.
 
 ## 2. The toggle
 
 `option(EMERAUDE_USE_EXPLICIT_EXPORTS … OFF)` in `CMakeLists.txt`:
 
-| Mode | `WINDOWS_EXPORT_ALL_SYMBOLS` | `EMERAUDE_API` expands to |
+| Mode | `WINDOWS_EXPORT_ALL_SYMBOLS` | `EMEN_API` expands to |
 |------|------------------------------|---------------------------|
 | **OFF** (default) | `ON` | *nothing* (no-op) |
 | **ON** | `OFF` | `__declspec(dllexport)` while building the DLL (`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for consumers, `__attribute__((visibility("default")))` elsewhere |
@@ -41,16 +41,16 @@ referenced surface is annotated. The macro lives in [`src/emeraude_export.hpp`](
 
 ## 3. What to annotate
 
-`EMERAUDE_API` marks the boundary of what crosses the DLL edge and is referenced **out-of-line** by
+`EMEN_API` marks the boundary of what crosses the DLL edge and is referenced **out-of-line** by
 a consumer (`projet-alpha`, tests, tools).
 
 - **Annotate**: a public `class`/`struct` that has out-of-line member definitions (i.e. a `.cpp`).
-  Put it on the type — `class EMERAUDE_API Foo` — which exports every member.
+  Put it on the type — `class EMEN_API Foo` — which exports every member.
   ```cpp
   #include "emeraude_export.hpp"
 
-  class EMERAUDE_API Foo { … };
-  EMERAUDE_API bool freeFunction (int);   // out-of-line free function
+  class EMEN_API Foo { … };
+  EMEN_API bool freeFunction (int);   // out-of-line free function
   ```
 - **Do NOT annotate**: header-only / fully-inline classes, function/class **templates** (instantiated
   in the consumer — `Math/*`, most of `Base::PixelFactory`), `constexpr`/`inline` helpers, and
@@ -64,7 +64,7 @@ emeraude-base's `EMERAUDE_COMPILE_OPTIONS`) rather than driving an annotation ca
 
 - The whole cascade (DLL + every consumer) is built with the **same toolchain and CRT** — the
   layout/allocator mismatches those warnings guard against cannot occur.
-- `EMERAUDE_API` classes may derive from emeraude-base traits that stay unexported **by design**
+- `EMEN_API` classes may derive from emeraude-base traits that stay unexported **by design**
   (see § 4). Annotating the base hierarchy would only serve the warning, not a real need.
 
 Consequence: annotating a class does **not** pull in its bases. Annotate only what the linker
@@ -100,7 +100,7 @@ build** and draining the linker:
    a Claude-owned build dir (never the CLion `cmake-build-*`).
 2. Build the cascade; the consumer's link reports `LNK2019` (unresolved import) for every
    not-yet-exported symbol it references.
-3. For each, annotate the **owning class/function** with `EMERAUDE_API` (bases are NOT pulled in —
+3. For each, annotate the **owning class/function** with `EMEN_API` (bases are NOT pulled in —
    C4275 is disabled, see § 3).
 4. Repeat until the link is green. Then make `EMERAUDE_USE_EXPLICIT_EXPORTS=ON` the default and drop
    this guidance to a short "done" note.
@@ -110,7 +110,7 @@ minimal and intentional.
 
 ## 6. Exported pimpl — out-of-line destructors, and the header hygiene it unlocks
 
-An `EMERAUDE_API`-exported class forces MSVC to instantiate its **destructor at the class
+An `EMEN_API`-exported class forces MSVC to instantiate its **destructor at the class
 definition point in every TU**. If such a class holds a `std::unique_ptr< T >` to a
 forward-declared (incomplete) `T`, `= default`-ing the destructor in the header instantiates
 `std::default_delete< T >` on an incomplete type → hard error. The fix is the **exported pimpl**
@@ -119,7 +119,7 @@ complete.
 
 ```cpp
 // Foo.hpp
-class EMERAUDE_API Foo final
+class EMEN_API Foo final
 {
     public:
         ~Foo ();                       // declared only — NOT '= default'
@@ -132,7 +132,8 @@ class EMERAUDE_API Foo final
 Foo::~Foo () = default;                // deleter sees the complete Bar here
 ```
 
-Current users: `Graphics::Renderer`, `Graphics::PostProcessor`, `Graphics::BindlessTextureManager`.
+Current users: `Graphics::Renderer`, `Graphics::PostProcessor`, `Graphics::BindlessTextureManager`,
+`Graphics::Compute::ProbeConvolver`.
 
 **The lever this unlocks.** Once the destructor is out-of-line, *every* smart-pointer and
 reference member may point at an incomplete type, so a hot header can trade `#include` for
@@ -187,6 +188,62 @@ delta per TU, and that part is reliable: it is how the 2026-07 pass found `Graph
 > **Lesson: validate a detector against a known-broken TU before trusting its silence.** Only the
 > header-level delta is sound enough to bound the surface; for the rest, **let the compiler
 > enumerate it** and budget several build rounds.
+
+### Same mechanism, other special members — delete copy explicitly on move-only holders
+
+The destructor is not the only implicit member the export materializes: MSVC defines **every**
+implicitly-declared special member of an exported class at its definition point. So an exported
+class holding a move-only member (`std::unique_ptr`, or a container of them) must **delete its
+copy operations explicitly** — leaving them implicit is not equivalent.
+
+Why "implicit" is not enough here: an implicit copy assignment is defined as deleted only when a
+member's own copy assignment is *deleted or inaccessible*. `std::vector::operator=(const vector&)`
+is neither — it is declared for **any** `T`, move-only included, and is not SFINAE-constrained. It
+is merely ill-formed **in its body**. The class's copy assignment is therefore a normal (non-deleted)
+implicit member, the export forces its definition, and the error lands deep inside
+`std::vector::_Assign_counted_range` on `std::unique_ptr::operator=(const unique_ptr &)`:
+
+```
+vector(1461): error C2280: 'std::unique_ptr<T> &std::unique_ptr<T>::operator =(const std::unique_ptr<T> &)':
+              attempting to reference a deleted function
+  ProbeConvolver.hpp(130): see reference to class template instantiation 'std::vector<std::unique_ptr<T>>'
+  ProbeConvolver.hpp(138): see the first reference to 'std::vector<...>::operator =' in 'ProbeConvolver::operator ='
+```
+
+Read that trace carefully: the "first reference" points at the class's **closing brace** — the
+implicit-definition location — not at any call site. **Nothing in the codebase copies the class**;
+the export alone is enough.
+
+```cpp
+class EMEN_API ProbeConvolver final
+{
+    public:
+        ProbeConvolver () noexcept = default;
+        ProbeConvolver (const ProbeConvolver &) = delete;              // required by the export
+        ProbeConvolver (ProbeConvolver &&) = delete;                   // already suppressed by the dtor
+        ProbeConvolver & operator= (const ProbeConvolver &) = delete;  // required by the export
+        ProbeConvolver & operator= (ProbeConvolver &&) = delete;
+        ~ProbeConvolver () noexcept;                                   // out of line (exported pimpl)
+    private:
+        std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_mipDescriptorSets;
+};
+```
+
+The move operations were already suppressed by the user-declared destructor, so deleting them
+changes no contract — declare them anyway: it is the style of every other exported RAII holder
+(`MDI::BatchBuilder`, `Scenes::SceneMetaData`, `Scenes::SceneInstanceTransforms`, …), and it turns
+`ProbeConvolver a = std::move(b);` into an error that names the move instead of one that names the
+deleted copy overload it silently fell back to.
+
+What immunizes a class is having **any base or member whose copy assignment is genuinely deleted** —
+the class's own is then deleted too, and a deleted member is never defined. That covers most engine
+services (non-copyable base), but also, *by accident*, some standalone holders:
+`Graphics::SharedUniformBuffer` is exported, standalone, and holds two
+`std::vector< std::unique_ptr< … > >` — yet never trips this, only because of its
+`mutable std::mutex` member. Do not read that silence as "a vector of `unique_ptr` is fine here".
+
+The genuinely exposed case is the standalone exported RAII holder with no such member:
+`Graphics::Compute::ProbeConvolver` was the first (2026-08).
 
 ## 7. Status
 

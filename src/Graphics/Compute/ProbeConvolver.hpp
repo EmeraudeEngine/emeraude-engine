@@ -82,6 +82,36 @@ namespace EmEn::Graphics::Compute
 			ProbeConvolver () noexcept = default;
 
 			/**
+			 * @brief Copy constructor (deleted).
+			 * @note Deleted EXPLICITLY, not merely left implicit: the class is exported
+			 * (EMEN_API), which forces MSVC to DEFINE every implicit special member at the
+			 * class definition point. The implicit copy assignment is not deleted (std::vector's
+			 * copy assignment is declared for any T, move-only included — it is only ill-formed
+			 * in its body), so defining it hard-errors on m_mipDescriptorSets
+			 * (std::unique_ptr is not copy-assignable). Same export mechanism as the out-of-line
+			 * destructor of BindlessTextureManager. See docs/windows-export-api.md.
+			 */
+			ProbeConvolver (const ProbeConvolver &) = delete;
+
+			/**
+			 * @brief Move constructor (deleted).
+			 * @note Already suppressed by the user-declared destructor — explicit for the
+			 * diagnostic and for consistency with the other exported RAII holders.
+			 */
+			ProbeConvolver (ProbeConvolver &&) = delete;
+
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @note See the copy constructor — this is the member the export actually chokes on.
+			 */
+			ProbeConvolver & operator= (const ProbeConvolver &) = delete;
+
+			/**
+			 * @brief Move assignment (deleted).
+			 */
+			ProbeConvolver & operator= (ProbeConvolver &&) = delete;
+
+			/**
 			 * @brief Destructs the probe convolver.
 			 * @note Out of line: members are smart pointers to forward-declared types.
 			 */

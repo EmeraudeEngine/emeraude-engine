@@ -27,24 +27,25 @@
 #pragma once
 
 /*
- * EMERAUDE_API — public boundary annotation for the engine shared library (Emeraude.dll).
+ * EMEN_API — public boundary annotation for the engine shared library (Emeraude.dll).
  * See docs/windows-export-api.md for the full migration procedure and rationale.
  *
  * Two modes, selected by the EMERAUDE_USE_EXPLICIT_EXPORTS build option (CMake):
  *
- *  - OFF (default): the macro expands to NOTHING. The DLL's exported surface is produced by
- *    CMake's WINDOWS_EXPORT_ALL_SYMBOLS, exactly as before. Annotations are harmless no-ops,
- *    so the public API can be migrated class-by-class without ever breaking the build.
+ *  - ON (default since the migration completed, 2026-07): the macro becomes
+ *    __declspec(dllexport) while building the DLL (CMake auto-defines Emeraude_EXPORTS for the
+ *    SHARED target) and __declspec(dllimport) for consumers (projet-alpha);
+ *    WINDOWS_EXPORT_ALL_SYMBOLS is dropped. This is the end state required on MSVC, where
+ *    WINDOWS_EXPORT_ALL_SYMBOLS + precompiled headers leak PCH marker symbols into the
+ *    auto-generated exports.def and fail to link (LNK2001 on a bogus '__' symbol).
  *
- *  - ON: the macro becomes __declspec(dllexport) while building the DLL (CMake auto-defines
- *    Emeraude_EXPORTS for the SHARED target) and __declspec(dllimport) for consumers
- *    (projet-alpha); WINDOWS_EXPORT_ALL_SYMBOLS is dropped. This is the end state required on
- *    MSVC, where WINDOWS_EXPORT_ALL_SYMBOLS + precompiled headers leak PCH marker symbols into
- *    the auto-generated exports.def and fail to link (LNK2001 on a bogus '__' symbol).
+ *  - OFF: the macro expands to NOTHING. The DLL's exported surface is produced by CMake's
+ *    WINDOWS_EXPORT_ALL_SYMBOLS, as before the migration. Annotations are harmless no-ops —
+ *    this was the staged path that let the public API be annotated class-by-class.
  *
- * Annotate public CLASSES (exports every member) and out-of-line free functions with
- * EMERAUDE_API. A dll-interface class whose base is not itself EMERAUDE_API triggers C4275 on
- * MSVC — its bases must be annotated too (see the doc).
+ * Annotate public CLASSES (exports every member) and out-of-line free functions with EMEN_API.
+ * Annotating a class does NOT pull in its bases: C4275/C4251 are disabled cascade-wide by
+ * decision (same toolchain and CRT everywhere), so annotate only what the linker names.
  */
 #if defined(EMERAUDE_USE_EXPLICIT_EXPORTS)
 	#if defined(_WIN32) || defined(__CYGWIN__)

@@ -177,7 +177,7 @@ For a debug build, swap `Release` → `Debug` everywhere (build directory, `CMAK
 | `EMERAUDE_BUILD_SERVICES_ONLY` | `Off` | Build the engine services without the rendering stack. |
 | `EMERAUDE_ENABLE_IMGUI` | `Off` | Compile the ImGui debug UI. |
 | `EMERAUDE_ENABLE_RENDERDOC` | `Off` | RenderDoc in-application API (see below). |
-| `EMERAUDE_USE_EXPLICIT_EXPORTS` | `On` | Windows: explicit `EMERAUDE_API` export macro instead of `WINDOWS_EXPORT_ALL_SYMBOLS`. See [`docs/windows-export-api.md`](docs/windows-export-api.md). |
+| `EMERAUDE_USE_EXPLICIT_EXPORTS` | `On` | Windows: explicit `EMEN_API` export macro instead of `WINDOWS_EXPORT_ALL_SYMBOLS`. See [`docs/windows-export-api.md`](docs/windows-export-api.md). |
 | `EMERAUDE_USE_STATIC_RUNTIME` | `Off` | Windows: static MSVC runtime (`/MT`). Also selects the matching prebuilt archive. |
 | `EMERAUDE_ENABLE_ASAN` / `MSAN` / `LSAN` / `TSAN` / `UBSAN` | `Off` | Sanitizers (Linux only). |
 | `EMERAUDE_DEBUG_KEYBOARD_INPUT`, `EMERAUDE_DEBUG_POINTER_INPUT`, `EMERAUDE_DEBUG_WINDOW_EVENTS`, `EMERAUDE_DEBUG_VULKAN_TRACKING` | `Off` | Console tracing of the matching subsystem. |

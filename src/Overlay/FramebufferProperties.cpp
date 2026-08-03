@@ -65,7 +65,7 @@ namespace EmEn::Overlay
 		m_resolutionY = 0.0F;
 	}
 
-	/* NOTE: EMERAUDE_API is carried by both header declarations (the in-class 'friend' and the
+	/* NOTE: EMEN_API is carried by both header declarations (the in-class 'friend' and the
 	 * one below the class); this definition repeats it so all three agree on linkage. Omitting it
 	 * anywhere warns C4273 on consumers. See docs/windows-export-api.md § "friend operator<<". */
 	EMEN_API std::ostream &
