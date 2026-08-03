@@ -126,6 +126,28 @@ dispatches).
 - Avoid deadlocks through strict acquisition order
 - Thread-safe `CommandBuffer` with dedicated pools
 
+**Binary semaphores: one signal, one wait, and you must be able to PROVE the wait happened.**
+A binary semaphore may not be re-signaled while an operation still waits on it. What differs
+between primitives is the *proof* available that the wait completed:
+
+| Waiter | Proof of completion | Therefore index the semaphore by |
+|---|---|---|
+| `vkQueueSubmit()` | the batch's **fence** | frame in flight |
+| `vkQueuePresentKHR()` | **none** — no fence observes a present | **swap-chain image** (its re-acquisition is the only proof) |
+
+That second row is the whole reason `Renderer::m_presentSemaphores` is indexed by the value
+`SwapChain::acquireNextImage()` returned and not by the frame index — see
+`src/Graphics/AGENTS.md` § 16 Rule 5 and `docs/caution-points.md` § "Present semaphore was
+indexed by frame in flight". `VK_KHR_swapchain_maintenance1` (present fence) is the extension
+that would supply the missing proof; the engine does not require it, so it relies on
+re-acquisition instead.
+
+**Abandoning a frame is not free.** Once a semaphore has been signaled, something must wait on
+it exactly once. `Queue::submit(const SynchInfo &)` is the engine contract for that: a
+synchronization-only submission (`commandBufferCount = 0`) that drains pending signals and
+optionally signals a fence. Never just `return` out of a frame that already signaled
+semaphores.
+
 ### Coordinate Convention
 - Projection matrices configured for Y-down
 - Vulkan Y-inverted viewport handled automatically
@@ -542,6 +564,7 @@ The command buffer supports `drawIndexedIndirect()` for GPU-driven rendering. De
 - **Memory barriers**: Correct state transitions for images
 - **Queue family ownership**: Two-sided barriers for exclusive-mode cross-queue access
 - **TLAS barriers**: Use `FRAGMENT_SHADER_BIT | COMPUTE_SHADER_BIT`, NOT `RAY_TRACING_SHADER_BIT_KHR` (ray queries, not RT pipelines)
+- **Present semaphores**: indexed by **acquired swap-chain image**, never by frame in flight — no fence observes a present (see Synchronization above)
 - **Validation layers**: Always active in development (note: ~6% CPU overhead, ~41% when combined with rwlock)
 - **Never direct calls**: Graphics, Resources, Saphir use Vulkan abstractions
 - **VMA mandatory**: All GPU allocation via VMA, never direct vkAllocateMemory

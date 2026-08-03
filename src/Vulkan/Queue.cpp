@@ -116,6 +116,47 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	Queue::submit (const SynchInfo & synchInfo) const noexcept
+	{
+		if ( synchInfo.waitSemaphores.size() != synchInfo.waitStages.size() )
+		{
+			Tracer::error(ClassId, "Wait semaphore count must equal wait stage count!");
+
+			return false;
+		}
+
+		const VkSubmitInfo submitInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = nullptr,
+			.waitSemaphoreCount = static_cast< uint32_t >(synchInfo.waitSemaphores.size()),
+			.pWaitSemaphores = synchInfo.waitSemaphores.data(),
+			.pWaitDstStageMask = synchInfo.waitStages.data(),
+			.commandBufferCount = 0,
+			.pCommandBuffers = nullptr,
+			.signalSemaphoreCount = static_cast< uint32_t >(synchInfo.signalSemaphores.size()),
+			.pSignalSemaphores = synchInfo.signalSemaphores.data(),
+		};
+
+		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
+		const std::lock_guard< Device > lock{*m_device};
+
+		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to submit synchronization into the queue : " << vkResultToCString(result) << " !";
+
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				m_device->dumpDeviceLostDiagnostics("Queue::submit");
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
 	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<SwapChainStatus> & swapChainStatus) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */

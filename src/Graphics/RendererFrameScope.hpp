@@ -157,6 +157,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the image available semaphore.
+			 * @note This one is rightfully owned per frame in flight: the swap-chain image
+			 * index is unknown until vkAcquireNextImageKHR() returns, so the semaphore handed
+			 * to the acquisition cannot be indexed by image. Its reuse is safe because this
+			 * frame's fence guarantees the submission that waited on it has completed.
+			 * The symmetric "render finished" semaphore is the exact opposite: it is waited on
+			 * by vkQueuePresentKHR(), whose completion NO fence observes, so it MUST be indexed
+			 * by acquired image index and lives in Renderer (see Renderer::m_presentSemaphores).
 			 * @return Vulkan::Sync::Semaphore *
 			 */
 			[[nodiscard]]
@@ -164,17 +171,6 @@ namespace EmEn::Graphics
 			imageAvailableSemaphore () const noexcept
 			{
 				return m_imageAvailableSemaphore.get();
-			}
-
-			/**
-			 * @brief Returns the image finished semaphore.
-			 * @return Vulkan::Sync::Semaphore *
-			 */
-			[[nodiscard]]
-			Vulkan::Sync::Semaphore *
-			renderFinishedSemaphore () const noexcept
-			{
-				return m_renderFinishedSemaphore.get();
 			}
 
 			/**
@@ -205,7 +201,6 @@ namespace EmEn::Graphics
 			/* Synchronization. */
 			std::unique_ptr< Vulkan::Sync::Fence > m_inFlightFence;
 			std::unique_ptr< Vulkan::Sync::Semaphore > m_imageAvailableSemaphore;
-			std::unique_ptr< Vulkan::Sync::Semaphore > m_renderFinishedSemaphore;
 			uint32_t m_frameIndex{0};
 	};
 }

@@ -323,12 +323,18 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Presents an rendered image.
-			 * @param imageIndex The current rendering image index.
+			 * @param imageIndex The image index returned by acquireNextImage().
 			 * @param queue The graphics queue to present the image.
-			 * @param renderFinishedSemaphore A semaphore handle to wait the signal for a finished render.
+			 * @param presentSemaphore A semaphore handle to wait the signal for a finished render.
+			 * @warning This semaphore MUST belong to @a imageIndex and to no other image
+			 * (Renderer::m_presentSemaphores). No fence observes the completion of a present, so
+			 * the sole proof that this semaphore is free again is the re-acquisition of the image
+			 * it was presented with. A semaphore indexed by frame in flight instead gets
+			 * re-signaled while a present still waits on it, because acquireNextImage() returns
+			 * indices in an arbitrary order: VUID-vkQueueSubmit-pSignalSemaphores-00067.
 			 * @return void
 			 */
-			void present (const uint32_t & imageIndex, const Queue * queue, VkSemaphore renderFinishedSemaphore) noexcept;
+			void present (const uint32_t & imageIndex, const Queue * queue, VkSemaphore presentSemaphore) noexcept;
 
 		private:
 

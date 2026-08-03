@@ -1714,6 +1714,70 @@ AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::op
 
 ## Vulkan Validation
 
+### Fixed: Present semaphore was indexed by frame in flight, not by swap-chain image (Aug 2026)
+
+`VUID-vkQueueSubmit-pSignalSemaphores-00067`, fired on the **first frames** and aborting the
+submission with `VK_ERROR_VALIDATION_FAILED_EXT`. Surfaced the day the validation layers were
+enabled **on Windows**; the same code had been running clean on Linux for a long time.
+
+```
+pSubmits[0].pSignalSemaphores[0] is being signaled by VkQueue ...
+Most recently acquired image indices: 0, [1], 2, 0, 0.
+Swapchain image 1 was presented but was not re-acquired, so the semaphore may still be in use.
+```
+
+That index list **is** the diagnosis: `0, 1, 2, 0, 0` is not a cycle. `vkAcquireNextImageKHR()`
+hands back image indices in whatever order the presentation engine chooses — under MAILBOX
+(selected on Windows for triple buffering) it repeats and skips freely, whereas under FIFO
+(Linux/Mesa) it happens to cycle, which is exactly why the platforms disagreed.
+
+The semaphore signaled by the frame submission and waited on by `vkQueuePresentKHR()` lived in
+`RendererFrameScope`, i.e. **one per frame in flight**, selected with `m_currentFrameIndex`,
+which advances `+1 % framesInFlight()`. `createRenderingSystem()` sizes the frame scopes from
+the swap-chain image count, so the *counts* matched and hid the defect — but the *mapping* was
+wrong. The frame slot eventually came back around and re-signaled the very semaphore that the
+still-pending present of another image was waiting on.
+
+> [!CAUTION]
+> **Why a fence does not save you here.** The frame's in-flight fence proves the *submission*
+> completed. It says nothing about the *present*: no fence observes the completion of a
+> `vkQueuePresentKHR()` (that is precisely what `VK_KHR_swapchain_maintenance1` exists to add).
+> The only proof that a present released its semaphore is the **re-acquisition of the image it
+> presented**. Hence the asymmetry inside one frame:
+> - **image-available** semaphore → **per frame in flight** (the image index does not exist yet
+>   at acquisition time; the fence proves reuse is safe),
+> - **present** semaphore → **per swap-chain image** (nothing but re-acquisition proves it).
+
+**Fix:** `Renderer::m_presentSemaphores`, one semaphore per swap-chain image, indexed by the
+value `acquireNextImage()` returned. `RendererFrameScope::m_renderFinishedSemaphore` is gone —
+the wrongly-indexed primitive was removed rather than left available to be misused again. The
+array is owned by the **rendering system** and not by `SwapChain::Frame`, so that it survives
+swap-chain recreation: `vkDeviceWaitIdle()` does not retire pending present operations, so
+destroying those semaphores on every resize would trade this VUID for a
+destruction-while-in-use on the resize path.
+
+**Second defect, same root, fixed in the same pass:** every early `return` placed *after* a
+successful acquisition leaked signaled semaphores (and leaked the acquired image, which nothing
+but a swap-chain recreation can give back). `Renderer::discardAcquiredImage()` now drains them
+with an empty synchronization batch — `Queue::submit(const SynchInfo &)`, no command buffer, a
+new engine contract — deduplicated because the caller may already have appended the acquisition
+semaphore, signaling the fence back only when it had already been reset. It then declares the
+swap-chain degraded. `getCommandBuffer()` can return a null pointer and was being dereferenced
+unchecked at that same spot; it is now tested.
+
+> [!TIP]
+> **Index discipline.** In `renderFrame()` the acquired value is named `imageIndex`, never
+> `frameIndex`. Anything addressed by it (framebuffer, colour image, present semaphore) uses it;
+> anything belonging to the frame slot (fence, command pool, per-frame SSBOs and descriptors)
+> uses `m_currentFrameIndex`. Equal counts do not make them the same number.
+
+**Files:** `Graphics/Renderer.{hpp,cpp}` (`m_presentSemaphores`, `createRenderingSystem()`,
+`discardAcquiredImage()`, `renderFrame()`), `Graphics/RendererFrameScope.{hpp,cpp}`,
+`Vulkan/Queue.{hpp,cpp}` (sync-only `submit()`), `Vulkan/SwapChain.{hpp,cpp}` (`present()`
+`@warning`). Contract: `src/Graphics/AGENTS.md` § 16 Rule 5.
+
+---
+
 ### Fixed: ToneMapping auto-exposure readback — AdaptLum images lacked TRANSFER_SRC usage (Jul 2026)
 
 Enabling HDR on a camera (`Component::Camera::enableHDR(true)`) produced a storm of validation

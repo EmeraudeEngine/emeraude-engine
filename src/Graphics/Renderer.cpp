@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <ranges>
 #include <thread>
 
@@ -63,6 +64,7 @@
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
 #include "Window.hpp"
 
 namespace
@@ -1487,26 +1489,32 @@ namespace EmEn::Graphics
 		 * reference them has finished execution and been re-recorded. */
 		m_deferredDestructor.tick();
 
-		/* 3. Get the new frame to render to. */
-		const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
+		/* 3. Get the new frame to render to.
+		 * NOTE: The returned index addresses a SWAP-CHAIN IMAGE, in an arbitrary order that has
+		 * nothing to do with m_currentFrameIndex. Everything indexed by it (the present
+		 * semaphore, the framebuffer) must use it, and never the frame index. */
+		const auto imageIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
 
-		if ( !frameIndexOpt )
+		if ( !imageIndexOpt )
 		{
 			return;
 		}
+
+		const uint32_t imageIndex = imageIndexOpt.value();
 
 		/* 4. Reset the fence. */
 		if ( !currentFrameScope.inFlightFence()->reset() )
 		{
 			TraceError{ClassId} << "Something wrong happens while reset the fence for image #" << m_currentFrameIndex << '!';
 
+			/* The fence is still signaled, so the empty batch must not signal it again. */
+			this->discardAcquiredImage(currentFrameScope, false);
+
 			return;
 		}
 
 		/* 5. The new frame rendering is starting now. */
 		m_statistics.start();
-
-		const uint32_t frameIndex = frameIndexOpt.value();
 
 		/* NOTE: Offscreen rendering */
 		if ( scene != nullptr )
@@ -1540,8 +1548,10 @@ namespace EmEn::Graphics
 		/* Then we need the command buffer linked to this image by its index. */
 		const auto commandBuffer = currentFrameScope.getCommandBuffer(m_swapChain.get());
 
-		if ( !commandBuffer->begin() )
+		if ( commandBuffer == nullptr || !commandBuffer->begin() )
 		{
+			this->discardAcquiredImage(currentFrameScope, true);
+
 			return;
 		}
 
@@ -1658,6 +1668,8 @@ namespace EmEn::Graphics
 
 		if ( !commandBuffer->end() )
 		{
+			this->discardAcquiredImage(currentFrameScope, true);
+
 			return;
 		}
 
@@ -1673,18 +1685,22 @@ namespace EmEn::Graphics
 			currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
 			waitStages.emplace_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-			auto renderFinishedSemaphoreHandle = currentFrameScope.renderFinishedSemaphore()->handle();
+			/* The present semaphore belongs to the ACQUIRED IMAGE, not to the frame slot: only the
+			 * re-acquisition of that image proves the previous present released it. */
+			auto presentSemaphoreHandle = m_presentSemaphores[imageIndex]->handle();
 
 			if ( !m_graphicsQueue->submit(*commandBuffer, SynchInfo{}
 					.waits(currentFrameScope.secondarySemaphores(), waitStages)
-					.signals({&renderFinishedSemaphoreHandle, 1})
+					.signals({&presentSemaphoreHandle, 1})
 					.withFence(currentFrameScope.inFlightFence()->handle())
 				) )
 			{
+				this->discardAcquiredImage(currentFrameScope, true);
+
 				return;
 			}
 
-			m_swapChain->present(frameIndex, m_graphicsQueue, renderFinishedSemaphoreHandle);
+			m_swapChain->present(imageIndex, m_graphicsQueue, presentSemaphoreHandle);
 		}
 
 		m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
@@ -2223,13 +2239,78 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* One present semaphore per SWAP-CHAIN IMAGE (see m_presentSemaphores).
+		 * The count happens to equal the frame-in-flight count, but the INDEX does not:
+		 * these are addressed by the index vkAcquireNextImageKHR() returns. */
+		m_presentSemaphores.clear();
+
+		for ( uint32_t imageIndex = 0; imageIndex < imageCount; imageIndex++ )
+		{
+			auto semaphore = std::make_unique< Sync::Semaphore >(m_device);
+			semaphore->setIdentifier(ClassId, "Image" + std::to_string(imageIndex) + "PresentReady", "Semaphore");
+
+			if ( !semaphore->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the present semaphore for swap-chain image #" << imageIndex << '!';
+
+				return false;
+			}
+
+			m_presentSemaphores.emplace_back(std::move(semaphore));
+		}
+
 		return true;
+	}
+
+	void
+	Renderer::discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) noexcept
+	{
+		/* Primary semaphores (shadow maps) may not have been promoted yet when the frame
+		 * failed early, so drain both lists. */
+		currentFrameScope.promotePrimaryToSecondary();
+
+		/* Deduplicated: a binary semaphore may be waited on only ONCE per batch, and the caller
+		 * may already have appended the acquisition semaphore to the pending list before failing. */
+		StaticVector< VkSemaphore, 17 > drainedSemaphores;
+
+		drainedSemaphores.emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
+
+		for ( const auto semaphore : currentFrameScope.secondarySemaphores() )
+		{
+			if ( std::ranges::find(drainedSemaphores, semaphore) == drainedSemaphores.cend() )
+			{
+				drainedSemaphores.emplace_back(semaphore);
+			}
+		}
+
+		const StaticVector< VkPipelineStageFlags, 17 > waitStages(drainedSemaphores.size(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+
+		auto synchInfo = SynchInfo{}.waits(drainedSemaphores, waitStages);
+
+		if ( signalFence )
+		{
+			synchInfo.withFence(currentFrameScope.inFlightFence()->handle());
+		}
+
+		if ( !m_graphicsQueue->submit(synchInfo) )
+		{
+			TraceError{ClassId} << "Unable to drain the synchronization of the abandoned frame #" << currentFrameScope.frameIndex() << '!';
+		}
+
+		currentFrameScope.secondarySemaphores().clear();
+
+		/* The acquired image is never presented: only the swap-chain recreation gives it back. */
+		if ( m_swapChain != nullptr )
+		{
+			m_swapChain->setDegraded();
+		}
 	}
 
 	void
 	Renderer::destroyRenderingSystem () noexcept
 	{
 		m_rendererFrameScope.clear();
+		m_presentSemaphores.clear();
 	}
 
 	bool

@@ -1482,6 +1482,21 @@ namespace EmEn::Graphics
 			bool createRenderingSystem (uint32_t imageCount) noexcept;
 
 			/**
+			 * @brief Abandons the swap-chain image acquired by the current frame.
+			 * @note Every semaphore already signaled for this frame (the acquisition, plus the
+			 * shadow map and render-to-texture submissions that ran before the failure) must be
+			 * consumed exactly once, otherwise the next frame reusing them hits
+			 * VUID-vkQueueSubmit-pSignalSemaphores-00067. An empty synchronization batch drains
+			 * them, then the swap-chain is declared degraded: its recreation destroys the image
+			 * this frame acquired but will never present, which no other mechanism can release.
+			 * @param currentFrameScope A reference to the frame scope being abandoned.
+			 * @param signalFence Set to true when the in-flight fence was reset and therefore
+			 * needs the empty batch to signal it back.
+			 * @return void
+			 */
+			void discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) noexcept;
+
+			/**
 			 * @brief Creates the RT descriptor set layout and descriptor set.
 			 * @note Called once during initialization. The set is updated per-frame via updateRTDescriptorSet().
 			 * @return bool
@@ -1535,6 +1550,20 @@ namespace EmEn::Graphics
 			Vulkan::DeferredDestructor m_deferredDestructor;
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope{};
+			/** @brief Semaphores signaled by the frame submission and waited on by
+			 * vkQueuePresentKHR(), indexed by ACQUIRED SWAP-CHAIN IMAGE INDEX — never by frame
+			 * index. A binary semaphore cannot be re-signaled while an operation still waits on
+			 * it, and no fence ever observes the completion of a present: the only proof that a
+			 * present released its semaphore is the re-acquisition of the image it presented.
+			 * vkAcquireNextImageKHR() returns indices in an arbitrary order (MAILBOX notably),
+			 * so a per-frame-index semaphore is re-signaled while the present of another image
+			 * still waits on it — VUID-vkQueueSubmit-pSignalSemaphores-00067.
+			 * These live with the rendering system and NOT with the swap-chain frames on purpose:
+			 * they must survive swap-chain recreation, because vkDeviceWaitIdle() does not retire
+			 * pending present operations, so destroying them on resize would be a
+			 * destruction-while-in-use. Sized by swap-chain image count in
+			 * createRenderingSystem(). */
+			Base::StaticVector< std::unique_ptr< Vulkan::Sync::Semaphore >, 5 > m_presentSemaphores{};
 			/** @brief Lens-effect snapshots retained per frame in flight (renderer side of the
 			 * camera's copy-on-write publication contract): the snapshot recorded into frame slot
 			 * N stays referenced until slot N is reused — its fence has passed by then — so a

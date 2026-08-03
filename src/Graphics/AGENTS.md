@@ -1844,6 +1844,49 @@ rendered frame**, Rule 1 applies and the single buffer becomes a data race.
 **Checklist before adding a member to a view UBO:** does this value differ between two
 frames that share the same camera state? If yes, it does not belong here.
 
+### Rule 5: Frame-in-Flight Index ≠ Swap-Chain Image Index (Aug 2026)
+
+`Renderer::createRenderingSystem()` sizes `m_rendererFrameScope` from the swap-chain **image
+count**, so the two counts are equal — but the two **indices are not interchangeable**:
+
+| Index | Advances how | Addresses |
+|---|---|---|
+| `m_currentFrameIndex` | `+1 % framesInFlight()`, strictly cyclic | frame scope: command pool, in-flight fence, image-available semaphore, per-frame SSBOs/descriptors |
+| the value returned by `SwapChain::acquireNextImage()` | **arbitrary order**, decided by the presentation engine | framebuffer, colour image, **present semaphore** |
+
+The two coincide under FIFO (Linux/Mesa) and diverge under MAILBOX (typical on Windows), which
+is why an index mix-up can stay invisible for a long time on one platform.
+
+**The synchronization primitives split along that line, and the reason is the completion proof:**
+
+- **Image-available semaphore → per frame in flight.** The image index is unknown until
+  `vkAcquireNextImageKHR()` returns, so it *cannot* be indexed by image. Reuse is safe because
+  the frame's fence proves the submission that waited on it has completed.
+- **Present semaphore → per swap-chain image** (`Renderer::m_presentSemaphores`). **No fence
+  ever observes the completion of a `vkQueuePresentKHR()`.** The only proof that a present
+  released its semaphore is the **re-acquisition of the image it presented**. Index it by frame
+  and a binary semaphore gets re-signaled while a present still waits on it:
+  `VUID-vkQueueSubmit-pSignalSemaphores-00067`.
+
+These semaphores live with the **rendering system**, not with `SwapChain::Frame`, on purpose:
+they must survive swap-chain recreation, because `vkDeviceWaitIdle()` does **not** retire
+pending present operations — destroying them on resize would be a destruction-while-in-use.
+
+**Any bail-out after a successful acquisition must drain, not return.** Every semaphore already
+signaled for that frame (the acquisition, plus the shadow-map and render-to-texture submissions
+that ran before the failure) must be waited on exactly once, or the next frame reusing them hits
+the same VUID. `Renderer::discardAcquiredImage()` submits an empty synchronization batch
+(`Queue::submit(const SynchInfo &)`, no command buffer) that drains them and, when the fence was
+already reset, signals it back — then declares the swap-chain degraded, because its recreation is
+the only thing that gives back an image that was acquired and never presented.
+
+**Code references:**
+- `Renderer.hpp:m_presentSemaphores` — the per-image array and its lifetime contract
+- `Renderer.cpp:renderFrame()` — `imageIndex` (acquired) vs `m_currentFrameIndex` (frame slot)
+- `Renderer.cpp:discardAcquiredImage()` — the drain
+- `Vulkan/SwapChain.hpp:present()` — `@warning` stating the per-image requirement
+- `docs/caution-points.md` § "Present semaphore was indexed by frame in flight"
+
 ## 17. Multi-Draw Indirect (MDI) — GPU-Driven Rendering
 
 ### Overview

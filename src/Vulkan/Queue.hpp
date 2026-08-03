@@ -205,6 +205,20 @@ namespace EmEn::Vulkan
 			bool submit (const CommandBuffer & commandBuffer, const SynchInfo & synchInfo) const noexcept;
 
 			/**
+			 * @brief Submits synchronization only, without any command buffer.
+			 * @note This is the engine contract for draining pending semaphore signals: a
+			 * binary semaphore that was signaled (by vkAcquireNextImageKHR() or by an earlier
+			 * submission) MUST be waited on exactly once. When a frame is abandoned after
+			 * those signals happened, this empty batch consumes them and optionally signals
+			 * the frame fence, so the synchronization state stays consistent instead of
+			 * leaking a signaled semaphore into the next frame.
+			 * @param synchInfo A reference to a syncInfo.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool submit (const SynchInfo & synchInfo) const noexcept;
+
+			/**
 			 * @brief Submits a present info structure.
 			 * @param presentInfo A pointer to a presentInfo structure.
 			 * @param swapChainStatus A writable reference to the atomic swap-chain status.

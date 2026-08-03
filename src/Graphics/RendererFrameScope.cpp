@@ -85,20 +85,6 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_renderFinishedSemaphore = std::make_unique< Sync::Semaphore >(device);
-#if IS_MACOS
-		m_renderFinishedSemaphore->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "RenderFinished").str(), "Semaphore");
-#else
-		m_renderFinishedSemaphore->setIdentifier(ClassId, std::format("Frame{}RenderFinished", frameIndex), "Semaphore");
-#endif
-
-		if ( !m_renderFinishedSemaphore->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image finished!";
-
-			return false;
-		}
-
 		return true;
 	}
 
