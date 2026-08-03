@@ -48,6 +48,7 @@
 #include "DeviceRequirements.hpp"
 #include "Identification.hpp"
 #include "PhysicalDevice.hpp"
+#include "PortabilitySubset.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Utility.hpp"
@@ -896,11 +897,42 @@ namespace EmEn::Vulkan
 			 * extension being advertised, NEVER on the platform. It used to be guarded by
 			 * "if constexpr ( !IsMacOS )", which skipped it on the one platform that always
 			 * needs it and left the device created in a spec-violating state. */
-			if ( hasExtension("VK_KHR_portability_subset") )
+			if ( hasExtension(PortabilitySubset::ExtensionName) )
 			{
-				m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
+				m_requiredGraphicsDeviceExtensions.emplace_back(PortabilitySubset::ExtensionName);
 
-				Tracer::info(ClassId, "VK_KHR_portability_subset extension detected and enabled.");
+				/* NOTE: Enabling the extension is NOT enough. Every portability feature defaults to
+				 * DISABLED, so the feature structure must be chained into VkDeviceCreateInfo::pNext with
+				 * the features actually requested — otherwise the engine silently runs without
+				 * capabilities the device has. Requesting exactly what the device reports is both
+				 * maximal and safe: asking for an unsupported feature would fail device creation.
+				 *
+				 * This is what was missing when every shadow-map descriptor write was rejected with
+				 * VUID-VkDescriptorImageInfo-mutableComparisonSamplers-04450: the M2 reports
+				 * mutableComparisonSamplers = VK_TRUE, the engine simply never asked for it, so the
+				 * descriptor stayed unwritten and every lit draw sampled undefined memory. */
+				const auto & supported = physicalDevice->portabilitySubsetFeatures();
+				auto & requested = requirements.portabilitySubsetFeatures();
+
+				requested.constantAlphaColorBlendFactors = supported.constantAlphaColorBlendFactors;
+				requested.events = supported.events;
+				requested.imageViewFormatReinterpretation = supported.imageViewFormatReinterpretation;
+				requested.imageViewFormatSwizzle = supported.imageViewFormatSwizzle;
+				requested.imageView2DOn3DImage = supported.imageView2DOn3DImage;
+				requested.multisampleArrayImage = supported.multisampleArrayImage;
+				requested.mutableComparisonSamplers = supported.mutableComparisonSamplers;
+				requested.pointPolygons = supported.pointPolygons;
+				requested.samplerMipLodBias = supported.samplerMipLodBias;
+				requested.separateStencilMaskRef = supported.separateStencilMaskRef;
+				requested.shaderSampleRateInterpolationFunctions = supported.shaderSampleRateInterpolationFunctions;
+				requested.tessellationIsolines = supported.tessellationIsolines;
+				requested.tessellationPointMode = supported.tessellationPointMode;
+				requested.triangleFans = supported.triangleFans;
+				requested.vertexAttributeAccessBeyondStride = supported.vertexAttributeAccessBeyondStride;
+
+				TraceInfo{ClassId} <<
+					"VK_KHR_portability_subset detected and enabled, requesting every feature the device "
+					"supports (mutableComparisonSamplers: " << (supported.mutableComparisonSamplers == VK_TRUE ? "yes" : "NO") << ").";
 			}
 
 			/* NOTE: Ray tracing extensions (VK_KHR_acceleration_structure + VK_KHR_ray_query).

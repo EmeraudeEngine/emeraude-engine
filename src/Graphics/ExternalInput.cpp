@@ -40,8 +40,6 @@ namespace EmEn::Graphics
 	using namespace Base;
 	using namespace Base::PixelFactory;
 
-	constexpr auto TracerTag{"ExternalInput"};
-
 	bool
 	ExternalInput::onInitialize () noexcept
 	{
@@ -56,7 +54,7 @@ namespace EmEn::Graphics
 		m_captureWidth = settings.getOrSetDefault< uint32_t >(VideoCaptureDeviceWidthKey, DefaultVideoCaptureDeviceWidth);
 		m_captureHeight = settings.getOrSetDefault< uint32_t >(VideoCaptureDeviceHeightKey, DefaultVideoCaptureDeviceHeight);
 
-		TraceInfo{TracerTag} << "External input service initialized, device index: " << m_defaultDeviceIndex << ", resolution: " << m_captureWidth << "x" << m_captureHeight << ").";
+		TraceInfo{ClassId} << "External input service initialized, device index: " << m_defaultDeviceIndex << ", resolution: " << m_captureWidth << "x" << m_captureHeight << ").";
 
 		return true;
 	}
@@ -110,7 +108,7 @@ namespace EmEn::Graphics
 	{
 		if ( !m_captureDevice.isOpen() )
 		{
-			TraceWarning{TracerTag} << "Cannot capture frame: no device is open.";
+			TraceWarning{ClassId} << "Cannot capture frame: no device is open.";
 
 			return false;
 		}

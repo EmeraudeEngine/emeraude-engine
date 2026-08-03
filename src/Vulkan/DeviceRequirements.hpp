@@ -35,6 +35,9 @@
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
+/* Local inclusions. */
+#include "PortabilitySubset.hpp"
+
 /* Forward declarations. */
 namespace EmEn
 {
@@ -259,6 +262,22 @@ namespace EmEn::Vulkan
 				return m_faultFeatures;
 			}
 
+			/**
+			 * @brief Gives access to configure the VK_KHR_portability_subset device features.
+			 * @note Only meaningful when the selected device advertises the extension. Fill it from
+			 * PhysicalDevice::portabilitySubsetFeatures(): requesting a feature the device does not
+			 * support fails device creation, and requesting NOTHING leaves them all disabled even
+			 * though the device supports them — which is exactly how the engine silently lost hardware
+			 * depth comparison on MoltenVK.
+			 * @return PortabilitySubset::Features &
+			 */
+			[[nodiscard]]
+			PortabilitySubset::Features &
+			portabilitySubsetFeatures () noexcept
+			{
+				return m_portabilitySubsetFeatures;
+			}
+
 		private:
 
 			/**
@@ -276,6 +295,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
 			VkPhysicalDeviceFaultFeaturesEXT m_faultFeatures{};
+			PortabilitySubset::Features m_portabilitySubsetFeatures{};
 			VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 			bool m_enableGraphics{false};
 			bool m_enableCompute{false};

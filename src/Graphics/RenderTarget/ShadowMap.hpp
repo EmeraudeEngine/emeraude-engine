@@ -578,7 +578,7 @@ namespace EmEn::Graphics::RenderTarget
 				}
 
 				/* Create a sampler for the texture. */
-				m_sampler = renderer.getSampler("ShadowMap", [this] (Settings &, VkSamplerCreateInfo & createInfo) {
+				m_sampler = renderer.getSampler("ShadowMap", [] (Settings &, VkSamplerCreateInfo & createInfo) {
 					//createInfo.flags = 0;
 					createInfo.magFilter = VK_FILTER_LINEAR;
 					createInfo.minFilter = VK_FILTER_LINEAR;

@@ -27,6 +27,7 @@
 #include "BindlessTextureManager.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <vector>
 
 /* Local inclusions. */
@@ -39,6 +40,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/TextureInterface.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
@@ -77,6 +79,13 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		if ( !this->computeCapacities() )
+		{
+			Tracer::error(ClassId, "The device cannot host the bindless descriptor table !");
+
+			return false;
+		}
+
 		if ( !this->createDescriptorSetLayout() )
 		{
 			Tracer::error(ClassId, "Failed to create the bindless descriptor set layout !");
@@ -100,11 +109,94 @@ namespace EmEn::Graphics
 
 		TraceSuccess{ClassId} <<
 			"Bindless textures manager initialized successfully with: "
-			"1D[" << MaxTextures1D << "], "
-			"2D[" << MaxTextures2D << "], "
-			"3D[" << MaxTextures3D << "], "
-			"Cube[" << MaxTexturesCube << "], "
-			"CubeArray[" << MaxTexturesCubeArray << "] textures.";
+			"1D[" << m_maxTextures1D << "], "
+			"2D[" << m_maxTextures2D << "], "
+			"3D[" << m_maxTextures3D << "], "
+			"Cube[" << m_maxTexturesCube << "], "
+			"CubeArray[" << m_maxTexturesCubeArray << "] textures.";
+
+		return true;
+	}
+
+	bool
+	BindlessTextureManager::computeCapacities () noexcept
+	{
+		const auto & properties = m_device->physicalDevice()->propertiesVK12();
+
+		/* A COMBINED_IMAGE_SAMPLER descriptor is charged to the sampler AND the sampled-image
+		 * update-after-bind limits, and both have a per-set and a per-stage variant. The binding
+		 * constraint is whichever is smallest — on MoltenVK the sampler pair (1024), on desktop
+		 * none of them in practice. */
+		const auto deviceBudget = std::min({
+			properties.maxPerStageDescriptorUpdateAfterBindSamplers,
+			properties.maxDescriptorSetUpdateAfterBindSamplers,
+			properties.maxPerStageDescriptorUpdateAfterBindSampledImages,
+			properties.maxDescriptorSetUpdateAfterBindSampledImages,
+			properties.maxPerStageUpdateAfterBindResources
+		});
+
+		constexpr uint32_t minimalTotal = 5 * MinTexturesPerArray;
+
+		if ( deviceBudget < OtherSetsSamplerHeadroom + minimalTotal )
+		{
+			TraceError{ClassId} <<
+				"The device update-after-bind budget (" << deviceBudget << " descriptors) cannot host "
+				"the bindless descriptor table (" << minimalTotal << " minimum, plus " << OtherSetsSamplerHeadroom << " reserved for other sets) !";
+
+			return false;
+		}
+
+		const auto budget = deviceBudget - OtherSetsSamplerHeadroom;
+
+		constexpr uint32_t desiredTotal =
+			DesiredMaxTextures1D + DesiredMaxTextures2D + DesiredMaxTextures3D +
+			DesiredMaxTexturesCube + DesiredMaxTexturesCubeArray;
+
+		if ( desiredTotal <= budget )
+		{
+			m_maxTextures1D = DesiredMaxTextures1D;
+			m_maxTextures2D = DesiredMaxTextures2D;
+			m_maxTextures3D = DesiredMaxTextures3D;
+			m_maxTexturesCube = DesiredMaxTexturesCube;
+			m_maxTexturesCubeArray = DesiredMaxTexturesCubeArray;
+
+			return true;
+		}
+
+		/* Reduced profile: fixed floors for the secondary arrays, the remainder to the 2D array. */
+		m_maxTextures1D = ReducedMaxTextures1D;
+		m_maxTextures3D = ReducedMaxTextures3D;
+		m_maxTexturesCube = ReducedMaxTexturesCube;
+		m_maxTexturesCubeArray = ReducedMaxTexturesCubeArray;
+
+		constexpr uint32_t reducedSecondaryTotal =
+			ReducedMaxTextures1D + ReducedMaxTextures3D + ReducedMaxTexturesCube + ReducedMaxTexturesCubeArray;
+
+		if ( budget < reducedSecondaryTotal + MinTexturesPerArray )
+		{
+			/* Even the reduced floors do not fit: fall back to the absolute floor everywhere. The
+			 * Vulkan 1.2 spec minimum for these limits is 500, so this branch is unreachable on a
+			 * conformant device — it exists so a non-conformant one degrades instead of corrupting. */
+			m_maxTextures1D = MinTexturesPerArray;
+			m_maxTextures3D = MinTexturesPerArray;
+			m_maxTexturesCube = MinTexturesPerArray;
+			m_maxTexturesCubeArray = MinTexturesPerArray;
+			m_maxTextures2D = budget - (4 * MinTexturesPerArray);
+		}
+		else
+		{
+			m_maxTextures2D = std::min(budget - reducedSecondaryTotal, DesiredMaxTextures2D);
+		}
+
+		TraceWarning{ClassId} <<
+			"The device update-after-bind budget (" << deviceBudget << " descriptors) cannot host the desired "
+			"bindless table (" << desiredTotal << " descriptors). Reduced to "
+			"1D[" << m_maxTextures1D << "], "
+			"2D[" << m_maxTextures2D << "], "
+			"3D[" << m_maxTextures3D << "], "
+			"Cube[" << m_maxTexturesCube << "], "
+			"CubeArray[" << m_maxTexturesCubeArray << "]. "
+			"A scene needing more textures of one type will fail to register them.";
 
 		return true;
 	}
@@ -142,7 +234,7 @@ namespace EmEn::Graphics
 
 		/* Declare each texture array binding with the appropriate flags. */
 		/* Binding 0: sampler1D array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture1DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures1D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture1DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures1D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare 1D texture binding !");
 
@@ -150,7 +242,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 1: sampler2D array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture2DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures2D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture2DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures2D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare 2D texture binding !");
 
@@ -158,7 +250,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 2: sampler3D array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture3DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures3D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture3DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures3D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare 3D texture binding !");
 
@@ -166,7 +258,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 3: samplerCube array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTexturesCube, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTexturesCube, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare cubemap texture binding !");
 
@@ -174,7 +266,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 4: samplerCubeArray array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeArrayBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTexturesCubeArray, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeArrayBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTexturesCubeArray, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare cube array texture binding !");
 
@@ -197,7 +289,7 @@ namespace EmEn::Graphics
 	{
 		/* Pool sizes for each texture type. */
 		std::vector< VkDescriptorPoolSize > poolSizes{
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures1D + MaxTextures2D + MaxTextures3D + MaxTexturesCube + MaxTexturesCubeArray}
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures1D + m_maxTextures2D + m_maxTextures3D + m_maxTexturesCube + m_maxTexturesCubeArray}
 		};
 
 		/* Create pool with UPDATE_AFTER_BIND flag and FREE_DESCRIPTOR_SET_BIT
@@ -423,7 +515,7 @@ namespace EmEn::Graphics
 	bool
 	BindlessTextureManager::updateTexture1D (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept
 	{
-		if ( index >= MaxTextures1D )
+		if ( index >= m_maxTextures1D )
 		{
 			TraceError{ClassId} << "Invalid 1D texture index: " << index;
 
@@ -439,7 +531,7 @@ namespace EmEn::Graphics
 	bool
 	BindlessTextureManager::updateTexture2D (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept
 	{
-		if ( index >= MaxTextures2D )
+		if ( index >= m_maxTextures2D )
 		{
 			TraceError{ClassId} << "Invalid 2D texture index: " << index;
 
@@ -455,7 +547,7 @@ namespace EmEn::Graphics
 	bool
 	BindlessTextureManager::updateTexture3D (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept
 	{
-		if ( index >= MaxTextures3D )
+		if ( index >= m_maxTextures3D )
 		{
 			TraceError{ClassId} << "Invalid 3D texture index: " << index;
 
@@ -471,7 +563,7 @@ namespace EmEn::Graphics
 	bool
 	BindlessTextureManager::updateTextureCube (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept
 	{
-		if ( index >= MaxTexturesCube )
+		if ( index >= m_maxTexturesCube )
 		{
 			TraceError{ClassId} << "Invalid cubemap texture index: " << index;
 
@@ -487,7 +579,7 @@ namespace EmEn::Graphics
 	bool
 	BindlessTextureManager::updateTextureCubeArray (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept
 	{
-		if ( index >= MaxTexturesCubeArray )
+		if ( index >= m_maxTexturesCubeArray )
 		{
 			TraceError{ClassId} << "Invalid cube array texture index: " << index;
 
@@ -541,7 +633,7 @@ namespace EmEn::Graphics
 	bool
 	BindlessTextureManager::updateTexture2DFromDescriptorInfo (uint32_t index, const VkDescriptorImageInfo & descriptorInfo) const noexcept
 	{
-		if ( index >= MaxTextures2D )
+		if ( index >= m_maxTextures2D )
 		{
 			TraceError{ClassId} << "Invalid 2D texture index for raw descriptor: " << index;
 

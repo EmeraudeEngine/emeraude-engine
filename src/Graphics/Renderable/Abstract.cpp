@@ -32,8 +32,6 @@ namespace EmEn::Graphics::Renderable
 	using namespace Base::Math;
 	using namespace Resources;
 
-	constexpr auto TracerTag{"RenderableInterface"};
-
 	std::shared_ptr< Saphir::Program >
 	Abstract::findCachedProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key) const noexcept
 	{

@@ -863,6 +863,31 @@ namespace EmEn::Vulkan
 
 		renderPass->addSubPass(subPass);
 
+		/* NOTE: This pass performs the layout transition of the acquired swap-chain image (its colour
+		 * attachment declares initialLayout = UNDEFINED), and the submit waits on the
+		 * vkAcquireNextImageKHR semaphore at COLOR_ATTACHMENT_OUTPUT (see Renderer::renderFrame).
+		 *
+		 * Without an EXPLICIT external dependency, the implicit one uses TOP_OF_PIPE as its source
+		 * stage, which creates NO execution dependency with that wait: the layout transition is then
+		 * free to run before the image is actually available for writing. The Synchronization
+		 * Validation layer reports it as
+		 * `SYNC-HAZARD-WRITE-AFTER-READ: vkCmdBeginRenderPass writes to resource, which was previously
+		 * accessed by vkAcquireNextImageKHR`, and the visible result is frame-to-frame corruption —
+		 * garbage that also poisons the metered luminance driving the auto-exposure.
+		 *
+		 * An execution dependency is sufficient (hence srcAccessMask = 0): what must be guaranteed is
+		 * the ORDER between the semaphore wait and the transition, not a cache flush. The stages of
+		 * both attachments are covered, because both are transitioned by this pass. */
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = VK_SUBPASS_EXTERNAL,
+			.dstSubpass = 0,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			.srcAccessMask = 0,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			.dependencyFlags = 0
+		});
+
 		if ( !renderPass->createOnHardware() )
 		{
 			Tracer::error(ClassId, "Unable to create a render pass !");
@@ -1472,6 +1497,20 @@ namespace EmEn::Vulkan
 		}
 
 		const auto & frame = m_frames[m_acquiredImageIndex];
+
+		/* NOTE: The image captured here is a SWAP-CHAIN image whose last writer is vkQueuePresentKHR.
+		 * The download below transitions it out of PRESENT_SRC — a WRITE — on an image the engine no
+		 * longer owns: a presented image belongs to the presentation engine until it is RE-ACQUIRED.
+		 * The Synchronization Validation layer reports `SYNC-HAZARD-WRITE-AFTER-PRESENT` and refuses
+		 * the submit, so the capture returns nothing.
+		 *
+		 * This is an ownership problem, not a timing one — a host-side drain (vkDeviceWaitIdle) does
+		 * NOT fix it and was tried. The correct fix is to capture inside the frame, right after the
+		 * post-process pass and BEFORE the present, while the image is still acquired: the console
+		 * command would only arm a request and read the result on the following frame.
+		 *
+		 * Capturing SceneRenderTarget instead is not equivalent: it holds the HDR buffer
+		 * (R16G16B16A16_SFLOAT) BEFORE tone mapping, so it cannot show what reaches the screen. */
 
 		/* Capture color buffer. */
 		if ( frame.colorImage )

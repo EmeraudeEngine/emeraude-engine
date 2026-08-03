@@ -2677,7 +2677,7 @@ namespace EmEn::Graphics::Material
 			const auto maxPOMIterations = generator.pomIterations();
 			const auto minPOMIterations = std::max(maxPOMIterations / 4, 2);
 
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [this, maxPOMIterations, minPOMIterations] (FragmentShader & shader, const Texture * component) {
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [maxPOMIterations, minPOMIterations] (FragmentShader & shader, const Texture * component) {
 				/* Inline POM ray-marching directly in main().
 				 * NOTE: Cannot use Declaration::Function because functions are emitted before
 				 * sampler declarations in the generated GLSL, causing 'undeclared identifier' errors. */

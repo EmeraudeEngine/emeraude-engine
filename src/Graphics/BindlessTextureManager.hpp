@@ -87,12 +87,37 @@ namespace EmEn::Graphics
 			/* First slot available for scene-dynamic textures (all arrays). */
 			static constexpr uint32_t FirstDynamicSlot = 16;
 
-			/** @brief Maximum texture counts per type. */
-			static constexpr uint32_t MaxTextures1D = 256;
-			static constexpr uint32_t MaxTextures2D = 4096;
-			static constexpr uint32_t MaxTextures3D = 256;
-			static constexpr uint32_t MaxTexturesCube = 256;
-			static constexpr uint32_t MaxTexturesCubeArray = 64;
+			/** @brief Desired (uncapped) texture counts per type.
+			 * @warning These are a TARGET, not the effective capacity. The descriptor table is
+			 * sized at initialization from the device's update-after-bind budget — see
+			 * computeCapacities() and the maxTextures*() accessors. Never use these constants to
+			 * bound a slot index; use the accessors. */
+			static constexpr uint32_t DesiredMaxTextures1D = 256;
+			static constexpr uint32_t DesiredMaxTextures2D = 4096;
+			static constexpr uint32_t DesiredMaxTextures3D = 256;
+			static constexpr uint32_t DesiredMaxTexturesCube = 256;
+			static constexpr uint32_t DesiredMaxTexturesCubeArray = 64;
+
+			/** @brief Capacities used when the device budget cannot host the desired ones.
+			 * @note The four secondary arrays take a fixed floor and the 2D array — by far the most
+			 * used — absorbs whatever the budget leaves. On Apple/MoltenVK (budget 1024 samplers)
+			 * this yields 32/768/32/128/32. */
+			static constexpr uint32_t ReducedMaxTextures1D = 32;
+			static constexpr uint32_t ReducedMaxTextures3D = 32;
+			static constexpr uint32_t ReducedMaxTexturesCube = 128;
+			static constexpr uint32_t ReducedMaxTexturesCubeArray = 32;
+
+			/** @brief Absolute floor for any array: the reserved slots plus a few dynamic entries.
+			 * @note A device that cannot host five arrays of this size cannot run the engine's
+			 * bindless design at all; initialization fails loudly rather than rendering garbage. */
+			static constexpr uint32_t MinTexturesPerArray = FirstDynamicSlot + 8;
+
+			/** @brief Sampler budget left to the OTHER descriptor sets of a pipeline layout.
+			 * @note The update-after-bind pipeline-layout VUIDs (03022, 03036) sum the sampler
+			 * descriptors of EVERY set in pSetLayouts — including non-UAB ones such as the
+			 * post-process input sets — so the bindless table must not claim the whole device
+			 * budget. 32 covers the widest input set the engine builds today (SSR/RTGI resolve). */
+			static constexpr uint32_t OtherSetsSamplerHeadroom = 32;
 
 			/** @brief Binding points in the descriptor set layout. */
 			static constexpr uint32_t Texture1DBinding = 0;
@@ -129,6 +154,66 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept;
+
+			/**
+			 * @brief Returns the effective capacity of the 1D texture array.
+			 * @note Valid after service initialization; before that, the desired capacity.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			maxTextures1D () const noexcept
+			{
+				return m_maxTextures1D;
+			}
+
+			/**
+			 * @brief Returns the effective capacity of the 2D texture array.
+			 * @note Valid after service initialization; before that, the desired capacity.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			maxTextures2D () const noexcept
+			{
+				return m_maxTextures2D;
+			}
+
+			/**
+			 * @brief Returns the effective capacity of the 3D texture array.
+			 * @note Valid after service initialization; before that, the desired capacity.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			maxTextures3D () const noexcept
+			{
+				return m_maxTextures3D;
+			}
+
+			/**
+			 * @brief Returns the effective capacity of the Cube texture array.
+			 * @note Valid after service initialization; before that, the desired capacity.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			maxTexturesCube () const noexcept
+			{
+				return m_maxTexturesCube;
+			}
+
+			/**
+			 * @brief Returns the effective capacity of the CubeArray texture array.
+			 * @note Valid after service initialization; before that, the desired capacity.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			maxTexturesCubeArray () const noexcept
+			{
+				return m_maxTexturesCubeArray;
+			}
 
 			/**
 			 * @brief Mirrors the active scene's bindless texture set into the descriptor table.
@@ -252,6 +337,19 @@ namespace EmEn::Graphics
 			bool onTerminate () noexcept override;
 
 			/**
+			 * @brief Sizes the five texture arrays against the device's update-after-bind budget.
+			 * @note A COMBINED_IMAGE_SAMPLER descriptor is charged to BOTH the sampler and the
+			 * sampled-image update-after-bind limits, per set AND per stage. Desktop drivers
+			 * advertise budgets in the millions and get the desired capacities; MoltenVK is capped
+			 * at 1024 samplers by Metal's argument-buffer limit (sampled images stay at 1M), so it
+			 * falls back to the reduced profile. Declaring more than the budget is not a validation
+			 * nitpick: it is a hard Metal limit and undefined behaviour on any device.
+			 * @return bool False if the device cannot host even the absolute floor.
+			 */
+			[[nodiscard]]
+			bool computeCapacities () noexcept;
+
+			/**
 			 * @brief Creates the descriptor set layout with UPDATE_AFTER_BIND support.
 			 * @return bool
 			 */
@@ -293,6 +391,13 @@ namespace EmEn::Graphics
 			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const VkDescriptorImageInfo & descriptorInfo) const noexcept;
 
 			Renderer & m_renderer;
+			/* Effective capacities, resolved at initialization from the device budget. They default
+			 * to the desired values so a query made before initialization stays benign. */
+			uint32_t m_maxTextures1D{DesiredMaxTextures1D};
+			uint32_t m_maxTextures2D{DesiredMaxTextures2D};
+			uint32_t m_maxTextures3D{DesiredMaxTextures3D};
+			uint32_t m_maxTexturesCube{DesiredMaxTexturesCube};
+			uint32_t m_maxTexturesCubeArray{DesiredMaxTexturesCubeArray};
 			std::shared_ptr< Vulkan::Device > m_device;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;

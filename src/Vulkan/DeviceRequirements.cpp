@@ -50,9 +50,18 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* NOTE: Portability subset features (KHR extension) — MoltenVK and other portability
+		 * implementations. It sits at the TAIL of the chain and stays all-zero unless the caller fills
+		 * it (see Instance.cpp, graphics device features configuration).
+		 *
+		 * This structure being chained is NOT optional when the extension is enabled: the spec makes
+		 * every portability feature disabled by default, so an application that enables the extension
+		 * and omits the structure silently loses capabilities the device actually has. */
+		m_portabilitySubsetFeatures.sType = PortabilitySubset::FeaturesType;
+		m_portabilitySubsetFeatures.pNext = nullptr;
 		/* NOTE: Device fault features (EXT extension) — GPU device-lost diagnostics. */
 		m_faultFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
-		m_faultFeatures.pNext = nullptr;
+		m_faultFeatures.pNext = &m_portabilitySubsetFeatures;
 		/* NOTE: Ray query features (KHR extension). */
 		m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
 		m_rayQueryFeatures.pNext = &m_faultFeatures;

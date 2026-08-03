@@ -93,6 +93,21 @@ namespace EmEn::Scenes
 			BindlessTextureSet () noexcept = default;
 
 			/**
+			 * @brief Sets the slot capacities the set is allowed to allocate from.
+			 * @note MUST mirror the effective capacities of the GPU descriptor table
+			 * (Graphics::BindlessTextureManager::maxTextures2D() and friends), which are resolved at
+			 * renderer initialization from the device's update-after-bind budget and are NOT the
+			 * compile-time desired values on every device (MoltenVK caps them). Handing out a slot
+			 * beyond the table size would make the manager silently reject the descriptor write and
+			 * the texture would never appear. Called by the owning scene at construction.
+			 * @param maxTextures2D The capacity of the 2D array.
+			 * @param maxTexturesCube The capacity of the cubemap array.
+			 * @param maxTexturesCubeArray The capacity of the cube array array.
+			 * @return void
+			 */
+			void setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray) noexcept;
+
+			/**
 			 * @brief Registers a 2D texture (deduplicated by texture instance).
 			 * @param texture A reference to the texture smart pointer.
 			 * @return The global bindless index, or UINT32_MAX if the table is full.
@@ -204,6 +219,12 @@ namespace EmEn::Scenes
 			uint32_t m_next2D{Graphics::BindlessTextureManager::FirstDynamicSlot};
 			uint32_t m_nextCube{Graphics::BindlessTextureManager::FirstDynamicSlot};
 			uint32_t m_nextCubeArray{Graphics::BindlessTextureManager::FirstDynamicSlot};
+
+			/* Effective table capacities, pushed by the owning scene — see setCapacities(). The
+			 * desired values are only a fallback for a set used before the scene wires them. */
+			uint32_t m_maxTextures2D{Graphics::BindlessTextureManager::DesiredMaxTextures2D};
+			uint32_t m_maxTexturesCube{Graphics::BindlessTextureManager::DesiredMaxTexturesCube};
+			uint32_t m_maxTexturesCubeArray{Graphics::BindlessTextureManager::DesiredMaxTexturesCubeArray};
 
 			std::shared_ptr< Vulkan::TextureInterface > m_environmentCubemap;
 			std::shared_ptr< Vulkan::TextureInterface > m_irradianceCubemap;

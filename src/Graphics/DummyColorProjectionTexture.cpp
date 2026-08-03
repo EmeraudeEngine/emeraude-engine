@@ -90,7 +90,7 @@ namespace EmEn::Graphics
 			}
 
 			/* Clear to white (1,1,1,1) = no color filtering. */
-			if ( !transferManager.clearColorImage(*m_image, {1.0F, 1.0F, 1.0F, 1.0F}) )
+			if ( !transferManager.clearColorImage(*m_image, VkClearColorValue{.float32 = {1.0F, 1.0F, 1.0F, 1.0F}}) )
 			{
 				TraceError{ClassId} << "Unable to clear dummy color projection texture !";
 

@@ -40,6 +40,7 @@
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
+#include "PortabilitySubset.hpp"
 #include "StaticVector.hpp"
 #include "Version.hpp"
 #include "Types.hpp"
@@ -192,6 +193,54 @@ namespace EmEn::Vulkan
 			accelerationStructureFeatures () const noexcept
 			{
 				return m_accelerationStructureFeatures;
+			}
+
+			/**
+			 * @brief Returns whether the device advertises VK_KHR_portability_subset.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPortabilitySubset () const noexcept
+			{
+				return m_hasPortabilitySubset;
+			}
+
+			/**
+			 * @brief Returns the portability subset features the device SUPPORTS.
+			 * @note All-zero when the extension is absent. These are the values to copy into
+			 * DeviceRequirements: requesting a feature the device does not support fails device
+			 * creation, and requesting nothing leaves them all disabled.
+			 * @return const PortabilitySubset::Features &
+			 */
+			[[nodiscard]]
+			const PortabilitySubset::Features &
+			portabilitySubsetFeatures () const noexcept
+			{
+				return m_portabilitySubsetFeatures;
+			}
+
+			/**
+			 * @brief Returns whether a comparison sampler can be WRITTEN into a descriptor set.
+			 *
+			 * @note This is the `mutableComparisonSamplers` feature of `VK_KHR_portability_subset`,
+			 * and its name is the whole point: Metal only accepts a comparison sampler once the
+			 * feature is ENABLED at device creation. A device without the portability subset has no
+			 * such restriction, hence the permissive answer.
+			 *
+			 * @warning Ignoring this returns garbage, silently. The descriptor write is rejected
+			 * (`VUID-VkDescriptorImageInfo-mutableComparisonSamplers-04450`), so the descriptor stays
+			 * **unwritten**, and every draw sampling it reads an undefined descriptor
+			 * (`VUID-vkCmdDrawIndexed-None-08114`). On the shadow-map binding that kills direct
+			 * lighting, feeds the auto-exposure nonsense and fills the frame with artifacts.
+			 *
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			supportsMutableComparisonSamplers () const noexcept
+			{
+				return !m_hasPortabilitySubset || m_portabilitySubsetFeatures.mutableComparisonSamplers == VK_TRUE;
 			}
 
 			/**
@@ -673,6 +722,9 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
+			/* Resolved in the constructor; only populated when the extension is advertised. */
+			PortabilitySubset::Features m_portabilitySubsetFeatures{};
+			bool m_hasPortabilitySubset{false};
 			VkPhysicalDeviceProperties2 m_properties{};
 			VkPhysicalDeviceVulkan11Properties m_propertiesVK11{};
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};

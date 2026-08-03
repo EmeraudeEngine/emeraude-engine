@@ -27,8 +27,11 @@
 #include "PhysicalDevice.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cstring>
 #include <iomanip>
 #include <iterator>
+#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */
@@ -65,6 +68,32 @@ namespace EmEn::Vulkan
 			m_features.pNext = &m_featuresVK11;
 
 			vkGetPhysicalDeviceFeatures2(m_physicalDevice, &m_features);
+		}
+
+		/* NOTE: Portability subset (MoltenVK and friends). Queried SEPARATELY and only when the
+		 * extension is advertised: chaining an unsupported feature struct into the query above is
+		 * undefined. A device without the extension has no portability restriction at all, so the
+		 * members keep their permissive defaults. The reported values are kept, because
+		 * DeviceRequirements must request exactly what the device supports — see
+		 * Instance.cpp, graphics device features configuration. */
+		{
+			const auto extensions = this->getExtensions();
+
+			m_hasPortabilitySubset = std::ranges::any_of(extensions, [] (const auto & extension) {
+				return std::strcmp(extension.extensionName, PortabilitySubset::ExtensionName) == 0;
+			});
+
+			if ( m_hasPortabilitySubset )
+			{
+				m_portabilitySubsetFeatures.sType = PortabilitySubset::FeaturesType;
+				m_portabilitySubsetFeatures.pNext = nullptr;
+
+				VkPhysicalDeviceFeatures2 features{};
+				features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+				features.pNext = &m_portabilitySubsetFeatures;
+
+				vkGetPhysicalDeviceFeatures2(m_physicalDevice, &features);
+			}
 		}
 
 		/* NOTE: Get the device properties. */

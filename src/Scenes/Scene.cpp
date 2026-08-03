@@ -67,6 +67,20 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
 
+		/* Mirror the GPU descriptor table capacities into the per-scene set: they are resolved from
+		 * the device's update-after-bind budget at renderer initialization and are lower than the
+		 * desired ones on MoltenVK (Metal caps argument buffers at 1024 samplers). Allocating a slot
+		 * the table cannot hold would silently drop the texture. */
+		{
+			const auto & bindlessTextureManager = graphicsRenderer.bindlessTextureManager();
+
+			m_bindlessTextureSet.setCapacities(
+				bindlessTextureManager.maxTextures2D(),
+				bindlessTextureManager.maxTexturesCube(),
+				bindlessTextureManager.maxTexturesCubeArray()
+			);
+		}
+
 		/* An asynchronously loading background pushes its photometry (luminance) once
 		 * loaded — see the polling block at the top of processLogics(). */
 		m_backgroundPhotometryDirty = m_backgroundResource != nullptr;

@@ -98,12 +98,22 @@ namespace EmEn::Scenes
 		}
 	}
 
+	void
+	BindlessTextureSet::setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		m_maxTextures2D = maxTextures2D;
+		m_maxTexturesCube = maxTexturesCube;
+		m_maxTexturesCubeArray = maxTexturesCubeArray;
+	}
+
 	uint32_t
 	BindlessTextureSet::registerTexture2D (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
-		return this->registerInBucket(m_textures2D, m_lookup2D, m_free2D, m_next2D, BindlessTextureManager::MaxTextures2D, texture);
+		return this->registerInBucket(m_textures2D, m_lookup2D, m_free2D, m_next2D, m_maxTextures2D, texture);
 	}
 
 	uint32_t
@@ -111,7 +121,7 @@ namespace EmEn::Scenes
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
-		return this->registerInBucket(m_texturesCube, m_lookupCube, m_freeCube, m_nextCube, BindlessTextureManager::MaxTexturesCube, texture);
+		return this->registerInBucket(m_texturesCube, m_lookupCube, m_freeCube, m_nextCube, m_maxTexturesCube, texture);
 	}
 
 	uint32_t
@@ -119,7 +129,7 @@ namespace EmEn::Scenes
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
-		return this->registerInBucket(m_texturesCubeArray, m_lookupCubeArray, m_freeCubeArray, m_nextCubeArray, BindlessTextureManager::MaxTexturesCubeArray, texture);
+		return this->registerInBucket(m_texturesCubeArray, m_lookupCubeArray, m_freeCubeArray, m_nextCubeArray, m_maxTexturesCubeArray, texture);
 	}
 
 	void
