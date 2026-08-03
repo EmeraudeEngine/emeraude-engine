@@ -27,6 +27,7 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <ranges>
 
 /* Local inclusions. */
@@ -38,8 +39,11 @@
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
+#include "FileSystem.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
+#include "PixelFactory/FileIO.hpp"
+#include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Scenes
@@ -942,5 +946,90 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Orients a node to look at a point. Usage: setNodeLookAt(nodeName, x, y, z)");
+
+		this->bindCommand("dumpRenderTarget", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: dumpRenderTarget(nameFragment) — writes the target's color image (layer 0) as a PNG in the captures directory.");
+
+				return false;
+			}
+
+			const auto nameFragment = arguments[0].asString();
+			bool dumped = false;
+
+			this->withSharedActiveScene([&] (const std::shared_ptr< Scene > & scene) {
+				scene->forEachRenderToTexture([&] (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) {
+					if ( dumped || renderTarget->id().find(nameFragment) == std::string::npos )
+					{
+						return;
+					}
+
+					const auto * textureInterface = dynamic_cast< const Vulkan::TextureInterface * >(renderTarget.get());
+
+					if ( textureInterface == nullptr || textureInterface->image() == nullptr )
+					{
+						outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget->id() << "' has no readable image !");
+
+						return;
+					}
+
+					/* A target that never rendered still holds its image in the UNDEFINED layout:
+					 * the SHADER_READ_ONLY readback below is then undefined behaviour (measured:
+					 * process crash, even after waitIdle). The on-demand policies make this state
+					 * perfectly reachable — an unfired "once" probe, a suspended target. */
+					if ( !renderTarget->hasBeenRendered() )
+					{
+						outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget->id() << "' has never been rendered — nothing to dump yet.");
+
+						return;
+					}
+
+					auto & renderer = scene->AVConsoleManager().graphicsRenderer();
+
+					PixelFactory::Pixmap< uint8_t > pixmap;
+
+					/* Debug tool: this runs on the console thread while the render thread may be
+					 * drawing INTO this very target — a raw download crashed the process. Full
+					 * device sync first; brutal, but correct for a diagnostic command. */
+					renderer.device()->waitIdle("dumpRenderTarget console command");
+
+					/* NOTE: The render pass leaves the color attachment in SHADER_READ_ONLY_OPTIMAL
+					 * (it is sampled). Layer 0 only (+X face for a cubemap) — enough to tell a
+					 * black/dead probe from a live one. */
+					if ( !renderer.transferManager().downloadImage(*textureInterface->image(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
+					{
+						outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to download the image of '" << renderTarget->id() << "' !");
+
+						return;
+					}
+
+					auto captureDirectory = renderer.primaryServices().fileSystem().userDataDirectory("captures");
+
+					std::stringstream filename;
+					filename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
+
+					const auto filepath = captureDirectory.append(filename.str());
+
+					if ( !PixelFactory::FileIO::write(pixmap, filepath) )
+					{
+						outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << filepath);
+
+						return;
+					}
+
+					outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << renderTarget->id() << "' dumped: " << filepath);
+
+					dumped = true;
+				});
+			}, true);
+
+			if ( !dumped && outputs.empty() )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "No render-to-texture target matching '" << nameFragment << "' in the active scene.");
+			}
+
+			return dumped;
+		}, "Dumps a render-to-texture target's color image (layer 0) as a PNG. Usage: dumpRenderTarget(nameFragment)");
 	}
 }
