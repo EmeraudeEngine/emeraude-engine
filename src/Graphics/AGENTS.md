@@ -472,6 +472,34 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### Table Capacities Are Device-Dependent — Never Hardcode Them
+
+> [!CRITICAL]
+> The array sizes are **resolved at runtime** in `BindlessTextureManager::computeCapacities()` from
+> the device's update-after-bind budget. The `DesiredMaxTextures*` constants (256/4096/256/256/64)
+> are a **target, not the effective capacity**.
+>
+> **Why:** a `COMBINED_IMAGE_SAMPLER` descriptor is charged to BOTH the sampler and the sampled-image
+> update-after-bind limits, per set AND per stage. Desktop drivers advertise millions and get the
+> desired capacities. MoltenVK advertises **1024 samplers** (Metal's argument-buffer limit) while
+> sampled images stay at 1M, so the desired total (4928) blew the budget by ~5x and every pipeline
+> layout including the bindless set was rejected. Without the validation layers it did not error — it
+> was silently undefined behaviour.
+>
+> **Reduced profile** on Apple GPUs: **1D[32] 2D[768] 3D[32] Cube[128] CubeArray[32]**, announced by
+> a `TraceWarning` at startup. A headroom is withheld from the budget because the update-after-bind
+> VUIDs sum **every** set of a pipeline layout, including non-UAB ones such as the SSR/RTGI inputs.
+>
+> **Rules:**
+> - Bound a slot index with `manager.maxTextures2D()` and friends, **never** with
+>   `DesiredMaxTextures2D`.
+> - The per-scene `Scenes::BindlessTextureSet` receives these capacities from `Scene`'s constructor
+>   via `setCapacities()` — a set handing out a slot beyond the table size would have its descriptor
+>   write rejected by the manager and the texture would never appear.
+> - The generated GLSL declares **unbounded** arrays (`Declaration::Sampler::UnboundedArray`), so
+>   capacities never leak into shader code. Keep it that way.
+> - Read the startup trace before blaming a missing texture on anything else.
+
 ### Reserved Slots
 
 > [!IMPORTANT]

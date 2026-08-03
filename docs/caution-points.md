@@ -995,6 +995,31 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 > `Scenes/Scene.{hpp,cpp}`, `Scenes/Scene.rendering.cpp`, `Graphics/Renderer.cpp`. See
 > `src/Graphics/AGENTS.md` §6 "Bindless Textures Manager".
 
+### Fixed: bindless table sizes were hardcoded — 5x over the device budget on macOS (Aug 2026)
+
+> [!CRITICAL]
+> **Symptom:** with the validation layers on, **no scene loads** —
+> `VUID-VkPipelineLayoutCreateInfo-descriptorType-03022` / `-pSetLayouts-03036`, "sampler bindings
+> count (4933) exceeds maxPerStageDescriptorUpdateAfterBindSamplers (1024)". The post-process stack
+> fails first and takes the whole act down.
+>
+> **Root cause:** the five arrays were `static constexpr` (4928 `COMBINED_IMAGE_SAMPLER`
+> descriptors) and the device limits were **never queried**. Full analysis, including why 4933 and
+> not 4928, in [`docs/troubleshooting.md`](../docs/troubleshooting.md) → macOS / MoltenVK.
+>
+> **Fix:** `BindlessTextureManager::computeCapacities()` resolves the capacities at initialization
+> from `PhysicalDevice::propertiesVK12()`. `Scene`'s constructor pushes them into its
+> `Scenes::BindlessTextureSet` via `setCapacities()` — otherwise the set would hand out a slot beyond
+> the table and the manager's bounds check would silently drop the texture.
+>
+> **Rule:** bound a slot index with `manager.maxTextures2D()` and friends, **never** with
+> `DesiredMaxTextures2D`. The generated GLSL declares unbounded arrays
+> (`Declaration::Sampler::UnboundedArray`), so capacities never leak into shader code — keep it that
+> way. Startup logs the effective table; read it before blaming a missing texture on anything else.
+>
+> **Files:** `Graphics/BindlessTextureManager.{hpp,cpp}`, `Scenes/BindlessTextureSet.{hpp,cpp}`,
+> `Scenes/Scene.cpp`.
+
 ### Fixed: Acceleration structure builder was per-scene via a global static (Jun 2026)
 
 > [!CRITICAL]
@@ -1605,6 +1630,27 @@ during a move-construct.
   rewrite *is* enough (no `reserve` needed). Full comparison of both triggers and fixes:
   [`dependencies/emeraude-base/docs/caution-points.md`](../dependencies/emeraude-base/docs/caution-points.md).
 
+### An unqualified `TracerTag` in a service `.cpp` resolves to `ServiceInterface::TracerTag`
+
+`ServiceInterface` declares a **public** `static constexpr auto TracerTag{"ServiceInterface"}`. A
+service `.cpp` that also declares a namespace-scope `constexpr auto TracerTag{"MyService"}` does
+**not** override it: inside member functions, unqualified lookup finds the *inherited class member*
+first, so every `TraceInfo{TracerTag}` in that file logs under **`ServiceInterface`** while the
+file-local constant sits unused. The traces are mislabelled and the log becomes unsearchable.
+
+- **Detected by:** clang's `-Wunused-const-variable` — **Debug only**, because `-Wall`/`-Wextra` are
+  in the Debug warning set and *not* in the Release one. It reads as a trivial "unused variable"; it
+  is a real logging bug.
+- **Seen in (fixed Aug 2026):** `Graphics/ExternalInput.cpp` (two traces logged as
+  `ServiceInterface`), plus a genuinely dead `TracerTag` in `Graphics/Renderable/Abstract.cpp`.
+- **Rule:** in a `ServiceInterface` subclass, trace with the class's own **`ClassId`**. Never
+  introduce a file-local `TracerTag` in a service translation unit.
+
+> [!NOTE]
+> **Corollary worth its own habit:** Release does not enable `-Wall`/`-Wextra`, Debug does — with
+> `-Werror`. A Release-only workflow lets Debug rot until it stops compiling entirely, which is
+> exactly what had happened (6 translation units, 4 distinct causes) when this was found.
+
 ### PCH masks missing STL includes → build PCH-OFF to catch them
 
 The cascade-wide STL precompiled header (`emeraude-base/src/STLPrecompiledHeaders.hpp`) force-includes
@@ -1713,6 +1759,106 @@ AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::op
 ---
 
 ## Vulkan Validation
+
+### Never assume a device capability — query it, and REQUEST it
+
+> [!CRITICAL]
+> Two distinct failures of the same reflex bit the engine in the same week, both silent, both
+> macOS-only in their symptoms and both engine bugs:
+>
+> | What was assumed | Reality | Damage |
+> |------------------|---------|--------|
+> | Descriptor array sizes (4928 samplers) | MoltenVK caps update-after-bind samplers at 1024 | no scene loaded at all |
+> | Enabling `VK_KHR_portability_subset` enables its features | they default to **disabled** unless the feature struct is chained | no direct lighting, no shadows, artifacts |
+>
+> **Querying is not enough — a feature must also be requested at device creation.** A capability the
+> device advertises but the application never asks for is a capability the application does not
+> have, and nothing tells you: the descriptor write is simply rejected and the descriptor stays
+> unwritten. Full stories in [`docs/troubleshooting.md`](troubleshooting.md) → macOS / MoltenVK.
+>
+> Also remember the asymmetry between the two VUID families: the **non**-update-after-bind limits
+> (`maxPerStageDescriptorSamplers`, 16 on MoltenVK) count only sets created *without*
+> `UPDATE_AFTER_BIND_POOL_BIT`, while the update-after-bind limits count **every** set of the
+> pipeline layout. Budget accordingly.
+
+### The Synchronization Validation layer is NOT enabled — turn it on before hunting artifacts
+
+> [!CRITICAL]
+> The engine requests `VK_LAYER_KHRONOS_validation` but **never** requests its synchronization
+> checks: there is no `VkValidationFeaturesEXT` / `validate_sync` anywhere in `Vulkan/Instance.cpp`.
+> The startup banner tells you exactly what is armed:
+>
+> ```
+> Current Validaiton Enabled:
+>   - Core Checks
+>   - Stateless Parameter
+>   - Object lifetime
+>   - Thread Safety
+>   - Handle Wrapping        ← no "Synchronization"
+> ```
+>
+> **Consequence:** a clean validation log proves nothing about synchronization. Race conditions,
+> missing barriers and missing subpass dependencies are simply not looked for — on **any** platform.
+> That is how the swap-chain hazard below survived unnoticed on Windows, Linux and macOS alike.
+>
+> **Rule: artifacts that look like memory corruption with a clean core-validation log are a
+> synchronization hazard until proven otherwise.** Re-run with it enabled:
+>
+> ```bash
+> VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT ./projet-alpha …
+> ```
+>
+> Two things to know when you do. The layer **rejects** the offending submit
+> (`VK_ERROR_VALIDATION_FAILED_EXT`), so features that ride on a hazardous submit appear *broken*
+> while it is on — the screenshot path is one of them, and that is a measurement artifact, not a
+> regression. And its message IDs are `SYNC-HAZARD-*`, not `VUID-*`: a grep for `VUID-` will report
+> "zero errors" while hazards are flying past.
+
+### Fixed: swap-chain render pass had no subpass dependency at all (Aug 2026)
+
+> [!CRITICAL]
+> **Symptom:** frame-to-frame graphical corruption on macOS, with a perfectly clean core-validation
+> log. Under Synchronization Validation, 10 ×
+> `SYNC-HAZARD-WRITE-AFTER-READ: vkCmdBeginRenderPass writes to resource, which was previously
+> accessed by vkAcquireNextImageKHR`.
+>
+> **Root cause:** `SwapChain::createRenderPass()` went straight from `addSubPass()` to
+> `createOnHardware()` — **no `addSubPassDependency()` call**. Its colour attachment declares
+> `initialLayout = UNDEFINED`, so beginning the pass transitions the acquired image, while the
+> submit waits on the acquisition semaphore at `COLOR_ATTACHMENT_OUTPUT`. Without an explicit
+> external dependency the implicit one uses `TOP_OF_PIPE`, which creates **no execution dependency**
+> with that wait: the layout transition was free to run before the image was available.
+>
+> **Why only macOS showed it:** the bug is a spec gap on every platform. With
+> `initialLayout = UNDEFINED` the previous contents may be discarded, so desktop drivers usually
+> emit no real transition, or schedule it after the wait anyway — nothing to race. MoltenVK has to
+> *emulate* render passes over Metal command encoders, so the transition becomes real work that can
+> genuinely precede the wait. **Do not read "it works on Windows" as "it is correct".**
+>
+> **Fix:** an external dependency with `srcStageMask` covering the wait stages. An *execution*
+> dependency is sufficient (`srcAccessMask = 0`): what must be guaranteed is the order between the
+> semaphore wait and the transition, not a cache flush.
+>
+> **Verified:** 10 hazards → 0, no more rejected submits. **File:** `Vulkan/SwapChain.cpp`.
+
+### Open: SwapChain::capture() writes to an image the engine no longer owns
+
+> [!WARNING]
+> `SYNC-HAZARD-WRITE-AFTER-PRESENT` — the capture path transitions a **presented** swap-chain image
+> out of `PRESENT_SRC` to download it. A presented image belongs to the presentation engine until it
+> is **re-acquired**; writing to it (a layout transition is a write) is illegal.
+>
+> **This is an ownership problem, not a timing one.** A host-side drain (`vkDeviceWaitIdle`) does
+> **not** fix it — that was tried and reverted. Capturing `SceneRenderTarget` instead is not
+> equivalent either: it holds the HDR buffer *before* tone mapping, so it cannot show what reaches
+> the screen.
+>
+> **Correct fix (not implemented):** capture inside the frame, right after the post-process pass and
+> **before** the present, while the image is still acquired — the console command would only arm a
+> request and read the result on the following frame.
+>
+> **Impact today:** none outside Synchronization Validation, where the layer rejects the submit and
+> the capture returns nothing. **File:** `Vulkan/SwapChain.cpp::capture()`.
 
 ### Fixed: Present semaphore was indexed by frame in flight, not by swap-chain image (Aug 2026)
 

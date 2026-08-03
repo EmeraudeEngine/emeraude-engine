@@ -410,6 +410,15 @@ See `Scene.cpp:enable()`, `Scene.cpp:disable()`, `AbstractEntity.cpp:suspend()`,
 - **Deleted** — destroyed; per-scene state dies with it, global services keep running referencing
   nothing of it.
 
+> [!IMPORTANT]
+> **`BindlessTextureSet` slot capacities are device-dependent.** `Scene`'s constructor pushes the GPU
+> table capacities into its set (`setCapacities(maxTextures2D, maxTexturesCube, maxTexturesCubeArray)`,
+> read from `Renderer::bindlessTextureManager()`). They are resolved at renderer initialization from
+> the device's update-after-bind budget and are **lower than the `DesiredMaxTextures*` constants on
+> MoltenVK** (2D[768]). Never bound a slot with the desired constants: a set handing out a slot beyond
+> the table would have its descriptor write rejected by the manager and the texture would simply never
+> appear. See [`Graphics/AGENTS.md`](../Graphics/AGENTS.md) → "Table Capacities Are Device-Dependent".
+
 **Disable contract** (`Manager::disableActiveScene`, under the exclusive `m_activeSceneSharedAccess` lock):
 editor deactivate → `BindlessTextureManager::clearTextureSet` (overwrites this scene's dynamic
 slots with dummies — **hitch-free, NO waitIdle**) → `Scene::disable` (suspend entities, node

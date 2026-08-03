@@ -197,21 +197,87 @@ always the case for MoltenVK. Test the *extension*, never the platform: guarding
 with `if constexpr ( !IsMacOS )` skips the one platform that always needs it and leaves the
 device created in a spec-violating state.
 
+**And enabling the extension is only half the job** — see the next entry.
+
 **Code reference:** `Vulkan/Instance.cpp`, graphics device features configuration.
 
-### Shadow comparison samplers are not available (open)
+### Enabling the portability subset does NOT enable its features (fixed Aug 2026)
 
-**Symptoms:** with the validation layers on, macOS reports
-`VUID-VkDescriptorImageInfo-mutableComparisonSamplers-04450`, "sampler comparison not
-available", on the shadow-map descriptor writes.
+**Symptoms:** no direct lighting and no cast shadows on macOS, plus artifacts and a runaway
+auto-exposure. With the validation layers on:
 
-**Root cause:** MoltenVK's portability subset reports `mutableComparisonSamplers = VK_FALSE`,
-but `DummyShadowTexture` and `RenderTarget/ShadowMap` create samplers with
-`compareEnable = VK_TRUE`. This affects the hand-authored dynamic-lighting path (shadow maps);
-the sky-driven path uses no shadow map and is unaffected.
+```
+VUID-VkDescriptorImageInfo-mutableComparisonSamplers-04450 : sampler comparison not available
+   → the shadow-map descriptor write is REJECTED
+VUID-vkCmdDrawIndexed-None-08114 : "uShadowMapSampler" ... has never been updated
+   → every lit draw then samples an UNDEFINED descriptor
+```
 
-**Status:** not fixed. A portable shadow path has to sample the depth texture and do the
-comparison in the shader instead of relying on a hardware comparison sampler.
+**Root cause — read this before blaming MoltenVK.** The device reports
+`mutableComparisonSamplers = VK_TRUE`: the M2 *can* do hardware depth comparison. But when
+`VK_KHR_portability_subset` is enabled, the spec makes every one of its features **disabled by
+default** unless `VkPhysicalDevicePortabilitySubsetFeaturesKHR` is chained into
+`VkDeviceCreateInfo::pNext` with the features the application wants. The engine enabled the
+extension and never chained the structure, so **all 15** portability features were silently off —
+`events`, `imageViewFormatSwizzle`, `samplerMipLodBias`, `triangleFans`,
+`separateStencilMaskRef`… not just the sampler one.
+
+Reading an unwritten descriptor is undefined behaviour, which is why the damage went far beyond
+missing shadows: a garbage shadow factor kills the direct light, feeds nonsense into the metered
+luminance and fills the frame with artifacts — with no error from the engine itself.
+
+**Solution:** `PhysicalDevice` queries the supported portability features (separately, and only
+when the extension is advertised — chaining an unsupported feature struct into the query is
+undefined), `DeviceRequirements` carries the structure at the tail of its `pNext` chain, and
+`Instance.cpp` copies **exactly what the device reports** into it. Requesting a feature the device
+lacks fails device creation; requesting nothing loses capabilities the device has.
+
+The KHR structure and its enumerant live behind `VK_ENABLE_BETA_EXTENSIONS`, which this project
+does not define, so both are mirrored in `Vulkan/PortabilitySubset.hpp` — the same workaround
+`Instance.hpp` already used for the extension *name*.
+
+**Verified:** both VUIDs 8 and 20 occurrences → **0**; direct lighting and cast shadows restored
+on an Apple M2 (MoltenVK 1.4.1). No regression on Linux.
+
+**Code reference:** `Vulkan/PortabilitySubset.hpp`, `Vulkan/PhysicalDevice.{hpp,cpp}`,
+`Vulkan/DeviceRequirements.{hpp,cpp}`, `Vulkan/Instance.cpp`.
+
+### Bindless table exceeded the update-after-bind sampler limit (fixed Aug 2026)
+
+**Symptoms:** with the validation layers on, **no scene loads** — the first pipeline layout that
+includes the bindless set is rejected and the failure cascades to the act:
+
+```
+VUID-VkPipelineLayoutCreateInfo-descriptorType-03022 / -pSetLayouts-03036
+  max per-stage sampler bindings count (4933) exceeds ...UpdateAfterBindSamplers limit (1024)
+[Error][LayoutManagerService] The pipeline layout 'SSRResolveInputBindlessTextures…' is not created !
+[Error][PostProcessStack] Failed to create effect in the post-process stack !
+```
+
+**Root cause:** the five bindless arrays were `static constexpr`
+(256 + 4096 + 256 + 256 + 64 = **4928** `COMBINED_IMAGE_SAMPLER` descriptors) and the device limits
+were never queried. Such a descriptor is charged to BOTH the sampler and the sampled-image
+update-after-bind limits; MoltenVK caps samplers at **1024** (Metal's argument-buffer limit). The
+reported 4933 also counts the non-UAB sets of the same layout (4928 + 5 SSR inputs): unlike their
+non-UAB counterparts, the UAB VUIDs sum **every** element of `pSetLayouts`.
+
+**This was never "working code that validation broke"** — 1024 is a hard Metal limit; without the
+layers it was silently undefined behaviour.
+
+**Solution:** `BindlessTextureManager::computeCapacities()` sizes the arrays from
+`propertiesVK12()` at initialization, withholding a headroom for the other sets of a pipeline
+layout. Desktop keeps 256/4096/256/256/64; Apple GPUs get a reduced profile
+(**1D[32] 2D[768] 3D[32] Cube[128] CubeArray[32]**) announced by a `TraceWarning`. The generated
+GLSL declares unbounded arrays, so no shader change was needed. `Scene`'s constructor pushes the
+same capacities into its `Scenes::BindlessTextureSet`, so it never hands out a slot the table
+cannot hold.
+
+**Known limitation:** 768 2D textures per scene on Apple hardware. Lifting it means splitting the
+arrays into `SAMPLED_IMAGE` + a small `SAMPLER` array (Metal allows ~1M sampled images). That
+refactor was attempted and **reverted**: it is the right design, but it lands on MoltenVK's
+bindless-sampler path, which has form here (see the MoltenVK < 1.4 entry above), and it could not
+be validated visually while the macOS render was still broken by the two bugs above. Redo it
+against a known-good reference image.
 
 ---
 
