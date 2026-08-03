@@ -422,6 +422,20 @@ echo "Core.RendererService.screenshot()" | nc -q 2 localhost 7777
 
 Screenshots are saved to: `~/.local/share/LNIsle/<app-name>/captures/`
 
+### Dumping a render-to-texture target (probe diagnostics)
+
+```bash
+echo "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap)" | nc -q 4 localhost 7777
+# Response: Render target 'MyProbe_...' dumped: "/path/to/captures/rt-dump-<timestamp>.png"
+```
+
+Matches the target by NAME FRAGMENT and writes its color image (layer 0 — the +X face for
+a cubemap) as a PNG in the captures directory. This is the ground-truth tool for any
+"the reflection looks wrong" investigation: it answers "what did the probe actually bake?"
+without inferring it through a curved reflection. A target that never rendered (an unfired
+"once" probe, a suspended target) is refused cleanly instead of being read in an undefined
+layout.
+
 ### Triggering a RenderDoc GPU frame capture
 
 For deep GPU analysis (draw calls, bound descriptors, sampled images, pipeline state) the engine
