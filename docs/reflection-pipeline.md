@@ -130,6 +130,23 @@ every frame whatever its flags):
 | Once | `setAutomaticRenderingState(false)` + `setRenderOutOfDate()` | one bake, then stops; `setRenderOutOfDate()` re-bakes on demand |
 | Suspension | `setSuspendableByPostProcessReflections(true)` — default for cubemap probes | while an ENABLED reflection provider (SSR/RTR, `providesReflections()`) is in the scene stack, the probe is suspended AFTER one guaranteed render — the traced reflection does its job better; the materials keep a stale-but-real bake |
 
+**GGX convolution (Aug 2026).** A probe is no longer mirror-sharp whatever the material: its
+color cubemap carries a **GGX-prefiltered mip chain** (`enableGGXConvolution()`, set by
+`createRenderToCubemap`). Mip 0 stays the NATIVE mirror render (512² untouched — no
+resolution regression); after every render, `Compute::ProbeConvolver` records — in the
+target's own command buffer, no blocking submit — a blit cascade into a private half-size
+scratch cubemap (the prefilter's filtered importance sampling needs a PLAIN mip chain on its
+source; reading the probe's own prefiltered mips would be a hazard AND a bias), then one
+borrowed IBLBaker prefilter dispatch per upper mip (roughness k/(mips−1), the sky IBL chain
+semantics). Materials with a render-target reflection component sample
+`textureLod(probe, R, roughness × (mips−1))` — Standard maps Shininess through Beckmann
+(`√(2/(s+2))`), PBR uses its roughness (component or scalar) directly. The probe uses a
+dedicated TRILINEAR sampler (`maxLod` unclamped — the shared render-to-texture sampler honors
+the settings mip level, default 1, which would truncate the chain). Static texture cubemaps
+keep the plain mirror fetch: the explicit texture mode is ARTISTIC by contract.
+Validated on `reflexion-debug` option #3 (Polished/Aluminium × all modes): the aluminium
+probe blurs palm/dragon/floor physically, the polished one keeps the mirror.
+
 > [!CAUTION]
 > **Four measured defects of this path (Aug 2026, `reflexion-debug` + `offscreen-rendering`
 > benches — diagnosis owner-driven), fix lot planned:**
@@ -161,6 +178,11 @@ every frame whatever its flags):
 >    render target list mutex — walking the lists there self-deadlocked the render thread.
 >    Validated: once-probe shows the full scene with the animated dragon FROZEN in its
 >    last-event pose while the live one animates beside it.
+>    ⚠️ **OPEN (Aug 2026): the GROUND can miss the bake.** Measured on the reflexion-debug
+>    automated tour (mode 3): the once-probe held palm + dragon but a BLACK lower hemisphere —
+>    the bake fired before the ground scene-visual was ready and no re-bake followed. The
+>    readiness signal covers ordinary renderable instances; the scene-visual path (basic
+>    ground, background) apparently does not re-signal. To investigate.
 > 4. ✅ **FIXED — the subject was rendered into its own probe** (inception feedback, visible in
 >    `offscreen-rendering`). `RenderTarget::Abstract` now carries a rendering EXCLUSION LIST
 >    (opaque renderable-instance keys, `excludeFromRendering()`), consulted by the single

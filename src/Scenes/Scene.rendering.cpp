@@ -221,6 +221,11 @@ namespace EmEn::Scenes
 		renderTarget->setAutomaticRenderingState(true);
 		renderTarget->setSuspendableByPostProcessReflections(true);
 
+		/* GGX-prefiltered mip chain: mip 0 = native mirror render, upper mips convolved
+		 * after every render so rough materials get a physically blurred reflection
+		 * (textureLod by roughness — the sky IBL chain semantics). */
+		renderTarget->enableGGXConvolution();
+
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";

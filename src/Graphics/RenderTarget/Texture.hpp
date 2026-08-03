@@ -30,6 +30,8 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -40,6 +42,8 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Compute/ProbeConvolver.hpp"
+#include "Graphics/IBLTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
@@ -116,6 +120,21 @@ namespace EmEn::Graphics::RenderTarget
 				}
 			{
 
+			}
+
+			/**
+			 * @brief Requests a GGX-prefiltered mip chain on the color cubemap.
+			 * @note Must be called BEFORE createRenderTarget(). Mip 0 stays the native mirror
+			 * render; the upper mips are GGX-convolved after every render by a
+			 * Compute::ProbeConvolver (roughness k/(mips-1), the sky IBL chain semantics).
+			 * Materials then sample `textureLod(probe, R, roughness x (mips-1))`.
+			 * Ignored for non-cubemap targets.
+			 * @return void
+			 */
+			void
+			enableGGXConvolution () noexcept
+			{
+				m_GGXConvolutionRequested = true;
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
@@ -496,8 +515,25 @@ namespace EmEn::Graphics::RenderTarget
 					return false;
 				}
 
-				/* NOTE: Create a sampler for the texture to be samplable in fragment shaders. */
-				m_sampler = renderer.getSampler("RenderToTexture", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+				/* NOTE: Create a sampler for the texture to be samplable in fragment shaders.
+				 * A GGX-convolved probe needs its own TRILINEAR sampler with an unclamped LOD
+				 * range: the shared render-to-texture sampler honors the settings mip level
+				 * (default 1), which would clamp the prefiltered chain to its first mip. */
+				if ( m_GGXConvolutionRequested && this->isCubemap() )
+				{
+					m_sampler = renderer.getSampler("RenderToTextureConvolved", [] (Settings & /*settings*/, VkSamplerCreateInfo & createInfo) {
+						createInfo.magFilter = VK_FILTER_LINEAR;
+						createInfo.minFilter = VK_FILTER_LINEAR;
+						createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+						createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+						createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+						createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+						createInfo.maxLod = VK_LOD_CLAMP_NONE;
+					});
+				}
+				else
+				{
+					m_sampler = renderer.getSampler("RenderToTexture", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
 					const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
 					const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
 					const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
@@ -520,7 +556,8 @@ namespace EmEn::Graphics::RenderTarget
 					createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
 					//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 					//createInfo.unnormalizedCoordinates = VK_FALSE;
-				});
+					});
+				}
 
 				if ( m_sampler == nullptr )
 				{
@@ -542,9 +579,33 @@ namespace EmEn::Graphics::RenderTarget
 					return false;
 				}
 
+				/* GGX-convolved probe: set up the convolver (scratch cascade + prefilter
+				 * dispatches recorded after every render — see recordPostRenderCompute()). */
+				if ( m_GGXConvolutionRequested && this->isCubemap() && m_colorImage->createInfo().mipLevels > 1 )
+				{
+					m_probeConvolver = std::make_unique< Compute::ProbeConvolver >();
+
+					if ( !m_probeConvolver->create(renderer, m_colorImage) )
+					{
+						TraceError{ClassId} << "Unable to create the GGX probe convolver for '" << this->id() << "' — the probe will stay mirror-sharp.";
+
+						m_probeConvolver.reset();
+					}
+				}
+
 				m_isReadyForRendering = true;
 
 				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::recordPostRenderCompute() */
+			void
+			recordPostRenderCompute (const Vulkan::CommandBuffer & commandBuffer) noexcept override
+			{
+				if ( m_probeConvolver != nullptr )
+				{
+					m_probeConvolver->record(commandBuffer);
+				}
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onDestroy() */
@@ -552,6 +613,9 @@ namespace EmEn::Graphics::RenderTarget
 			onDestroy () noexcept override
 			{
 				m_isReadyForRendering = false;
+
+				/* The GGX convolver (holds views on the color image — release first). */
+				m_probeConvolver.reset();
 
 				/* The main framebuffer. */
 				m_framebuffer.reset();
@@ -584,15 +648,30 @@ namespace EmEn::Graphics::RenderTarget
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
 				{
+					/* GGX-convolved probe: allocate the prefiltered mip chain (mip 0 = native
+					 * mirror render, upper mips rewritten by the convolver after each render)
+					 * and the extra usages it needs (blit source for the scratch cascade,
+					 * storage for the compute writes). Clamped for tiny probes. */
+					const bool convolved = m_GGXConvolutionRequested && this->isCubemap();
+					const uint32_t maxMipLevels = static_cast< uint32_t >(std::bit_width(this->extent().width));
+					const uint32_t colorMipLevels = convolved ? std::min(IBLTexture::PrefilteredMipLevels, maxMipLevels) : 1U;
+
+					VkImageUsageFlags colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+					if ( convolved )
+					{
+						colorUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+					}
+
 					/* Create the image for a color buffer in video memory. */
 					m_colorImage = std::make_shared< Vulkan::Image >(
 						device,
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findColorFormat(device, this->precisions()),
 						this->extent(),
-						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+						colorUsage,
 						this->isCubemap() ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
-						1,
+						colorMipLevels,
 						this->isCubemap() ? 6 : 1
 					);
 					m_colorImage->setIdentifier(ClassId, this->id(), "Image");
@@ -613,7 +692,9 @@ namespace EmEn::Graphics::RenderTarget
 						VkImageSubresourceRange{
 							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 							.baseMipLevel = 0,
-							.levelCount = m_colorImage->createInfo().mipLevels,
+							/* NOTE: A framebuffer attachment view must cover exactly ONE mip
+							 * level — the render always writes the mirror mip 0. */
+							.levelCount = 1,
 							.baseArrayLayer = 0,
 							.layerCount = m_colorImage->createInfo().arrayLayers
 						}
@@ -923,8 +1004,11 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
+			/** @brief GGX prefilter of the upper mips after every render (cubemap probes). */
+			std::unique_ptr< Compute::ProbeConvolver > m_probeConvolver;
 			view_matrices_t m_viewMatrices;
 			Base::Math::CartesianFrame< float > m_worldCoordinates;
 			bool m_isReadyForRendering{false};
+			bool m_GGXConvolutionRequested{false};
 	};
 }

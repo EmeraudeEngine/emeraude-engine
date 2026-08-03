@@ -125,14 +125,62 @@ namespace EmEn::Graphics::Compute
 			[[nodiscard]]
 			bool bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered) noexcept;
 
-		private:
+			/**
+			 * @brief Push constant block of the environment pipelines (prefilter, irradiance).
+			 * @note Public: the probe convolver (Compute::ProbeConvolver) records the SAME
+			 * prefilter pipeline into the frame command buffer and must push this block.
+			 */
+			struct EMEN_API EnvironmentPushConstants
+			{
+				uint32_t sourceSize;
+				uint32_t destSize;
+				uint32_t sampleCount;
+				float roughness;
+			};
 
 			/**
 			 * @brief Creates (once) the cached environment-bake pipelines and command objects.
+			 * @note Public: also called by Compute::ProbeConvolver before borrowing the
+			 * prefilter pipeline (see the getters below).
 			 * @return bool True when everything is ready.
 			 */
 			[[nodiscard]]
 			bool ensureEnvironmentPipelines () noexcept;
+
+			/**
+			 * @brief Returns the environment descriptor set layout (source cube + dest faces), or nullptr.
+			 * @return const std::shared_ptr< Vulkan::DescriptorSetLayout > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Vulkan::DescriptorSetLayout > &
+			environmentDSLayout () const noexcept
+			{
+				return m_environmentDSLayout;
+			}
+
+			/**
+			 * @brief Returns the environment pipeline layout, or nullptr.
+			 * @return const std::shared_ptr< Vulkan::PipelineLayout > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Vulkan::PipelineLayout > &
+			environmentPipelineLayout () const noexcept
+			{
+				return m_environmentPipelineLayout;
+			}
+
+			/**
+			 * @brief Returns the GGX prefilter compute pipeline, or nullptr.
+			 * @return const Vulkan::ComputePipeline *
+			 */
+			[[nodiscard]]
+			const Vulkan::ComputePipeline *
+			prefilterPipeline () const noexcept
+			{
+				return m_prefilterPipeline.get();
+			}
+
+		private:
 
 #ifdef EMERAUDE_DEBUG_IBL_FACES
 			/**

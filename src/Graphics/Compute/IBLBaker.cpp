@@ -383,14 +383,9 @@ void main ()
 }
 )";
 
-	/* Push constant block shared by the two environment pipelines. */
-	struct EnvironmentPushConstants
-	{
-		uint32_t sourceSize;
-		uint32_t destSize;
-		uint32_t sampleCount;
-		float roughness;
-	};
+	/* NOTE: The push constant block lives in the header (IBLBaker::EnvironmentPushConstants)
+	 * so the probe convolver can push the same block on the borrowed prefilter pipeline. */
+	using EnvironmentPushConstants = IBLBaker::EnvironmentPushConstants;
 
 	/* Per-texel sample counts (FIS makes these enough — see class note). The prefilter
 	 * count grows with the mip level: the GGX lobe widens with roughness and the texel

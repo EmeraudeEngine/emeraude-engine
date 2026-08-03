@@ -478,6 +478,21 @@ namespace EmEn::Graphics::RenderTarget
 			virtual bool isReadyForRendering () const noexcept = 0;
 
 			/**
+			 * @brief Records optional GPU work into the target's command buffer right after
+			 * its render pass ended (same submission). Default no-op.
+			 * @note Used by GGX-convolved cubemap probes to refresh their prefiltered mip
+			 * chain from the fresh mip 0 render (Compute::ProbeConvolver).
+			 * @param commandBuffer The target's frame command buffer (recording state).
+			 * @return void
+			 */
+			virtual
+			void
+			recordPostRenderCompute (const Vulkan::CommandBuffer & /*commandBuffer*/) noexcept
+			{
+
+			}
+
+			/**
 			 * @brief Writes a sampled texture to the descriptor set.
 			 * @param descriptorSet A reference to the descriptor set.
 			 * @param bindingIndex The binding index of the first texture inside the descriptor set layout.

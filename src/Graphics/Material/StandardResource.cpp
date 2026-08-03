@@ -1846,8 +1846,25 @@ namespace EmEn::Graphics::Material
 				Code(shader, Location::Top) <<
 					"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 					"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
-					"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
-					"const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+					"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);";
+
+				/* A render-target cubemap (dynamic probe) carries a GGX-prefiltered mip
+				 * chain (mip 0 = mirror, upper mips convolved per render — see
+				 * Compute::ProbeConvolver): drive the LOD by the material roughness, the
+				 * exact sampling contract of the automatic environment path. The LOD
+				 * clamps to the image's actual chain, so a target without mips (older or
+				 * non-probe) simply stays mirror-sharp. Static texture cubemaps keep the
+				 * plain mirror fetch: the explicit texture mode is ARTISTIC by contract. */
+				if ( component->textureResource() == nullptr && component->texture() != nullptr && component->texture()->isCubemapTexture() )
+				{
+					Code(shader, Location::Top) <<
+						"const float reflectionRoughness = clamp(sqrt(2.0 / (" << MaterialUB(UniformBlock::Component::Shininess) << " + 2.0)), 0.0, 1.0);" << Line::End <<
+						"const vec4 " << component->variableName() << " = textureLod(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ", reflectionRoughness * " << (Graphics::IBLTexture::PrefilteredMipLevels - 1) << ".0);";
+				}
+				else
+				{
+					Code(shader, Location::Top) << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+				}
 			}
 			else
 			{

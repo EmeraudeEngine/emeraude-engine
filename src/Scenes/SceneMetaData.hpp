@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <array>
 #include <memory>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -281,6 +282,9 @@ namespace EmEn::Scenes
 			 * refit are recorded by recordTLASBuild() ahead of the TLAS build. The shared
 			 * pointers keep the per-instance RT resources alive until recording. */
 			std::vector< std::shared_ptr< const Graphics::RenderableInstance::Abstract > > m_pendingSkinnedInstances;
+			/** @brief Last two TLAS instance counts (most recent first) for the content log:
+			 * per-target exclusions make the count oscillate between two steady values. */
+			std::array< size_t, 2 > m_lastTLASInstanceCounts{std::numeric_limits< size_t >::max(), std::numeric_limits< size_t >::max()};
 			/** @brief Number of active RT instances this frame. */
 			size_t m_instanceCount{0};
 			/** @brief Number of unique RT materials this frame. */

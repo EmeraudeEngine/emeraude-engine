@@ -2090,6 +2090,10 @@ namespace EmEn::Graphics
 
 			commandBuffer->endRenderPass();
 
+			/* Post-render compute owned by the target itself (e.g. the GGX convolution of a
+			 * probe's prefiltered mip chain), recorded in the SAME submission. */
+			renderToTexture->recordPostRenderCompute(*commandBuffer);
+
 			if ( !commandBuffer->end() )
 			{
 				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << renderToTexture->id() << "' !";

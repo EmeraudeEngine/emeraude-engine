@@ -31,6 +31,7 @@
 #include <ranges>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 
 /* Local inclusions. */
 #include "GPUMeshMetaData.hpp"
@@ -426,16 +427,23 @@ namespace EmEn::Scenes
 
 		/* Log the TLAS content whenever the instance count changes — catches async-loaded
 		 * renderables arriving late, and instantly answers "is X in the TLAS, where, at
-		 * what scale?" (the exact questions of any missing-reflection investigation). */
+		 * what scale?" (the exact questions of any missing-reflection investigation).
+		 * The rebuild runs once PER RENDER TARGET and per-target exclusion lists make the
+		 * count OSCILLATE (main view with the probe's subject, probe without it): comparing
+		 * against the last TWO counts keeps the log silent on that steady A-B-A pattern
+		 * while still firing on genuinely new content (measured: 8500+ spam lines in 25 s
+		 * with a single-value comparison on ReflexionDebug's camera modes). */
+		if ( instances.size() != m_lastTLASInstanceCounts[0] && instances.size() != m_lastTLASInstanceCounts[1] )
 		{
-			static size_t s_lastTLASInstanceCount{std::numeric_limits< size_t >::max()};
+			m_lastTLASInstanceCounts[1] = m_lastTLASInstanceCounts[0];
+			m_lastTLASInstanceCounts[0] = instances.size();
 
-			if ( instances.size() != s_lastTLASInstanceCount )
-			{
-				s_lastTLASInstanceCount = instances.size();
-
-				TraceInfo{ClassId} << "[TLAS-DUMP] " << instances.size() << " instance(s):" << tlasDump.str();
-			}
+			TraceInfo{ClassId} << "[TLAS-DUMP] " << instances.size() << " instance(s):" << tlasDump.str();
+		}
+		else if ( instances.size() != m_lastTLASInstanceCounts[0] )
+		{
+			/* Known alternate value: keep the pair ordered (most recent first), silently. */
+			std::swap(m_lastTLASInstanceCounts[0], m_lastTLASInstanceCounts[1]);
 		}
 
 
