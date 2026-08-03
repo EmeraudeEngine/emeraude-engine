@@ -173,6 +173,34 @@ The **Scene** orchestrates program generation based on configuration:
 
 **Cache hierarchy**: Programs are first looked up in the Renderable's cache. On miss, they're generated via Saphir and cached for future use by any instance of the same Renderable.
 
+### Per-instance resources vs the shared program cache (Aug 2026)
+
+The program cache lives on the **Renderable** — shared by every instance of the same mesh —
+while some descriptor sets the sealed pipeline layout demands live on the **instance**
+(today: the skeletal skinning SSBO, `SetType::PerModel`). Those two lifetimes must be tied
+together or an instance gets declared ready on another instance's cached program while
+still missing its own descriptor set.
+
+The rules, all three enforced in `RenderableInstance::Abstract`:
+
+1. `prepareSkinningResources(renderer)` runs at the top of **both** `getReadyForRender()`
+   and `getReadyForShadowCasting()`, before any program generation. Same thread (render),
+   same instant as the layout sealing.
+2. `isReadyToRender()` / `isReadyToCastShadows()` return **false** while
+   `isMissingSkinningResources()` — a cached program is not enough to declare an instance
+   ready. The Scene then calls the matching `getReadyFor*()`, which creates the resources
+   and skips the already-cached program generation.
+3. The recording paths refuse to draw when the layout declares a set the instance cannot
+   provide (`traceMissingDescriptorSet()`, reported once per instance).
+
+⚠️ The skinning resources are **NOT** created by `Scenes::Component::Visual` any more. They
+were, from the logic thread, on the first `processLogics()` — which let a render happen in
+between (a probe cubemap baked at scene build time renders before the first logic tick) with
+the `PerModel` set sealed in the layout but absent at binding time. See the descriptor set
+binding contract in [`src/Saphir/AGENTS.md`](../src/Saphir/AGENTS.md). The component still
+owns the `SkeletalAnimator` and the pose upload; until the first pose lands, the SSBO
+sections hold identity matrices (bind pose).
+
 ## Render Context System
 
 To support both classic 2D rendering and cubemap multiview rendering, the system uses two POD structures that encapsulate rendering context:
@@ -224,12 +252,16 @@ render(readStateIndex, renderTarget, lightEmitter, renderPassType,
     4. Bind instance VBO/matrices
     5. Build RenderPassContext and PushConstantContext
     6. Push matrices via pushMatricesForRendering(passContext, pushContext, worldCoordinates)
-    7. Bind View UBO (descriptor set 0)
-    8. Bind Light UBO if present (descriptor set 1)
-    9. Bind Material descriptors (descriptor set 1 or 2)
-    10. commandBuffer.draw(geometry, layerIndex/frameIndex, instanceCount)
+    7. For each SetType the SEALED layout declares (program->setIndexes()), bind its
+       descriptor set at the DECLARED index — PerView, PerSceneTransforms, PerLight,
+       PerModel (skinning), PerModelLayer (material), PerBindless
+    8. commandBuffer.draw(geometry, layerIndex/frameIndex, instanceCount)
 }
 ```
+
+⚠️ Step 7 never uses a running counter. Each set goes to `setIndexes.set(SetType::X)`, so a
+set left unbound cannot shift the ones after it. If a declared set has no resource, the draw
+is **skipped** (contract violation, traced once) — never bound one slot lower.
 
 ### Shadow Casting Flow
 
@@ -240,7 +272,8 @@ castShadows(readStateIndex, renderTarget, layerIndex, worldCoordinates, commandB
     2. Query program from Renderable cache
     3. Bind graphics pipeline
     4. Set dynamic viewport
-    5. Bind View UBO (if instancing enabled)
+    5. Bind, at the index the sealed layout declares: PerView (instancing or multiview),
+       PerModel (skinning), PerModelLayer (alpha-tested shadows)
     6. Bind instance model layer
     7. Build RenderPassContext and PushConstantContext
     8. Push matrices via pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates)

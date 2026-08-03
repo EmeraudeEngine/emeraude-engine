@@ -1031,6 +1031,43 @@ namespace EmEn::Graphics::RenderableInstance
 		private:
 
 			/**
+			 * @brief Reports ONCE that the sealed pipeline layout declares a descriptor set the
+			 * instance cannot provide, which means the generation-time condition and the
+			 * binding-time condition of that set have diverged.
+			 * @note Render thread only. The draw call is skipped by the caller: binding the
+			 * following sets one slot lower would corrupt every set after the missing one.
+			 * @param setName The name of the missing descriptor set.
+			 * @param renderTarget A reference to the render target being recorded.
+			 * @return void
+			 */
+			void traceMissingDescriptorSet (const char * setName, const RenderTarget::Abstract & renderTarget) const noexcept;
+
+			/**
+			 * @brief Returns whether the renderable declares skeletal data but the instance does
+			 * not own its skinning descriptor sets yet.
+			 * @note The program cache lives on the RENDERABLE (shared by every instance of the
+			 * same mesh), the skinning descriptor sets on the INSTANCE: this is what keeps a
+			 * second instance from being declared ready on the first one's cached program.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isMissingSkinningResources () const noexcept;
+
+			/**
+			 * @brief Creates the skeletal skinning GPU resources if the renderable declares
+			 * skeletal data and the instance does not own them yet.
+			 * @note MUST be called before any program generation: the pipeline layout seals the
+			 * PerModel set on the RENDERABLE (SkeletalDataTrait::hasSkeletalData()), while the
+			 * command recording binds it on the INSTANCE (hasSkinningResources()). Creating the
+			 * resources here — render thread, renderable ready — makes both the same instant.
+			 * The animator itself stays with the Scenes::Component::Visual component; until it
+			 * uploads a first pose, the SSBO sections hold identity matrices (bind pose).
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			bool prepareSkinningResources (Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Builds a program cache key for this instance's current configuration.
 			 * @param programType The type of program.
 			 * @param renderPassType The render pass type.
@@ -1110,5 +1147,7 @@ namespace EmEn::Graphics::RenderableInstance
 			static uint64_t s_skinningFrameCursor;
 			/** @brief Whether m_lastModelMatrix holds a valid previous-frame matrix (false until the first primary staging). */
 			bool m_hasModelHistory{false};
+			/** @brief Whether the descriptor set contract violation was already reported (render thread only, anti-spam). */
+			mutable bool m_missingDescriptorSetReported{false};
 	};
 }

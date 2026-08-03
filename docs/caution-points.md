@@ -1909,6 +1909,64 @@ so its Vulkan objects had no device to be destroyed against.
 
 **Files:** `Graphics/Renderer.cpp:onTerminate()`
 
+### Fixed: a descriptor set skipped at binding shifted every following set (Aug 2026)
+
+`VUID-vkCmdBindDescriptorSets-pDescriptorSets-00358` then
+`VUID-vkCmdDrawIndexed-None-08600`, on the **first frames only**, in the `reflexion-debug`
+demo options 3 and 4 (the two probe-camera reflection modes — the modes that render the scene
+into a cubemap **at scene build time**):
+
+```
+pDescriptorSets[0] being bound is not compatible with overlapping descriptorSetLayout at
+index 1 ... layout has 1 total descriptors, but the bound one has 3 total descriptors.
+... at index 2 ... has 3 total descriptors, but the bound one has 4928 total descriptors.
+The VkPipeline statically uses descriptor set 3, but all sets 0 to 3 are not compatible ...
+```
+
+The count ladder **is** the diagnosis: 1 → 3 → 4928 is the skinning SSBO, the material and
+the bindless array, each landing one slot too low. The recording code walked the sets with a
+running `setOffset++` counter, so skipping ONE set shifted every set after it.
+
+The skipped set was `PerModel` (skinning) on the animated glTF dragon. Its two conditions had
+diverged:
+
+| | Condition | Owner | When |
+|---|---|---|---|
+| Pipeline layout (sealed) | `SkeletalDataTrait::hasSkeletalData()` | the **renderable** | as soon as the resource is loaded |
+| Binding | `hasSkinningResources()` | the **instance** | first `processLogics()` (LOGIC thread) |
+
+A probe cubemap renders before the first logic tick, so the layout declared the set the
+instance did not own yet. Two more traps compounded it: the program cache lives on the
+**renderable** (shared by every instance), so a second instance of the same skeletal mesh was
+declared ready on the first one's cached program and never created its own descriptor sets;
+and `getReadyForShadowCasting()` is a separate entry point from `getReadyForRender()`.
+
+**Fix** (`Graphics/RenderableInstance/Abstract.{hpp,cpp}`, `Scenes/Component/Visual.cpp`):
+
+1. `prepareSkinningResources()` at the top of `getReadyForRender()` **and**
+   `getReadyForShadowCasting()` — render thread, same instant as the layout sealing. Removed
+   from `Scenes::Component::Visual` (which keeps the animator and the pose upload).
+2. `isReadyToRender()` / `isReadyToCastShadows()` answer **false** while
+   `isMissingSkinningResources()` — a renderable-level cached program never makes an instance
+   ready on its own.
+3. Every set is now bound at the index the sealed layout **declares**
+   (`program->setIndexes().set(SetType::X)`), never at a running counter, in all three
+   recording paths. A declared set with no resource drops the draw and reports once
+   (`traceMissingDescriptorSet()`) instead of silently shifting the others.
+
+> [!IMPORTANT]
+> **Rule:** every descriptor set has TWO conditions — one at generation, one at binding — and
+> they must be equivalent BY CONSTRUCTION. When one is a property of the renderable and the
+> other a property of the instance, they will diverge. The full table lives in
+> `@src/Saphir/AGENTS.md` § "Descriptor set binding contract".
+
+**Reproduce:** `./projet-alpha --load-demo reflexion-debug --demo-options 0,4,0` with the
+validation layers on; the errors fire in the first second, then never again.
+
+**Files:** `Graphics/RenderableInstance/Abstract.cpp` (`prepareSkinningResources`,
+`isMissingSkinningResources`, `traceMissingDescriptorSet`, the 3 binding paths),
+`Scenes/Component/Visual.cpp:processLogics()`
+
 ---
 
 ## Related Documentation

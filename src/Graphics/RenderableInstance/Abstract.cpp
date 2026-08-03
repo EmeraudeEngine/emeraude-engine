@@ -35,6 +35,7 @@
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
+#include "Saphir/Generator/SkinningLayoutHelper.hpp"
 #include "Settings.hpp"
 #include "Saphir/Generator/ShadowCasting.hpp"
 #include "Saphir/Generator/TBNSpaceRendering.hpp"
@@ -484,6 +485,15 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
+		/* NOTE: The program cache lives on the RENDERABLE, shared by every instance of the same
+		 * mesh, while the skinning descriptor sets live on the INSTANCE. Without this test, a
+		 * second instance of a skeletal mesh would find the cached program, be declared ready,
+		 * and never get the PerModel set the sealed pipeline layout demands. */
+		if ( this->isMissingSkinningResources() )
+		{
+			return false;
+		}
+
 		/* Check if all shadow casting programs exist for all layers. */
 		const auto layerCount = m_renderable->layerCount();
 
@@ -505,6 +515,15 @@ namespace EmEn::Graphics::RenderableInstance
 	Abstract::isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
 		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
+		{
+			return false;
+		}
+
+		/* NOTE: The program cache lives on the RENDERABLE, shared by every instance of the same
+		 * mesh, while the skinning descriptor sets live on the INSTANCE. Without this test, a
+		 * second instance of a skeletal mesh would find the cached program, be declared ready,
+		 * and never get the PerModel set the sealed pipeline layout demands. */
+		if ( this->isMissingSkinningResources() )
 		{
 			return false;
 		}
@@ -531,6 +550,46 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
+	Abstract::isMissingSkinningResources () const noexcept
+	{
+		if ( this->hasSkinningResources() )
+		{
+			return false;
+		}
+
+		const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderable.get());
+
+		if ( skeletalData == nullptr || !skeletalData->hasSkeletalData() )
+		{
+			return false;
+		}
+
+		return skeletalData->skin().jointCount() > 0;
+	}
+
+	bool
+	Abstract::prepareSkinningResources (Renderer & renderer) noexcept
+	{
+		if ( !this->isMissingSkinningResources() )
+		{
+			return true;
+		}
+
+		const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderable.get());
+		const auto boneCount = static_cast< uint32_t >(skeletalData->skin().jointCount());
+		const auto descriptorSetLayout = Generator::getSkinningDescriptorSetLayout(renderer.layoutManager());
+
+		if ( !this->createSkinningResources(renderer.device(), descriptorSetLayout, boneCount, renderer.framesInFlight()) )
+		{
+			this->setBroken("Unable to create the skinning resources of a skeletal renderable instance !");
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
 	Abstract::getReadyForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept
 	{
 		if ( m_renderable == nullptr )
@@ -548,6 +607,14 @@ namespace EmEn::Graphics::RenderableInstance
 		if ( !m_renderable->isReadyForInstantiation() )
 		{
 			return true;
+		}
+
+		/* Skinning GPU resources, created BEFORE the first program generation (see the method).
+		 * The shadow map of a skeletal mesh is generated from the same skinned pose: this entry
+		 * point can perfectly run before getReadyForRender(). */
+		if ( !this->prepareSkinningResources(renderer) )
+		{
+			return false;
 		}
 
 		const auto layerCount = m_renderable->layerCount();
@@ -612,6 +679,12 @@ namespace EmEn::Graphics::RenderableInstance
 		if ( !m_renderable->isReadyForInstantiation() )
 		{
 			return true;
+		}
+
+		/* Skinning GPU resources, created BEFORE the first program generation (see the method). */
+		if ( !this->prepareSkinningResources(renderer) )
+		{
+			return false;
 		}
 
 		const auto layerCount = m_renderable->layerCount();
@@ -881,6 +954,25 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
+	Abstract::traceMissingDescriptorSet (const char * setName, const RenderTarget::Abstract & renderTarget) const noexcept
+	{
+		if ( m_missingDescriptorSetReported )
+		{
+			return;
+		}
+
+		m_missingDescriptorSetReported = true;
+
+		TraceError{TracerTag} <<
+			"Descriptor set contract violation: the sealed pipeline layout declares the '" << setName << "' set, "
+			"but the renderable instance cannot provide it. The draw call is skipped.\n"
+			"  Renderable  : " << (m_renderable != nullptr ? m_renderable->name() : "null") << "\n"
+			"  RenderTarget: " << to_string(renderTarget.renderType()) << " (" << renderTarget.extent().width << "x" << renderTarget.extent().height << ")\n"
+			"  NOTE        : the generation-time condition (Saphir::Generator) and the binding-time "
+			"condition of that set have diverged. Fix the pair, never the binding alone.";
+	}
+
+	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
@@ -907,30 +999,47 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Set the dynamic viewport and scissor. */
 		renderTarget->setViewport(commandBuffer);
 
-		uint32_t setOffset = 0;
+		/* NOTE: Every set goes to the index DECLARED by the sealed pipeline layout, never to a
+		 * running counter — a set left unbound can then no longer shift the ones after it.
+		 * See the "Descriptor set binding" contract in src/Saphir/AGENTS.md. */
+		const auto & setIndexes = program->setIndexes();
 
-		/* NOTE: Bind the view UBO if:
+		/* NOTE: The view UBO is part of the layout when:
 		 * - Renderable instance uses GPU instancing (needs view matrix from UBO)
 		 * - OR render target is a cubemap (multiview needs 6 view matrices from UBO indexed by gl_ViewIndex)
 		 * - OR render target is a CSM (multiview needs N cascade view matrices from UBO indexed by gl_ViewIndex) */
-		if ( this->useModelVertexBufferObject() || renderTarget->isCubemap() || renderTarget->isCascadedShadowMap() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
 		{
-			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
 		}
 
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
-		if ( this->hasSkinningResources() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) )
 		{
+			if ( !this->hasSkinningResources() )
+			{
+				this->traceMissingDescriptorSet("PerModel (skinning)", *renderTarget);
+
+				return;
+			}
+
 			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
-			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModel));
 		}
 
 		/* Bind material descriptor set for alpha-tested shadows. */
 		const auto * material = m_renderable->material(layerIndex);
 
-		if ( material != nullptr && material->requiresAlphaTestedShadows() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
 		{
-			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
+			if ( material == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerModelLayer (material)", *renderTarget);
+
+				return;
+			}
+
+			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
 		}
 
 		this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
@@ -1031,47 +1140,91 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Configure the push constants. */
 		this->pushMatricesForRendering(passContext, pushContext, worldCoordinates);
 
-		uint32_t setOffset = 0;
+		/* NOTE: Every set goes to the index DECLARED by the sealed pipeline layout, never to a
+		 * running counter — a set left unbound can then no longer shift the ones after it.
+		 * See the "Descriptor set binding" contract in src/Saphir/AGENTS.md. */
+		const auto & setIndexes = program->setIndexes();
 
 		/* Bind view UBO. */
-		commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
+		{
+			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
+		}
 
 		/* Bind the scene instance transforms SSBO set.
 		 * NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
 		 * the set may be part of the layout yet unreferenced by the shader (advanced
-		 * fallback), and set index ordering must stay consistent either way. */
-		if ( program->setIndexes().isSetEnabled(Saphir::SetType::PerSceneTransforms) && sceneTransformsDS != nullptr )
+		 * fallback). */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
 		{
-			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			if ( sceneTransformsDS == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerSceneTransforms", *renderTarget);
+
+				return;
+			}
+
+			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
 		}
 
 		/* Bind light UBO (and shadow map sampler if applicable). */
-		if ( lightEmitter != nullptr && lightEmitter->isCreated() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerLight) )
 		{
+			if ( lightEmitter == nullptr || !lightEmitter->isCreated() )
+			{
+				this->traceMissingDescriptorSet("PerLight", *renderTarget);
+
+				return;
+			}
+
 			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
 
-			commandBuffer.bind(*lightEmitter->descriptorSet(useShadowMap), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++, lightEmitter->UBOOffset());
+			commandBuffer.bind(*lightEmitter->descriptorSet(useShadowMap), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerLight), lightEmitter->UBOOffset());
 		}
 
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
-		if ( this->hasSkinningResources() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) )
 		{
+			if ( !this->hasSkinningResources() )
+			{
+				this->traceMissingDescriptorSet("PerModel (skinning)", *renderTarget);
+
+				return;
+			}
+
 			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
-			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModel));
 		}
 
 		/* Bind material UBO and samplers. */
 		const auto * material = m_renderable->material(layerIndex);
 
-		commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
-
-		/* Bind bindless textures descriptor set if the material uses automatic reflection,
-		 * the instance is lit (ambient-pass IBL reserved slots), or the light uses bindless
-		 * color projection, and the manager is available. Must stay in sync with the
-		 * program-generation gating (buildProgramCacheKey / getReadyForRendering). */
-		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || this->isLightingEnabled() || renderPassUsesColorProjection(renderPassType)) )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
 		{
-			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
+			if ( material == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerModelLayer (material)", *renderTarget);
+
+				return;
+			}
+
+			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
+		}
+
+		/* Bind the bindless textures descriptor set. The layout declares it when the material
+		 * uses automatic reflection, the instance is lit (ambient-pass IBL reserved slots), or
+		 * the light uses bindless color projection — see the program-generation gating
+		 * (buildProgramCacheKey / getReadyForRender). */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerBindless) )
+		{
+			if ( bindlessTexturesManager == nullptr || bindlessTexturesManager->descriptorSet() == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerBindless", *renderTarget);
+
+				return;
+			}
+
+			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerBindless));
 		}
 
 		/* NOTE: The InstanceTransforms slot travels through the firstInstance draw
@@ -1217,37 +1370,53 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Push constants are always required (unique model matrix per object). */
 		this->pushMatricesForRendering(passContext, pushContext, worldCoordinates);
 
-		uint32_t setOffset = 0;
+		/* NOTE: Every set goes to the index DECLARED by the sealed pipeline layout, never to a
+		 * running counter — a set left unbound can then no longer shift the ones after it.
+		 * See the "Descriptor set binding" contract in src/Saphir/AGENTS.md. */
+		const auto & setIndexes = program->setIndexes();
 
 		/* Bind view UBO (skip if already bound for this pipeline). */
-		const auto * viewDS = renderTarget->viewMatrices().descriptorSet();
-
-		if ( tracker.lastViewDS != viewDS->handle() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
 		{
-			commandBuffer.bind(*viewDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
-			tracker.lastViewDS = viewDS->handle();
-		}
+			const auto * viewDS = renderTarget->viewMatrices().descriptorSet();
 
-		setOffset++;
+			if ( tracker.lastViewDS != viewDS->handle() )
+			{
+				commandBuffer.bind(*viewDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
+				tracker.lastViewDS = viewDS->handle();
+			}
+		}
 
 		/* Bind the scene instance transforms SSBO set (skip if already bound).
 		 * NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
 		 * the set may be part of the layout yet unreferenced by the shader (advanced
-		 * fallback), and set index ordering must stay consistent either way. */
-		if ( program->setIndexes().isSetEnabled(Saphir::SetType::PerSceneTransforms) && sceneTransformsDS != nullptr )
+		 * fallback). */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
 		{
-			if ( tracker.lastSceneTransformsDS != sceneTransformsDS->handle() )
+			if ( sceneTransformsDS == nullptr )
 			{
-				commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
-				tracker.lastSceneTransformsDS = sceneTransformsDS->handle();
+				this->traceMissingDescriptorSet("PerSceneTransforms", *renderTarget);
+
+				return;
 			}
 
-			setOffset++;
+			if ( tracker.lastSceneTransformsDS != sceneTransformsDS->handle() )
+			{
+				commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
+				tracker.lastSceneTransformsDS = sceneTransformsDS->handle();
+			}
 		}
 
 		/* Bind light UBO (and shadow map sampler if applicable). */
-		if ( lightEmitter != nullptr && lightEmitter->isCreated() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerLight) )
 		{
+			if ( lightEmitter == nullptr || !lightEmitter->isCreated() )
+			{
+				this->traceMissingDescriptorSet("PerLight", *renderTarget);
+
+				return;
+			}
+
 			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
 			const auto * lightDS = lightEmitter->descriptorSet(useShadowMap);
 			const auto lightUBOOffset = lightEmitter->UBOOffset();
@@ -1258,48 +1427,71 @@ namespace EmEn::Graphics::RenderableInstance
 			 * first light's data (a single light lit the whole scene). */
 			if ( tracker.lastLightDS != lightDS->handle() || tracker.lastLightUBOOffset != lightUBOOffset )
 			{
-				commandBuffer.bind(*lightDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset, lightUBOOffset);
+				commandBuffer.bind(*lightDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerLight), lightUBOOffset);
 				tracker.lastLightDS = lightDS->handle();
 				tracker.lastLightUBOOffset = lightUBOOffset;
 			}
-
-			setOffset++;
 		}
 
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
-		if ( this->hasSkinningResources() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) )
 		{
+			if ( !this->hasSkinningResources() )
+			{
+				this->traceMissingDescriptorSet("PerModel (skinning)", *renderTarget);
+
+				return;
+			}
+
 			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
-			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModel));
 		}
 
 		/* Bind material UBO and samplers (skip if already bound). */
 		const auto * material = m_renderable->material(layerIndex);
-		const auto * materialDS = material->descriptorSet();
 
-		if ( tracker.lastMaterialDS != materialDS->handle() )
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
 		{
-			commandBuffer.bind(*materialDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset);
-			tracker.lastMaterialDS = materialDS->handle();
-		}
+			if ( material == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerModelLayer (material)", *renderTarget);
+
+				return;
+			}
+
+			const auto * materialDS = material->descriptorSet();
+
+			if ( tracker.lastMaterialDS != materialDS->handle() )
+			{
+				commandBuffer.bind(*materialDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
+				tracker.lastMaterialDS = materialDS->handle();
+			}
 #ifdef DEBUG
-		else
-		{
-			tracker.savedMaterialBinds++;
-		}
+			else
+			{
+				tracker.savedMaterialBinds++;
+			}
 #endif
+		}
 
-		setOffset++;
-
-		/* Bind bindless textures descriptor set if needed (same condition as the
-		 * program-generation gating — see getReadyForRendering). */
-		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || this->isLightingEnabled() || renderPassUsesColorProjection(renderPassType)) )
+		/* Bind the bindless textures descriptor set. The layout declares it when the material
+		 * uses automatic reflection, the instance is lit (ambient-pass IBL reserved slots), or
+		 * the light uses bindless color projection — see the program-generation gating
+		 * (buildProgramCacheKey / getReadyForRender). */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerBindless) )
 		{
+			if ( bindlessTexturesManager == nullptr || bindlessTexturesManager->descriptorSet() == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerBindless", *renderTarget);
+
+				return;
+			}
+
 			const auto * bindlessDS = bindlessTexturesManager->descriptorSet();
 
 			if ( tracker.lastBindlessDS != bindlessDS->handle() )
 			{
-				commandBuffer.bind(*bindlessDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
+				commandBuffer.bind(*bindlessDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerBindless));
 				tracker.lastBindlessDS = bindlessDS->handle();
 			}
 		}

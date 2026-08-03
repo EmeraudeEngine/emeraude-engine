@@ -210,6 +210,17 @@ Each `Renderable::Abstract` maintains a program cache per render target:
 
 See: `Renderable::Abstract::findCachedProgram()`, `cacheProgram()`, `ProgramCacheKey.hpp`
 
+> [!CRITICAL]
+> **A shared cached program does NOT make an instance ready.** Some descriptor sets the
+> sealed pipeline layout demands are **per instance** — today the skeletal skinning SSBO
+> (`SetType::PerModel`). `isReadyToRender()` / `isReadyToCastShadows()` therefore also test
+> `isMissingSkinningResources()`, and `getReadyForRender()` /
+> `getReadyForShadowCasting()` both call `prepareSkinningResources()` before generating
+> anything. Skipping that test let a second instance of a skeletal mesh be drawn without its
+> `PerModel` set — which shifted every following set one slot down (Aug 2026, see
+> [`docs/caution-points.md`](../../docs/caution-points.md) § Vulkan Validation and
+> [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) § "Descriptor set binding contract").
+
 ### Window Resize and Render Pass Handle Invalidation
 
 > [!CRITICAL]

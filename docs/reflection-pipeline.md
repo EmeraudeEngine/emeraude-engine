@@ -195,6 +195,19 @@ probe blurs palm/dragon/floor physically, the polished one keeps the mirror.
 >    subject after creation — first brick of the future probe system. ⚠️ Lifetime is the
 >    caller's: exclusions are not cleaned when an instance dies. Validated: the city crosses
 >    the offscreen-rendering bronze sphere's reflection continuously, no inception disc.
+> 5. ✅ **FIXED — a skinned mesh in the probe corrupted the descriptor set binding.**
+>    `VUID-vkCmdBindDescriptorSets-pDescriptorSets-00358` + `VUID-vkCmdDrawIndexed-None-08600`
+>    on the first frames of `reflexion-debug` options 3 and 4 (and ONLY those two — they are
+>    the modes that render the scene into a cubemap **at scene build time**, before the first
+>    logic tick). The pipeline layout seals the skinning set on the RENDERABLE
+>    (`hasSkeletalData()`) while the binding tested the INSTANCE (`hasSkinningResources()`),
+>    and those descriptor sets were created lazily from the logic thread. The probe rendered
+>    the dragon in between: the skinning set was skipped and the running set counter shifted
+>    the material and the bindless array one slot down. The resources are now created on the
+>    render thread by `RenderableInstance::Abstract::prepareSkinningResources()`, an instance
+>    missing them is not "ready", and every set is bound at the index the sealed layout
+>    declares. Measured: the six reflection modes now run with ZERO validation errors.
+>    See [`caution-points.md`](caution-points.md) § Vulkan Validation.
 >
 > Still true besides: **no roughness response** (bare `texture()`, no mip chain, no GGX
 > convolution — a `roughness = 0.35` metal reflects like polished chrome), no per-face

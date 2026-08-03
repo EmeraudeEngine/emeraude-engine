@@ -31,8 +31,6 @@
 #include "Animations/SkeletonResource.hpp"
 #include "Constants.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Saphir/Generator/SkinningLayoutHelper.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Scenes::Component
@@ -91,16 +89,14 @@ namespace EmEn::Scenes::Component
 						m_skeletalAnimator->play(skeletalData->animationClips()[0]->clip().name());
 					}
 
-					/* Create GPU resources for skinning matrices. */
-					const auto boneCount = static_cast< uint32_t >(skeletalData->skin().jointCount());
-
-					if ( boneCount > 0 )
-					{
-						auto & renderer = skeletalData->skeletonResource()->serviceProvider().graphicsRenderer();
-						auto descriptorSetLayout = Saphir::Generator::getSkinningDescriptorSetLayout(renderer.layoutManager());
-
-						m_renderableInstance->createSkinningResources(renderer.device(), descriptorSetLayout, boneCount, renderer.framesInFlight());
-					}
+					/* NOTE: The skinning GPU resources are NOT created here. They belong to the
+					 * render thread, where Graphics::RenderableInstance::Abstract::getReadyForRender()
+					 * creates them in the same breath as the program generation that seals the
+					 * PerModel set in the pipeline layout. Creating them from the logic thread
+					 * let a render happen (a probe cubemap baked at scene build time) between
+					 * the sealed layout and the existing descriptor sets, shifting every
+					 * following set by one at binding time. Until they exist, the pose upload
+					 * below simply waits (hasSkinningResources() guard). */
 				}
 			}
 		}
