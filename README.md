@@ -123,14 +123,14 @@ CMake fails at configure time with the download URL if the SDK is not found.
 
 Cloned with `--recurse-submodules` and compiled with the engine:
 
-| Library | Version | Repository |
-|---|---|---|
-| **GLFW** | `3bbf4c12` (2025-01-12) | [EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw) **[FORK]** |
-| **ImGui** | 1.92.8 | [ocornut/imgui](https://github.com/ocornut/imgui) |
-| **magic_enum** | 0.9.8 | [Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
-| **Vulkan Memory Allocator** | 3.3.0+46 (`b3cbbb43`) | [GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
-| **SDL_GameControllerDB** | unversioned (`366c416`) | [gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB) |
-| **RenderDoc** | v1.44 (branch `v1.x`) | [baldurk/renderdoc](https://github.com/baldurk/renderdoc) — optional, GPU debug tooling |
+| Library | Version                                                  | Repository |
+|---|----------------------------------------------------------|---|
+| **GLFW** | `3bbf4c12` (2025-01-12)                                  | [EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw) **[FORK]** |
+| **ImGui** | 1.92.9b (`f1cc2ae15e53a861a874c3034aae6798fde194ab`)     | [ocornut/imgui](https://github.com/ocornut/imgui) |
+| **magic_enum** | 0.9.8 (`1384769c66bd16ec9bb1353f45fe8ec8ccc12dbd`)  | [Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
+| **Vulkan Memory Allocator** | 3.4.0 (`3aa921224c154a0d2c43912bc88e1c42ce1f7607`)       | [GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
+| **SDL_GameControllerDB** | unversioned (`92580540a27913da37a34cfcc006f973d471c081`) | [gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB) |
+| **RenderDoc** | v1.45 (branch `v1.x`)                                    | [baldurk/renderdoc](https://github.com/baldurk/renderdoc) — optional, GPU debug tooling |
 
 Everything else — prebuilt static libraries, `Setup*.cmake` scripts, compile policy — comes from
 [emeraude-base](https://github.com/EmeraudeEngine/emeraude-base/blob/main/README.md#external-dependencies)
