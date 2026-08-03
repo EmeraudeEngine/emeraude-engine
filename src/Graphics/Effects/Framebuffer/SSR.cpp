@@ -26,6 +26,10 @@
 
 #include "SSR.hpp"
 
+/* STL inclusions. */
+#include <bit>
+#include <cmath>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -111,6 +115,50 @@ void main()
 	float d3 = texelFetch(srcMip, min(s + ivec2(1, 1), sMax), 0).r;
 
 	imageStore(dstMip, p, vec4(min(min(d0, d1), min(d2, d3))));
+}
+)GLSL";
+
+	/* Color pyramid downsample: 4 bilinear taps at the corners of the destination texel's
+	 * source footprint — a 4x4 tent. Repeated across the chain it converges toward the
+	 * gaussian pre-convolution the cone lookup interpolates (Uludag, GPU Pro 5). The same
+	 * shader builds mip 0 (input color -> half res) and every subsequent mip. */
+	static constexpr auto SSRColorDownsampleComputeShader = R"GLSL(
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcColor;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D dstMip;
+
+layout(push_constant) uniform PushConstants
+{
+	int destWidth;
+	int destHeight;
+	int sourceMaxX;
+	int sourceMaxY;
+};
+
+void main()
+{
+	ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+
+	if (p.x >= destWidth || p.y >= destHeight)
+	{
+		return;
+	}
+
+	vec2 srcSize = vec2(float(sourceMaxX + 1), float(sourceMaxY + 1));
+	vec2 invSrc = 1.0 / srcSize;
+	/* Center of the destination texel's 2x2 source footprint. */
+	vec2 uv = (vec2(p) * 2.0 + 1.0) * invSrc;
+
+	vec3 color = 0.25 * (
+		texture(srcColor, uv + vec2(-0.5, -0.5) * invSrc).rgb +
+		texture(srcColor, uv + vec2( 0.5, -0.5) * invSrc).rgb +
+		texture(srcColor, uv + vec2(-0.5,  0.5) * invSrc).rgb +
+		texture(srcColor, uv + vec2( 0.5,  0.5) * invSrc).rgb);
+
+	imageStore(dstMip, p, vec4(color, 1.0));
 }
 )GLSL";
 
@@ -220,8 +268,10 @@ void main()
 		return;
 	}
 
-	/* Skip expensive traversal for very rough surfaces (no visible reflection). */
-	if (roughness > 0.5)
+	/* Skip expensive traversal for very rough surfaces only: the cone-traced resolve
+	 * turns mid-roughness hits into physically blurred reflections (they used to be
+	 * faded out at 0.5 because the sharp fetch looked wrong on them). */
+	if (roughness > 0.85)
 	{
 		outHit = vec4(0.0);
 		return;
@@ -369,8 +419,10 @@ void main()
 		/* Facing fade: reflections nearly parallel to the view direction are weak. */
 		float facingFade = 1.0 - pow(max(0.0, dot(viewDir, reflDir)), 5.0);
 
-		/* Roughness fade: smooth surfaces reflect, rough surfaces don't. */
-		float roughnessFade = 1.0 - smoothstep(0.0, 0.4, roughness);
+		/* Roughness fade: with the cone-traced resolve, mid-roughness reflections are
+		 * BLURRED instead of suppressed — the fade only retires the truly diffuse tail
+		 * where the specular lobe carries no readable image. */
+		float roughnessFade = 1.0 - smoothstep(0.55, 0.85, roughness);
 
 		confidence = distFade * edgeFade * facingFade * roughnessFade;
 	}
@@ -470,6 +522,8 @@ layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D traceTex;
 layout(set = 0, binding = 2) uniform sampler2D depthTex;
 layout(set = 0, binding = 3) uniform sampler2D normalTex;
+/* Pre-convolved color pyramid (half-res base): the cone lookup source. */
+layout(set = 0, binding = 4) uniform sampler2D pyramidTex;
 
 /* Bindless textures (set 1): the reserved cube slot 2 holds the ACTIVE SCENE's
  * GGX-prefiltered environment, re-baked at every background switch (the old dedicated
@@ -489,6 +543,8 @@ layout(push_constant) uniform PushConstants
 	float tanHalfFovY, aspectRatio;
 	float envFallbackIntensity;
 	float intensity;
+	float pyramidLodOffset;
+	float pyramidMaxLod;
 };
 
 float linearizeDepth (float depth)
@@ -503,8 +559,33 @@ void main()
 
 	if (confidence > 0.001)
 	{
-		/* SSR hit: sample reflected color at hitUV. */
-		vec3 reflColor = texture(colorTex, traceData.xy).rgb;
+		/* Cone-traced glossy resolve (Uludag, GPU Pro 5 — the second half of the Hi-Z
+		 * chapter): a rough surface reflects a CONE, not a line. Its footprint at the hit
+		 * is the GGX lobe tangent (alpha = roughness²) times the marched screen distance;
+		 * the pre-convolved pyramid is read at the matching LOD. Mirror-sharp rays
+		 * (cone < 1 trace texel) keep the full-res color fetch — zero regression. */
+		float packedRM = texture(normalTex, vUV).a;
+		float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
+		float coneTan = roughness * roughness;
+		vec2 deltaTexels = (traceData.xy - vUV) / vec2(texelSizeX, texelSizeY);
+		float coneWidthTexels = 2.0 * coneTan * length(deltaTexels);
+
+		vec3 reflColor;
+
+		if (coneWidthTexels <= 1.0)
+		{
+			reflColor = texture(colorTex, traceData.xy).rgb;
+		}
+		else
+		{
+			float pyramidLOD = clamp(log2(coneWidthTexels) + pyramidLodOffset, 0.0, pyramidMaxLod);
+			vec3 sharpColor = texture(colorTex, traceData.xy).rgb;
+			vec3 coneColor = textureLod(pyramidTex, traceData.xy, max(pyramidLOD, 0.0)).rgb;
+
+			/* Fade in the pyramid over cone width 1..2 texels: hides the half-res step. */
+			reflColor = mix(sharpColor, coneColor, clamp(coneWidthTexels - 1.0, 0.0, 1.0));
+		}
+
 		outResolve = vec4(reflColor, confidence);
 	}
 	else if (envFallbackIntensity > 0.0)
@@ -687,6 +768,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			resolveInputLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 			resolveInputLayout->declareCombinedImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT);
 			resolveInputLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT);
+			/* Binding 4: the pre-convolved color pyramid (cone-traced glossy lookup). */
+			resolveInputLayout->declareCombinedImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT);
 			/* NOTE: The environment fallback reads the bindless prefiltered slot (set 1). */
 
 			if ( !layoutManager.createDescriptorSetLayout(resolveInputLayout) )
@@ -999,15 +1082,23 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 
 			/* Descriptor sets: per-frame copy set (scene depth changes descriptor per frame),
-			 * fixed reduce set per destination mip. */
+			 * fixed reduce set per destination mip. The pool also carries the COLOR pyramid
+			 * sets created below (per-frame copy + fixed per-mip downsample). */
 			const auto framesInFlight = renderer.framesInFlight();
 
+			/* Color pyramid dimensioning: half-res base, chain down to ~8 px. */
+			const uint32_t pyramidBaseW = std::max(1U, width / 2U);
+			const uint32_t pyramidBaseH = std::max(1U, height / 2U);
+			m_colorPyramidMipCount = std::clamp(static_cast< uint32_t >(std::bit_width(std::min(pyramidBaseW, pyramidBaseH))) - 3U, 1U, 8U);
+
+			const uint32_t computeSetCount = (framesInFlight * 2U) + m_hiZMipCount + m_colorPyramidMipCount;
+
 			const std::vector< VkDescriptorPoolSize > poolSizes{
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, framesInFlight + m_hiZMipCount},
-				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, framesInFlight + m_hiZMipCount}
+				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, computeSetCount},
+				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, computeSetCount}
 			};
 
-			m_hiZDescriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, framesInFlight + m_hiZMipCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+			m_hiZDescriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, computeSetCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 			if ( !m_hiZDescriptorPool->createOnHardware() )
 			{
@@ -1106,6 +1197,166 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
 			}
+
+			/* ---- Pre-convolved color pyramid (cone-traced glossy, Uludag GPU Pro 5) ---- */
+			{
+				m_colorPyramidImage = std::make_shared< Image >(
+					device,
+					VK_IMAGE_TYPE_2D,
+					VK_FORMAT_R16G16B16A16_SFLOAT,
+					VkExtent3D{pyramidBaseW, pyramidBaseH, 1U},
+					VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+					0,
+					m_colorPyramidMipCount
+				);
+				m_colorPyramidImage->setIdentifier(ClassId, "ColorPyramid", "Image");
+
+				if ( !m_colorPyramidImage->createOnHardware() )
+				{
+					TraceError{ClassId} << "Failed to create the color pyramid image !";
+
+					return false;
+				}
+
+				m_colorPyramidMipViews.reserve(m_colorPyramidMipCount);
+
+				for ( uint32_t mip = 0; mip < m_colorPyramidMipCount; mip++ )
+				{
+					auto view = std::make_shared< ImageView >(
+						m_colorPyramidImage,
+						VK_IMAGE_VIEW_TYPE_2D,
+						VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, mip, 1U, 0U, 1U}
+					);
+					view->setIdentifier(ClassId, "ColorPyramidMip" + std::to_string(mip), "ImageView");
+
+					if ( !view->createOnHardware() )
+					{
+						return false;
+					}
+
+					m_colorPyramidMipViews.emplace_back(view);
+				}
+
+				m_colorPyramidFullView = std::make_shared< ImageView >(
+					m_colorPyramidImage,
+					VK_IMAGE_VIEW_TYPE_2D,
+					VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0U, m_colorPyramidMipCount, 0U, 1U}
+				);
+				m_colorPyramidFullView->setIdentifier(ClassId, "ColorPyramidFull", "ImageView");
+
+				if ( !m_colorPyramidFullView->createOnHardware() )
+				{
+					return false;
+				}
+
+				/* TRILINEAR/clamp: the downsample taps bilinear corners, the cone lookup
+				 * interpolates between mips. */
+				m_colorPyramidSampler = renderer.getSampler("SSRColorPyramid", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+					createInfo.magFilter = VK_FILTER_LINEAR;
+					createInfo.minFilter = VK_FILTER_LINEAR;
+					createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+					createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+					createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+					createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+					createInfo.anisotropyEnable = VK_FALSE;
+					createInfo.maxLod = VK_LOD_CLAMP_NONE;
+				});
+
+				if ( m_colorPyramidSampler == nullptr )
+				{
+					return false;
+				}
+
+				const auto downsampleModule = shaderManager.getShaderModuleFromSourceCode(device, "SSR_ColorDownsample_CS", ShaderType::ComputeShader, SSRColorDownsampleComputeShader);
+
+				if ( downsampleModule == nullptr )
+				{
+					TraceError{ClassId} << "Failed to compile the color pyramid downsample shader !";
+
+					return false;
+				}
+
+				/* Same push constants and DS shape as the Hi-Z build: the layouts are shared. */
+				m_colorDownsamplePipeline = std::make_unique< ComputePipeline >(m_hiZPipelineLayout);
+				m_colorDownsamplePipeline->setShaderModule(downsampleModule->handle());
+
+				if ( !m_colorDownsamplePipeline->createOnHardware() )
+				{
+					return false;
+				}
+
+				const auto writePyramidSource = [&device, this] (const DescriptorSet & descriptorSet, const ImageView & sourceView, VkImageLayout layout) {
+					VkDescriptorImageInfo sourceInfo{};
+					sourceInfo.sampler = m_colorPyramidSampler->handle();
+					sourceInfo.imageView = sourceView.handle();
+					sourceInfo.imageLayout = layout;
+
+					VkWriteDescriptorSet write{};
+					write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					write.dstSet = descriptorSet.handle();
+					write.dstBinding = 0;
+					write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+					write.descriptorCount = 1;
+					write.pImageInfo = &sourceInfo;
+
+					vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+				};
+
+				m_colorCopyPerFrame.reserve(framesInFlight);
+
+				for ( uint32_t frame = 0; frame < framesInFlight; frame++ )
+				{
+					auto descriptorSet = std::make_unique< DescriptorSet >(m_hiZDescriptorPool, m_hiZDSLayout);
+					descriptorSet->setIdentifier(ClassId, "ColorCopy_DescSet" + std::to_string(frame), "DescriptorSet");
+
+					if ( !descriptorSet->create() )
+					{
+						return false;
+					}
+
+					writeStorageDest(*descriptorSet, *m_colorPyramidMipViews[0]);
+
+					m_colorCopyPerFrame.emplace_back(std::move(descriptorSet));
+				}
+
+				m_colorReduceSets.reserve(m_colorPyramidMipCount);
+
+				for ( uint32_t mip = 1; mip < m_colorPyramidMipCount; mip++ )
+				{
+					auto descriptorSet = std::make_unique< DescriptorSet >(m_hiZDescriptorPool, m_hiZDSLayout);
+					descriptorSet->setIdentifier(ClassId, "ColorReduce_DescSet" + std::to_string(mip), "DescriptorSet");
+
+					if ( !descriptorSet->create() )
+					{
+						return false;
+					}
+
+					/* The downsample samples the previous mip while the image is in GENERAL. */
+					writePyramidSource(*descriptorSet, *m_colorPyramidMipViews[mip - 1], VK_IMAGE_LAYOUT_GENERAL);
+					writeStorageDest(*descriptorSet, *m_colorPyramidMipViews[mip]);
+
+					m_colorReduceSets.emplace_back(std::move(descriptorSet));
+				}
+
+				/* The resolve reads the full chain (binding 4), same view every frame. */
+				for ( const auto & descriptorSet : m_resolvePerFrame )
+				{
+					VkDescriptorImageInfo pyramidInfo{};
+					pyramidInfo.sampler = m_colorPyramidSampler->handle();
+					pyramidInfo.imageView = m_colorPyramidFullView->handle();
+					pyramidInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+					VkWriteDescriptorSet write{};
+					write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					write.dstSet = descriptorSet->handle();
+					write.dstBinding = 4;
+					write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+					write.descriptorCount = 1;
+					write.pImageInfo = &pyramidInfo;
+
+					vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+				}
+			}
 		}
 
 		return true;
@@ -1121,6 +1372,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_blurHPerFrame.clear();
 		m_hiZCopyPerFrame.clear();
 		m_hiZReduceSets.clear();
+		m_colorCopyPerFrame.clear();
+		m_colorReduceSets.clear();
+		m_colorDownsamplePipeline.reset();
+		m_colorPyramidSampler.reset();
+		m_colorPyramidFullView.reset();
+		m_colorPyramidMipViews.clear();
+		m_colorPyramidImage.reset();
 		m_hiZDescriptorPool.reset();
 		m_hiZCopyPipeline.reset();
 		m_hiZReducePipeline.reset();
@@ -1258,6 +1516,88 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
+		/* ---- Pass 0b: pre-convolved color pyramid build (cone-traced glossy source) ---- */
+		if ( m_colorPyramidImage != nullptr )
+		{
+			/* This frame's copy set: input color -> pyramid mip 0 (tent downsample). */
+			static_cast< void >(m_colorCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+			/* Whole pyramid: UNDEFINED -> GENERAL (previous content discarded, fully rewritten). */
+			{
+				Sync::ImageMemoryBarrier barrier{
+					*m_colorPyramidImage,
+					0,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+			}
+
+			const auto & pyramidExtent = m_colorPyramidImage->createInfo().extent;
+			const auto baseWidth = static_cast< int32_t >(pyramidExtent.width);
+			const auto baseHeight = static_cast< int32_t >(pyramidExtent.height);
+
+			commandBuffer.bind(*m_colorDownsamplePipeline);
+			commandBuffer.bind(*m_colorCopyPerFrame[frameIndex], *m_hiZPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+
+			{
+				const HiZPushConstants pc{
+					.destWidth = baseWidth,
+					.destHeight = baseHeight,
+					.sourceMaxX = static_cast< int32_t >(inputColor.image()->createInfo().extent.width) - 1,
+					.sourceMaxY = static_cast< int32_t >(inputColor.image()->createInfo().extent.height) - 1
+				};
+
+				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
+				commandBuffer.dispatch((baseWidth + 7) / 8, (baseHeight + 7) / 8, 1);
+			}
+
+			for ( uint32_t mip = 1; mip < m_colorPyramidMipCount; mip++ )
+			{
+				/* Previous mip written -> readable by this downsample. */
+				Sync::ImageMemoryBarrier barrier{
+					*m_colorPyramidImage,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_LAYOUT_GENERAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+				const auto destWidth = std::max(1, baseWidth >> mip);
+				const auto destHeight = std::max(1, baseHeight >> mip);
+				const auto sourceWidth = std::max(1, baseWidth >> (mip - 1));
+				const auto sourceHeight = std::max(1, baseHeight >> (mip - 1));
+
+				const HiZPushConstants pc{
+					.destWidth = destWidth,
+					.destHeight = destHeight,
+					.sourceMaxX = sourceWidth - 1,
+					.sourceMaxY = sourceHeight - 1
+				};
+
+				commandBuffer.bind(*m_colorReduceSets[mip - 1], *m_hiZPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
+				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
+			}
+
+			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the resolve fragment shader. */
+			{
+				Sync::ImageMemoryBarrier barrier{
+					*m_colorPyramidImage,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			}
+		}
+
 		/* ---- Pass 1: Trace (Hi-Z hierarchical traversal) ---- */
 		{
 			const TracePushConstants pc{
@@ -1319,7 +1659,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.tanHalfFovY = constants.tanHalfFovY,
 				.aspectRatio = constants.frameWidth / constants.frameHeight,
 				.envFallbackIntensity = m_parameters.envFallbackIntensity,
-				.intensity = m_parameters.intensity
+				.intensity = m_parameters.intensity,
+				/* Cone width is measured in TRACE texels; the pyramid base is half the
+				 * effect resolution — the offset converts one into the other. */
+				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_colorPyramidImage != nullptr ? m_colorPyramidImage->createInfo().extent.width : m_traceTarget.width()))),
+				.pyramidMaxLod = static_cast< float >(m_colorPyramidMipCount > 0U ? m_colorPyramidMipCount - 1U : 0U)
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

@@ -32,9 +32,9 @@ Ordered from the crudest simulation to the most exact evaluation.
 | 1 | **Legacy lerp** | `StandardResource::setReflectionComponent(texture, amount)` | none — a flat `mix()`, no Fresnel, no roughness | 1 fetch |
 | 2 | **Static cubemap + Fresnel** | same, high-quality shader path | Fresnel-Schlick only, perfect mirror | 1 fetch |
 | 3 | **IBL split-sum** | `PBRResource::setReflectionComponentFromEnvironmentCubemap(iblIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
-| 4 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | perfect mirror only (no prefilter) | 6 full scene passes / frame |
-| 5 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | hard cutoff at `roughness > 0.5` | 5 passes, half-res |
-| 6 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | fade over `roughness ∈ [0.45, 0.7]` | 4 passes, half-res by default |
+| 4 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | GGX-prefiltered mip chain, roughness-driven LOD | 6 full scene passes / frame + convolution |
+| 5 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
+| 6 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
 | 7 | **Grab-pass transmission** | `PBRResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
 
 Paths 1-4 are **material** features, resolved in the object's ambient pass. Paths 5-6 are
@@ -250,7 +250,20 @@ Working resolution is FULL-RES by default (owner decision) — `Core/Graphics/Sc
 Reflection/PixelDoubling` (false), `BlurRadius`, `DepthSigma`, `NormalSigma` drive the quality.
 The remaining `thickness` parameter only CLASSIFIES behind-vs-contact at the final hit — it no
 longer drives the march. Confidence = `distFade · edgeFade · facingFade · roughnessFade`, with
-`roughnessFade = 1 - smoothstep(0, 0.4, roughness)` and an early-out at `roughness > 0.5`.
+`roughnessFade = 1 - smoothstep(0.55, 0.85, roughness)` and an early-out at `roughness > 0.85`.
+
+**Cone-traced glossy (Aug 2026 — the second half of the Uludag chapter).** The resolve no
+longer fetches the hit color sharp whatever the roughness: a rough surface reflects a CONE,
+whose footprint at the hit is `2 · tan(GGX lobe) · marched screen distance` with
+`tan(lobe) = roughness²`. A pre-convolved COLOR PYRAMID (half-res base, 4x4-tent chain
+rebuilt every frame by compute — the exact Hi-Z build pattern, shared DS/pipeline layouts)
+is read at the matching LOD; mirror-sharp rays (cone < 1 trace texel) keep the full-res
+fetch — zero sharpness regression, half the memory of a full-res pyramid. The env fallback
+already sampled the prefiltered environment at the roughness LOD, so the hit/miss boundary
+is now blurred CONSISTENTLY on both sides — the D3 hard frontier softened as a side effect.
+The known screen-space occlusion gap remains (rays aimed at geometry hidden behind the
+reflector fall back to the environment): the per-pixel fallback chain (SSR miss → probe →
+sky) is the successor.
 References: Uludag, *Hi-Z Screen-Space Cone-Traced Reflections*, GPU Pro 5; McGuire & Mara,
 *Efficient GPU Screen-Space Ray Tracing*, JCGT 2014.
 
@@ -298,6 +311,17 @@ The trace pass is the interesting one:
   **Still missing at the hit**: multi-bounce. The long-term path for full fidelity is a
   Saphir-generated SBT (`VK_KHR_ray_tracing_pipeline`) — the per-material codegen already
   exists for raster.
+
+- **Glossy via the reflection pyramid (Aug 2026)**: the traced result used to composite
+  SHARP whatever the roughness (the bilateral blur tops out at a few texels — nowhere near
+  the ~100 px a 0.45-roughness cone spans). The trace output (PREMULTIPLIED color +
+  confidence) now feeds a pre-convolved pyramid (half-res base, tent chain, compute); the
+  composite reads it at `LOD = log2(coneWidthScale · roughness²)` — an O(1) blur of any
+  width, the /confidence division renormalizing edge bleed. v1 assumes a representative hit
+  distance (`coneWidthScale = 0.3 × trace height`): the per-pixel hit-distance term belongs
+  to the stochastic + temporal successor (Frostbite SSSR), which will also need an MRT for
+  hit data. Debug note: any LINEAR debug visualization through the photometric exposure is
+  unreadable (0.45 nits ≈ black at sunny-16) — use BINARY indicators scaled to 1e6.
 
 > [!NOTE]
 > **Engine cubemap convention.** A world direction `D` samples the cubemap at

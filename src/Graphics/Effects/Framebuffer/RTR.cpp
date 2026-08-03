@@ -26,6 +26,10 @@
 
 #include "RTR.hpp"
 
+/* STL inclusions. */
+#include <bit>
+#include <cmath>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Scenes/LightSet.hpp"
@@ -36,6 +40,8 @@
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 
 namespace
 {
@@ -425,9 +431,10 @@ void main()
 		return;
 	}
 
-	/* Progressive roughness fade-out instead of a hard cutoff — glossy surfaces
-	 * keep a soft reflection that the roughness-scaled blur spreads out. */
-	float roughnessFade = 1.0 - smoothstep(0.45, 0.7, roughness);
+	/* Progressive roughness fade-out instead of a hard cutoff. With the cone-scaled
+	 * bilateral blur (radius ∝ roughness², see the blur pass), mid-roughness surfaces
+	 * keep a physically blurred reflection — only the truly diffuse tail retires. */
+	float roughnessFade = 1.0 - smoothstep(0.6, 0.9, roughness);
 
 	if (roughnessFade <= 0.0)
 	{
@@ -742,11 +749,16 @@ void main()
 	vec4 result = vec4(0.0);
 	float totalWeight = 0.0;
 
-	/* Roughness-scaled radius: polished surfaces (water, onyx) keep mirror-sharp
-	 * reflections, rough surfaces get the full blur spread. */
+	/* Cone-scaled radius: the GGX lobe tangent grows with alpha = roughness², so the
+	 * blur footprint follows the SQUARE of the roughness — polished surfaces (water,
+	 * onyx) keep mirror-sharp reflections, brushed metal gets a real satin spread.
+	 * blurRadius is the MAXIMUM (reached near roughness 0.7); v1 approximation: the
+	 * footprint ignores the per-pixel hit distance (uniform cone) — the stochastic
+	 * + temporal successor will replace it (Frostbite SSSR). */
 	float packedRM = texture(normalTex, vUV).a;
 	float centerRoughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
-	int effectiveRadius = max(1, int(float(blurRadius) * smoothstep(0.02, 0.5, centerRoughness)));
+	float coneScale = clamp((centerRoughness * centerRoughness) / 0.49, 0.0, 1.0);
+	int effectiveRadius = max(1, int(float(blurRadius) * coneScale));
 
 	float spatialSigma = float(effectiveRadius) * 0.5;
 	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
@@ -774,6 +786,59 @@ void main()
 }
 )GLSL";
 
+	/* Reflection pyramid downsample: 4 bilinear taps at the corners of the destination
+	 * texel's source footprint — a 4x4 tent, converging toward a gaussian across the
+	 * chain (same pre-convolution as the SSR color pyramid). Operates on the
+	 * PREMULTIPLIED trace output (color·confidence, confidence): the composite's
+	 * division by the filtered confidence renormalizes edge bleed. */
+	static constexpr auto RTRPyramidDownsampleComputeShader = R"GLSL(
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcColor;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D dstMip;
+
+layout(push_constant) uniform PushConstants
+{
+	int destWidth;
+	int destHeight;
+	int sourceMaxX;
+	int sourceMaxY;
+};
+
+void main()
+{
+	ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+
+	if (p.x >= destWidth || p.y >= destHeight)
+	{
+		return;
+	}
+
+	vec2 srcSize = vec2(float(sourceMaxX + 1), float(sourceMaxY + 1));
+	vec2 invSrc = 1.0 / srcSize;
+	vec2 uv = (vec2(p) * 2.0 + 1.0) * invSrc;
+
+	vec4 color = 0.25 * (
+		texture(srcColor, uv + vec2(-0.5, -0.5) * invSrc) +
+		texture(srcColor, uv + vec2( 0.5, -0.5) * invSrc) +
+		texture(srcColor, uv + vec2(-0.5,  0.5) * invSrc) +
+		texture(srcColor, uv + vec2( 0.5,  0.5) * invSrc));
+
+	imageStore(dstMip, p, color);
+}
+)GLSL";
+
+	/* Push constants of the pyramid build dispatches. */
+	struct PyramidPushConstants
+	{
+		int32_t destWidth;
+		int32_t destHeight;
+		int32_t sourceMaxX;
+		int32_t sourceMaxY;
+	};
+
 	/* Composite shader — blends ray-traced reflections with the scene,
 	 * modulated by the per-pixel reflectivity from the material properties G-buffer. */
 	static constexpr auto RTRCompositeFragmentShader = R"GLSL(
@@ -786,13 +851,16 @@ layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D rtrTex;
 layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
 layout(set = 0, binding = 3) uniform sampler2D depthTex;
+layout(set = 0, binding = 4) uniform sampler2D normalTex;
+/* Pre-convolved reflection pyramid (premultiplied color + confidence). */
+layout(set = 0, binding = 5) uniform sampler2D pyramidTex;
 
 layout(push_constant) uniform PushConstants
 {
 	float intensity;
-	float padding1;
-	float padding2;
-	float padding3;
+	float coneWidthScale;
+	float pyramidLodOffset;
+	float pyramidMaxLod;
 };
 
 void main()
@@ -821,6 +889,25 @@ void main()
 	}
 
 	rtrData /= totalWeight;
+
+	/* Glossy cone approximation: the GGX lobe of a rough surface spreads the traced
+	 * reflection over a cone whose footprint grows with alpha = roughness². The
+	 * separable bilateral tops out at a few texels; beyond that the pre-convolved
+	 * pyramid delivers an O(1) blur of ANY width. v1: the cone assumes a representative
+	 * hit distance (coneWidthScale) — the per-pixel hit distance lives in the future
+	 * stochastic + temporal successor (Frostbite SSSR). */
+	float compositePackedRM = texture(normalTex, vUV).a;
+	float compositeRoughness = compositePackedRM >= 2.0 ? compositePackedRM - 2.0 : compositePackedRM;
+	float coneWidthTexels = coneWidthScale * compositeRoughness * compositeRoughness;
+
+
+	if (coneWidthTexels > 1.0)
+	{
+		float coneLOD = clamp(log2(coneWidthTexels) + pyramidLodOffset, 0.0, pyramidMaxLod);
+		vec4 coneData = textureLod(pyramidTex, vUV, coneLOD);
+
+		rtrData = mix(rtrData, coneData, clamp(coneWidthTexels - 1.0, 0.0, 1.0));
+	}
 
 	/* Decode reflectivity from the material properties G-buffer (R channel, high nibble). */
 	vec4 mp = texture(materialPropsTex, vUV);
@@ -897,7 +984,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto blurInputLayout = this->getInputLayout(3);
 
 		/* Composite input (color + blurred RTR + material properties + depth): 4 combined image samplers. */
-		auto compositeLayout = this->getInputLayout(4);
+		auto compositeLayout = this->getInputLayout(6);
 
 		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || compositeLayout == nullptr )
 		{
@@ -1069,12 +1156,242 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
+		/* ---- Pre-convolved reflection pyramid (glossy cone approximation) ---- */
+		{
+			const auto device = renderer.device();
+
+			const uint32_t pyramidBaseW = std::max(1U, static_cast< uint32_t >(m_traceTarget.width()) / 2U);
+			const uint32_t pyramidBaseH = std::max(1U, static_cast< uint32_t >(m_traceTarget.height()) / 2U);
+			m_pyramidMipCount = std::clamp(static_cast< uint32_t >(std::bit_width(std::min(pyramidBaseW, pyramidBaseH))) - 3U, 1U, 8U);
+
+			m_pyramidImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				VK_FORMAT_R16G16B16A16_SFLOAT,
+				VkExtent3D{pyramidBaseW, pyramidBaseH, 1U},
+				VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				0,
+				m_pyramidMipCount
+			);
+			m_pyramidImage->setIdentifier(ClassId, "ReflectionPyramid", "Image");
+
+			if ( !m_pyramidImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Failed to create the reflection pyramid image !";
+
+				return false;
+			}
+
+			m_pyramidMipViews.reserve(m_pyramidMipCount);
+
+			for ( uint32_t mip = 0; mip < m_pyramidMipCount; mip++ )
+			{
+				auto view = std::make_shared< ImageView >(
+					m_pyramidImage,
+					VK_IMAGE_VIEW_TYPE_2D,
+					VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, mip, 1U, 0U, 1U}
+				);
+				view->setIdentifier(ClassId, "ReflectionPyramidMip" + std::to_string(mip), "ImageView");
+
+				if ( !view->createOnHardware() )
+				{
+					return false;
+				}
+
+				m_pyramidMipViews.emplace_back(view);
+			}
+
+			m_pyramidFullView = std::make_shared< ImageView >(
+				m_pyramidImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0U, m_pyramidMipCount, 0U, 1U}
+			);
+			m_pyramidFullView->setIdentifier(ClassId, "ReflectionPyramidFull", "ImageView");
+
+			if ( !m_pyramidFullView->createOnHardware() )
+			{
+				return false;
+			}
+
+			m_pyramidSampler = renderer.getSampler("RTRPyramid", [] (Settings &, VkSamplerCreateInfo & samplerCreateInfo) {
+				samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+				samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+				samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+				samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				samplerCreateInfo.anisotropyEnable = VK_FALSE;
+				samplerCreateInfo.maxLod = VK_LOD_CLAMP_NONE;
+			});
+
+			if ( m_pyramidSampler == nullptr )
+			{
+				return false;
+			}
+
+			/* Compute DS layout: binding 0 = sampled source, binding 1 = storage dest. */
+			m_pyramidDSLayout = std::make_shared< DescriptorSetLayout >(device, "RTRPyramidDSLayout");
+
+			{
+				VkDescriptorSetLayoutBinding binding{};
+				binding.binding = 0;
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				binding.descriptorCount = 1;
+				binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+				m_pyramidDSLayout->declare(binding);
+			}
+
+			{
+				VkDescriptorSetLayoutBinding binding{};
+				binding.binding = 1;
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				binding.descriptorCount = 1;
+				binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+				m_pyramidDSLayout->declare(binding);
+			}
+
+			if ( !m_pyramidDSLayout->createOnHardware() )
+			{
+				return false;
+			}
+
+			VkPushConstantRange pushConstantRange{};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			pushConstantRange.offset = 0;
+			pushConstantRange.size = sizeof(PyramidPushConstants);
+
+			m_pyramidPipelineLayout = std::make_shared< PipelineLayout >(
+				device, "RTRPyramidPipelineLayout",
+				StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 >{m_pyramidDSLayout},
+				StaticVector< VkPushConstantRange, 4 >{pushConstantRange}
+			);
+
+			if ( !m_pyramidPipelineLayout->createOnHardware() )
+			{
+				return false;
+			}
+
+			const auto downsampleModule = renderer.shaderManager().getShaderModuleFromSourceCode(device, "RTR_PyramidDownsample_CS", ShaderType::ComputeShader, RTRPyramidDownsampleComputeShader);
+
+			if ( downsampleModule == nullptr )
+			{
+				TraceError{ClassId} << "Failed to compile the reflection pyramid downsample shader !";
+
+				return false;
+			}
+
+			m_pyramidDownsamplePipeline = std::make_unique< ComputePipeline >(m_pyramidPipelineLayout);
+			m_pyramidDownsamplePipeline->setShaderModule(downsampleModule->handle());
+
+			if ( !m_pyramidDownsamplePipeline->createOnHardware() )
+			{
+				return false;
+			}
+
+			const std::vector< VkDescriptorPoolSize > poolSizes{
+				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_pyramidMipCount},
+				{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, m_pyramidMipCount}
+			};
+
+			m_pyramidDescriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, m_pyramidMipCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+
+			if ( !m_pyramidDescriptorPool->createOnHardware() )
+			{
+				return false;
+			}
+
+			const auto writeComputeSet = [&device, this] (const DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const ImageView & destView) {
+				VkDescriptorImageInfo sourceInfo{};
+				sourceInfo.sampler = sourceSampler;
+				sourceInfo.imageView = sourceView;
+				sourceInfo.imageLayout = sourceLayout;
+
+				VkDescriptorImageInfo destInfo{};
+				destInfo.sampler = VK_NULL_HANDLE;
+				destInfo.imageView = destView.handle();
+				destInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+				std::array< VkWriteDescriptorSet, 2 > writes{};
+
+				writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[0].dstSet = descriptorSet.handle();
+				writes[0].dstBinding = 0;
+				writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writes[0].descriptorCount = 1;
+				writes[0].pImageInfo = &sourceInfo;
+
+				writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[1].dstSet = descriptorSet.handle();
+				writes[1].dstBinding = 1;
+				writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				writes[1].descriptorCount = 1;
+				writes[1].pImageInfo = &destInfo;
+
+				vkUpdateDescriptorSets(device->handle(), static_cast< uint32_t >(writes.size()), writes.data(), 0, nullptr);
+			};
+
+			m_pyramidSets.reserve(m_pyramidMipCount);
+
+			for ( uint32_t mip = 0; mip < m_pyramidMipCount; mip++ )
+			{
+				auto descriptorSet = std::make_unique< DescriptorSet >(m_pyramidDescriptorPool, m_pyramidDSLayout);
+				descriptorSet->setIdentifier(ClassId, "Pyramid_DescSet" + std::to_string(mip), "DescriptorSet");
+
+				if ( !descriptorSet->create() )
+				{
+					return false;
+				}
+
+				if ( mip == 0 )
+				{
+					/* Trace target (fixed IRT, SHADER_READ_ONLY after its render pass) -> mip 0. */
+					writeComputeSet(*descriptorSet, m_traceTarget.imageView()->handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_pyramidSampler->handle(), *m_pyramidMipViews[0]);
+				}
+				else
+				{
+					/* Previous mip (sampled in GENERAL during the chain) -> this mip. */
+					writeComputeSet(*descriptorSet, m_pyramidMipViews[mip - 1]->handle(), VK_IMAGE_LAYOUT_GENERAL, m_pyramidSampler->handle(), *m_pyramidMipViews[mip]);
+				}
+
+				m_pyramidSets.emplace_back(std::move(descriptorSet));
+			}
+
+			/* The composite reads the full chain (binding 5), same view every frame. */
+			for ( const auto & descriptorSet : m_compositePerFrame )
+			{
+				VkDescriptorImageInfo pyramidInfo{};
+				pyramidInfo.sampler = m_pyramidSampler->handle();
+				pyramidInfo.imageView = m_pyramidFullView->handle();
+				pyramidInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+				VkWriteDescriptorSet write{};
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = descriptorSet->handle();
+				write.dstBinding = 5;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				write.descriptorCount = 1;
+				write.pImageInfo = &pyramidInfo;
+
+				vkUpdateDescriptorSets(device->handle(), 1, &write, 0, nullptr);
+			}
+		}
+
 		return true;
 	}
 
 	void
 	RTR::destroy () noexcept
 	{
+		m_pyramidSets.clear();
+		m_pyramidDescriptorPool.reset();
+		m_pyramidDownsamplePipeline.reset();
+		m_pyramidPipelineLayout.reset();
+		m_pyramidDSLayout.reset();
+		m_pyramidSampler.reset();
+		m_pyramidFullView.reset();
+		m_pyramidMipViews.clear();
+		m_pyramidImage.reset();
+
 		m_compositePerFrame.clear();
 		m_tracePerFrame.clear();
 		m_blurVPerFrame.clear();
@@ -1136,6 +1453,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(3, *inputDepth));
+		}
+
+		/* Roughness (normals alpha) drives the composite's glossy cone LOD. */
+		if ( inputNormals != nullptr )
+		{
+			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(4, *inputNormals));
 		}
 
 		/* ---- Pass 1: Ray Trace ---- */
@@ -1233,6 +1556,93 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_traceTarget.endRenderPass(commandBuffer);
 		}
 
+		/* ---- Pass 1b: pre-convolved reflection pyramid build (glossy cone source) ---- */
+		if ( m_pyramidImage != nullptr )
+		{
+			/* Trace render pass writes -> compute sampling of the trace target. */
+			{
+				VkMemoryBarrier barrier{};
+				barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+				vkCmdPipelineBarrier(
+					commandBuffer.handle(),
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+					0,
+					1, &barrier,
+					0, nullptr,
+					0, nullptr
+				);
+			}
+
+			/* Whole pyramid: UNDEFINED -> GENERAL (previous content discarded, fully rewritten). */
+			{
+				Sync::ImageMemoryBarrier barrier{
+					*m_pyramidImage,
+					0,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+			}
+
+			const auto & pyramidExtent = m_pyramidImage->createInfo().extent;
+			const auto baseWidth = static_cast< int32_t >(pyramidExtent.width);
+			const auto baseHeight = static_cast< int32_t >(pyramidExtent.height);
+
+			commandBuffer.bind(*m_pyramidDownsamplePipeline);
+
+			for ( uint32_t mip = 0; mip < m_pyramidMipCount; mip++ )
+			{
+				if ( mip > 0 )
+				{
+					/* Previous mip written -> readable by this downsample. */
+					Sync::ImageMemoryBarrier barrier{
+						*m_pyramidImage,
+						VK_ACCESS_SHADER_WRITE_BIT,
+						VK_ACCESS_SHADER_READ_BIT,
+						VK_IMAGE_LAYOUT_GENERAL,
+						VK_IMAGE_LAYOUT_GENERAL
+					};
+
+					commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+				}
+
+				const auto destWidth = std::max(1, baseWidth >> mip);
+				const auto destHeight = std::max(1, baseHeight >> mip);
+				const auto sourceWidth = mip == 0 ? static_cast< int32_t >(m_traceTarget.width()) : std::max(1, baseWidth >> (mip - 1));
+				const auto sourceHeight = mip == 0 ? static_cast< int32_t >(m_traceTarget.height()) : std::max(1, baseHeight >> (mip - 1));
+
+				const PyramidPushConstants pc{
+					.destWidth = destWidth,
+					.destHeight = destHeight,
+					.sourceMaxX = sourceWidth - 1,
+					.sourceMaxY = sourceHeight - 1
+				};
+
+				commandBuffer.bind(*m_pyramidSets[mip], *m_pyramidPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+				vkCmdPushConstants(commandBuffer.handle(), m_pyramidPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PyramidPushConstants), &pc);
+				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
+			}
+
+			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the composite fragment shader. */
+			{
+				Sync::ImageMemoryBarrier barrier{
+					*m_pyramidImage,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			}
+		}
+
 		/* Update depth + normals descriptors for blur passes (per-frame). */
 		if ( inputDepth != nullptr )
 		{
@@ -1298,9 +1708,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		{
 			const CompositePushConstants comp{
 				.intensity = m_parameters.intensity,
-				.padding1 = 0.0F,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
+				/* Cone width per unit of GGX alpha: 2 x assumed hit fraction (0.15 of the
+				 * trace height). v1 — no per-pixel hit distance available. */
+				.coneWidthScale = 0.3F * static_cast< float >(m_traceTarget.height()),
+				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : static_cast< uint32_t >(m_traceTarget.width())))),
+				.pyramidMaxLod = static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U)
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

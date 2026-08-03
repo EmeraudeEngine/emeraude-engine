@@ -133,7 +133,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the resolve pass (cubemap fallback).
+			 * @brief Push constants for the resolve pass (cone lookup + cubemap fallback).
 			 */
 			struct EMEN_API ResolvePushConstants
 			{
@@ -148,6 +148,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float aspectRatio;
 				float envFallbackIntensity;
 				float intensity;
+				/** @brief log2(pyramid base texel / trace texel): maps a cone width measured
+				 * in TRACE texels onto the color pyramid LOD (the pyramid base is half-res). */
+				float pyramidLodOffset;
+				float pyramidMaxLod;
 			};
 
 			/**
@@ -302,6 +306,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Fixed: one reduce set per destination mip (mip N-1 -> mip N). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_hiZReduceSets;
 			uint32_t m_hiZMipCount{0U};
+			/* Pre-convolved COLOR pyramid (Uludag cone tracing — the second half of the Hi-Z
+			 * chapter): half-res base, tent-downsampled chain, rebuilt every frame by compute.
+			 * The resolve reads it at the cone-width LOD; mirror-sharp fetches (cone < 1
+			 * texel) stay on the full-res input color — no sharpness regression, half the
+			 * memory. Shares the Hi-Z DS/pipeline layouts (same {sampler, storage} shape). */
+			std::shared_ptr< Vulkan::Image > m_colorPyramidImage;
+			std::vector< std::shared_ptr< Vulkan::ImageView > > m_colorPyramidMipViews;
+			std::shared_ptr< Vulkan::ImageView > m_colorPyramidFullView;
+			std::shared_ptr< Vulkan::Sampler > m_colorPyramidSampler;
+			std::unique_ptr< Vulkan::ComputePipeline > m_colorDownsamplePipeline;
+			/* Per frame-in-flight: input color -> pyramid mip 0. */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_colorCopyPerFrame;
+			/* Fixed: one downsample set per destination mip. */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_colorReduceSets;
+			uint32_t m_colorPyramidMipCount{0U};
 			/* Per-frame-in-flight descriptor sets (updated every frame). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_resolvePerFrame;

@@ -37,7 +37,13 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/ComputePipeline.hpp"
+#include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -64,7 +70,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float maxDistance{100.0F};
 				float intensity{0.8F};
 				float fadeScreenEdge{0.15F};
-				uint32_t blurRadius{2};
+				/** @brief MAXIMUM bilateral blur radius in texels, reached near roughness 0.7
+				 * (the per-pixel radius scales with roughness² — the GGX cone footprint).
+				 * Polished surfaces pay ~1 texel whatever this value. */
+				uint32_t blurRadius{12};
 				float depthSigma{0.5F};
 				float normalSigma{0.3F};
 			};
@@ -111,14 +120,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the composite pass.
+			 * @brief Push constants for the composite pass (cone lookup included).
 			 */
 			struct EMEN_API CompositePushConstants
 			{
 				float intensity;
-				float padding1;
-				float padding2;
-				float padding3;
+				/** @brief Cone width in TRACE texels per unit of GGX alpha (roughness²):
+				 * 2 x assumedHitFraction x trace height. v1 approximation — the per-pixel
+				 * hit distance is not available (alpha carries the confidence), the cone
+				 * assumes a representative hit distance. */
+				float coneWidthScale;
+				/** @brief log2(pyramid base texel / trace texel). */
+				float pyramidLodOffset;
+				float pyramidMaxLod;
 			};
 
 			/**
@@ -249,5 +263,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
+			/* Pre-convolved REFLECTION pyramid (glossy cone approximation): half-res base,
+			 * tent-downsampled chain of the PREMULTIPLIED trace output rebuilt every frame.
+			 * The composite reads it at the roughness²-driven LOD (the /confidence division
+			 * renormalizes edge bleed) — an O(1) blur whatever the cone width, where the
+			 * separable bilateral tops out at a few texels. */
+			std::shared_ptr< Vulkan::Image > m_pyramidImage;
+			std::vector< std::shared_ptr< Vulkan::ImageView > > m_pyramidMipViews;
+			std::shared_ptr< Vulkan::ImageView > m_pyramidFullView;
+			std::shared_ptr< Vulkan::Sampler > m_pyramidSampler;
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_pyramidDSLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_pyramidPipelineLayout;
+			std::unique_ptr< Vulkan::ComputePipeline > m_pyramidDownsamplePipeline;
+			std::shared_ptr< Vulkan::DescriptorPool > m_pyramidDescriptorPool;
+			/* Fixed sets: trace target -> mip 0, then mip k-1 -> mip k. */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_pyramidSets;
+			uint32_t m_pyramidMipCount{0U};
 	};
 }
