@@ -46,6 +46,15 @@ namespace
 {
 	/* ---- GLSL Shader Sources ---- */
 
+	/* EXPLICIT LOD 0 THROUGHOUT THIS EFFECT.
+	 * Every sample here is a fixed-level read of a SINGLE-MIP image, so the mip level is never
+	 * something the shader should be deriving. It matters concretely: the downsample passes MINIFY
+	 * (each reads a level and writes the next one, half the size), and on MoltenVK an implicit,
+	 * derivative-derived LOD on a single-mip image was measured returning ZERO in exactly this
+	 * situation — it is what made the tone-mapping luminance chain meter a black scene. See
+	 * docs/caution-points.md, "the auto-exposure EMA had no sanitisation". Asking for level 0
+	 * removes the whole mip path from the equation. */
+
 	static constexpr auto DownsampleFragmentShader = R"GLSL(
 #version 450
 
@@ -81,19 +90,19 @@ float karisWeight (vec3 color)
  * first downsample pass to prevent single bright pixels from dominating. */
 vec4 downsample13Tap (sampler2D tex, vec2 uv, vec2 ts, bool useAntiFirefly)
 {
-	vec4 A = texture(tex, uv + ts * vec2(-1.0, -1.0));
-	vec4 B = texture(tex, uv + ts * vec2( 0.0, -1.0));
-	vec4 C = texture(tex, uv + ts * vec2( 1.0, -1.0));
-	vec4 D = texture(tex, uv + ts * vec2(-0.5, -0.5));
-	vec4 E = texture(tex, uv + ts * vec2( 0.5, -0.5));
-	vec4 F = texture(tex, uv + ts * vec2(-1.0,  0.0));
-	vec4 G = texture(tex, uv);
-	vec4 H = texture(tex, uv + ts * vec2( 1.0,  0.0));
-	vec4 I = texture(tex, uv + ts * vec2(-0.5,  0.5));
-	vec4 J = texture(tex, uv + ts * vec2( 0.5,  0.5));
-	vec4 K = texture(tex, uv + ts * vec2(-1.0,  1.0));
-	vec4 L = texture(tex, uv + ts * vec2( 0.0,  1.0));
-	vec4 M = texture(tex, uv + ts * vec2( 1.0,  1.0));
+	vec4 A = textureLod(tex, uv + ts * vec2(-1.0, -1.0), 0.0);
+	vec4 B = textureLod(tex, uv + ts * vec2( 0.0, -1.0), 0.0);
+	vec4 C = textureLod(tex, uv + ts * vec2( 1.0, -1.0), 0.0);
+	vec4 D = textureLod(tex, uv + ts * vec2(-0.5, -0.5), 0.0);
+	vec4 E = textureLod(tex, uv + ts * vec2( 0.5, -0.5), 0.0);
+	vec4 F = textureLod(tex, uv + ts * vec2(-1.0,  0.0), 0.0);
+	vec4 G = textureLod(tex, uv, 0.0);
+	vec4 H = textureLod(tex, uv + ts * vec2( 1.0,  0.0), 0.0);
+	vec4 I = textureLod(tex, uv + ts * vec2(-0.5,  0.5), 0.0);
+	vec4 J = textureLod(tex, uv + ts * vec2( 0.5,  0.5), 0.0);
+	vec4 K = textureLod(tex, uv + ts * vec2(-1.0,  1.0), 0.0);
+	vec4 L = textureLod(tex, uv + ts * vec2( 0.0,  1.0), 0.0);
+	vec4 M = textureLod(tex, uv + ts * vec2( 1.0,  1.0), 0.0);
 
 	if ( useAntiFirefly )
 	{
@@ -165,7 +174,7 @@ void main()
 	{
 		/* Decode bloom contribution and emissive mask from material properties G-buffer.
 		 * B channel: high nibble = bloomContrib, low nibble = emissiveMask. */
-		vec4 mp = texture(materialPropsTex, vUV);
+		vec4 mp = textureLod(materialPropsTex, vUV, 0.0);
 		uint bPacked = uint(mp.b * 255.0);
 		float bloomContrib = float(bPacked >> 4u) / 15.0;
 		float emissiveMask = float(bPacked & 0xFu) / 15.0;
@@ -213,15 +222,15 @@ vec4 upsampleTent (sampler2D tex, vec2 uv, vec2 ts, float sampleScale)
 	vec2 s = ts * sampleScale;
 
 	vec4 result = vec4(0.0);
-	result += texture(tex, uv + vec2(-s.x, -s.y));
-	result += texture(tex, uv + vec2( 0.0, -s.y)) * 2.0;
-	result += texture(tex, uv + vec2( s.x, -s.y));
-	result += texture(tex, uv + vec2(-s.x,  0.0)) * 2.0;
-	result += texture(tex, uv)					  * 4.0;
-	result += texture(tex, uv + vec2( s.x,  0.0)) * 2.0;
-	result += texture(tex, uv + vec2(-s.x,  s.y));
-	result += texture(tex, uv + vec2( 0.0,  s.y)) * 2.0;
-	result += texture(tex, uv + vec2( s.x,  s.y));
+	result += textureLod(tex, uv + vec2(-s.x, -s.y), 0.0);
+	result += textureLod(tex, uv + vec2( 0.0, -s.y), 0.0) * 2.0;
+	result += textureLod(tex, uv + vec2( s.x, -s.y), 0.0);
+	result += textureLod(tex, uv + vec2(-s.x,  0.0), 0.0) * 2.0;
+	result += textureLod(tex, uv, 0.0)					  * 4.0;
+	result += textureLod(tex, uv + vec2( s.x,  0.0), 0.0) * 2.0;
+	result += textureLod(tex, uv + vec2(-s.x,  s.y), 0.0);
+	result += textureLod(tex, uv + vec2( 0.0,  s.y), 0.0) * 2.0;
+	result += textureLod(tex, uv + vec2( s.x,  s.y), 0.0);
 
 	return result / 16.0;
 }
@@ -230,7 +239,7 @@ void main()
 {
 	vec2 ts = vec2(texelSizeX, texelSizeY);
 	vec4 upsampled = upsampleTent(inputTex, vUV, ts, spread);
-	vec4 current = texture(currentLevel, vUV);
+	vec4 current = textureLod(currentLevel, vUV, 0.0);
 
 	outColor = current + upsampled;
 }
@@ -257,8 +266,8 @@ layout(push_constant) uniform PushConstants
 
 void main()
 {
-	vec4 original = texture(originalTex, vUV);
-	vec4 bloom = texture(bloomTex, vUV);
+	vec4 original = textureLod(originalTex, vUV, 0.0);
+	vec4 bloom = textureLod(bloomTex, vUV, 0.0);
 
 	outColor = original + bloom * intensity;
 }

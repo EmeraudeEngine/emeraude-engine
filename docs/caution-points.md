@@ -2279,6 +2279,91 @@ frame with no ISO readout to a correctly exposed one reporting `metered: ISO 199
 
 ---
 
+### Fixed: the tone mapping never declared requiresHDR — the HDR buffer vanished under it (Aug 2026)
+
+**Symptom (found on macOS, latent everywhere):** un-ticking the LAST enabled effect that happened
+to require HDR turns the whole frame into a **uniform grey/white framebuffer**, while HDR (tone
+mapping) is still ticked. Which effect triggers it depends on what else is on — it was reported
+first as "the bloom does it", then as "no, the motion blur does it", which is the signature of an
+aggregate requirement rather than one effect's bug.
+
+**Root cause:** the scene render target's colour format is chosen from the stack's AGGREGATE
+requirement (`Renderer::recreateSceneTarget()` via `PostProcessor::cachedRequiresHDR()`), and that
+requirement is re-evaluated every time the camera materializes or retires an effect
+(`PostProcessStack::syncCameraEffects()`). `ToneMapping` inherited `requiresHDR() == false`, so the
+HDR buffer was only ever held up by whichever OTHER effect was enabled — `Bloom`, `MotionBlur`,
+`TAA`, `SSR`, `SSGI`, `RTR`, `AtmosphericFog`, `LensFlare` or `VolumetricLight` all declare it.
+Turn the last of them off and the scene target drops to the 8-bit swap-chain format underneath a
+still-active tone mapper: photometric radiance of a few thousand nits clamps to 1.0 everywhere.
+
+That is exactly the failure the on-demand chain in `Renderer::render()` was written to prevent —
+its own comment says *"the raw photometric radiance reached an LDR swap-chain — pure white in
+daylight, pure black at night"*. The guard existed; the effect that needs it did not ask.
+
+**Fix:** `ToneMapping::requiresHDR()` returns `true`. Converting linear HDR radiance into a
+display-referred image IS what the effect does, so it must pin the requirement itself.
+
+> [!IMPORTANT]
+> **Rule for every new effect: `requires*()` describes what YOUR pass reads, and nothing else.**
+> Never rely on a sibling effect to hold a resource up for you. The set is aggregated and
+> re-evaluated at runtime, so any requirement you leave undeclared is a resource that disappears
+> the moment the user unticks something unrelated.
+
+**Verified:** with bloom AND motion blur off, the log still reports
+`Scene render target created (2560x1440, format: R16G16B16A16_SFLOAT)` and the frame is correctly
+exposed, where it was a flat grey before.
+
+**File:** `Graphics/Effects/Framebuffer/ToneMapping.hpp`
+
+---
+
+### Fixed: shadow maps and render-to-texture kept BY_REGION dependencies (Aug 2026)
+
+`IntermediateRenderTarget::createRenderPass()` carries a long CRITICAL note on why its
+write->read dependency must **not** be `VK_DEPENDENCY_BY_REGION_BIT`. Two render passes were
+missed when that was fixed, and both are consumed non-locally:
+
+| Render pass | Consumed by | Why by-region is wrong |
+|---|---|---|
+| `RenderTarget/ShadowMap.hpp` | every lit draw, sampled with **PCF** | a PCF tap reads a NEIGHBOURHOOD, and from arbitrary world positions |
+| `RenderTarget/Texture.hpp` | reflections / environment probes | a cubemap is sampled in ARBITRARY directions |
+
+A by-region dependency only orders the *matching* framebuffer region, so a neighbouring tile may
+not be written yet when it is read. All four dependencies (both directions, both files) now use
+`dependencyFlags = 0`.
+
+> [!WARNING]
+> **Metal is genuinely tile-based, so MoltenVK HONOURS the region restriction** where desktop
+> drivers quietly widen it. Expected symptom when it bites: oblique blocks of stale frame-N-1
+> content in the GPU's tile order, worst during motion. This is why "it works on Windows" proves
+> nothing here — the same warning as the swap-chain dependency entry above.
+>
+> **`reflexion-debug --demo-options=0,4,0` exercises it hard:** option 1 = 4 is
+> `CameraContinuous`, which re-renders the probe cubemap **every frame, six faces**.
+
+**Files:** `Graphics/RenderTarget/ShadowMap.hpp`, `Graphics/RenderTarget/Texture.hpp`
+
+---
+
+### Reduction passes must sample with an explicit LOD (Aug 2026)
+
+Generalised from the tone-mapping fix above and now applied to `Bloom` as well (all 26 sample
+sites: the 13-tap downsample, the 9-tap upsample tent, the material-properties fetch and the
+composite).
+
+Every sample in a post-process reduction chain is a **fixed-level read of a single-mip image**, so
+the mip level is never something the shader should be deriving from derivatives. It is not
+cosmetic: a downsample pass MINIFIES, which pushes the implicit LOD near 1, and on MoltenVK that
+was measured returning **ZERO** on a single-mip image — the defect that made the luminance chain
+meter a black scene and pin the exposure to the ISO ceiling.
+
+**Use `textureLod(tex, uv, 0.0)` (or `texelFetch`) in any downsample/upsample/gather pass.** Plain
+`texture()` is only appropriate where the read is genuinely 1:1 with the target.
+
+**Files:** `Graphics/Effects/Framebuffer/Bloom.cpp`, `Graphics/Effects/Framebuffer/ToneMapping.cpp`
+
+---
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

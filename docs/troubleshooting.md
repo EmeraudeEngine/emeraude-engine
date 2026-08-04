@@ -9,6 +9,8 @@ Solutions for common engine-level issues in Emeraude Engine development.
 - [Material/Shader Issues](#materialshader-issues)
 - [Physics Issues](#physics-issues)
 - [macOS / MoltenVK Issues](#macos--moltenvk-issues)
+  - [Uniform grey/white framebuffer after un-ticking an effect](#uniform-greywhite-framebuffer-after-un-ticking-a-photographic-effect-fixed-aug-2026)
+  - [Blocky corruption on macOS — the two known classes](#blocky-corruption-on-macos--the-two-known-classes)
   - [Tone mapping blows out to white / auto-ISO shows nothing](#tone-mapping-blows-out-to-white-and-never-recovers--auto-iso-shows-nothing-mitigated-aug-2026)
 
 ---
@@ -321,6 +323,49 @@ as an **Error** while the extension is listed as available two lines above and i
 enabled four lines below (`mutableComparisonSamplers: yes`). That message is misleading noise from
 the scoring checklist — **it is not a portability-subset failure**, and it cost real time during
 this hunt. Worth silencing.
+
+---
+
+### Uniform grey/white framebuffer after un-ticking a photographic effect (fixed Aug 2026)
+
+**Symptom:** in the Shift+F2 panel, un-ticking one effect (bloom, or motion blur, or whichever is
+last) turns the whole frame flat grey while HDR is still ticked. Re-ticking it restores the scene.
+
+**Cause:** `ToneMapping` did not declare `requiresHDR()`, so the HDR scene buffer was only held up
+by other effects. Which effect appears guilty depends on what else is enabled — that shifting
+attribution is the tell. Full write-up: [`docs/caution-points.md`](caution-points.md) -> "the tone
+mapping never declared requiresHDR".
+
+**If you see this again on a NEW effect:** check its `requires*()` overrides before anything else.
+`requires*()` must describe what your own pass reads; relying on a sibling to hold a resource up is
+how this bug is written.
+
+### Blocky corruption on macOS — the two known classes
+
+Both are macOS-only and both look like video-memory corruption. They have **different** causes, so
+identify which one you have before digging (toggle the effects one at a time in Shift+F2):
+
+| What you see | Correlates with | Status |
+|---|---|---|
+| **Green blocks** | the bloom / lens glare | open — all bloom sampling moved to explicit LOD 0, re-evaluate |
+| **Displaced pixel blocks**, only around moving objects | the motion blur | open — matches the TileMax/NeighborMax tile granularity |
+| Oblique blocks of last frame's content, worst in motion | shadow maps, environment probes | fixed (BY_REGION removed) |
+
+**Ruled out, do not re-investigate:** the scene render target's subpass dependencies (its
+attachments are **copied** to the grab pass, so `TRANSFER_READ` in the dst mask is correct, and the
+grab-pass textures get a proper `TRANSFER_DST -> SHADER_READ_ONLY` barrier with `FRAGMENT_SHADER` as
+the destination stage); the skinning SSBO (properly sectioned per frame in flight, staged under a
+mutex, uploaded once per frame; its memory is `HOST_VISIBLE | HOST_COHERENT`, so no
+`vkFlushMappedMemoryRanges` is owed); Synchronization Validation (verified active, clean on the
+render path); the motion blur tile chain itself (already `texelFetch` with explicit clamping).
+
+**Next instrument — use the boolean probe, not code reading.** Two structural hypotheses were
+derived from reading this code and both were wrong; the measurements are what produced every real
+finding. Emit a boolean (`is the fetched tile velocity non-finite or absurd?`, `is the composited
+bloom value non-finite or negative?`) as the resolved colour and `return` early: the artefact then
+draws its own silhouette. See
+[`docs/temporal-stability-measurement.md`](../../../docs/temporal-stability-measurement.md) §4 in
+projet-alpha.
 
 ---
 

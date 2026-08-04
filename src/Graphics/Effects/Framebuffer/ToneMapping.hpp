@@ -147,6 +147,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/**
+			 * @brief Returns whether this effect needs a high dynamic range input. It does, by
+			 * definition: converting linear HDR radiance into a display-referred image IS what
+			 * this effect is for.
+			 * @note This MUST be declared. The scene render target's colour format is chosen from
+			 * the stack's aggregate requirement (`Renderer::recreateSceneTarget()` via
+			 * `PostProcessor::cachedRequiresHDR()`), and the requirement is re-evaluated whenever
+			 * the camera materializes or retires an effect. While this returned the inherited
+			 * `false`, the HDR buffer was only held up by whichever OTHER effect happened to be
+			 * enabled (bloom, motion blur, TAA, SSR...). Turning the last of them off dropped the
+			 * scene target to the 8-bit swap-chain format underneath a still-active tone mapper,
+			 * so photometric radiance of a few thousand nits clamped to 1.0 everywhere — a
+			 * uniformly grey/white frame, which is exactly the failure the on-demand chain in
+			 * `Renderer::render()` was written to prevent.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			requiresHDR () const noexcept override
+			{
+				return true;
+			}
+
+			/**
 			 * @brief Sets the tone mapping parameters.
 			 * @param parameters The new parameters.
 			 * @return void

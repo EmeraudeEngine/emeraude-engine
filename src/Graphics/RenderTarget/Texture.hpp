@@ -899,7 +899,14 @@ namespace EmEn::Graphics::RenderTarget
 					.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
 					/* The new access will be a "write" in an attachment. */
 					.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+					/* NOT by-region: this target is sampled NON-LOCALLY by its consumers, so the
+					 * whole write must complete before any read (and the whole read before any
+					 * overwrite) — not merely the matching framebuffer region. Identical reasoning to
+					 * IntermediateRenderTarget::createRenderPass(); see the CRITICAL note there.
+					 * Metal is genuinely tile-based, so MoltenVK HONOURS the region restriction where
+					 * desktop drivers quietly widen it: the symptom is oblique blocks of stale
+					 * frame-N-1 content in the GPU's tile order. */
+					.dependencyFlags = 0
 				});
 
 				renderPass->addSubPassDependency({
@@ -913,7 +920,14 @@ namespace EmEn::Graphics::RenderTarget
 					.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 					/* The next access will be a shader read. */
 					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+					/* NOT by-region: this target is sampled NON-LOCALLY by its consumers, so the
+					 * whole write must complete before any read (and the whole read before any
+					 * overwrite) — not merely the matching framebuffer region. Identical reasoning to
+					 * IntermediateRenderTarget::createRenderPass(); see the CRITICAL note there.
+					 * Metal is genuinely tile-based, so MoltenVK HONOURS the region restriction where
+					 * desktop drivers quietly widen it: the symptom is oblique blocks of stale
+					 * frame-N-1 content in the GPU's tile order. */
+					.dependencyFlags = 0
 				});
 
 				/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
