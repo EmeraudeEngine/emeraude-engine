@@ -1,4 +1,8 @@
 # Bugs and TODO-list
+
+> Open work only. Completed items are removed once their knowledge lives in `docs/` or the
+> `AGENTS.md` network — measurements, traps and owner decisions belong there, not here.
+
 - GENERAL: Remove all invalid noexcept keyword. (WIP)
 - GENERAL: Increase inlining. (WIP)
 - GENERAL: Improve functions args to use "std::move" when useful. (WIP)
@@ -22,53 +26,26 @@
 - ANIMATION SYSTEM: Check all animatable properties for all objects.
 - ANIMATION SYSTEM: Root-motion mode — extract root delta per frame from skeletal clips and feed it back to the actor as actual displacement (foot-planting, no foot-sliding, animation-driven speed). Companion to `LoaderOptions::stripRootMotion` (which kills horizontal root translation at load); the new mode keeps it and routes it through `MovableTrait`. Industry-standard locomotion. Required for production-grade runtime quality on humanoid characters.
 - CONSOLE SYSTEM: Bring back a useful console behavior.
-- LIGHTING AND SHADOWING: **CSM directional lights still do not light their receivers** (Jul 2026).
-  Three defects were fixed (missing `DirectionalLightPassCSM` pre-generation, the shader reading a
-  non-existent `ubView.viewMatrix`, and the shared directional UBO sized on the classic 120-byte
-  block instead of the 324-byte CSM one) but a live A/B on `water-world` — CSM constructor vs
-  classic constructor, everything else identical — shows the ground lit ONLY by the classic path.
-  Prime suspect: the CSM block's colour / direction / intensity are written exclusively inside
-  `DirectionalLight::updateCascades()`, so they depend entirely on that per-frame path running and
-  on its ordering against `onVideoMemoryUpdate()`. Next step is to read the light UBO back on the
-  host (the camera metering ring buffer is the existing precedent) rather than keep inferring.
-  See `docs/shadow-mapping.md` (CSM status section). Until closed, demos should use the classic
-  constructor; `lighten-marbles` and `basic-scenery` still use CSM but at 0.5 lx moonlight, where
-  the loss is invisible.
-- LIGHTING AND SHADOWING: ~~Normalise the legacy SPECULAR term in ENERGY~~ + ~~Re-tune `Shininess` /
-  `Specular` across the material store~~ — **DONE AND VERIFIED (Jul 2026)**, both in one pass as this
-  entry required. `(n + 2) / (8 * pi)` plus the missing `N.L`, applied at the three factor sites
-  (`LightGenerator.PerVertex` / `.PerFragment` / `.PerFragment.NormalMap`) rather than next to
-  `finaleSpecularFactor` — the exponent and `N.L` are both in scope there. The retune did NOT become a
-  per-file sweep: `"Shininess"` in a manifest was always authored as a **glossiness in [0,1]**
-  (3834 files of 3917 hold `0.1`), so it is now converted at the parse boundary by
-  `StandardResource::specularExponentFromGlossiness()` = `exp2(1 + 10 * gloss)`. Only the 13 files
-  that genuinely held exponents were rewritten. Measured on `basic-scenery` / `Clouds`: rendered
-  ground/sky ratio 1.64 vs 1.65 computed. Full story and the do-not-remap-twice rule in
-  `docs/caution-points.md`, "The legacy specular was not energy-normalised, and `Shininess` was
-  authored as a glossiness".
-  - REMAINS: the **PBR low-quality specular approximation** (`lqSpecPower` in `LightGenerator.cpp`) is
-    still unnormalised and still multiplies the raw illuminance, reusing the raw `N.L`
-    `finaleDiffuseFactor` inside its own `pow()`. Same treatment needed, smaller blast radius (LQ path
-    only, `Core/Graphics/Shader/EnableHighQuality` false).
-- LIGHTING AND SHADOWING: **The sky lighting is applied only once the background resource reports
-  `isLoaded()`, and the environment cubemap identity is captured BEFORE that** (Jul 2026, observed,
-  root cause not yet isolated). At boot `Scene::setBackground()` logs
-  `Scene will use environment cubemap '+DefaultTextureCubemap'`; the real cubemap is adopted later and
-  the IBL bake follows. Two consequences to check: (a) the first frames run with an unpublished
-  irradiance while `applyBackgroundLightingNow()` has ALREADY zeroed the scalar ambient
-  (`m_iblAmbientEnabled`), so nothing fills the shadows in that window; (b) if the adoption never
-  fires, that state is permanent and every surface not reached by direct light renders pure black.
-  ⚠️ HYPOTHESIS, NOT PROVEN — the test is a run where both `Scene will use environment cubemap
-  '<name>'` and `Environment IBL baked` appear, then inspecting a face turned away from the sun.
-- LIGHTING AND SHADOWING: **The shadow pass ignores the opacity mask** (Jul 2026, observed). Alpha-cut
-  foliage casts the shadow of its QUAD: the palms of `basic-scenery` drop hard rectangular blocks on
-  the ground. The shadow-map program needs the same opacity discard as the colour passes.
+- LIGHTING AND SHADOWING: **CSM directional lights do not light their receivers — OPEN but PARKED
+  BY OWNER DECISION (Jul 2026).** Three defects were fixed; a fourth remains (the CSM block's
+  colour / direction / intensity are written only inside `DirectionalLight::updateCascades()`).
+  The classic constructor is the right tool for the scenes at hand, so the investigation was
+  closed deliberately: **do not relaunch the light-UBO host readback without a new reason.**
+  Consequence to respect: prefer the classic constructor; `lighten-marbles` and `basic-scenery`
+  still use CSM but at 0.5 lx moonlight, where the loss is invisible. Full defect table in
+  `docs/shadow-mapping.md` (CSM status section).
+- LIGHTING AND SHADOWING: the **PBR low-quality specular approximation** (`lqSpecPower` in
+  `LightGenerator.cpp`) is still unnormalised and still multiplies the raw illuminance, reusing the
+  raw `N.L` `finaleDiffuseFactor` inside its own `pow()`. Same treatment as the legacy specular
+  (done, see `docs/caution-points.md` § "the legacy specular was not energy-normalised"), smaller
+  blast radius — LQ path only, `Core/Graphics/Shader/EnableHighQuality` false.
 - GRAPHICS MATERIAL: **`Reflection: { "Type": "Automatic" }` does not create the component** (Jul 2026,
-  observed). `setReflectionComponentFromEnvironmentCubemap()` raises `m_isUsingEnvironmentCubemap` and
-  then calls `setReflectionAmount()`, which warns `The material 'X' has no reflection component !`
-  because no `ComponentType::Reflection` is ever emplaced. Either the bindless path should stop going
-  through `setReflectionAmount()`, or the warning is wrong — as it stands the log accuses four
-  materials that declared reflection correctly, which sent this session chasing a false lead.
+  observed, STILL PRESENT Aug 2026). `setReflectionComponentFromEnvironmentCubemap()` raises
+  `m_isUsingEnvironmentCubemap` and then calls `setReflectionAmount()`, which warns
+  `The material 'X' has no reflection component !` because no `ComponentType::Reflection` is ever
+  emplaced (verified in both `StandardResource` and `PBRResource`). Either the bindless path should
+  stop going through `setReflectionAmount()`, or the warning is wrong — as it stands the log accuses
+  materials that declared reflection correctly, which already sent one session chasing a false lead.
 - LIGHTING AND SHADOWING: Fix the ambient light update against the render target which uses it.
 - LIGHTING AND SHADOWING: Re-enable the ambient light color generated by the averaging active light color.
 - LIGHTING AND SHADOWING: Check the ambient light color generated by a texture.
@@ -80,578 +57,73 @@
 - VULKAN: Find a better way to detect the UBO max capacity. For now the limit is hard-coded to 65,536 bytes.
 - VULKAN: Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering (Vulkan 1.3), then leverage dynamic rendering to order draws by pipeline layout and reduce binding cost.
 - VULKAN: Extend SharedUniformBuffer pooling strategy to short-lived entities (particles, projectiles) for UBO/VBO allocation optimization.
-- RAY TRACING: Skinned meshes sit in the TLAS with their BIND-POSE BLAS — **ACCEPTED LIMIT
-  (owner decision 2026-07-25), deferred on purpose. Do not "fix" it opportunistically.**
-  Skinning happens in the vertex shader, invisible to ray queries, so RT effects (RTAO/RTGI/RTR)
-  trace an invisible bind-pose statue at the actor's transform. SYMPTOM SEEN 2026-07-25 (owner,
-  GI demo + Paladin): a phantom second pair of foot-occlusion marks offset from the animated feet.
-  The two real options remain open for the day this is revisited — recorded here so nobody has to
-  re-derive them:
-    1. EXCLUDE skinned renderables from the TLAS — cheap, industry-standard. Cost: animated actors
-       stop casting RT shadows and stop appearing in reflections/GI entirely. Trades a wrong
-       contribution for a missing one.
-    2. PER-FRAME BLAS REFIT from compute-skinned vertices — correct. Cost: one refit per skinned
-       actor per frame, and it REQUIRES a compute skinning path that does not exist yet (skinning
-       is vertex-shader only today, see the double-skinning work of the motion-vector chain).
-  Whichever is chosen, decide it against a MEASUREMENT of the phantom's actual contribution (a
-  boolean probe on the RT effect output, cf. projet-alpha
-  `docs/temporal-stability-measurement.md` § "the boolean probe draws a SHAPE"), not on principle.
-- ⚠️ **RAY TRACING: intermittent DEVICE_LOST in the `game-logic` demo (found 2026-07-26).**
-  The demo itself is FINE — it renders correctly (night city, statue, fire/smoke particles,
-  animated actors) and runs indefinitely most of the time. But it dies with
+- ⚠️ **RAY TRACING: intermittent DEVICE_LOST in the `game-logic` demo (found 2026-07-26, NOT
+  RE-TESTED SINCE).** The demo itself is FINE — it renders correctly (night city, statue,
+  fire/smoke particles, animated actors) and runs indefinitely most of the time. But it died with
   `VK_ERROR_DEVICE_LOST` on roughly one run in four: **2/8 runs with `RayTracing/Enabled` true,
   0/3 with it false** (plausible attribution, NOT established — the no-RT arm needs ~10 runs).
-  The engine's own diagnostics name the region: `device_fault` reports a
-  `READ_INVALID` at a low address plus an `INSTRUCTION_POINTER_FAULT`, and the per-queue
-  checkpoints show the last GPU markers reached to be a MIX of `AS-build:end` (acceleration
-  structure builds) and `transfer:image-layout-transition`. That is the exact signature of the
-  SECOND root cause of the Sponza DEVICE_LOST fixed on 2026-07-05 (BLAS builds racing uploads
-  across the round-robined transfer queues, fixed with `Device::waitTransferQueuesIdle()`), so
-  that fix does not cover this case — `game-logic` has many dynamic actors, hence many more
-  AS builds interleaved with texture uploads than Sponza.
-  Reproduce: `cd .claude-build-release/Release && for i in $(seq 1 8); do timeout 40
+  The engine's own diagnostics name the region: `device_fault` reports a `READ_INVALID` at a low
+  address plus an `INSTRUCTION_POINTER_FAULT`, and the per-queue checkpoints show the last GPU
+  markers reached to be a MIX of `AS-build:end` and `transfer:image-layout-transition` — the
+  signature of BLAS builds racing uploads across the round-robined transfer queues.
+  ⚠️ **Several candidate fixes have landed since this was filed** (`Device::waitTransferQueuesIdle()`,
+  the `DeferredDestructor`, the one-shot queue-family ownership fix `ebae3d4c`, the shared-UBO
+  registry race `e8d63525`). **Re-run the repro before spending any analysis on it — it may
+  already be closed.**
+  Repro: `cd .claude-build-release/Release && for i in $(seq 1 8); do timeout 40
   ./projet-alpha --load-demo game-logic --disable-cef > /tmp/gl_$i.log 2>&1; grep -c DEVICE_LOST
-  /tmp/gl_$i.log; done`. Next step: confirm the attribution with a larger no-RT arm, then look at
-  what serializes AS builds against transfers when actors are created/destroyed at runtime.
+  /tmp/gl_$i.log; done`.
   NOTE: `[Error][UIManagerService] No default page found !` appears in EVERY demo, including the
   ones that never fail — it is not related.
-- **IMAGE PIPELINE: HDR — DONE for environment cubemaps (Jul 2026), option 1 (Radiance RGBE).**
-  `PixelFactory::FileFormatHDR` (owner-approved exception to the "Ave robustus!" freeze) reads and
-  writes Radiance `.hdr`, unit-tested (round-trip, RLE variants, hostile streams). The engine loads
-  `"FileFormat": "hdr"` equirectangular cubemaps through a float pipeline (`Pixmap< float >`, raw
-  sampling — ⚠️ `Color< float >` CLAMPS to [0,1], every HDR path must stay on raw floats),
-  photometrically calibrated (D6, Unity-like: the upper hemisphere is normalized to pi lux at
-  scale 1, so the Background "Luminance" key means the same thing for LDR and HDR), and uploaded
-  as RGBA16F (guaranteed-filterable, sun clamped to the 65504 half maximum — a real specular sun
-  at last). Remaining options if ever needed: OpenEXR (heavy dependency), KTX2/BC6H (asset
-  pipeline question). ⚠️ Root cause of the first broken display: `Vulkan::Image::pixelBytes()`
-  did not know the 16-bit formats — wrong per-layer buffer offsets, scrambled cubemap faces.
-- RENDERING SYSTEM: Hi-Z Occlusion
+- RENDERING SYSTEM: Hi-Z Occlusion (see the GPU-driven roadmap below — the SSR Hi-Z pyramid
+  already exists, occlusion culling does not).
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
 - RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
 
 ## Post-Processing Pipeline (Effects/Framebuffer + Effects/Lens)
 
-- [x] **Screen-Space GI (SSGI)** — DONE (validated 2026-07-23 in the `global-illumination`
-  demo bench, incl. receiver-albedo modulation via the new albedo G-buffer attachment).
-- [x] **Motion Blur** — DONE 2026-07-26, validated visually by the owner (streak follows the
-  motion, no ghost copies, no tile seams, no bleeding through silhouettes, sharp at rest).
-  `Graphics/Effects/Framebuffer/MotionBlur.{hpp,cpp}` implements McGuire et al., "A
-  Reconstruction Filter for Plausible Motion Blur" (I3D 2012) in four fragment/IRT passes:
-  `MB_TileMaxH` + `MB_TileMax` (SEPARABLE reduction to the dominant velocity of each 64 px tile —
-  separable so K can be large: 64+64 iterations instead of 64² = 4096 in one invocation, same
-  total fetches), `MB_NeighborMax` (3x3 tile max, so a fast object smears beyond its own tile),
-  and `MB_Output` (24 jittered samples along the dominant velocity, cone/cylinder weights with a
-  soft depth foreground/background classification; interleaved gradient noise for the jitter,
-  after Jimenez SIGGRAPH 2014).
-  PHOTOGRAPHIC CONTRACT (owner decision): the blur LENGTH is not a strength slider but
-  `Camera::setShutterSpeed()` (seconds) divided by the frame duration = the SHUTTER ANGLE, i.e.
-  how many frames of motion the exposure covers. Angles above 1 are normal and must NOT be
-  clamped (1/60 s at 500 fps = 8.3): clamping to 1 made the blur shrink as the framerate rose,
-  which is exactly what a shutter speed exists to prevent. The velocity is extrapolated linearly
-  over the exposure — assumed limit: a curved trajectory becomes a straight streak.
-  New contract member `PostProcessor::PushConstants::deltaTime` (duration of the previous
-  RENDERED frame, clamped to [1/1000, 1/15] s): the chain's single source of truth for anything
-  converting the per-frame velocity buffer into a physical duration.
-  Placement (owner decision): HDR, AFTER the temporal resolve (blurring before it would poison
-  the TAA history) and BEFORE the photographic effects — the camera inserts DepthOfField and
-  ToneMapping ahead of the first display-referred effect, so stacking the blur between TAA and
-  Sharpen is enough. Settings: `Core/Graphics/MotionBlur/*` (quality knobs only).
-  ⚠️ Two traps paid for during this work, both written up in `docs/caution-points.md`: the
-  velocity buffer's floating-point noise floor must be gated on the RAW per-frame magnitude
-  (a shutter angle above 1 amplifies it past any post-scale threshold), and the auto-exposure
-  settle time lengthens when an effect engages on the startup transient — verify a flat
-  per-frame mean luma before trusting any measurement (see projet-alpha
-  `docs/temporal-stability-measurement.md` step 3).
-  NOT DONE: coupling the shutter speed to the exposure value (a 1/8 s pose should also be +3 EV)
-  — that belongs to the pending ISO/shutter work of the physical camera.
-- [x] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
-  **DONE 2026-07-25 — VALIDATED VISUALLY BY THE OWNER.** The remaining static-camera residual
-  (`0.195` mean / `11.3` p99.9 on Sponza, ray tracing off, see the bench below) was inspected
-  and judged **acceptable to the eye**. That number is therefore the ACCEPTED baseline, not an
-  open defect: do NOT reopen it without a new visible symptom. The variance-clip lead below
-  stays documented for the day a harsher scene (thin geometry, high-frequency normal maps)
-  actually shows something.
-  `Graphics/Effects/Framebuffer/TAA.{hpp,cpp}` (single-pass HDR resolve: YCoCg variance
-  clipping, Catmull-Rom history, Karis inverse-luminance weighting) + the jitter contract
-  (`requiresJitter()`, `ViewMatricesInterface::setProjectionJitter()`, `Renderer::prepareFrameJitter()`
-  driving a Halton (2,3) sequence). Settings under `Core/Graphics/AntiAliasing/Temporal/*`.
-
-  **DONE — defect 1 (root cause): the jitter is now a per-draw push constant.**
-  `PushConstant::Component::ProjectionJitter`, a `vec2` after the pushed V/VP matrix (block
-  76 B), applied to `gl_Position` alone; NO matrix carries the jitter anymore (view UBO
-  uploads the clean projection, `archiveStateAfterRendering()` archives the clean one, the
-  `InstanceTransforms` header is back to 128 B, the velocity clip positions need no
-  subtraction). New accessor `ViewMatricesInterface::unjitteredProjectionMatrix()` for every
-  velocity-feeding consumer; `previousProjectionJitter()` removed (dead).
-  OWNER DECISION (extension of the original plan): the two CLASSIC VP-pushed paths (instanced
-  non-advanced, and non-instanced InstanceTransforms non-advanced) were switched too — they
-  push an UNJITTERED VP + the jitter member, so velocity is correct on unlit/non-advanced
-  geometry as well (`doom-loader`, mixed scenes). Only MDI, the MVP fallback and the 132 B
-  advanced fallback still bake the jitter in their CPU-computed matrix — none outputs a
-  velocity (the 132 B one rasterizes unjittered: assumed limit, no room for the member).
-  Validated: 14 generated vertex shaders read the jitter and all 14 declare it (zero
-  mismatch, `ShowSourceCode` sweep), zero min-spec warnings, cascade builds `-Werror`.
-  Static-camera A/B (Sponza, `gltf-loader`, protocol in projet-alpha
-  `docs/temporal-stability-measurement.md`): temporal peak-to-peak mean **2.1-3.8 → 0.29**,
-  p99.9 **56-99 → 12.9**, against a TAA-off baseline of 0.11 / 2.4. Two TAA runs agreed to
-  1.03x, so the remaining gap is signal, not noise.
-
-  **DONE — defect 4: `Renderer.hpp` clear-value getters.**
-  `getClearDepthValue()`/`getClearStencilValue()` read `m_clearColors[5]` (the setter's index)
-  instead of `[4]`, which became the velocity slot; the layout comment in
-  `renderFrameWithInternal()` now lists all six entries.
-
-  **DONE (state of the art) but MEASUREMENT-NEUTRAL — defect 2: the resolve reconstruction.**
-  The single bilinear tap is replaced by the canonical filtered 3x3 reconstruction:
-  Mitchell-Netravali weights (B = C = 1/3, support radius 2, so 3x3 covers it) evaluated at
-  each tap's sub-pixel distance `|(x, y) - jitterTexels|` — the jitter MUST enter that
-  distance, otherwise the kernel is symmetric and merely blurs instead of unjittering
-  (Karis 2014; A. Tardif's "Temporal Antialiasing Starter Pack" flags the same; Mitchell
-  preferred over Catmull-Rom for milder negative lobes, cf. M. Pettineo's filter comparison —
-  the result is clamped to zero because those lobes still undershoot on HDR edges).
-  The taps now land on TEXEL CENTERS (`vUV`, not `vUV + jitter`): a fractional offset made
-  every tap a bilinear blend whose blur depends on the jitter phase. The same taps feed the
-  variance clip (one 3x3 pass for both, 19 texture fetches instead of 20), so the moments are
-  crisp and phase-independent. Depth and velocity are read at texel centers too — bilinear
-  filtering across a depth or velocity discontinuity invents values that exist on neither
-  surface.
-  ⚠️ **HONEST RESULT: no measurable improvement.** Old resolve 0.027 / 0.030, new resolve
-  0.021 / 0.022 / 0.027 (three runs) — overlapping ranges on the clean bench below. At a mean
-  of 0.02-0.03 the metric sits at the 8-bit quantization floor of PNG screenshots (a few
-  percent of pixels differing by exactly 1 LSB), so the bench CANNOT resolve reconstruction
-  quality. Kept on principle (state of the art, one fetch cheaper, and the texel-center reads
-  are a correctness fix independent of amplitude), NOT on evidence. Resolving it would need a
-  float/HDR capture path or a deliberately harsher scene (thin geometry, high-frequency normal
-  maps).
-
-  **A MUCH CLEANER BENCH (found 2026-07-25, use it from now on).** With
-  `Core/Graphics/RayTracing/Enabled` = false the raster is BIT-STABLE on a static camera:
-  temporal peak-to-peak mean is **exactly 0.000** with TAA off, on both `gltf-loader` and
-  `global-illumination`. The `0.11` figure long treated as the measurement baseline was in fact
-  the RT effects' own temporal noise (RTGI/RTAO/RTR half-res accumulation). With RT off, every
-  unit of residual is 1:1 attributable to TAA.
-
-  Measured on that bench (mean / p99.9 / share of pixels moving >= 1 unit):
-
-  | scene | TAA off | TAA alone | TAA + Sharpen |
-  |---|---|---|---|
-  | `gltf-loader` (Sponza) | 0.000 | 0.195 / 11.3 / 3.3% | 0.244 / 12.1 / 6.4% |
-  | `global-illumination` (box room) | 0.000 | 0.021 / 3.0 / 0.3% | n/a (no Sharpen) |
-
-  Two conclusions: (a) the residual is **content-driven** — a factor ~10 between a
-  high-frequency scene and a plain one, with the same code; (b) the `Sharpen` pass after the
-  resolve costs only x1.25 in amplitude but **doubles the affected area** (3.3% -> 6.4% of
-  pixels moving at least one unit), which is what reads as shimmer. An earlier x12 claim was a
-  scene confound (two different demos) and is retracted.
-
-  **Lead kept for later (NOT a defect — the residual is owner-accepted): the variance clip.** Its
-  neighbourhood is a *jittered sampling* of the scene, so on high-contrast detail mu and sigma
-  change every frame even with taps on fixed texel centers — the AABB breathes and drags the
-  converged history with it, proportionally to local contrast. That matches the content
-  dependence above. The state-of-the-art answer is to build the clip statistics from
-  reconstructed (unjittered) neighbours rather than raw taps, which costs a 5x5 tap footprint;
-  cheaper knobs first: `VarianceGamma`, and Karis' luma weighting (already available).
-
-- [x] **Infinity-view renderables wrote a garbage velocity (the sky)** — DONE 2026-07-25.
-  MISDIAGNOSED TWICE before being measured: the smooth NDC-position-like gradient (up to ~0.3 NDC)
-  was blamed on the translucent skylight glass of Sponza, because the SKY is seen THROUGH that
-  glass and both occupy the same screen region. A boolean velocity probe (see the measurement doc)
-  settled it: on a static camera the whole buffer was EXACTLY zero except a trapezoid at the top
-  centre — the sky, 2.7% of pixels, above 0.01 NDC (~14 px).
-  ROOT CAUSE: a STRUCTURAL matrix mismatch, not a temporal one. Renderables using the infinity
-  view (`isUsingInfinityView()`, the sky background) get their CURRENT clip position from the
-  pushed translation-free view, while their PREVIOUS one came from the InstanceTransforms header,
-  which only carried the REGULAR previous view-projection. The two differ by the whole camera
-  translation, so the velocity never cancelled — not even with a perfectly frozen camera.
-  FIX (owner decision, zero size cost): the header's CURRENT `viewProjection` member was read 0
-  times by the generated GLSL, so it now carries `previousViewProjectionInfinity` — the header
-  stays at 128 B. The vertex shader selects the right one from a new generator flag
-  `IsUsingInfinityView`, which reaches the program cache key through `flags()` (mandatory: two
-  instances of the same renderable, one infinity-view and one not, must never share a program).
-  New `ViewMatricesInterface::previousInfinityViewMatrix()`, archived by `ViewMatrices2DUBO`.
-  VALIDATED: static camera → velocity buffer exactly 0.000% non-zero everywhere (was 2.7%);
-  generated GLSL → exactly ONE program reads the infinity variant (`SimplePass`, the sky), every
-  other reads the regular one; camera ROTATING → the sky lights up again (owner moved the mouse
-  during a probe run: a screenshot cannot catch a one-frame event at 200+ FPS). Image stability on
-  a static camera is unchanged (0.264 vs 0.244, inside the envelope) — expected, the sky is a
-  smooth gradient and the variance clip already bounded the wrong reprojection. The value is
-  correctness for every velocity consumer (RTGI reprojection, future motion blur) and no sky
-  smearing during pans.
-### Photometric lighting + absolute exposure (PROJECT, owner decisions taken 2026-07-26)
-
-Goal: the camera's aperture / shutter speed / ISO drive the exposure through the real APEX
-equation, which only means something once the SCENE carries physical light units. Four owner
-decisions, taken before any code:
-
-1. **Photometric units FIRST**, not a relative calibration constant. The shortcut (couple EV to
-   the current arbitrary units through a calibration factor, giving correct RATIOS but no
-   absolute level) was explicitly REJECTED.
-2. **Auto-exposure becomes AUTO-ISO.** Aperture drives the depth of field and shutter speed
-   drives the motion blur — both are CREATIVE controls the metering must never touch, or dialing
-   exposure would change the bokeh or the streak length. ISO is the only pure exposure variable.
-   That is how live-action shooting works, and it makes auto mode honest: a slow shutter blurs
-   more WITHOUT over-exposing, because ISO drops to compensate.
-3. **Big-bang migration**: attenuation and units land in the SAME step. Taken together they can
-   be calibrated to PRESERVE the current look at a reference distance, whereas either alone
-   destroys it — one visual recalibration instead of two, and no duplicated shading path (an
-   opt-in `usesPhotometricUnits()` flag was rejected for that reason).
-4. Phase order below.
-
-**THE LOAD-BEARING FACT.** The current point/spot attenuation is NOT physical
-(`LightGenerator.PerFragment.cpp`, "radius influence"):
-
-```glsl
-const vec3 DR = abs(distance) / lightRadius;
-lightFactor *= max(1.0 - dot(DR, DR), 0.0);      /* = max(1 - (d/r)^2, 0) */
-```
-
-A radius-bounded artistic falloff: exactly zero at `d == r` (convenient for culling) but nothing
-like `I/d^2`. **Lumens are meaningless until this becomes a windowed inverse square** (Karis:
-`saturate(1 - (d/r)^4)^2 / (d^2 + 1)`). This is why units and attenuation cannot be separated.
-
-**Migration surface — CORRECTED 2026-07-26, the earlier figure here was WRONG.** It said "3
-`setIntensity` call sites, small". That measurement missed the actual authoring path: demo lights
-are created through `Scenes::Toolkit::generate{Point,Spot,Directional}Light()`, which take the
-intensity as a PARAMETER. The real surface is **~45 light creation sites across ~20 demos**, plus
-3 `setIntensity` call sites in projet-alpha (Actor/Drone, Actor/Player, Actor/Marble), 6 in the
-engine and 4 data files. Still not a large diff, but it is an ART pass, not a mechanical one.
-
-**⚠️ AND THE VALUES CANNOT BE CONVERTED MECHANICALLY.** One world unit IS one metre — established:
-`Actor/Paladin.cpp` scales the Mixamo rig to a 1.90 m target from a measured 1.725 m,
-`Builtin/GlobalIllumination.cpp` documents "Layout constants (metres)" with a 6 m ceiling, and
-`Actor/Player.cpp` reasons about "a 1.75 m player". Yet the authored light radii are **120, 400,
-512 and 1024 metres** — a 512 m point light inside a 6 m room. Those numbers were never physical
-extents, only "big enough not to clip" under a falloff that reached zero at the radius.
-Consequence: converting to preserve the current look gives absurd values (the `liminal` pool light,
-r = 120, I = 4, becomes 12 292 cd = ~154 000 lm, a stadium floodlight indoors). Phase 2 must
-AUTHOR plausible values and accept that the look changes — and with the falloff now physical, the
-radius is only a CULLING bound, so it should be set where the contribution becomes negligible
-(a 800 lm bulb is 63.7 cd, i.e. 0.16 lx at 20 m: r = 20 is already generous).
-
-**⚠️ Method: keep the AUTO-EXPOSURE ON for the whole migration.** Absolute values go from ~1 to
-~100000; without metering, every intermediate step renders pure white or pure black and nothing
-can be verified.
-
-**Reference values** (UE5 physical light units, and ikrima's unit survey): sun 100 000 lx,
-overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-equivalent bulb
-800 lm; monitor 200-300 nits, candle 5-10 nits. Conversions: point `cd = lm / 4pi`, spot
-`cd = lm / (2pi(1 - cos(theta/2)))`, and `lux = cd / d^2`.
-
-**Formulas** (APEX / Frostbite, Lagarde & de Rousiers SIGGRAPH 2014):
-`EV100 = log2(N^2 / t * 100 / S)` then `exposure = 1 / (1.2 * 2^EV100)`.
-
-- [x] **Phase 1 — physical attenuation + photometric units, together.** DONE 2026-07-26.
-  `Graphics/Photometry.hpp` is the single conversion point (lumens->candela per light type, the
-  inverse-square law, and the APEX exposure equations phase 3 needs); the emitters gained
-  `DirectionalLight::setIlluminance()` (lux) and `PointLight`/`SpotLight::setLuminousPower()`
-  (lumens); and `LightGenerator.PerFragment` replaced `max(1 - (d/r)^2, 0)` with the Karis
-  windowed inverse square `saturate(1 - (d/r)^4)^2 / (d^2 + 1)`.
-  ⚠️ Carries ONE temporary expression, `legacyUnitCompensation = 0.8533 * (r^2/4 + 1)`, derived
-  per-light from its own radius: the switch to a true inverse square makes existing content ~22x
-  dimmer at mid-range (r = 10, d = 5: 0.75 before, 0.034 after), and this restores the previous
-  level at d = r/2 so the RELATIVE balance between lights of different radii survives — the one
-  thing the auto-exposure cannot fix. **Phase 2 deletes that expression** when the demos carry
-  real lumens.
-  Measured (`liminal`, ray tracing on, TAA off, the only stock demo with point lights AND tone
-  mapping — Sponza has zero point lights so it cannot validate this): mean luma 121.4 against a
-  123.0 baseline taken with the old falloff, i.e. 1.3%, flat across the series. Visually
-  indistinguishable at screenshot scale. ⚠️ The SHAPE of the falloff did change: brighter close
-  to a source, dimmer far from it. Scenes where a light sits CLOSE to a surface will show it, and
-  `liminal` is not that scene — check `light-and-shadow-debug` and `basic-scenery` in phase 2.
-- [~] **Phase 2 — re-light every demo** in real values. MECHANISM DONE, SCENE NOT YET COHERENT.
-  Done: `Scenes::Toolkit::generate{Point,Spot,Directional}Light()` now take the AUTHORING unit —
-  lumens for point/spot (converted to candela, the spot after its cone angles are set), lux for
-  directional — and the temporary `legacyUnitCompensation` is GONE from the shader. All 46 demo
-  light values re-authored to plausible magnitudes (sun 100000 lx, warm low sun 30000, moon 0.5,
-  indoor fill 100; bulb 800 lm, ceiling panel 4000-6000, torch 100, accent 300; spot 1500-3000),
-  with radii cut from 120-4096 m down to a real culling bound (8-60 m).
-  ⚠️ **MEASURED CONSEQUENCE — the scene is now INCOHERENT, and lights alone cannot fix it.**
-  `gltf-loader`: blown whites went from 0.1% to **34.2%** of pixels while the midtones collapsed
-  from 33.9% to 10.2% — the image is a silhouette, white in the sun and black in the shade. The
-  mean luma (67 -> 110) hides it; the histogram does not. Cause: the lights are photometric
-  (sun = 100000 lx) while `ambientLightIntensity`, the per-material `IBLIntensity` and the
-  environment cubemaps are still arbitrary (~1). Five orders of magnitude apart, and a single
-  exposure cannot span that — it blows the sun AND crushes the shadows.
-  ⚠️ Demos that never migrated to the physical camera (`Liminal`, `Citadel`: they add `ToneMapping`
-  by hand with fixed parameters) have NO metering at all to absorb the change and are simply blown
-  out — `liminal` reads 244/255. The method note "keep the auto-exposure ON" only protects the
-  demos that let the CAMERA materialize tone mapping.
-  AMBIENT: DONE. `LightSet::setAmbientLightIntensity()` is an ILLUMINANCE in lux and the shader
-  applies the Lambertian `albedo * E / pi` (0.3183) instead of the old arbitrary 0.05; the 23 demo
-  values are re-authored (15000 lx sunlit exterior, 5000 overcast, 100 lit interior, 1 moonlit
-  night). EXPOSURE: DONE. The auto-exposure clamps span a photometric range [1e-5, 100] instead of
-  [0.1, 4], and `keyValue` is the photographic middle grey 0.18 instead of 0.5.
-  Measured on `gltf-loader` (mean luma / blown / midtones): 67.2 / 0.1% / 33.9% before the project,
-  110.2 / 34.2% / 10.2% with lights converted alone (incoherent), 194.0 / 0.2% / 75.4% with the
-  ambient converted, **137.6 / 0.0% / 90.4%** with middle grey. `liminal`: 130.9 / 0.0% / 93.6%.
-  FOLLOW-UP (2026-07-26): keyValue is now `Photometry::MeteredMiddleGrey` = 12.5/(1.2·100) ≈
-  0.104, NOT 0.18 — Reinhard's grey card is a display-side convention and kept the auto mode
-  0.79 EV hotter than the same scene shot with the manual APEX triad (two standard conventions,
-  mixed). Auto and manual now land a metered scene identically and the ISO bounds keep their
-  meaning; scenes read ~0.8 EV darker in auto (gltf-loader median 101 → 83, mean 118 → 114,
-  0% blown). Constants single-sourced in `Photometry.hpp` (MeterCalibration promoted,
-  ReflectedMeterK added). In the same pass, the bloom's anti-firefly ceiling became
-  `max(threshold,1)×64` on every mip (was a fixed LDR-era 64 nits, four stops BELOW the default
-  threshold — every source crushed to identical glare) and `bloomIntensity` became a PHYSICAL
-  scattered fraction, default 0.03 (the composite adds full photometric energy in nits; 1.0
-  meant "the lens scatters 100%" and set daylight ablaze — 15.4% of the frame clipped).
-
-  SKY: DONE. A skybox is self-illuminating, so it now carries a real luminance:
-  `BasicResource` gained `setEmissiveStrength()` (free structurally — the material-properties
-  buffer's twelfth float was commented "Unused", so the block finally matches the buffer exactly),
-  `SkyBoxResource` sets amount = 1 and strength = `DefaultSkyLuminance` (8000 nits) on both of its
-  creation paths, and the UNLIT path of `SceneRendering` applies it.
-  ⚠️ That last step is where the subtlety lives, and it cost a GLSL dump to find: the skybox is
-  drawn by `RenderableInstanceSimplePassFragmentShader`, whose body was just
-  `svOutputFragment = SurfaceColor;`. The uniform block carried the members but nothing applied
-  them, because the emissive code lives in `LightGenerator`, which does not run for an unlit
-  material. Hence `Material::Interface::emissionMultiplier()`: with no lighting to add emission
-  ON TOP OF, the surface colour IS the emitted radiance, so the emission MULTIPLIES there while
-  the lit path keeps ADDING it. Applying it in both would double-count.
-  ⚠️ It is deliberately NOT applied to the albedo G-buffer attachment written from the same
-  `fragmentColor()` expression: albedo is a reflectance in [0,1], and 8000 nits in there would
-  poison every consumer that reads it, RTGI first.
-  Measured on `gltf-loader`, mean luma / crushed / blown / midtones: **124.8 / 0.0% / 0.0% /
-  97.0%**, against 67.2 / 1.0% / 0.1% / 33.9% before the whole project.
-
-  IBL: **DONE AND VERIFIED (IBL work, lots 1-4, Jul 2026).** The environment luminance scale is
-  exercised for real now: the ambient pass reads the baked diffuse irradiance cubemap (E/π,
-  reserved bindless slot 1) and the split-sum specular reads the GGX-prefiltered chain (slot 2)
-  plus the BRDF LUT (2D slot 3), all scaled by the background luminance. Verified live on
-  geometry-loader: a star-less sky (Backrooms) models objects with zero analytic light.
-  See `src/Graphics/AGENTS.md` § "Graphics/Compute/IBLBaker" and `src/Saphir/AGENTS.md`
-  § "IBL Ambient Pass".
-  ⚠️ **SCOPE FOUND 2026-07-26, do not discover it mid-migration: emitters are not the whole
-  light domain.** Two more sources feed the image and carry arbitrary units today:
-    - **Emissive materials — RESOLVED BY THE SPEC ITSELF, no convention to invent.** The earlier
-      framing here (a conflict between glTF conformance and photometric units) was WRONG.
-      glTF 2.0 `Specification.adoc` line 2118: *"For implementations where a physical light unit
-      is needed, the units for the multiplicative product of the emissive texture and factor are
-      candela per square meter (cd/m^2), sometimes called nits."* And the
-      `KHR_materials_emissive_strength` README: the extension *"supplies a unitless multiplier"*
-      and *"does not alter the physical units defined in glTF 2.0's additional textures section"*.
-      So `emissiveFactor * emissiveTexture * emissiveStrength` IS a luminance in nits — follow it
-      literally, no anchor constant to pick. The spec even defers the rest to us: line 2123, *"the
-      exact conversion from physical light units to the brightness of rendered pixels requires
-      knowledge of the camera's exposure settings, which are left as an implementation detail"* —
-      i.e. exactly phase 3.
-      TWO CONSEQUENCES, which are the real work:
-        1. Assets authored ARTISTICALLY (emissive in [0,1], no extension) become ~1 nit, i.e.
-           black next to an 800 lm bulb. **OWNER DECISION 2026-07-26: follow the spec, NO
-           compatibility shim.** An import-time multiplier would be a deviation from the very
-           spec we are choosing to honour, and it would silently double-correct assets that ARE
-           conformant. If an emissive goes black in phase 2, the fix belongs in the asset or in
-           the material setup, not in the importer.
-           Cost measured before deciding, and it is why this is cheap: exactly ONE asset file in
-           `projet-alpha.data` uses emissive at all, ZERO use
-           `KHR_materials_emissive_strength`, and there are 4 `setEmissiveStrength()` call sites
-           outside the loaders. Nothing meaningful to break.
-        2. ⚠️ Do NOT compensate for an exporter bug. Khronos glTF-Blender-IO issue #1766: Blender's
-           watts-based emission needs a `*683/(2*pi)` factor to produce spec-compliant nits. A dim
-           emissive coming out of Blender is wrong AT THE SOURCE; compensating engine-side would
-           double-correct every correctly exported asset.
-    - **IBL / environment** — per-material `IBLIntensity` plus `ambientLightIntensity` in the view
-      UBO, fed by environment cubemaps. VERIFIED 2026-07-26: `PixelFactory` decodes JPEG, PNG and
-      Targa only — three integer [0,1] formats, no Radiance `.hdr`, no OpenEXR. **The sky cannot
-      be authored in nits.**
-      OWNER DECISION 2026-07-26: go with **LDR + a per-cubemap `peakLuminanceNits` scale**. It is
-      CORRECT for the diffuse contribution, which is the bulk of what a sky provides: diffuse IBL
-      is a wide convolution where the sun disc weighs little, so an LDR gradient times a peak
-      luminance gives a right ambience.
-      ⚠️ **DOCUMENTED FAILURE MODE: a clamped sun means WRONG SPECULAR.** In a real cubemap the
-      sun disc is ~1.6e9 nits against ~8000 for the surrounding sky, a 200 000:1 ratio; in [0,1]
-      both end at 1.0. The cubemap feeds the materials' reflection component
-      (`setReflectionComponentFromEnvironmentCubemap`, `IBLIntensity`), so wet ground and metal
-      will mirror a DULL GREY sun instead of a blinding highlight, and an environment-driven bloom
-      cannot be right either. Accepted for now, fixed by the item below.
-- [x] **Phase 3 — absolute exposure**: DONE 2026-07-26. `Camera` carries the third member of the
-  triad (`setSensitivity()` in ISO, plus `setSensitivityRange()` defaulting to 100-12800), and
-  `ToneMapping` computes the APEX exposure from it: `EV100 = log2(N^2/t * 100/S)` then
-  `exposure = 1/(1.2 * 2^EV100)`. The auto-exposure clamps are no longer hand-picked numbers —
-  they are what the SENSOR allows at the current aperture and shutter, i.e. the exposures of the
-  min and max ISO. That is auto-ISO: the metering moves the sensitivity and nothing else, so the
-  aperture stays a depth-of-field control and the shutter a motion-blur control.
-  ⚠️ TRAP PAID FOR: the shader does `hdrColor *= exposure * autoExposure`, so the two terms
-  MULTIPLY. Putting the physical exposure in both compounded it to ~3e-6 and rendered every scene
-  black (measured: mean luma 10.9). In AUTO mode the metering IS the exposure and the term is only
-  the EV bias; the full APEX exposure belongs there only in MANUAL mode.
-  ⚠️ CONSEQUENCE, and it is the point of the whole project: **the camera settings must now match
-  the lighting, exactly like a real body.** `gltf-loader` shot its 100000 lx courtyard at f/2.8
-  1/60 — an indoor setting, about three stops over even at the ISO 100 floor, where the metering
-  has nowhere left to go: 16.5% of the frame blown. Moved to f/11 1/250 (sunny-16), it reads
-  **125.2 mean / 0.0% crushed / 0.0% blown / 98.0% midtones**, the best of the whole migration.
-  ⚠️ `liminal` still reads 200.4 with 5.8% blown at f/4 1/60: its lamps and its optics have not
-  been tuned against each other yet. That is authoring, not a defect.
-- [x] **Phase 4 — recalibrate** every effect reading absolute luminance. DONE 2026-07-26.
-  GI/AO turned out to carry NO absolute luminance threshold, so this reduced to the bloom, and the
-  auto-exposure clamps were already done in phase 3 (they are the sensor's ISO range now).
-  The bloom threshold is a scene luminance in NITS, because the effect runs on the HDR scene
-  before the sensor: the old 0.8-1.3 meant "anything above one nit", i.e. every lit surface, so
-  the whole frame bloomed and veiled itself. Re-authored per scene: 3000 for a sunlit courtyard,
-  1000-2000 for a bright debug scene, 150 for an indoor pool, 20 for a night castle.
-  ⚠️ AND THE ORDER WAS WRONG (owner spotted it). Veiling glare is scattering INSIDE the lens, so
-  it applies to the image the optics have already FORMED — after the defocus and the motion smear,
-  before the sensor. It used to sit early in the scene stack, ahead of the temporal resolve, so it
-  was computed on a jittered aliased image whose thin highlights flicker in and out of the
-  threshold. Bloom is therefore now a CAMERA-materialized photographic effect like the depth of
-  field and the tone mapping (`Camera::enableBloom()`, `setBloomThreshold()` in nits,
-  `setBloomIntensity()`), inserted in the canonical order **DepthOfField -> Bloom -> ToneMapping**,
-  and removed from all four demo stacks.
-  Measured on `gltf-loader`: local contrast `|grad|` rises from 2.056 to **2.861** (+39%) — the
-  signature of a bloom that stops veiling the whole frame — with the midtones relaxing from 98.0%
-  to 83.9%, i.e. the dynamic range reopening instead of being flattened.
-  DEPTH OF FIELD: FIXED, and it was a FORMULA BUG, not a scale. The thin-lens circle of confusion
-  needs the aperture DIAMETER, `A = f / N`; the shader used the f-number N itself, which inverts
-  the whole relation — closing down to f/11 blurred FOUR TIMES MORE than f/2.8 instead of four
-  times less. `CoCScale = 10` was the fudge compensating for it. Now: the diameter is derived from
-  the f-number, the resulting CoC (a size in meters ON the sensor) is normalised by the sensor
-  width, which the camera carries (`setSensorWidth()`, 36 mm full frame — the format the focal
-  lengths were already implicitly in), and `CoCScale` drops to 1, surviving only as a deliberate
-  artistic override.
-  Measured on `gltf-loader` at f/11: local contrast `|grad|` **2.861 -> 9.940**, ×3.5, the
-  foreground finally sharp as a small aperture demands.
-  FOLLOW-UP (2026-07-26, code inspection): the normalisation above never reached the screen — the
-  setup stored the CoC as a FRACTION of the image width but the gathers multiplied it by
-  `MaxRadius` (12) instead of converting to pixels (`fraction * halfResWidth / 2`, ~×720 at
-  2880-wide), leaving the blur ~80x too weak and resolution-dependent: subject isolation was
-  impossible (owner-reported symptom). Fixed at the source: the setup now writes the SIGNED CoC
-  radius in half-res PIXELS, clamped by `MaxRadius` — which becomes a pure performance/quality
-  ceiling (default raised 12 -> 32) — and every downstream pass (dilate, gathers, composite blend)
-  consumes pixels directly. `CoCScale` is REMOVED (key and member): the physics is the only truth.
-  Also fixed in the same pass: first-frame read of the undefined 1x1 focus history (NaN could
-  poison the EMA forever; the reset frame now falls back to the manual focus distance) and the
-  dead `texelSize` push constants of the composite. ⚠️ A persisted `MaxRadius` from an older
-  settings file still caps the new default; the stale `CoCScale` entry is simply ignored.
-  Verified on `gltf-loader`: close-focus shot (capital at 0.6 m, courtyard at ~12 m), subject
-  sharp, background visibly defocused at f/2.8 / 13.1 mm.
-
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
-
-### GI/AO follow-ups (from the 2026-07-23 GlobalIllumination demo debugging session)
-
-- [x] **RTR: port the shadow-ray occlusion fix** — DONE (validated 2026-07-23 in a
-  reflection-heavy indoor scene). The naive port regressed (phantom shadows, dead tile
-  reflections) and produced the "reflections must match the raster" contract: shadow rays
-  only for shadow-casting lights (per-light SSBO flag) + real scene ambient at hit points.
-  See caution-points § "RTR Shadow Rays + The Reflections Must Match The Raster Contract".
-- [x] **RTGI: read receiver albedo from the albedo G-buffer attachment** — DONE 2026-07-24
-  (part of the temporal/multi-bounce work; the primary ray is gone, −1 ray/pixel).
-- [x] **GI second bounce** — DONE 2026-07-24 via the multi-bounce temporal feedback
-  (screen-space geometric series, `MultiBounce/Strength` = continuous bounce dial).
-  Validated in the `global-illumination` demo: +21% median where lit+penumbra co-visible.
-  KNOWN LIMIT: screen-space only — no propagation around never-co-visible corners; the
-  full fix remains a world-space cache (probes / surface cache), budget-gated.
-- [x] **GI temporal accumulation** — DONE 2026-07-24 (RTGI passes 4/5: temporal resolve +
-  world-normal history, camera-distance + normal validation, neighborhood clamp).
-  Static-geometry reprojection only (v1) — see motion vectors item below.
-- [ ] **Motion vectors (5th MRT attachment)** — required for correct temporal reprojection
-  of MOVING geometry (RTGI v1 ghosts on animated actors, bounded by history validation).
-  Chain: (B1) move scene-pass transforms from push constants to a per-instance SSBO —
-  ALSO fixes the 132-byte min-spec violation below; (B2) per-renderable previous model
-  matrix (Unique member; Multiple: +4 vec4/instance in the VBO); (B3) RG16F MRT attachment
-  (watch the depth clear index shift, same trap as the albedo attachment); (B4) skeletal:
-  previous pose retained + double skinning in the VS (permanent VS cost on humanoids).
-  PROGRESS 2026-07-25 — B1 milestones 1-3 DONE: `Scenes/SceneInstanceTransforms` (per-frame
-  SSBO `{VP, prevVP}` header + `{model, prevModel}` entries, frame-linear slots staged at
-  `prepareRender()`, `Scene::beginRenderFrame()` renderer contract) + dedicated descriptor
-  set per frame-in-flight at the new `Saphir::SetType::PerSceneTransforms` index (owner
-  decision: NOT in the per-target view set — incompatible lifecycles) + CLASSIC PATH
-  SWITCHED: non-instanced/non-MDI/non-cubemap/non-advanced scene programs push VP+frameIndex
-  (68 B, MDI precedent) and read the model matrix from the SSBO via `gl_InstanceIndex`
-  (== firstInstance with instanceCount 1 — no shaderDrawParameters requirement; owner-visible
-  deviation from the gl_BaseInstance wording, same mechanism, wider fleet).
-  Validated: doom-loader (unlit=switched path), global-illumination A/B in noise floor,
-  basic-scenery (infinity view + sprites). MILESTONE 4 DONE (2026-07-25): ADVANCED path
-  switched too (push V + frameIndex = 68 B, projection from the view UBO, model from the
-  SSBO — kills the Unique 132 B violation; incl. the LightGenerator.ShadowMap non-instanced
-  reads). OWNER DECISION: cubemap scene / shadow 2D / CSM / shadow-cubemap paths STAY on
-  push constants (64-68 B, min-spec clean, no motion data needed there) — assumed limit.
-  GI demo A/B: M4 render BIT-IDENTICAL to M3 (0 differing bytes, converged accumulation).
-  MILESTONE 5 DONE (2026-07-25): `PipelineLayout::createOnHardware()` validates every push
-  range (hard error above the device limit, warning above the 128 B minimum guarantee) +
-  INSTANCED advanced/billboard 132 B block fixed (push V only, VP recomposed in shader from
-  the view UBO projection — scene AND shadow variants; validated on the sprite and
-  basic-scenery demos, zero min-spec warnings engine-wide). Bench: perf-neutral (GI demo,
-  deterministic camera: 230 FPS B1 vs 225-235 baseline; doom-loader ~7.6k vs ~7.2k).
-  ==> B1 COMPLETE (committed e080399e). B2 DONE TOO (2026-07-25): Unique previousModel is
-  real (per-instance history advanced by the primary-view staging only) + Multiple opt-in
-  `EnableInstanceMotionHistory` creation flag (+4 vec4/instance VBO slot, full chain
-  generator→VertexShader→VertexBufferFormat→ProgramCacheKey — no demo content uses it yet).
-  Zero-behavior-change A/B validated (⚠️ identical capture timing required — RTGI
-  reconvergence residual pollutes the diff otherwise). B3 DONE (2026-07-25): RG16F velocity
-  5th MRT attachment (owner decision) — SceneRenderTarget/GrabPass/PostProcessor velocity
-  chain (`requiresVelocity()` aggregate, blit, `GrabPassVelocityAdapter`,
-  `FrameContext::velocity`), shader generation (VS `synthesizeVelocityClipPositions()`:
-  prev clip = SSBO header prevVP × {SSBO entry | PreviousModelMatrix attribute |
-  current-matrix camera fallback for billboards/MDI/pre-B4 skinned}; FS writes the NDC
-  delta on location 4, jitter-ready), PerSceneTransforms set extended to instanced programs
-  (header read), RTGI temporal pass consumes the velocity with 3x3 depth-nearest DILATION
-  instead of the camera-only reprojection (`requiresVelocity() == true` forces the full MRT
-  chain). Validated: GI (bit-clean render, active chain), basic-scenery (instanced+set),
-  doom-loader (unlit). ANTI-GHOSTING VALIDATED LIVE 2026-07-25 by the owner (GI demo +
-  walking Paladin, pre-B3 vs B3 binaries): pre-B3 showed no gross trail — the disocclusion
-  tests + neighborhood clamp already BOUNDED the wrong reprojection by REJECTING history on
-  the moving actor (visible as GI grain/shimmer on him); B3 reuses the history through
-  per-object velocity → visibly more stable GI on the moving actor (owner confirmed).
-  Optional future evidence: RenderDoc velocity-buffer capture. B4 DOUBLE SKINNING DONE
-  (2026-07-25): the skinning SSBO interleaves {current, previous} bone matrices (stride 2,
-  archived by `RenderableInstance::Abstract::updateSkinningMatrices()`, buffer x2, identity
-  init both slots); the vertex shader blends the previous pose (odd slots) into
-  `previousSkinnedPosition` when the velocity outputs are emitted — LIMB motion now
-  produces real per-pixel velocity. Skinning regression-checked (fbx-loader animated
-  Paladin incl. skinned shadow).
-  **⚠️ 2026-07-25: static-camera correctness — FIXED (defect 1 of the TAA item above).** The
-  TAA debugging session proved the velocity buffer was non-zero (~1-2 px, uniform across all
-  depths) when nothing moved: the B1-B4 validation only ever exercised MOVING geometry, where
-  a constant offset is invisible next to real motion, and RTGI had been reprojecting off by
-  that amount since 2026-07-24 with its own history validation masking the error. The jitter
-  no longer travels through any matrix, so the velocity is zero on a static camera by
-  construction. **Keep a static-camera zero-velocity check in any future motion-vector work.**
-  Defect 3 (translucent pass) remains open and is a velocity bug of the same family.
-  Next: TAA (blocked, see above) and motion blur (camera effect, shutter speed —
-  state-of-the-art research first: McGuire tile-based reconstruction).
-  See `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and
-  `src/Scenes/AGENTS.md` § "Instance Transforms".
-- [ ] **Push constant min-spec violation (132 B)** — `RenderableInstance/Unique.cpp`
-  `pushMatricesForRendering()`, `useAdvancedMatrices` path: view(64)+model(64)+frameIndex(4)
-  = 132 B > the 128 B Vulkan minimum guarantee → main pipelines would fail to build on
-  128 B devices (part of the AMD/Intel fleet). No engine-wide `maxPushConstantsSize`
-  validation exists either. Fixed by B1 above; add a creation-time validation regardless.
-  See caution-points § "Push Constants: the 128-Byte Minimum Guarantee".
-  DISCOVERED 2026-07-25: the INSTANCED advanced/billboard block has the same violation —
-  `Saphir/Generator/Abstract.cpp::declareMatrixPushConstantBlock()`, `wasInstancingEnabled`
-  branch declares V(64)+VP(64)+frameIndex(4) = 132 B. Owner decision: handle it with the
-  min-spec validation step (B1 milestone 5), not in the B1 non-instanced switch (likely
-  fix: stop pushing VP, recompose it in the shader from the view UBO projection × pushed V).
-- [x] **`GBufferInputs` struct refactor** — DONE 2026-07-25 as
-  `IndirectPostProcessEffect::FrameContext` (G-buffers + lightSet + ACTIVE CAMERA +
-  push constants), mechanical pass across all 16 effects. Motivated by the physical
-  camera model (camera data had to reach the effects each frame).
-- [x] **Camera presets** — DONE 2026-07-25: `Scenes/EffectsToolkit/CameraPresets`
-  (Neutral, HighQuality, HumanEye, VintageBlackAndWhite, Super8), cycled with KeyPad7
-  in the projet-alpha demos. Validated on Sponza.
+- [ ] **Re-light the demos that never migrated to the physical camera** (last phase of the
+  photometric project — the units, the attenuation, the APEX exposure and the effect
+  recalibration are all done; see `src/Graphics/AGENTS.md` § "Light Attenuation — Physical, Not
+  Artistic", § "Physical Camera" and § "Background photometric contract").
+  `Liminal` and `Citadel` add `ToneMapping` BY HAND with fixed parameters, so they have NO
+  metering to absorb photometric values and read blown out (`liminal` measured 200.4 mean, 5.8%
+  blown at f/4 1/60; `Citadel` reads ~0 nits). Their lamps and their optics have to be tuned
+  against each other. This is AUTHORING, not a defect.
+  ⚠️ Method: keep the auto-exposure ON while migrating a scene — absolute values span ~1 to
+  ~100000 and without metering every intermediate step renders pure white or pure black.
+- [ ] **Velocity on the translucent pass** (motion-vector defect 3) — the B1-B4 chain is done and
+  pushed (per-instance transforms SSBO, previous-model history, RG16F velocity attachment, double
+  skinning; see `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and `src/Scenes/AGENTS.md`
+  § "Instance Transforms"). The translucent pass still writes a wrong velocity — same family as
+  the two static-camera bugs already closed.
+  ⚠️ **Keep a static-camera zero-velocity check in any future motion-vector work.** The original
+  B1-B4 validation only ever exercised MOVING geometry, where a constant offset is invisible next
+  to real motion, and RTGI's own history validation masked the error for a day.
+- [ ] **Push constant min-spec violation — observed at 144 B (owner, 2026-07-30), still open.**
+  `Saphir/Generator/Abstract.cpp::declareMatrixPushConstantBlock()` still emits a
+  `V(64) + M(64) + frameIndex(4)` = 132 B fallback for the advanced path when a scene has no
+  instance transforms, and `generatePushConstantRanges()` lays blocks END TO END — so a second
+  declared block ADDS to that offset, which is how the engine's own startup validation now reports
+  144 B against the 128 B Vulkan minimum guarantee (part of the AMD/Intel fleet exposes exactly
+  128). The validation itself is DONE (`Vulkan::PipelineLayout::createOnHardware()`: hard error
+  above the device limit, warning above 128 B) — read the warning to identify which program and
+  which second block push it over, then eliminate the fallback.
+  See `docs/caution-points.md` § "Push Constants: the 128-Byte Minimum Guarantee".
 - [ ] **Physical camera follow-ups** — (a) console commands for the camera optics
   (`prévoir les possibilités`: the setters exist, the bindings don't); (b) focal length
-  → FOV coupling as an opt-in physical mode (sensorWidth); (c) full exposure triangle
-  (ISO/shutter) — requires scene luminance calibration; (d) bokeh aperture blades
-  (polygonal sample distribution in the DoF gather); (e) more presets (the LensPresets
+  → FOV coupling as an opt-in physical mode (sensorWidth); (c) bokeh aperture blades
+  (polygonal sample distribution in the DoF gather); (d) more presets (the LensPresets
   catalog — GoldenHour, Analog80s... — can each become a full camera preset).
 
-## Rendering
+### GI/AO follow-ups
 
-### ~~Throttle concurrent BLAS builds~~ — root cause found and FIXED (2026-07-05)
-- The "16 concurrent BLAS builds" reading was an artifact: builds are serialized
-  (`m_buildAccess` mutex + per-build fence wait) and `getGraphicsQueue()` round-robins,
-  so stale checkpoint markers linger on every queue. Nothing to throttle.
-- **Actual root cause**: `buildBLAS()` waited `waitIdle()` on ONE round-robined transfer
-  queue while the vertex/index upload of the very buffers it reads could be in flight on a
-  SIBLING transfer queue (the family has 2) → the build read mid-DMA data → the GPU AS unit
-  stalled on garbage triangles → `Xid 109 CTX SWITCH TIMEOUT` → `VK_ERROR_DEVICE_LOST`.
-- **Fix**: `Device::waitTransferQueuesIdle()` (all queues of the transfer family, graphics
-  fallback) used by the builder. Acceptance: the two deterministic repros (GI disabled and
-  GI 4 spp on the glTF Sponza+extras scene, no frame cap — both ~100% fault before) pass
-  6/6 clean.
+- [ ] **World-space GI cache** — the multi-bounce feedback is SCREEN-SPACE only: no propagation
+  around corners that are never co-visible. The full fix is a world-space cache (probes /
+  surface cache), budget-gated. See `src/Graphics/AGENTS.md` § "RTGI — Temporal + Multi-Bounce".
+
+## Rendering
 
 ### Post-device-loss robustness (observed 2026-08-04, macOS)
 
@@ -664,7 +136,7 @@ object; the services keep using them. Options to evaluate: a device-lost flag ch
 service layer (fail-stop with diagnostics dump), or full device recreation. Low urgency — the
 known triggers are fixed — but any future GPU fault will end in the same undignified crash.
 
-## Current State (v0.6.4)
+## Current State (v0.9.52)
 
 The renderer has a solid foundation:
 - **State sorting** via 64-bit composite key (pipeline > material > geometry > distance)
@@ -673,6 +145,8 @@ The renderer has a solid foundation:
 - **Triple buffering** with double-buffered SSBO/indirect buffers per frame-in-flight
 - **TLAS deferred recording** for ray-tracing acceleration structure builds
 - **Post-processing pipeline** with indirect (multi-pass) and direct (in-RP) effect execution
+- **Per-instance transforms SSBO** (`Scenes::SceneInstanceTransforms`) with motion history
+- **Bindless texture table** (`BindlessTextureManager` + per-scene `BindlessTextureSet`)
 
 ### Roadmap toward UE5-class runtime
 
@@ -686,18 +160,20 @@ Move culling and draw submission from CPU to GPU.
 - CPU uploads entire scene to persistent SSBOs, no longer rebuilds render list per-frame
 - Foundation for Nanite-class geometry handling
 
-#### 2. Bindless Textures
+#### 2. Bindless Textures — FOUNDATION DONE, the PAYOFF is not taken yet
 
-Eliminate material as a batch-breaking criterion.
+The global table exists and is multi-scene safe (`BindlessTextureManager`, per-scene
+`BindlessTextureSet`; see `src/Graphics/AGENTS.md`). What remains is USING it to stop treating
+material as a batch-breaking criterion:
 
-- Single descriptor set containing all scene textures
-- Per-draw material index stored in SSBO alongside model matrix
-- Batch key reduces from `(pipeline, material, geometry)` to `(pipeline, geometry)`
+- Per-draw material index stored in the transforms SSBO alongside the model matrix
+- Batch key reduced from `(pipeline, material, geometry)` to `(pipeline, geometry)`
 - Dramatically larger MDI batches
 
 #### 3. GPU Occlusion Culling (Hi-Z)
 
-Reject invisible geometry before draw submission.
+Reject invisible geometry before draw submission. A Hi-Z depth pyramid already exists for SSR
+ray marching (`Effects/Framebuffer/SSR`), but nothing culls with it.
 
 - Downsample previous frame depth into Hi-Z mipmap pyramid
 - GPU compute tests each bounding box against Hi-Z

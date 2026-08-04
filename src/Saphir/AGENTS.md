@@ -497,6 +497,24 @@ case DirectionalLightPassColorMap: if (!enableShadowMap) { enableColorProjection
 case DirectionalLightPass: lightType = Directional; break;
 ```
 
+### Emission on the UNLIT path — `emissionMultiplier()` MULTIPLIES, it does not ADD
+
+Emission is normally applied by `LightGenerator`, which **never runs for an unlit material**.
+So `SimplePass` (the skybox, unlit sprites) used to emit a bare `svOutputFragment = SurfaceColor;`
+— the material-properties block carried `emissiveStrength` but nothing consumed it, which is why a
+skybox authored at 8000 nits rendered at its raw texel value. Found only by dumping the generated
+GLSL; the C++ setters all looked correct.
+
+`Material::Interface::emissionMultiplier()` closes it, and the asymmetry is deliberate:
+
+- **UNLIT**: there is no lighting to add emission on top of, so the surface colour **IS** the
+  emitted radiance — the emission MULTIPLIES it (`SceneRendering.cpp`, `SimplePass` branch).
+- **LIT**: `LightGenerator` keeps ADDING the emission to the shaded result.
+
+Applying it in both would double-count. ⚠️ And it is deliberately **NOT** applied to the albedo
+G-buffer attachment written from the same `fragmentColor()` expression: albedo is a reflectance in
+[0,1], and pushing 8000 nits into it poisons every consumer that reads it — RTGI first.
+
 ### MRT normal output — the `N` declaration contract
 
 `SceneRendering` writes the view-space perturbed normal to the G-buffer normal

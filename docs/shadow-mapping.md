@@ -118,6 +118,19 @@ Shadow map filtering code is generated in `LightGenerator.ShadowMap.cpp`:
 - `Saphir/LightGenerator.ShadowMap.cpp` - All shadow map code generation
 - `Saphir/LightGenerator.hpp:PCFMethod` - PCF method enum
 
+## Alpha-Tested Shadows — the shadow pass must honour the opacity mask
+
+The shadow pass renders depth only, so it is tempting to skip texture sampling entirely.
+Doing that makes alpha-cut geometry cast the shadow of its **QUAD**: the palm trees of
+`basic-scenery` used to drop hard rectangular blocks on the ground instead of leaf shadows.
+
+`Generator::ShadowCasting` therefore generates a discard in the shadow fragment shader when
+`needsAlphaTest` is set, delegating to `Material::Interface::generateShadowAlphaTestCode()` so
+each material type samples its own opacity source. Any new material type that supports an
+opacity mask MUST implement it, otherwise its cut-outs silently cast solid shadows again.
+
+**Code reference:** `Saphir/Generator/ShadowCasting.cpp` (fragment shader generation).
+
 ## Cascaded Shadow Maps (CSM) — STATUS: PARTIALLY REPAIRED, STILL NOT USABLE (Jul 2026)
 
 > [!CAUTION]
@@ -136,7 +149,7 @@ Shadow map filtering code is generated in `LightGenerator.ShadowMap.cpp`:
 | 1 | `Scene::prepareRenderPassTypes()` never emitted `DirectionalLightPassCSM`, while `renderLightedSelection()` selects it as soon as `light->usesCSM()` | Program lookup missed at draw time → the whole directional pass was skipped. No diffuse, no specular, NO shadow. Only the ambient pass survived, so the scene looked flatly ambient-lit | **FIXED** |
 | 2 | `generateCSMShadowMapCode()` emitted `ubView.viewMatrix`, which the 2D view block does not declare (the view matrix travels as a PUSH CONSTANT, vertex stage only) | The CSM fragment shader could not compile. `setBroken()` on the instance then removed the renderable from rendering entirely — a disappearing ground and a frozen animated material | **FIXED** — reads `svPositionViewSpace.z`, requested `ToNextStage` in all four light generators |
 | 3 | `LightSet::initialize()` sized the shared directional UBO on the CLASSIC block (~120 B) while a CSM light always uploads the CSM block (324 B) | Cascade splits, cascade count, shadow bias and the light's own colour / direction / intensity were truncated away and never reached the GPU | **FIXED** — sized on `max(classic, CSM)` |
-| 4 | The CSM block's colour / direction / intensity are written **only** inside `DirectionalLight::updateCascades()`, which returns early when `m_shadowMap == nullptr` | Measured live after fixes 1-3: the ground still receives no sun from a CSM light. Switching the same scene to the classic constructor lights it correctly — an A/B on `water-world` with everything else unchanged | **OPEN** — see `TODO.md` |
+| 4 | The CSM block's colour / direction / intensity are written **only** inside `DirectionalLight::updateCascades()`, which returns early when `m_shadowMap == nullptr` | Measured live after fixes 1-3: the ground still receives no sun from a CSM light. Switching the same scene to the classic constructor lights it correctly — an A/B on `water-world` with everything else unchanged | **OPEN, PARKED BY OWNER DECISION** (Jul 2026) — the classic map is the right tool for the scenes at hand and the investigation was closed deliberately. Do NOT relaunch the light-UBO host readback without a new reason. |
 
 ### The CSM ⊕ colour-projection contract is now enforced in code
 
