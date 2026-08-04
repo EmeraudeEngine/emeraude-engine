@@ -39,15 +39,23 @@
 namespace EmEn::Scenes::EffectsToolkit::FX
 {
 	/**
-	 * @brief Creates a flashing point light.
+	 * @brief Creates a detonation flash: a point light that peaks instantly, decays fast, and
+	 * cools from white through the yellows to a settling tint.
+	 * @note PHOTOMETRIC UNITS. The power is authored in LUMENS, as a light is sold, and
+	 * converted to candela internally — same contract as
+	 * `Scenes::Toolkit::generate{Point,Spot,Directional}Light()`.
+	 * @warning Do NOT try to shape the flash with the radius. Under the windowed inverse square
+	 * the radius is only a culling bound: `saturate(1 - (d/r)^4)^2` sits at 1.0 over almost the
+	 * whole range, while `1 / (d^2 + 1)` carries the falloff. Growing it brightens nothing, it
+	 * moves the hard cut. The envelope lives in the intensity keyframes.
 	 * @param node A reference to a scene node.
-	 * @param color A reference to a color.
-	 * @param radius The point light radius.
-	 * @param intensity The point light initial intensity.
+	 * @param settlingTint The colour the flash cools DOWN to; it always starts white hot.
+	 * @param cullingRadius The distance at which the contribution becomes negligible, in metres.
+	 * @param peakLumens The luminous power at the detonation peak, in lumens.
 	 * @param duration The animation duration in milliseconds.
 	 * @return std::shared_ptr< Component::PointLight >
 	 */
-	EMEN_API std::shared_ptr< Component::PointLight > createFlashEffect (Node & node, const Base::PixelFactory::Color< float > & color, float radius, float intensity, uint32_t duration) noexcept;
+	EMEN_API std::shared_ptr< Component::PointLight > createFlashEffect (Node & node, const Base::PixelFactory::Color< float > & settlingTint, float cullingRadius, float peakLumens, uint32_t duration) noexcept;
 
 	/**
 	 * @brief Creates a temporary spherical push force.

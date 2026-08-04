@@ -856,6 +856,28 @@ flight keep sampling the published pair), then publishes via
 engine default black cubemap is never baked. Failures mark the source as attempted — no
 retry storm. See `src/Graphics/AGENTS.md` § "Graphics/Compute/IBLBaker".
 
+## EffectsToolkit/FX — photometric since Aug 2026
+
+`EffectsToolkit::FX::createFlashEffect()` was the LAST authoring entry point still taking raw
+candela after the photometric migration converted `Toolkit::generate{Point,Spot,Directional}Light()`
+to authoring units. It now takes **lumens** and converts once (the keyframes drive `setIntensity()`,
+which is candela, so converting per interpolated frame would be waste).
+
+Its keyframes are also the reference shape for a **detonation**, and the reason is a contract
+change nobody sees coming:
+
+> [!CAUTION]
+> **Do not shape a light effect with its RADIUS.** Under the windowed inverse square the radius is
+> `saturate(1 - (d/r)^4)^2`, a culling window that sits at 1.0 over almost the whole range; the
+> falloff is `1 / (d^2 + 1)`, distance only. Animating the radius — the natural move under the old
+> `max(1 - (d/r)^2, 0)` falloff — brightens nothing and just pops the hard cut in and out. The
+> envelope belongs in the intensity. Full write-up in `docs/caution-points.md` § "The light RADIUS
+> is a culling bound, not a dimmer".
+
+The flash also ramps its COLOUR (white hot → yellows → the caller's settling tint), which
+`Component::PointLight` supports natively: `playAnimation()` handles the `Color` id and `Sequence`
+interpolates `Variant`s of type `Color` (linear and cosine).
+
 ## Shadow Mapping Integration
 
 The Scene handles shadow map rendering and lighting pass selection. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.

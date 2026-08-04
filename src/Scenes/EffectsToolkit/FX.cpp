@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Animations/Sequence.hpp"
+#include "Graphics/Photometry.hpp"
 
 namespace EmEn::Scenes::EffectsToolkit::FX
 {
@@ -37,21 +38,56 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 	using namespace Base::PixelFactory;
 
 	std::shared_ptr< Component::PointLight >
-	createFlashEffect (Node & node, const Color< float > & color, float radius, float intensity, uint32_t duration) noexcept
+	createFlashEffect (Node & node, const Color< float > & settlingTint, float cullingRadius, float peakLumens, uint32_t duration) noexcept
 	{
+		/* The keyframes drive setIntensity(), which takes CANDELA, so the authored
+		 * luminous power is converted once here rather than on every interpolated frame. */
+		const auto peakCandela = Graphics::Photometry::candelaFromPointLumens(peakLumens);
+
 		const auto effect = node.componentBuilder< Component::PointLight >("Flash")
 			.setup([&] (auto & component) {
-				/* NOTE: repeat = 0 means no repetition (play once then stop). */
-				const auto interpolation = std::make_shared< Sequence >(duration, 0);
-				interpolation->addKeyFrame(0.0F, Variant{intensity}, InterpolationType::Cosine);
-				interpolation->addKeyFrame(0.5F, Variant{intensity * 0.85F}, InterpolationType::Cosine);
-				interpolation->addKeyFrame(1.0F, Variant{0.0F}, InterpolationType::Cosine);
-				interpolation->play();
+				/* INTENSITY — the detonation envelope, and the ONLY thing that shapes the
+				 * flash in time.
+				 *
+				 * ⚠️ Animating the RADIUS used to be the way to do this, and it no longer
+				 * works: under the photometric windowed inverse square the radius is
+				 * `saturate(1 - (d/r)^4)^2`, a culling WINDOW that sits at 1.0 over almost the
+				 * whole range and only bites near d == r. The falloff is carried by
+				 * `1 / (d^2 + 1)`, which depends on the distance alone. Growing the radius
+				 * therefore does not brighten anything — it just moves the hard cut outwards.
+				 *
+				 * Shape: a near-instant peak followed by a fast decay, which is what a
+				 * detonation does — the shock front flashes, then the fuel burns off as an
+				 * expanding, cooling fireball. Holding near-peak for half the duration (the
+				 * pre-photometric curve) does not read as an explosion, it reads as a lamp
+				 * being switched on, and it floods the whole scene.
+				 * NOTE: repeat = 0 means no repetition (play once then stop). */
+				const auto intensityRamp = std::make_shared< Sequence >(duration, 0);
+				intensityRamp->addKeyFrame(0.00F, Variant{peakCandela}, InterpolationType::Cosine);
+				intensityRamp->addKeyFrame(0.06F, Variant{peakCandela * 0.55F}, InterpolationType::Cosine);
+				intensityRamp->addKeyFrame(0.15F, Variant{peakCandela * 0.22F}, InterpolationType::Cosine);
+				intensityRamp->addKeyFrame(0.35F, Variant{peakCandela * 0.07F}, InterpolationType::Cosine);
+				intensityRamp->addKeyFrame(0.70F, Variant{peakCandela * 0.015F}, InterpolationType::Cosine);
+				intensityRamp->addKeyFrame(1.00F, Variant{0.0F}, InterpolationType::Cosine);
+				intensityRamp->play();
 
-				component.setColor(color);
-				component.setRadius(radius);
-				component.setIntensity(intensity);
-				component.addAnimation(Component::PointLight::Intensity, interpolation);
+				/* COLOUR — the fireball cools as it burns: the shock front is white hot, the
+				 * soot-laden fuel that follows radiates around 1500-2000 K, so the flash
+				 * settles through the yellows into the caller's tint. */
+				const auto colorRamp = std::make_shared< Sequence >(duration, 0);
+				colorRamp->addKeyFrame(0.00F, Variant{Color< float >{1.0F, 1.0F, 1.0F, 1.0F}}, InterpolationType::Cosine);
+				colorRamp->addKeyFrame(0.05F, Variant{Color< float >{1.0F, 0.95F, 0.75F, 1.0F}}, InterpolationType::Cosine);
+				colorRamp->addKeyFrame(0.18F, Variant{Color< float >{1.0F, 0.80F, 0.35F, 1.0F}}, InterpolationType::Cosine);
+				colorRamp->addKeyFrame(1.00F, Variant{settlingTint}, InterpolationType::Cosine);
+				colorRamp->play();
+
+				component.setColor(Color< float >{1.0F, 1.0F, 1.0F, 1.0F});
+				/* The radius is a CULLING BOUND, not a dimmer — set it where the contribution
+				 * becomes negligible and leave it alone. */
+				component.setRadius(cullingRadius);
+				component.setLuminousPower(peakLumens);
+				component.addAnimation(Component::PointLight::Intensity, intensityRamp);
+				component.addAnimation(Component::PointLight::Color, colorRamp);
 			}).build();
 
 		return effect;

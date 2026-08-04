@@ -806,6 +806,51 @@ truthful, so nothing was renamed.
 > `Shininess` was authored as a glossiness". The retune did NOT become a per-file sweep: the manifest
 > key was re-interpreted at the parse boundary instead.
 
+### The light RADIUS is a culling bound, not a dimmer — and an "artistic" emissive is 1 nit (Aug 2026)
+
+> [!CAUTION]
+> **Two independent consequences of the photometric migration, both of which make things
+> VANISH rather than look wrong.** Found on the `game-logic` fire and explosions, which had been
+> invisible since the migration.
+
+**1. Animating the radius no longer dims anything.** The pre-photometric falloff was
+`max(1 - (d/r)^2, 0)`, where the radius genuinely shaped the whole curve — so growing and shrinking
+it was the natural way to animate a flash or a dying fire. The photometric falloff is
+
+```glsl
+radiusWindow = clamp(1 - (d/r)^4, 0, 1)
+lightFactor *= (radiusWindow * radiusWindow) / (d * d + 1.0)
+```
+
+The window sits at **1.0 over almost the entire range** and only bites near `d == r`; the whole
+falloff is carried by `1 / (d^2 + 1)`, which depends on the distance alone. So the radius is now a
+**culling bound**: set it where the contribution stops mattering and leave it there. An effect that
+used to breathe by scaling its radius now either does nothing visible or pops its hard edge in and
+out. **Move the envelope to the intensity** — see `EffectsToolkit::FX::createFlashEffect()`, whose
+keyframes are the reference shape for a detonation (instant peak, fast decay; holding near-peak for
+half the duration reads as a lamp switching on, and floods the scene).
+
+**2. An emissive authored artistically emits exactly 1 nit.** The emitted quantity is
+`autoIlluminationColor * autoIlluminationAmount * emissiveStrength`, the AMOUNT is clamped to [0,1]
+because it is the emissive MASK, and `emissiveStrength` defaults to 1. So the conventional
+`"AutoIllumination": 1.0` — the artistic maximum — is **one candela per square metre**, which is
+invisible next to anything real. The brightness belongs in `EmissiveStrength`, in nits.
+
+⚠️ **Sprites could not express this at all until Aug 2026**: `SpriteResource::load()` parsed
+`AutoIllumination` but no strength key, so a flame sprite was structurally stuck at 1 nit. It now
+reads `EmissiveStrength`, the same key and contract as `StandardResource` / `PBRResource` and
+`KHR_materials_emissive_strength`.
+
+⚠️ **Reference luminances, because the intuition is wrong here**: a candle flame is ~**10 000**
+nits, not 5-10 — a flame is SMALL, not dim, and its luminance must not be confused with the
+illuminance it casts. Clear sky ~8000, SDR monitor 200-300, explosion fireball an order of
+magnitude above a flame, sun 1.6e9.
+
+⚠️ **Symptom shape to recognise**: both failures are SILENT. Nothing logs, nothing warns, the
+geometry is drawn and the light is enabled — the contribution is simply five orders of magnitude
+below what the auto-exposure is metering, so it reads as "the asset disappeared". When something
+vanishes after a photometric change, check the UNITS before suspecting the renderer.
+
 ### Fixed: the legacy specular was not energy-normalised, and `Shininess` was authored as a glossiness (Jul 2026)
 
 **Two independent defects that compounded into one symptom** — every sunlit Standard surface read as
