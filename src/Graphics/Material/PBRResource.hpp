@@ -455,6 +455,10 @@ namespace EmEn::Graphics::Material
 				return m_isUsingGrabPassForTransmission;
 			}
 
+			/** @copydoc EmEn::Graphics::Material::Interface::samplesTexture() const noexcept */
+			[[nodiscard]]
+			bool samplesTexture (const Vulkan::TextureInterface * texture) const noexcept override;
+
 			/**
 			 * @brief Sets the auto-illumination (emissive) component as a color.
 			 * @warning This function is available before creation time.

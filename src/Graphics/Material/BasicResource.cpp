@@ -581,6 +581,17 @@ namespace EmEn::Graphics::Material
 		return SurfaceColor;
 	}
 
+	bool
+	BasicResource::samplesTexture (const Vulkan::TextureInterface * texture) const noexcept
+	{
+		if ( texture == nullptr || m_textureComponent == nullptr )
+		{
+			return false;
+		}
+
+		return m_textureComponent->texture().get() == texture;
+	}
+
 	void
 	BasicResource::exportRTMaterialData (GPURTMaterialData & outData) const noexcept
 	{

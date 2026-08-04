@@ -2418,6 +2418,44 @@ meter a black scene and pin the exposure to the ISO ceiling.
 
 ---
 
+### Fixed: probe self-sampling is a GPU FAULT on Apple Silicon — the populate gate now auto-excludes (Aug 2026)
+
+> [!CRITICAL]
+> **A draw that samples the image it is being rendered into does not just glitch on macOS — it
+> faults the GPU.** `basic-scenery`'s bronze sphere sampled its own environment probe while being
+> rendered INTO that probe (the demo never called `excludeFromRendering()`). On Apple M2 the
+> feedback draw triggered a GPU error/recovery: macOS discarded every in-flight command buffer
+> (`kIOGPUCommandBufferCallbackErrorInnocentVictim` — the innocents die with the offender), MoltenVK
+> reported `VK_ERROR_DEVICE_LOST`, and the engine limped through a cascade of secondary failures
+> (`vkResetFences` rejected on the in-flight fence — "the fence must be destroyed", every later
+> IRT/effect creation failing) into a segfault. On desktop drivers the same feedback loop merely
+> reads stale texels, which is why the demo "worked" on Linux/Windows for months.
+>
+> **Diagnostic signature:** a burst of `VUID-vkCmdDrawIndexed-imageLayout-00344` ("layout
+> SHADER_READ_ONLY_OPTIMAL doesn't match previous known layout COLOR_ATTACHMENT_OPTIMAL") on a
+> sampler variable, immediately followed by `Lost VkDevice ... (victim of GPU error/recovery)`.
+> The named sampler tells you WHICH texture; the layout mismatch tells you it is being sampled
+> mid-render-pass. Everything after the device loss is noise — fix the trigger, not the cascade.
+>
+> **Fix (engine, two layers):**
+> - `Material::Interface::samplesTexture(const Vulkan::TextureInterface *)` — a material can now
+>   be asked whether any of its components samples a given texture (overridden by Basic, Standard
+>   and PBR resources).
+> - `Scene::checkRenderableInstanceForRendering()` consults it and **auto-excludes** the instance
+>   from Texture/Cubemap render targets its own material samples — no registration needed, the
+>   manual `excludeFromRendering()` list remains for other cases. Cost is confined to probe
+>   renders by a `renderType()` test.
+>
+> **Post-device-loss robustness remains an open item** (tracked in `TODO.md`): the engine does not
+> yet recover or fail-stop cleanly after `VK_ERROR_DEVICE_LOST` — it must not be reachable through
+> scene content in the first place.
+>
+> **Files:** `Scenes/Scene.rendering.cpp`, `Graphics/Material/Interface.hpp`,
+> `Graphics/Material/{Basic,Standard,PBR}Resource.{hpp,cpp}`. See also
+> `docs/reflection-pipeline.md` § 2.3 fix 4.
+
+---
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

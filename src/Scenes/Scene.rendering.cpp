@@ -37,6 +37,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Renderable/Types.hpp"
 #include "NodeCrawler.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 namespace EmEn::Scenes
 {
@@ -1000,6 +1001,34 @@ namespace EmEn::Scenes
 		if ( renderTarget->isExcludedFromRendering(renderableInstance.get()) )
 		{
 			return true; // Continue
+		}
+
+		/* AUTO-exclusion (probe self-sampling): an instance whose material SAMPLES the render
+		 * target being populated must never be rendered into it, whether or not the caller
+		 * registered it in the manual exclusion list above. Sampling an image that is
+		 * simultaneously the pass's color attachment is undefined behavior everywhere and a
+		 * hard GPU fault on Apple Silicon: measured on basic-scenery, the feedback draw
+		 * triggered a GPU recovery that discarded every in-flight command buffer
+		 * (kIOGPUCommandBufferCallbackErrorInnocentVictim) and lost the device. Only texture
+		 * render targets can be sampled: the renderType() test keeps the cost off the main
+		 * view/shadow hot paths, the dynamic_cast resolves the TextureInterface subobject. */
+		if ( const auto renderTargetType = renderTarget->renderType(); renderTargetType == RenderTargetType::Texture || renderTargetType == RenderTargetType::Cubemap )
+		{
+			if ( const auto * targetTexture = dynamic_cast< const Vulkan::TextureInterface * >(renderTarget.get()) )
+			{
+				const auto & renderable = *renderableInstance->renderable();
+				const auto layerCount = renderable.layerCount();
+
+				for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
+				{
+					const auto * material = renderable.material(layerIndex);
+
+					if ( material != nullptr && material->samplesTexture(targetTexture) )
+					{
+						return true; // Continue
+					}
+				}
+			}
 		}
 
 		/* Check whether the renderable instance is ready for shadow casting. */

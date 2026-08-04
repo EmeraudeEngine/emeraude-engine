@@ -597,6 +597,10 @@ namespace EmEn::Graphics::Material
 				return m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction;
 			}
 
+			/** @copydoc EmEn::Graphics::Material::Interface::samplesTexture() const noexcept */
+			[[nodiscard]]
+			bool samplesTexture (const Vulkan::TextureInterface * texture) const noexcept override;
+
 			/**
 			 * @brief Returns whether a material component is present.
 			 * @param componentType The type of component.

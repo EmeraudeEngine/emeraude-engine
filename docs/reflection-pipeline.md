@@ -195,6 +195,14 @@ probe blurs palm/dragon/floor physically, the polished one keeps the mirror.
 >    subject after creation — first brick of the future probe system. ⚠️ Lifetime is the
 >    caller's: exclusions are not cleaned when an instance dies. Validated: the city crosses
 >    the offscreen-rendering bronze sphere's reflection continuously, no inception disc.
+>    **AUTOMATIC since Aug 2026:** the same gate now also skips, without any registration, any
+>    instance whose MATERIAL samples the render target being populated
+>    (`Material::Interface::samplesTexture()`, cost gated on `renderType()` = Texture/Cubemap).
+>    The manual list stays for subjects the material test cannot see (e.g. excluding a
+>    neighbour). This closed a REAL GPU FAULT: `basic-scenery` never registered its bronze
+>    sphere, the self-sampling draw made the Apple M2 GPU fault and recover, macOS discarded
+>    every in-flight command buffer (`kIOGPUCommandBufferCallbackErrorInnocentVictim`) and the
+>    device was lost — see `docs/caution-points.md` § "Probe self-sampling".
 > 5. ✅ **FIXED — a skinned mesh in the probe corrupted the descriptor set binding.**
 >    `VUID-vkCmdBindDescriptorSets-pDescriptorSets-00358` + `VUID-vkCmdDrawIndexed-None-08600`
 >    on the first frames of `reflexion-debug` options 3 and 4 (and ONLY those two — they are

@@ -3415,6 +3415,25 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	PBRResource::samplesTexture (const Vulkan::TextureInterface * texture) const noexcept
+	{
+		if ( texture == nullptr )
+		{
+			return false;
+		}
+
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component != nullptr && component->texture().get() == texture )
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool
 	PBRResource::setReflectionComponentFromEnvironmentCubemap (float IBLIntensity) noexcept
 	{
 		if ( this->isCreated() )

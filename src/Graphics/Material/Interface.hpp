@@ -410,6 +410,25 @@ namespace EmEn::Graphics::Material
 			}
 
 			/**
+			 * @brief Returns whether one of the material components samples this texture.
+			 * @note Consulted by the render-list populate gate (Scene::checkRenderableInstanceForRendering)
+			 * to AUTO-EXCLUDE a renderable instance from a render target its own material samples:
+			 * a probe self-sampling loop (e.g. a dynamic reflection component pointing at the very
+			 * cubemap being rendered) reads an image that is simultaneously the pass's color
+			 * attachment — undefined behavior everywhere, and a hard GPU fault (device loss) on
+			 * Apple Silicon. Every material holding sampled textures MUST override this.
+			 * @param texture A raw pointer to the texture interface to test.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			samplesTexture (const Vulkan::TextureInterface * /*texture*/) const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Exports this material as a normalized PBR representation for ray tracing shaders.
 			 * @note Each material type overrides this to convert its properties to the unified
 			 *	   GPURTMaterialData format. Only properties visible in reflections are exported.

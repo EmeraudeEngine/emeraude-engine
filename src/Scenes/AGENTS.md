@@ -789,6 +789,14 @@ The Scene dispatches renderable layers into 7 render lists (defined in `Scene.hp
 - `Scene.rendering.cpp:insertIntoRenderLists()` — 3-way dispatch
 - `Scene.rendering.cpp:populateRenderLists()` — Clear and populate all 6 non-shadow lists
 
+**Populate gate exclusions** (`checkRenderableInstanceForRendering()`, Aug 2026): before the
+readiness checks, an instance is skipped for a given target when (1) the caller registered it in
+the target's manual exclusion list (`RenderTarget::Abstract::excludeFromRendering()`), or (2) —
+**automatic, no registration** — its material `samplesTexture()` the Texture/Cubemap target being
+populated. Rule 2 is what keeps a probe self-sampling feedback loop structurally impossible: on
+Apple Silicon that loop is a GPU fault → `DEVICE_LOST`, not a mere artifact. See engine
+`docs/caution-points.md` § "Probe self-sampling" and `docs/reflection-pipeline.md` § 2.3 fix 4.
+
 ## LightSet & Background-Derived Lighting (Jul 2026)
 
 **The "static lighting" mode was REMOVED** (`Saphir::StaticLighting`, `enableAsStaticLighting()`,

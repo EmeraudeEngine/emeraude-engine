@@ -653,6 +653,17 @@ overcast daylight 10 000 lx, office interior ~500 lx, full moon 0.25-1 lx; 60 W-
   GI 4 spp on the glTF Sponza+extras scene, no frame cap — both ~100% fault before) pass
   6/6 clean.
 
+### Post-device-loss robustness (observed 2026-08-04, macOS)
+
+After a `VK_ERROR_DEVICE_LOST` (probe self-sampling GPU fault on Apple M2, since fixed at the
+trigger — see `docs/caution-points.md` § "Probe self-sampling"), the engine kept limping: every
+later fence reset was rejected ("the fence must be destroyed" per the validation layer), every
+IRT/effect/grab-pass creation failed in cascade, and the process eventually segfaulted instead
+of failing stopped. A lost device invalidates fences, command buffers and every downstream
+object; the services keep using them. Options to evaluate: a device-lost flag checked by the
+service layer (fail-stop with diagnostics dump), or full device recreation. Low urgency — the
+known triggers are fixed — but any future GPU fault will end in the same undignified crash.
+
 ## Current State (v0.6.4)
 
 The renderer has a solid foundation:

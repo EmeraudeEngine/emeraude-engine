@@ -184,6 +184,10 @@ namespace EmEn::Graphics::Material
 				return false;
 			}
 
+			/** @copydoc EmEn::Graphics::Material::Interface::samplesTexture() const noexcept */
+			[[nodiscard]]
+			bool samplesTexture (const Vulkan::TextureInterface * texture) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::exportRTMaterialData() */
 			void exportRTMaterialData (GPURTMaterialData & outData) const noexcept override;
 

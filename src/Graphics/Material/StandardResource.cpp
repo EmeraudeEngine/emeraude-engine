@@ -2687,6 +2687,25 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::samplesTexture (const Vulkan::TextureInterface * texture) const noexcept
+	{
+		if ( texture == nullptr )
+		{
+			return false;
+		}
+
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component != nullptr && component->texture().get() == texture )
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool
 	StandardResource::setReflectionComponentFromEnvironmentCubemap (float amount) noexcept
 	{
 		if ( this->isCreated() )
