@@ -1,6 +1,6 @@
 name: PCH-OFF build (Linux)
 
-# The cascade-wide STL precompiled header (emeraude-base/src/STLPrecompiledHeaders.hpp)
+# The cascade-wide STL precompiled header (emeraude-base/cmake/STLPrecompiledHeaders.cmake)
 # force-includes the STL hot-set into every translation unit. With the PCH enabled this
 # silently hides any TU or header that uses std::... without including the right header —
 # it compiles only because the PCH already pulled that header in. This lane builds the

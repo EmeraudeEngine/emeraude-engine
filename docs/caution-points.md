@@ -1693,8 +1693,8 @@ file-local constant sits unused. The traces are mislabelled and the log becomes 
 
 ### PCH masks missing STL includes → build PCH-OFF to catch them
 
-The cascade-wide STL precompiled header (`emeraude-base/src/STLPrecompiledHeaders.hpp`) force-includes
-the whole STL hot-set (`<ranges>`, `<string>`, `<ostream>`, `<sstream>`, …) into every translation
+The cascade-wide STL precompiled header (`emeraude-base/cmake/STLPrecompiledHeaders.cmake`) force-includes
+the whole STL hot-set (`<ranges>`, `<string>`, `<iostream>`, `<sstream>`, …) into every translation
 unit. With `EMERAUDE_ENABLE_PCH=ON` this silently hides any TU or header that uses `std::…` without
 including the right header — it compiles only because the PCH already pulled that header in. Flip the
 PCH off and the same code fails: `'std::views' has not been declared`, `'ostream' in namespace 'std'

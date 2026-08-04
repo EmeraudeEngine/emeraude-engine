@@ -1,6 +1,7 @@
 # Development History Log
 
 ## Beta version 0.9.51 (in development)
+ - **Revert `EMERAUDE_USE_EXPLICIT_EXPORTS` to Off by default** — `On` makes the consuming application's link much longer, on every link (explicit `dllimport`/`dllexport` gives the consumer's linker a far larger import-resolution surface than the compact export-all `.def`), on top of the standing duty to annotate every new consumer-referenced public symbol. Also move the MSVC "export-all excludes the PCH" guard out of emeraude-base's shared helper into the engine's own PCH call site. The engine target is the only one in the cascade using `WINDOWS_EXPORT_ALL_SYMBOLS`, so it is now the only one that loses its precompiled header — every other target keeps it. The explicit-export migration itself stays in the tree and can be turned back on with one line.
  - Fix Vulkan validation errors.
  - macOS: minor fixes.
  - Docs: the macOS/MoltenVK section (bindless samplers require MoltenVK 1.4+), and what not to re-investigate.

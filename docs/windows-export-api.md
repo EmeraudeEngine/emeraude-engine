@@ -1,11 +1,28 @@
 # Windows DLL export API (`EMEN_API`) — migration guide
 
-> Status: **migration complete (2026-07).** `EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to **ON**
-> (explicit `EMEN_API` boundary, `WINDOWS_EXPORT_ALL_SYMBOLS` dropped) and
-> `EMERAUDE_ENABLE_PCH` defaults to **ON**. The full MSVC cascade (base → engine → a consumer library →
-> consumer executables) builds and links with the PCH enabled. New public API that a consumer
-> references out-of-line must carry `EMEN_API` — the consumer's linker (`LNK2019` on
-> `__imp_...`) names any omission.
+> Status: **migration complete and verified (2026-07), but OFF by default again (2026-08).**
+> The full MSVC cascade (base → engine → a consumer library → consumer executables) has been built
+> and linked with `EMERAUDE_USE_EXPLICIT_EXPORTS=ON` and the PCH enabled — the mechanism works and
+> the annotations are in the tree.
+>
+> The default was nonetheless reverted to **OFF** for two *permanent* costs of `ON`:
+>
+> 1. **Link time (decisive).** With `ON`, the consuming application takes
+>    **much longer to link** — paid on every single link of the downstream project. Explicit
+>    `dllimport`/`dllexport` puts the consumer's linker through a far larger import-resolution
+>    surface than the compact export-all `.def`. Trading a few seconds of engine compile time (the
+>    PCH) for a much longer consumer link is not a trade worth making.
+> 2. **Maintenance.** Every new public symbol a consumer references out-of-line must carry
+>    `EMEN_API`, or the **consumer's** link breaks (`LNK2019` on `__imp_...`) — a failure that
+>    surfaces one repository away from the change that caused it.
+>
+> `OFF` restores `WINDOWS_EXPORT_ALL_SYMBOLS` and costs the engine target its
+> PCH on MSVC, **and nothing else**: the guard lives at the engine's
+> `emeraude_base_target_enable_pch()` call site, so base and every consumer target keep theirs
+> (`EMERAUDE_ENABLE_PCH` is a separate, cascade-wide switch).
+>
+> Turning it back `ON` is a one-liner in `CMakeLists.txt` — the annotated surface is already there.
+> If you do, expect to annotate any public API added since.
 
 ## 1. Why this exists
 
@@ -30,10 +47,10 @@ auto-exporting and declare the public boundary explicitly with the `EMEN_API` ma
 
 `option(EMERAUDE_USE_EXPLICIT_EXPORTS … OFF)` in `CMakeLists.txt`:
 
-| Mode | `WINDOWS_EXPORT_ALL_SYMBOLS` | `EMEN_API` expands to |
-|------|------------------------------|---------------------------|
-| **OFF** (default) | `ON` | *nothing* (no-op) |
-| **ON** | `OFF` | `__declspec(dllexport)` while building the DLL (`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for consumers, `__attribute__((visibility("default")))` elsewhere |
+| Mode | `WINDOWS_EXPORT_ALL_SYMBOLS` | `EMEN_API` expands to | Engine PCH on MSVC |
+|------|------------------------------|---------------------------|--------------------|
+| **OFF** (default) | `ON` | *nothing* (no-op) | disabled (guard at the call site) |
+| **ON** | `OFF` | `__declspec(dllexport)` while building the DLL (`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for consumers, `__attribute__((visibility("default")))` elsewhere | enabled — but a much longer consumer link |
 
 Because the macro is inert while the option is OFF, the public API can be annotated **one class at
 a time without ever breaking the default build**. The switch is flipped to ON only once the whole
@@ -257,6 +274,16 @@ The genuinely exposed case is the standalone exported RAII holder with no such m
       linkage attribute must be on the FIRST namespace-scope declaration, before the class).
 - [x] Flip defaults to ON (`EMERAUDE_USE_EXPLICIT_EXPORTS`, `EMERAUDE_ENABLE_PCH`); full MSVC
       cascade verified (build + link with PCH).
-- [x] MSVC PCH guard in emeraude-base's `EnablePrecompiledHeaders.cmake`: **kept deliberately**
-      — it now protects the `EMERAUDE_USE_EXPLICIT_EXPORTS=OFF` fallback (anyone reverting to
-      export-all gets the PCH silently disabled instead of `LNK2001`).
+- [x] **`EMERAUDE_USE_EXPLICIT_EXPORTS` reverted to OFF by default (2026-08)** — the mechanism is
+      done and stays in the tree, but `ON` makes the consuming application's **link much longer, on
+      every link** (decisive), on top of the standing annotation duty (a missing `EMEN_API`
+      breaks the *consumer's* link, one repo away). Neither was worth the engine's own PCH.
+      Cost of OFF: that single target's PCH on MSVC. Flipping back is a one-liner.
+- [x] MSVC PCH guard: **kept deliberately** — it protects the `EMERAUDE_USE_EXPLICIT_EXPORTS=OFF`
+      fallback (anyone reverting to export-all gets the PCH silently disabled instead of `LNK2001`).
+      **Moved (2026-08) from emeraude-base's `EnablePrecompiledHeaders.cmake` to the engine's own
+      `emeraude_base_target_enable_pch()` call site.** Rationale: this target is the only one in the
+      cascade using export-all, so a guard in the shared helper needlessly stripped the PCH from
+      every *other* target (base, the consumer libraries, the consumer binaries — all
+      `STATIC`/`OBJECT`/executables, never export-scanned) as soon as the option went OFF. It also
+      removed an engine-specific concept from the foundation helper.
