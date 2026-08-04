@@ -147,6 +147,18 @@ namespace EmEn::Graphics::Renderable
 					materialResource.setAutoIlluminationAmount(autoIllumination);
 				}
 
+				/* Check the optional emissive strength — the PHOTOMETRIC half of the emission.
+				 * The amount above is clamped to [0,1] and acts as the emissive MASK, so it
+				 * cannot carry a brightness: `AutoIllumination: 1.0` alone emits exactly 1 nit,
+				 * which is invisible next to any real light source. A self-illuminating sprite
+				 * (a flame, an explosion, a neon sign) declares its LUMINANCE in cd/m^2 here,
+				 * same key and same contract as StandardResource / PBRResource and as the glTF
+				 * extension KHR_materials_emissive_strength. */
+				if ( data.isMember(EmissiveStrengthString) )
+				{
+					materialResource.setEmissiveStrength(FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(materialResource.emissiveStrength()));
+				}
+
 				/* Always declare opacity for sprites: their texture is intrinsically
 				 * alpha-mapped (cutout). Calling setOpacity sets the OpacityEnabled flag,
 				 * which the RT pipeline reads (Material::Interface::isAlphaTest) to know

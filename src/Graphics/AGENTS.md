@@ -1517,6 +1517,37 @@ keys on it, never on `isEnabled()` alone. A scene with an empty chain therefore 
 > purpose: making the application arm the pipeline is what produced the silent no-op above.
 > Declare the effect on the camera, or add it to the scene stack — the renderer arms itself.
 
+e### Sprite photometric contract — a flame is authored in nits (Aug 2026)
+
+A sprite is almost always a self-illuminating object (flame, explosion, muzzle flash, neon), it is
+rendered UNLIT, and on the unlit path the surface colour IS the emitted radiance — so it needs a
+real luminance or it contributes nothing. The manifest carries both halves:
+
+```json
+{
+	"Type": "AnimatedTexture",
+	"Data": { "Name": "fire001" },
+	"BlendingMode": "Screen",
+	"AutoIllumination": 1.0,
+	"EmissiveStrength": 10000.0
+}
+```
+
+- `AutoIllumination` — the emissive **MASK**, clamped to [0,1]. It cannot carry a brightness.
+- `EmissiveStrength` — the **LUMINANCE in cd/m² (nits)**. Same key and same contract as
+  `StandardResource` / `PBRResource` and the glTF extension `KHR_materials_emissive_strength`;
+  the emitted quantity is `autoIlluminationColor * autoIlluminationAmount * emissiveStrength`.
+
+⚠️ **The key was added in Aug 2026 and its absence was a hard limit, not an oversight to work
+around in the application**: before it, `SpriteResource::load()` parsed the amount only, so every
+sprite emitted exactly 1 nit and the fire and explosions of `game-logic`-style scenes were
+invisible under photometric exposure. Reference values and the full failure mode are in
+`docs/caution-points.md` § "The light RADIUS is a culling bound, not a dimmer".
+
+Applied by `Material::Interface::emissionMultiplier()` — see `src/Saphir/AGENTS.md` § "Emission on
+the UNLIT path", including why it multiplies here and adds on the lit path, and why it must never
+reach the albedo attachment.
+
 ### Effect Chain Order & Phase Contract (Jul 2026)
 
 The chain has THREE phases, enforced structurally:

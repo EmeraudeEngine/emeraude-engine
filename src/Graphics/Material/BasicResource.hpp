@@ -385,8 +385,10 @@ namespace EmEn::Graphics::Material
 			 * specifies that product to be a LUMINANCE in candela per square meter (nits). So this
 			 * is where a self-illuminating surface gets a physical brightness — a skybox authored
 			 * as an LDR cubemap becomes a real sky by setting the amount to 1 and the strength to
-			 * the sky's peak luminance (an overcast sky is ~8000 nits, a monitor 200-300, a candle
-			 * flame 5-10).
+			 * the sky's peak luminance. Reference luminances: an overcast sky ~8000 nits, a clear
+			 * blue sky ~8000, an SDR monitor 200-300, a candle flame ~10000 (measured — a flame is
+			 * SMALL, not dim; do not confuse its luminance with the illuminance it casts), an
+			 * explosion fireball an order of magnitude above that, the sun 1.6e9.
 			 * @warning The AMOUNT is clamped to [0,1] where it acts as the emissive mask, so a
 			 * luminance cannot be passed through it — it belongs here.
 			 * @param strength The multiplier, >= 0.
