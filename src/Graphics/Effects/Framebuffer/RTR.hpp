@@ -128,11 +128,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/** @brief Cone width in TRACE texels per unit of GGX alpha (roughness²):
 				 * 2 x assumedHitFraction x trace height. v1 approximation — the per-pixel
 				 * hit distance is not available (alpha carries the confidence), the cone
-				 * assumes a representative hit distance. */
+				 * assumes a representative hit distance. Zeroed when the cone is disabled. */
 				float coneWidthScale;
 				/** @brief log2(pyramid base texel / trace texel). */
 				float pyramidLodOffset;
 				float pyramidMaxLod;
+				/** @brief Cone width (trace texels) under which the reflection stays purely the
+				 * sharp traced buffer. */
+				float coneBlendStart;
+				/** @brief Cone width (trace texels) from which the reflection comes entirely
+				 * from the pre-convolved pyramid. Cross-faded linearly in between. */
+				float coneBlendFull;
 			};
 
 			/**
@@ -279,5 +285,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Fixed sets: trace target -> mip 0, then mip k-1 -> mip k. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_pyramidSets;
 			uint32_t m_pyramidMipCount{0U};
+			/* Glossy cone controls, read from the settings ONCE at create() (a change takes
+			 * effect on the next stack creation — relaunch or swap-chain recreation). The
+			 * defaults reproduce the v1 heuristic except for the cross-fade, which replaces
+			 * the former hard takeover at 2 texels. See SettingKeys.hpp for the arithmetic. */
+			float m_coneHitFraction{0.15F};
+			float m_coneBlendStart{2.0F};
+			float m_coneBlendFull{24.0F};
+			float m_coneMaxLod{8.0F};
+			bool m_coneEnabled{true};
 	};
 }

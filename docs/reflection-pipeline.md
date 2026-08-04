@@ -34,7 +34,7 @@ Ordered from the crudest simulation to the most exact evaluation.
 | 3 | **IBL split-sum** | `PBRResource::setReflectionComponentFromEnvironmentCubemap(iblIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
 | 4 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | GGX-prefiltered mip chain, roughness-driven LOD | 6 full scene passes / frame + convolution |
 | 5 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
-| 6 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
+| 6 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance — over-blurs curved reflectors, § 3.2.1), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
 | 7 | **Grab-pass transmission** | `PBRResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
 
 Paths 1-4 are **material** features, resolved in the object's ambient pass. Paths 5-6 are
@@ -331,10 +331,90 @@ The trace pass is the interesting one:
   confidence) now feeds a pre-convolved pyramid (half-res base, tent chain, compute); the
   composite reads it at `LOD = log2(coneWidthScale · roughness²)` — an O(1) blur of any
   width, the /confidence division renormalizing edge bleed. v1 assumes a representative hit
-  distance (`coneWidthScale = 0.3 × trace height`): the per-pixel hit-distance term belongs
-  to the stochastic + temporal successor (Frostbite SSSR), which will also need an MRT for
-  hit data. Debug note: any LINEAR debug visualization through the photometric exposure is
+  distance (`coneWidthScale = 2 × hitFraction × trace height`, `hitFraction` 0.15 by default):
+  the per-pixel hit-distance term belongs to the stochastic + temporal successor (Frostbite
+  SSSR), which will also need an MRT for hit data. **Read § 3.2.1 before judging the sharpness
+  of any glossy reflection** — the uniform cone has a documented failure mode on curved
+  geometry. Debug note: any LINEAR debug visualization through the photometric exposure is
   unreadable (0.45 nits ≈ black at sunny-16) — use BINARY indicators scaled to 1e6.
+
+#### 3.2.1 The uniform cone is wrong on curved surfaces — and `PixelDoubling` cannot fix it
+
+> [!CAUTION]
+> A polished sphere under RTR reads as **pixel doubling**, and turning
+> `RayTracing/Reflection/PixelDoubling` off changes **nothing**. Both facts follow from the
+> arithmetic below. Do not chase this in the trace pass: it lives entirely in the composite.
+
+The cone width is expressed in **trace texels** and is proportional to the trace height, so the
+LOD it selects cancels the resolution gain exactly. Put in closed form — the pyramid base is
+half the trace, and the LOD offset is `−1`:
+
+```
+effective reflection width = pyramidBaseW / 2^coneLOD
+                           = (traceW / 2) / (coneWidthTexels / 2)
+                           = traceW / (2 · hitFraction · traceH · α)
+                           = aspectRatio / (2 · hitFraction · α)      ← NO resolution term
+```
+
+At 16:9, `hitFraction` 0.15 and roughness 0.1 (α = roughness² = 0.01) that is **593 px, whatever
+the output resolution**. Verified on the bench (`reflexion-debug --demo-options=0,5,0`: sphere,
+AutoPostProcess, Polished), 1920×1080 logical window on a contentScale-1.5 display ⇒ 2880×1620
+framebuffer:
+
+| | `PixelDoubling` = true (default) | `PixelDoubling` = false |
+|---|---|---|
+| trace target | 1440×810 | 2880×1620 |
+| `coneWidthScale` = 2·0.15·traceH | 243 | 486 |
+| `coneWidthTexels` = scale·α | 2.43 | 4.86 |
+| `coneLOD` (offset −1) | 0.28 | 1.28 |
+| pyramid base | 720 px | 1440 px |
+| **effective reflection width** | **593 px** | **593 px** |
+
+Identical — hence a ×4.86 magnification over a 2880 px frame either way.
+
+Two compounding causes:
+
+1. **The former blend erased the sharp trace far too early.** It was
+   `mix(rtrData, coneData, clamp(coneWidthTexels - 1, 0, 1))`, saturating at 2 texels, i.e.
+   **roughness ≈ 0.058**. Above that, 100 % of the reflection came from a point lookup into a
+   mip whose single texel spans the whole cone, and the full-resolution traced reflection was
+   discarded outright. Fixed Aug 2026 by the **cross-fade** (`coneBlendStart` → `coneBlendFull`,
+   2 → 24 trace texels by default): a near-mirror keeps most of its traced reflection, brushed
+   metal still reaches the pyramid entirely.
+2. **A screen-space cone ignores curvature — the deep cause, still open.** On a sphere the whole
+   environment is compressed into the silhouette, so `d(reflected direction)/d(screen position)`
+   is enormous and the screen footprint of a 0.57° GGX lobe is a fraction of a pixel, not 6.5.
+   The `hitFraction = 0.15` heuristic is calibrated for flat-ish reflectors (floor, water),
+   where a mirror reflecting the sky legitimately spreads `≈ α × height / (2·tan(fov_y/2))`
+   ≈ 23 texels. **There is no single global value that is right for both** — which is exactly
+   why lowering `hitFraction` to sharpen the sphere will under-blur the floor. The real fix is
+   an empirically-derived footprint (screen-space derivative of the reflected direction) or the
+   stochastic + temporal successor with per-pixel hit distance.
+
+Bench knobs — read **once at `create()`**, so a change needs a relaunch (or any swap-chain
+recreation), consistent with `PixelDoubling`:
+
+| Setting key (under `Core/Graphics/RayTracing/Reflection/GlossyCone/`) | Default | Effect |
+|---|---|---|
+| `Enabled` | `true` | `false` zeroes `coneWidthScale`: the pyramid is never read, the composite shows the RAW traced reflection at full trace resolution — **the sharpness reference** |
+| `HitFraction` | `0.15` | assumed hit distance as a fraction of screen height; `coneWidthScale = 2 × this × traceHeight` |
+| `BlendStartTexels` | `2.0` | cone width under which the reflection is purely the sharp trace |
+| `BlendFullTexels` | `24.0` | cone width from which it comes entirely from the pyramid |
+| `MaxLod` | `8.0` | hard ceiling on the pyramid LOD, on top of the mip count — caps how coarse a rough surface may get |
+
+**Measured gain of the cross-fade** (same framing, sphere at 4 m, reflected floor tiles inside
+the silhouette — crop 550×390 px; sharpness = mean |gradient| and variance of the Laplacian):
+
+| Variant | mean gradient | Laplacian variance | Tenengrad |
+|---|---|---|---|
+| former hard takeover (`BlendStart` 1, `BlendFull` 2) | 1.879 | 8.63 | 17.86 |
+| **new default cross-fade (2 → 24)** | **4.141** | **62.26** | **77.29** |
+| `Enabled = false` (raw traced reflection, ceiling) | 4.548 | 81.87 | 94.83 |
+
+**×2.20 gradient energy / ×7.21 Laplacian variance** over the former behaviour, landing at
+**91 % of the sharp-trace ceiling** in gradient energy. The residual gap is the cone's remaining
+13 % pyramid contribution at roughness 0.1 — deliberate, so the knob stays physically meaningful
+instead of being neutralized.
 
 > [!NOTE]
 > **Engine cubemap convention.** A world direction `D` samples the cubemap at

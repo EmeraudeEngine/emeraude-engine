@@ -27,6 +27,7 @@
 #include "RTR.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <bit>
 #include <cmath>
 
@@ -861,6 +862,8 @@ layout(push_constant) uniform PushConstants
 	float coneWidthScale;
 	float pyramidLodOffset;
 	float pyramidMaxLod;
+	float coneBlendStart;
+	float coneBlendFull;
 };
 
 void main()
@@ -895,18 +898,26 @@ void main()
 	 * separable bilateral tops out at a few texels; beyond that the pre-convolved
 	 * pyramid delivers an O(1) blur of ANY width. v1: the cone assumes a representative
 	 * hit distance (coneWidthScale) — the per-pixel hit distance lives in the future
-	 * stochastic + temporal successor (Frostbite SSSR). */
+	 * stochastic + temporal successor (Frostbite SSSR).
+	 *
+	 * The pyramid mip is a POINT lookup whose texel already spans the whole cone, so the
+	 * fetch resolution collapses as the cone widens: taking it wholesale means a polished
+	 * surface loses every bit of its full-resolution traced reflection and reads as pixel
+	 * doubling. Hence the CROSS-FADE below — pure trace under coneBlendStart, pure pyramid
+	 * from coneBlendFull on, linear in between. A near-mirror therefore stays sharp while
+	 * brushed metal still gets its real satin spread. */
 	float compositePackedRM = texture(normalTex, vUV).a;
 	float compositeRoughness = compositePackedRM >= 2.0 ? compositePackedRM - 2.0 : compositePackedRM;
 	float coneWidthTexels = coneWidthScale * compositeRoughness * compositeRoughness;
 
-
-	if (coneWidthTexels > 1.0)
+	/* coneWidthScale is zeroed when the cone is disabled, which short-circuits here. */
+	if (coneWidthTexels > coneBlendStart)
 	{
 		float coneLOD = clamp(log2(coneWidthTexels) + pyramidLodOffset, 0.0, pyramidMaxLod);
 		vec4 coneData = textureLod(pyramidTex, vUV, coneLOD);
+		float coneWeight = clamp((coneWidthTexels - coneBlendStart) / max(coneBlendFull - coneBlendStart, 1e-3), 0.0, 1.0);
 
-		rtrData = mix(rtrData, coneData, clamp(coneWidthTexels - 1.0, 0.0, 1.0));
+		rtrData = mix(rtrData, coneData, coneWeight);
 	}
 
 	/* Decode reflectivity from the material properties G-buffer (R channel, high nibble). */
@@ -938,10 +949,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
-		/* Pixel doubling: half-res for performance (default), full-res for quality. */
-		const auto pixelDoubling = renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsRayTracingReflectionPixelDoublingKey, DefaultGraphicsRayTracingReflectionPixelDoubling);
+		auto & settings = renderer.primaryServices().settings();
+
+		/* Pixel doubling: half-res for performance (default), full-res for quality.
+		 * NOTE: this alone cannot sharpen the reflection of a glossy surface — the cone width
+		 * below is expressed in TRACE texels and scales with the trace height, so the cone LOD
+		 * exactly cancels the resolution gain. Use the GlossyCone knobs for that. */
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingReflectionPixelDoublingKey, DefaultGraphicsRayTracingReflectionPixelDoubling);
 		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
+
+		/* Glossy cone controls (bench knobs — see SettingKeys.hpp for the full rationale). */
+		m_coneEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingReflectionGlossyConeEnabledKey, DefaultGraphicsRayTracingReflectionGlossyConeEnabled);
+		m_coneHitFraction = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeHitFractionKey, DefaultGraphicsRayTracingReflectionGlossyConeHitFraction));
+		m_coneBlendStart = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeBlendStartKey, DefaultGraphicsRayTracingReflectionGlossyConeBlendStart));
+		m_coneBlendFull = std::max(m_coneBlendStart, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeBlendFullKey, DefaultGraphicsRayTracingReflectionGlossyConeBlendFull));
+		m_coneMaxLod = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeMaxLodKey, DefaultGraphicsRayTracingReflectionGlossyConeMaxLod));
 
 		/* Trace target (half-res by default, RGBA16F: reflected color RGB + confidence A). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Trace") )
@@ -1745,11 +1768,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		{
 			const CompositePushConstants comp{
 				.intensity = m_parameters.intensity,
-				/* Cone width per unit of GGX alpha: 2 x assumed hit fraction (0.15 of the
-				 * trace height). v1 — no per-pixel hit distance available. */
-				.coneWidthScale = 0.3F * static_cast< float >(m_traceTarget.height()),
+				/* Cone width per unit of GGX alpha: 2 x assumed hit fraction of the trace
+				 * height. v1 — no per-pixel hit distance available. A zeroed scale disables
+				 * the pyramid lookup altogether (raw traced reflection, sharpness reference). */
+				.coneWidthScale = m_coneEnabled ? 2.0F * m_coneHitFraction * static_cast< float >(m_traceTarget.height()) : 0.0F,
 				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : m_traceTarget.width()))),
-				.pyramidMaxLod = static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U)
+				.pyramidMaxLod = std::min(m_coneMaxLod, static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U)),
+				.coneBlendStart = m_coneBlendStart,
+				.coneBlendFull = m_coneBlendFull
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

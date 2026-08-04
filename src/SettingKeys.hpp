@@ -371,6 +371,38 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingReflectionPixelDoublingKey{"Core/Graphics/RayTracing/Reflection/PixelDoubling"};
 			constexpr auto DefaultGraphicsRayTracingReflectionPixelDoubling{true};
 
+			/* Ray Tracing > Reflection > Glossy cone (pre-convolved reflection pyramid lookup).
+			 * The v1 cone is UNIFORM in screen space: it assumes a representative hit distance
+			 * and ignores surface curvature, so a curved mirror (sphere) is over-blurred by an
+			 * order of magnitude — the reflected environment is compressed into the silhouette,
+			 * where the same GGX lobe covers far fewer screen texels than on a flat floor.
+			 * These knobs exist to MEASURE that trade-off on the reflection bench; the definitive
+			 * fix is the stochastic + temporal successor (per-pixel hit distance through an MRT). */
+			/* Master switch for the cone lookup: false = the pyramid is never read, the composite
+			 * shows the RAW traced reflection at its full trace resolution (sharpness reference). */
+			constexpr auto GraphicsRayTracingReflectionGlossyConeEnabledKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeEnabled{true};
+			/* Assumed hit distance as a fraction of the screen height: the cone width in trace
+			 * texels is 2 x thisFraction x traceHeight x roughness². NOTE that this makes the
+			 * width proportional to the resolution, hence the perceived blur INVARIANT in
+			 * resolution — which is why PixelDoubling alone can never sharpen the reflection. */
+			constexpr auto GraphicsRayTracingReflectionGlossyConeHitFractionKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/HitFraction"};
+			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeHitFraction{0.15F};
+			/* Cone width (in trace texels) below which the reflection stays PURELY the sharp
+			 * traced buffer: under one texel of spread there is nothing to convolve. */
+			constexpr auto GraphicsRayTracingReflectionGlossyConeBlendStartKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/BlendStartTexels"};
+			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeBlendStart{2.0F};
+			/* Cone width (in trace texels) at which the reflection comes ENTIRELY from the
+			 * pyramid. Between start and full the two are cross-faded linearly, so a near-mirror
+			 * keeps most of its full-resolution traced reflection instead of being replaced
+			 * wholesale by a coarse mip. */
+			constexpr auto GraphicsRayTracingReflectionGlossyConeBlendFullKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/BlendFullTexels"};
+			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeBlendFull{24.0F};
+			/* Hard ceiling on the pyramid LOD the cone may reach, on top of the mip count: caps
+			 * how coarse a rough surface is allowed to get (each LOD halves the resolution). */
+			constexpr auto GraphicsRayTracingReflectionGlossyConeMaxLodKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/MaxLod"};
+			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeMaxLod{8.0F};
+
 			/* Ray Tracing > Ambient Occlusion */
 			constexpr auto GraphicsRayTracingAOEnabledKey{"Core/Graphics/RayTracing/AmbientOcclusion/Enabled"};
 			constexpr auto DefaultGraphicsRayTracingAOEnabled{true};
