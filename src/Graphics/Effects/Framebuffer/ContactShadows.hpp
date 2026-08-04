@@ -82,18 +82,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the blur passes (PCSS-lite).
-			 */
-			struct EMEN_API BlurPushConstants
-			{
-				float directionX;
-				float directionY;
-				float texelSizeX;
-				float texelSizeY;
-				float maxBlurRadius;
-			};
-
-			/**
 			 * @brief Constructs a contact shadows effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -131,8 +119,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
-			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */
+			[[nodiscard]]
+			bool
+			usesSharedDenoise () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
+			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
+			[[nodiscard]]
+			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]
@@ -204,22 +204,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			Parameters m_parameters;
-			/* Intermediate render targets. */
+			/* Intermediate render targets (half-res, gated by the RT AO pixel doubling
+			 * setting — the shared denoise group must share one extent). */
 			IntermediateRenderTarget m_shadowTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_shadowPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurHPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurVPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_shadowLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			/* Descriptor set layouts. */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_shadowDescLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_shadowPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 	};
 }

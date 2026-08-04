@@ -167,38 +167,6 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto BlurFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out float outAO;
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float directionX;
-	float directionY;
-};
-
-void main()
-{
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec2 dir = vec2(directionX, directionY);
-
-	float result = 0.0;
-	result += texture(inputTex, vUV - 2.0 * dir * texelSize).r * 0.06136;
-	result += texture(inputTex, vUV - 1.0 * dir * texelSize).r * 0.24477;
-	result += texture(inputTex, vUV).r * 0.38774;
-	result += texture(inputTex, vUV + 1.0 * dir * texelSize).r * 0.24477;
-	result += texture(inputTex, vUV + 2.0 * dir * texelSize).r * 0.06136;
-
-	outAO = result;
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -268,16 +236,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(singleLayout);
-
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			});
-		}
-
-		if ( m_aoLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_aoLayout == nullptr )
 		{
 			return false;
 		}
@@ -288,9 +247,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, SSAOComputeFragmentShader);
-		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_Blur_FS", Saphir::ShaderType::FragmentShader, BlurFragmentShader);
 
-		if ( vertexModule == nullptr || aoFragment == nullptr || blurFragment == nullptr )
+		if ( vertexModule == nullptr || aoFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile SSAO shaders !";
 
@@ -299,9 +257,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create pipelines ---- */
 		m_aoPipeline = this->createFullscreenPipeline(ClassId, "SSAO_AO", vertexModule, aoFragment, m_aoLayout, m_aoTarget);
-		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSAO_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 
-		if ( m_aoPipeline == nullptr || m_blurPipeline == nullptr )
+		if ( m_aoPipeline == nullptr )
 		{
 			return false;
 		}
@@ -317,34 +274,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Blur H: reads AO result. */
-		m_blurHDescSet = std::make_unique< DescriptorSet >(pool, singleLayout);
-		m_blurHDescSet->setIdentifier(ClassId, "BlurH_DescSet", "DescriptorSet");
-
-		if ( !m_blurHDescSet->create() )
-		{
-			return false;
-		}
-
-		if ( !m_blurHDescSet->writeCombinedImageSampler(0, m_aoTarget) )
-		{
-			return false;
-		}
-
-		/* Blur V: reads blur H result. */
-		m_blurVDescSet = std::make_unique< DescriptorSet >(pool, singleLayout);
-		m_blurVDescSet->setIdentifier(ClassId, "BlurV_DescSet", "DescriptorSet");
-
-		if ( !m_blurVDescSet->create() )
-		{
-			return false;
-		}
-
-		if ( !m_blurVDescSet->writeCombinedImageSampler(0, m_blurHTarget) )
-		{
-			return false;
-		}
-
 		return true;
 	}
 
@@ -352,12 +281,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	SSAO::destroy () noexcept
 	{
 		m_aoPerFrame.clear();
-		m_blurVDescSet.reset();
-		m_blurHDescSet.reset();
 		
-		m_blurPipeline.reset();
 		m_aoPipeline.reset();
-		m_blurLayout.reset();
 		m_aoLayout.reset();
 
 		m_blurVTarget.destroy();
@@ -366,7 +291,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	SSAO::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
+	SSAO::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -411,46 +336,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(pc)
 			);
 		}
+	}
 
-		/* ---- Pass 2: Horizontal Blur ---- */
-		{
-			const BlurPushConstants pc{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
-				.directionX = 1.0F,
-				.directionY = 0.0F
-			};
+	IndirectPostProcessEffect::DenoiseContribution
+	SSAO::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "ssao";
+		contribution.source = &m_aoTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurHTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurHDescSet,
-				&pc,
-				sizeof(pc)
-			);
-		}
+		/* Same 5-tap gaussian as the retired SSAO_Blur_FS pass (no guides). */
+		contribution.code =
+			"\tvec2 ssaoTexel = 1.0 / vec2(textureSize(ssaoSrc, 0));\n"
+			"\tfloat ssaoBlur = 0.0;\n"
+			"\tssaoBlur += texture(ssaoSrc, vUV - 2.0 * emDenoiseDir * ssaoTexel).r * 0.06136;\n"
+			"\tssaoBlur += texture(ssaoSrc, vUV - 1.0 * emDenoiseDir * ssaoTexel).r * 0.24477;\n"
+			"\tssaoBlur += texture(ssaoSrc, vUV).r * 0.38774;\n"
+			"\tssaoBlur += texture(ssaoSrc, vUV + 1.0 * emDenoiseDir * ssaoTexel).r * 0.24477;\n"
+			"\tssaoBlur += texture(ssaoSrc, vUV + 2.0 * emDenoiseDir * ssaoTexel).r * 0.06136;\n"
+			"\tvec4 ssaoResult = vec4(ssaoBlur, 0.0, 0.0, 1.0);\n";
 
-		/* ---- Pass 3: Vertical Blur ---- */
-		{
-			const BlurPushConstants pc{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
-				.directionX = 0.0F,
-				.directionY = 1.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurVTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurVDescSet,
-				&pc,
-				sizeof(pc)
-			);
-		}
+		return contribution;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

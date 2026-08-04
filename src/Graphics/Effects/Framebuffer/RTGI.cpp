@@ -592,89 +592,6 @@ void main()
 }
 )GLSL";
 
-	/* Bilateral blur shader — depth/normal-aware separable filter.
-	 * Preserves edges by weighting samples based on depth and normal similarity.
-	 * Binding 0: GI input, Binding 1: depth, Binding 2: normals. */
-	constexpr auto RTGIBlurFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outBlur;
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D normalTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float directionX;
-	float directionY;
-	float depthSigma;
-	float normalSigma;
-	int blurRadius;
-	float padding;
-};
-
-void main()
-{
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec2 dir = vec2(directionX, directionY);
-
-	/* Center pixel reference values. */
-	vec4 centerGI = texture(inputTex, vUV);
-	float centerDepth = texture(depthTex, vUV).r;
-	vec3 centerNormal = texture(normalTex, vUV).rgb;
-
-	/* Skip far-plane fragments. */
-	if (centerDepth >= 1.0)
-	{
-		outBlur = centerGI;
-		return;
-	}
-
-	/* Bilateral weighted accumulation.
-	 * Each sample's weight combines:
-	 * 1. Spatial Gaussian (distance from center)
-	 * 2. Depth similarity (penalize large depth discontinuities)
-	 * 3. Normal similarity (penalize different surface orientations) */
-	vec4 result = vec4(0.0);
-	float totalWeight = 0.0;
-
-	float spatialSigma = float(blurRadius) * 0.5;
-	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
-	float invDepthSigma2 = 1.0 / (2.0 * depthSigma * depthSigma);
-
-	for (int i = -blurRadius; i <= blurRadius; i++)
-	{
-		vec2 sampleUV = vUV + dir * texelSize * float(i);
-		vec4 sampleGI = texture(inputTex, sampleUV);
-		float sampleDepth = texture(depthTex, sampleUV).r;
-		vec3 sampleNormal = texture(normalTex, sampleUV).rgb;
-
-		/* Spatial weight: Gaussian falloff. */
-		float spatialW = exp(-float(i * i) * invSpatialSigma2);
-
-		/* Depth weight: penalize depth discontinuities.
-		 * Use linearized depth difference scaled by depth sigma. */
-		float depthDiff = abs(centerDepth - sampleDepth);
-		float depthW = exp(-depthDiff * depthDiff * invDepthSigma2);
-
-		/* Normal weight: dot product similarity.
-		 * Surfaces facing very different directions should not blur together. */
-		float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
-		float normalW = pow(normalDot, 1.0 / max(normalSigma, 0.001));
-
-		float w = spatialW * depthW * normalW;
-		result += sampleGI * w;
-		totalWeight += w;
-	}
-
-	outBlur = (totalWeight > 0.0) ? result / totalWeight : centerGI;
-}
-)GLSL";
-
 	/* Temporal resolve pass: exponential moving average between the current blurred GI and
 	 * the reprojected history. The history UV is found by projecting the pixel's world
 	 * position through the PREVIOUS frame's view-projection (static-geometry reprojection —
@@ -963,16 +880,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * frame UBO (the per-frame data outgrew the 128-byte push constant minimum). */
 		auto traceInputLayout = this->getInputLayout(4, 1);
 
-		/* Blur input: 3 combined image samplers (GI + depth + normals). */
-		auto blurInputLayout = this->getInputLayout(3);
-
 		/* Temporal resolve input: GI + depth + normals + history + normal history, plus the frame UBO. */
 		auto temporalInputLayout = this->getInputLayout(6, 1);
 
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
 
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || temporalInputLayout == nullptr || normalCopyInputLayout == nullptr )
+		if ( traceInputLayout == nullptr || temporalInputLayout == nullptr || normalCopyInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -1010,18 +924,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(blurInputLayout);
-
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(BlurPushConstants)}
-			});
-		}
-
-		{
 			/* Temporal resolve: single set, no push constants (frame UBO). */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(temporalInputLayout);
@@ -1037,7 +939,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_normalCopyLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_temporalLayout == nullptr || m_normalCopyLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_temporalLayout == nullptr || m_normalCopyLayout == nullptr )
 		{
 			return false;
 		}
@@ -1048,9 +950,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Trace_FS", ShaderType::FragmentShader, RTGITraceFragmentShader);
-		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Blur_FS", ShaderType::FragmentShader, RTGIBlurFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTGI shaders !";
 
@@ -1059,9 +960,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
+		if ( m_tracePipeline == nullptr )
 		{
 			return false;
 		}
@@ -1125,38 +1025,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Blur H: reads trace result + depth + normals (per-frame for depth/normals). */
-		m_blurHPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurH_DescSet");
-
-		if ( m_blurHPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & ds : m_blurHPerFrame )
-		{
-			if ( !ds->writeCombinedImageSampler(0, m_traceTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Blur V: reads blur H result + depth + normals (per-frame for depth/normals). */
-		m_blurVPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurV_DescSet");
-
-		if ( m_blurVPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & ds : m_blurVPerFrame )
-		{
-			if ( !ds->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
-			}
-		}
-
 		/* Temporal resolve + normal history sets (per-frame; texture bindings are
 		 * rewritten every frame because of the history ping-pong). */
 		if ( m_parameters.temporalEnabled )
@@ -1189,7 +1057,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Combine source default: the blurred trace. When the temporal chain is active,
-		 * recordOverlayPasses() retargets it to the freshly resolved history every frame. */
+		 * recordPostDenoisePasses() retargets it to the freshly resolved history every frame. */
 		m_combineSource = &m_blurVTarget;
 
 		return true;
@@ -1202,19 +1070,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_normalCopyPerFrame.clear();
 		m_temporalPerFrame.clear();
-		m_blurVPerFrame.clear();
-		m_blurHPerFrame.clear();
 		m_tracePerFrame.clear();
 
 		m_frameUBOs.clear();
 
 		m_normalCopyPipeline.reset();
 		m_temporalPipeline.reset();
-		m_blurPipeline.reset();
 		m_tracePipeline.reset();
 		m_normalCopyLayout.reset();
 		m_temporalLayout.reset();
-		m_blurLayout.reset();
 		m_traceLayout.reset();
 
 		for ( auto & target : m_normalHistoryTargets )
@@ -1236,7 +1100,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	RTGI::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	RTGI::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -1246,10 +1110,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		const bool temporalActive = m_parameters.temporalEnabled && m_temporalPipeline != nullptr;
-		const uint32_t writeIdx = m_historyWriteIndex;
-		const uint32_t readIdx = 1U - writeIdx;
 
-		/* ---- Per-frame descriptor updates ---- */
+		/* ---- Per-frame descriptor updates (trace pass) ---- */
 
 		if ( inputDepth != nullptr )
 		{
@@ -1267,32 +1129,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		if ( temporalActive )
 		{
-			/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
-			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
-			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
-
-			if ( inputDepth != nullptr )
-			{
-				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-			}
-
-			if ( inputNormals != nullptr )
-			{
-				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-				static_cast< void >(m_normalCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputNormals));
-			}
-
-			if ( context.velocity != nullptr )
-			{
-				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
-			}
+			/* History ping-pong: this frame reads [1 - writeIdx]. The flip only happens at
+			 * the end of recordPostDenoisePasses(), so m_historyWriteIndex is stable here. */
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[1U - m_historyWriteIndex]));
 		}
-
-		/* The combine snippet consumes the freshly resolved history when the temporal
-		 * chain is active — [writeIdx] is written THIS frame, captured here BEFORE the
-		 * ping-pong flip below — and the blurred trace otherwise. */
-		m_combineSource = temporalActive ? static_cast< const TextureInterface * >(&m_historyTargets[writeIdx]) : &m_blurVTarget;
 
 		/* ---- Frame UBO (shared by trace/temporal/normal-copy passes) ---- */
 		{
@@ -1415,74 +1255,107 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			m_traceTarget.endRenderPass(commandBuffer);
 		}
+	}
 
-		/* Update depth + normals descriptors for blur passes (per-frame). */
-		if ( inputDepth != nullptr )
+	IndirectPostProcessEffect::DenoiseContribution
+	RTGI::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "rtgi";
+		contribution.source = &m_traceTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.needsDepth = true;
+		contribution.needsNormals = true;
+		contribution.dynamics = Base::Math::Vector< 4, float >{m_parameters.depthSigma, m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F};
+
+		/* Same depth/normal-aware bilateral kernel as the retired RTGI_Blur_FS pass.
+		 * Dynamics0: x = depthSigma, y = normalSigma, z = blurRadius. */
+		contribution.code =
+			"\tvec2 rtgiTexel = 1.0 / vec2(textureSize(rtgiSrc, 0));\n"
+			"\tvec4 rtgiCenter = texture(rtgiSrc, vUV);\n"
+			"\tfloat rtgiCenterDepth = texture(emDepth, vUV).r;\n"
+			"\tvec3 rtgiCenterNormal = texture(emNormals, vUV).rgb;\n"
+			"\tvec4 rtgiResult = rtgiCenter;\n"
+			"\t/* Skip far-plane fragments. */\n"
+			"\tif (rtgiCenterDepth < 1.0)\n"
+			"\t{\n"
+			"\t\tint rtgiRadius = int(emDyn.rtgiDynamics0.z);\n"
+			"\t\tfloat rtgiSpatialSigma = float(rtgiRadius) * 0.5;\n"
+			"\t\tfloat rtgiInvSpatialSigma2 = 1.0 / (2.0 * rtgiSpatialSigma * rtgiSpatialSigma);\n"
+			"\t\tfloat rtgiInvDepthSigma2 = 1.0 / (2.0 * emDyn.rtgiDynamics0.x * emDyn.rtgiDynamics0.x);\n"
+			"\t\tvec4 rtgiSum = vec4(0.0);\n"
+			"\t\tfloat rtgiTotalWeight = 0.0;\n"
+			"\t\tfor (int rtgiI = -rtgiRadius; rtgiI <= rtgiRadius; rtgiI++)\n"
+			"\t\t{\n"
+			"\t\t\tvec2 rtgiUV = vUV + emDenoiseDir * rtgiTexel * float(rtgiI);\n"
+			"\t\t\tvec4 rtgiSample = texture(rtgiSrc, rtgiUV);\n"
+			"\t\t\tfloat rtgiDepth = texture(emDepth, rtgiUV).r;\n"
+			"\t\t\tvec3 rtgiNormal = texture(emNormals, rtgiUV).rgb;\n"
+			"\t\t\tfloat rtgiSpatialW = exp(-float(rtgiI * rtgiI) * rtgiInvSpatialSigma2);\n"
+			"\t\t\tfloat rtgiDepthDiff = abs(rtgiCenterDepth - rtgiDepth);\n"
+			"\t\t\tfloat rtgiDepthW = exp(-rtgiDepthDiff * rtgiDepthDiff * rtgiInvDepthSigma2);\n"
+			"\t\t\tfloat rtgiNormalDot = max(dot(rtgiCenterNormal, rtgiNormal), 0.0);\n"
+			"\t\t\tfloat rtgiNormalW = pow(rtgiNormalDot, 1.0 / max(emDyn.rtgiDynamics0.y, 0.001));\n"
+			"\t\t\tfloat rtgiW = rtgiSpatialW * rtgiDepthW * rtgiNormalW;\n"
+			"\t\t\trtgiSum += rtgiSample * rtgiW;\n"
+			"\t\t\trtgiTotalWeight += rtgiW;\n"
+			"\t\t}\n"
+			"\t\tif (rtgiTotalWeight > 0.0)\n"
+			"\t\t{\n"
+			"\t\t\trtgiResult = rtgiSum / rtgiTotalWeight;\n"
+			"\t\t}\n"
+			"\t}\n";
+
+		return contribution;
+	}
+
+	void
+	RTGI::recordPostDenoisePasses (const CommandBuffer & commandBuffer, const FrameContext & context) noexcept
+	{
+		const auto frameIndex = this->renderer().currentFrameIndex();
+
+		const bool temporalActive = m_parameters.temporalEnabled && m_temporalPipeline != nullptr;
+		const uint32_t writeIdx = m_historyWriteIndex;
+		const uint32_t readIdx = 1U - writeIdx;
+
+		/* The combine snippet consumes the freshly resolved history when the temporal
+		 * chain is active — [writeIdx] is written THIS frame, captured here BEFORE the
+		 * ping-pong flip below — and the blurred trace otherwise. */
+		m_combineSource = temporalActive ? static_cast< const TextureInterface * >(&m_historyTargets[writeIdx]) : &m_blurVTarget;
+
+		if ( !temporalActive )
 		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
+			return;
 		}
 
-		if ( inputNormals != nullptr )
+		/* ---- Per-frame descriptor updates (temporal chain) ---- */
+
+		/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
+		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
+		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
+
+		if ( context.depth != nullptr )
 		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
+			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
 		}
 
-		/* ---- Pass 2: Bilateral Blur Horizontal ---- */
+		if ( context.normals != nullptr )
 		{
-			const BlurPushConstants blurH{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
-				.directionX = 1.0F,
-				.directionY = 0.0F,
-				.depthSigma = m_parameters.depthSigma,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurHTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurHPerFrame[frameIndex],
-				&blurH,
-				sizeof(BlurPushConstants)
-			);
+			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(2, *context.normals));
+			static_cast< void >(m_normalCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *context.normals));
 		}
 
-		/* ---- Pass 3: Bilateral Blur Vertical ---- */
+		if ( context.velocity != nullptr )
 		{
-			const BlurPushConstants blurV{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
-				.directionX = 0.0F,
-				.directionY = 1.0F,
-				.depthSigma = m_parameters.depthSigma,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurVTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurVPerFrame[frameIndex],
-				&blurV,
-				sizeof(BlurPushConstants)
-			);
+			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
 		}
 
 		/* ---- Pass 4: Temporal resolve + Pass 5: Normal history ---- */
-		if ( temporalActive )
 		{
 			/* NOTE: The pipelines were created against the [0] targets; recording into [1]
 			 * relies on Vulkan render pass compatibility (identical format/ops), exactly
-			 * like the shared blur pipeline recording into both blur targets. */
+			 * like the shared denoise pipeline recording into both blur targets. */
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
 				m_historyTargets[writeIdx],
@@ -1505,11 +1378,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Flip the history ping-pong for the next frame. */
-		if ( temporalActive )
-		{
-			m_historyWriteIndex = readIdx;
-			m_historyValid = true;
-		}
+		m_historyWriteIndex = readIdx;
+		m_historyValid = true;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

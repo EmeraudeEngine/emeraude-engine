@@ -288,88 +288,6 @@ void main()
 }
 )GLSL";
 
-	/* Bilateral blur shader — depth/normal-aware separable filter.
-	 * Preserves edges by weighting samples based on depth and normal similarity.
-	 * Identical to the RTGI bilateral blur.
-	 * Binding 0: GI input, Binding 1: depth, Binding 2: normals. */
-	constexpr auto SSGIBlurFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outBlur;
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D normalTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float directionX;
-	float directionY;
-	float depthSigma;
-	float normalSigma;
-	int blurRadius;
-	float padding;
-};
-
-void main()
-{
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec2 dir = vec2(directionX, directionY);
-
-	/* Center pixel reference values. */
-	vec4 centerGI = texture(inputTex, vUV);
-	float centerDepth = texture(depthTex, vUV).r;
-	vec3 centerNormal = texture(normalTex, vUV).rgb;
-
-	/* Skip far-plane fragments. */
-	if (centerDepth >= 1.0)
-	{
-		outBlur = centerGI;
-		return;
-	}
-
-	/* Bilateral weighted accumulation.
-	 * Each sample's weight combines:
-	 * 1. Spatial Gaussian (distance from center)
-	 * 2. Depth similarity (penalize large depth discontinuities)
-	 * 3. Normal similarity (penalize different surface orientations) */
-	vec4 result = vec4(0.0);
-	float totalWeight = 0.0;
-
-	float spatialSigma = float(blurRadius) * 0.5;
-	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
-	float invDepthSigma2 = 1.0 / (2.0 * depthSigma * depthSigma);
-
-	for (int i = -blurRadius; i <= blurRadius; i++)
-	{
-		vec2 sampleUV = vUV + dir * texelSize * float(i);
-		vec4 sampleGI = texture(inputTex, sampleUV);
-		float sampleDepth = texture(depthTex, sampleUV).r;
-		vec3 sampleNormal = texture(normalTex, sampleUV).rgb;
-
-		/* Spatial weight: Gaussian falloff. */
-		float spatialW = exp(-float(i * i) * invSpatialSigma2);
-
-		/* Depth weight: penalize depth discontinuities. */
-		float depthDiff = abs(centerDepth - sampleDepth);
-		float depthW = exp(-depthDiff * depthDiff * invDepthSigma2);
-
-		/* Normal weight: dot product similarity. */
-		float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
-		float normalW = pow(normalDot, 1.0 / max(normalSigma, 0.001));
-
-		float w = spatialW * depthW * normalW;
-		result += sampleGI * w;
-		totalWeight += w;
-	}
-
-	outBlur = (totalWeight > 0.0) ? result / totalWeight : centerGI;
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -444,18 +362,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(tripleLayout);
-
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
-				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				.offset = 0,
-				.size = sizeof(BlurPushConstants)
-			}});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_traceLayout == nullptr )
 		{
 			return false;
 		}
@@ -466,9 +373,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_Trace_FS", ShaderType::FragmentShader, SSGITraceFragmentShader);
-		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_Blur_FS", ShaderType::FragmentShader, SSGIBlurFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile SSGI shaders !";
 
@@ -477,9 +383,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "SSGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSGI_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
+		if ( m_tracePipeline == nullptr )
 		{
 			return false;
 		}
@@ -494,51 +399,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Blur H: reads trace result (fixed) + depth + normals (per-frame). */
-		m_blurHPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "BlurH_DescSet");
-
-		if ( m_blurHPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_blurHPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_traceTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Blur V: reads blur H result (fixed) + depth + normals (per-frame). */
-		m_blurVPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "BlurV_DescSet");
-
-		if ( m_blurVPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_blurVPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	SSGI::destroy () noexcept
 	{
-		m_blurVPerFrame.clear();
-		m_blurHPerFrame.clear();
 		m_tracePerFrame.clear();
 
-		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_blurLayout.reset();
 		m_traceLayout.reset();
 
 		m_blurVTarget.destroy();
@@ -547,7 +416,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	SSGI::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	SSGI::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -594,67 +463,56 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(TracePushConstants)
 			);
 		}
+	}
 
-		/* Update depth + normals descriptors for blur passes (per-frame). */
-		if ( inputDepth != nullptr )
-		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-		}
+	IndirectPostProcessEffect::DenoiseContribution
+	SSGI::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "ssgi";
+		contribution.source = &m_traceTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.needsDepth = true;
+		contribution.needsNormals = true;
+		contribution.dynamics = Base::Math::Vector< 4, float >{m_parameters.depthSigma, m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F};
 
-		if ( inputNormals != nullptr )
-		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-		}
+		/* Same bilateral kernel as the retired SSGI_Blur_FS pass: depth/normal-aware
+		 * separable filter (identical to the RTGI bilateral blur).
+		 * dynamics0 = {depthSigma, normalSigma, blurRadius}. */
+		contribution.code =
+			"\tvec2 ssgiTexel = 1.0 / vec2(textureSize(ssgiSrc, 0));\n"
+			"\tvec4 ssgiCenterGI = texture(ssgiSrc, vUV);\n"
+			"\tfloat ssgiCenterDepth = texture(emDepth, vUV).r;\n"
+			"\tvec3 ssgiCenterNormal = texture(emNormals, vUV).rgb;\n"
+			"\tvec4 ssgiResult = ssgiCenterGI;\n"
+			"\tif (ssgiCenterDepth < 1.0)\n"
+			"\t{\n"
+			"\t\tvec4 ssgiSum = vec4(0.0);\n"
+			"\t\tfloat ssgiTotalWeight = 0.0;\n"
+			"\t\tint ssgiRadius = int(emDyn.ssgiDynamics0.z);\n"
+			"\t\tfloat ssgiSpatialSigma = float(ssgiRadius) * 0.5;\n"
+			"\t\tfloat ssgiInvSpatialSigma2 = 1.0 / (2.0 * ssgiSpatialSigma * ssgiSpatialSigma);\n"
+			"\t\tfloat ssgiInvDepthSigma2 = 1.0 / (2.0 * emDyn.ssgiDynamics0.x * emDyn.ssgiDynamics0.x);\n"
+			"\t\tfor (int ssgiI = -ssgiRadius; ssgiI <= ssgiRadius; ssgiI++)\n"
+			"\t\t{\n"
+			"\t\t\tvec2 ssgiSampleUV = vUV + emDenoiseDir * ssgiTexel * float(ssgiI);\n"
+			"\t\t\tvec4 ssgiSampleGI = texture(ssgiSrc, ssgiSampleUV);\n"
+			"\t\t\tfloat ssgiSampleDepth = texture(emDepth, ssgiSampleUV).r;\n"
+			"\t\t\tvec3 ssgiSampleNormal = texture(emNormals, ssgiSampleUV).rgb;\n"
+			"\t\t\tfloat ssgiSpatialW = exp(-float(ssgiI * ssgiI) * ssgiInvSpatialSigma2);\n"
+			"\t\t\tfloat ssgiDepthDiff = abs(ssgiCenterDepth - ssgiSampleDepth);\n"
+			"\t\t\tfloat ssgiDepthW = exp(-ssgiDepthDiff * ssgiDepthDiff * ssgiInvDepthSigma2);\n"
+			"\t\t\tfloat ssgiNormalDot = max(dot(ssgiCenterNormal, ssgiSampleNormal), 0.0);\n"
+			"\t\t\tfloat ssgiNormalW = pow(ssgiNormalDot, 1.0 / max(emDyn.ssgiDynamics0.y, 0.001));\n"
+			"\t\t\tfloat ssgiW = ssgiSpatialW * ssgiDepthW * ssgiNormalW;\n"
+			"\t\t\tssgiSum += ssgiSampleGI * ssgiW;\n"
+			"\t\t\tssgiTotalWeight += ssgiW;\n"
+			"\t\t}\n"
+			"\t\tssgiResult = (ssgiTotalWeight > 0.0) ? ssgiSum / ssgiTotalWeight : ssgiCenterGI;\n"
+			"\t}\n";
 
-		/* ---- Pass 2: Bilateral Blur Horizontal ---- */
-		{
-			const BlurPushConstants blurH{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
-				.directionX = 1.0F,
-				.directionY = 0.0F,
-				.depthSigma = m_parameters.depthSigma,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurHTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurHPerFrame[frameIndex],
-				&blurH,
-				sizeof(BlurPushConstants)
-			);
-		}
-
-		/* ---- Pass 3: Bilateral Blur Vertical ---- */
-		{
-			const BlurPushConstants blurV{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
-				.directionX = 0.0F,
-				.directionY = 1.0F,
-				.depthSigma = m_parameters.depthSigma,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurVTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurVPerFrame[frameIndex],
-				&blurV,
-				sizeof(BlurPushConstants)
-			);
-		}
+		return contribution;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

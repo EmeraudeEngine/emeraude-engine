@@ -431,81 +431,6 @@ void main()
 }
 )GLSL";
 
-	constexpr auto SSRBlurFragmentShader = R"GLSL(
-#version 450
-
-/* Bilateral blur — depth/normal-aware separable filter, radius scaled by the surface
- * roughness (ported from RTR): a polished surface keeps a mirror-sharp reflection, a rough
- * one gets the full spread. Replaces the former fixed 5-tap gaussian that smeared everything
- * equally whatever the material. */
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outBlur;
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D normalTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float directionX;
-	float directionY;
-	float depthSigma;
-	float normalSigma;
-	int blurRadius;
-	float padding;
-};
-
-void main()
-{
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec2 dir = vec2(directionX, directionY);
-
-	vec4 centerVal = texture(inputTex, vUV);
-	float centerDepth = texture(depthTex, vUV).r;
-	vec3 centerNormal = texture(normalTex, vUV).rgb;
-
-	if (centerDepth >= 1.0)
-	{
-		outBlur = centerVal;
-		return;
-	}
-
-	vec4 result = vec4(0.0);
-	float totalWeight = 0.0;
-
-	/* Roughness-scaled radius: polished surfaces keep mirror-sharp reflections. */
-	float packedRM = texture(normalTex, vUV).a;
-	float centerRoughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
-	int effectiveRadius = max(1, int(float(blurRadius) * smoothstep(0.02, 0.5, centerRoughness)));
-
-	float spatialSigma = float(effectiveRadius) * 0.5;
-	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
-	float invDepthSigma2 = 1.0 / (2.0 * depthSigma * depthSigma);
-
-	for (int i = -effectiveRadius; i <= effectiveRadius; i++)
-	{
-		vec2 sampleUV = vUV + dir * texelSize * float(i);
-		vec4 sampleVal = texture(inputTex, sampleUV);
-		float sampleDepth = texture(depthTex, sampleUV).r;
-		vec3 sampleNormal = texture(normalTex, sampleUV).rgb;
-
-		float spatialW = exp(-float(i * i) * invSpatialSigma2);
-		float depthDiff = abs(centerDepth - sampleDepth);
-		float depthW = exp(-depthDiff * depthDiff * invDepthSigma2);
-		float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
-		float normalW = pow(normalDot, 1.0 / max(normalSigma, 0.001));
-
-		float w = spatialW * depthW * normalW;
-		result += sampleVal * w;
-		totalWeight += w;
-	}
-
-	outBlur = (totalWeight > 0.0) ? result / totalWeight : centerVal;
-}
-)GLSL";
-
 	/* Resolve pass: reads the trace hit data and the scene color,
 	 * outputs the reflected color weighted by confidence.
 	 * This converts (hitUV, confidence) into (reflectedColor * confidence, confidence)
@@ -704,9 +629,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Trace input (normals + Hi-Z pyramid): 2 combined image samplers at bindings 0,1. */
 		auto traceInputLayout = this->getInputLayout(2);
 
-		/* Blur input (color + depth + normals for the bilateral filter): 3 combined image samplers. */
-		auto blurInputLayout = this->getInputLayout(3);
-
 		/* Resolve input (color + trace + depth + normals + env cubemap): 5 bindings, custom. */
 		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInput");
 
@@ -728,7 +650,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || resolveInputLayout == nullptr )
+		if ( traceInputLayout == nullptr || resolveInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -763,20 +685,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(blurInputLayout);
-
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(BlurPushConstants)
-				}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_resolveLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_resolveLayout == nullptr )
 		{
 			return false;
 		}
@@ -788,9 +697,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Trace_FS", ShaderType::FragmentShader, SSRTraceFragmentShader);
 		const auto resolveFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Resolve_FS", ShaderType::FragmentShader, SSRResolveFragmentShader);
-		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Blur_FS", ShaderType::FragmentShader, SSRBlurFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || resolveFragment == nullptr || blurFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || resolveFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile SSR shaders !";
 
@@ -800,9 +708,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "SSR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 		m_resolvePipeline = this->createFullscreenPipeline(ClassId, "SSR_Resolve", vertexModule, resolveFragment, m_resolveLayout, m_resolveTarget);
-		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 
-		if ( m_tracePipeline == nullptr || m_resolvePipeline == nullptr || m_blurPipeline == nullptr )
+		if ( m_tracePipeline == nullptr || m_resolvePipeline == nullptr )
 		{
 			return false;
 		}
@@ -834,38 +741,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				{
 					return false;
 				}
-			}
-		}
-
-		/* Blur H: reads resolve result (fixed) + depth/normals (per-frame, bilateral filter). */
-		m_blurHPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurH_DescSet");
-
-		if ( m_blurHPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_blurHPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_resolveTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Blur V: reads blur H result (fixed) + depth/normals (per-frame). */
-		m_blurVPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurV_DescSet");
-
-		if ( m_blurVPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_blurVPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
 			}
 		}
 
@@ -1329,8 +1204,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		m_resolvePerFrame.clear();
 		m_tracePerFrame.clear();
-		m_blurVPerFrame.clear();
-		m_blurHPerFrame.clear();
 		m_hiZCopyPerFrame.clear();
 		m_hiZReduceSets.clear();
 		m_colorCopyPerFrame.clear();
@@ -1350,10 +1223,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_hiZMipViews.clear();
 		m_hiZImage.reset();
 
-		m_blurPipeline.reset();
 		m_resolvePipeline.reset();
 		m_tracePipeline.reset();
-		m_blurLayout.reset();
 		m_resolveLayout.reset();
 		m_traceLayout.reset();
 
@@ -1364,7 +1235,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	SSR::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	SSR::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -1625,74 +1496,59 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				this->renderer().bindlessTextureManager().descriptorSet()
 			);
 		}
+	}
 
-		/* ---- Pass 3: Bilateral Blur Horizontal (roughness-scaled radius) ---- */
-		{
-			if ( inputDepth != nullptr )
-			{
-				static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-			}
+	IndirectPostProcessEffect::DenoiseContribution
+	SSR::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "ssr";
+		contribution.source = &m_resolveTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.needsDepth = true;
+		contribution.needsNormals = true;
+		contribution.dynamics = Base::Math::Vector< 4, float >{m_depthSigma, m_normalSigma, static_cast< float >(m_blurRadius), 0.0F};
 
-			if ( inputNormals != nullptr )
-			{
-				static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-			}
+		/* Same bilateral kernel as the retired SSR_Blur_FS pass: depth/normal-aware
+		 * separable filter, radius scaled by the surface roughness (polished surfaces
+		 * keep mirror-sharp reflections). dynamics0 = {depthSigma, normalSigma, blurRadius}. */
+		contribution.code =
+			"\tvec2 ssrTexel = 1.0 / vec2(textureSize(ssrSrc, 0));\n"
+			"\tvec4 ssrCenterVal = texture(ssrSrc, vUV);\n"
+			"\tfloat ssrCenterDepth = texture(emDepth, vUV).r;\n"
+			"\tvec3 ssrCenterNormal = texture(emNormals, vUV).rgb;\n"
+			"\tvec4 ssrResult = ssrCenterVal;\n"
+			"\tif (ssrCenterDepth < 1.0)\n"
+			"\t{\n"
+			"\t\tvec4 ssrSum = vec4(0.0);\n"
+			"\t\tfloat ssrTotalWeight = 0.0;\n"
+			"\t\t/* Roughness-scaled radius: polished surfaces keep mirror-sharp reflections. */\n"
+			"\t\tfloat ssrPackedRM = texture(emNormals, vUV).a;\n"
+			"\t\tfloat ssrCenterRoughness = ssrPackedRM >= 2.0 ? ssrPackedRM - 2.0 : ssrPackedRM;\n"
+			"\t\tint ssrRadius = max(1, int(emDyn.ssrDynamics0.z * smoothstep(0.02, 0.5, ssrCenterRoughness)));\n"
+			"\t\tfloat ssrSpatialSigma = float(ssrRadius) * 0.5;\n"
+			"\t\tfloat ssrInvSpatialSigma2 = 1.0 / (2.0 * ssrSpatialSigma * ssrSpatialSigma);\n"
+			"\t\tfloat ssrInvDepthSigma2 = 1.0 / (2.0 * emDyn.ssrDynamics0.x * emDyn.ssrDynamics0.x);\n"
+			"\t\tfor (int ssrI = -ssrRadius; ssrI <= ssrRadius; ssrI++)\n"
+			"\t\t{\n"
+			"\t\t\tvec2 ssrSampleUV = vUV + emDenoiseDir * ssrTexel * float(ssrI);\n"
+			"\t\t\tvec4 ssrSampleVal = texture(ssrSrc, ssrSampleUV);\n"
+			"\t\t\tfloat ssrSampleDepth = texture(emDepth, ssrSampleUV).r;\n"
+			"\t\t\tvec3 ssrSampleNormal = texture(emNormals, ssrSampleUV).rgb;\n"
+			"\t\t\tfloat ssrSpatialW = exp(-float(ssrI * ssrI) * ssrInvSpatialSigma2);\n"
+			"\t\t\tfloat ssrDepthDiff = abs(ssrCenterDepth - ssrSampleDepth);\n"
+			"\t\t\tfloat ssrDepthW = exp(-ssrDepthDiff * ssrDepthDiff * ssrInvDepthSigma2);\n"
+			"\t\t\tfloat ssrNormalDot = max(dot(ssrCenterNormal, ssrSampleNormal), 0.0);\n"
+			"\t\t\tfloat ssrNormalW = pow(ssrNormalDot, 1.0 / max(emDyn.ssrDynamics0.y, 0.001));\n"
+			"\t\t\tfloat ssrW = ssrSpatialW * ssrDepthW * ssrNormalW;\n"
+			"\t\t\tssrSum += ssrSampleVal * ssrW;\n"
+			"\t\t\tssrTotalWeight += ssrW;\n"
+			"\t\t}\n"
+			"\t\tssrResult = (ssrTotalWeight > 0.0) ? ssrSum / ssrTotalWeight : ssrCenterVal;\n"
+			"\t}\n";
 
-			const BlurPushConstants blurH{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
-				.directionX = 1.0F,
-				.directionY = 0.0F,
-				.depthSigma = m_depthSigma,
-				.normalSigma = m_normalSigma,
-				.blurRadius = static_cast< int32_t >(m_blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurHTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurHPerFrame[frameIndex],
-				&blurH,
-				sizeof(BlurPushConstants)
-			);
-		}
-
-		/* ---- Pass 4: Bilateral Blur Vertical ---- */
-		{
-			if ( inputDepth != nullptr )
-			{
-				static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-			}
-
-			if ( inputNormals != nullptr )
-			{
-				static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-			}
-
-			const BlurPushConstants blurV{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
-				.directionX = 0.0F,
-				.directionY = 1.0F,
-				.depthSigma = m_depthSigma,
-				.normalSigma = m_normalSigma,
-				.blurRadius = static_cast< int32_t >(m_blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurVTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurVPerFrame[frameIndex],
-				&blurV,
-				sizeof(BlurPushConstants)
-			);
-		}
+		return contribution;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

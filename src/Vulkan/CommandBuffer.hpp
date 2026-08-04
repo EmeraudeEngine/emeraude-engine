@@ -247,7 +247,9 @@ namespace EmEn::Vulkan
 			template< size_t array_size_t >
 			void
 			beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, array_size_t > & clearValues, VkSubpassContents subpassContents) const noexcept
-				requires (array_size_t > 0 && array_size_t != 2)
+				/* Zero clear values is legal Vulkan (every attachment loads DONT_CARE —
+				 * the shared denoise pass); 2 keeps resolving to the non-template overload. */
+				requires (array_size_t != 2)
 			{
 				VkRenderPassBeginInfo renderPassBeginInfo{};
 				renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

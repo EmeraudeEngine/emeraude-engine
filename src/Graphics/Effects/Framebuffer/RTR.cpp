@@ -707,86 +707,6 @@ void main()
 }
 )GLSL";
 
-	/* Blur shader — identical to SSR blur. */
-	/* Bilateral blur shader — depth/normal-aware separable filter for reflections.
-	 * Preserves sharp reflection edges at geometric boundaries. */
-	constexpr auto RTRBlurFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outBlur;
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D normalTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float directionX;
-	float directionY;
-	float depthSigma;
-	float normalSigma;
-	int blurRadius;
-	float padding;
-};
-
-void main()
-{
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec2 dir = vec2(directionX, directionY);
-
-	vec4 centerVal = texture(inputTex, vUV);
-	float centerDepth = texture(depthTex, vUV).r;
-	vec3 centerNormal = texture(normalTex, vUV).rgb;
-
-	if (centerDepth >= 1.0)
-	{
-		outBlur = centerVal;
-		return;
-	}
-
-	vec4 result = vec4(0.0);
-	float totalWeight = 0.0;
-
-	/* Cone-scaled radius: the GGX lobe tangent grows with alpha = roughness², so the
-	 * blur footprint follows the SQUARE of the roughness — polished surfaces (water,
-	 * onyx) keep mirror-sharp reflections, brushed metal gets a real satin spread.
-	 * blurRadius is the MAXIMUM (reached near roughness 0.7); v1 approximation: the
-	 * footprint ignores the per-pixel hit distance (uniform cone) — the stochastic
-	 * + temporal successor will replace it (Frostbite SSSR). */
-	float packedRM = texture(normalTex, vUV).a;
-	float centerRoughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
-	float coneScale = clamp((centerRoughness * centerRoughness) / 0.49, 0.0, 1.0);
-	int effectiveRadius = max(1, int(float(blurRadius) * coneScale));
-
-	float spatialSigma = float(effectiveRadius) * 0.5;
-	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
-	float invDepthSigma2 = 1.0 / (2.0 * depthSigma * depthSigma);
-
-	for (int i = -effectiveRadius; i <= effectiveRadius; i++)
-	{
-		vec2 sampleUV = vUV + dir * texelSize * float(i);
-		vec4 sampleVal = texture(inputTex, sampleUV);
-		float sampleDepth = texture(depthTex, sampleUV).r;
-		vec3 sampleNormal = texture(normalTex, sampleUV).rgb;
-
-		float spatialW = exp(-float(i * i) * invSpatialSigma2);
-		float depthDiff = abs(centerDepth - sampleDepth);
-		float depthW = exp(-depthDiff * depthDiff * invDepthSigma2);
-		float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
-		float normalW = pow(normalDot, 1.0 / max(normalSigma, 0.001));
-
-		float w = spatialW * depthW * normalW;
-		result += sampleVal * w;
-		totalWeight += w;
-	}
-
-	outBlur = (totalWeight > 0.0) ? result / totalWeight : centerVal;
-}
-)GLSL";
-
 	/* Reflection pyramid downsample: 4 bilinear taps at the corners of the destination
 	 * texel's source footprint — a 4x4 tent, converging toward a gaussian across the
 	 * chain (same pre-convolution as the SSR color pyramid). Operates on the
@@ -898,10 +818,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Trace input (set 1): depth + normals + environment cubemap — 3 combined image samplers. */
 		auto traceInputLayout = this->getInputLayout(3);
 
-		/* Single input (blur): 1 combined image sampler. */
-		auto blurInputLayout = this->getInputLayout(3);
-
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr )
+		if ( traceInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -943,20 +860,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(blurInputLayout);
-
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(BlurPushConstants)
-				}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_traceLayout == nullptr )
 		{
 			return false;
 		}
@@ -967,9 +871,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Trace_FS", ShaderType::FragmentShader, RTRTraceFragmentShader);
-		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Blur_FS", ShaderType::FragmentShader, RTRBlurFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTR shaders !";
 
@@ -978,9 +881,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
+		if ( m_tracePipeline == nullptr )
 		{
 			return false;
 		}
@@ -1017,38 +919,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				{
 					return false;
 				}
-			}
-		}
-
-		/* Blur H: reads trace result + depth + normals (per-frame). */
-		m_blurHPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurH_DescSet");
-
-		if ( m_blurHPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( auto & ds : m_blurHPerFrame )
-		{
-			if ( !ds->writeCombinedImageSampler(0, m_traceTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Blur V: reads blur H result + depth + normals (per-frame). */
-		m_blurVPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurV_DescSet");
-
-		if ( m_blurVPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( auto & ds : m_blurVPerFrame )
-		{
-			if ( !ds->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
 			}
 		}
 
@@ -1294,12 +1164,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_pyramidImage.reset();
 
 		m_tracePerFrame.clear();
-		m_blurVPerFrame.clear();
-		m_blurHPerFrame.clear();
 
-		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_blurLayout.reset();
 		m_traceLayout.reset();
 
 		m_blurVTarget.destroy();
@@ -1308,7 +1174,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	RTR::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
+	RTR::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -1525,67 +1391,65 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 			}
 		}
+	}
 
-		/* Update depth + normals descriptors for blur passes (per-frame). */
-		if ( inputDepth != nullptr )
-		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputDepth));
-		}
+	IndirectPostProcessEffect::DenoiseContribution
+	RTR::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "rtr";
+		contribution.source = &m_traceTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.needsDepth = true;
+		contribution.needsNormals = true;
+		contribution.dynamics = Base::Math::Vector< 4, float >{m_parameters.depthSigma, m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F};
 
-		if ( inputNormals != nullptr )
-		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputNormals));
-		}
+		/* Same depth/normal-aware bilateral kernel as the retired RTR_Blur_FS pass,
+		 * including the roughness²-driven cone-scaled radius (GGX lobe footprint:
+		 * polished surfaces keep mirror-sharp reflections, brushed metal gets a real
+		 * satin spread; blurRadius is the MAXIMUM, reached near roughness 0.7).
+		 * Dynamics0: x = depthSigma, y = normalSigma, z = blurRadius (maximum). */
+		contribution.code =
+			"\tvec2 rtrDnTexel = 1.0 / vec2(textureSize(rtrSrc, 0));\n"
+			"\tvec4 rtrDnCenter = texture(rtrSrc, vUV);\n"
+			"\tfloat rtrDnCenterDepth = texture(emDepth, vUV).r;\n"
+			"\tvec3 rtrDnCenterNormal = texture(emNormals, vUV).rgb;\n"
+			"\tvec4 rtrResult = rtrDnCenter;\n"
+			"\t/* Skip far-plane fragments. */\n"
+			"\tif (rtrDnCenterDepth < 1.0)\n"
+			"\t{\n"
+			"\t\tfloat rtrDnPackedRM = texture(emNormals, vUV).a;\n"
+			"\t\tfloat rtrDnRoughness = rtrDnPackedRM >= 2.0 ? rtrDnPackedRM - 2.0 : rtrDnPackedRM;\n"
+			"\t\tfloat rtrDnConeScale = clamp((rtrDnRoughness * rtrDnRoughness) / 0.49, 0.0, 1.0);\n"
+			"\t\tint rtrDnRadius = max(1, int(emDyn.rtrDynamics0.z * rtrDnConeScale));\n"
+			"\t\tfloat rtrDnSpatialSigma = float(rtrDnRadius) * 0.5;\n"
+			"\t\tfloat rtrDnInvSpatialSigma2 = 1.0 / (2.0 * rtrDnSpatialSigma * rtrDnSpatialSigma);\n"
+			"\t\tfloat rtrDnInvDepthSigma2 = 1.0 / (2.0 * emDyn.rtrDynamics0.x * emDyn.rtrDynamics0.x);\n"
+			"\t\tvec4 rtrDnSum = vec4(0.0);\n"
+			"\t\tfloat rtrDnTotalWeight = 0.0;\n"
+			"\t\tfor (int rtrDnI = -rtrDnRadius; rtrDnI <= rtrDnRadius; rtrDnI++)\n"
+			"\t\t{\n"
+			"\t\t\tvec2 rtrDnUV = vUV + emDenoiseDir * rtrDnTexel * float(rtrDnI);\n"
+			"\t\t\tvec4 rtrDnSample = texture(rtrSrc, rtrDnUV);\n"
+			"\t\t\tfloat rtrDnDepth = texture(emDepth, rtrDnUV).r;\n"
+			"\t\t\tvec3 rtrDnNormal = texture(emNormals, rtrDnUV).rgb;\n"
+			"\t\t\tfloat rtrDnSpatialW = exp(-float(rtrDnI * rtrDnI) * rtrDnInvSpatialSigma2);\n"
+			"\t\t\tfloat rtrDnDepthDiff = abs(rtrDnCenterDepth - rtrDnDepth);\n"
+			"\t\t\tfloat rtrDnDepthW = exp(-rtrDnDepthDiff * rtrDnDepthDiff * rtrDnInvDepthSigma2);\n"
+			"\t\t\tfloat rtrDnNormalDot = max(dot(rtrDnCenterNormal, rtrDnNormal), 0.0);\n"
+			"\t\t\tfloat rtrDnNormalW = pow(rtrDnNormalDot, 1.0 / max(emDyn.rtrDynamics0.y, 0.001));\n"
+			"\t\t\tfloat rtrDnW = rtrDnSpatialW * rtrDnDepthW * rtrDnNormalW;\n"
+			"\t\t\trtrDnSum += rtrDnSample * rtrDnW;\n"
+			"\t\t\trtrDnTotalWeight += rtrDnW;\n"
+			"\t\t}\n"
+			"\t\tif (rtrDnTotalWeight > 0.0)\n"
+			"\t\t{\n"
+			"\t\t\trtrResult = rtrDnSum / rtrDnTotalWeight;\n"
+			"\t\t}\n"
+			"\t}\n";
 
-		/* ---- Pass 2: Bilateral Blur Horizontal ---- */
-		{
-			const BlurPushConstants blurH{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
-				.directionX = 1.0F,
-				.directionY = 0.0F,
-				.depthSigma = m_parameters.depthSigma,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurHTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurHPerFrame[frameIndex],
-				&blurH,
-				sizeof(BlurPushConstants)
-			);
-		}
-
-		/* ---- Pass 3: Bilateral Blur Vertical ---- */
-		{
-			const BlurPushConstants blurV{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
-				.directionX = 0.0F,
-				.directionY = 1.0F,
-				.depthSigma = m_parameters.depthSigma,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurVTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurVPerFrame[frameIndex],
-				&blurV,
-				sizeof(BlurPushConstants)
-			);
-		}
+		return contribution;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

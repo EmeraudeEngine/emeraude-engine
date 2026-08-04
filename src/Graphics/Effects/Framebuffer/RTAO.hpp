@@ -87,21 +87,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the blur pass.
-			 */
-			struct EMEN_API BlurPushConstants
-			{
-				float texelSizeX;
-				float texelSizeY;
-				float directionX;
-				float directionY;
-				float normalSigma;
-				int32_t blurRadius;
-				float padding1;
-				float padding2;
-			};
-
-			/**
 			 * @brief Constructs a ray-tracing ambient occlusion effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -139,8 +124,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
-			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */
+			[[nodiscard]]
+			bool
+			usesSharedDenoise () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
+			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
+			[[nodiscard]]
+			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]
@@ -209,13 +206,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			IntermediateRenderTarget m_blurVTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 	};
 }

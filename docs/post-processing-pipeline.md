@@ -123,6 +123,36 @@ SSR variant `[SSR,SSAO] | [SSGI,VL]` → 2 combines; LightAndShadowDebug
 the groups. Net effect: the ~17 per-effect full-res RGBA16F output targets are gone,
 replaced by the two shared combine targets.
 
+## 3c. The shared denoise pass (phase E)
+
+The seven overlay effects with a "trace → separable blur H → blur V" working chain
+(RTR/SSR, RTAO/SSAO, RTGI/SSGI, ContactShadows) also delegate the blur pair to the
+PostProcessor's **DenoisePass**: per combine group, ONE horizontal + ONE vertical
+multi-render-target pass replace two passes per effect. The protocol mirrors §3b:
+
+- `usesSharedDenoise()` → true; `recordPreDenoisePasses()` records the trace only;
+  `denoiseContribution()` provides the source (trace output), the effect-owned H/V
+  targets, the guides (`emDepth`/`emNormals`), one `vec4` dynamics slot and the GLSL
+  kernel snippet (assigns `vec4 <prefix>Result`; direction comes as `emDenoiseDir`).
+  Each effect keeps its EXACT kernel — the bilateral weights, radii and early-outs of
+  the retired per-effect blur shaders are transcribed verbatim, prefixed.
+- `recordPostDenoisePasses()` hosts what ran AFTER the blur: the RTGI temporal resolve
+  + normal-history copy (and its ping-pong flip / combine-source selection).
+- Group execution order: every member's pre-denoise passes → DenoisePass H → V →
+  every member's post-denoise passes → CombinePass.
+- The group is PARTITIONED BY EXTENT (a pixel-doubling-gated effect can coexist with an
+  unconditionally half-res one): one H+V pair per resolution present in the group.
+- The MRT render pass allows mixed attachment formats (R8/RG16F/RGBA16F), same
+  conventions as the IntermediateRenderTarget pass (DONT_CARE load — zero clear values,
+  the `CommandBuffer::beginRenderPass()` template now accepts an empty array — STORE,
+  ends SHADER_READ_ONLY, FULL non-by-region dependencies).
+- VolumetricLight (radial march) and LensFlare (ghosts) keep their own non-separable
+  passes.
+
+ContactShadows also moved to the SAME pixel-doubling-gated working resolution as RTAO
+(it was the only full-res mask chain) — the assumed quality trade of this phase; its
+combine snippet upsamples bilinearly like every other overlay.
+
 ## 4. Per-effect GPU pass counts (reference, 1080p half-res)
 
 Measured from the `execute()` implementations (render passes + compute dispatches):
@@ -161,9 +191,13 @@ before the next:
 - **Phase A (done)** — the overlay protocol + combine pass (§3b): the nine overlay
   effects lost their apply/composite passes; worst realistic chains save 3-4 full-res
   passes and ~15 full-res RGBA16F render targets.
-- **Phase E (if measurements justify)** — shared MRT bilateral denoise for AO/GI/contact
-  shadows (same depth/normals guides). Also revisit ContactShadows' full-res working
-  chain (§4 anomaly).
+- **Phase E (done)** — the shared denoise pass (§3c): the seven separable-blur effects
+  delegate their blur pairs (up to 8 passes → 2 per group), and ContactShadows moved to
+  the pixel-doubling-gated half resolution (the §4 anomaly). NOTE: the phase B+A Linux
+  measurement showed NO FPS gain on Sponza RT — the bottleneck there is the RT TRACE
+  passes, which none of these phases touch. E was executed as architectural cleanup with
+  that expectation on record; the next real lever for Sponza-class scenes is trace cost
+  (resolution, sample counts), to be driven by per-pass GPU timings.
 
 ## Known issues
 

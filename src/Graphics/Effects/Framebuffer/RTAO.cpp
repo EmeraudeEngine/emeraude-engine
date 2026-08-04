@@ -203,72 +203,6 @@ void main()
 }
 )GLSL";
 
-	/* Bilateral blur shader — depth + normal-weighted filter for ambient occlusion.
-	 * Preserves geometric edges while smoothing AO noise.
-	 * Binding 0: AO input (RG), Binding 1: normals. */
-	static constexpr auto RTAOBlurFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec2 outBlur; /* R = blurred AO, G = depth (pass-through center). */
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-layout(set = 0, binding = 1) uniform sampler2D normalTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float directionX;
-	float directionY;
-	float normalSigma;
-	int blurRadius;
-	float padding1;
-	float padding2;
-};
-
-void main()
-{
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec2 dir = vec2(directionX, directionY);
-
-	vec2 center = texture(inputTex, vUV).rg;
-	float centerDepth = center.g;
-	vec3 centerNormal = texture(normalTex, vUV).rgb;
-
-	if (centerDepth >= 1.0)
-	{
-		outBlur = center;
-		return;
-	}
-
-	float result = 0.0;
-	float totalWeight = 0.0;
-
-	float spatialSigma = float(blurRadius) * 0.5;
-	float invSpatialSigma2 = 1.0 / (2.0 * spatialSigma * spatialSigma);
-
-	for (int i = -blurRadius; i <= blurRadius; i++)
-	{
-		vec2 sampleUV = vUV + dir * texelSize * float(i);
-		vec2 s = texture(inputTex, sampleUV).rg;
-		vec3 sampleNormal = texture(normalTex, sampleUV).rgb;
-
-		float spatialW = exp(-float(i * i) * invSpatialSigma2);
-		float depthDiff = abs(s.g - centerDepth);
-		float depthW = exp(-depthDiff * depthDiff * 10000.0);
-		float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
-		float normalW = pow(normalDot, 1.0 / max(normalSigma, 0.001));
-
-		float w = spatialW * depthW * normalW;
-		result += s.r * w;
-		totalWeight += w;
-	}
-
-	outBlur = vec2(result / max(totalWeight, 0.001), centerDepth);
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -327,10 +261,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
 		auto traceInputLayout = this->getInputLayout(2);
 
-		/* Single input (blur): 1 combined image sampler. */
-		auto blurInputLayout = this->getInputLayout(2);
-
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr )
+		if ( traceInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -357,16 +288,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(blurInputLayout);
-
-			m_blurLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_traceLayout == nullptr )
 		{
 			return false;
 		}
@@ -377,9 +299,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		auto vertexModule = this->getFullscreenVertexShader();
 		auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Trace_FS", ShaderType::FragmentShader, RTAOTraceFragmentShader);
-		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Blur_FS", ShaderType::FragmentShader, RTAOBlurFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTAO shaders !";
 
@@ -388,9 +309,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTAO_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTAO_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
+		if ( m_tracePipeline == nullptr )
 		{
 			return false;
 		}
@@ -404,38 +324,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Blur H: reads trace result + normals (per-frame for normals). */
-		m_blurHPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurH_DescSet");
-
-		if ( m_blurHPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( auto & ds : m_blurHPerFrame )
-		{
-			if ( !ds->writeCombinedImageSampler(0, m_traceTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Blur V: reads blur H result + normals (per-frame for normals). */
-		m_blurVPerFrame = this->createPerFrameDescriptorSets(blurInputLayout, ClassId, "BlurV_DescSet");
-
-		if ( m_blurVPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( auto & ds : m_blurVPerFrame )
-		{
-			if ( !ds->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
@@ -443,12 +331,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	RTAO::destroy () noexcept
 	{
 		m_tracePerFrame.clear();
-		m_blurVPerFrame.clear();
-		m_blurHPerFrame.clear();
 
-		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_blurLayout.reset();
 		m_traceLayout.reset();
 
 		m_blurVTarget.destroy();
@@ -457,7 +341,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	RTAO::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
+	RTAO::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -552,61 +436,53 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			m_traceTarget.endRenderPass(commandBuffer);
 		}
+	}
 
-		/* Update normals descriptors for blur passes (per-frame). */
-		if ( inputNormals != nullptr )
-		{
-			static_cast< void >(m_blurHPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
-			static_cast< void >(m_blurVPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
-		}
+	IndirectPostProcessEffect::DenoiseContribution
+	RTAO::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "rtao";
+		contribution.source = &m_traceTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.needsNormals = true;
+		contribution.dynamics = {m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F, 0.0F};
 
-		/* ---- Pass 2: Bilateral Blur Horizontal ---- */
-		{
-			const BlurPushConstants blurH{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurHTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurHTarget.height()),
-				.directionX = 1.0F,
-				.directionY = 0.0F,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding1 = 0.0F,
-				.padding2 = 0.0F
-			};
+		/* Same bilateral kernel as the retired RTAO_Blur_FS pass: gaussian spatial term,
+		 * depth edge-stopping from the source's own G channel, normal edge-stopping from
+		 * the shared normals guide, far-plane early-out (center pass-through). */
+		contribution.code =
+			"\tvec2 rtaoTexel = 1.0 / vec2(textureSize(rtaoSrc, 0));\n"
+			"\tvec2 rtaoCenter = texture(rtaoSrc, vUV).rg;\n"
+			"\tfloat rtaoCenterDepth = rtaoCenter.g;\n"
+			"\tvec4 rtaoResult = vec4(rtaoCenter, 0.0, 1.0);\n"
+			"\tif (rtaoCenterDepth < 1.0)\n"
+			"\t{\n"
+			"\t\tvec3 rtaoCenterNormal = texture(emNormals, vUV).rgb;\n"
+			"\t\tint rtaoRadius = int(emDyn.rtaoDynamics0.y);\n"
+			"\t\tfloat rtaoSpatialSigma = float(rtaoRadius) * 0.5;\n"
+			"\t\tfloat rtaoInvSpatialSigma2 = 1.0 / (2.0 * rtaoSpatialSigma * rtaoSpatialSigma);\n"
+			"\t\tfloat rtaoSum = 0.0;\n"
+			"\t\tfloat rtaoTotalWeight = 0.0;\n"
+			"\t\tfor (int rtaoI = -rtaoRadius; rtaoI <= rtaoRadius; rtaoI++)\n"
+			"\t\t{\n"
+			"\t\t\tvec2 rtaoSampleUV = vUV + emDenoiseDir * rtaoTexel * float(rtaoI);\n"
+			"\t\t\tvec2 rtaoS = texture(rtaoSrc, rtaoSampleUV).rg;\n"
+			"\t\t\tvec3 rtaoSampleNormal = texture(emNormals, rtaoSampleUV).rgb;\n"
+			"\t\t\tfloat rtaoSpatialW = exp(-float(rtaoI * rtaoI) * rtaoInvSpatialSigma2);\n"
+			"\t\t\tfloat rtaoDepthDiff = abs(rtaoS.g - rtaoCenterDepth);\n"
+			"\t\t\tfloat rtaoDepthW = exp(-rtaoDepthDiff * rtaoDepthDiff * 10000.0);\n"
+			"\t\t\tfloat rtaoNormalDot = max(dot(rtaoCenterNormal, rtaoSampleNormal), 0.0);\n"
+			"\t\t\tfloat rtaoNormalW = pow(rtaoNormalDot, 1.0 / max(emDyn.rtaoDynamics0.x, 0.001));\n"
+			"\t\t\tfloat rtaoW = rtaoSpatialW * rtaoDepthW * rtaoNormalW;\n"
+			"\t\t\trtaoSum += rtaoS.r * rtaoW;\n"
+			"\t\t\trtaoTotalWeight += rtaoW;\n"
+			"\t\t}\n"
+			"\t\trtaoResult = vec4(rtaoSum / max(rtaoTotalWeight, 0.001), rtaoCenterDepth, 0.0, 1.0);\n"
+			"\t}\n";
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurHTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurHPerFrame[frameIndex],
-				&blurH,
-				sizeof(BlurPushConstants)
-			);
-		}
-
-		/* ---- Pass 3: Bilateral Blur Vertical ---- */
-		{
-			const BlurPushConstants blurV{
-				.texelSizeX = 1.0F / static_cast< float >(m_blurVTarget.width()),
-				.texelSizeY = 1.0F / static_cast< float >(m_blurVTarget.height()),
-				.directionX = 0.0F,
-				.directionY = 1.0F,
-				.normalSigma = m_parameters.normalSigma,
-				.blurRadius = static_cast< int32_t >(m_parameters.blurRadius),
-				.padding1 = 0.0F,
-				.padding2 = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_blurVTarget,
-				*m_blurPipeline,
-				*m_blurLayout,
-				*m_blurVPerFrame[frameIndex],
-				&blurV,
-				sizeof(BlurPushConstants)
-			);
-		}
+		return contribution;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "CombinePass.hpp"
+#include "DenoisePass.hpp"
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
 #include "IndirectPostProcessEffect.hpp"
@@ -490,6 +491,12 @@ namespace EmEn::Graphics
 
 		m_quadGeometry.reset();
 
+		if ( m_denoisePass != nullptr )
+		{
+			m_denoisePass->destroy();
+			m_denoisePass.reset();
+		}
+
 		if ( m_combinePass != nullptr )
 		{
 			m_combinePass->destroy();
@@ -590,6 +597,25 @@ namespace EmEn::Graphics
 			TraceError{ClassId} << "Unable to create the post-processor combine pass !";
 
 			m_combinePass.reset();
+
+			return false;
+		}
+
+		/* (Re)create the shared denoise pass (per-signature resources, created lazily). */
+		if ( m_denoisePass != nullptr )
+		{
+			m_renderer.deferredDestructor().retireAction([pass = std::shared_ptr< DenoisePass >{std::move(m_denoisePass)}] () {
+				pass->destroy();
+			});
+		}
+
+		m_denoisePass = std::make_unique< DenoisePass >(m_renderer);
+
+		if ( !m_denoisePass->create(extent.width, extent.height) )
+		{
+			TraceError{ClassId} << "Unable to create the post-processor denoise pass !";
+
+			m_denoisePass.reset();
 
 			return false;
 		}
@@ -1132,11 +1158,14 @@ namespace EmEn::Graphics
 		};
 
 		/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects
-		 * accumulate their contributions and are applied by ONE generated full-res pass.
-		 * The group flushes before any effect that needs the up-to-date chain color —
-		 * a non-overlay effect, or an overlay whose upstream passes sample the chain
-		 * color (readsChainColorUpstream) — preserving exact sequential semantics. */
-		std::vector< CombinePass::GroupEntry > combineGroup;
+		 * accumulate and are applied by ONE generated full-res pass. The group flushes
+		 * before any effect that needs the up-to-date chain color — a non-overlay effect,
+		 * or an overlay whose upstream passes sample the chain color
+		 * (readsChainColorUpstream) — preserving exact sequential semantics.
+		 * Recording is DEFERRED to the flush so the shared denoise (phase E) can batch the
+		 * whole group: every member's pre-denoise passes (traces) first, then ONE H + ONE V
+		 * multi-target blur, then the post-denoise passes (temporal), then the combine. */
+		std::vector< IndirectPostProcessEffect * > combineGroup;
 		const Vulkan::TextureInterface * combineGroupInput = nullptr;
 		uint32_t combineGroupIndex = 0;
 
@@ -1146,7 +1175,93 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			currentTexture = &m_combinePass->record(commandBuffer, *combineGroupInput, combineGroup, context, combineGroupIndex++);
+			/* 1. Internal passes. Shared-denoise members record their traces only; the
+			 * others record their full internal chain. Order across members is free: the
+			 * upstream passes read the G-buffer and the FIXED group input color only. */
+			for ( auto * effect : combineGroup )
+			{
+				if ( effect->usesSharedDenoise() )
+				{
+					effect->recordPreDenoisePasses(commandBuffer, *combineGroupInput, context);
+				}
+				else
+				{
+					effect->recordOverlayPasses(commandBuffer, *combineGroupInput, context);
+				}
+			}
+
+			/* 2. The shared separable blur (one H + one V multi-target pass per RESOLUTION):
+			 * effects keep their natural working resolution (some are pixel-doubling gated,
+			 * some are unconditionally half-res), so the group is partitioned by extent and
+			 * each partition gets its own H+V pair. */
+			{
+				std::vector< DenoisePass::GroupEntry > denoiseGroup;
+				denoiseGroup.reserve(combineGroup.size());
+
+				for ( auto * effect : combineGroup )
+				{
+					if ( effect->usesSharedDenoise() )
+					{
+						denoiseGroup.emplace_back(effect->denoiseContribution(context));
+					}
+				}
+
+				while ( !denoiseGroup.empty() )
+				{
+					std::vector< DenoisePass::GroupEntry > partition;
+					partition.reserve(denoiseGroup.size());
+
+					const auto width = denoiseGroup.front().targetH != nullptr ? denoiseGroup.front().targetH->width() : 0;
+					const auto height = denoiseGroup.front().targetH != nullptr ? denoiseGroup.front().targetH->height() : 0;
+
+					for ( auto it = denoiseGroup.begin(); it != denoiseGroup.end(); )
+					{
+						if ( it->targetH == nullptr )
+						{
+							/* Dropped (and traced) — it must not starve the partition loop. */
+							TraceError{ClassId} << "A denoise contribution ('" << (it->prefix != nullptr ? it->prefix : "?") << "') has no target !";
+
+							it = denoiseGroup.erase(it);
+						}
+						else if ( it->targetH->width() == width && it->targetH->height() == height )
+						{
+							partition.emplace_back(std::move(*it));
+							it = denoiseGroup.erase(it);
+						}
+						else
+						{
+							++it;
+						}
+					}
+
+					if ( !m_denoisePass->record(commandBuffer, partition, context) )
+					{
+						TraceError{ClassId} << "The shared denoise pass failed — the group's blur targets are stale !";
+					}
+				}
+			}
+
+			/* 3. Post-denoise passes (temporal resolves, history copies). */
+			for ( auto * effect : combineGroup )
+			{
+				if ( effect->usesSharedDenoise() )
+				{
+					effect->recordPostDenoisePasses(commandBuffer, context);
+				}
+			}
+
+			/* 4. The combine pass applies the whole group onto the chain color. */
+			{
+				std::vector< CombinePass::GroupEntry > contributions;
+				contributions.reserve(combineGroup.size());
+
+				for ( const auto * effect : combineGroup )
+				{
+					contributions.emplace_back(effect->combineContribution(context));
+				}
+
+				currentTexture = &m_combinePass->record(commandBuffer, *combineGroupInput, contributions, context, combineGroupIndex++);
+			}
 
 			combineGroup.clear();
 		};
@@ -1220,8 +1335,7 @@ namespace EmEn::Graphics
 					combineGroupInput = currentTexture;
 				}
 
-				effect->recordOverlayPasses(commandBuffer, *combineGroupInput, context);
-				combineGroup.emplace_back(effect->combineContribution(context));
+				combineGroup.emplace_back(effect.get());
 
 				continue;
 			}

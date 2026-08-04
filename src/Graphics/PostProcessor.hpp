@@ -67,6 +67,7 @@ namespace EmEn
 	namespace Graphics
 	{
 		class CombinePass;
+		class DenoisePass;
 		class GrabPass;
 		class IndirectPostProcessEffect;
 		class PostProcessStack;
@@ -376,6 +377,9 @@ namespace EmEn::Graphics
 			/* Shared apply pass of the overlay effects (see CombinePass). Same exported-pimpl
 			 * constraint as m_grabPass: the destructor needs the complete type (defined out-of-line). */
 			std::unique_ptr< CombinePass > m_combinePass;
+			/* Shared separable-blur pass of the overlay effects (see DenoisePass). Same
+			 * exported-pimpl constraint. */
+			std::unique_ptr< DenoisePass > m_denoisePass;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
 			float m_nearPlane{0.1F};

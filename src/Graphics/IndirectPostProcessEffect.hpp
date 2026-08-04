@@ -420,6 +420,97 @@ namespace EmEn::Graphics
 				return {};
 			}
 
+			/* ---- Shared denoise protocol (phase E) ----
+			 * An overlay effect whose working chain is "trace → separable blur H → blur V"
+			 * can delegate the blur pair to the PostProcessor's shared DenoisePass: the
+			 * group's blurs run as TWO multi-render-target passes (one H, one V) instead of
+			 * two per effect. Each effect keeps its EXACT kernel through a GLSL snippet. */
+
+			/**
+			 * @brief Returns whether this effect delegates its separable blur to the shared denoise pass.
+			 * @note When true, the PostProcessor drives the effect through
+			 * recordPreDenoisePasses() / denoiseContribution() / recordPostDenoisePasses()
+			 * instead of recordOverlayPasses().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			usesSharedDenoise () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Records the passes PRECEDING the shared blur (trace, pyramid...).
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param inputColor The group input color texture.
+			 * @param context The per-frame chain context.
+			 * @return void
+			 */
+			virtual
+			void
+			recordPreDenoisePasses (const Vulkan::CommandBuffer & /*commandBuffer*/, const Vulkan::TextureInterface & /*inputColor*/, const FrameContext & /*context*/) noexcept
+			{
+
+			}
+
+			/**
+			 * @brief What an effect contributes to the shared denoise pass.
+			 * @note The snippet computes `vec4 <prefix>Result` from its source sampler
+			 * `<prefix>Src` (the trace output on the H pass, the H target on the V pass),
+			 * the pass direction `emDenoiseDir` (vec2, texel-normalized axis), the shared
+			 * guides (`emDepth`, `emNormals`, fetched by the snippet as needed) and its
+			 * `emDyn.<prefix>Dynamics0` vec4. All declared identifiers must be prefixed.
+			 * The H and V targets are EFFECT-OWNED (same extent across the group; formats
+			 * may differ) — the blurV target remains what combineContribution() exposes.
+			 */
+			struct EMEN_API DenoiseContribution
+			{
+				/** @brief Lowercase GLSL identifier prefix, unique per effect type. */
+				const char * prefix{nullptr};
+				/** @brief The blur input (trace/extract output). */
+				const Vulkan::TextureInterface * source{nullptr};
+				/** @brief Horizontal pass output (effect-owned). */
+				IntermediateRenderTarget * targetH{nullptr};
+				/** @brief Vertical pass output (effect-owned). */
+				IntermediateRenderTarget * targetV{nullptr};
+				/** @brief Shared context guides required by the snippet. */
+				bool needsDepth{false};
+				bool needsNormals{false};
+				/** @brief Per-frame scalar slot, exposed as a vec4 UBO member. */
+				Base::Math::Vector< 4, float > dynamics{};
+				/** @brief The GLSL kernel snippet (assigns `vec4 <prefix>Result`). */
+				std::string code;
+			};
+
+			/**
+			 * @brief Returns this frame's denoise contribution.
+			 * @note Only meaningful when usesSharedDenoise() is true, after recordPreDenoisePasses().
+			 * @param context The per-frame chain context.
+			 * @return DenoiseContribution
+			 */
+			[[nodiscard]]
+			virtual
+			DenoiseContribution
+			denoiseContribution (const FrameContext & /*context*/) const noexcept
+			{
+				return {};
+			}
+
+			/**
+			 * @brief Records the passes FOLLOWING the shared blur (temporal resolve, history copies...).
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param context The per-frame chain context.
+			 * @return void
+			 */
+			virtual
+			void
+			recordPostDenoisePasses (const Vulkan::CommandBuffer & /*commandBuffer*/, const FrameContext & /*context*/) noexcept
+			{
+
+			}
+
 		protected:
 
 			/**

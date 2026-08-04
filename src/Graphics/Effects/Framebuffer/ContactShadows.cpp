@@ -147,60 +147,6 @@ void main()
 }
 )GLSL";
 
-	constexpr auto BlurFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D inputTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float directionX;
-	float directionY;
-	float texelSizeX;
-	float texelSizeY;
-	float maxBlurRadius;
-};
-
-void main()
-{
-	vec4 center = texture(inputTex, vUV);
-	float shadow = center.r;
-	float hitDist = center.g;
-
-	/* Blur radius proportional to normalized hit distance (PCSS-lite).
-	 * Close occluders produce tight contact shadows; far occluders produce soft penumbra. */
-	float radius = maxBlurRadius * hitDist;
-
-	/* Skip blur for fully lit pixels or negligible radius. */
-	if (radius < 0.5)
-	{
-		outColor = center;
-		return;
-	}
-
-	/* 9-tap Gaussian kernel (center + 4 bilateral pairs).
-	 * Weights are pre-normalized (sum ≈ 1.0). */
-	const float weights[5] = float[](0.227027, 0.194596, 0.121621, 0.054054, 0.016216);
-
-	vec2 step = vec2(directionX * texelSizeX, directionY * texelSizeY);
-
-	float result = shadow * weights[0];
-
-	for (int i = 1; i < 5; i++)
-	{
-		vec2 offset = step * (float(i) / 4.0 * radius);
-		result += texture(inputTex, vUV + offset).r * weights[i];
-		result += texture(inputTex, vUV - offset).r * weights[i];
-	}
-
-	/* Preserve hit distance in G channel for the vertical blur pass. */
-	outColor = vec4(result, hitDist, 0.0, 1.0);
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -216,23 +162,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		auto & renderer = this->renderer();
 
-		/* Create shadow mask target (full-res, RT gives clean results). */
-		if ( !m_shadowTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_RTShadow") )
+		auto & settings = renderer.primaryServices().settings();
+
+		/* Pixel doubling: half-res for performance (default), full-res for quality.
+		 * SAME key and rule as RTAO — the shared denoise pass blurs the whole group in
+		 * one multi-target pass, so every member's blur targets must share one extent. */
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingAOPixelDoublingKey, DefaultGraphicsRayTracingAOPixelDoubling);
+		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
+		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+
+		/* Create shadow mask target (half-res, RT gives clean results — the combine
+		 * upsamples bilinearly back to full resolution). */
+		if ( !m_shadowTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_RTShadow") )
 		{
 			TraceError{TracerTag} << "Failed to create shadow target !";
 
 			return false;
 		}
 
-		/* Create blur intermediate targets (full-res). */
-		if ( !m_blurHTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_BlurH") )
+		/* Create blur intermediate targets (half-res). */
+		if ( !m_blurHTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_BlurH") )
 		{
 			TraceError{TracerTag} << "Failed to create horizontal blur target !";
 
 			return false;
 		}
 
-		if ( !m_blurVTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_BlurV") )
+		if ( !m_blurVTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_BlurV") )
 		{
 			TraceError{TracerTag} << "Failed to create vertical blur target !";
 
@@ -240,13 +196,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Descriptor set layouts ---- */
-		auto singleInputLayout = this->getInputLayout(1);
-
-		if ( singleInputLayout == nullptr )
-		{
-			return false;
-		}
-
 		/* RT shadow pass layout: depth (binding 0) + normals (binding 1) + TLAS (binding 2). */
 		{
 			const auto & device = renderer.device();
@@ -283,17 +232,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_shadowLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
 
-		{
-			const StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
-			};
-
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(singleInputLayout);
-			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-
-		if ( m_shadowLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_shadowLayout == nullptr )
 		{
 			return false;
 		}
@@ -320,21 +259,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "CS_Blur_FS", ShaderType::FragmentShader, BlurFragmentShader);
-
-		if ( blurFragment == nullptr )
-		{
-			TraceError{TracerTag} << "Failed to compile blur shader !";
-
-			return false;
-		}
-
 		/* ---- Create pipelines ---- */
 		m_shadowPipeline = this->createFullscreenPipeline(ClassId, "CS_RTShadow", vertexModule, shadowFragment, m_shadowLayout, m_shadowTarget);
-		m_blurHPipeline = this->createFullscreenPipeline(ClassId, "CS_BlurH", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_blurVPipeline = this->createFullscreenPipeline(ClassId, "CS_BlurV", vertexModule, blurFragment, m_blurLayout, m_blurVTarget);
 
-		if ( m_shadowPipeline == nullptr || m_blurHPipeline == nullptr || m_blurVPipeline == nullptr )
+		if ( m_shadowPipeline == nullptr )
 		{
 			return false;
 		}
@@ -349,52 +277,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Blur H: reads shadow mask (binding 0, fixed). */
-		m_blurHPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "CS_BlurH_DescSet");
-
-		if ( m_blurHPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_blurHPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_shadowTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Blur V: reads blur H output (binding 0, fixed). */
-		m_blurVPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "CS_BlurV_DescSet");
-
-		if ( m_blurVPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_blurVPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	ContactShadows::destroy () noexcept
 	{
-		m_blurVPerFrame.clear();
-		m_blurHPerFrame.clear();
 		m_shadowPerFrame.clear();
 
-		m_blurVPipeline.reset();
-		m_blurHPipeline.reset();
 		m_shadowPipeline.reset();
-		m_blurLayout.reset();
 		m_shadowLayout.reset();
 		m_shadowDescLayout.reset();
 
@@ -404,7 +295,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	ContactShadows::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
+	ContactShadows::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -446,7 +337,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto invView = viewMat.inverse();
 		const auto * inv = invView.data();
 
-		/* 3. Pass 1: RT shadow query (full-res). */
+		/* 3. Pass 1: RT shadow query (half-res). */
 		ShadowPushConstants shadowPC{};
 		std::memcpy(shadowPC.inverseProjViewMatrix, invViewProjMat.data(), sizeof(shadowPC.inverseProjViewMatrix));
 		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
@@ -468,47 +359,42 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			&shadowPC,
 			sizeof(ShadowPushConstants)
 		);
+	}
 
-		/* 4. Pass 2: Horizontal Gaussian blur (PCSS-lite, radius from hit distance). */
-		const float texelX = 1.0F / static_cast< float >(m_blurHTarget.width());
-		const float texelY = 1.0F / static_cast< float >(m_blurHTarget.height());
+	IndirectPostProcessEffect::DenoiseContribution
+	ContactShadows::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	{
+		DenoiseContribution contribution;
+		contribution.prefix = "cshdw";
+		contribution.source = &m_shadowTarget;
+		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
+		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.dynamics = {m_parameters.maxBlurRadius, 0.0F, 0.0F, 0.0F};
 
-		const BlurPushConstants blurHPC{
-			.directionX = 1.0F,
-			.directionY = 0.0F,
-			.texelSizeX = texelX,
-			.texelSizeY = texelY,
-			.maxBlurRadius = m_parameters.maxBlurRadius
-		};
+		/* Same PCSS-lite kernel as the retired CS_Blur_FS pass: 9-tap gaussian whose
+		 * radius scales with the normalized hit distance (G channel of the source),
+		 * early-out pass-through below half a texel, hit distance preserved in G. */
+		contribution.code =
+			"\tvec2 cshdwTexel = 1.0 / vec2(textureSize(cshdwSrc, 0));\n"
+			"\tvec4 cshdwCenter = texture(cshdwSrc, vUV);\n"
+			"\tfloat cshdwHitDist = cshdwCenter.g;\n"
+			"\tfloat cshdwRadius = emDyn.cshdwDynamics0.x * cshdwHitDist;\n"
+			"\tvec4 cshdwResult = cshdwCenter;\n"
+			"\tif (cshdwRadius >= 0.5)\n"
+			"\t{\n"
+			"\t\tconst float cshdwWeights[5] = float[](0.227027, 0.194596, 0.121621, 0.054054, 0.016216);\n"
+			"\t\tvec2 cshdwStep = emDenoiseDir * cshdwTexel;\n"
+			"\t\tfloat cshdwSum = cshdwCenter.r * cshdwWeights[0];\n"
+			"\t\tfor (int cshdwI = 1; cshdwI < 5; cshdwI++)\n"
+			"\t\t{\n"
+			"\t\t\tvec2 cshdwOffset = cshdwStep * (float(cshdwI) / 4.0 * cshdwRadius);\n"
+			"\t\t\tcshdwSum += texture(cshdwSrc, vUV + cshdwOffset).r * cshdwWeights[cshdwI];\n"
+			"\t\t\tcshdwSum += texture(cshdwSrc, vUV - cshdwOffset).r * cshdwWeights[cshdwI];\n"
+			"\t\t}\n"
+			"\t\tcshdwResult = vec4(cshdwSum, cshdwHitDist, 0.0, 1.0);\n"
+			"\t}\n";
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_blurHTarget,
-			*m_blurHPipeline,
-			*m_blurLayout,
-			*m_blurHPerFrame[frameIndex],
-			&blurHPC,
-			sizeof(BlurPushConstants)
-		);
-
-		/* 5. Pass 3: Vertical Gaussian blur (PCSS-lite). */
-		const BlurPushConstants blurVPC{
-			.directionX = 0.0F,
-			.directionY = 1.0F,
-			.texelSizeX = texelX,
-			.texelSizeY = texelY,
-			.maxBlurRadius = m_parameters.maxBlurRadius
-		};
-
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_blurVTarget,
-			*m_blurVPipeline,
-			*m_blurLayout,
-			*m_blurVPerFrame[frameIndex],
-			&blurVPC,
-			sizeof(BlurPushConstants)
-		);
+		return contribution;
 	}
 
 	IndirectPostProcessEffect::CombineContribution
