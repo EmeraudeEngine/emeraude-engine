@@ -57,24 +57,38 @@
 - VULKAN: Find a better way to detect the UBO max capacity. For now the limit is hard-coded to 65,536 bytes.
 - VULKAN: Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering (Vulkan 1.3), then leverage dynamic rendering to order draws by pipeline layout and reduce binding cost.
 - VULKAN: Extend SharedUniformBuffer pooling strategy to short-lived entities (particles, projectiles) for UBO/VBO allocation optimization.
-- ⚠️ **RAY TRACING: intermittent DEVICE_LOST in the `game-logic` demo (found 2026-07-26, NOT
-  RE-TESTED SINCE).** The demo itself is FINE — it renders correctly (night city, statue,
-  fire/smoke particles, animated actors) and runs indefinitely most of the time. But it died with
-  `VK_ERROR_DEVICE_LOST` on roughly one run in four: **2/8 runs with `RayTracing/Enabled` true,
-  0/3 with it false** (plausible attribution, NOT established — the no-RT arm needs ~10 runs).
-  The engine's own diagnostics name the region: `device_fault` reports a `READ_INVALID` at a low
-  address plus an `INSTRUCTION_POINTER_FAULT`, and the per-queue checkpoints show the last GPU
-  markers reached to be a MIX of `AS-build:end` and `transfer:image-layout-transition` — the
-  signature of BLAS builds racing uploads across the round-robined transfer queues.
-  ⚠️ **Several candidate fixes have landed since this was filed** (`Device::waitTransferQueuesIdle()`,
-  the `DeferredDestructor`, the one-shot queue-family ownership fix `ebae3d4c`, the shared-UBO
-  registry race `e8d63525`). **Re-run the repro before spending any analysis on it — it may
-  already be closed.**
+- **RAY TRACING: intermittent DEVICE_LOST in the `game-logic` demo — DID NOT REPRODUCE, 0/8
+  (re-tested 2026-08-04, RTX 3070 Ti, Release built from `develop` at `3225123c`).**
+  Filed 2026-07-26 at **2/8 runs** with `RayTracing/Enabled` true: `device_fault` reported a
+  `READ_INVALID` at a low address plus an `INSTRUCTION_POINTER_FAULT`, with the last per-queue GPU
+  markers a MIX of `AS-build:end` and `transfer:image-layout-transition` — the signature of BLAS
+  builds racing uploads across the round-robined transfer queues. Four plausible fixes landed since
+  (`Device::waitTransferQueuesIdle()`, the `DeferredDestructor`, the one-shot queue-family ownership
+  fix `ebae3d4c`, the shared-UBO registry race `e8d63525`).
+  ⚠️ **0/8 is NOT proof of a fix.** At the original 25% rate, eight clean runs happen by chance
+  about 10% of the time. Left open deliberately; **16 consecutive clean runs would put that at ~1%**
+  and justify closing it. Do NOT re-derive the protocol — it is below.
   Repro: `cd .claude-build-release/Release && for i in $(seq 1 8); do timeout 40
   ./projet-alpha --load-demo game-logic --disable-cef > /tmp/gl_$i.log 2>&1; grep -c DEVICE_LOST
   /tmp/gl_$i.log; done`.
-  NOTE: `[Error][UIManagerService] No default page found !` appears in EVERY demo, including the
-  ones that never fail — it is not related.
+  ⚠️ Two false positives to skip when reading those logs: `device_fault` matches the startup line
+  `VK_EXT_device_fault detected and enabled`, so grep the FAULT REPORT, not the extension name; and
+  `[Error][UIManagerService] No default page found !` appears in every demo, including the ones that
+  never fail.
+- ⚠️ **WAYLAND: a compositor protocol error kills the surface mid-load (measured 1/8, 2026-08-04).**
+  Found while re-testing the entry above, and it is a DIFFERENT defect — no device loss, no GPU
+  fault. One run in eight logged
+  `wp_linux_drm_syncobj_surface_v1#94: error 3: Release or Acquire point set but no buffer attached`,
+  then `VK_ERROR_SURFACE_LOST_KHR` at present, then a clean `User exit code: 0` shutdown (2561
+  frames rendered, so it survived a while before dying). The engine shuts down gracefully, so the
+  symptom reads as "the demo closed by itself".
+  TIMING IS THE LEAD: the error fires inside the **RT skinned-geometry creation burst** (Fox +
+  Paladin BLAS mirrors, ~4 MB of mirror buffers allocated back to back) — the same "heavy load
+  starves the Wayland dialogue" family already suspected elsewhere. `explicit sync` is the
+  protocol involved (`wp_linux_drm_syncobj`): the engine attaches an acquire/release point without a
+  buffer, which the compositor treats as a protocol violation and kills the surface for.
+  Next step: audit the swap-chain present path for a present submitted with a sync point but no
+  attached buffer, most likely on a frame that raced a swap-chain recreation or a stall.
 - RENDERING SYSTEM: Hi-Z Occlusion (see the GPU-driven roadmap below — the SSR Hi-Z pyramid
   already exists, occlusion culling does not).
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
