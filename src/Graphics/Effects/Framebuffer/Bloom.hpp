@@ -172,6 +172,45 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return m_parameters;
 			}
 
+			/**
+			 * @brief Bypasses the full-resolution composite pass.
+			 * @note Set by PostProcessStack::syncCameraEffects() when the camera ToneMapping
+			 * consumes bloomTexture() directly (it adds the glare inside its own pass): the
+			 * chain color then passes through this effect untouched and the composite pass
+			 * is not paid. A standalone Bloom (no tone mapping downstream) keeps compositing.
+			 * @param state The bypass state.
+			 * @return void
+			 */
+			void
+			setCompositeBypassed (bool state) noexcept
+			{
+				m_compositeBypassed = state;
+			}
+
+			/**
+			 * @brief Returns whether the composite pass is bypassed by a downstream consumer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isCompositeBypassed () const noexcept
+			{
+				return m_compositeBypassed;
+			}
+
+			/**
+			 * @brief Returns the final blurred glare texture (top of the upsample chain, half-res).
+			 * @note Only meaningful after create() and an execute() this frame; consumed by the
+			 * camera ToneMapping when the composite is bypassed.
+			 * @return const Vulkan::TextureInterface &
+			 */
+			[[nodiscard]]
+			const Vulkan::TextureInterface &
+			bloomTexture () const noexcept
+			{
+				return m_upTargets[MipLevels - 2];
+			}
+
 		private:
 
 			/**
@@ -189,6 +228,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			bool createDescriptorSets () noexcept;
 
 			Parameters m_parameters;
+			/* When true, a downstream consumer (camera ToneMapping) samples bloomTexture()
+			 * itself and the full-res composite pass is skipped. */
+			bool m_compositeBypassed{false};
 			/* Intermediate render targets. */
 			std::array< IntermediateRenderTarget, MipLevels > m_downTargets;
 			std::array< IntermediateRenderTarget, MipLevels - 1 > m_upTargets;

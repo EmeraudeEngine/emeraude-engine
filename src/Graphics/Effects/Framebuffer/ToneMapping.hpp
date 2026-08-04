@@ -42,6 +42,8 @@
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
+	class Bloom;
+
 	/**
 	 * @brief Tone mapping post-processing effect that converts HDR to LDR.
 	 * @note Supports multiple tone mapping operators: ACES Filmic, Reinhard, and Uncharted 2.
@@ -109,7 +111,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float exposure;
 				float gamma;
 				uint32_t tonemapOperator;
-				float padding;
+				float bloomIntensity;
 			};
 
 			/**
@@ -178,6 +180,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			setParameters (const Parameters & parameters) noexcept
 			{
 				m_parameters = parameters;
+			}
+
+			/**
+			 * @brief Wires a Bloom effect whose glare this tone mapping applies itself.
+			 * @note MUST be set BEFORE create(): the pipeline variant (extra bloom sampler,
+			 * additive term before exposure) is baked at creation. The stack's
+			 * syncCameraEffects() pairs the camera Bloom and ToneMapping this way and
+			 * rebuilds the tone mapping whenever the bloom (de)materializes — this is what
+			 * removed the bloom's own full-resolution composite pass.
+			 * @param bloom A shared pointer to the bloom effect, or nullptr.
+			 * @return void
+			 */
+			void
+			setBloomSource (std::shared_ptr< Bloom > bloom) noexcept
+			{
+				m_bloomSource = std::move(bloom);
 			}
 
 			/**
@@ -303,5 +321,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Auto-exposure: true until the first adaptation pass ran — drives the shader-side
 			 * history reset (the frame delta itself comes from PushConstants::deltaTime). */
 			bool m_firstFrame{true};
+			/* Optional bloom whose glare THIS pass applies (additive term before exposure),
+			 * sparing the bloom's own full-res composite. Set before create() — the pipeline
+			 * variant is baked at creation (extra sampler binding). */
+			std::shared_ptr< Bloom > m_bloomSource;
+			/* Tonemap-pass descriptor sets (single input, or dual with the bloom variant).
+			 * Distinct from m_descriptorSets, which stays single-input for the luminance
+			 * extraction pass. */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tonemapDescPerFrame;
+			/* Tonemap-pass pipeline layout (single or dual input, 16-byte push constants). */
+			std::shared_ptr< Vulkan::PipelineLayout > m_tonemapPipelineLayout;
 	};
 }

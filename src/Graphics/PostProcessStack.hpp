@@ -34,6 +34,9 @@
 #include <memory>
 #include <vector>
 
+/* Local inclusions for usages. */
+#include "DirectPostProcessEffect.hpp"
+
 namespace EmEn::Graphics
 {
 	class IndirectPostProcessEffect;
@@ -124,6 +127,47 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Effects::Framebuffer::DepthOfField > cameraDepthOfField () const noexcept;
+
+			/**
+			 * @brief Appends a DISPLAY effect, compiled into the final fullscreen pass.
+			 * @note Display effects (anti-aliasing, sharpening) are display-referred and
+			 * single-pass by nature: instead of paying a render pass + render target each,
+			 * they generate GLSL into the final post-process shader, BEFORE the camera's
+			 * lens effects (film grain or scanlines must not be sharpened). At most ONE
+			 * fetch-overriding effect (FXAA, FXAASharpen) per stack.
+			 * @param effect A shared pointer to the display effect.
+			 * @return void
+			 */
+			void
+			addDisplayEffect (std::shared_ptr< DirectPostProcessEffect > effect) noexcept
+			{
+				if ( effect != nullptr )
+				{
+					m_displayEffects.emplace_back(std::move(effect));
+				}
+			}
+
+			/**
+			 * @brief Returns the display effect list (final-pass compiled effects).
+			 * @return const DirectEffectList &
+			 */
+			[[nodiscard]]
+			const DirectEffectList &
+			displayEffects () const noexcept
+			{
+				return m_displayEffects;
+			}
+
+			/**
+			 * @brief Returns whether the stack has any display effects.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasDisplayEffects () const noexcept
+			{
+				return !m_displayEffects.empty();
+			}
 
 			/**
 			 * @brief Clears the entire effect chain.
@@ -249,6 +293,9 @@ namespace EmEn::Graphics
 		private:
 
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_effects;
+			/* Display effects (AA, sharpening): no GPU resources of their own, they are
+			 * compiled into the final fullscreen pass shader before the camera lens effects. */
+			DirectEffectList m_displayEffects;
 			/* Camera-driven photographic effects (physical camera contract). Kept aside to
 			 * distinguish them from the application/scene effects inside m_effects. */
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraDepthOfField;

@@ -67,6 +67,7 @@ namespace EmEn::Graphics
 	PostProcessStack::clearEffects () noexcept
 	{
 		m_effects.clear();
+		m_displayEffects.clear();
 	}
 
 	bool
@@ -205,10 +206,41 @@ namespace EmEn::Graphics
 			m_cameraBloom.reset();
 		}
 
-		/* HDR (tone mapping) materialization. */
+		/* HDR (tone mapping) materialization. The tone mapping OWNS the bloom application
+		 * (folded composite): its pipeline variant is baked at create() time, so a bloom
+		 * (de)materialization above forces the tone mapping to rebuild with/without the
+		 * glare sampler. Rare event (a camera toggling its glare), and the auto-exposure
+		 * re-adapts within a second. */
+		const bool bloomPresenceChanged = wantBloom != hasBloom;
+
+		if ( m_cameraToneMapping != nullptr && ( !wantHDR || bloomPresenceChanged ) )
+		{
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraToneMapping)] () {
+				effect->destroy();
+			});
+
+			m_cameraToneMapping.reset();
+
+			/* The glare loses its consumer: restore the bloom's own composite pass. */
+			if ( !wantHDR && m_cameraBloom != nullptr )
+			{
+				std::static_pointer_cast< Effects::Framebuffer::Bloom >(m_cameraBloom)->setCompositeBypassed(false);
+			}
+		}
+
 		if ( wantHDR && m_cameraToneMapping == nullptr )
 		{
 			auto effect = std::make_shared< Effects::Framebuffer::ToneMapping >(renderer);
+
+			/* Pair the camera glare with its consumer: the tone mapping samples the bloom
+			 * chain directly and the bloom skips its own full-res composite pass. */
+			if ( m_cameraBloom != nullptr )
+			{
+				auto bloom = std::static_pointer_cast< Effects::Framebuffer::Bloom >(m_cameraBloom);
+
+				effect->setBloomSource(bloom);
+				bloom->setCompositeBypassed(true);
+			}
 
 			if ( effect->create(extent.width, extent.height) )
 			{
@@ -218,14 +250,6 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Failed to materialize the camera tone mapping effect !";
 			}
-		}
-		else if ( !wantHDR && m_cameraToneMapping != nullptr )
-		{
-			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraToneMapping)] () {
-				effect->destroy();
-			});
-
-			m_cameraToneMapping.reset();
 		}
 
 		/* Re-insert the surviving camera effects after the scene (HDR) effects but BEFORE

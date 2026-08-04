@@ -34,6 +34,7 @@
 #include <string>
 
 /* Local inclusions. */
+#include "Graphics/Effects/Framebuffer/Bloom.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -123,9 +124,32 @@ namespace
 		float keyValue;
 		float minExposure;
 		float maxExposure;
-		float padding0;
+		float bloomIntensity;
 		float padding1;
 	};
+
+	/**
+	 * @brief Returns a shader source with the EM_BLOOM define inserted after the #version line.
+	 * @note The bloom variant of the tonemap shaders adds a glare sampler and the additive
+	 * term the retired Bloom composite pass used to apply.
+	 */
+	std::string
+	withBloomDefine (const char * source) noexcept
+	{
+		std::string result{source};
+
+		/* Insert after the #version LINE — the raw string literals begin with a newline,
+		 * so "first line" is not it, and a define before #version is invalid GLSL. */
+		const auto versionPos = result.find("#version");
+		const auto endOfVersionLine = versionPos != std::string::npos ? result.find('\n', versionPos) : std::string::npos;
+
+		if ( endOfVersionLine != std::string::npos )
+		{
+			result.insert(endOfVersionLine + 1, "#define EM_BLOOM\n");
+		}
+
+		return result;
+	}
 
 	/* ---- GLSL Shader Sources ---- */
 
@@ -303,13 +327,16 @@ layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D inputTex;
+#ifdef EM_BLOOM
+layout(set = 0, binding = 1) uniform sampler2D bloomTex;
+#endif
 
 layout(push_constant) uniform PushConstants
 {
 	float exposure;
 	float gamma;
 	uint tonemapOperator;
-	float padding;
+	float bloomIntensity;
 };
 
 /* ACES Filmic approximation (Stephen Hill). */
@@ -353,6 +380,13 @@ void main()
 {
 	vec3 hdrColor = texture(inputTex, vUV).rgb;
 
+#ifdef EM_BLOOM
+	/* Additive glare, exactly what the retired Bloom composite pass applied
+	 * (original + bloom * intensity) — before the exposure, like the composite
+	 * that used to run before this pass. */
+	hdrColor += texture(bloomTex, vUV).rgb * bloomIntensity;
+#endif
+
 	/* Apply exposure. */
 	hdrColor *= exposure;
 
@@ -387,6 +421,9 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D inputTex;
 layout(set = 0, binding = 1) uniform sampler2D adaptedLumTex;
+#ifdef EM_BLOOM
+layout(set = 0, binding = 2) uniform sampler2D bloomTex;
+#endif
 
 layout(push_constant) uniform PushConstants
 {
@@ -396,7 +433,7 @@ layout(push_constant) uniform PushConstants
 	float keyValue;
 	float minExposure;
 	float maxExposure;
-	float padding0;
+	float bloomIntensity;
 	float padding1;
 };
 
@@ -440,6 +477,13 @@ vec3 uncharted2 (vec3 color)
 void main()
 {
 	vec3 hdrColor = texture(inputTex, vUV).rgb;
+
+#ifdef EM_BLOOM
+	/* Additive glare, exactly what the retired Bloom composite pass applied
+	 * (original + bloom * intensity) — before the exposure, like the composite
+	 * that used to run before this pass. */
+	hdrColor += texture(bloomTex, vUV).rgb * bloomIntensity;
+#endif
 
 	/* Compute auto-exposure from adapted log-luminance. */
 	float adaptedLogLum = texture(adaptedLumTex, vec2(0.5)).r;
@@ -509,12 +553,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* The bloom variant bakes an extra glare sampler + additive term into the two
+		 * tonemap shaders (the retired Bloom composite pass, folded here). */
+		const bool withBloom = m_bloomSource != nullptr;
+
 		/* Compile fragment shaders. */
-		auto tmFragment = shaderManager.getShaderModuleFromSourceCode(device, "ToneMappingFS", ShaderType::FragmentShader, ToneMappingFragmentShader);
+		auto tmFragment = withBloom
+			? shaderManager.getShaderModuleFromSourceCode(device, "ToneMappingBloomFS", ShaderType::FragmentShader, withBloomDefine(ToneMappingFragmentShader))
+			: shaderManager.getShaderModuleFromSourceCode(device, "ToneMappingFS", ShaderType::FragmentShader, ToneMappingFragmentShader);
 		auto lumExtractFragment = shaderManager.getShaderModuleFromSourceCode(device, "LumExtractFS", ShaderType::FragmentShader, LuminanceExtractFragmentShader);
 		auto lumDownsampleFragment = shaderManager.getShaderModuleFromSourceCode(device, "LumDownsampleFS", ShaderType::FragmentShader, LuminanceDownsampleFragmentShader);
 		auto adaptFragment = shaderManager.getShaderModuleFromSourceCode(device, "AdaptationFS", ShaderType::FragmentShader, AdaptationFragmentShader);
-		auto autoExpFragment = shaderManager.getShaderModuleFromSourceCode(device, "AutoExpToneMappingFS", ShaderType::FragmentShader, AutoExposureToneMappingFragmentShader);
+		auto autoExpFragment = withBloom
+			? shaderManager.getShaderModuleFromSourceCode(device, "AutoExpToneMappingBloomFS", ShaderType::FragmentShader, withBloomDefine(AutoExposureToneMappingFragmentShader))
+			: shaderManager.getShaderModuleFromSourceCode(device, "AutoExpToneMappingFS", ShaderType::FragmentShader, AutoExposureToneMappingFragmentShader);
 
 		if ( tmFragment == nullptr || lumExtractFragment == nullptr ||
 			 lumDownsampleFragment == nullptr || adaptFragment == nullptr ||
@@ -528,8 +580,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Descriptor set layouts. */
 		auto singleInputLayout = this->getInputLayout(1);
 		auto dualInputLayout = this->getInputLayout(2);
+		/* Tonemap-pass layouts grow by one sampler in the bloom variant. */
+		auto tonemapInputLayout = withBloom ? dualInputLayout : singleInputLayout;
+		auto autoExpInputLayout = withBloom ? this->getInputLayout(3) : dualInputLayout;
 
-		if ( singleInputLayout == nullptr || dualInputLayout == nullptr )
+		if ( singleInputLayout == nullptr || dualInputLayout == nullptr || autoExpInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -563,6 +618,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
+			sets.emplace_back(tonemapInputLayout);
+
+			m_tonemapPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange16);
+		}
+
+		{
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(dualInputLayout);
 
 			m_adaptPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange16);
@@ -570,18 +632,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(dualInputLayout);
+			sets.emplace_back(autoExpInputLayout);
 
 			m_autoExpPipelineLayout = layoutManager.getPipelineLayout(sets, pcRange32);
 		}
 
-		if ( m_pipelineLayout == nullptr || m_adaptPipelineLayout == nullptr || m_autoExpPipelineLayout == nullptr )
+		if ( m_pipelineLayout == nullptr || m_tonemapPipelineLayout == nullptr || m_adaptPipelineLayout == nullptr || m_autoExpPipelineLayout == nullptr )
 		{
 			return false;
 		}
 
 		/* Create pipelines. */
-		m_pipeline = this->createFullscreenPipeline(ClassId, "ToneMapping", vertexModule, tmFragment, m_pipelineLayout, m_outputTarget);
+		m_pipeline = this->createFullscreenPipeline(ClassId, "ToneMapping", vertexModule, tmFragment, m_tonemapPipelineLayout, m_outputTarget);
 		m_lumExtractPipeline = this->createFullscreenPipeline(ClassId, "LumExtract", vertexModule, lumExtractFragment, m_pipelineLayout, *m_lumTargets[0]);
 		m_lumDownsamplePipeline = this->createFullscreenPipeline(ClassId, "LumDownsample", vertexModule, lumDownsampleFragment, m_pipelineLayout, *m_lumTargets[0]);
 		m_adaptPipeline = this->createFullscreenPipeline(ClassId, "Adaptation", vertexModule, adaptFragment, m_adaptPipelineLayout, m_adaptTargets[0]);
@@ -603,14 +665,26 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Per-frame single-input descriptor sets.
-		 * Used for non-auto-exposure tone mapping AND luminance extraction.
+		/* Per-frame single-input descriptor sets for the LUMINANCE EXTRACTION pass.
 		 * Updated each frame to point to the HDR input. */
 		m_descriptorSets = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "ToneMappingDescSet");
 
 		if ( m_descriptorSets.empty() )
 		{
 			return false;
+		}
+
+		/* Per-frame tonemap-pass descriptor sets (manual exposure path): single input,
+		 * or dual with the bloom variant (binding 1 = glare). */
+		{
+			const auto tonemapInputLayout = m_bloomSource != nullptr ? dualInputLayout : singleInputLayout;
+
+			m_tonemapDescPerFrame = this->createPerFrameDescriptorSets(tonemapInputLayout, ClassId, "TonemapPassDescSet");
+
+			if ( m_tonemapDescPerFrame.empty() )
+			{
+				return false;
+			}
 		}
 
 		/* Luminance downsample chain descriptor sets (fixed, single input).
@@ -654,13 +728,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Per-frame auto-exposure tone mapping descriptor sets (dual input).
-		 * Binding 0 = HDR input, binding 1 = adapted luminance. */
-		m_autoExpDescPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "AutoExpDescSet");
-
-		if ( m_autoExpDescPerFrame.empty() )
+		/* Per-frame auto-exposure tone mapping descriptor sets.
+		 * Binding 0 = HDR input, binding 1 = adapted luminance, (bloom variant: binding 2 = glare). */
 		{
-			return false;
+			const auto autoExpInputLayout = m_bloomSource != nullptr ? this->getInputLayout(3) : dualInputLayout;
+
+			if ( autoExpInputLayout == nullptr )
+			{
+				return false;
+			}
+
+			m_autoExpDescPerFrame = this->createPerFrameDescriptorSets(autoExpInputLayout, ClassId, "AutoExpDescSet");
+
+			if ( m_autoExpDescPerFrame.empty() )
+			{
+				return false;
+			}
 		}
 
 		return true;
@@ -802,6 +885,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Standard descriptor sets. */
 		m_descriptorSets.clear();
+		m_tonemapDescPerFrame.clear();
 
 		/* Auto-exposure pipelines. */
 		m_autoExposurePipeline.reset();
@@ -816,8 +900,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_autoExpPipelineLayout.reset();
 		m_adaptPipelineLayout.reset();
 
-		/* Standard pipeline layout. */
+		/* Standard pipeline layouts. */
 		m_pipelineLayout.reset();
+		m_tonemapPipelineLayout.reset();
 
 		/* Adaptation targets. */
 		for ( auto & target : m_adaptTargets )
@@ -910,6 +995,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * range that stood in while the scene was still on arbitrary units. */
 			minExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->minSensitivity()));
 			maxExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->maxSensitivity()));
+		}
+
+		/* Glare intensity for the folded bloom application (see setBloomSource()): the
+		 * ACTIVE CAMERA owns it — same per-frame re-read the Bloom composite used to do. */
+		float bloomIntensity = 0.0F;
+
+		if ( m_bloomSource != nullptr )
+		{
+			bloomIntensity = context.camera != nullptr ? context.camera->bloomIntensity() : m_bloomSource->parameters().intensity;
 		}
 
 		/* Update the per-frame descriptor set for the HDR input. */
@@ -1101,9 +1195,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* ---- Auto-Exposure Tone Mapping ---- */
 			{
-				/* Update descriptor set: binding 0 = HDR input, binding 1 = adapted luminance. */
+				/* Update descriptor set: binding 0 = HDR input, binding 1 = adapted luminance,
+				 * (bloom variant: binding 2 = glare, re-written per-frame to survive a resize). */
 				static_cast< void >(m_autoExpDescPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 				static_cast< void >(m_autoExpDescPerFrame[frameIndex]->writeCombinedImageSampler(1, m_adaptTargets[m_currentAdaptIndex]));
+
+				if ( m_bloomSource != nullptr )
+				{
+					static_cast< void >(m_autoExpDescPerFrame[frameIndex]->writeCombinedImageSampler(2, m_bloomSource->bloomTexture()));
+				}
 
 				const AutoExposurePushConstants pc{
 					.exposure = exposure,
@@ -1112,7 +1212,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					.keyValue = keyValue,
 					.minExposure = minExposure,
 					.maxExposure = maxExposure,
-					.padding0 = 0.0F,
+					.bloomIntensity = bloomIntensity,
 					.padding1 = 0.0F
 				};
 
@@ -1138,19 +1238,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_meteredSensitivity = 0.0F;
 			m_meteredLuminance = 0.0F;
 
+			/* Tonemap-pass descriptor: binding 0 = HDR input, (bloom variant: binding 1 = glare). */
+			static_cast< void >(m_tonemapDescPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+
+			if ( m_bloomSource != nullptr )
+			{
+				static_cast< void >(m_tonemapDescPerFrame[frameIndex]->writeCombinedImageSampler(1, m_bloomSource->bloomTexture()));
+			}
+
 			const ToneMappingPushConstants pc{
 				.exposure = exposure,
 				.gamma = m_parameters.gamma,
 				.tonemapOperator = static_cast< uint32_t >(m_parameters.tonemapOperator),
-				.padding = 0.0F
+				.bloomIntensity = bloomIntensity
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
 				m_outputTarget,
 				*m_pipeline,
-				*m_pipelineLayout,
-				*m_descriptorSets[frameIndex],
+				*m_tonemapPipelineLayout,
+				*m_tonemapDescPerFrame[frameIndex],
 				&pc,
 				sizeof(pc)
 			);

@@ -649,7 +649,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_downFirstPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputMaterialProperties));
 		}
 
-		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+		if ( !m_compositeBypassed )
+		{
+			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
+		}
 
 		/* ---- Downsample Chain ---- */
 		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
@@ -726,6 +729,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Composite ---- */
+
+		/* Bypassed when the camera ToneMapping consumes bloomTexture() directly: the
+		 * chain color passes through untouched, the full-res composite is not paid. */
+		if ( m_compositeBypassed )
+		{
+			return inputColor;
+		}
+
 		{
 			const auto outW = static_cast< float >(m_outputTarget.width());
 			const auto outH = static_cast< float >(m_outputTarget.height());

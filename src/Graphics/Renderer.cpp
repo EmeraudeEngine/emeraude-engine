@@ -93,6 +93,45 @@ namespace
 
 		return background != nullptr ? background->luminance() : 0.0F;
 	}
+
+	/**
+	 * @brief Composes the effect list of the FINAL fullscreen pass: the scene stack's
+	 * display effects (AA, sharpening) followed by the camera's lens effects.
+	 * @note Returns the camera list unchanged (no allocation) when the stack declares no
+	 * display effect; the returned list feeds the per-frame snapshot slot, which retains
+	 * it for the in-flight frame.
+	 * @param stack A pointer to the scene post-process stack, may be nullptr.
+	 * @param camera A pointer to the active camera, may be nullptr.
+	 * @return std::shared_ptr< const EmEn::Graphics::DirectEffectList >
+	 */
+	std::shared_ptr< const EmEn::Graphics::DirectEffectList >
+	composeFinalPassEffects (const EmEn::Graphics::PostProcessStack * stack, const EmEn::Scenes::Component::Camera * camera) noexcept
+	{
+		std::shared_ptr< const EmEn::Graphics::DirectEffectList > lensEffects;
+
+		if ( camera != nullptr )
+		{
+			lensEffects = camera->lensEffects();
+		}
+
+		if ( stack == nullptr || !stack->hasDisplayEffects() )
+		{
+			return lensEffects;
+		}
+
+		const auto & displayEffects = stack->displayEffects();
+
+		auto combined = std::make_shared< EmEn::Graphics::DirectEffectList >();
+		combined->reserve(displayEffects.size() + (lensEffects != nullptr ? lensEffects->size() : 0));
+		combined->insert(combined->end(), displayEffects.begin(), displayEffects.end());
+
+		if ( lensEffects != nullptr )
+		{
+			combined->insert(combined->end(), lensEffects->begin(), lensEffects->end());
+		}
+
+		return combined;
+	}
 }
 
 namespace EmEn::Graphics
@@ -1595,7 +1634,7 @@ namespace EmEn::Graphics
 			 * effects a camera just materialized count from this very frame. */
 			m_postProcessingActive =
 				m_postProcessor.isEnabled() &&
-				( ( stack != nullptr && stack->hasEffects() ) || ( camera != nullptr && camera->hasLensEffects() ) );
+				( ( stack != nullptr && ( stack->hasEffects() || stack->hasDisplayEffects() ) ) || ( camera != nullptr && camera->hasLensEffects() ) );
 		}
 		else
 		{
@@ -1799,12 +1838,14 @@ namespace EmEn::Graphics
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-			/* Process camera lens effects (single-pass). The snapshot is RETAINED in this
-			 * frame's slot: it only drops when the slot is reused (fence passed), so effects
-			 * removed from the camera meanwhile survive until the GPU is done with them. */
+			/* Process the final-pass effects (single-pass): the scene stack's display effects
+			 * (AA, sharpening) followed by the camera lens effects, compiled into one shader.
+			 * The snapshot is RETAINED in this frame's slot: it only drops when the slot is
+			 * reused (fence passed), so effects removed meanwhile survive until the GPU is
+			 * done with them. */
 			const auto camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
 			auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
-			lensEffectsSnapshot = (camera != nullptr) ? camera->lensEffects() : nullptr;
+			lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
 
 			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
 		}
@@ -1976,11 +2017,13 @@ namespace EmEn::Graphics
 		 * pass (compatible render passes). */
 		commandBuffer->beginRenderPass(*m_swapChain->offscreenCompositeFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-		/* Process camera lens effects (single-pass). Same snapshot-retention contract as the
-		 * direct swap-chain path: the slot keeps the list alive for the in-flight frame. */
+		/* Process the final-pass effects (single-pass): the scene stack's display effects
+		 * (AA, sharpening) followed by the camera lens effects, compiled into one shader.
+		 * Same snapshot-retention contract as the direct swap-chain path: the slot keeps
+		 * the list alive for the in-flight frame. */
 		const auto camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
 		auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
-		lensEffectsSnapshot = (camera != nullptr) ? camera->lensEffects() : nullptr;
+		lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
 
 		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
 
