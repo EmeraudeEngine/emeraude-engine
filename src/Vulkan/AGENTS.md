@@ -372,6 +372,24 @@ UniformBufferObject::getDescriptorInfo (uint32_t elementOffset) const noexcept
 >
 > See [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md) for complete caching architecture.
 
+### SwapChain render passes (three variants)
+
+`SwapChain` owns three render passes sharing the same attachments (color + depth,
+single-sample outside the main MSAA pass):
+
+| Pass | Load ops / initial layouts | Used by |
+|------|---------------------------|---------|
+| `createRenderPass()` | CLEAR from UNDEFINED (MSAA variant: 4 attachments + resolve) | Direct path RP1 — scene draws into the swap chain |
+| `createPostProcessRenderPass()` | LOAD from ATTACHMENT | Direct path RP2 — content must survive the mid-frame grab-pass blit (end/restart) |
+| `createOffscreenCompositeRenderPass()` | CLEAR from UNDEFINED, depth store DONT_CARE | Internal-target path RP-final — single pass doing transition + clear + composite + present (replaced the empty layout-establishing pass) |
+
+The composite pass reuses the pipelines created against the `postProcess` pass, which is
+only legal because the two passes are **compatible** — and compatibility requires the
+**subpass dependency lists to be identical** (only load/store ops and layouts are
+exempt). Never edit one pass's dependencies without mirroring the other, or every draw
+fails `VUID-vkCmdDrawIndexed-renderPass-02684`. Full pipeline description:
+[`docs/post-processing-pipeline.md`](../../docs/post-processing-pipeline.md).
+
 ### Data Transfers
 1. Use `TransferManager` for async transfers
 2. Automatic staging buffers for large transfers

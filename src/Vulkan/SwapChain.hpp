@@ -230,6 +230,22 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the offscreen-composite framebuffer for the current frame.
+			 * @note Used by the internal-target render path, where the scene is rendered
+			 * offscreen and the swap chain only receives the composite (post-process quad,
+			 * gizmos, overlay). Its render pass starts from UNDEFINED and clears both
+			 * attachments, so no prior layout-establishing pass is needed. Its pipelines are
+			 * shared with the post-process pass (compatible: same formats and sample counts).
+			 * @return const Framebuffer *
+			 */
+			[[nodiscard]]
+			const Framebuffer *
+			offscreenCompositeFramebuffer () const noexcept
+			{
+				return m_frames[m_acquiredImageIndex].offscreenCompositeFramebuffer.get();
+			}
+
+			/**
 			 * @brief Returns the swap-chain vulkan handle.
 			 * @return VkSwapchainKHR
 			 */
@@ -495,6 +511,26 @@ namespace EmEn::Vulkan
 			bool createPostProcessFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept;
 
 			/**
+			 * @brief Creates the offscreen-composite render pass (initialLayout UNDEFINED, LOAD_OP_CLEAR).
+			 * @note Single swap-chain pass of the internal-target render path: it performs the
+			 * UNDEFINED -> attachment layout transitions itself (carrying the acquire-semaphore
+			 * dependency) and presents, so the former empty layout-establishing pass is not needed.
+			 * Compatible with the post-process render pass (same attachments), so pipelines are shared.
+			 * @param renderer A reference to the renderer.
+			 * @return std::shared_ptr< RenderPass >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< RenderPass > createOffscreenCompositeRenderPass (Graphics::Renderer & renderer) const noexcept;
+
+			/**
+			 * @brief Creates the offscreen-composite framebuffer array.
+			 * @param renderPass A reference to the render pass smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createOffscreenCompositeFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept;
+
+			/**
 			 * @brief Creates the swap-chain framebuffer.
 			 * @return bool
 			 */
@@ -521,6 +557,10 @@ namespace EmEn::Vulkan
 				std::unique_ptr< Framebuffer > framebuffer;
 				/* Post-process framebuffer (LOAD_OP_LOAD, for overlay/post-processing after grab pass). */
 				std::unique_ptr< Framebuffer > postProcessFramebuffer;
+				/* Offscreen-composite framebuffer (initialLayout UNDEFINED, LOAD_OP_CLEAR): the
+				 * single swap-chain pass of the internal-target render path, replacing the former
+				 * empty layout-establishing pass + LOAD pass sequence. */
+				std::unique_ptr< Framebuffer > offscreenCompositeFramebuffer;
 				/* MSAA Color buffer (multisampled) */
 				std::shared_ptr< Image > MSAAColorImage;
 				std::shared_ptr< ImageView > MSAAColorImageView;

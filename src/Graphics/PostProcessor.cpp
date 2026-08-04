@@ -672,56 +672,173 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const auto dstImage = m_grabPass->image();
+		const auto dstColorImage = m_grabPass->image();
 
-		/* 1. Transition scene color: current layout -> TRANSFER_SRC_OPTIMAL.
-		 * When using the internal scene target, the image is in COLOR_ATTACHMENT_OPTIMAL.
-		 * When rendering directly to swapchain, the image is in PRESENT_SRC_KHR after RP2 end. */
+		/* Scene color source layout: the internal scene target image stays in
+		 * COLOR_ATTACHMENT_OPTIMAL; the swap-chain image is in PRESENT_SRC_KHR after RP2 end. */
+		const auto srcColorLayout = m_renderer.sceneTarget() != nullptr
+			? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+		/* Optional G-buffer copies enabled this frame. */
+		const auto srcDepthImage = m_renderer.currentSceneDepthImage();
+		const auto srcNormalsImage = m_renderer.currentSceneNormalsImage();
+		const auto srcMaterialPropertiesImage = m_renderer.currentSceneMaterialPropertiesImage();
+		const auto srcAlbedoImage = m_renderer.currentSceneAlbedoImage();
+		const auto srcVelocityImage = m_renderer.currentSceneVelocityImage();
+
+		const bool copyDepth = srcDepthImage != nullptr && m_grabPass->hasDepth();
+		const bool copyNormals = srcNormalsImage != nullptr && m_grabPass->hasNormals();
+		const bool copyMaterialProperties = srcMaterialPropertiesImage != nullptr && m_grabPass->hasMaterialProperties();
+		const bool copyAlbedo = srcAlbedoImage != nullptr && m_grabPass->hasAlbedo();
+		const bool copyVelocity = srcVelocityImage != nullptr && m_grabPass->hasVelocity();
+
+		/* The whole G-buffer grab is expressed as TWO batched barriers around the copies
+		 * instead of one pipelineBarrier() per transition (which serialized the GPU up to
+		 * ~30 times): every source goes to TRANSFER_SRC and every destination to TRANSFER_DST
+		 * in a single call, then the copies run back-to-back, then a single call restores
+		 * everything. The stage masks are the union of the per-image stages — per-image
+		 * precision is preserved by the access masks carried by each VkImageMemoryBarrier. */
+		std::vector< VkImageMemoryBarrier > barriers;
+		barriers.reserve(12);
+
+		/* === Pre-copy batch: sources -> TRANSFER_SRC, destinations -> TRANSFER_DST. === */
+
+		barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+			*srcColorImage,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			srcColorLayout,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		}.get());
+
+		barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+			*dstColorImage,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+		}.get());
+
+		if ( copyDepth )
 		{
-			const auto srcLayout = m_renderer.sceneTarget() != nullptr
-				? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*srcColorImage,
-				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcDepthImage,
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				srcLayout,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-			};
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
 
-			commandBuffer.pipelineBarrier(
-				barrier,
-				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT
-			);
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->depthImage(),
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
 		}
 
-		/* 2. Transition grab pass image: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
+		if ( copyNormals )
 		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*dstImage,
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcNormalsImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->normalsImage(),
 				VK_ACCESS_SHADER_READ_BIT,
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-			};
-
-			commandBuffer.pipelineBarrier(
-				barrier,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT
-			);
+			}.get());
 		}
 
-		/* 3. Transfer scene color -> grab pass.
-		 * When HDR is enabled, formats may differ (e.g. R16G16B16A16_SFLOAT source),
+		if ( copyMaterialProperties )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcMaterialPropertiesImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->materialPropertiesImage(),
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			}.get());
+		}
+
+		if ( copyAlbedo )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcAlbedoImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->albedoImage(),
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			}.get());
+		}
+
+		if ( copyVelocity )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcVelocityImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->velocityImage(),
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			}.get());
+		}
+
+		{
+			/* Destinations were last sampled by fragment shaders; color sources were last
+			 * written as color attachments; the depth source by the late fragment tests. */
+			VkPipelineStageFlags preSrcStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			if ( copyDepth )
+			{
+				preSrcStages |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			}
+
+			commandBuffer.pipelineBarrier(barriers, preSrcStages, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		}
+
+		/* === Copies, back-to-back (no barrier needed between independent transfers). === */
+
+		/* When HDR is enabled, formats may differ (e.g. R16G16B16A16_SFLOAT source),
 		 * so vkCmdBlitImage is used for format conversion. Otherwise, exact pixel copy. */
 		if ( m_cachedRequiresHDR )
 		{
 			commandBuffer.blitImage(
 				*srcColorImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				*dstColorImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_FILTER_LINEAR
 			);
 		}
@@ -729,466 +846,185 @@ namespace EmEn::Graphics
 		{
 			commandBuffer.copyImage(
 				*srcColorImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				*dstColorImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			);
 		}
 
-		/* 4. Transition grab pass image: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
+		if ( copyDepth )
 		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*dstImage,
+			commandBuffer.copyImage(
+				*srcDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_grabPass->depthImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			);
+		}
+
+		if ( copyNormals )
+		{
+			commandBuffer.copyImage(
+				*srcNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_grabPass->normalsImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+		}
+
+		if ( copyMaterialProperties )
+		{
+			commandBuffer.copyImage(
+				*srcMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_grabPass->materialPropertiesImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+		}
+
+		if ( copyAlbedo )
+		{
+			commandBuffer.copyImage(
+				*srcAlbedoImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_grabPass->albedoImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+		}
+
+		if ( copyVelocity )
+		{
+			commandBuffer.copyImage(
+				*srcVelocityImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_grabPass->velocityImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+		}
+
+		/* === Post-copy batch: destinations -> SHADER_READ, sources restored for RP2
+		 * restart or for the internal target to remain in attachment layout. === */
+
+		barriers.clear();
+
+		barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+			*dstColorImage,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		}.get());
+
+		barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+			*srcColorImage,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		}.get());
+
+		if ( copyDepth )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->depthImage(),
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcDepthImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
+		}
+
+		if ( copyNormals )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->normalsImage(),
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 				VK_ACCESS_SHADER_READ_BIT,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
+			}.get());
 
-			commandBuffer.pipelineBarrier(
-				barrier,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-			);
-		}
-
-		/* 5. Transition scene color: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL.
-		 * Ready for RP2 restart or for the internal target to remain in attachment layout. */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*srcColorImage,
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcNormalsImage,
 				VK_ACCESS_TRANSFER_READ_BIT,
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-			};
-
-			commandBuffer.pipelineBarrier(
-				barrier,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			);
+			}.get());
 		}
 
-		/* === Depth copy === */
-		const auto srcDepthImage = m_renderer.currentSceneDepthImage();
-
-		if ( srcDepthImage != nullptr && m_grabPass->hasDepth() )
+		if ( copyMaterialProperties )
 		{
-			const auto dstDepthImage = m_grabPass->depthImage();
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->materialPropertiesImage(),
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get());
 
-			/* 6. Transition scene depth: DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcDepthImage,
-					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 7. Transition grab pass depth: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstDepthImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 8. Copy scene depth -> grab pass depth. */
-			commandBuffer.copyImage(
-				*srcDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstDepthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_ASPECT_DEPTH_BIT
-			);
-
-			/* 9. Transition grab pass depth: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstDepthImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 10. Transition scene depth: TRANSFER_SRC_OPTIMAL -> DEPTH_STENCIL_ATTACHMENT_OPTIMAL.
-			 * Ready for RP2 restart or internal target attachment layout restoration. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcDepthImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-				);
-			}
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcMaterialPropertiesImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get());
 		}
 
-		/* === Normals copy === */
-		const auto srcNormalsImage = m_renderer.currentSceneNormalsImage();
-
-		if ( srcNormalsImage != nullptr && m_grabPass->hasNormals() )
+		if ( copyAlbedo )
 		{
-			const auto dstNormalsImage = m_grabPass->normalsImage();
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->albedoImage(),
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get());
 
-			/* 11. Transition scene normals: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcNormalsImage,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 12. Transition grab pass normals: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstNormalsImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 13. Copy scene normals -> grab pass normals (same format). */
-			commandBuffer.copyImage(
-				*srcNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			);
-
-			/* 14. Transition grab pass normals: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstNormalsImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 15. Transition scene normals: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL.
-			 * Ready for RP2 restart or internal target attachment layout restoration. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcNormalsImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
-			}
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcAlbedoImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get());
 		}
 
-		/* === Material properties copy === */
-		const auto srcMaterialPropertiesImage = m_renderer.currentSceneMaterialPropertiesImage();
-
-		if ( srcMaterialPropertiesImage != nullptr && m_grabPass->hasMaterialProperties() )
+		if ( copyVelocity )
 		{
-			const auto dstMaterialPropertiesImage = m_grabPass->materialPropertiesImage();
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->velocityImage(),
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get());
 
-			/* 16. Transition scene material properties: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcMaterialPropertiesImage,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 17. Transition grab pass material properties: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstMaterialPropertiesImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 18. Copy scene material properties -> grab pass material properties (same format). */
-			commandBuffer.copyImage(
-				*srcMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			);
-
-			/* 19. Transition grab pass material properties: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstMaterialPropertiesImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 20. Transition scene material properties: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL.
-			 * Ready for RP2 restart or internal target attachment layout restoration. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcMaterialPropertiesImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
-			}
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcVelocityImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get());
 		}
 
-		/* === Albedo copy === */
-		const auto srcAlbedoImage = m_renderer.currentSceneAlbedoImage();
-
-		if ( srcAlbedoImage != nullptr && m_grabPass->hasAlbedo() )
 		{
-			const auto dstAlbedoImage = m_grabPass->albedoImage();
+			/* Destinations are sampled by fragment shaders; color sources resume as color
+			 * attachments; the depth source resumes at the early fragment tests. */
+			VkPipelineStageFlags postDstStages = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-			/* 21. Transition scene albedo: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
+			if ( copyDepth )
 			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcAlbedoImage,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
+				postDstStages |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 			}
 
-			/* 22. Transition grab pass albedo: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstAlbedoImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 23. Copy scene albedo -> grab pass albedo (same format). */
-			commandBuffer.copyImage(
-				*srcAlbedoImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstAlbedoImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			);
-
-			/* 24. Transition grab pass albedo: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstAlbedoImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 25. Transition scene albedo: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcAlbedoImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
-			}
-		}
-
-		/* === Velocity copy === */
-		const auto srcVelocityImage = m_renderer.currentSceneVelocityImage();
-
-		if ( srcVelocityImage != nullptr && m_grabPass->hasVelocity() )
-		{
-			const auto dstVelocityImage = m_grabPass->velocityImage();
-
-			/* 21. Transition scene velocity: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcVelocityImage,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 22. Transition grab pass velocity: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstVelocityImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 23. Copy scene velocity -> grab pass velocity (same format). */
-			commandBuffer.copyImage(
-				*srcVelocityImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				*dstVelocityImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			);
-
-			/* 24. Transition grab pass velocity: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*dstVelocityImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 25. Transition scene velocity: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL. */
-			{
-				const Vulkan::Sync::ImageMemoryBarrier barrier{
-					*srcVelocityImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					barrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
-			}
+			commandBuffer.pipelineBarrier(barriers, VK_PIPELINE_STAGE_TRANSFER_BIT, postDstStages);
 		}
 	}
 

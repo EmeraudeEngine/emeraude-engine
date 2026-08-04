@@ -299,6 +299,12 @@ namespace EmEn::Vulkan
 
 		for ( const auto & frame : m_frames )
 		{
+			/* Clear the offscreen-composite framebuffer. */
+			if ( frame.offscreenCompositeFramebuffer != nullptr )
+			{
+				frame.offscreenCompositeFramebuffer->destroyFromHardware();
+			}
+
 			/* Clear the post-process framebuffer. */
 			if ( frame.postProcessFramebuffer != nullptr )
 			{
@@ -987,6 +993,138 @@ namespace EmEn::Vulkan
 		return renderPass;
 	}
 
+	std::shared_ptr< RenderPass >
+	SwapChain::createOffscreenCompositeRenderPass (Renderer & renderer) const noexcept
+	{
+		/* NOTE: This render pass must stay COMPATIBLE with the post-process render pass
+		 * (same attachment count, formats and sample counts) so the pipelines created for
+		 * that pass (post-process quad, gizmos, overlay) run here unchanged — load/store
+		 * ops and layouts are excluded from the Vulkan compatibility rules. */
+		auto renderPass = std::make_shared< RenderPass >(renderer.device(), 0);
+		renderPass->setIdentifier(ClassId, "SwapChainOffscreenComposite", "RenderPass");
+
+		RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+
+		/* Attachment 0: Color buffer (swap-chain image, single-sample).
+		 * The scene was rendered offscreen (internal target): the acquired image content is
+		 * irrelevant, so the pass starts from UNDEFINED and clears — no prior pass needed. */
+		{
+			const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
+
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = colorBufferCreateInfo.format,
+				.samples = colorBufferCreateInfo.samples,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE, /* Store for presentation. */
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			});
+
+			subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		}
+
+		/* Attachment 1: Depth/Stencil buffer (single-sample).
+		 * Cleared for the gizmos/overlay depth testing; nothing reads it after the pass,
+		 * so the content is discarded (DONT_CARE store). */
+		{
+			const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = depthStencilBufferCreateInfo.format,
+				.samples = depthStencilBufferCreateInfo.samples,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			});
+
+			subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+		}
+
+		renderPass->addSubPass(subPass);
+
+		/* IDENTICAL to the two post-process pass dependencies — render pass COMPATIBILITY
+		 * requires it: the Vulkan rules only exempt load/store ops and image layouts, so the
+		 * subpass dependencies must match for the shared pipelines to be legal here
+		 * (validation: VUID-vkCmdDrawIndexed-renderPass-02684, "dependencyCount 1 != 2").
+		 * They also cover this pass's own needs: the EXTERNAL -> 0 dependency source at
+		 * COLOR_ATTACHMENT_OUTPUT chains with the vkAcquireNextImageKHR semaphore wait, so
+		 * the UNDEFINED -> attachment transitions cannot run before the image is available
+		 * (see createRenderPass() for the acquire-hazard rationale). */
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = VK_SUBPASS_EXTERNAL,
+			.dstSubpass = 0,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			.dependencyFlags = 0
+		});
+
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = 0,
+			.dstSubpass = VK_SUBPASS_EXTERNAL,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dependencyFlags = 0
+		});
+
+		if ( !renderPass->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the offscreen-composite render pass !");
+
+			return nullptr;
+		}
+
+		return renderPass;
+	}
+
+	bool
+	SwapChain::createOffscreenCompositeFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept
+	{
+		if ( renderPass == nullptr )
+		{
+			return false;
+		}
+
+		for ( size_t imageIndex = 0; imageIndex < m_imageCount; ++imageIndex )
+		{
+			auto & frame = m_frames[imageIndex];
+
+			frame.offscreenCompositeFramebuffer = std::make_unique< Framebuffer >(renderPass, this->extent());
+#if IS_MACOS
+			frame.offscreenCompositeFramebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "OffscreenComposite").str(), "Framebuffer");
+#else
+			frame.offscreenCompositeFramebuffer->setIdentifier(ClassId, std::format("Frame{}OffscreenComposite", imageIndex), "Framebuffer");
+#endif
+
+			/* Same single-sample attachments as the post-process framebuffer (compatibility). */
+
+			/* Attachment 0: Color buffer (swap-chain image, single-sample). */
+			frame.offscreenCompositeFramebuffer->addAttachment(frame.colorImageView->handle());
+
+			/* Attachment 1: Depth/Stencil buffer (single-sample). */
+			frame.offscreenCompositeFramebuffer->addAttachment(frame.depthImageView->handle());
+
+			if ( !frame.offscreenCompositeFramebuffer->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create an offscreen-composite framebuffer #" << imageIndex << " !";
+
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	bool
 	SwapChain::createPostProcessFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept
 	{
@@ -1050,6 +1188,14 @@ namespace EmEn::Vulkan
 		if ( !this->createPostProcessFramebufferArray(this->createPostProcessRenderPass(m_renderer)) )
 		{
 			Tracer::error(ClassId, "Unable to create the post-process framebuffer !");
+
+			return false;
+		}
+
+		/* Create the offscreen-composite render pass and framebuffer array. */
+		if ( !this->createOffscreenCompositeFramebufferArray(this->createOffscreenCompositeRenderPass(m_renderer)) )
+		{
+			Tracer::error(ClassId, "Unable to create the offscreen-composite framebuffer !");
 
 			return false;
 		}

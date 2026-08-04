@@ -26,6 +26,9 @@
 
 #include "GrabPass.hpp"
 
+/* STL inclusions. */
+#include <vector>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
@@ -572,326 +575,236 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* === Color blit === */
+		const bool copyDepth = srcDepthImage != nullptr && this->hasDepth();
+		const bool copyNormals = srcNormalsImage != nullptr && this->hasNormals();
+		const bool copyMaterialProperties = srcMaterialPropertiesImage != nullptr && this->hasMaterialProperties();
 
-		/* 1. Barrier: swapchain color COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
+		/* The grab is expressed as TWO batched barriers around the copies instead of one
+		 * pipelineBarrier() per transition (which serialized the GPU up to ~20 times):
+		 * every source goes to TRANSFER_SRC and every destination to TRANSFER_DST in a
+		 * single call, then the copies run back-to-back, then a single call restores
+		 * everything. The stage masks are the union of the per-image stages — per-image
+		 * precision is preserved by the access masks carried by each VkImageMemoryBarrier. */
+		std::vector< VkImageMemoryBarrier > barriers;
+		barriers.reserve(8);
+
+		/* === Pre-copy batch: sources -> TRANSFER_SRC, destinations -> TRANSFER_DST. === */
+
+		barriers.push_back(Sync::ImageMemoryBarrier{
+			srcColorImage,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		}.get());
+
+		barriers.push_back(Sync::ImageMemoryBarrier{
+			*m_image,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+		}.get());
+
+		if ( copyDepth )
 		{
-			const Sync::ImageMemoryBarrier srcBarrier{
-				srcColorImage,
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*srcDepthImage,
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
+
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*m_depthImage,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
+		}
+
+		if ( copyNormals )
+		{
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*srcNormalsImage,
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 				VK_ACCESS_TRANSFER_READ_BIT,
 				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-			};
+			}.get());
 
-			commandBuffer.pipelineBarrier(
-				srcBarrier,
-				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT
-			);
-		}
-
-		/* 2. Barrier: grab color texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
-		{
-			const Sync::ImageMemoryBarrier dstBarrier{
-				*m_image,
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*m_normalsImage,
 				VK_ACCESS_SHADER_READ_BIT,
 				VK_ACCESS_TRANSFER_WRITE_BIT,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-			};
-
-			commandBuffer.pipelineBarrier(
-				dstBarrier,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT
-			);
+			}.get());
 		}
 
-		/* 3. Blit: swapchain color -> grab color texture */
+		if ( copyMaterialProperties )
+		{
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*srcMaterialPropertiesImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get());
+
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*m_materialPropertiesImage,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			}.get());
+		}
+
+		{
+			/* Destinations were last sampled by fragment shaders; color sources were last
+			 * written as color attachments; the depth source by the late fragment tests. */
+			VkPipelineStageFlags preSrcStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+			if ( copyDepth )
+			{
+				preSrcStages |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			}
+
+			commandBuffer.pipelineBarrier(barriers, preSrcStages, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		}
+
+		/* === Copies, back-to-back (no barrier needed between independent transfers). === */
+
+		/* Color uses vkCmdBlitImage (formats may differ); depth uses vkCmdCopyImage as
+		 * depth formats may not support blit on all GPUs; the rest are same-format copies. */
 		commandBuffer.blitImage(
 			srcColorImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			*m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 		);
 
-		/* 4. Barrier: grab color texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
+		if ( copyDepth )
 		{
-			const Sync::ImageMemoryBarrier dstBarrier{
-				*m_image,
-				VK_ACCESS_TRANSFER_WRITE_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-
-			commandBuffer.pipelineBarrier(
-				dstBarrier,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-			);
-		}
-
-		/* 5. Barrier: swapchain color TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
-		 * (ready for the post-process render pass). */
-		{
-			const Sync::ImageMemoryBarrier srcBarrier{
-				srcColorImage,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-			};
-
-			commandBuffer.pipelineBarrier(
-				srcBarrier,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			);
-		}
-
-		/* === Depth copy === */
-		if ( srcDepthImage != nullptr && this->hasDepth() )
-		{
-			/* 6. Barrier: swapchain depth DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier srcBarrier{
-					*srcDepthImage,
-					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					srcBarrier,
-					VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 7. Barrier: grab depth texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier dstBarrier{
-					*m_depthImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					dstBarrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 8. Copy: swapchain depth -> grab depth texture (vkCmdCopyImage, no filtering).
-			 * Depth formats may not support vkCmdBlitImage on all GPUs. */
 			commandBuffer.copyImage(
 				*srcDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				*m_depthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_ASPECT_DEPTH_BIT
 			);
-
-			/* 9. Barrier: grab depth texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier dstBarrier{
-					*m_depthImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					dstBarrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 10. Barrier: swapchain depth TRANSFER_SRC_OPTIMAL -> DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-			 * (ready for the post-process render pass). */
-			{
-				const Sync::ImageMemoryBarrier srcBarrier{
-					*srcDepthImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_ASPECT_DEPTH_BIT
-				};
-
-				commandBuffer.pipelineBarrier(
-					srcBarrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
-				);
-			}
 		}
 
-		/* === Normals copy === */
-		if ( srcNormalsImage != nullptr && this->hasNormals() )
+		if ( copyNormals )
 		{
-			/* 11. Barrier: source normals COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier srcBarrier{
-					*srcNormalsImage,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					srcBarrier,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 12. Barrier: grab normals texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier dstBarrier{
-					*m_normalsImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					dstBarrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 13. Copy: source normals -> grab normals texture (same format, use vkCmdCopyImage). */
 			commandBuffer.copyImage(
 				*srcNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				*m_normalsImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			);
-
-			/* 14. Barrier: grab normals texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier dstBarrier{
-					*m_normalsImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					dstBarrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
-			}
-
-			/* 15. Barrier: source normals TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
-			 * (ready for the post-process render pass). */
-			{
-				const Sync::ImageMemoryBarrier srcBarrier{
-					*srcNormalsImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					srcBarrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
-			}
 		}
 
-		/* === Material properties copy === */
-		if ( srcMaterialPropertiesImage != nullptr && this->hasMaterialProperties() )
+		if ( copyMaterialProperties )
 		{
-			/* 16. Barrier: source material properties COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier srcBarrier{
-					*srcMaterialPropertiesImage,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					srcBarrier,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 17. Barrier: grab material properties texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
-			{
-				const Sync::ImageMemoryBarrier dstBarrier{
-					*m_materialPropertiesImage,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					dstBarrier,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-					VK_PIPELINE_STAGE_TRANSFER_BIT
-				);
-			}
-
-			/* 18. Copy: source material properties -> grab material properties texture (same format, use vkCmdCopyImage). */
 			commandBuffer.copyImage(
 				*srcMaterialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				*m_materialPropertiesImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			);
+		}
 
-			/* 19. Barrier: grab material properties texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
+		/* === Post-copy batch: destinations -> SHADER_READ, sources restored for the
+		 * post-process render pass. === */
+
+		barriers.clear();
+
+		barriers.push_back(Sync::ImageMemoryBarrier{
+			*m_image,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		}.get());
+
+		barriers.push_back(Sync::ImageMemoryBarrier{
+			srcColorImage,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		}.get());
+
+		if ( copyDepth )
+		{
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*m_depthImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
+
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*srcDepthImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			}.get());
+		}
+
+		if ( copyNormals )
+		{
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*m_normalsImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get());
+
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*srcNormalsImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get());
+		}
+
+		if ( copyMaterialProperties )
+		{
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*m_materialPropertiesImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get());
+
+			barriers.push_back(Sync::ImageMemoryBarrier{
+				*srcMaterialPropertiesImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get());
+		}
+
+		{
+			/* Destinations are sampled by fragment shaders; color sources resume as color
+			 * attachments; the depth source resumes at the early fragment tests. */
+			VkPipelineStageFlags postDstStages = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+			if ( copyDepth )
 			{
-				const Sync::ImageMemoryBarrier dstBarrier{
-					*m_materialPropertiesImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					dstBarrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-				);
+				postDstStages |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 			}
 
-			/* 20. Barrier: source material properties TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
-			 * (ready for the post-process render pass). */
-			{
-				const Sync::ImageMemoryBarrier srcBarrier{
-					*srcMaterialPropertiesImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				};
-
-				commandBuffer.pipelineBarrier(
-					srcBarrier,
-					VK_PIPELINE_STAGE_TRANSFER_BIT,
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
-			}
+			commandBuffer.pipelineBarrier(barriers, VK_PIPELINE_STAGE_TRANSFER_BIT, postDstStages);
 		}
 	}
 

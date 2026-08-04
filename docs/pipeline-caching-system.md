@@ -255,6 +255,23 @@ Validation Error: VkRenderPass 0x... is not compatible
 1. **Check all three cache levels** include renderPassHandle
 2. **Verify includes** are present in generator .cpp files
 3. **Add logging** to see cache hits/misses:
+
+### Sharing pipelines across DIFFERENT render passes (compatibility)
+
+A pipeline created against render pass A may legally be used inside render pass B when
+the two passes are **compatible**. The Vulkan rules exempt **only** the load/store ops
+and the initial/final/reference image layouts — everything else must match:
+
+- attachment count, formats and sample counts, **and**
+- the **subpass dependency list, verbatim** — a differing `dependencyCount` alone makes
+  every draw fail `VUID-vkCmdDrawIndexed-renderPass-02684`
+  ("dependencyCount is incompatible ... 1 != 2").
+
+Live example: the swap chain's `offscreenComposite` pass reuses the pipelines created
+against the `postProcess` pass (PP quad, gizmos, overlay) and therefore carries a
+verbatim copy of its two subpass dependencies — see
+[`docs/post-processing-pipeline.md`](post-processing-pipeline.md) § 2 and
+`SwapChain::createOffscreenCompositeRenderPass()`.
    ```cpp
    Tracer::debug(ClassId, "Cache key: {}, hit: {}", cacheKey, wasHit);
    ```

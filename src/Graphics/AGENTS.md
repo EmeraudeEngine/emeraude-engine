@@ -1090,7 +1090,7 @@ Key design:
 - `Effects/Framebuffer/SSR.hpp` — Parameters, ResolvePushConstants, setEnvironmentCubemap()
 - `Effects/Framebuffer/SSR.cpp` — Shader source, descriptor layouts ("SSRResolveInput"), pipeline creation
 - `PostProcessEffect.hpp` — Base interface
-- `PostProcessor.hpp/cpp` — Chain management, push constants. `configure()` retires its previous grab pass + per-frame descriptor sets through `Renderer::deferredDestructor()` (frames-in-flight safety, no mid-frame `waitIdle`) — see `src/Vulkan/AGENTS.md`, "Deferred destruction contract"
+- `PostProcessor.hpp/cpp` — Chain management, push constants. `configure()` retires its previous grab pass + per-frame descriptor sets through `Renderer::deferredDestructor()` (frames-in-flight safety, no mid-frame `waitIdle`) — see `src/Vulkan/AGENTS.md`, "Deferred destruction contract". `recordBlit()` (and `GrabPass::recordBlit()`) follow the **batched barrier contract**: exactly two batched `pipelineBarrier()` calls around the back-to-back copies, never one barrier per transition — see [`docs/post-processing-pipeline.md`](../../docs/post-processing-pipeline.md) § 3 before touching either.
 
 ### AtmosphericFog (Exponential Height Fog)
 
@@ -1710,6 +1710,12 @@ See: `Graphics/Geometry/ResourceGenerator.hpp`, `Graphics/Geometry/ResourceGener
 | **P3** | Compute shaders for blur/SSAO | Fragment-only | Compute + Fragment | Shared memory, no RP transitions |
 | **P4** | Mesh LOD / tessellation | 2M indices flat ground | Adaptive | Scalable scene complexity |
 | **P5** | GPU-driven culling | CPU-side | Compute dispatch | Scalable to large scenes |
+
+> P2 has an **owner-approved phased plan** (2026-08) with per-effect pass counts, merge
+> targets and execution order — see
+> [`docs/post-processing-pipeline.md`](../../docs/post-processing-pipeline.md) § 5.
+> Phase D (done): batched grab-pass barriers + the swap-chain `offscreenComposite` pass
+> replacing the empty layout-establishing pass.
 
 ### UE5 Comparison (Same Scene)
 

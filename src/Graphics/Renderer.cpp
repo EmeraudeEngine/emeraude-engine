@@ -1968,15 +1968,13 @@ namespace EmEn::Graphics
 			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr));
 		}
 
-		/* Establish swap-chain image layouts by running RP1 (CLEAR) with no draw calls.
-		 * This transitions swap-chain color from UNDEFINED to COLOR_ATTACHMENT_OPTIMAL
-		 * and depth from UNDEFINED to DEPTH_STENCIL_ATTACHMENT_OPTIMAL. */
-		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
-		commandBuffer->endRenderPass();
-
-		/* RP-final (swap-chain postProcess, LOAD): Draw the PP fullscreen quad + overlay.
-		 * This transitions the swap-chain color to PRESENT_SRC_KHR for presentation. */
-		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen
+		 * quad + overlay, then transition the swap-chain color to PRESENT_SRC_KHR.
+		 * This single pass performs the UNDEFINED -> attachment layout transitions itself,
+		 * replacing the former empty layout-establishing pass (a full-screen clear with no
+		 * draw call) followed by a LOAD pass. Pipelines are shared with the post-process
+		 * pass (compatible render passes). */
+		commandBuffer->beginRenderPass(*m_swapChain->offscreenCompositeFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 		/* Process camera lens effects (single-pass). Same snapshot-retention contract as the
 		 * direct swap-chain path: the slot keeps the list alive for the in-flight frame. */
