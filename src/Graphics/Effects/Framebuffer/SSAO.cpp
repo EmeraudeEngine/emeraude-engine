@@ -199,47 +199,6 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto ApplyFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D aoTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-	float padding1;
-	float padding2;
-	float padding3;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-	float ao = texture(aoTex, vUV).r;
-
-	/* Decode material properties from G-buffer. */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint gPacked = uint(mp.g * 255.0);
-	float aoResponse = float(gPacked >> 4u) / 15.0;
-	uint bPacked = uint(mp.b * 255.0);
-	float emissiveMask = float(bPacked & 0xFu) / 15.0;
-
-	/* Single application of the user-facing intensity (the compute pass stores the pure
-	 * visibility term). Clamped: an intensity above 1 must saturate the darkening, not
-	 * extrapolate the mix below the computed AO. */
-	ao = clamp(mix(1.0, ao, intensity), 0.0, 1.0);
-
-	/* Modulate AO by material aoResponse; emissive surfaces reject AO darkening. */
-	ao = mix(1.0, ao, aoResponse * (1.0 - emissiveMask));
-
-	outColor = vec4(color.rgb * ao, color.a);
-}
-)GLSL";
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -288,20 +247,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Apply target (full-res, RGBA). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "SSAO_Output") )
-		{
-			TraceError{ClassId} << "Failed to create SSAO output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts (shared) ---- */
 		auto singleLayout = this->getInputLayout(1);
 		auto dualLayout = this->getInputLayout(2);
-		auto tripleLayout = this->getInputLayout(3);
 
-		if ( singleLayout == nullptr || dualLayout == nullptr || tripleLayout == nullptr )
+		if ( singleLayout == nullptr || dualLayout == nullptr )
 		{
 			return false;
 		}
@@ -327,16 +277,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(tripleLayout);
-
-			m_applyLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
-			});
-		}
-
-		if ( m_aoLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
+		if ( m_aoLayout == nullptr || m_blurLayout == nullptr )
 		{
 			return false;
 		}
@@ -348,9 +289,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, SSAOComputeFragmentShader);
 		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_Blur_FS", Saphir::ShaderType::FragmentShader, BlurFragmentShader);
-		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_Apply_FS", Saphir::ShaderType::FragmentShader, ApplyFragmentShader);
 
-		if ( vertexModule == nullptr || aoFragment == nullptr || blurFragment == nullptr || applyFragment == nullptr )
+		if ( vertexModule == nullptr || aoFragment == nullptr || blurFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile SSAO shaders !";
 
@@ -360,9 +300,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create pipelines ---- */
 		m_aoPipeline = this->createFullscreenPipeline(ClassId, "SSAO_AO", vertexModule, aoFragment, m_aoLayout, m_aoTarget);
 		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSAO_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_applyPipeline = this->createFullscreenPipeline(ClassId, "SSAO_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
-		if ( m_aoPipeline == nullptr || m_blurPipeline == nullptr || m_applyPipeline == nullptr )
+		if ( m_aoPipeline == nullptr || m_blurPipeline == nullptr )
 		{
 			return false;
 		}
@@ -406,53 +345,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Apply: reads color (updated per-frame) + blurred AO (fixed) + material properties (per-frame). */
-		m_applyPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "Apply_DescSet");
-
-		if ( m_applyPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_applyPerFrame )
-		{
-			/* Binding 1: blurred AO (same for all frames). */
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	SSAO::destroy () noexcept
 	{
-		m_applyPerFrame.clear();
 		m_aoPerFrame.clear();
 		m_blurVDescSet.reset();
 		m_blurHDescSet.reset();
 		
-		m_applyPipeline.reset();
 		m_blurPipeline.reset();
 		m_aoPipeline.reset();
-		m_applyLayout.reset();
 		m_blurLayout.reset();
 		m_aoLayout.reset();
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_aoTarget.destroy();
 	}
 
-	const TextureInterface &
-	SSAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	SSAO::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
 		const auto & constants = context.constants;
 
 
@@ -467,15 +384,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputNormals != nullptr )
 		{
 			static_cast< void >(m_aoPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
-		}
-
-		/* Update color descriptor for apply pass (this frame's copy). */
-		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for apply pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* ---- Pass 1: AO Computation ---- */
@@ -543,27 +451,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(pc)
 			);
 		}
+	}
 
-		/* ---- Pass 4: Apply AO to Color ---- */
-		{
-			const ApplyPushConstants pc{
-				.intensity = m_parameters.intensity,
-				.padding1 = 0.0F,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
-			};
+	IndirectPostProcessEffect::CombineContribution
+	SSAO::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "ssao";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.needsMaterialProperties = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_outputTarget,
-				*m_applyPipeline,
-				*m_applyLayout,
-				*m_applyPerFrame[frameIndex],
-				&pc,
-				sizeof(pc)
-			);
-		}
+		/* Same math as the retired SSAO_Apply_FS pass: user intensity (clamped mix, an
+		 * intensity above 1 saturates rather than extrapolating), then the material
+		 * aoResponse with emissive rejection. */
+		contribution.code =
+			"\tfloat ssaoAO = texture(ssaoTex, vUV).r;\n"
+			"\tvec4 ssaoMp = texture(emMaterialProps, vUV);\n"
+			"\tfloat ssaoResponse = float(uint(ssaoMp.g * 255.0) >> 4u) / 15.0;\n"
+			"\tfloat ssaoEmissive = float(uint(ssaoMp.b * 255.0) & 0xFu) / 15.0;\n"
+			"\tssaoAO = clamp(mix(1.0, ssaoAO, emDyn.ssaoDynamics0.x), 0.0, 1.0);\n"
+			"\tssaoAO = mix(1.0, ssaoAO, ssaoResponse * (1.0 - ssaoEmissive));\n"
+			"\tem_Color.rgb *= ssaoAO;\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

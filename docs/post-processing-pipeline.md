@@ -8,14 +8,21 @@ that keep the chain correct. Read this before touching `PostProcessor`, `GrabPas
 
 | Family | Base class | Execution | Cost model |
 |--------|-----------|-----------|------------|
-| **Lens (direct)** | `DirectPostProcessEffect` | The Saphir `PostProcessing` generator compiles the camera's whole effect list into **ONE fragment shader**, drawn as a fullscreen quad in the final swap-chain pass. | One pass total, whatever the list size. Nothing to optimize here. |
-| **Framebuffer (indirect)** | `IndirectPostProcessEffect` | Each effect owns its render targets, render passes and pipelines. The chain executes sequentially — each `execute()` receives the previous effect's output texture (`PostProcessor::executeIndirectPostProcessEffects()`). | 1 to ~22 GPU passes **per effect** (see §4). This is where frame time goes. |
+| **Lens (direct)** | `DirectPostProcessEffect` | The Saphir `PostProcessing` generator compiles the stack's DISPLAY effects + the camera's lens list into **ONE fragment shader**, drawn as a fullscreen quad in the final swap-chain pass. | One pass total, whatever the list size. |
+| **Display (direct)** | `DirectPostProcessEffect`, added via `PostProcessStack::addDisplayEffect()` | `Effects::Display::{Sharpen, FXAA, FXAASharpen}` — display-referred single-pass effects folded into the final pass, BEFORE the camera lens effects (grain/scanlines must not be sharpened). At most ONE fetch-overriding effect (FXAA*) per stack. | Zero passes, zero render targets (phase B — they replaced the retired single-pass `Framebuffer` versions). |
+| **Framebuffer (indirect)** | `IndirectPostProcessEffect` | Each effect owns its render targets, render passes and pipelines. The chain executes sequentially through `PostProcessor::executeIndirectPostProcessEffects()`. OVERLAY effects (see §3b) skip their own apply pass. | 1 to ~22 GPU passes **per effect** (see §4). This is where frame time goes. |
 
-Ownership: the Scene owns the `PostProcessStack` (indirect chain); the Camera owns the
-lens list and *declares* the photographic effects (`enableHDR`/`enableBloom`/
-`enableDepthOfField`/`enableMotionBlur`) that `PostProcessStack::syncCameraEffects()`
-materializes each frame in canonical order (DoF → MotionBlur → Bloom → ToneMapping),
-inserted before the first `runsAfterToneMapping()` effect (FXAA/Sharpen/FXAASharpen).
+Ownership: the Scene owns the `PostProcessStack` (indirect chain + display list); the
+Camera owns the lens list and *declares* the photographic effects (`enableHDR`/
+`enableBloom`/`enableDepthOfField`/`enableMotionBlur`) that
+`PostProcessStack::syncCameraEffects()` materializes each frame in canonical order
+(DoF → MotionBlur → Bloom → ToneMapping), inserted before the first
+`runsAfterToneMapping()` effect. `syncCameraEffects()` also PAIRS the camera Bloom with
+the camera ToneMapping (phase C): the tone mapping samples `Bloom::bloomTexture()` and
+adds the glare in its own pass (`setBloomSource()`, EM_BLOOM shader variant baked at
+create), while the bloom bypasses its full-res composite (`setCompositeBypassed()`) —
+a standalone Bloom without tone mapping downstream keeps compositing itself. A bloom
+(de)materialization rebuilds the tone mapping (pipeline variant change).
 
 > A camera with `enableHDR`+`enableBloom` (the `Player` baseline in consuming projects)
 > forces a stack even on a scene that declares none: the runtime floor is
@@ -86,6 +93,36 @@ the access masks inside each `VkImageMemoryBarrier`. The previous shape — one
 `pipelineBarrier()` per transition — serialized the GPU up to ~30 times per frame for
 the exact same correctness.
 
+## 3b. The overlay protocol and the combine pass (phase A)
+
+The nine "screen overlay" effects — RTR/SSR, RTAO/SSAO, RTGI/SSGI, ContactShadows,
+VolumetricLight, LensFlare — no longer own a full-resolution apply/composite pass.
+They implement the OVERLAY protocol of `IndirectPostProcessEffect`:
+
+- `producesOverlay()` → true; the PostProcessor never calls their `execute()`.
+- `recordOverlayPasses()` records their internal passes (trace, pyramid, blur…) only.
+- `combineContribution()` returns what the shared **CombinePass** needs: a GLSL
+  identifier `prefix`, the effect's own textures (`<prefix><Suffix>` samplers), the
+  shared context samplers it reads (`emDepth`/`emNormals`/`emMaterialProps`/`emAlbedo`),
+  up to two `vec4` per-frame scalar slots (`emDyn.<prefix>Dynamics0/1`), and the GLSL
+  snippet applying its result onto the running `em_Color` — the EXACT math of its
+  retired apply shader.
+
+`PostProcessor::executeIndirectPostProcessEffects()` groups CONTIGUOUS overlay effects
+and applies each group in ONE generated full-res pass (`Graphics/CombinePass`, shader +
+pipeline cached per group signature, two ping-pong output targets). Sequential
+exactness is preserved by the **flush rule**: the group is flushed (combine emitted)
+before any non-overlay effect, and before any overlay effect whose UPSTREAM passes
+sample the chain color — `readsChainColorUpstream(context)`: SSGI (trace gather), SSR
+(color pyramid + resolve), LensFlare (threshold), RTGI only when the albedo G-buffer
+is missing (trace fallback binding).
+
+Real chains: `[RTR,RTAO,RTGI,CS,VL]` → 1 combine (5 full-res applies → 1);
+SSR variant `[SSR,SSAO] | [SSGI,VL]` → 2 combines; LightAndShadowDebug
+`[RTR,RTAO,RTGI,CS] | fog | [VL] | [LF]` → fog and the flush before LensFlare split
+the groups. Net effect: the ~17 per-effect full-res RGBA16F output targets are gone,
+replaced by the two shared combine targets.
+
 ## 4. Per-effect GPU pass counts (reference, 1080p half-res)
 
 Measured from the `execute()` implementations (render passes + compute dispatches):
@@ -115,18 +152,18 @@ Executed in phases; each phase is measured (RenderDoc), committed, then Linux-te
 before the next:
 
 - **Phase D (done)** — batched grab-pass barriers (§3) + offscreen-composite pass (§2).
-  No pass-count change inside effects; removes ~28 redundant barrier calls and one full
-  swap-chain clear pass per frame.
-- **Phase B+A (next)** — B: fold the post-tonemap LDR effects (Sharpen/FXAA/FXAASharpen)
-  into the final direct uber-shader (`overrideFragmentFetching()` exists for this).
-  A: merge the per-effect apply/composite passes (RTR/RTAO/RTGI/ContactShadows/
-  VolumetricLight/LensFlare each pay a full-res pass) into a single *GBufferCombine*
-  pass — requires extending the `IndirectPostProcessEffect` contract so effects can
-  return an overlay (buffer + composition mode) instead of writing color themselves.
-  C (attached here): sample the bloom chain directly from the ToneMapping pass instead
-  of a separate composite.
+  Removes ~28 redundant barrier calls and one full swap-chain clear pass per frame.
+- **Phase B (done)** — the post-tonemap LDR effects became DISPLAY effects
+  (`Effects::Display::*`, §1) compiled into the final pass: −1 to −2 full-res passes
+  and render targets per frame. The single-pass `Framebuffer` versions were retired.
+- **Phase C (done)** — the camera ToneMapping applies the bloom itself (§1 pairing):
+  −1 full-res pass on EVERY scene, including the Bloom+ToneMapping floor.
+- **Phase A (done)** — the overlay protocol + combine pass (§3b): the nine overlay
+  effects lost their apply/composite passes; worst realistic chains save 3-4 full-res
+  passes and ~15 full-res RGBA16F render targets.
 - **Phase E (if measurements justify)** — shared MRT bilateral denoise for AO/GI/contact
-  shadows (same depth/normals guides).
+  shadows (same depth/normals guides). Also revisit ContactShadows' full-res working
+  chain (§4 anomaly).
 
 ## Known issues
 

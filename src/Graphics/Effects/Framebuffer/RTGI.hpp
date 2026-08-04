@@ -121,17 +121,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the apply pass.
-			 */
-			struct EMEN_API ApplyPushConstants
-			{
-				float intensity;
-				float padding1;
-				float padding2;
-				float padding3;
-			};
-
-			/**
 			 * @brief Constructs a ray-tracing global illumination effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -161,9 +150,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::readsChainColorUpstream() */
+			[[nodiscard]]
+			bool
+			readsChainColorUpstream (const FrameContext & context) const noexcept override
+			{
+				/* The trace pass reads the receiver albedo from the G-buffer and only
+				 * falls back to the chain color when that attachment is missing. */
+				return context.albedo == nullptr;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -238,11 +248,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			Parameters m_parameters;
-			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res), apply (full-res). */
+			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Temporal history (half-res, ping-pong): RGB = resolved indirect radiance,
 			 * A = camera distance of the pixel (0 = invalid/sky). Plus the world-space
 			 * normal history used for disocclusion rejection. */
@@ -253,22 +262,23 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_applyPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_normalCopyLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_temporalPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_normalCopyPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
 			/* Per-frame UBOs shared by trace/temporal/normal-copy passes. */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_frameUBOs;
+			/* Texture consumed by this frame's combine snippet: the freshly resolved
+			 * history when the temporal chain is active, the blurred trace otherwise.
+			 * Set by recordOverlayPasses() BEFORE the history ping-pong flip. */
+			const Vulkan::TextureInterface * m_combineSource{nullptr};
 			/* Ping-pong index of the history buffer written THIS frame. */
 			uint32_t m_historyWriteIndex{0};
 			/* False until a first frame filled the history (forces alpha=1, no feedback). */

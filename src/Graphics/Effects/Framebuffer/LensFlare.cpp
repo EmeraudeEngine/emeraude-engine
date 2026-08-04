@@ -192,33 +192,6 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto CompositeFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D sceneTex;
-layout(set = 0, binding = 1) uniform sampler2D flareTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float lightOnScreen;
-	float padding;
-};
-
-void main()
-{
-	vec3 scene = texture(sceneTex, vUV).rgb;
-	vec3 flare = texture(flareTex, vUV).rgb;
-
-	/* Modulate flare by lightOnScreen: fades out when light is behind the camera. */
-	outColor = vec4(scene + flare * lightOnScreen, 1.0);
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -255,14 +228,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Create output target (full-res). */
-		if ( !m_outputTarget.create(renderer, width, height, format, "LF_Output") )
-		{
-			TraceError{TracerTag} << "Failed to create output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
@@ -270,14 +235,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
-		{
-			return false;
-		}
-
-		/* Dual input layout (2 combined image samplers). */
-		auto dualInputLayout = this->getInputLayout(2);
-
-		if ( dualInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -301,16 +258,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(dualInputLayout);
-
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			});
-		}
-
-		if ( m_thresholdLayout == nullptr || m_ghostHaloLayout == nullptr || m_compositeLayout == nullptr )
+		if ( m_thresholdLayout == nullptr || m_ghostHaloLayout == nullptr )
 		{
 			return false;
 		}
@@ -346,21 +294,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_Composite_FS", ShaderType::FragmentShader, CompositeFragmentShader);
-
-		if ( compositeFragment == nullptr )
-		{
-			TraceError{TracerTag} << "Failed to compile composite shader !";
-
-			return false;
-		}
-
 		/* ---- Create pipelines ---- */
 		m_thresholdPipeline = this->createFullscreenPipeline(ClassId, "LF_Threshold", vertexModule, thresholdFragment, m_thresholdLayout, m_thresholdTarget);
 		m_ghostHaloPipeline = this->createFullscreenPipeline(ClassId, "LF_GhostHalo", vertexModule, ghostHaloFragment, m_ghostHaloLayout, m_ghostHaloTarget);
-		m_compositePipeline = this->createFullscreenPipeline(ClassId, "LF_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
-		if ( m_thresholdPipeline == nullptr || m_ghostHaloPipeline == nullptr || m_compositePipeline == nullptr )
+		if ( m_thresholdPipeline == nullptr || m_ghostHaloPipeline == nullptr )
 		{
 			return false;
 		}
@@ -391,47 +329,26 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Composite: reads scene color (updated per-frame, binding 0) + ghost+halo result (fixed, binding 1). */
-		m_compositePerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "LF_Composite_DescSet");
-
-		if ( m_compositePerFrame.empty() )
-		{
-			return false;
-		}
-
-		/* Write binding 1 (ghost+halo result) for each composite frame descriptor. */
-		for ( const auto & descriptorSet : m_compositePerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_ghostHaloTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	LensFlare::destroy () noexcept
 	{
-		m_compositePerFrame.clear();
 		m_ghostHaloDescSet.reset();
 		m_thresholdPerFrame.clear();
 
-		m_compositePipeline.reset();
 		m_ghostHaloPipeline.reset();
 		m_thresholdPipeline.reset();
-		m_compositeLayout.reset();
 		m_ghostHaloLayout.reset();
 		m_thresholdLayout.reset();
 
-		m_outputTarget.destroy();
 		m_ghostHaloTarget.destroy();
 		m_thresholdTarget.destroy();
 	}
 
-	const TextureInterface &
-	LensFlare::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	LensFlare::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * lightSet = context.lightSet;
 
@@ -476,13 +393,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto distFromCenter = std::sqrt(dx * dx + dy * dy);
 		lightOnScreen *= std::max(0.0F, std::min(1.0F, 1.5F - distFromCenter));
 
+		/* Expose the visibility factor to the combine pass (dynamics0.x). */
+		m_lastLightOnScreen = lightOnScreen;
+
 		/* 2. Update per-frame threshold descriptor with scene color. */
 		static_cast< void >(m_thresholdPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
-		/* 3. Update per-frame composite descriptor with scene color. */
-		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* 4. Pass 1: Threshold extraction (half-res). */
+		/* 3. Pass 1: Threshold extraction (half-res). */
 		const ThresholdPushConstants thresholdPC{
 			.texelSizeX = 1.0F / static_cast< float >(m_thresholdTarget.width()),
 			.texelSizeY = 1.0F / static_cast< float >(m_thresholdTarget.height()),
@@ -500,7 +417,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sizeof(ThresholdPushConstants)
 		);
 
-		/* 5. Pass 2: Ghost generation + Halo (half-res). */
+		/* 4. Pass 2: Ghost generation + Halo (half-res). */
 		const GhostHaloPushConstants ghostHaloPC{
 			.lightScreenX = screenX,
 			.lightScreenY = screenY,
@@ -521,25 +438,23 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			&ghostHaloPC,
 			sizeof(GhostHaloPushConstants)
 		);
+	}
 
-		/* 6. Pass 3: Composite (additive blend, full-res). */
-		const CompositePushConstants compositePC{
-			.texelSizeX = 1.0F / static_cast< float >(m_outputTarget.width()),
-			.texelSizeY = 1.0F / static_cast< float >(m_outputTarget.height()),
-			.lightOnScreen = lightOnScreen,
-			.padding = 0.0F
-		};
+	IndirectPostProcessEffect::CombineContribution
+	LensFlare::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "lflare";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_ghostHaloTarget});
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_lastLightOnScreen, 0.0F, 0.0F, 0.0F});
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_outputTarget,
-			*m_compositePipeline,
-			*m_compositeLayout,
-			*m_compositePerFrame[frameIndex],
-			&compositePC,
-			sizeof(CompositePushConstants)
-		);
+		/* Same math as the retired LF_Composite_FS pass: additive flare modulated by
+		 * lightOnScreen (fades out when the light leaves the screen or is behind the
+		 * camera), alpha forced to 1 as the original composite did. */
+		contribution.code =
+			"\tem_Color.rgb += texture(lflareTex, vUV).rgb * emDyn.lflareDynamics0.x;\n"
+			"\tem_Color.a = 1.0;\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

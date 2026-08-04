@@ -1745,8 +1745,13 @@ See: `Graphics/Geometry/ResourceGenerator.hpp`, `Graphics/Geometry/ResourceGener
 > P2 has an **owner-approved phased plan** (2026-08) with per-effect pass counts, merge
 > targets and execution order — see
 > [`docs/post-processing-pipeline.md`](../../docs/post-processing-pipeline.md) § 5.
-> Phase D (done): batched grab-pass barriers + the swap-chain `offscreenComposite` pass
-> replacing the empty layout-establishing pass.
+> Phases D, B, C and A are DONE: batched grab-pass barriers + `offscreenComposite`
+> swap-chain pass (D); `Effects::Display::*` folded into the final shader (B);
+> ToneMapping applies the bloom itself (C); the nine overlay effects apply through the
+> shared generated `CombinePass` — their own apply/composite passes and full-res output
+> targets are GONE (A). Before touching ANY overlay effect's apply math, read
+> `docs/post-processing-pipeline.md` § 3b: the math now lives in the effect's
+> `combineContribution()` GLSL snippet.
 
 ### UE5 Comparison (Same Scene)
 

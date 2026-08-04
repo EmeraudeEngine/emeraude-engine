@@ -839,103 +839,6 @@ void main()
 		int32_t sourceMaxX;
 		int32_t sourceMaxY;
 	};
-
-	/* Composite shader — blends ray-traced reflections with the scene,
-	 * modulated by the per-pixel reflectivity from the material properties G-buffer. */
-	constexpr auto RTRCompositeFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D rtrTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-layout(set = 0, binding = 3) uniform sampler2D depthTex;
-layout(set = 0, binding = 4) uniform sampler2D normalTex;
-/* Pre-convolved reflection pyramid (premultiplied color + confidence). */
-layout(set = 0, binding = 5) uniform sampler2D pyramidTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-	float coneWidthScale;
-	float pyramidLodOffset;
-	float pyramidMaxLod;
-	float coneBlendStart;
-	float coneBlendFull;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-
-	/* Depth-aware upsample of the half-res reflection buffer: 4 taps around the
-	 * pixel, each weighted by depth similarity. Plain bilinear filtering bleeds
-	 * reflections across depth discontinuities (halos around thin geometry). */
-	vec2 halfTexel = 1.0 / vec2(textureSize(rtrTex, 0));
-	float centerDepth = texture(depthTex, vUV).r;
-
-	const vec2 offsets[4] = vec2[](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(-0.5, 0.5), vec2(0.5, 0.5));
-
-	vec4 rtrData = vec4(0.0);
-	float totalWeight = 0.0;
-
-	for (int i = 0; i < 4; i++)
-	{
-		vec2 uv = vUV + offsets[i] * halfTexel;
-		float d = texture(depthTex, uv).r;
-		float w = exp(-abs(d - centerDepth) * 512.0) + 1e-4;
-
-		rtrData += texture(rtrTex, uv) * w;
-		totalWeight += w;
-	}
-
-	rtrData /= totalWeight;
-
-	/* Glossy cone approximation: the GGX lobe of a rough surface spreads the traced
-	 * reflection over a cone whose footprint grows with alpha = roughness². The
-	 * separable bilateral tops out at a few texels; beyond that the pre-convolved
-	 * pyramid delivers an O(1) blur of ANY width. v1: the cone assumes a representative
-	 * hit distance (coneWidthScale) — the per-pixel hit distance lives in the future
-	 * stochastic + temporal successor (Frostbite SSSR).
-	 *
-	 * The pyramid mip is a POINT lookup whose texel already spans the whole cone, so the
-	 * fetch resolution collapses as the cone widens: taking it wholesale means a polished
-	 * surface loses every bit of its full-resolution traced reflection and reads as pixel
-	 * doubling. Hence the CROSS-FADE below — pure trace under coneBlendStart, pure pyramid
-	 * from coneBlendFull on, linear in between. A near-mirror therefore stays sharp while
-	 * brushed metal still gets its real satin spread. */
-	float compositePackedRM = texture(normalTex, vUV).a;
-	float compositeRoughness = compositePackedRM >= 2.0 ? compositePackedRM - 2.0 : compositePackedRM;
-	float coneWidthTexels = coneWidthScale * compositeRoughness * compositeRoughness;
-
-	/* coneWidthScale is zeroed when the cone is disabled, which short-circuits here. */
-	if (coneWidthTexels > coneBlendStart)
-	{
-		float coneLOD = clamp(log2(coneWidthTexels) + pyramidLodOffset, 0.0, pyramidMaxLod);
-		vec4 coneData = textureLod(pyramidTex, vUV, coneLOD);
-		float coneWeight = clamp((coneWidthTexels - coneBlendStart) / max(coneBlendFull - coneBlendStart, 1e-3), 0.0, 1.0);
-
-		rtrData = mix(rtrData, coneData, coneWeight);
-	}
-
-	/* Decode reflectivity from the material properties G-buffer (R channel, high nibble). */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint rPacked = uint(mp.r * 255.0);
-	float reflectivity = float(rPacked >> 4u) / 15.0;
-
-	/* rtrData.rgb = blurred reflected color, rtrData.a = blurred confidence. */
-	float confidence = rtrData.a;
-
-	if (confidence > 0.001 && reflectivity > 0.0)
-	{
-		color.rgb = mix(color.rgb, rtrData.rgb / max(confidence, 0.001), confidence * intensity * reflectivity);
-	}
-
-	outColor = color;
-}
-)GLSL";
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -989,14 +892,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Composite target (full-res, RGBA16F). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Output") )
-		{
-			TraceError{ClassId} << "Failed to create RTR output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
@@ -1006,10 +901,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Single input (blur): 1 combined image sampler. */
 		auto blurInputLayout = this->getInputLayout(3);
 
-		/* Composite input (color + blurred RTR + material properties + depth): 4 combined image samplers. */
-		auto compositeLayout = this->getInputLayout(6);
-
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || compositeLayout == nullptr )
+		if ( traceInputLayout == nullptr || blurInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -1064,20 +956,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(compositeLayout);
-
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(CompositePushConstants)
-				}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_compositeLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_blurLayout == nullptr )
 		{
 			return false;
 		}
@@ -1089,9 +968,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Trace_FS", ShaderType::FragmentShader, RTRTraceFragmentShader);
 		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Blur_FS", ShaderType::FragmentShader, RTRBlurFragmentShader);
-		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTR_Composite_FS", ShaderType::FragmentShader, RTRCompositeFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr || compositeFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTR shaders !";
 
@@ -1101,9 +979,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_compositePipeline = this->createFullscreenPipeline(ClassId, "RTR_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr || m_compositePipeline == nullptr )
+		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
 		{
 			return false;
 		}
@@ -1175,22 +1052,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Composite: reads color (per-frame) + blurred RTR (fixed). */
-		m_compositePerFrame = this->createPerFrameDescriptorSets(compositeLayout, ClassId, "Composite_DescSet");
-
-		if ( m_compositePerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_compositePerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
-			{
-				return false;
-			}
-		}
-
 		/* ---- Pre-convolved reflection pyramid (glossy cone approximation) ---- */
 		{
 			const auto localDevice = renderer.device();
@@ -1220,6 +1081,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 				return false;
 			}
+
+			/* The combine pass binds the pyramid through the TextureInterface adapter, whose
+			 * descriptor write reads Image::currentImageLayout(). The per-frame build cycle
+			 * (UNDEFINED -> GENERAL -> SHADER_READ_ONLY, explicit-layout barriers) always
+			 * leaves the pyramid in SHADER_READ_ONLY when the combine samples it — declare
+			 * it once, like IntermediateRenderTarget does for its own image. */
+			m_pyramidImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 			m_pyramidMipViews.reserve(m_pyramidMipCount);
 
@@ -1407,25 +1275,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 				m_pyramidSets.emplace_back(std::move(descriptorSet));
 			}
-
-			/* The composite reads the full chain (binding 5), same view every frame. */
-			for ( const auto & descriptorSet : m_compositePerFrame )
-			{
-				VkDescriptorImageInfo pyramidInfo{};
-				pyramidInfo.sampler = m_pyramidSampler->handle();
-				pyramidInfo.imageView = m_pyramidFullView->handle();
-				pyramidInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-				VkWriteDescriptorSet write{};
-				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				write.dstSet = descriptorSet->handle();
-				write.dstBinding = 5;
-				write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				write.descriptorCount = 1;
-				write.pImageInfo = &pyramidInfo;
-
-				vkUpdateDescriptorSets(localDevice->handle(), 1, &write, 0, nullptr);
-			}
 		}
 
 		return true;
@@ -1444,30 +1293,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_pyramidMipViews.clear();
 		m_pyramidImage.reset();
 
-		m_compositePerFrame.clear();
 		m_tracePerFrame.clear();
 		m_blurVPerFrame.clear();
 		m_blurHPerFrame.clear();
 
-		m_compositePipeline.reset();
 		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_compositeLayout.reset();
 		m_blurLayout.reset();
 		m_traceLayout.reset();
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
 	}
 
-	const TextureInterface &
-	RTR::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	RTR::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
 		const auto * lightSet = context.lightSet;
 
 
@@ -1490,27 +1334,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( m_environmentCubemap != nullptr && m_environmentCubemap->isCreated() )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, *m_environmentCubemap));
-		}
-
-		/* Update color descriptor for composite pass. */
-		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for composite pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
-		}
-
-		/* Update depth descriptor for the composite depth-aware upsample. */
-		if ( inputDepth != nullptr )
-		{
-			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(3, *inputDepth));
-		}
-
-		/* Roughness (normals alpha) drives the composite's glossy cone LOD. */
-		if ( inputNormals != nullptr )
-		{
-			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(4, *inputNormals));
 		}
 
 		/* ---- Pass 1: Ray Trace ---- */
@@ -1763,27 +1586,65 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(BlurPushConstants)
 			);
 		}
+	}
 
-		/* ---- Pass 4: Composite ---- */
-		{
-			const CompositePushConstants comp{
-				.intensity = m_parameters.intensity,
-				/* Cone width per unit of GGX alpha: 2 x assumed hit fraction of the trace
-				 * height. v1 — no per-pixel hit distance available. A zeroed scale disables
-				 * the pyramid lookup altogether (raw traced reflection, sharpness reference). */
-				.coneWidthScale = m_coneEnabled ? 2.0F * m_coneHitFraction * static_cast< float >(m_traceTarget.height()) : 0.0F,
-				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : m_traceTarget.width()))),
-				.pyramidMaxLod = std::min(m_coneMaxLod, static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U)),
-				.coneBlendStart = m_coneBlendStart,
-				.coneBlendFull = m_coneBlendFull
-			};
+	IndirectPostProcessEffect::CombineContribution
+	RTR::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		/* Cone width per unit of GGX alpha: 2 x assumed hit fraction of the trace
+		 * height. v1 — no per-pixel hit distance available. A zeroed scale disables
+		 * the pyramid lookup altogether (raw traced reflection, sharpness reference). */
+		const float coneWidthScale = m_coneEnabled ? 2.0F * m_coneHitFraction * static_cast< float >(m_traceTarget.height()) : 0.0F;
+		const float pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : m_traceTarget.width())));
+		const float pyramidMaxLod = std::min(m_coneMaxLod, static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U));
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer, m_outputTarget, *m_compositePipeline, *m_compositeLayout,
-				*m_compositePerFrame[frameIndex], &comp, sizeof(CompositePushConstants)
-			);
-		}
+		CombineContribution contribution;
+		contribution.prefix = "rtr";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{"Pyramid", &m_pyramidTexture});
+		contribution.needsDepth = true;
+		contribution.needsNormals = true;
+		contribution.needsMaterialProperties = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, coneWidthScale, pyramidLodOffset, pyramidMaxLod});
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_coneBlendStart, m_coneBlendFull, 0.0F, 0.0F});
 
-		return m_outputTarget;
+		/* Same math as the retired RTR_Composite_FS pass: depth-aware upsample of the
+		 * half-res reflection (4 taps, depth-similarity weights — plain bilinear bleeds
+		 * across discontinuities), glossy cone cross-fade toward the pre-convolved pyramid
+		 * (pure trace under blendStart, pure pyramid from blendFull), then the
+		 * reflectivity-modulated, confidence-renormalized application. */
+		contribution.code =
+			"\tvec2 rtrHalfTexel = 1.0 / vec2(textureSize(rtrTex, 0));\n"
+			"\tfloat rtrCenterDepth = texture(emDepth, vUV).r;\n"
+			"\tconst vec2 rtrOffsets[4] = vec2[](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(-0.5, 0.5), vec2(0.5, 0.5));\n"
+			"\tvec4 rtrData = vec4(0.0);\n"
+			"\tfloat rtrTotalWeight = 0.0;\n"
+			"\tfor (int rtrI = 0; rtrI < 4; rtrI++)\n"
+			"\t{\n"
+			"\t\tvec2 rtrUV = vUV + rtrOffsets[rtrI] * rtrHalfTexel;\n"
+			"\t\tfloat rtrD = texture(emDepth, rtrUV).r;\n"
+			"\t\tfloat rtrW = exp(-abs(rtrD - rtrCenterDepth) * 512.0) + 1e-4;\n"
+			"\t\trtrData += texture(rtrTex, rtrUV) * rtrW;\n"
+			"\t\trtrTotalWeight += rtrW;\n"
+			"\t}\n"
+			"\trtrData /= rtrTotalWeight;\n"
+			"\tfloat rtrPackedRM = texture(emNormals, vUV).a;\n"
+			"\tfloat rtrRoughness = rtrPackedRM >= 2.0 ? rtrPackedRM - 2.0 : rtrPackedRM;\n"
+			"\tfloat rtrConeWidthTexels = emDyn.rtrDynamics0.y * rtrRoughness * rtrRoughness;\n"
+			"\tif (rtrConeWidthTexels > emDyn.rtrDynamics1.x)\n"
+			"\t{\n"
+			"\t\tfloat rtrConeLOD = clamp(log2(rtrConeWidthTexels) + emDyn.rtrDynamics0.z, 0.0, emDyn.rtrDynamics0.w);\n"
+			"\t\tvec4 rtrConeData = textureLod(rtrPyramid, vUV, rtrConeLOD);\n"
+			"\t\tfloat rtrConeWeight = clamp((rtrConeWidthTexels - emDyn.rtrDynamics1.x) / max(emDyn.rtrDynamics1.y - emDyn.rtrDynamics1.x, 1e-3), 0.0, 1.0);\n"
+			"\t\trtrData = mix(rtrData, rtrConeData, rtrConeWeight);\n"
+			"\t}\n"
+			"\tfloat rtrReflectivity = float(uint(texture(emMaterialProps, vUV).r * 255.0) >> 4u) / 15.0;\n"
+			"\tfloat rtrConfidence = rtrData.a;\n"
+			"\tif (rtrConfidence > 0.001 && rtrReflectivity > 0.0)\n"
+			"\t{\n"
+			"\t\tem_Color.rgb = mix(em_Color.rgb, rtrData.rgb / max(rtrConfidence, 0.001), rtrConfidence * emDyn.rtrDynamics0.x * rtrReflectivity);\n"
+			"\t}\n";
+
+		return contribution;
 	}
 }

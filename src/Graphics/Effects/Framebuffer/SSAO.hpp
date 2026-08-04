@@ -92,17 +92,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the apply pass.
-			 */
-			struct EMEN_API ApplyPushConstants
-			{
-				float intensity;
-				float padding1;
-				float padding2;
-				float padding3;
-			};
-
-			/**
 			 * @brief Constructs a screen-space ambient occlusion effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -132,9 +121,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -189,20 +189,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			IntermediateRenderTarget m_aoTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_aoPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_applyPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_aoLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
 			/* Descriptor sets (fixed -- never updated after creation). */
 			std::unique_ptr< Vulkan::DescriptorSet > m_blurHDescSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_blurVDescSet;
 			/* Per-frame-in-flight descriptor sets (updated every frame). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_aoPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
 	};
 }

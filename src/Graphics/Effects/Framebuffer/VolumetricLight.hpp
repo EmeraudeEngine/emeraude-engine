@@ -90,17 +90,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the composite pass.
-			 */
-			struct EMEN_API CompositePushConstants
-			{
-				float texelSizeX;
-				float texelSizeY;
-				float padding1;
-				float padding2;
-			};
-
-			/**
 			 * @brief Constructs a volumetric light effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -130,9 +119,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -228,19 +228,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Intermediate render targets. */
 			IntermediateRenderTarget m_occlusionTarget;
 			IntermediateRenderTarget m_radialTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_occlusionPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_radialPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_occlusionLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_radialLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_occlusionPerFrame;
 			std::unique_ptr< Vulkan::DescriptorSet > m_radialDescSet;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
 			/* Optional overrides (nullopt = read from LightSet at execute time). */
 			std::optional< Base::PixelFactory::Color<> > m_lightColorOverride;
 			std::optional< float > m_lightIntensityOverride;

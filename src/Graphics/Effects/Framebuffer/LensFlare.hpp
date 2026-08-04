@@ -96,17 +96,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the composite pass.
-			 */
-			struct EMEN_API CompositePushConstants
-			{
-				float texelSizeX;
-				float texelSizeY;
-				float lightOnScreen;
-				float padding;
-			};
-
-			/**
 			 * @brief Constructs a lens flare effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -136,9 +125,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::readsChainColorUpstream() */
+			[[nodiscard]]
+			bool
+			readsChainColorUpstream (const FrameContext & /*context*/) const noexcept override
+			{
+				/* The threshold pass samples the chain color to extract bright spots. */
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresHDR() */
 			[[nodiscard]]
@@ -185,18 +194,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Intermediate render targets. */
 			IntermediateRenderTarget m_thresholdTarget;
 			IntermediateRenderTarget m_ghostHaloTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_thresholdPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_ghostHaloPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_thresholdLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_ghostHaloLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_thresholdPerFrame;
 			std::unique_ptr< Vulkan::DescriptorSet > m_ghostHaloDescSet;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
+			/* Light visibility factor computed by recordOverlayPasses(), consumed by
+			 * combineContribution() as the flare modulation (dynamics0.x). */
+			float m_lastLightOnScreen{0.0F};
 	};
 }

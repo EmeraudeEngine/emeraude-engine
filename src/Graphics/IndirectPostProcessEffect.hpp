@@ -38,6 +38,7 @@
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
 #include "PostProcessor.hpp"
+#include "StaticVector.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 namespace EmEn
@@ -308,13 +309,116 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Executes the effect for the current frame.
 			 * @note Called outside any active render pass. The effect manages its own render passes.
+			 * OVERLAY effects (producesOverlay() == true) are never executed through this method:
+			 * the PostProcessor drives them via recordOverlayPasses() and folds their application
+			 * into a shared combine pass. The default implementation exists only for them and is
+			 * a traced passthrough.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param inputColor The input color texture to process.
 			 * @param context The per-frame chain context (G-buffers, light set, active camera, constants).
 			 * @return const Vulkan::TextureInterface & The output texture to pass to the next effect.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept = 0;
+			virtual const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept;
+
+			/* ---- Overlay protocol (combine pass) ----
+			 * An OVERLAY effect computes its result in its own working targets (trace, blur)
+			 * but does NOT apply it to the chain color itself: the PostProcessor gathers the
+			 * contiguous overlay effects of the chain and applies them all in ONE generated
+			 * full-resolution combine pass, reproducing the exact sequential math while paying
+			 * a single full-res read/write instead of one per effect. */
+
+			/**
+			 * @brief Returns whether this effect participates in the shared combine pass.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			producesOverlay () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Returns whether the effect's UPSTREAM passes sample the chain color.
+			 * @note The combine group is FLUSHED before such an effect runs, so it reads the
+			 * up-to-date color (exact sequential semantics): SSGI gathers radiance from the
+			 * chain color, LensFlare thresholds it, SSR builds its pyramid from it. RTGI only
+			 * falls back to it when the albedo G-buffer is missing — hence the context.
+			 * @param context The per-frame chain context.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			readsChainColorUpstream (const FrameContext & /*context*/) const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Records the effect's internal passes (trace, blur...) WITHOUT the apply.
+			 * @note Only meaningful for overlay effects. The input color is the color of the
+			 * CURRENT COMBINE GROUP (flushed beforehand when readsChainColorUpstream()).
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param inputColor The group input color texture.
+			 * @param context The per-frame chain context.
+			 * @return void
+			 */
+			virtual
+			void
+			recordOverlayPasses (const Vulkan::CommandBuffer & /*commandBuffer*/, const Vulkan::TextureInterface & /*inputColor*/, const FrameContext & /*context*/) noexcept
+			{
+
+			}
+
+			/** @brief One texture consumed by an effect's combine snippet. */
+			struct EMEN_API CombineSamplerInput
+			{
+				/** @brief Sampler name suffix: declared in GLSL as sampler2D <prefix><NameSuffix>. */
+				const char * nameSuffix{nullptr};
+				const Vulkan::TextureInterface * texture{nullptr};
+			};
+
+			/**
+			 * @brief What an overlay effect contributes to the generated combine shader.
+			 * @note The snippet operates on the running color variable `em_Color` (vec4) and
+			 * reads `vUV`. Its samplers are declared as `<prefix><NameSuffix>`; the shared
+			 * context samplers are `emDepth`, `emNormals`, `emMaterialProps`, `emAlbedo`.
+			 * Per-frame scalars land in the combine UBO as `<prefix>Dynamics0/1` (vec4 each).
+			 * Every identifier the snippet declares must be prefixed to avoid collisions.
+			 */
+			struct EMEN_API CombineContribution
+			{
+				/** @brief Lowercase GLSL identifier prefix, unique per effect type (e.g. "rtao"). */
+				const char * prefix{nullptr};
+				/** @brief The effect's own textures (blur output, pyramid...). */
+				Base::StaticVector< CombineSamplerInput, 4 > samplers;
+				/** @brief Shared context samplers required by the snippet. */
+				bool needsDepth{false};
+				bool needsNormals{false};
+				bool needsMaterialProperties{false};
+				bool needsAlbedo{false};
+				/** @brief Per-frame scalar slots, exposed as vec4 UBO members. */
+				Base::StaticVector< Base::Math::Vector< 4, float >, 2 > dynamics;
+				/** @brief The GLSL application snippet (main() body fragment). */
+				std::string code;
+			};
+
+			/**
+			 * @brief Returns this frame's combine contribution (textures, dynamics, GLSL snippet).
+			 * @note Only meaningful for overlay effects, and only after recordOverlayPasses().
+			 * @param context The per-frame chain context.
+			 * @return CombineContribution
+			 */
+			[[nodiscard]]
+			virtual
+			CombineContribution
+			combineContribution (const FrameContext & /*context*/) const noexcept
+			{
+				return {};
+			}
 
 		protected:
 

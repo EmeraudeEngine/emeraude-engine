@@ -640,48 +640,6 @@ void main()
 	}
 }
 )GLSL";
-
-	/* Composite pass: blends the blurred reflected color with the scene,
-	 * modulated by the per-pixel reflectivity from the material properties G-buffer. */
-	constexpr auto SSRCompositeFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D ssrTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-	float padding1;
-	float padding2;
-	float padding3;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-	vec4 ssrData = texture(ssrTex, vUV);
-
-	/* Decode reflectivity from the material properties G-buffer (R channel, high nibble). */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint rPacked = uint(mp.r * 255.0);
-	float reflectivity = float(rPacked >> 4u) / 15.0;
-
-	/* ssrData.rgb = blurred reflected color, ssrData.a = blurred confidence. */
-	float confidence = ssrData.a;
-
-	if (confidence > 0.001 && reflectivity > 0.0)
-	{
-		color.rgb = mix(color.rgb, ssrData.rgb / max(confidence, 0.001), confidence * intensity * reflectivity);
-	}
-
-	outColor = color;
-}
-)GLSL";
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -740,14 +698,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Composite target (full-res, RGBA16F). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "SSR_Output") )
-		{
-			TraceError{ClassId} << "Failed to create SSR output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
@@ -778,10 +728,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Composite input (color + blurred SSR + material properties): 3 combined image samplers at bindings 0,1,2. */
-		auto compositeLayout = this->getInputLayout(3);
-
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || resolveInputLayout == nullptr || compositeLayout == nullptr )
+		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || resolveInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -829,20 +776,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(compositeLayout);
-
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(CompositePushConstants)
-				}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_resolveLayout == nullptr || m_blurLayout == nullptr || m_compositeLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_resolveLayout == nullptr || m_blurLayout == nullptr )
 		{
 			return false;
 		}
@@ -855,9 +789,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Trace_FS", ShaderType::FragmentShader, SSRTraceFragmentShader);
 		const auto resolveFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Resolve_FS", ShaderType::FragmentShader, SSRResolveFragmentShader);
 		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Blur_FS", ShaderType::FragmentShader, SSRBlurFragmentShader);
-		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Composite_FS", ShaderType::FragmentShader, SSRCompositeFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || resolveFragment == nullptr || blurFragment == nullptr || compositeFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || resolveFragment == nullptr || blurFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile SSR shaders !";
 
@@ -868,9 +801,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "SSR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 		m_resolvePipeline = this->createFullscreenPipeline(ClassId, "SSR_Resolve", vertexModule, resolveFragment, m_resolveLayout, m_resolveTarget);
 		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSR_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_compositePipeline = this->createFullscreenPipeline(ClassId, "SSR_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
-		if ( m_tracePipeline == nullptr || m_resolvePipeline == nullptr || m_blurPipeline == nullptr || m_compositePipeline == nullptr )
+		if ( m_tracePipeline == nullptr || m_resolvePipeline == nullptr || m_blurPipeline == nullptr )
 		{
 			return false;
 		}
@@ -932,23 +864,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		for ( const auto & descriptorSet : m_blurVPerFrame )
 		{
 			if ( !descriptorSet->writeCombinedImageSampler(0, m_blurHTarget) )
-			{
-				return false;
-			}
-		}
-
-		/* Composite: reads color (updated per-frame) + blurred SSR (fixed). */
-		m_compositePerFrame = this->createPerFrameDescriptorSets(compositeLayout, ClassId, "Composite_DescSet");
-
-		if ( m_compositePerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_compositePerFrame )
-		{
-			/* Binding 1: blurred SSR (same for all frames). */
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
 			{
 				return false;
 			}
@@ -1412,7 +1327,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	void
 	SSR::destroy () noexcept
 	{
-		m_compositePerFrame.clear();
 		m_resolvePerFrame.clear();
 		m_tracePerFrame.clear();
 		m_blurVPerFrame.clear();
@@ -1435,29 +1349,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_hiZFullView.reset();
 		m_hiZMipViews.clear();
 		m_hiZImage.reset();
-		
-		m_compositePipeline.reset();
+
 		m_blurPipeline.reset();
 		m_resolvePipeline.reset();
 		m_tracePipeline.reset();
-		m_compositeLayout.reset();
 		m_blurLayout.reset();
 		m_resolveLayout.reset();
 		m_traceLayout.reset();
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_resolveTarget.destroy();
 		m_traceTarget.destroy();
 	}
 
-	const TextureInterface &
-	SSR::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	SSR::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
 		const auto & constants = context.constants;
 
 
@@ -1468,15 +1378,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputNormals != nullptr )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(0, *inputNormals));
-		}
-
-		/* Update color descriptor for composite pass (this frame's copy). */
-		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for composite pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* ---- Pass 0: Hi-Z pyramid build (compute) ---- */
@@ -1792,27 +1693,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(BlurPushConstants)
 			);
 		}
+	}
 
-		/* ---- Pass 5: Composite ---- */
-		{
-			const CompositePushConstants comp{
-				.intensity = m_parameters.intensity,
-				.padding1 = 0.0F,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
-			};
+	IndirectPostProcessEffect::CombineContribution
+	SSR::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "ssr";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.needsMaterialProperties = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_outputTarget,
-				*m_compositePipeline,
-				*m_compositeLayout,
-				*m_compositePerFrame[frameIndex],
-				&comp,
-				sizeof(CompositePushConstants)
-			);
-		}
+		/* Same math as the retired SSR_Composite_FS pass: reflectivity decoded from the
+		 * material properties G-buffer (R channel, high nibble), then a confidence-weighted
+		 * mix — the /confidence division renormalizes the premultiplied blurred reflection. */
+		contribution.code =
+			"\tvec4 ssrData = texture(ssrTex, vUV);\n"
+			"\tfloat ssrReflectivity = float(uint(texture(emMaterialProps, vUV).r * 255.0) >> 4u) / 15.0;\n"
+			"\tfloat ssrConfidence = ssrData.a;\n"
+			"\tif (ssrConfidence > 0.001 && ssrReflectivity > 0.0)\n"
+			"\t{\n"
+			"\t\tem_Color.rgb = mix(em_Color.rgb, ssrData.rgb / max(ssrConfidence, 0.001), ssrConfidence * emDyn.ssrDynamics0.x * ssrReflectivity);\n"
+			"\t}\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

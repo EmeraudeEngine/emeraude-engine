@@ -33,6 +33,7 @@
 #include <numbers>
 
 /* Local inclusions. */
+#include "CombinePass.hpp"
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
 #include "IndirectPostProcessEffect.hpp"
@@ -489,6 +490,12 @@ namespace EmEn::Graphics
 
 		m_quadGeometry.reset();
 
+		if ( m_combinePass != nullptr )
+		{
+			m_combinePass->destroy();
+			m_combinePass.reset();
+		}
+
 		if ( m_grabPass != nullptr )
 		{
 			m_grabPass->destroy();
@@ -562,6 +569,27 @@ namespace EmEn::Graphics
 			TraceError{ClassId} << "Unable to create the post-processor grab pass !";
 
 			m_grabPass.reset();
+
+			return false;
+		}
+
+		/* (Re)create the shared combine pass with the same frames-in-flight safety.
+		 * NOTE: shared_ptr capture — retireAction() stores a std::function, which
+		 * requires a copyable callable. */
+		if ( m_combinePass != nullptr )
+		{
+			m_renderer.deferredDestructor().retireAction([pass = std::shared_ptr< CombinePass >{std::move(m_combinePass)}] () {
+				pass->destroy();
+			});
+		}
+
+		m_combinePass = std::make_unique< CombinePass >(m_renderer);
+
+		if ( !m_combinePass->create(extent.width, extent.height) )
+		{
+			TraceError{ClassId} << "Unable to create the post-processor combine pass !";
+
+			m_combinePass.reset();
 
 			return false;
 		}
@@ -1103,6 +1131,26 @@ namespace EmEn::Graphics
 			}
 		};
 
+		/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects
+		 * accumulate their contributions and are applied by ONE generated full-res pass.
+		 * The group flushes before any effect that needs the up-to-date chain color —
+		 * a non-overlay effect, or an overlay whose upstream passes sample the chain
+		 * color (readsChainColorUpstream) — preserving exact sequential semantics. */
+		std::vector< CombinePass::GroupEntry > combineGroup;
+		const Vulkan::TextureInterface * combineGroupInput = nullptr;
+		uint32_t combineGroupIndex = 0;
+
+		const auto flushCombineGroup = [&] () {
+			if ( combineGroup.empty() )
+			{
+				return;
+			}
+
+			currentTexture = &m_combinePass->record(commandBuffer, *combineGroupInput, combineGroup, context, combineGroupIndex++);
+
+			combineGroup.clear();
+		};
+
 		for ( const auto & effect : stack.effects() )
 		{
 			if ( effect == nullptr || !effect->isEnabled() )
@@ -1160,8 +1208,30 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			if ( m_combinePass != nullptr && effect->producesOverlay() )
+			{
+				if ( !combineGroup.empty() && effect->readsChainColorUpstream(context) )
+				{
+					flushCombineGroup();
+				}
+
+				if ( combineGroup.empty() )
+				{
+					combineGroupInput = currentTexture;
+				}
+
+				effect->recordOverlayPasses(commandBuffer, *combineGroupInput, context);
+				combineGroup.emplace_back(effect->combineContribution(context));
+
+				continue;
+			}
+
+			flushCombineGroup();
+
 			currentTexture = &effect->execute(commandBuffer, *currentTexture, context);
 		}
+
+		flushCombineGroup();
 
 		/* Update only the current frame's descriptor set to point to the effect chain output
 		 * instead of the raw grab pass, so the single-pass render uses the processed texture.

@@ -269,48 +269,6 @@ void main()
 }
 )GLSL";
 
-	/* Apply pass: multiply scene color by AO factor. */
-	static constexpr auto RTAOApplyFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D aoTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-	float padding1;
-	float padding2;
-	float padding3;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-	float ao = texture(aoTex, vUV).r;
-
-	/* Decode material properties from G-buffer. */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint gPacked = uint(mp.g * 255.0);
-	float aoResponse = float(gPacked >> 4u) / 15.0;
-	uint bPacked = uint(mp.b * 255.0);
-	float emissiveMask = float(bPacked & 0xFu) / 15.0;
-
-	/* Single application of the user-facing intensity (the trace pass stores the pure
-	 * visibility term). Clamped: an intensity above 1 must saturate the darkening, not
-	 * extrapolate the mix below the computed AO. */
-	ao = clamp(mix(1.0, ao, intensity), 0.0, 1.0);
-
-	/* Modulate AO by material aoResponse; emissive surfaces reject AO darkening. */
-	ao = mix(1.0, ao, aoResponse * (1.0 - emissiveMask));
-
-	outColor = vec4(color.rgb * ao, color.a);
-}
-)GLSL";
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -363,14 +321,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Apply target (full-res, RGBA16F). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "RTAO_Output") )
-		{
-			TraceError{ClassId} << "Failed to create RTAO output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
@@ -380,10 +330,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Single input (blur): 1 combined image sampler. */
 		auto blurInputLayout = this->getInputLayout(2);
 
-		/* Apply input (color + blurred AO + material properties): 3 combined image samplers. */
-		auto applyLayout = this->getInputLayout(3);
-
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || applyLayout == nullptr )
+		if ( traceInputLayout == nullptr || blurInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -419,16 +366,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(applyLayout);
-
-			m_applyLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_blurLayout == nullptr )
 		{
 			return false;
 		}
@@ -440,9 +378,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto vertexModule = this->getFullscreenVertexShader();
 		auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Trace_FS", ShaderType::FragmentShader, RTAOTraceFragmentShader);
 		auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Blur_FS", ShaderType::FragmentShader, RTAOBlurFragmentShader);
-		auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Apply_FS", ShaderType::FragmentShader, RTAOApplyFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr || applyFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTAO shaders !";
 
@@ -452,9 +389,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTAO_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTAO_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_applyPipeline = this->createFullscreenPipeline(ClassId, "RTAO_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr || m_applyPipeline == nullptr )
+		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
 		{
 			return false;
 		}
@@ -500,52 +436,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Apply: reads color (per-frame) + blurred AO (fixed). */
-		m_applyPerFrame = this->createPerFrameDescriptorSets(applyLayout, ClassId, "Apply_DescSet");
-
-		if ( m_applyPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_applyPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	RTAO::destroy () noexcept
 	{
-		m_applyPerFrame.clear();
 		m_tracePerFrame.clear();
 		m_blurVPerFrame.clear();
 		m_blurHPerFrame.clear();
 
-		m_applyPipeline.reset();
 		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_applyLayout.reset();
 		m_blurLayout.reset();
 		m_traceLayout.reset();
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
 	}
 
-	const TextureInterface &
-	RTAO::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	RTAO::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
 
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
@@ -559,15 +474,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputNormals != nullptr )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
-		}
-
-		/* Update color descriptor for apply pass. */
-		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for apply pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
 		/* ---- Pass 1: Ray Trace AO ---- */
@@ -701,27 +607,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(BlurPushConstants)
 			);
 		}
+	}
 
-		/* ---- Pass 4: Apply AO to scene color ---- */
-		{
-			const ApplyPushConstants apply{
-				.intensity = m_parameters.intensity,
-				.padding1 = 0.0F,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
-			};
+	IndirectPostProcessEffect::CombineContribution
+	RTAO::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "rtao";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.needsMaterialProperties = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_outputTarget,
-				*m_applyPipeline,
-				*m_applyLayout,
-				*m_applyPerFrame[frameIndex],
-				&apply,
-				sizeof(ApplyPushConstants)
-			);
-		}
+		/* Same math as the retired RTAO_Apply_FS pass: user intensity (clamped mix, an
+		 * intensity above 1 saturates rather than extrapolating), then the material
+		 * aoResponse with emissive rejection. */
+		contribution.code =
+			"\tfloat rtaoAO = texture(rtaoTex, vUV).r;\n"
+			"\tvec4 rtaoMp = texture(emMaterialProps, vUV);\n"
+			"\tfloat rtaoResponse = float(uint(rtaoMp.g * 255.0) >> 4u) / 15.0;\n"
+			"\tfloat rtaoEmissive = float(uint(rtaoMp.b * 255.0) & 0xFu) / 15.0;\n"
+			"\trtaoAO = clamp(mix(1.0, rtaoAO, emDyn.rtaoDynamics0.x), 0.0, 1.0);\n"
+			"\trtaoAO = mix(1.0, rtaoAO, rtaoResponse * (1.0 - rtaoEmissive));\n"
+			"\tem_Color.rgb *= rtaoAO;\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

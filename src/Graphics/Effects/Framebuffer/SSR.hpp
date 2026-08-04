@@ -142,17 +142,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the composite pass.
-			 */
-			struct EMEN_API CompositePushConstants
-			{
-				float intensity;
-				float padding1;
-				float padding2;
-				float padding3;
-			};
-
-			/**
 			 * @brief Constructs a screen-space reflexion effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -184,9 +173,30 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::readsChainColorUpstream()
+			 * @note The color pyramid build (mip 0 tent downsample) and the resolve pass both
+			 * sample the chain color UPSTREAM of the combine — the group is flushed first. */
+			[[nodiscard]]
+			bool
+			readsChainColorUpstream (const FrameContext & /*context*/) const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -253,22 +263,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			Parameters m_parameters;
-			/* IRTs: trace (half-res), resolve (half-res), blur H (half-res), blur V (half-res), composite (full-res). */
+			/* IRTs: trace (half-res), resolve (half-res), blur H (half-res), blur V (half-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_resolveTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_resolvePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_resolveLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
 			/* Descriptor sets (fixed — never updated after creation). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
@@ -311,6 +318,5 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Per-frame-in-flight descriptor sets (updated every frame). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_resolvePerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
 	};
 }

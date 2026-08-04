@@ -52,6 +52,18 @@ namespace EmEn::Graphics
 {
 	using namespace Vulkan;
 
+	/* ---- Default execute (overlay effects only) ---- */
+
+	const TextureInterface &
+	IndirectPostProcessEffect::execute (const CommandBuffer & /*commandBuffer*/, const TextureInterface & inputColor, const FrameContext & /*context*/) noexcept
+	{
+		/* Overlay effects are driven through recordOverlayPasses() + the combine pass:
+		 * reaching this default means an executor ignored producesOverlay(). */
+		Tracer::error(TracerTag, "execute() called on an overlay effect — the PostProcessor must drive it through the combine pass !");
+
+		return inputColor;
+	}
+
 	/* ---- Default resize ---- */
 
 	bool

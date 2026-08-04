@@ -145,31 +145,6 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto CompositeFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D sceneTex;
-layout(set = 0, binding = 1) uniform sampler2D shaftsTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float texelSizeX;
-	float texelSizeY;
-	float padding1;
-	float padding2;
-};
-
-void main()
-{
-	vec3 scene = texture(sceneTex, vUV).rgb;
-	vec3 shafts = texture(shaftsTex, vUV).rgb;
-	outColor = vec4(scene + shafts, 1.0);
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -206,14 +181,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Create output target (full-res). */
-		if ( !m_outputTarget.create(renderer, width, height, format, "VL_Output") )
-		{
-			TraceError{TracerTag} << "Failed to create output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
@@ -221,14 +188,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
-		{
-			return false;
-		}
-
-		/* Dual input layout (2 combined image samplers). */
-		auto dualInputLayout = this->getInputLayout(2);
-
-		if ( dualInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -252,16 +211,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(dualInputLayout);
-
-			m_compositeLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePushConstants)}
-			});
-		}
-
-		if ( m_occlusionLayout == nullptr || m_radialLayout == nullptr || m_compositeLayout == nullptr )
+		if ( m_occlusionLayout == nullptr || m_radialLayout == nullptr )
 		{
 			return false;
 		}
@@ -297,21 +247,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		const auto compositeFragment = shaderManager.getShaderModuleFromSourceCode(device, "VL_Composite_FS", ShaderType::FragmentShader, CompositeFragmentShader);
-
-		if ( compositeFragment == nullptr )
-		{
-			TraceError{TracerTag} << "Failed to compile composite shader !";
-
-			return false;
-		}
-
 		/* ---- Create pipelines ---- */
 		m_occlusionPipeline = this->createFullscreenPipeline(ClassId, "VL_Occlusion", vertexModule, occlusionFragment, m_occlusionLayout, m_occlusionTarget);
 		m_radialPipeline = this->createFullscreenPipeline(ClassId, "VL_Radial", vertexModule, radialFragment, m_radialLayout, m_radialTarget);
-		m_compositePipeline = this->createFullscreenPipeline(ClassId, "VL_Composite", vertexModule, compositeFragment, m_compositeLayout, m_outputTarget);
 
-		if ( m_occlusionPipeline == nullptr || m_radialPipeline == nullptr || m_compositePipeline == nullptr )
+		if ( m_occlusionPipeline == nullptr || m_radialPipeline == nullptr )
 		{
 			return false;
 		}
@@ -342,47 +282,26 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Composite: reads scene color (updated per-frame, binding 0) + radial result (fixed, binding 1). */
-		m_compositePerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "VL_Composite_DescSet");
-
-		if ( m_compositePerFrame.empty() )
-		{
-			return false;
-		}
-
-		/* Write binding 1 (radial blur result) for each composite frame descriptor. */
-		for ( const auto & descriptorSet : m_compositePerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_radialTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	VolumetricLight::destroy () noexcept
 	{
-		m_compositePerFrame.clear();
 		m_radialDescSet.reset();
 		m_occlusionPerFrame.clear();
 
-		m_compositePipeline.reset();
 		m_radialPipeline.reset();
 		m_occlusionPipeline.reset();
-		m_compositeLayout.reset();
 		m_radialLayout.reset();
 		m_occlusionLayout.reset();
 
-		m_outputTarget.destroy();
 		m_radialTarget.destroy();
 		m_occlusionTarget.destroy();
 	}
 
-	const TextureInterface &
-	VolumetricLight::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	VolumetricLight::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * lightSet = context.lightSet;
@@ -437,9 +356,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputDepth));
 		}
 
-		/* 3. Update per-frame composite descriptor with scene color. */
-		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
 		/* Build scatter push constants (shared by occlusion and radial passes). */
 		const ScatterPushConstants scatterPC{
 			.lightScreenX = screenX,
@@ -481,25 +397,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			&scatterPC,
 			sizeof(ScatterPushConstants)
 		);
+	}
 
-		/* 6. Pass 3: Composite (additive blend scene + light shafts). */
-		const CompositePushConstants compositePC{
-			.texelSizeX = 1.0F / static_cast< float >(m_outputTarget.width()),
-			.texelSizeY = 1.0F / static_cast< float >(m_outputTarget.height()),
-			.padding1 = 0.0F,
-			.padding2 = 0.0F
-		};
+	IndirectPostProcessEffect::CombineContribution
+	VolumetricLight::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "vlight";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_radialTarget});
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_outputTarget,
-			*m_compositePipeline,
-			*m_compositeLayout,
-			*m_compositePerFrame[frameIndex],
-			&compositePC,
-			sizeof(CompositePushConstants)
-		);
+		/* Same math as the retired VL_Composite_FS pass: pure additive blend of the
+		 * radially blurred light shafts (the lightOnScreen fade is already baked into
+		 * the radial pass output), alpha forced to 1 as the original composite did. */
+		contribution.code =
+			"\tem_Color.rgb += texture(vlightTex, vUV).rgb;\n"
+			"\tem_Color.a = 1.0;\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

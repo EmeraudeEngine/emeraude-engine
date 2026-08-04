@@ -147,41 +147,6 @@ void main()
 }
 )GLSL";
 
-	constexpr auto ApplyFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D shadowTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-	float shadow = texture(shadowTex, vUV).r;
-
-	/* Decode material properties from G-buffer. */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint gPacked = uint(mp.g * 255.0);
-	float shadowResponse = float(gPacked & 0xFu) / 15.0;
-
-	/* Mix toward full shadow based on intensity. */
-	shadow = mix(1.0, shadow, intensity);
-
-	/* Modulate shadow by material shadowResponse. */
-	shadow = mix(1.0, shadow, shadowResponse);
-
-	outColor = vec4(color.rgb * shadow, color.a);
-}
-)GLSL";
-
 	constexpr auto BlurFragmentShader = R"GLSL(
 #version 450
 
@@ -274,25 +239,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Create output target (full-res). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "CS_Output") )
-		{
-			TraceError{TracerTag} << "Failed to create output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts ---- */
 		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
-		{
-			return false;
-		}
-
-		auto tripleInputLayout = this->getInputLayout(3);
-
-		if ( tripleInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -335,16 +285,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		{
 			const StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ApplyPushConstants)}
-			};
-
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(tripleInputLayout);
-			m_applyLayout = layoutManager.getPipelineLayout(sets, ranges);
-		}
-
-		{
-			const StaticVector< VkPushConstantRange, 4 > ranges{
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BlurPushConstants)}
 			};
 
@@ -353,7 +293,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_blurLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
 
-		if ( m_shadowLayout == nullptr || m_applyLayout == nullptr || m_blurLayout == nullptr )
+		if ( m_shadowLayout == nullptr || m_blurLayout == nullptr )
 		{
 			return false;
 		}
@@ -380,15 +320,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "CS_Apply_FS", ShaderType::FragmentShader, ApplyFragmentShader);
-
-		if ( applyFragment == nullptr )
-		{
-			TraceError{TracerTag} << "Failed to compile apply shader !";
-
-			return false;
-		}
-
 		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "CS_Blur_FS", ShaderType::FragmentShader, BlurFragmentShader);
 
 		if ( blurFragment == nullptr )
@@ -402,9 +333,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_shadowPipeline = this->createFullscreenPipeline(ClassId, "CS_RTShadow", vertexModule, shadowFragment, m_shadowLayout, m_shadowTarget);
 		m_blurHPipeline = this->createFullscreenPipeline(ClassId, "CS_BlurH", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
 		m_blurVPipeline = this->createFullscreenPipeline(ClassId, "CS_BlurV", vertexModule, blurFragment, m_blurLayout, m_blurVTarget);
-		m_applyPipeline = this->createFullscreenPipeline(ClassId, "CS_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
-		if ( m_shadowPipeline == nullptr || m_blurHPipeline == nullptr || m_blurVPipeline == nullptr || m_applyPipeline == nullptr )
+		if ( m_shadowPipeline == nullptr || m_blurHPipeline == nullptr || m_blurVPipeline == nullptr )
 		{
 			return false;
 		}
@@ -451,55 +381,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Apply: reads scene color (binding 0, per-frame) + blurred shadow (binding 1, fixed) + material properties (per-frame). */
-		m_applyPerFrame = this->createPerFrameDescriptorSets(tripleInputLayout, ClassId, "CS_Apply_DescSet");
-
-		if ( m_applyPerFrame.empty() )
-		{
-			return false;
-		}
-
-		/* Write binding 1 (blurred shadow mask) for each apply frame descriptor. */
-		for ( const auto & descriptorSet : m_applyPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	ContactShadows::destroy () noexcept
 	{
-		m_applyPerFrame.clear();
 		m_blurVPerFrame.clear();
 		m_blurHPerFrame.clear();
 		m_shadowPerFrame.clear();
 
-		m_applyPipeline.reset();
 		m_blurVPipeline.reset();
 		m_blurHPipeline.reset();
 		m_shadowPipeline.reset();
-		m_applyLayout.reset();
 		m_blurLayout.reset();
 		m_shadowLayout.reset();
 		m_shadowDescLayout.reset();
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_shadowTarget.destroy();
 	}
 
-	const TextureInterface &
-	ContactShadows::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	ContactShadows::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
 		const auto * lightSet = context.lightSet;
 
 
@@ -534,20 +442,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_shadowPerFrame[frameIndex]->writeAccelerationStructure(2, TLAS->handle()));
 		}
 
-		/* 3. Update per-frame apply descriptor with scene color. */
-		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for apply pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
-		}
-
 		/* Extract camera position from inverse view matrix. */
 		const auto invView = viewMat.inverse();
 		const auto * inv = invView.data();
 
-		/* 4. Pass 1: RT shadow query (full-res). */
+		/* 3. Pass 1: RT shadow query (full-res). */
 		ShadowPushConstants shadowPC{};
 		std::memcpy(shadowPC.inverseProjViewMatrix, invViewProjMat.data(), sizeof(shadowPC.inverseProjViewMatrix));
 		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
@@ -570,7 +469,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sizeof(ShadowPushConstants)
 		);
 
-		/* 5. Pass 2: Horizontal Gaussian blur (PCSS-lite, radius from hit distance). */
+		/* 4. Pass 2: Horizontal Gaussian blur (PCSS-lite, radius from hit distance). */
 		const float texelX = 1.0F / static_cast< float >(m_blurHTarget.width());
 		const float texelY = 1.0F / static_cast< float >(m_blurHTarget.height());
 
@@ -592,7 +491,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sizeof(BlurPushConstants)
 		);
 
-		/* 6. Pass 3: Vertical Gaussian blur (PCSS-lite). */
+		/* 5. Pass 3: Vertical Gaussian blur (PCSS-lite). */
 		const BlurPushConstants blurVPC{
 			.directionX = 0.0F,
 			.directionY = 1.0F,
@@ -610,22 +509,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			&blurVPC,
 			sizeof(BlurPushConstants)
 		);
+	}
 
-		/* 7. Pass 4: Apply blurred shadow mask to scene color. */
-		const ApplyPushConstants applyPC{
-			.intensity = m_parameters.intensity
-		};
+	IndirectPostProcessEffect::CombineContribution
+	ContactShadows::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "cshdw";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.needsMaterialProperties = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_outputTarget,
-			*m_applyPipeline,
-			*m_applyLayout,
-			*m_applyPerFrame[frameIndex],
-			&applyPC,
-			sizeof(ApplyPushConstants)
-		);
+		/* Same math as the retired CS_Apply_FS pass: user intensity, then the material
+		 * shadowResponse (LOW nibble of mp.g — the HIGH nibble is the aoResponse). */
+		contribution.code =
+			"\tfloat cshdwShadow = texture(cshdwTex, vUV).r;\n"
+			"\tvec4 cshdwMp = texture(emMaterialProps, vUV);\n"
+			"\tfloat cshdwResponse = float(uint(cshdwMp.g * 255.0) & 0xFu) / 15.0;\n"
+			"\tcshdwShadow = mix(1.0, cshdwShadow, emDyn.cshdwDynamics0.x);\n"
+			"\tcshdwShadow = mix(1.0, cshdwShadow, cshdwResponse);\n"
+			"\tem_Color.rgb *= cshdwShadow;\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

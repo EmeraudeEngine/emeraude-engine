@@ -82,14 +82,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the apply pass.
-			 */
-			struct EMEN_API ApplyPushConstants
-			{
-				float intensity;
-			};
-
-			/**
 			 * @brief Push constants for the blur passes (PCSS-lite).
 			 */
 			struct EMEN_API BlurPushConstants
@@ -131,9 +123,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -205,22 +208,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			IntermediateRenderTarget m_shadowTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_shadowPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurHPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurVPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_applyPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_shadowLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_applyLayout;
 			/* Descriptor set layouts. */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_shadowDescLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_shadowPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_applyPerFrame;
 	};
 }

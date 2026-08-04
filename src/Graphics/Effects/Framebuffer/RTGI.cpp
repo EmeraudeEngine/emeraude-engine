@@ -866,46 +866,6 @@ void main()
 }
 )GLSL";
 
-	/* Apply pass: additive blend of indirect light onto the scene,
-	 * modulated by the material properties G-buffer (emissive surfaces
-	 * should not receive GI — they emit their own light). */
-	constexpr auto RTGIApplyFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D giTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-	float padding1;
-	float padding2;
-	float padding3;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-	vec3 gi = texture(giTex, vUV).rgb;
-
-	/* Decode emissive mask from material properties G-buffer.
-	 * B channel low nibble = emissiveMask (0 = not emissive, 15 = fully emissive).
-	 * Emissive surfaces should not receive GI — they emit their own light. */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint bPacked = uint(mp.b * 255.0);
-	float emissiveMask = float(bPacked & 0xFu) / 15.0;
-	gi *= (1.0 - emissiveMask);
-
-	/* Additive blend: indirect light adds to the scene. */
-	color.rgb += gi * intensity;
-
-	outColor = color;
-}
-)GLSL";
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -972,14 +932,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Apply target (full-res, RGBA16F). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Output") )
-		{
-			TraceError{ClassId} << "Failed to create RTGI output target !";
-
-			return false;
-		}
-
 		/* Temporal history targets (half-res, ping-pong). Only allocated when the temporal
 		 * accumulation is enabled, so the disabled path costs no VRAM. */
 		if ( m_parameters.temporalEnabled )
@@ -1020,10 +972,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
 
-		/* Apply input (color + resolved GI + material properties): 3 combined image samplers. */
-		auto applyLayout = this->getInputLayout(3);
-
-		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || temporalInputLayout == nullptr || normalCopyInputLayout == nullptr || applyLayout == nullptr )
+		if ( traceInputLayout == nullptr || blurInputLayout == nullptr || temporalInputLayout == nullptr || normalCopyInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -1088,19 +1037,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_normalCopyLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(applyLayout);
-
-			m_applyLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset = 0,
-					.size = sizeof(ApplyPushConstants)}
-			});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_temporalLayout == nullptr || m_normalCopyLayout == nullptr || m_applyLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_temporalLayout == nullptr || m_normalCopyLayout == nullptr )
 		{
 			return false;
 		}
@@ -1112,9 +1049,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Trace_FS", ShaderType::FragmentShader, RTGITraceFragmentShader);
 		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Blur_FS", ShaderType::FragmentShader, RTGIBlurFragmentShader);
-		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Apply_FS", ShaderType::FragmentShader, RTGIApplyFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr || applyFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTGI shaders !";
 
@@ -1124,9 +1060,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 		m_blurPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_applyPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr || m_applyPipeline == nullptr )
+		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
 		{
 			return false;
 		}
@@ -1253,25 +1188,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Apply: reads color (per-frame) + resolved GI (per-frame with temporal ping-pong,
-		 * fixed to the blur V output otherwise). */
-		m_applyPerFrame = this->createPerFrameDescriptorSets(applyLayout, ClassId, "Apply_DescSet");
-
-		if ( m_applyPerFrame.empty() )
-		{
-			return false;
-		}
-
-		if ( !m_parameters.temporalEnabled )
-		{
-			for ( const auto & ds : m_applyPerFrame )
-			{
-				if ( !ds->writeCombinedImageSampler(1, m_blurVTarget) )
-				{
-					return false;
-				}
-			}
-		}
+		/* Combine source default: the blurred trace. When the temporal chain is active,
+		 * recordOverlayPasses() retargets it to the freshly resolved history every frame. */
+		m_combineSource = &m_blurVTarget;
 
 		return true;
 	}
@@ -1279,7 +1198,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	void
 	RTGI::destroy () noexcept
 	{
-		m_applyPerFrame.clear();
+		m_combineSource = nullptr;
+
 		m_normalCopyPerFrame.clear();
 		m_temporalPerFrame.clear();
 		m_blurVPerFrame.clear();
@@ -1288,12 +1208,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_frameUBOs.clear();
 
-		m_applyPipeline.reset();
 		m_normalCopyPipeline.reset();
 		m_temporalPipeline.reset();
 		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_applyLayout.reset();
 		m_normalCopyLayout.reset();
 		m_temporalLayout.reset();
 		m_blurLayout.reset();
@@ -1309,7 +1227,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			target.destroy();
 		}
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
@@ -1318,12 +1235,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_historyWriteIndex = 0;
 	}
 
-	const TextureInterface &
-	RTGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	RTGI::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
 		const auto * inputAlbedo = context.albedo;
 
 
@@ -1371,19 +1287,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			{
 				static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
 			}
-
-			/* The apply pass consumes the freshly resolved history. */
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(1, m_historyTargets[writeIdx]));
 		}
 
-		/* Update color descriptor for apply pass. */
-		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for apply pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
-		}
+		/* The combine snippet consumes the freshly resolved history when the temporal
+		 * chain is active — [writeIdx] is written THIS frame, captured here BEFORE the
+		 * ping-pong flip below — and the blurred trace otherwise. */
+		m_combineSource = temporalActive ? static_cast< const TextureInterface * >(&m_historyTargets[writeIdx]) : &m_blurVTarget;
 
 		/* ---- Frame UBO (shared by trace/temporal/normal-copy passes) ---- */
 		{
@@ -1595,33 +1504,33 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			);
 		}
 
-		/* ---- Final pass: Apply GI to scene color ---- */
-		{
-			const ApplyPushConstants apply{
-				.intensity = m_parameters.intensity,
-				.padding1 = 0.0F,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
-			};
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_outputTarget,
-				*m_applyPipeline,
-				*m_applyLayout,
-				*m_applyPerFrame[frameIndex],
-				&apply,
-				sizeof(ApplyPushConstants)
-			);
-		}
-
 		/* Flip the history ping-pong for the next frame. */
 		if ( temporalActive )
 		{
 			m_historyWriteIndex = readIdx;
 			m_historyValid = true;
 		}
+	}
 
-		return m_outputTarget;
+	IndirectPostProcessEffect::CombineContribution
+	RTGI::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "rtgi";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", m_combineSource});
+		contribution.needsMaterialProperties = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
+
+		/* Same math as the retired RTGI_Apply_FS pass: emissive surfaces reject GI
+		 * (they emit their own light), then the user intensity scales the additive
+		 * blend. No albedo here — the receiver albedo is recovered at the trace. */
+		contribution.code =
+			"\tvec3 rtgiGI = texture(rtgiTex, vUV).rgb;\n"
+			"\tvec4 rtgiMp = texture(emMaterialProps, vUV);\n"
+			"\tfloat rtgiEmissive = float(uint(rtgiMp.b * 255.0) & 0xFu) / 15.0;\n"
+			"\trtgiGI *= (1.0 - rtgiEmissive);\n"
+			"\tem_Color.rgb += rtgiGI * emDyn.rtgiDynamics0.x;\n";
+
+		return contribution;
 	}
 }

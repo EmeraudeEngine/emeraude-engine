@@ -370,55 +370,6 @@ void main()
 }
 )GLSL";
 
-	/* Apply pass: additive blend of indirect light onto the scene,
-	 * modulated by the material properties G-buffer (emissive surfaces
-	 * should not receive GI — they emit their own light) and by the
-	 * receiver's albedo from the albedo G-buffer: the indirect diffuse is
-	 * albedo * irradiance. Without it, a coloured surface lit only by
-	 * indirect light showed the raw incoming (grey) light — e.g. a green
-	 * column rendered grey in shadow (RTGI recovers the same term via a
-	 * primary ray + material SSBO; SSGI reads the G-buffer). */
-	constexpr auto SSGIApplyFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D colorTex;
-layout(set = 0, binding = 1) uniform sampler2D giTex;
-layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
-layout(set = 0, binding = 3) uniform sampler2D albedoTex;
-
-layout(push_constant) uniform PushConstants
-{
-	float intensity;
-	float padding1;
-	float padding2;
-	float padding3;
-};
-
-void main()
-{
-	vec4 color = texture(colorTex, vUV);
-	vec3 gi = texture(giTex, vUV).rgb;
-
-	/* Decode emissive mask from material properties G-buffer.
-	 * B channel low nibble = emissiveMask (0 = not emissive, 15 = fully emissive).
-	 * Emissive surfaces should not receive GI — they emit their own light. */
-	vec4 mp = texture(materialPropsTex, vUV);
-	uint bPacked = uint(mp.b * 255.0);
-	float emissiveMask = float(bPacked & 0xFu) / 15.0;
-	gi *= (1.0 - emissiveMask);
-
-	/* Modulate by the receiver's albedo (sRGB view: sampled linear). */
-	gi *= texture(albedoTex, vUV).rgb;
-
-	/* Additive blend: indirect light adds to the scene. */
-	color.rgb += gi * intensity;
-
-	outColor = color;
-}
-)GLSL";
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -471,21 +422,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Apply target (full-res, RGBA16F). */
-		if ( !m_outputTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "SSGI_Output") )
-		{
-			TraceError{ClassId} << "Failed to create SSGI output target !";
-
-			return false;
-		}
-
 		/* ---- Descriptor set layouts (shared) ---- */
 		auto tripleLayout = this->getInputLayout(3);
 
-		/* Apply input: color + GI + material properties + albedo. */
-		auto applyInputLayout = this->getInputLayout(4);
-
-		if ( tripleLayout == nullptr || applyInputLayout == nullptr )
+		if ( tripleLayout == nullptr )
 		{
 			return false;
 		}
@@ -515,18 +455,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}});
 		}
 
-		{
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(applyInputLayout);
-
-			m_applyLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
-				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				.offset = 0,
-				.size = sizeof(ApplyPushConstants)
-			}});
-		}
-
-		if ( m_traceLayout == nullptr || m_blurLayout == nullptr || m_applyLayout == nullptr )
+		if ( m_traceLayout == nullptr || m_blurLayout == nullptr )
 		{
 			return false;
 		}
@@ -538,9 +467,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_Trace_FS", ShaderType::FragmentShader, SSGITraceFragmentShader);
 		const auto blurFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_Blur_FS", ShaderType::FragmentShader, SSGIBlurFragmentShader);
-		const auto applyFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_Apply_FS", ShaderType::FragmentShader, SSGIApplyFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr || applyFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || blurFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile SSGI shaders !";
 
@@ -550,9 +478,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Create pipelines ---- */
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "SSGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 		m_blurPipeline = this->createFullscreenPipeline(ClassId, "SSGI_Blur", vertexModule, blurFragment, m_blurLayout, m_blurHTarget);
-		m_applyPipeline = this->createFullscreenPipeline(ClassId, "SSGI_Apply", vertexModule, applyFragment, m_applyLayout, m_outputTarget);
 
-		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr || m_applyPipeline == nullptr )
+		if ( m_tracePipeline == nullptr || m_blurPipeline == nullptr )
 		{
 			return false;
 		}
@@ -599,53 +526,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Apply: reads color (per-frame) + blurred GI (fixed) + material properties (per-frame). */
-		m_applyPerFrame = this->createPerFrameDescriptorSets(applyInputLayout, ClassId, "Apply_DescSet");
-
-		if ( m_applyPerFrame.empty() )
-		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_applyPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(1, m_blurVTarget) )
-			{
-				return false;
-			}
-		}
-
 		return true;
 	}
 
 	void
 	SSGI::destroy () noexcept
 	{
-		m_applyPerFrame.clear();
 		m_blurVPerFrame.clear();
 		m_blurHPerFrame.clear();
 		m_tracePerFrame.clear();
 
-		m_applyPipeline.reset();
 		m_blurPipeline.reset();
 		m_tracePipeline.reset();
-		m_applyLayout.reset();
 		m_blurLayout.reset();
 		m_traceLayout.reset();
 
-		m_outputTarget.destroy();
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
 	}
 
-	const TextureInterface &
-	SSGI::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	void
+	SSGI::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputMaterialProperties = context.materialProperties;
-		const auto * inputAlbedo = context.albedo;
 		const auto & constants = context.constants;
 
 
@@ -663,23 +568,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, inputColor));
-
-		/* Update color descriptor for apply pass. */
-		static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* Update material properties descriptor for apply pass. */
-		if ( inputMaterialProperties != nullptr )
-		{
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
-		}
-
-		/* Update albedo descriptor for apply pass (receiver albedo modulation).
-		 * Always present: the effect declares requiresAlbedo(), the PostProcessor
-		 * skips it when the albedo G-buffer is unavailable. */
-		if ( inputAlbedo != nullptr )
-		{
-			static_cast< void >(m_applyPerFrame[frameIndex]->writeCombinedImageSampler(3, *inputAlbedo));
-		}
 
 		/* ---- Pass 1: Screen-Space GI Trace ---- */
 		{
@@ -767,27 +655,31 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(BlurPushConstants)
 			);
 		}
+	}
 
-		/* ---- Pass 4: Apply GI to scene color ---- */
-		{
-			const ApplyPushConstants apply{
-				.intensity = m_parameters.intensity,
-				.padding1 = 0.0F,
-				.padding2 = 0.0F,
-				.padding3 = 0.0F
-			};
+	IndirectPostProcessEffect::CombineContribution
+	SSGI::combineContribution (const FrameContext & /*context*/) const noexcept
+	{
+		CombineContribution contribution;
+		contribution.prefix = "ssgi";
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.needsMaterialProperties = true;
+		contribution.needsAlbedo = true;
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_outputTarget,
-				*m_applyPipeline,
-				*m_applyLayout,
-				*m_applyPerFrame[frameIndex],
-				&apply,
-				sizeof(ApplyPushConstants)
-			);
-		}
+		/* Same math as the retired SSGI_Apply_FS pass: emissive surfaces reject GI
+		 * (they emit their own light), the indirect diffuse is modulated by the
+		 * receiver's albedo (albedo * irradiance — without it a coloured surface lit
+		 * only by indirect light shows the raw incoming grey light), then the user
+		 * intensity scales the additive blend. */
+		contribution.code =
+			"\tvec3 ssgiGI = texture(ssgiTex, vUV).rgb;\n"
+			"\tvec4 ssgiMp = texture(emMaterialProps, vUV);\n"
+			"\tfloat ssgiEmissive = float(uint(ssgiMp.b * 255.0) & 0xFu) / 15.0;\n"
+			"\tssgiGI *= (1.0 - ssgiEmissive);\n"
+			"\tssgiGI *= texture(emAlbedo, vUV).rgb;\n"
+			"\tem_Color.rgb += ssgiGI * emDyn.ssgiDynamics0.x;\n";
 
-		return m_outputTarget;
+		return contribution;
 	}
 }

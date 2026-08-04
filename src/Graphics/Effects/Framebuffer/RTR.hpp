@@ -44,6 +44,7 @@
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -120,28 +121,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the composite pass (cone lookup included).
-			 */
-			struct EMEN_API CompositePushConstants
-			{
-				float intensity;
-				/** @brief Cone width in TRACE texels per unit of GGX alpha (roughness²):
-				 * 2 x assumedHitFraction x trace height. v1 approximation — the per-pixel
-				 * hit distance is not available (alpha carries the confidence), the cone
-				 * assumes a representative hit distance. Zeroed when the cone is disabled. */
-				float coneWidthScale;
-				/** @brief log2(pyramid base texel / trace texel). */
-				float pyramidLodOffset;
-				float pyramidMaxLod;
-				/** @brief Cone width (trace texels) under which the reflection stays purely the
-				 * sharp traced buffer. */
-				float coneBlendStart;
-				/** @brief Cone width (trace texels) from which the reflection comes entirely
-				 * from the pre-convolved pyramid. Cross-faded linearly in between. */
-				float coneBlendFull;
-			};
-
-			/**
 			 * @brief Constructs a ray-tracing reflexion effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
@@ -173,9 +152,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::execute() */
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
-			const Vulkan::TextureInterface & execute (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses() */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -249,26 +239,101 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
+			/**
+			 * @brief Lightweight adapter exposing the reflection pyramid (custom mip-chain
+			 * view over m_pyramidImage) as a TextureInterface for the combine pass.
+			 * @note The pyramid is not an IntermediateRenderTarget — its full-chain view and
+			 * trilinear sampler live as raw Vulkan objects; the CombineSamplerInput contract
+			 * requires a TextureInterface (same pattern as the GrabPass adapters).
+			 */
+			class PyramidTextureAdapter final : public Vulkan::TextureInterface
+			{
+				public:
+
+					explicit
+					PyramidTextureAdapter (const RTR & effect) noexcept
+						: m_effect{effect}
+					{
+
+					}
+
+					[[nodiscard]]
+					bool
+					isCreated () const noexcept override
+					{
+						return m_effect.m_pyramidImage != nullptr && m_effect.m_pyramidImage->isCreated();
+					}
+
+					[[nodiscard]]
+					Vulkan::TextureType
+					type () const noexcept override
+					{
+						return Vulkan::TextureType::Texture2D;
+					}
+
+					[[nodiscard]]
+					uint32_t
+					dimensions () const noexcept override
+					{
+						return 2;
+					}
+
+					[[nodiscard]]
+					bool
+					isCubemapTexture () const noexcept override
+					{
+						return false;
+					}
+
+					[[nodiscard]]
+					std::shared_ptr< Vulkan::Image >
+					image () const noexcept override
+					{
+						return m_effect.m_pyramidImage;
+					}
+
+					[[nodiscard]]
+					std::shared_ptr< Vulkan::ImageView >
+					imageView () const noexcept override
+					{
+						return m_effect.m_pyramidFullView;
+					}
+
+					[[nodiscard]]
+					std::shared_ptr< Vulkan::Sampler >
+					sampler () const noexcept override
+					{
+						return m_effect.m_pyramidSampler;
+					}
+
+					[[nodiscard]]
+					bool
+					request3DTextureCoordinates () const noexcept override
+					{
+						return false;
+					}
+
+				private:
+
+					const RTR & m_effect;
+			};
+
 			Parameters m_parameters;
 			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
-			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res), composite (full-res). */
+			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			IntermediateRenderTarget m_outputTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_blurPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_compositePipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_blurLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_compositeLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurHPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_blurVPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_compositePerFrame;
 			/* Pre-convolved REFLECTION pyramid (glossy cone approximation): half-res base,
 			 * tent-downsampled chain of the PREMULTIPLIED trace output rebuilt every frame.
 			 * The composite reads it at the roughness²-driven LOD (the /confidence division
@@ -285,6 +350,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Fixed sets: trace target -> mip 0, then mip k-1 -> mip k. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_pyramidSets;
 			uint32_t m_pyramidMipCount{0U};
+			/* The pyramid exposed as a TextureInterface for the combine contribution. */
+			PyramidTextureAdapter m_pyramidTexture{*this};
 			/* Glossy cone controls, read from the settings ONCE at create() (a change takes
 			 * effect on the next stack creation — relaunch or swap-chain recreation). The
 			 * defaults reproduce the v1 heuristic except for the cross-fade, which replaces
