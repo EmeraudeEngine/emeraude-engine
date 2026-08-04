@@ -150,11 +150,15 @@ void main()
 {
 	vec2 ts = vec2(texelSizeX, texelSizeY);
 
-	/* Sample 4 texels in a 2x2 pattern; bilinear filtering gives a free 4-tap average. */
-	vec3 s0 = texture(inputTex, vUV + ts * vec2(-0.25, -0.25)).rgb;
-	vec3 s1 = texture(inputTex, vUV + ts * vec2( 0.25, -0.25)).rgb;
-	vec3 s2 = texture(inputTex, vUV + ts * vec2(-0.25,  0.25)).rgb;
-	vec3 s3 = texture(inputTex, vUV + ts * vec2( 0.25,  0.25)).rgb;
+	/* Sample 4 texels in a 2x2 pattern; bilinear filtering gives a free 4-tap average.
+	 * EXPLICIT LOD 0, not texture(): this pass MINIFIES (it reads a full-resolution HDR buffer
+	 * to write a half-resolution target), so the implicit derivative-based LOD lands near 1 on
+	 * a single-mip image. A reduction pass wants one specific level by definition, and asking
+	 * for it removes the mip path from the equation entirely. */
+	vec3 s0 = textureLod(inputTex, vUV + ts * vec2(-0.25, -0.25), 0.0).rgb;
+	vec3 s1 = textureLod(inputTex, vUV + ts * vec2( 0.25, -0.25), 0.0).rgb;
+	vec3 s2 = textureLod(inputTex, vUV + ts * vec2(-0.25,  0.25), 0.0).rgb;
+	vec3 s3 = textureLod(inputTex, vUV + ts * vec2( 0.25,  0.25), 0.0).rgb;
 
 	/* Convert to luminance (Rec. 709 coefficients). */
 	const vec3 w = vec3(0.2126, 0.7152, 0.0722);
@@ -199,10 +203,11 @@ void main()
 	/* 4 bilinear taps at the centers of each 2x2 quadrant within a 4x4 texel area.
 	 * Offsets are ±0.75 texels from center, landing on the boundary between texels
 	 * in each 2x2 block so bilinear filtering averages 4 texels per tap. */
-	float s0 = texture(inputTex, vUV + ts * vec2(-0.75, -0.75)).r;
-	float s1 = texture(inputTex, vUV + ts * vec2( 0.75, -0.75)).r;
-	float s2 = texture(inputTex, vUV + ts * vec2(-0.75,  0.75)).r;
-	float s3 = texture(inputTex, vUV + ts * vec2( 0.75,  0.75)).r;
+	/* Explicit LOD 0, for the same reason as the extract pass: this is a reduction. */
+	float s0 = textureLod(inputTex, vUV + ts * vec2(-0.75, -0.75), 0.0).r;
+	float s1 = textureLod(inputTex, vUV + ts * vec2( 0.75, -0.75), 0.0).r;
+	float s2 = textureLod(inputTex, vUV + ts * vec2(-0.75,  0.75), 0.0).r;
+	float s3 = textureLod(inputTex, vUV + ts * vec2( 0.75,  0.75), 0.0).r;
 
 	outColor = vec4((s0 + s1 + s2 + s3) * 0.25, 0.0, 0.0, 1.0);
 }
@@ -228,19 +233,58 @@ layout(push_constant) uniform PushConstants
 	uint resetHistory;
 };
 
+/* PLAUSIBILITY WINDOW for a log-luminance, and the ONLY validity predicate used here.
+ * Lower bound: the extract pass floors every tap at 1e-4 nits (log = -9.21), so nothing
+ * legitimate can sit below it — the margin absorbs the RGBA16F rounding of that floor.
+ * Upper bound: e^16 ~ 8.9e6 nits, comfortably above the brightest thing this engine's
+ * photometry authors (a sun disc), so a real measurement never trips it.
+ *
+ * ⚠️ Deliberately a RANGE TEST and not isnan()/isinf(). Metal is compiled with fast math,
+ * under which those intrinsics may be folded away — that is exactly how a NaN used to
+ * survive every guard on macOS. Every comparison against NaN is false, so a bounds test
+ * rejects NaN and Inf *without* relying on finite-math intrinsics, and it additionally
+ * rejects finite-but-absurd values, which is what sampled corrupt memory actually looks
+ * like (a provably uniform constant came back off by 10% through this very chain). */
+const float MinLogLuminance = -9.3;
+const float MaxLogLuminance = 16.0;
+
+bool
+isPlausible (float logLuminance)
+{
+	return logLuminance >= MinLogLuminance && logLuminance <= MaxLogLuminance;
+}
+
 void main()
 {
 	float currentLogLum = texture(currentLumTex, vec2(0.5)).r;
+	float prevAdapted = texture(prevAdaptedTex, vec2(0.5)).r;
 
-	/* Reset frame: the ping-pong history was never written — its content is undefined and
-	 * must not enter the EMA (mix with a NaN stays NaN forever). Snap to the measurement. */
-	if (resetHistory != 0u)
+	bool currentOk = isPlausible(currentLogLum);
+	bool historyOk = isPlausible(prevAdapted);
+
+	/* Reset frame, or a history that is not usable: the ping-pong was never written (its
+	 * content is undefined), or it still carries a value from before this guard existed.
+	 * There is nothing to preserve, so snap to the measurement — and if the measurement is
+	 * itself unusable, fall back to the epsilon floor rather than propagate garbage. */
+	if (resetHistory != 0u || !historyOk)
 	{
-		outColor = vec4(currentLogLum, 0.0, 0.0, 1.0);
+		outColor = vec4(currentOk ? currentLogLum : MinLogLuminance, currentOk ? 0.0 : 1.0, 0.0, 1.0);
 		return;
 	}
 
-	float prevAdapted = texture(prevAdaptedTex, vec2(0.5)).r;
+	/* IMPLAUSIBLE MEASUREMENT -> HOLD THE HISTORY. The EMA is an infinite-impulse filter:
+	 * mixing in a single non-finite sample poisons it permanently (Inf - Inf = NaN, and no
+	 * weight ever removes a NaN), which is what pinned the auto-exposure against its ISO
+	 * ceiling and left the frame blown white until the effect was recreated. Holding the
+	 * last adapted value keeps the exposure stable across a transient glitch instead of
+	 * jumping — the behaviour of a real light meter — and self-heals on the next good frame.
+	 * The rejection is REPORTED (green channel) rather than silently swallowed: the CPU
+	 * counts it, so this guard doubles as a corruption detector instead of a mask. */
+	if (!currentOk)
+	{
+		outColor = vec4(prevAdapted, 1.0, 0.0, 1.0);
+		return;
+	}
 
 	/* Asymmetric speed: adapt faster when the scene brightens (pupil constricts),
 	 * slower when it darkens (pupil dilates) — matching human eye behavior. */
@@ -401,7 +445,17 @@ void main()
 	float adaptedLogLum = texture(adaptedLumTex, vec2(0.5)).r;
 	float avgLuminance = exp(adaptedLogLum);
 	float autoExposure = keyValue / max(avgLuminance, 0.001);
-	autoExposure = clamp(autoExposure, minExposure, maxExposure);
+
+	/* NaN-DETERMINISTIC SATURATION. Replaces clamp(), whose behaviour on a NaN is undefined
+	 * and hardware-dependent — on this path a NaN used to come out as the ISO CEILING, i.e.
+	 * the brightest possible exposure, blowing the whole frame to white. Every comparison
+	 * against a NaN is false, so it can only reach the last branch: an unusable measurement
+	 * now saturates DARK (the ISO floor) instead of bright. That is the recoverable
+	 * direction — highlights are preserved and the anomaly is legible instead of blinding.
+	 * The adaptation pass already rejects implausible values, so this is defence in depth. */
+	autoExposure = (autoExposure >= minExposure && autoExposure <= maxExposure)
+		? autoExposure
+		: ((autoExposure > maxExposure) ? maxExposure : minExposure);
 
 	/* Apply combined manual + auto exposure. */
 	hdrColor *= exposure * autoExposure;
@@ -714,6 +768,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			m_meteredSensitivity = 0.0F;
 			m_meteredLuminance = 0.0F;
+			m_meteredRejectedCount = 0;
 		}
 
 		/* Create pipelines. */
@@ -793,6 +848,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_meteredReadback.clear();
 		m_meteredSensitivity = 0.0F;
 		m_meteredLuminance = 0.0F;
+		m_meteredRejectedCount = 0;
 
 		m_firstFrame = true;
 		m_currentAdaptIndex = 0;
@@ -958,8 +1014,26 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					uint16_t halfBits = 0;
 					std::memcpy(&halfBits, slot.mappedPtr, sizeof(halfBits));
 
+					/* The adaptation pass reports a REJECTED measurement in the green channel
+					 * (it held the previous adapted value rather than poison the EMA). Counting
+					 * it here is what keeps that guard from being a silent mask: a non-zero,
+					 * GROWING count means the luminance chain is sampling implausible data —
+					 * on macOS this is the fingerprint of the video-memory corruption that also
+					 * shows as green blocks, and the counter is currently the cheapest detector
+					 * of it available without a GPU capture. */
+					uint16_t rejectedBits = 0;
+					std::memcpy(&rejectedBits, slot.mappedPtr + sizeof(halfBits), sizeof(rejectedBits));
+
+					if ( halfToFloat(rejectedBits) > 0.5F )
+					{
+						++m_meteredRejectedCount;
+					}
+
 					const auto adaptedLogLum = halfToFloat(halfBits);
 
+					/* The shader now guarantees a plausible value, so a non-finite reading here
+					 * means the READBACK itself was corrupted: keep the last good measurement
+					 * (the panel keeps showing a usable ISO) instead of reverting to "no data". */
 					if ( std::isfinite(adaptedLogLum) )
 					{
 						m_meteredLuminance = std::exp(adaptedLogLum);

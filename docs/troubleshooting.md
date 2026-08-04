@@ -9,6 +9,7 @@ Solutions for common engine-level issues in Emeraude Engine development.
 - [Material/Shader Issues](#materialshader-issues)
 - [Physics Issues](#physics-issues)
 - [macOS / MoltenVK Issues](#macos--moltenvk-issues)
+  - [Tone mapping blows out to white / auto-ISO shows nothing](#tone-mapping-blows-out-to-white-and-never-recovers--auto-iso-shows-nothing-mitigated-aug-2026)
 
 ---
 
@@ -278,6 +279,48 @@ refactor was attempted and **reverted**: it is the right design, but it lands on
 bindless-sampler path, which has form here (see the MoltenVK < 1.4 entry above), and it could not
 be validated visually while the macOS render was still broken by the two bugs above. Redo it
 against a known-good reference image.
+
+---
+
+### Tone mapping blows out to white and never recovers / auto-ISO shows nothing (mitigated Aug 2026)
+
+**Symptoms:** the frame is massively overexposed, toggling HDR off/on fixes it, looking at the sky
+breaks it again *suddenly*, and the Shift+F2 panel is stuck on "metering...". Green blocks may be
+visible in the frame at the same time. Both validation layers are clean.
+
+**Quick triage — read the panel first (Shift+F2 -> Exposure).** It now tells you which of the two
+distinct problems you have:
+
+| Panel says | Diagnosis |
+|---|---|
+| `metered: ISO <n> \| scene avg <x> nits`, `n` inside the sensor range | metering healthy — a blown frame is NOT the exposure, look elsewhere |
+| `(saturated at the sensor bound)` with a **plausible** avg | the triad genuinely cannot expose the scene: stop the aperture down / shorten the shutter (a daylight scene at f/2.8 1/60 s is ~6 stops over; `ReflexionDebug` correctly uses f/11 + 1/250 s) |
+| `(N metered frame(s) rejected as implausible - held)` and **N keeps growing** | the luminance chain is sampling **corrupt video memory** every frame — the metering is being held, not measured |
+| `metering...` forever | no valid measurement ever completed (pre-Aug-2026 behaviour: a latched NaN) |
+
+**What was fixed:** the auto-exposure EMA had no sanitisation, so one corrupt frame poisoned it
+permanently (`Inf - Inf = NaN`, and `clamp()` on a NaN resolved to the ISO **ceiling**). It now
+validates its measurement against a physical range, **holds** the previous value on failure,
+saturates dark rather than bright, and counts rejections. Full write-up and the reproducible probe
+numbers: [`docs/caution-points.md`](caution-points.md) -> "the auto-exposure EMA had no
+sanitisation".
+
+> [!WARNING]
+> **The underlying video-memory corruption is NOT fixed** — it is only prevented from destroying
+> the exposure. A provably uniform per-draw constant (`textureSize().x` = 2560) was measured
+> arriving at the end of the luminance chain as **2320**, which is direct evidence of corrupt
+> sampling; the same corruption shows as green blocks. Synchronization Validation is clean on the
+> render path (and **verified active** via the still-open `SYNC-HAZARD-WRITE-AFTER-PRESENT` on the
+> screenshot path as a positive control), so it sits below the Vulkan layers. Next instruments:
+> `MTL_DEBUG_LAYER=1`, `MTL_SHADER_VALIDATION=1`, `MVK_CONFIG_DEBUG=1`, and an **Xcode** GPU frame
+> capture — RenderDoc does not support Metal.
+
+**Also note:** the device-selection pass logs
+`The physical device 'Apple M2' is missing the required 'VK_KHR_portability_subset' extension !`
+as an **Error** while the extension is listed as available two lines above and is correctly
+enabled four lines below (`mutableComparisonSamplers: yes`). That message is misleading noise from
+the scoring checklist — **it is not a portability-subset failure**, and it cost real time during
+this hunt. Worth silencing.
 
 ---
 

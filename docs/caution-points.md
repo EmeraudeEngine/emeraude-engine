@@ -2202,6 +2202,83 @@ upload does not show).
 
 ---
 
+### Fixed: the auto-exposure EMA had no sanitisation — one corrupt frame blew the screen white FOREVER (Aug 2026)
+
+**Symptom (macOS only):** the tone mapping saturates to a blown-white frame and **never
+recovers**. Toggling HDR off/on restores it, and looking at the sky breaks it again *suddenly*.
+The auto-ISO readout in the physical-camera panel (Shift+F2) stays empty ("metering...")
+indefinitely. Core validation and **Synchronization Validation are both clean**.
+
+**Measured chain of causality** (do not re-derive it, these numbers are reproducible):
+
+| Probe | Reading | Meaning |
+|---|---|---|
+| `adaptedLogLum` | `-9.203` = `log(1e-4)` exactly | the luminance chain measures **pure black** |
+| resulting multiplier | `0.104 / 1e-4` = 1041, clamped | pinned against `maxExposure` -> white |
+| `isnan/isinf(hdrColor)` boolean probe | 0 over the whole frame | the HDR input is **finite**; the scene is innocent |
+| `isnan/isinf(adaptedLogLum)` | 1, flat, latched | the pollution is born **inside the chain** |
+| `halfBits` of the history | `0x7E00` | a canonical quiet **NaN**, latched forever |
+| `textureSize(inputTex,0).x` carried down the chain | **2320** instead of 2560 | a per-draw CONSTANT arrives corrupt: the chain samples **corrupt video memory** |
+| `deltaTime` | 0.015-0.035 s throughout | innocent |
+
+**Root cause — two independent defects, one visible failure.**
+
+1. **The EMA is an infinite-impulse filter with no validity check.** A single non-finite sample
+   poisons it permanently: `Inf - Inf = NaN`, and no weight ever removes a NaN. `resetHistory`
+   guarded only the *first* frame after creation, which is exactly why recreating the effect
+   (toggling HDR) "fixed" it every time. So a **transient** glitch became a **permanent** one.
+2. **`clamp()` on a NaN is undefined and hardware-dependent.** On this path a NaN came out as the
+   ISO **ceiling** — the brightest possible exposure — which is what actually painted the frame
+   white. The failure direction was the worst possible one.
+
+**Fixes (`Graphics/Effects/Framebuffer/ToneMapping.cpp`):**
+
+- The adaptation pass validates its measurement against a physical log-luminance window and,
+  when it fails, **HOLDS the previous adapted value** instead of mixing it in. The exposure now
+  shifts slightly during a glitch instead of being destroyed, and self-heals on the next good
+  frame. A poisoned *history* snaps back rather than staying stuck.
+- The saturation is a **NaN-deterministic select** instead of `clamp()`: an unusable measurement
+  now lands on the ISO **floor** (dark, recoverable, highlights preserved) rather than the ceiling.
+- The rejection is **counted and surfaced** (`ToneMapping::meteredRejectedCount()`, shown in the
+  Shift+F2 panel) so the guard is a **detector**, not a mask.
+
+> [!CAUTION]
+> **Do NOT write this guard with `isnan()` / `isinf()`.** Metal is compiled with fast math, under
+> which those intrinsics may be folded away — that is precisely how the NaN survived every
+> existing guard on macOS. Use a **RANGE TEST**: every comparison against a NaN is false, so a
+> bounds check rejects NaN and Inf *without* depending on finite-math intrinsics, and it
+> additionally rejects finite-but-absurd values — which is what sampled corrupt memory actually
+> looks like (see the 2320 row above). This applies to every temporal/accumulating buffer in the
+> engine, not just this one.
+
+> [!IMPORTANT]
+> **A reduction pass must ask for an explicit LOD.** The luminance extract pass minifies (it
+> reads a full-resolution HDR buffer into a half-resolution target), so `texture()` derives a
+> mip level from derivatives — meaningless for a reduction, and a live hazard on a single-mip
+> image. The whole chain now uses `textureLod(..., 0.0)`.
+
+> [!WARNING]
+> **This is a MITIGATION, not the root cause.** The `2320` measurement proves the luminance chain
+> samples corrupt video memory, and the same corruption shows up as green blocks in the frame
+> (reported since the photometry rework). Synchronization Validation is **verified active** — the
+> positive control is the still-open `SYNC-HAZARD-WRITE-AFTER-PRESENT` on the screenshot path,
+> which it does report — and **clean** on the render path, so the corruption sits below what the
+> Vulkan layers can see: MoltenVK/Metal. Hunt it with Metal API Validation
+> (`MTL_DEBUG_LAYER=1`, `MTL_SHADER_VALIDATION=1`), `MVK_CONFIG_DEBUG=1`, and an Xcode GPU frame
+> capture (Xcode works on Metal, RenderDoc does not). **Do not re-investigate:** resolution and
+> the downsample chain (identical at framebuffer 1280x720, the size Windows uses for the same
+> window — macOS runs 2x Retina, 2560x1440), the descriptor writes (image/view/**sampler** handles
+> and `imageLayout` byte-identical at both write sites), `deltaTime`, the portability subset (it
+> IS enabled and its features ARE requested), and explicit-LOD sampling.
+
+**Verified:** `--load-demo=reflexion-debug --demo-options=0,4,0` on an M2 goes from a fully blown
+frame with no ISO readout to a correctly exposed one reporting `metered: ISO 199 | scene avg
+1902.2 nits`, with `5 metered frame(s) rejected as implausible - held` counted rather than fatal.
+
+**Files:** `Graphics/Effects/Framebuffer/ToneMapping.{hpp,cpp}`, `Core.cpp` (panel readout)
+
+---
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

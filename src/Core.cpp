@@ -1120,6 +1120,14 @@ namespace EmEn
 							{
 								ImGui::TextDisabled("(saturated at the sensor bound — range %.0f-%.0f ISO)", camera->minSensitivity(), camera->maxSensitivity());
 							}
+
+							/* A GROWING count means the luminance chain is sampling implausible
+							 * data every frame — the metering is being held, not measured. This is
+							 * a corruption indicator, which is why it is surfaced and not hidden. */
+							if ( const auto rejected = toneMapping->meteredRejectedCount(); rejected > 0 )
+							{
+								ImGui::TextDisabled("(%u metered frame(s) rejected as implausible - held)", rejected);
+							}
 						}
 						else
 						{

@@ -197,6 +197,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return m_meteredLuminance;
 			}
 
+			/**
+			 * @brief Returns how many metered frames the adaptation pass REJECTED as implausible.
+			 * @note The adaptation pass validates its measurement against a physical
+			 * log-luminance window and holds the previous adapted value instead of feeding an
+			 * out-of-range one into the EMA — the filter is infinite-impulse, so a single
+			 * non-finite sample used to poison it permanently and pin the auto-exposure against
+			 * the ISO ceiling (frame blown white until the effect was recreated).
+			 * @note A count that keeps GROWING is a diagnostic, not a cosmetic detail: it means
+			 * the luminance chain is sampling implausible data every frame. On macOS that is the
+			 * fingerprint of the video-memory corruption that also manifests as green blocks;
+			 * this counter is the cheapest detector for it short of a GPU capture. Same readback
+			 * latency and RENDER THREAD contract as meteredSensitivity(). Reset on (re)creation.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			meteredRejectedCount () const noexcept
+			{
+				return m_meteredRejectedCount;
+			}
+
 		private:
 
 			/** @brief One host-visible readback slot per frame in flight (metered exposure). */
@@ -253,6 +274,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::vector< MeteredReadbackSlot > m_meteredReadback;
 			float m_meteredSensitivity{0.0F};
 			float m_meteredLuminance{0.0F};
+			/* Number of metered frames whose measurement was rejected as implausible — a growing
+			 * value means the luminance chain is reading corrupt data (see meteredRejectedCount()). */
+			uint32_t m_meteredRejectedCount{0};
 			/* Auto-exposure: true until the first adaptation pass ran — drives the shader-side
 			 * history reset (the frame delta itself comes from PushConstants::deltaTime). */
 			bool m_firstFrame{true};
