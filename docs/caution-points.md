@@ -2278,6 +2278,12 @@ indefinitely. Core validation and **Synchronization Validation are both clean**.
 > cross-platform bug wearing a macOS mask. The counter is also the **exit criterion** for the
 > remaining work: the corruption is fixed when it stays at 0 on the M2, not when a screenshot happens
 > to look clean. See [`docs/troubleshooting.md`](troubleshooting.md) -> "Blocky corruption on macOS".
+>
+> **CLOSED (Aug 2026):** the root cause the counter was pointing at is found and fixed — the
+> post-process chain's reliance on `VK_SUBPASS_EXTERNAL` dependencies alone, a race in MoltenVK's
+> inter-encoder translation. See the dedicated entry below ("chained post-process passes relied on
+> EXTERNAL subpass dependencies alone"). The counter stays: it is the permanent regression metric
+> for the post-process recording path.
 
 **Verified:** `--load-demo=reflexion-debug --demo-options=0,4,0` on an M2 goes from a fully blown
 frame with no ISO readout to a correctly exposed one reporting `metered: ISO 199 | scene avg
@@ -2369,6 +2375,46 @@ meter a black scene and pin the exposure to the ISO ceiling.
 `texture()` is only appropriate where the read is genuinely 1:1 with the target.
 
 **Files:** `Graphics/Effects/Framebuffer/Bloom.cpp`, `Graphics/Effects/Framebuffer/ToneMapping.cpp`
+
+---
+
+### Fixed: chained post-process passes relied on EXTERNAL subpass dependencies alone — a race on MoltenVK (Aug 2026)
+
+> [!CRITICAL]
+> **A `VK_SUBPASS_EXTERNAL` dependency is NOT a reliable inter-encoder barrier on MoltenVK.**
+> The whole post-process chain (motion blur 4 passes, bloom 10, auto-exposure) had zero explicit
+> `vkCmdPipelineBarrier` — every write→read ordering between back-to-back render passes rested on
+> the IRT's external subpass dependencies. Formally correct Vulkan: core validation AND
+> Synchronization Validation are clean, which is precisely why the defect was invisible to every
+> Vulkan-level sweep. On Metal each render pass is its own command encoder, and MoltenVK's
+> translation of those dependencies left the encoders racing on Apple M2.
+>
+> **Symptoms (the LAST two classes of the macOS blocky corruption):** displaced 64 px blocks
+> around moving objects (motion-blur gather reading a partially-written NeighborMax tile image),
+> green blocks (bloom chain reading uninitialized `DONT_CARE` memory), auto-exposure metering
+> rejections (~2/s on M2, 0 on Linux, same commit).
+>
+> **The decisive measurement:** `MTL_DEBUG_LAYER=1` fired **no assertion** yet its serialization
+> **suppressed the corruption completely** — a timing race below the Vulkan layers, proven in one
+> run. (Metal API Validation validates encoder usage, but its overhead also serializes encoder
+> scheduling — remember it as a *suppressor probe*, not only a validator.)
+>
+> **Fix:** `IndirectPostProcessEffect::recordFullscreenPass()` emits an explicit write→read image
+> barrier (no layout change, `SHADER_READ_ONLY → SHADER_READ_ONLY`) after `endRenderPass()`.
+> One site covers all 14+ chained passes; redundant and free on conforming desktop drivers.
+>
+> **Rules that follow:**
+> - Any pass recorded outside `recordFullscreenPass()` whose output is sampled by a later pass
+>   must emit the same barrier itself.
+> - "Synchronization Validation is clean" proves the **Vulkan** level only. On macOS, always add
+>   the `MTL_DEBUG_LAYER=1` suppressor probe to the diagnostic matrix: validation-clean +
+>   suppressed-by-debug-layer = translation-level race, fix with an explicit barrier.
+> - The regression metric is `ToneMapping::meteredRejectedCount()` — it must stay at 0 on the M2
+>   after any change to the post-process recording path.
+>
+> **Verified:** counter pinned at 0 through an active session (camera motion, all effects on,
+> no validation layers) where the pre-fix build accumulated 8 rejections within seconds; user
+> confirmed zero visual glitches. **File:** `Graphics/IndirectPostProcessEffect.cpp`.
 
 ---
 

@@ -354,23 +354,45 @@ how this bug is written.
 >
 > Same code, same scene, same luminance chain: the measurement is plausible *continuously* on Linux.
 > So the engine's Vulkan usage and CPU-side logic are sound — this is **not** a cross-platform bug
-> wearing a macOS mask. **Start a new investigation at the Metal level** (`MTL_DEBUG_LAYER=1`,
-> `MTL_SHADER_VALIDATION=1`, `MVK_CONFIG_DEBUG=1`, and an **Xcode** GPU frame capture — RenderDoc
-> does not support Metal). Do not spend another pass at the Vulkan layer: it has been swept clean
-> (see the ruled-out list below).
+> wearing a macOS mask. The Metal-level investigation this paragraph called for is what closed it
+> (see the RESOLVED block below): `MTL_DEBUG_LAYER=1` suppressing the corruption without firing a
+> single assertion localized the defect to inter-encoder timing, in one run.
 >
-> **EXIT CRITERION for the remaining work:** the corruption is fixed when
+> **EXIT CRITERION (met, Aug 2026, and still the regression metric):** the corruption is fixed when
 > `ToneMapping::meteredRejectedCount()` stays at **0 on the M2** — not when a screenshot happens to
 > look clean. A single-frame artefact at 200+ FPS is not capturable by a screenshot, so the eye and
-> the capture are both unreliable here; this counter is not.
+> the capture are both unreliable here; this counter is not. Re-read it after ANY change to the
+> post-process recording path.
 
-Both are macOS-only and both look like video-memory corruption. They have **different** causes, so
-identify which one you have before digging (toggle the effects one at a time in Shift+F2):
+> [!IMPORTANT]
+> **RESOLVED (Aug 2026) — both remaining classes had ONE root cause: MoltenVK's translation of
+> `VK_SUBPASS_EXTERNAL` dependencies between back-to-back render passes is insufficient.**
+> The post-process chain had no explicit `vkCmdPipelineBarrier` anywhere — all inter-pass
+> ordering (motion blur 4 passes, bloom 10 passes, auto-exposure chain) rested on the IRT's
+> external subpass dependencies. Formally correct Vulkan (hence the clean Synchronization
+> Validation), but each render pass becomes its own Metal command encoder, and the resulting
+> inter-encoder synchronization was a race on Apple M2.
+>
+> **How it was cornered:** Metal API Validation (`MTL_DEBUG_LAYER=1`) fired NO assertion but its
+> serialization **suppressed the corruption entirely** (counter 0, no green blocks) — the
+> signature of a timing race below the Vulkan layers, exactly where the docs said to hunt.
+>
+> **Fix:** `IndirectPostProcessEffect::recordFullscreenPass()` now emits an explicit write→read
+> image barrier (`COLOR_ATTACHMENT_OUTPUT/WRITE → FRAGMENT_SHADER/READ`, no layout change) after
+> every pass — one site covers every chained effect. Redundant (free) on conforming drivers.
+>
+> **Verified against the exit criterion:** `meteredRejectedCount()` stayed at **0 on the M2**
+> through an active session (camera motion, both effects on, no validation layers), where the
+> same build without the barrier accumulated 8 rejections within seconds. Visual confirmation:
+> no displaced blocks, no green blocks. **File:** `Graphics/IndirectPostProcessEffect.cpp`.
+
+Both were macOS-only and both looked like video-memory corruption (toggle the effects one at a
+time in Shift+F2 to identify a class):
 
 | What you see | Correlates with | Status |
 |---|---|---|
-| **Green blocks** | the bloom / lens glare | open — all bloom sampling moved to explicit LOD 0, re-evaluate |
-| **Displaced pixel blocks**, only around moving objects | the motion blur | open — matches the TileMax/NeighborMax tile granularity |
+| **Green blocks** | the bloom / lens glare | **fixed (Aug 2026)** — explicit inter-pass barrier, see above |
+| **Displaced pixel blocks**, only around moving objects | the motion blur | **fixed (Aug 2026)** — explicit inter-pass barrier, see above |
 | Oblique blocks of last frame's content, worst in motion | shadow maps, environment probes | fixed (BY_REGION removed) |
 
 **Ruled out, do not re-investigate:** the scene render target's subpass dependencies (its
@@ -381,10 +403,13 @@ mutex, uploaded once per frame; its memory is `HOST_VISIBLE | HOST_COHERENT`, so
 `vkFlushMappedMemoryRanges` is owed); Synchronization Validation (verified active, clean on the
 render path); the motion blur tile chain itself (already `texelFetch` with explicit clamping).
 
-**Next instrument — use the boolean probe, not code reading.** Two structural hypotheses were
-derived from reading this code and both were wrong; the measurements are what produced every real
-finding. Emit a boolean (`is the fetched tile velocity non-finite or absurd?`, `is the composited
-bloom value non-finite or negative?`) as the resolved colour and `return` early: the artefact then
+**Methodology that closed it (keep for the next hunt) — measure, don't re-read the code.** Two
+structural hypotheses derived from reading this code were wrong; the measurements produced every
+real finding. The decisive sequence: (1) the portable rejection counter proved the corruption
+platform-confined, (2) `MTL_DEBUG_LAYER=1` suppressing it *without one assertion* proved a timing
+race below the Vulkan layers, (3) a single discriminating code change (the explicit barrier)
+confirmed the mechanism — counter pinned at 0. For shader-side hunts, the boolean probe remains
+the tool: emit the suspect condition as the resolved colour and `return` early — the artefact
 draws its own silhouette. See
 [`docs/temporal-stability-measurement.md`](../../../docs/temporal-stability-measurement.md) §4 in
 projet-alpha.

@@ -996,6 +996,28 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
   magnitude, before its own factor — see `docs/caution-points.md` § "A velocity buffer has a
   floating-point noise floor".
 
+### Inter-Pass Synchronization — the MoltenVK contract (Aug 2026)
+
+Chained post-process passes render into `IntermediateRenderTarget`s whose render pass declares
+full (non-by-region) `VK_SUBPASS_EXTERNAL` dependencies in both directions — that is the
+**Vulkan-level** guarantee, and Synchronization Validation is clean with it alone.
+
+It is NOT sufficient on MoltenVK. Back-to-back render passes become separate Metal command
+encoders, and the external-dependency translation was **measured insufficient on Apple M2**:
+tile-granular stale reads in the motion-blur chain (displaced 64 px blocks around moving
+objects), uninitialized reads in the bloom chain (green blocks), and implausible luminance
+samples in the auto-exposure chain (`ToneMapping::meteredRejectedCount()` at ~2/s). The
+corruption is timing-dependent — `MTL_DEBUG_LAYER=1` serialization suppresses it completely,
+which is how it was cornered.
+
+**The contract:** `IndirectPostProcessEffect::recordFullscreenPass()` emits an explicit
+`vkCmdPipelineBarrier` (write→read, `SHADER_READ_ONLY → SHADER_READ_ONLY`, no layout change)
+after `endRenderPass()`, forcing a real inter-encoder fence. On conforming desktop drivers it
+is redundant with the subpass dependencies and free. **Any pass recorded OUTSIDE
+`recordFullscreenPass()` that writes an image another pass samples must emit the same barrier
+itself.** Full story: `docs/troubleshooting.md` § "Blocky corruption on macOS",
+`docs/caution-points.md` § Vulkan Validation.
+
 ### Light Attenuation — Physical, Not Artistic (since 2026-07-26)
 
 Point and spot lights fall off as a **windowed inverse square** (Karis, "Real Shading in Unreal
@@ -1155,7 +1177,8 @@ and converges. `MultiBounce/Clamp` bounds the re-injected radiance (anti-firefly
 
 **History ping-pong correctness:** 2 half-res RGBA16F history targets (+2 normal history).
 Frame N reads `[1-w]`, writes `[w]`; safe on a single queue thanks to the IRT's full
-(non-by-region) external subpass dependencies. `m_historyValid` forces alpha=1 and
+(non-by-region) external subpass dependencies **plus the explicit inter-pass barrier emitted
+by `recordFullscreenPass()`** (the MoltenVK contract, § 12 "Inter-Pass Synchronization"). `m_historyValid` forces alpha=1 and
 strength=0 on the first frame after (re)creation — the ping-pong images load DONT_CARE.
 The temporal/normal-copy pipelines are created against the `[0]` targets and record into
 `[1]` via render pass compatibility (same trick as the shared blur pipeline).

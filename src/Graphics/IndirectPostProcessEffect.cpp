@@ -43,6 +43,7 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
 
 static constexpr auto TracerTag{"IndirectPostProcessEffect"};
@@ -221,6 +222,25 @@ namespace EmEn::Graphics
 		commandBuffer.draw(3, 1);
 
 		target.endRenderPass(commandBuffer);
+
+		/* Explicit write→read barrier between chained post-process passes.
+		 * The IRT render pass already declares this ordering through its VK_SUBPASS_EXTERNAL
+		 * dependencies, so on a conforming driver this barrier is redundant (and free). It is
+		 * kept for MoltenVK: back-to-back render passes become separate Metal command encoders,
+		 * and the external-dependency translation alone was measured insufficient on Apple M2 —
+		 * tile-granular stale reads in the motion-blur chain and uninitialized reads in the
+		 * bloom chain (macOS-only corruption, suppressed by MTL_DEBUG_LAYER serialization).
+		 * The explicit barrier forces a real inter-encoder fence. No layout change: the pass
+		 * finalLayout is already SHADER_READ_ONLY_OPTIMAL. */
+		const Sync::ImageMemoryBarrier barrier{
+			*target.image(),
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 	}
 
 	/* ---- Shared descriptor set layout helpers ---- */
