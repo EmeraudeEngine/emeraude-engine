@@ -45,6 +45,37 @@ The animation system is split into three layers:
 | `Sequence` | `Sequence.hpp/.cpp` | Keyframe-based value interpolation (Linear, Cosine) |
 | `ConstantValue` | `ConstantValue.hpp` | Always returns the same value |
 | `RandomValue` | `RandomValue.hpp/.cpp` | Random value within range |
+| `LampFlicker` | `LampFlicker.hpp/.cpp` | An ailing lamp: sag, breathing and dropout bursts, driven by a single `health` |
+
+### LampFlicker — why `RandomValue` is not enough (Aug 2026)
+
+`RandomValue` draws a fresh uniform EVERY cycle, which is white noise at the logic rate: attached
+to a light it strobes. A failing lamp is **correlated** — steady most of the time, then a burst of
+brutal cuts. `LampFlicker` is a small state machine producing that, from one continuous parameter:
+
+- `health` 1 → perfectly steady (it short-circuits and returns the nominal value, so attaching it
+  to a healthy lamp costs a multiply), 0 → dead.
+- **Sag**: the mean output drops as the health does, and the lamp *breathes* around it through two
+  **incommensurate** oscillators (3.1 and 7.7 Hz) plus a little grain. Incommensurate on purpose —
+  their sum never repeats, so the sag cannot be read as a loop the way a `Sequence` would.
+- **Dropouts**: 2 to 12 cycles (~30-200 ms) at ~4% output, never a hard zero (a filament keeps a
+  dull glow through a brief cut, and a true zero reads as the light being deleted). The per-cycle
+  odds are QUADRATIC in the sag, and a dropout opens a burst window that multiplies them — which
+  is what groups the cuts into the two-or-three stutter of a real bad contact.
+
+⚠️ **It drives the INTENSITY only, and that is a design constraint, not an omission.**
+`AnimatableInterface::updateAnimations()` calls `getNextValue()` once per REGISTERED animation, so
+two channels fed from one generator would advance it twice per cycle and desynchronise. The colour
+of a dying lamp tracks the average state of its supply — minutes — not the individual flickers, so
+it is a pure function of the health: `LampFlicker::colorForHealth()`, applied once with
+`setColor()` when the health changes. Physically right and structurally simpler.
+
+The value it emits is a luminous intensity in CANDELA, matching the `Intensity` animation id:
+
+```cpp
+light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlicker >(nominalCandela, 0.5F));
+light->setColor(LampFlicker::colorForHealth(healthyColor, 0.5F));
+```
 
 ### Complete Data Flow
 ```

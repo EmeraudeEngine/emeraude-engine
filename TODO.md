@@ -15,7 +15,7 @@
   declared in the generated GLSL view blocks, but read by NO shader. The velocity parameter
   itself stays (it feeds the OpenAL listener/doppler on the audio side of the AVConsole
   contract). Motion vectors do NOT use it (they need the previous view-projection matrix,
-  not a linear velocity).
+  not a linear velocity).                                                       
 - PHYSICS SYSTEM: Enable the rotational physics. (WIP)
 - PHYSICS SYSTEM: Create a particle system using Compute Shader.
 - RESOURCES SYSTEM: Merge Font from PixelFactory and FontResource.
