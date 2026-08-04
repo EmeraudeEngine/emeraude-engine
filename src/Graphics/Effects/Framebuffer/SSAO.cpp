@@ -264,8 +264,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create descriptor sets ---- */
-		const auto & pool = renderer.descriptorPool();
-
 		/* AO computation: reads depth + normals (updated per-frame). */
 		m_aoPerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "AO_DescSet");
 
