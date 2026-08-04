@@ -200,34 +200,34 @@ endif ()
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
 add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
-# Shared STL hot-set precompiled header (owned by emeraude-base, applied PRIVATE here).
-# No-op when -DEMERAUDE_ENABLE_PCH=OFF.
-#
-# On MSVC the PCH is incompatible with WINDOWS_EXPORT_ALL_SYMBOLS: the PCH marker symbols leak into
-# the auto-generated exports.def and fail to link (LNK2001 on a bogus '__'). This target is the ONLY
-# one in the cascade concerned (the sole SHARED library using export-all), hence the guard here
-# rather than in the shared helper — every other consumer keeps its PCH regardless of this option.
-# See docs/windows-export-api.md.
-if ( MSVC AND NOT EMERAUDE_USE_EXPLICIT_EXPORTS )
-	message(STATUS "[EmeraudeEngine] PCH disabled on MSVC for '${PROJECT_NAME}' (WINDOWS_EXPORT_ALL_SYMBOLS + PCH break the DLL link).")
-else ()
-	emeraude_base_target_enable_pch(${PROJECT_NAME} "${EMERAUDE_BASE_STL_PCH_HEADERS}")
-endif ()
+if ( MSVC )
+	# Shared STL hot-set precompiled header (owned by emeraude-base, applied PRIVATE here).
+	# No-op when -DEMERAUDE_ENABLE_PCH=OFF.
+	#
+	# On MSVC the PCH is incompatible with WINDOWS_EXPORT_ALL_SYMBOLS: the PCH marker symbols leak into
+	# the auto-generated exports.def and fail to link (LNK2001 on a bogus '__'). This target is the ONLY
+	# one in the cascade concerned (the sole SHARED library using export-all), hence the guard here
+	# rather than in the shared helper — every other consumer keeps its PCH regardless of this option.
+	# See docs/windows-export-api.md.
+	# Public DLL boundary — see docs/windows-export-api.md.
+	#  - EMERAUDE_USE_EXPLICIT_EXPORTS=OFF (default): WINDOWS_EXPORT_ALL_SYMBOLS produces the export set;
+	#    the EMEN_API macro (emeraude_export.hpp) is a no-op, so the public API can be annotated
+	#    class-by-class without ever breaking the build.
+	#    On MSVC this mode costs this target its PCH (see the guard above).
+	#  - ON: EMEN_API drives __declspec(dllexport/import) and WINDOWS_EXPORT_ALL_SYMBOLS is dropped.
+	#    The only way to get a PCH on this target on MSVC — but it makes the consuming application's
+	#    LINK much longer, on every link, plus annotating every new public symbol a consumer
+	#    references out-of-line (the migration itself is done and verified). Hence Off by default.
+	if ( EMERAUDE_USE_EXPLICIT_EXPORTS )
+		emeraude_base_target_enable_pch(${PROJECT_NAME} "${EMERAUDE_BASE_STL_PCH_HEADERS}")
+		target_compile_definitions(${PROJECT_NAME} PUBLIC EMERAUDE_USE_EXPLICIT_EXPORTS)
 
-# Public DLL boundary — see docs/windows-export-api.md.
-#  - EMERAUDE_USE_EXPLICIT_EXPORTS=OFF (default): WINDOWS_EXPORT_ALL_SYMBOLS produces the export set;
-#    the EMEN_API macro (emeraude_export.hpp) is a no-op, so the public API can be annotated
-#    class-by-class without ever breaking the build.
-#    On MSVC this mode costs this target its PCH (see the guard above).
-#  - ON: EMEN_API drives __declspec(dllexport/import) and WINDOWS_EXPORT_ALL_SYMBOLS is dropped.
-#    The only way to get a PCH on this target on MSVC — but it makes the consuming application's
-#    LINK much longer, on every link, plus annotating every new public symbol a consumer
-#    references out-of-line (the migration itself is done and verified). Hence Off by default.
-if ( EMERAUDE_USE_EXPLICIT_EXPORTS )
-	set(EMERAUDE_WINDOWS_EXPORT_ALL OFF)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC EMERAUDE_USE_EXPLICIT_EXPORTS)
-else ()
-	set(EMERAUDE_WINDOWS_EXPORT_ALL ON)
+		set(EMERAUDE_WINDOWS_EXPORT_ALL OFF)
+	else ()
+		message(STATUS "[EmeraudeEngine] PCH disabled on MSVC for '${PROJECT_NAME}' (WINDOWS_EXPORT_ALL_SYMBOLS + PCH break the DLL link).")
+
+		set(EMERAUDE_WINDOWS_EXPORT_ALL ON)
+	endif ()
 endif ()
 
 target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
