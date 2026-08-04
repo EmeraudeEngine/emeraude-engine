@@ -66,24 +66,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
+option(EMERAUDE_USE_EXPLICIT_EXPORTS "Use the explicit EMEN_API export macro instead of WINDOWS_EXPORT_ALL_SYMBOLS (Windows only, Default Off)." Off) # See docs/windows-export-api.md.
 option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
-# Explicit DLL export API: drop WINDOWS_EXPORT_ALL_SYMBOLS in favour of the EMEN_API macro
-# (emeraude_export.hpp). The migration is complete and verified, but the default is Off for two
-# reasons: LINK TIME (decisive): with On, the consuming application takes MUCH LONGER to link.
-# Explicit dllimport/dllexport forces the consumer's linker through a far
-# larger import-resolution surface than the compact export-all .def, and that cost is paid on
-# every single link of the downstream project. Off keeps the fast link.
-# The price of Off is that this target loses its PCH on MSVC (export-all and PCH are mutually
-# exclusive) — and only this target: the guard sits at the emeraude_base_target_enable_pch() call
-# site below, so base and every consumer target keep theirs. Trading a few seconds of engine
-# compile time for a much longer consumer link is not a trade worth making.
-# See docs/windows-export-api.md.
-option(EMERAUDE_USE_EXPLICIT_EXPORTS "Use the explicit EMEN_API export macro instead of WINDOWS_EXPORT_ALL_SYMBOLS (Default Off)." Off)
+
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)
