@@ -56,6 +56,46 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 > - `Vulkan/UniformBufferObject.cpp` - Must convert element index to byte offset: `elementOffset * m_blockAlignedSize`
 > - `Graphics/Material/StandardResource.cpp` - Uses `m_sharedUBOIndex` for UBO slot
 
+### Critical: Shared UBO Registry Is Reached Concurrently (Materials)
+
+> [!CRITICAL]
+> **Never write `getSharedUniformBuffer()` then `createSharedUniformBuffer()`.** Use the atomic
+> `SharedUBOManager::getOrCreateSharedUniformBuffer(name, blockSize)`.
+>
+> Material buffer identifiers encode only the material kind and its texture count
+> (`MaterialPBRResource2Textures`), so distinct materials share one identifier **by design** — and
+> materials are loaded in parallel on the resource thread pool. A separate get-then-create is a
+> check-then-act race.
+>
+> **Bug pattern (fixed Aug 2026):**
+> - Two threads load two 2-texture PBR materials of the same mesh; both miss the lookup, both create.
+> - The loser gets `nullptr` from `createSharedUniformBuffer()` and its **whole material fails to
+>   load** → every sub-mesh using it vanishes from the scene.
+> - Lived on the `reflexion-debug` dragon: wings missing on some runs, body on others.
+>
+> **Log signature to recognize it instantly:**
+> ```
+> [Info] There is no shared uniform buffer named 'MaterialPBRResource2Textures' !   <- TWICE in a row
+> [Error] A shared uniform buffer named 'MaterialPBRResource2Textures' already exists !
+> [Error][MaterialPBRResource] Unable to get the shared uniform buffer !
+> [Error][MaterialInterface] Unable to load the material resource '...' !
+> ```
+> The **doubled info line is the proof of concurrency**: single-threaded, the first miss would have
+> created the buffer. A non-deterministic *"part of the mesh is missing, differently each run"* should
+> always send you looking for a check-then-act on a shared registry.
+>
+> **Two aggravating factors were present and are also fixed:**
+> - `m_sharedUniformBuffers` was a bare `std::map` with **no mutex**: two concurrent `emplace()` are a
+>   plain data race, not merely a lost insertion — red-black tree corruption was possible.
+> - `SharedUniformBuffer::addElement()` scanned and claimed a seat unguarded, so two materials could
+>   take the **same** UBO offset and silently overwrite each other's uniform block. The mutex meant for
+>   it (`m_memoryAccess`) was declared and **never locked anywhere** — a dead mutex. It is now
+>   `m_elementsAccess` and actually held.
+>
+> **Files:** `Graphics/SharedUBOManager.{hpp,cpp}`, `Graphics/SharedUniformBuffer.{hpp,cpp}`,
+> `Graphics/Material/Interface.cpp`. Full contract in
+> [`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) §5.
+
 ### Material Property Array Layout (std140)
 
 The `StandardResource` material uses a float array with specific offsets (std140 aligned):

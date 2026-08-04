@@ -88,13 +88,11 @@ namespace EmEn::Graphics::Material
 	std::shared_ptr< SharedUniformBuffer >
 	Interface::getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept
 	{
-		if ( auto sharedUniformBuffer = renderer.sharedUBOManager().getSharedUniformBuffer(identifier); sharedUniformBuffer != nullptr )
-		{
-			return sharedUniformBuffer;
-		}
-
-		const auto size = this->getUniformBlock(0, 0).bytes();
-
-		return renderer.sharedUBOManager().createSharedUniformBuffer(identifier, size);
+		/* NOTE: The identifier only encodes the material kind and its texture count, so distinct
+		 * materials share it by design. As they are loaded concurrently from the resource thread pool,
+		 * the buffer MUST be reached through a single atomic get-or-create: a get() then create()
+		 * sequence loses the race for every material but one, and a material that cannot reach its
+		 * shared uniform buffer fails to load entirely, removing its sub-meshes from the scene. */
+		return renderer.sharedUBOManager().getOrCreateSharedUniformBuffer(identifier, this->getUniformBlock(0, 0).bytes());
 	}
 }

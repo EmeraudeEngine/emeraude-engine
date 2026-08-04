@@ -27,6 +27,7 @@
 #include "SharedUniformBuffer.hpp"
 
 /* STL inclusions. */
+#include <mutex>
 #include <ranges>
 
 /* Local inclusions. */
@@ -153,6 +154,12 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addElement (const void * element, uint32_t & offset) noexcept
 	{
+		/* NOTE: Scanning for a free seat and claiming it MUST be atomic, otherwise two concurrent
+		 * owners both see the same seat as free and both take it, ending up sharing a single UBO
+		 * offset. The corruption is silent: no error is reported, the two owners simply overwrite
+		 * each other's uniform block. */
+		const std::lock_guard< std::mutex > lock{m_elementsAccess};
+
 		offset = 0;
 
 		for ( auto & seat : m_elements )
@@ -173,6 +180,8 @@ namespace EmEn::Graphics
 	void
 	SharedUniformBuffer::removeElement (const void * element) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_elementsAccess};
+
 		const auto elementIt = std::ranges::find_if(m_elements, [element] (const auto & seat) {
 			return seat == element;
 		});
@@ -186,6 +195,8 @@ namespace EmEn::Graphics
 	uint32_t
 	SharedUniformBuffer::elementCount () const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_elementsAccess};
+
 		uint32_t count = 0;
 
 		for ( const auto & seat : m_elements )

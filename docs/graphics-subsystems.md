@@ -85,6 +85,20 @@ transferManager.uploadToBuffer(
 - Automatic deduplication (same data → same UBO)
 - Efficient updates (update once per frame, not per object)
 
+**API — pick the right entry point:**
+
+| Method | Use when | On an existing name |
+|--------|----------|---------------------|
+| `getOrCreateSharedUniformBuffer(name, blockSize, maxCount)` | The name is **shared** between several owners (all material resources). **Thread-safe and atomic.** | Returns the existing buffer; `blockSize`/`maxCount` are ignored (first caller defines the geometry) |
+| `createSharedUniformBuffer(name, ...)` | The caller **owns** a unique name (e.g. `LightSet` per-scene light buffers) | Reports an error and returns `nullptr` — a genuine duplicate-name bug |
+| `getSharedUniformBuffer(name)` | Pure lookup, caller will **not** create on a miss | Returns the buffer, or `nullptr` after an info trace |
+
+> [!CAUTION]
+> Every access to the registry is guarded by a mutex because resources are loaded in parallel on the
+> resource thread pool. Do **not** reconstruct a get-then-create sequence out of the last two rows:
+> that check-then-act race makes materials fail to load and sub-meshes disappear non-deterministically.
+> See [`caution-points.md`](caution-points.md) → *Shared UBO Registry Is Reached Concurrently*.
+
 ### 5. VertexBufferFormatManager: Format Registry
 
 **Purpose:** Centralize vertex format definitions and enable reuse.

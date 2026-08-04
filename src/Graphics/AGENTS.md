@@ -273,6 +273,43 @@ Each `StandardResource` has:
 - `m_sharedUBOIndex`: Slot in the shared buffer (0, 1, 2...)
 - `m_materialProperties[]`: Float array with material data (ambientColor, diffuseColor, etc.)
 
+### Concurrency Contract (MANDATORY)
+
+> [!CRITICAL]
+> **Materials are loaded concurrently from the resource thread pool, and they SHARE their buffer
+> identifier by design.** `getSharedUniformBufferIdentifier()` encodes only the material kind and its
+> texture count (`MaterialPBRResource2Textures`, `MaterialStandardResource4Textures`, …), so two
+> unrelated materials routinely request the very same buffer from different threads.
+>
+> **Two invariants follow, both enforced in the engine — do not undo them:**
+>
+> 1. **Reaching a shared buffer is a single atomic call.** Use
+>    `SharedUBOManager::getOrCreateSharedUniformBuffer(name, blockSize)`. Never write
+>    `getSharedUniformBuffer()` followed by `createSharedUniformBuffer()`: that check-then-act
+>    sequence hands a `nullptr` to every loser of the race, and a material that cannot reach its
+>    buffer **fails to load entirely**, silently removing every sub-mesh using it from the scene.
+>    `createSharedUniformBuffer()` stays strict (it reports a genuine duplicate name) and is for
+>    owners of a unique name, such as `LightSet`'s per-scene light buffers.
+> 2. **Claiming a seat is guarded.** `SharedUniformBuffer::addElement()` scans the seat table for a
+>    free slot then writes it; the `m_elementsAccess` mutex makes the pair atomic. Without it two
+>    materials receive the **same** `m_sharedUBOIndex`, hence the same UBO byte offset, and overwrite
+>    each other's uniform block with no error reported at all.
+>
+> `writeElementData()` is deliberately **not** guarded: once a seat is granted its owner holds it
+> exclusively and writes to a byte range that belongs to no one else. Do not add a lock there — it
+> would serialize every per-frame material update.
+>
+> **Lived symptom (Aug 2026):** the `reflexion-debug` dragon loaded incomplete, missing its wings or
+> its body depending on the run. Log signature: the same `There is no shared uniform buffer named 'X'`
+> info line **twice in a row** (two threads missing the lookup together), then
+> `A shared uniform buffer named 'X' already exists !` → `Unable to get the shared uniform buffer` →
+> `Unable to load the material resource ...`. The doubled info line is the tell: single-threaded, the
+> first miss would have created the buffer.
+>
+> **Files:** `Graphics/SharedUBOManager.{hpp,cpp}`, `Graphics/SharedUniformBuffer.{hpp,cpp}`,
+> `Graphics/Material/Interface.cpp` (`getSharedUniformBuffer()`). Same pattern already applied in
+> `Vulkan/LayoutManager.cpp`.
+
 ### Descriptor Binding (Preferred API)
 
 When creating descriptor sets, use the **explicit helper methods** that ensure correct byte offsets:

@@ -26,6 +26,9 @@
 
 #include "SharedUBOManager.hpp"
 
+/* STL inclusions. */
+#include <mutex>
+
 /* Local inclusions. */
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
@@ -35,8 +38,39 @@ namespace EmEn::Graphics
 	using namespace Base;
 
 	std::shared_ptr< SharedUniformBuffer >
+	SharedUBOManager::getOrCreateSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	{
+		/* NOTE: The lookup and the insertion MUST stay in the same critical section. Material resources
+		 * are loaded concurrently from the resource thread pool and several of them legitimately share
+		 * one buffer identifier (it only encodes the material kind and its texture count), so a
+		 * get() then create() sequence lets every loser of the race receive a nullptr and fail to load
+		 * its whole material, which silently removes the sub-meshes using it from the scene.
+		 * The hardware buffer creation is serialized as a consequence: this is accepted, it happens
+		 * once per distinct identifier at load time and never in the rendering path. */
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		if ( const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name); sharedUniformBufferIt != m_sharedUniformBuffers.cend() )
+		{
+			return sharedUniformBufferIt->second;
+		}
+
+		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, uniformBlockSize, maxElementCount);
+
+		if ( !sharedUniformBuffer->usable() )
+		{
+			TraceError{ClassId} << "Unable to create a shared uniform buffer (Name: '" << name << "', block size: " << uniformBlockSize << ", element count: " << maxElementCount << ", Dynamic: false) !";
+
+			return nullptr;
+		}
+
+		return m_sharedUniformBuffers.emplace(name, sharedUniformBuffer).first->second;
+	}
+
+	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
 		if ( m_sharedUniformBuffers.contains(name) )
 		{
 			TraceError{ClassId} << "A shared uniform buffer named '" << name << "' already exists !";
@@ -59,6 +93,8 @@ namespace EmEn::Graphics
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
 		if ( m_sharedUniformBuffers.contains(name) )
 		{
 			TraceError{ClassId} << "A shared uniform buffer named '" << name << "' already exists !";
@@ -81,6 +117,8 @@ namespace EmEn::Graphics
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::getSharedUniformBuffer (const std::string & name) const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
 		const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name);
 
 		if ( sharedUniformBufferIt == m_sharedUniformBuffers.cend() )
@@ -96,11 +134,17 @@ namespace EmEn::Graphics
 	bool
 	SharedUBOManager::destroySharedUniformBuffer (const std::shared_ptr< SharedUniformBuffer > & pointer) noexcept
 	{
-		for ( const auto & [name, buffer] : m_sharedUniformBuffers )
+		/* NOTE: The erasure is performed here instead of delegating to the overload taking a name: the
+		 * lock is not recursive, so delegating under it would deadlock. */
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		for ( auto sharedUniformBufferIt = m_sharedUniformBuffers.begin(); sharedUniformBufferIt != m_sharedUniformBuffers.end(); ++sharedUniformBufferIt )
 		{
-			if ( buffer.get() == pointer.get() )
+			if ( sharedUniformBufferIt->second.get() == pointer.get() )
 			{
-				return this->destroySharedUniformBuffer(name);
+				m_sharedUniformBuffers.erase(sharedUniformBufferIt);
+
+				return true;
 			}
 		}
 
@@ -110,6 +154,8 @@ namespace EmEn::Graphics
 	bool
 	SharedUBOManager::destroySharedUniformBuffer (const std::string & name) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
 		const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name);
 
 		if ( sharedUniformBufferIt == m_sharedUniformBuffers.cend() )
@@ -140,6 +186,8 @@ namespace EmEn::Graphics
 	bool
 	SharedUBOManager::onTerminate () noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
 		m_sharedUniformBuffers.clear();
 
 		m_device.reset();

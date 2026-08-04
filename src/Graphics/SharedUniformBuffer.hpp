@@ -240,6 +240,11 @@ namespace EmEn::Graphics
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::vector< const void * > m_elements;
-			mutable std::mutex m_memoryAccess;
+			/* NOTE: Guards the seat table only. Owners are registered concurrently from the resource
+			 * thread pool, and claiming a seat is a scan followed by a write: without this lock two
+			 * owners can claim the same seat, hence the same UBO offset, and then silently overwrite
+			 * each other's uniform block. It does NOT guard writeElementData(): once a seat is granted
+			 * its owner holds it exclusively and writes to a byte range that belongs to no one else. */
+			mutable std::mutex m_elementsAccess;
 	};
 }

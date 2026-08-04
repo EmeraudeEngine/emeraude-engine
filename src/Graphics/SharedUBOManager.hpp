@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -97,7 +98,27 @@ namespace EmEn::Graphics
 			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
+			 * @brief Returns the named shared buffer uniform, creating it if it does not exist yet.
+			 * @note This is the thread-safe way to reach a shared uniform buffer whose name is not
+			 * unique to a single owner. Several resources loaded concurrently from the resource thread
+			 * pool legitimately share the same buffer identifier: calling getSharedUniformBuffer() then
+			 * createSharedUniformBuffer() is a check-then-act race where every loser gets a nullptr.
+			 * The lookup and the creation happen here inside a single critical section.
+			 * @warning If the buffer already exists, @p uniformBlockSize and @p maxElementCount are
+			 * ignored: the first caller wins and defines the geometry of the buffer. Every caller of a
+			 * given name MUST therefore request the same block size.
+			 * @param name A reference to a string.
+			 * @param uniformBlockSize The size of the uniform block.
+			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties.
+			 * @return std::shared_ptr< SharedUniformBuffer >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< SharedUniformBuffer > getOrCreateSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+
+			/**
 			 * @brief Returns a named shared buffer uniform.
+			 * @note Prefer getOrCreateSharedUniformBuffer() when the caller is ready to create the
+			 * buffer on a miss, as a get-then-create sequence is not atomic.
 			 * @param name A reference to a string.
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
@@ -129,5 +150,9 @@ namespace EmEn::Graphics
 			Renderer & m_renderer;
 			std::shared_ptr< Vulkan::Device > m_device;
 			std::map< std::string, std::shared_ptr< SharedUniformBuffer > > m_sharedUniformBuffers;
+			/* NOTE: Resources are loaded concurrently from the resource thread pool, so every access to
+			 * the buffer registry is guarded. Without it, two concurrent emplace() on this map are a
+			 * plain data race, not merely a lost insertion. */
+			mutable std::mutex m_access;
 	};
 }
