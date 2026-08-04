@@ -2271,6 +2271,14 @@ indefinitely. Core validation and **Synchronization Validation are both clean**.
 > and `imageLayout` byte-identical at both write sites), `deltaTime`, the portability subset (it
 > IS enabled and its features ARE requested), and explicit-LOD sampling.
 
+> [!IMPORTANT]
+> **CONFIRMED MoltenVK-ONLY (Aug 2026).** The rejection counter this fix introduced was read from the
+> SAME commit on both platforms: **~2 rejections per second on the Apple M2, exactly 0 on Linux after
+> a full rebuild**. The engine's Vulkan usage and CPU-side logic are therefore sound — this is not a
+> cross-platform bug wearing a macOS mask. The counter is also the **exit criterion** for the
+> remaining work: the corruption is fixed when it stays at 0 on the M2, not when a screenshot happens
+> to look clean. See [`docs/troubleshooting.md`](troubleshooting.md) -> "Blocky corruption on macOS".
+
 **Verified:** `--load-demo=reflexion-debug --demo-options=0,4,0` on an M2 goes from a fully blown
 frame with no ISO readout to a correctly exposed one reporting `metered: ISO 199 | scene avg
 1902.2 nits`, with `5 metered frame(s) rejected as implausible - held` counted rather than fatal.

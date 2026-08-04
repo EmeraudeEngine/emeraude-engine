@@ -342,6 +342,28 @@ how this bug is written.
 
 ### Blocky corruption on macOS — the two known classes
 
+> [!IMPORTANT]
+> **MEASURED CROSS-PLATFORM CONTROL (Aug 2026) — the corruption is confined to MoltenVK/Metal.**
+> The rejected-measurement counter (Shift+F2 -> Exposure, under the `metered:` line) is a *portable*
+> corruption metric, and it was read on both platforms from the SAME commit:
+>
+> | Platform | Rejected metered frames |
+> |---|---|
+> | macOS / Apple M2 (MoltenVK) | **~2 per second, growing** |
+> | Linux, same commit, full rebuild | **0** |
+>
+> Same code, same scene, same luminance chain: the measurement is plausible *continuously* on Linux.
+> So the engine's Vulkan usage and CPU-side logic are sound — this is **not** a cross-platform bug
+> wearing a macOS mask. **Start a new investigation at the Metal level** (`MTL_DEBUG_LAYER=1`,
+> `MTL_SHADER_VALIDATION=1`, `MVK_CONFIG_DEBUG=1`, and an **Xcode** GPU frame capture — RenderDoc
+> does not support Metal). Do not spend another pass at the Vulkan layer: it has been swept clean
+> (see the ruled-out list below).
+>
+> **EXIT CRITERION for the remaining work:** the corruption is fixed when
+> `ToneMapping::meteredRejectedCount()` stays at **0 on the M2** — not when a screenshot happens to
+> look clean. A single-frame artefact at 200+ FPS is not capturable by a screenshot, so the eye and
+> the capture are both unreliable here; this counter is not.
+
 Both are macOS-only and both look like video-memory corruption. They have **different** causes, so
 identify which one you have before digging (toggle the effects one at a time in Shift+F2):
 
