@@ -192,6 +192,132 @@ void main()
 }
 )GLSL";
 
+	/* Moments accumulation pass (SVGF, Schied et al. 2017, HPG): integrates the first and
+	 * second raw moments of the RAW estimate's luminance with the SAME velocity reprojection
+	 * and disocclusion validation as the colour resolve. The temporal variance
+	 * max(m2 - m1², 0) measures the per-pixel estimator noise and will drive the
+	 * luminance-weight normalisation of the à-trous filter (auto-dosage: noisy → smooth
+	 * hard, converged → preserve). The moments deliberately read the RAW input, not the
+	 * blurred one: variance of an already-smoothed signal underestimates the noise the
+	 * spatial filter must remove.
+	 * Output: R = m1, G = m2, B = accumulation age in frames (saturates at 64, reset on
+	 * disocclusion — the future 1/N counter), A = camera distance (0 = invalid/sky).
+	 *
+	 * Descriptor set 0:
+	 *   binding 0: raw GI estimate (the owner's trace output)
+	 *   binding 1: depth texture
+	 *   binding 2: normals texture (view space)
+	 *   binding 3: moments history texture (previous frame)
+	 *   binding 4: world-normal history texture (previous frame)
+	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
+	 *   binding 6: frame UBO (shared with the owner's trace pass)
+	 */
+	constexpr auto GIDenoiserMomentsFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outMoments;
+
+layout(set = 0, binding = 0) uniform sampler2D rawTex;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2) uniform sampler2D normalTex;
+layout(set = 0, binding = 3) uniform sampler2D momentsHistoryTex;
+layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
+layout(set = 0, binding = 5) uniform sampler2D velocityTex;
+
+layout(set = 0, binding = 6, std140) uniform FrameData
+{
+	mat4 invViewProj;
+	mat4 prevViewProj;
+	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
+	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
+	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
+	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
+};
+
+void main()
+{
+	float depth = texture(depthTex, vUV).r;
+
+	/* Sky/far-plane: no surface, invalid marker (a = 0). */
+	if (depth >= 1.0)
+	{
+		outMoments = vec4(0.0);
+		return;
+	}
+
+	float luma = dot(texture(rawTex, vUV).rgb, vec3(0.2126, 0.7152, 0.0722));
+
+	/* Reconstruct world-space position from NDC + depth via inverse VP. */
+	vec2 ndc = vUV * 2.0 - 1.0;
+	vec4 clipPos = vec4(ndc, depth, 1.0);
+	vec4 wp = invViewProj * clipPos;
+	vec3 worldPos = wp.xyz / wp.w;
+
+	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
+	float cameraDistance = length(worldPos - viewPos);
+
+	/* Current world-space normal, for the history normal comparison. */
+	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
+	vec3 worldNormal = normalize(invViewRot * normalize(texture(normalTex, vUV).rgb));
+
+	float alpha = temporalParams.x;
+
+	/* Same velocity reprojection + 3x3 depth-nearest dilation as the colour resolve —
+	 * the moments and the colour MUST agree on which pixels have a valid history. */
+	vec2 texelD = 1.0 / vec2(textureSize(depthTex, 0));
+	vec2 closestOffset = vec2(0.0);
+	float closestDepth = depth;
+
+	for (int y = -1; y <= 1; y++)
+	{
+		for (int x = -1; x <= 1; x++)
+		{
+			vec2 offset = vec2(x, y) * texelD;
+			float d = texture(depthTex, vUV + offset).r;
+
+			if (d < closestDepth)
+			{
+				closestDepth = d;
+				closestOffset = offset;
+			}
+		}
+	}
+
+	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
+	vec2 prevUV = vUV - velocity * 0.5;
+
+	bool offscreen = any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0)));
+
+	vec4 history = texture(momentsHistoryTex, prevUV);
+
+	/* Disocclusion tests, identical to the colour resolve. The alpha >= 1 test also
+	 * covers the first frame after (re)creation (the owner forces alpha to 1 while the
+	 * history is invalid) — the age must restart from the uninitialised ping-pong. */
+	float expectedDistance = length(worldPos - prevCamPos.xyz);
+	bool distanceValid = history.a > 0.0 && abs(history.a - expectedDistance) <= temporalParams.y * expectedDistance;
+	vec3 prevNormal = texture(historyNormalTex, prevUV).xyz;
+	bool normalValid = dot(prevNormal, worldNormal) >= temporalParams.z;
+
+	if (alpha >= 1.0 || offscreen || !distanceValid || !normalValid)
+	{
+		/* Reset: single-sample moments (variance reads zero — consumers must use the
+		 * age-gated spatial fallback while the accumulation is young). */
+		outMoments = vec4(luma, luma * luma, 1.0, cameraDistance);
+		return;
+	}
+
+	float m1 = mix(history.r, luma, alpha);
+	float m2 = mix(history.g, luma * luma, alpha);
+	float age = min(history.b + 1.0, 64.0);
+
+	outMoments = vec4(m1, m2, age, cameraDistance);
+}
+)GLSL";
+
 	/* Normal history pass: converts the current view-space normals G-buffer to world space
 	 * (camera-rotation invariant) and stores it at history resolution for the NEXT frame's
 	 * temporal validation. The normals MRT attachment is rewritten every frame, so the
@@ -292,12 +418,20 @@ namespace EmEn::Graphics
 
 				return false;
 			}
+
+			if ( !m_momentsTargets[index].create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, baseName + "_GIMoments" + suffix) )
+			{
+				TraceError{ClassId} << "Failed to create the GI moments target #" << index << " !";
+
+				return false;
+			}
 		}
 
 		/* ---- Descriptor set layouts ---- */
 
 		/* Temporal resolve input: GI + depth + normals + history + normal history + velocity,
-		 * plus the frame UBO. */
+		 * plus the frame UBO. The moments pass reuses the SAME shape (raw GI + depth +
+		 * normals + moments history + normal history + velocity + UBO). */
 		auto temporalInputLayout = this->getInputLayout(6, 1);
 
 		/* Normal history input: normals, plus the frame UBO. */
@@ -312,11 +446,12 @@ namespace EmEn::Graphics
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			/* Temporal resolve: single set, no push constants (frame UBO). */
+			/* Temporal resolve + moments: single set, no push constants (frame UBO). */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(temporalInputLayout);
 
 			m_temporalLayout = layoutManager.getPipelineLayout(sets, {});
+			m_momentsLayout = m_temporalLayout;
 		}
 
 		{
@@ -338,9 +473,10 @@ namespace EmEn::Graphics
 
 		const auto vertexModule = this->getFullscreenVertexShader();
 		const auto temporalFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Temporal_FS", ShaderType::FragmentShader, GIDenoiserTemporalFragmentShader);
+		const auto momentsFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Moments_FS", ShaderType::FragmentShader, GIDenoiserMomentsFragmentShader);
 		const auto normalCopyFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_NormalCopy_FS", ShaderType::FragmentShader, GIDenoiserNormalCopyFragmentShader);
 
-		if ( vertexModule == nullptr || temporalFragment == nullptr || normalCopyFragment == nullptr )
+		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile the GI denoiser shaders !";
 
@@ -351,9 +487,10 @@ namespace EmEn::Graphics
 		 * relies on Vulkan render pass compatibility (identical format/ops), exactly
 		 * like the shared denoise pipeline recording into both blur targets. */
 		m_temporalPipeline = this->createFullscreenPipeline(ClassId, baseName + "_GITemporal", vertexModule, temporalFragment, m_temporalLayout, m_historyTargets[0]);
+		m_momentsPipeline = this->createFullscreenPipeline(ClassId, baseName + "_GIMoments", vertexModule, momentsFragment, m_momentsLayout, m_momentsTargets[0]);
 		m_normalCopyPipeline = this->createFullscreenPipeline(ClassId, baseName + "_GINormalCopy", vertexModule, normalCopyFragment, m_normalCopyLayout, m_normalHistoryTargets[0]);
 
-		if ( m_temporalPipeline == nullptr || m_normalCopyPipeline == nullptr )
+		if ( m_temporalPipeline == nullptr || m_momentsPipeline == nullptr || m_normalCopyPipeline == nullptr )
 		{
 			return false;
 		}
@@ -361,9 +498,10 @@ namespace EmEn::Graphics
 		/* ---- Per-frame descriptor sets (texture bindings are rewritten every frame
 		 * because of the history ping-pong; the UBO binding is written once here) ---- */
 		m_temporalPerFrame = this->createPerFrameDescriptorSets(temporalInputLayout, ClassId, baseName + "_GITemporal_DescSet");
+		m_momentsPerFrame = this->createPerFrameDescriptorSets(temporalInputLayout, ClassId, baseName + "_GIMoments_DescSet");
 		m_normalCopyPerFrame = this->createPerFrameDescriptorSets(normalCopyInputLayout, ClassId, baseName + "_GINormalCopy_DescSet");
 
-		if ( m_temporalPerFrame.empty() || m_normalCopyPerFrame.empty() )
+		if ( m_temporalPerFrame.empty() || m_momentsPerFrame.empty() || m_normalCopyPerFrame.empty() )
 		{
 			return false;
 		}
@@ -371,6 +509,11 @@ namespace EmEn::Graphics
 		for ( size_t f = 0; f < m_temporalPerFrame.size(); ++f )
 		{
 			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(6, *m_frameUBOs[f]) )
+			{
+				return false;
+			}
+
+			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(6, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
@@ -388,14 +531,22 @@ namespace EmEn::Graphics
 	GIDenoiser::destroy () noexcept
 	{
 		m_normalCopyPerFrame.clear();
+		m_momentsPerFrame.clear();
 		m_temporalPerFrame.clear();
 
 		m_frameUBOs.clear();
 
 		m_normalCopyPipeline.reset();
+		m_momentsPipeline.reset();
 		m_temporalPipeline.reset();
 		m_normalCopyLayout.reset();
+		m_momentsLayout.reset();
 		m_temporalLayout.reset();
+
+		for ( auto & target : m_momentsTargets )
+		{
+			target.destroy();
+		}
 
 		for ( auto & target : m_normalHistoryTargets )
 		{
@@ -430,7 +581,7 @@ namespace EmEn::Graphics
 	}
 
 	const TextureInterface *
-	GIDenoiser::recordResolve (const CommandBuffer & commandBuffer, const TextureInterface & noisyInput, const FrameContext & context) noexcept
+	GIDenoiser::recordResolve (const CommandBuffer & commandBuffer, const TextureInterface & noisyInput, const TextureInterface & rawInput, const FrameContext & context) noexcept
 	{
 		if ( !this->temporalActive() )
 		{
@@ -445,28 +596,34 @@ namespace EmEn::Graphics
 		/* ---- Per-frame descriptor updates ---- */
 
 		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(0, noisyInput));
+		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(0, rawInput));
 
 		/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
 		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
 		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
+		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(3, m_momentsTargets[readIdx]));
+		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
 
 		if ( context.depth != nullptr )
 		{
 			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
+			static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
 		}
 
 		if ( context.normals != nullptr )
 		{
 			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(2, *context.normals));
+			static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(2, *context.normals));
 			static_cast< void >(m_normalCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *context.normals));
 		}
 
 		if ( context.velocity != nullptr )
 		{
 			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
+			static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
 		}
 
-		/* ---- Temporal resolve + normal history ---- */
+		/* ---- Temporal resolve + moments accumulation + normal history ---- */
 
 		IndirectPostProcessEffect::recordFullscreenPass(
 			commandBuffer,
@@ -474,6 +631,16 @@ namespace EmEn::Graphics
 			*m_temporalPipeline,
 			*m_temporalLayout,
 			*m_temporalPerFrame[frameIndex],
+			nullptr,
+			0
+		);
+
+		IndirectPostProcessEffect::recordFullscreenPass(
+			commandBuffer,
+			m_momentsTargets[writeIdx],
+			*m_momentsPipeline,
+			*m_momentsLayout,
+			*m_momentsPerFrame[frameIndex],
 			nullptr,
 			0
 		);

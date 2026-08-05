@@ -504,6 +504,14 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingGITemporalAnimatedNoiseKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/AnimatedNoise"};
 			constexpr auto DefaultGraphicsRayTracingGITemporalAnimatedNoise{false};
 
+			/* Ray Tracing > Global Illumination > Denoiser (shared GIDenoiser component, SVGF).
+			 * Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
+			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
+			 * scale is unreadable under the photometric exposure), 2 = accumulation age
+			 * (white = young/disoccluded). Diagnostic only, costs nothing at 0. */
+			constexpr auto GraphicsRayTracingGIDenoiserDebugViewKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/DebugView"};
+			constexpr auto DefaultGraphicsRayTracingGIDenoiserDebugView{0U};
+
 			/* Ray Tracing > Global Illumination > Multi-bounce feedback.
 			 * Bounce rays landing on a surface visible last frame pick up its accumulated
 			 * indirect radiance: the geometric series converges to the multi-bounce solution

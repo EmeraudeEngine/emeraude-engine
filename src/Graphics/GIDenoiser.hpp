@@ -180,6 +180,23 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the moments texture WRITTEN this frame (m1/m2 of the raw estimate's
+			 * luminance, accumulation age, camera distance).
+			 * @note Only meaningful when temporalActive(), after recordResolve(). The variance
+			 * is derived at the read site: max(m2 - m1*m1, 0). Feeds the variance-guided
+			 * à-trous weights (SVGF stage 2) and the debug views.
+			 * @return const Vulkan::TextureInterface &
+			 */
+			[[nodiscard]]
+			const Vulkan::TextureInterface &
+			momentsTexture () const noexcept
+			{
+				/* recordResolve() flipped m_historyWriteIndex AFTER writing: the freshly
+				 * written moments now sit at [1 - writeIdx]. */
+				return m_momentsTargets[1U - m_historyWriteIndex];
+			}
+
+			/**
 			 * @brief Returns the per-frame frame-data UBO, for the owner's own descriptor sets.
 			 * @param frameIndex The frame-in-flight index.
 			 * @return const Vulkan::UniformBufferObject &
@@ -201,17 +218,21 @@ namespace EmEn::Graphics
 			bool updateFrameData (uint32_t frameIndex, const FrameUBOData & data) noexcept;
 
 			/**
-			 * @brief Records the temporal resolve and the normal-history retention passes.
+			 * @brief Records the temporal resolve, the moments accumulation and the
+			 * normal-history retention passes.
 			 * @note Called outside any active render pass, after the owner's noisy estimate is
 			 * complete. Flips the history ping-pong. When the temporal chain is off, records
 			 * nothing and returns the noisy input unchanged.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param noisyInput The owner's denoised-so-far estimate (blur output today).
+			 * @param rawInput The owner's RAW estimate (trace output, before any spatial
+			 * filtering) — the moments integrate ITS luminance, so the variance measures the
+			 * estimator noise the à-trous must remove, not the already-smoothed signal.
 			 * @param context The per-frame chain context.
 			 * @return const Vulkan::TextureInterface * The texture the owner's combine must consume.
 			 */
 			[[nodiscard]]
-			const Vulkan::TextureInterface * recordResolve (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & noisyInput, const FrameContext & context) noexcept;
+			const Vulkan::TextureInterface * recordResolve (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & noisyInput, const Vulkan::TextureInterface & rawInput, const FrameContext & context) noexcept;
 
 		private:
 
@@ -222,14 +243,23 @@ namespace EmEn::Graphics
 			 * world-space normal history used for disocclusion rejection. */
 			std::array< IntermediateRenderTarget, 2 > m_historyTargets;
 			std::array< IntermediateRenderTarget, 2 > m_normalHistoryTargets;
+			/* Per-pixel moments of the RAW estimate's luminance (ping-pong, RGBA16F):
+			 * R = m1 (mean), G = m2 (mean of squares) — temporal variance = m2 - m1²,
+			 * B = accumulation age in frames (saturates at 64; reset on disocclusion —
+			 * the SVGF 1/N accumulation counter reuses this channel),
+			 * A = camera distance of the pixel (0 = invalid/sky), like the colour history. */
+			std::array< IntermediateRenderTarget, 2 > m_momentsTargets;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_momentsPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_momentsLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_normalCopyLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_temporalPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_momentsPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_normalCopyPerFrame;
 			/* Per-frame UBOs shared by the owner's trace and the denoiser passes. */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_frameUBOs;

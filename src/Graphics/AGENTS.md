@@ -1167,11 +1167,35 @@ advances the animated-noise R2 index). Owner-facing flow, in `recordPre/PostDeno
    normal history, flips the ping-pong, returns the texture the combine must consume
    (the noisy input unchanged when the temporal chain is off).
 
-The SVGF stages (per-pixel moments/variance, variance-guided à-trous replacing the shared
-H/V blur, 1/N accumulation counter, then animated noise) will be built INSIDE this
-component — settings will live under the mirrored
+The SVGF stages are built INSIDE this component — settings live under the mirrored
 `RayTracing/GlobalIllumination/Denoiser/` + `ScreenSpace/GlobalIllumination/Denoiser/`
-groups (owner decisions, 2026-08-06).
+groups (owner decisions, 2026-08-06). Remaining: variance-guided à-trous replacing the
+shared H/V blur (stage 2), 1/N accumulation counter (stage 3), animated noise (stage 4).
+
+**Stage 1 — per-pixel moments + variance (Aug 2026):** a third ping-pong pair
+(`_GIMoments`, RGBA16F) integrates the first/second raw moments of the **RAW estimate's
+luminance** (the owner passes its unfiltered trace as `rawInput` to `recordResolve()` —
+variance of the already-blurred signal would underestimate the noise the spatial filter
+must remove). Channels: R = m1, G = m2 (temporal variance = `max(m2 − m1², 0)`, derived at
+the read site via `momentsTexture()`), B = accumulation age in frames (saturates at 64,
+reset on disocclusion — the future 1/N counter), A = camera distance (validity marker).
+The moments pass duplicates the colour resolve's velocity reprojection + 3×3 depth-nearest
+dilation + double disocclusion test VERBATIM — both passes MUST agree on which pixels have
+a valid history; `alpha >= 1.0` also routes to the reset path (covers the first frame
+after (re)creation AND a user-set alpha of 1). Measured: +0.196 ms half-res on the 3070 Ti
+(RTGIEffect/temporal 0.266 → 0.462 ms), visually neutral (Sponza corridor ptp 0.830 within
+the baseline envelope, identical mean luma).
+
+**Denoiser debug views** (`RayTracing/GlobalIllumination/Denoiser/DebugView`, default 0,
+read by RTGI at create): the combine draws the denoiser internals INSTEAD of the GI —
+1 = temporal variance (amplified ×1e6, bounded — a LINEAR scale is unreadable under the
+photometric exposure), 2 = accumulation age (white = young/disoccluded, < 4 frames).
+Validated on Sponza: the variance map matches the owner's shimmer cartography
+(floor near the lit door + curtains brightest, penumbra structured, true darkness black);
+the age map shows saturation on stable surfaces and permanent per-frame resets exactly on
+the wind-animated ivy and on silhouette edges under the TAA jitter — the first direct
+visualisation of the "jitter is the vibrator" mechanism, and the zone the stage-2 spatial
+variance fallback must cover.
 
 ### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 

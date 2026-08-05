@@ -638,6 +638,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalVarianceGammaKey, DefaultGraphicsRayTracingGITemporalVarianceGamma);
 		m_parameters.multiBounceStrength = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceStrengthKey, DefaultGraphicsRayTracingGIMultiBounceStrength);
 		m_parameters.multiBounceClamp = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceClampKey, DefaultGraphicsRayTracingGIMultiBounceClamp);
+		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserDebugViewKey, DefaultGraphicsRayTracingGIDenoiserDebugView);
 		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalEnabledKey, DefaultGraphicsRayTracingGITemporalEnabled);
 		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalNeighborhoodClampKey, DefaultGraphicsRayTracingGITemporalNeighborhoodClamp);
 		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalAnimatedNoiseKey, DefaultGraphicsRayTracingGITemporalAnimatedNoise);
@@ -1020,15 +1021,44 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	void
 	RTGI::recordPostDenoisePasses (const CommandBuffer & commandBuffer, const FrameContext & context) noexcept
 	{
-		/* The denoiser records the temporal resolve + the normal-history retention and
-		 * flips its history ping-pong; the combine snippet consumes the freshly resolved
-		 * history when the temporal chain is active, the blurred trace otherwise. */
-		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_blurVTarget, context);
+		/* The denoiser records the temporal resolve + the moments accumulation + the
+		 * normal-history retention and flips its history ping-pong; the combine snippet
+		 * consumes the freshly resolved history when the temporal chain is active, the
+		 * blurred trace otherwise. The moments read the RAW trace: the variance must
+		 * measure the estimator noise, not the already-blurred signal. */
+		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_blurVTarget, m_traceTarget, context);
 	}
 
 	IndirectPostProcessEffect::CombineContribution
 	RTGI::combineContribution (const FrameContext & /*context*/) const noexcept
 	{
+		/* Denoiser debug views (diagnostic): draw the denoiser internals INSTEAD of the GI
+		 * contribution. Binary-amplified — a linear scale is unreadable under the
+		 * photometric exposure (the tone mapper is a camera sensor, not a data scope). */
+		if ( m_parameters.denoiserDebugView != 0U && m_denoiser.temporalActive() )
+		{
+			CombineContribution contribution;
+			contribution.prefix = "rtgi";
+			contribution.samplers.emplace_back(CombineSamplerInput{"Moments", &m_denoiser.momentsTexture()});
+			contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{static_cast< float >(m_parameters.denoiserDebugView), 0.0F, 0.0F, 0.0F});
+
+			contribution.code =
+				"\tvec4 rtgiMom = texture(rtgiMoments, vUV);\n"
+				"\tfloat rtgiVar = max(rtgiMom.g - rtgiMom.r * rtgiMom.r, 0.0);\n"
+				"\tif (emDyn.rtgiDynamics0.x < 1.5)\n"
+				"\t{\n"
+				"\t\t/* Variance, amplified x1e6 and bounded (readable under any exposure). */\n"
+				"\t\tem_Color.rgb = vec3(min(rtgiVar * 1e6, 1e4));\n"
+				"\t}\n"
+				"\telse\n"
+				"\t{\n"
+				"\t\t/* Accumulation age: white = young (< 4 frames, spatial-fallback zone). */\n"
+				"\t\tem_Color.rgb = rtgiMom.b < 4.0 ? vec3(1e4) : vec3(rtgiMom.b / 64.0 * 100.0);\n"
+				"\t}\n";
+
+			return contribution;
+		}
+
 		CombineContribution contribution;
 		contribution.prefix = "rtgi";
 		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", m_combineSource});
