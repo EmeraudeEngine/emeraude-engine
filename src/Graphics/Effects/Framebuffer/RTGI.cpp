@@ -110,9 +110,9 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
-	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
 	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z/w = unused. */
 };
 
@@ -446,6 +446,18 @@ void main()
 	/* Per-pixel random rotation to break banding. */
 	vec2 noiseVec = hash2(uvec2(gl_FragCoord.xy));
 
+	/* Temporal decorrelation (flag bit 1, requires the temporal resolve): advance the
+	 * per-pixel rotation every frame along the R2 low-discrepancy sequence (M. Roberts,
+	 * "The Unreasonable Effectiveness of Quasirandom Sequences", 2018) so the temporal
+	 * EMA AVERAGES the estimator error over the frames instead of freezing it as a
+	 * static pattern — which TAA's sub-pixel resampling turns into visible shimmer
+	 * (owner-isolated, 2026-08-05: TAA -> FXAA froze the noise). The flag is NEVER set
+	 * when the temporal chain is off: animated noise without accumulation boils. */
+	if ((uint(temporalParams.w) & 2u) != 0u)
+	{
+		noiseVec = fract(noiseVec + traceParams.w * vec2(0.7548776662, 0.5698402909));
+	}
+
 	/* Adaptive bias: scale with camera distance AND grazing angle.
 	 * Distance: pixel footprint grows → needs larger offset.
 	 * NdotV: at grazing angles, rays easily clip the surface → needs extra offset. */
@@ -630,9 +642,9 @@ layout(set = 0, binding = 6, std140) uniform FrameData
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
-	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
 };
 
 void main()
@@ -712,25 +724,34 @@ void main()
 		return;
 	}
 
-	/* Neighborhood clamp (flag bit 0): bound the history to the current 3x3 range so a
-	 * stale-but-plausible history cannot drag the result far from what is observed now. */
+	/* History rectification (flag bit 0): VARIANCE CLIPPING — bound the history to
+	 * mean ± gamma * sigma of the current 3x3 neighborhood (M. Salvi, "An Excursion in
+	 * Temporal Supersampling", GDC 2016 — the same technique as the engine TAA). It
+	 * replaced the min/max clamp: with ANIMATED noise the per-frame estimates are
+	 * deliberately different, and a min/max box collapses onto whatever outlier the
+	 * current frame produced, killing the convergence the animation exists for. The
+	 * statistical bound keeps disocclusion ghosting bounded while letting the EMA
+	 * actually accumulate. bounceParams.z = gamma (Temporal/VarianceGamma key). */
 	if ((uint(temporalParams.w) & 1u) != 0u)
 	{
 		vec2 texel = 1.0 / vec2(textureSize(giTex, 0));
-		vec3 nbMin = current;
-		vec3 nbMax = current;
+		vec3 m1 = vec3(0.0);
+		vec3 m2 = vec3(0.0);
 
 		for (int y = -1; y <= 1; y++)
 		{
 			for (int x = -1; x <= 1; x++)
 			{
 				vec3 nb = texture(giTex, vUV + vec2(x, y) * texel).rgb;
-				nbMin = min(nbMin, nb);
-				nbMax = max(nbMax, nb);
+				m1 += nb;
+				m2 += nb * nb;
 			}
 		}
 
-		history.rgb = clamp(history.rgb, nbMin, nbMax);
+		vec3 mu = m1 / 9.0;
+		vec3 sigma = sqrt(max(m2 / 9.0 - mu * mu, vec3(0.0)));
+
+		history.rgb = clamp(history.rgb, mu - bounceParams.z * sigma, mu + bounceParams.z * sigma);
 	}
 
 	outResolved = vec4(mix(history.rgb, current, alpha), cameraDistance);
@@ -762,9 +783,9 @@ layout(set = 0, binding = 1, std140) uniform FrameData
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
-	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = unused. */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags. */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z/w = unused. */
+	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
 };
 
 void main()
@@ -815,16 +836,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalAlphaKey, DefaultGraphicsRayTracingGITemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalDepthToleranceKey, DefaultGraphicsRayTracingGITemporalDepthTolerance);
 		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalNormalThresholdKey, DefaultGraphicsRayTracingGITemporalNormalThreshold);
+		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalVarianceGammaKey, DefaultGraphicsRayTracingGITemporalVarianceGamma);
 		m_parameters.multiBounceStrength = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceStrengthKey, DefaultGraphicsRayTracingGIMultiBounceStrength);
 		m_parameters.multiBounceClamp = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceClampKey, DefaultGraphicsRayTracingGIMultiBounceClamp);
 		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalEnabledKey, DefaultGraphicsRayTracingGITemporalEnabled);
 		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalNeighborhoodClampKey, DefaultGraphicsRayTracingGITemporalNeighborhoodClamp);
+		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalAnimatedNoiseKey, DefaultGraphicsRayTracingGITemporalAnimatedNoise);
 		m_parameters.multiBounceEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGIMultiBounceEnabledKey, DefaultGraphicsRayTracingGIMultiBounceEnabled);
 
 		/* History starts invalid: the first frame after (re)creation must not read the
 		 * uninitialized ping-pong images (alpha forced to 1, no multi-bounce feedback). */
 		m_historyValid = false;
 		m_historyWriteIndex = 0;
+		m_noiseFrameIndex = 0;
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )
@@ -1099,6 +1123,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_historyValid = false;
 		m_historyWriteIndex = 0;
+		m_noiseFrameIndex = 0;
 	}
 
 	void
@@ -1182,17 +1207,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.invViewCol2 = {inv[8], inv[9], inv[10]},
 				.viewPosZ = inv[14],
 				.prevCamPos = {pinv[12], pinv[13], pinv[14], 0.0F},
-				.traceParams = {m_parameters.maxDistance, m_parameters.bias, static_cast< float >(m_parameters.sampleCount), 0.0F},
+				.traceParams = {m_parameters.maxDistance, m_parameters.bias, static_cast< float >(m_parameters.sampleCount), static_cast< float >(m_noiseFrameIndex)},
 				.temporalParams = {
 					historyUsable ? m_parameters.temporalAlpha : 1.0F,
 					m_parameters.temporalDepthTolerance,
 					m_parameters.temporalNormalThreshold,
-					m_parameters.temporalNeighborhoodClamp ? 1.0F : 0.0F
+					static_cast< float >(
+						(m_parameters.temporalNeighborhoodClamp ? 1U : 0U) |
+						(temporalActive && m_parameters.temporalAnimatedNoise ? 2U : 0U)
+					)
 				},
 				.bounceParams = {
 					historyUsable && m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
 					m_parameters.multiBounceClamp,
-					0.0F,
+					m_parameters.temporalVarianceGamma,
 					0.0F
 				},
 				/* THE SKY IS A LIGHT SOURCE. The luminance comes from the scene background
@@ -1207,6 +1235,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			{
 				TraceError{ClassId} << "Failed to update the RTGI frame UBO !";
 			}
+
+			/* Advance the animated-noise sequence once per recorded frame (wraps at 4096,
+			 * exactly representable in float32 so fract(n * R2) stays precise). */
+			m_noiseFrameIndex = (m_noiseFrameIndex + 1U) % 4096U;
 		}
 
 		/* ---- Pass 1: Ray Trace GI ---- */

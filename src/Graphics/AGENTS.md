@@ -1183,6 +1183,24 @@ trace/temporal/normal-history passes — created via
 `IndirectPostProcessEffect::createPerFrameUniformBuffers()`, bound through
 `getInputLayout(samplerCount, uniformBufferCount)` (samplers first, then UBOs).
 
+**History rectification = variance clipping (Aug 2026):** the temporal resolve bounds the
+reprojected history to mean ± gamma × sigma of the current 3×3 neighborhood (Salvi, GDC 2016 —
+the same technique as the engine TAA; `Temporal/VarianceGamma`, default 1.0), replacing the
+former min/max clamp. Neutral with the static noise (measured), required for any future
+animated-noise work.
+
+**Animated noise infrastructure (Aug 2026) — DEFAULT OFF, measured regression:**
+`Temporal/AnimatedNoise` advances the per-pixel sample rotation along the R2 sequence
+(Roberts 2018) each frame (frame index in `traceParams.w`, flag bit 1 of `temporalParams.w`,
+gated on the temporal chain). ⚠ With the fixed-alpha EMA (0.1) this REGRESSED temporal
+stability ×2.4 on the Sponza corridor bench (mean peak-to-peak 0.67 → 1.65, >4/255 area ×9)
+with NO spatial gain: the EMA leaks ~α/(2−α) ≈ 23% of the injected variance, while a frozen
+pattern has near-zero temporal variance by construction — even an NRD-style 1/N accumulation
+counter would only reach parity (computed). The winning lever is cutting the per-frame noise
+BEFORE the resolve (variance-guided à-trous filter, SVGF) — only then does animated noise
+become viable. Owner-isolated context: the TAA jitter is what makes the static pattern
+shimmer (TAA→FXAA freezes it); see `docs/caution-points.md` § "Animated GI Noise".
+
 **Multi-bounce energy algebra:** the history stores DEMODULATED indirect irradiance
 (`E/π` — receiver albedo deferred to the combine pass), so the feedback IS multiplied by
 the HIT surface's albedo at consumption (`albedo * historyFeedback(hitPos)` in the trace) —

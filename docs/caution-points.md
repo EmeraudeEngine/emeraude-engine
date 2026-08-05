@@ -563,6 +563,31 @@ if ( materialType == PBRResource::ClassId )
 > renumbered — albedo binding removed, history=2, frame UBO=3; `combineContribution()`;
 > `readsChainColorUpstream()` now `false`).
 
+### Measured: Animated GI Noise Cannot Beat a Frozen Pattern Under a Fixed-Alpha EMA (Aug 2026)
+
+> [!WARNING]
+> **Context:** the RTGI noise seed is purely spatial (`hash2(gl_FragCoord)`, no frame index) —
+> the pattern is frozen by design. With TAA active, the Halton jitter makes that static pattern
+> shimmer (owner-isolated: switching TAA → FXAA freezes it — the jitter only exists when the
+> stack requires it, `PostProcessStack::requiresJitter()`), through two paths: the re-rasterized
+> G-buffer wiggles the trace inputs, and the TAA resolve resamples a high-frequency static
+> pattern at sub-pixel offsets. NOT matrix-related: swapping the effect's projection matrix for
+> the unjittered form had no measurable effect (2026-08-05, note in RTGI.cpp).
+>
+> **The measured lesson:** animating the seed (R2 sequence per frame) to "let the temporal EMA
+> average the error" REGRESSED the temporal peak-to-peak ×2.4 (Sponza corridor bench: mean
+> 0.67 → 1.65, >4/255 area ×9, both runs concordant) with no spatial gain. A fixed-alpha EMA
+> retains `α/(2−α)` of the input variance (≈23% at α=0.1) — and a frozen pattern's temporal
+> variance is ~zero by construction, so ANY seed animation loses on that metric. An NRD-style
+> per-pixel 1/N accumulation counter only reaches parity (computed at N=32-64).
+>
+> **The rule:** seed animation is only viable AFTER the per-frame estimator noise is cut ahead
+> of the resolve — a variance-guided à-trous filter chain (SVGF, Schied et al. 2017) or more
+> samples. Until that denoiser chantier lands, `Temporal/AnimatedNoise` stays **default OFF**
+> (the infrastructure — R2 frame index, flag bit 1, variance clipping in the resolve — is in
+> place and key-gated). Measurement protocol: projet-alpha `docs/temporal-stability-measurement.md`
+> (8-shot series ×2 runs — single runs differ by up to ×1.85 and prove nothing).
+
 ### Fixed: RTAO/RTGI tMin Skipped Near Occluders + SSAO Double Intensity & Screen-Edge Band (Jul 2026)
 
 > [!WARNING]

@@ -82,10 +82,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float temporalAlpha{0.1F};
 				float temporalDepthTolerance{0.05F};
 				float temporalNormalThreshold{0.8F};
+				float temporalVarianceGamma{1.0F};
 				float multiBounceStrength{1.0F};
 				float multiBounceClamp{4.0F};
 				bool temporalEnabled{true};
 				bool temporalNeighborhoodClamp{true};
+				bool temporalAnimatedNoise{true};
 				bool multiBounceEnabled{true};
 			};
 
@@ -289,6 +291,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const Vulkan::TextureInterface * m_combineSource{nullptr};
 			/* Ping-pong index of the history buffer written THIS frame. */
 			uint32_t m_historyWriteIndex{0};
+			/* Frame index of the animated-noise R2 sequence (advances once per recorded
+			 * frame, wraps at 4096 to stay exact in float32). */
+			uint32_t m_noiseFrameIndex{0};
 			/* False until a first frame filled the history (forces alpha=1, no feedback). */
 			bool m_historyValid{false};
 	};

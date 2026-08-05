@@ -483,9 +483,26 @@ namespace EmEn
 			/* Minimum cosine between current and history normals to accept history. */
 			constexpr auto GraphicsRayTracingGITemporalNormalThresholdKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NormalThreshold"};
 			constexpr auto DefaultGraphicsRayTracingGITemporalNormalThreshold{0.8F};
-			/* Clamp the reprojected history to the current 3x3 neighbourhood range (anti-ghosting). */
+			/* Rectify the reprojected history against the current 3x3 neighbourhood statistics
+			 * (anti-ghosting). Since 2026-08: VARIANCE CLIPPING (mean ± gamma * sigma, Salvi
+			 * GDC 2016 — same technique as the TAA), no longer a min/max clamp. */
 			constexpr auto GraphicsRayTracingGITemporalNeighborhoodClampKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NeighborhoodClamp"};
 			constexpr auto DefaultGraphicsRayTracingGITemporalNeighborhoodClamp{true};
+			/* Width of the variance-clipping bound, in standard deviations (gamma). Smaller =
+			 * tighter anti-ghosting but slower convergence; larger = smoother accumulation. */
+			constexpr auto GraphicsRayTracingGITemporalVarianceGammaKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/VarianceGamma"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalVarianceGamma{1.0F};
+			/* Advance the per-pixel noise every frame along the R2 low-discrepancy sequence so
+			 * the temporal accumulation averages the sampling error instead of freezing it as a
+			 * static pattern. Only effective when the temporal chain is enabled — animated noise
+			 * without accumulation boils.
+			 * ⚠ DEFAULT OFF (measured 2026-08-05, Sponza corridor bench): with the fixed-alpha
+			 * EMA the animation REGRESSED temporal stability x2.4 (the EMA leaks ~23% of the
+			 * injected variance; a frozen pattern has near-zero temporal variance by
+			 * construction). Re-enable only together with a variance-guided spatial filter
+			 * (SVGF-style) that actually cuts the per-frame noise before the resolve. */
+			constexpr auto GraphicsRayTracingGITemporalAnimatedNoiseKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/AnimatedNoise"};
+			constexpr auto DefaultGraphicsRayTracingGITemporalAnimatedNoise{false};
 
 			/* Ray Tracing > Global Illumination > Multi-bounce feedback.
 			 * Bounce rays landing on a surface visible last frame pick up its accumulated
