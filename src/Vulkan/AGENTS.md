@@ -514,9 +514,17 @@ falls back to a single submission.
 > and the renderer scene-target disable path (previously a local vector + countdown).
 > **Any new runtime destruction path MUST use this service.**
 >
+> Migrated 2026-08-05 (VUID `vkDestroyAccelerationStructureKHR`/`vkDestroyBuffer` "in use"
+> seen live on scene switches): `Geometry::Interface` destructor (per-geometry BLAS — a
+> geometry resource can unload while ray queries reference it) and
+> `RenderableInstance::Abstract` destructor (the whole per-instance skinned GPU set: refit
+> BLAS, skinned mirror + scratch buffers, skinning SSBO, descriptor sets then their pool —
+> an instance dies at runtime on actor death). Both keep the destructor pointer from their
+> creation site (`serviceProvider().graphicsRenderer()` / `prepareSkinningResources()`).
+>
 > Known candidates NOT yet migrated: `Overlay::Surface` framebuffer recreation,
 > material/shared-UBO teardown paths, `LightSet::terminate()` (scene teardown — currently
-> in-place), per-geometry BLAS destruction (`Geometry::Interface`).
+> in-place).
 
 ## Critical: Ray Query vs RT Pipeline Stage Flags
 

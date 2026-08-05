@@ -55,6 +55,14 @@ namespace EmEn::Graphics::Geometry
 		public:
 
 			/**
+			 * @brief Destructs the geometry interface.
+			 * @note The BLAS is routed through the renderer's deferred destructor: a
+			 * geometry resource can be unloaded at runtime while command buffers
+			 * (ray queries) referencing its acceleration structure are still in flight.
+			 */
+			~Interface () override;
+
+			/**
 			 * @brief Returns whether the tangent space is present in local data.
 			 * @return bool
 			 */

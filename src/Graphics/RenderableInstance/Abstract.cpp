@@ -44,6 +44,7 @@
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -62,6 +63,32 @@ namespace EmEn::Graphics::RenderableInstance
 
 	/* Rendered-frame cursor for the skinning per-frame upload (render thread only). */
 	uint64_t Abstract::s_skinningFrameCursor{0};
+
+	Abstract::~Abstract ()
+	{
+		/* NOTE: An instance can be destroyed at runtime (actor death) while command
+		 * buffers referencing its GPU resources are still in flight (per-frame BLAS
+		 * refit, skinning compute, draws): retire them instead of destroying in place.
+		 * Retirement order matters within a tick (FIFO destruction): the acceleration
+		 * structure goes first, then the buffers it references, then the descriptor
+		 * sets before their pool. */
+		if ( m_deferredDestructor != nullptr )
+		{
+			m_deferredDestructor->retireObject(std::move(m_rtSkinnedBLAS));
+			m_deferredDestructor->retireObject(std::move(m_rtSkinnedMirrorBuffer));
+			m_deferredDestructor->retireObject(std::move(m_rtRefitScratchBuffer));
+			m_deferredDestructor->retireObject(std::move(m_skinningSSBO));
+
+			for ( auto & descriptorSet : m_skinningDescriptorSets )
+			{
+				m_deferredDestructor->retireObject(std::move(descriptorSet));
+			}
+
+			m_skinningDescriptorSets.clear();
+
+			m_deferredDestructor->retireObject(std::move(m_skinningDescriptorPool));
+		}
+	}
 
 	void
 	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept
@@ -570,6 +597,10 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::prepareSkinningResources (Renderer & renderer) noexcept
 	{
+		/* NOTE: An instance can be destroyed at runtime (actor death) while frames are
+		 * still in flight: keep the deferred destructor at hand for the destructor. */
+		m_deferredDestructor = &renderer.deferredDestructor();
+
 		if ( !this->isMissingSkinningResources() )
 		{
 			return true;

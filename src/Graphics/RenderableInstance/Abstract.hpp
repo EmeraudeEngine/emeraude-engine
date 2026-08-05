@@ -74,6 +74,7 @@ namespace EmEn
 		class PipelineLayout;
 		class GraphicsPipeline;
 		class CommandBuffer;
+		class DeferredDestructor;
 	}
 
 	namespace Saphir
@@ -215,8 +216,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Destructs the renderable instance.
+			 * @note GPU-visible skinning/RT resources are routed through the renderer's
+			 * deferred destructor: an instance can die at runtime (actor death) while
+			 * command buffers referencing them are still in flight.
 			 */
-			~Abstract () override = default;
+			~Abstract () override;
 
 			/**
 			 * @brief Returns whether this instance is ready to cast shadows.
@@ -1145,6 +1149,10 @@ namespace EmEn::Graphics::RenderableInstance
 			mutable uint32_t m_skinningBoundSection{0};
 			/** @brief Rendered-frame cursor, set once per frame by the Renderer (render thread only). */
 			static uint64_t s_skinningFrameCursor;
+			/** @brief The renderer's deferred destructor (set with the skinning resources):
+			 * the destructor retires the GPU-visible resources through it, because an
+			 * instance can die at runtime while frames referencing them are in flight. */
+			Vulkan::DeferredDestructor * m_deferredDestructor{nullptr};
 			/** @brief Whether m_lastModelMatrix holds a valid previous-frame matrix (false until the first primary staging). */
 			bool m_hasModelHistory{false};
 			/** @brief Whether the descriptor set contract violation was already reported (render thread only, anti-spam). */

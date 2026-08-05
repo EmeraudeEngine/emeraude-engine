@@ -35,6 +35,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry
@@ -45,6 +46,17 @@ namespace EmEn::Graphics::Geometry
 	using namespace Vulkan;
 
 	constexpr auto TracerTag{"GeometryInterface"};
+
+	Interface::~Interface ()
+	{
+		/* NOTE: A geometry can be unloaded at runtime while command buffers (ray
+		 * queries) still reference its BLAS: retire it instead of destroying it in
+		 * place. The BLAS owns its backing buffer, so both follow the same delay. */
+		if ( m_accelerationStructure != nullptr )
+		{
+			this->serviceProvider().graphicsRenderer().deferredDestructor().retireObject(std::move(m_accelerationStructure));
+		}
+	}
 
 	bool
 	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, uint32_t length) noexcept
