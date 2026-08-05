@@ -15,6 +15,5 @@ dependencies/*
 cmake-build-*
 
 # Claude Code build directories
-.claude/settings.local.json
-.claude-build-debug/
-.claude-build-release/
+.claude/
+.claude-build-*
