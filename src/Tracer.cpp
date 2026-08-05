@@ -30,8 +30,8 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cstring>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <ranges>
@@ -275,6 +275,11 @@ namespace EmEn
 
 	Tracer::Tracer (PrivateToken) noexcept
 	{
+#if IS_WINDOWS
+		/* NOTE: Before the very first trace goes out. */
+		this->enableConsoleUTF8Output();
+#endif
+
 		if constexpr ( IsDebug )
 		{
 			std::cout << "Tracer constructed!" << std::endl;
@@ -293,7 +298,49 @@ namespace EmEn
 		{
 			std::cout << "Tracer instance destroyed!" << std::endl;
 		}
+
+#if IS_WINDOWS
+		/* NOTE: After the last trace, the console belongs to the parent shell again. */
+		this->restoreConsoleOutputCodePage();
+#endif
 	}
+
+#if IS_WINDOWS
+	void
+	Tracer::enableConsoleUTF8Output () noexcept
+	{
+		/* NOTE: Returns 0 when no console is attached to this process (WINDOWS subsystem,
+		 * public release builds): there is nothing to switch. */
+		const auto previousCodePage = GetConsoleOutputCP();
+
+		if ( previousCodePage == 0 || previousCodePage == CP_UTF8 )
+		{
+			return;
+		}
+
+		/* NOTE: Only remember the previous code page once the switch actually succeeded,
+		 * so the destructor never restores a value that was never replaced. Every CEF
+		 * sub-process shares the same console: the first one switches it, the others take
+		 * the early return above. */
+		if ( SetConsoleOutputCP(CP_UTF8) != FALSE )
+		{
+			m_previousConsoleOutputCodePage = previousCodePage;
+		}
+	}
+
+	void
+	Tracer::restoreConsoleOutputCodePage () noexcept
+	{
+		if ( m_previousConsoleOutputCodePage == 0 )
+		{
+			return;
+		}
+
+		SetConsoleOutputCP(m_previousConsoleOutputCodePage);
+
+		m_previousConsoleOutputCodePage = 0;
+	}
+#endif
 
 	void
 	Tracer::earlySetup (const Arguments & arguments, std::string processName, bool childProcess) noexcept

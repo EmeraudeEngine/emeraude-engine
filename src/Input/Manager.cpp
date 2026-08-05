@@ -622,24 +622,28 @@ namespace EmEn::Input
 			TraceDebug{ClassId} << count << " files has been dropped into the window." "\n";
 		}
 
-		std::vector< std::filesystem::path > filePaths;
-		filePaths.reserve(count);
+		std::vector< std::filesystem::path > fsPaths;
+		fsPaths.reserve(count);
 
 		for ( auto index = 0; index < count; index++ )
 		{
-			const std::filesystem::path filepath{paths[index]};
-
-			if ( !IO::fileExists(filepath) )
+			if ( auto fsPath = IO::u8path(paths[index]); IO::fileExists(fsPath) )
 			{
-				TraceError{ClassId} << "File '" << filepath << "' doesn't exists!";
+				TraceDebug{ClassId} << "Path dropped : " << IO::toU8String(fsPath);
 
-				continue;
+				fsPaths.emplace_back(std::move(fsPath));
 			}
-
-			filePaths.emplace_back(filepath);
+			else
+			{
+				TraceWarning{ClassId} << "The file '" << IO::toU8String(fsPath) << "' doesn't exists! Skipping ...";
+			}
 		}
 
-		s_instance->notify(DroppedFiles, filePaths);
+		/* NOTE: Only send existing files. */
+		if ( !fsPaths.empty() )
+		{
+			s_instance->notify(DroppedFiles, fsPaths);
+		}
 	}
 
 	void

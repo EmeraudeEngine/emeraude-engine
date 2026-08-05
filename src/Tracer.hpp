@@ -607,6 +607,31 @@ namespace EmEn
 			 */
 			bool filterTag (const char * tag) const noexcept;
 
+#if IS_WINDOWS
+			/**
+			 * @brief Switches the attached console to UTF-8 output.
+			 *
+			 * Traces are written as raw bytes to std::cout, and the console renders them
+			 * through its output code page (437, 850, 1252, ... by default). Without this,
+			 * every non-ASCII character of a trace (accented file paths, ...) is displayed
+			 * as mojibake even though the string itself is a valid UTF-8 one.
+			 *
+			 * The code page belongs to the console object, which is shared with the parent
+			 * shell: the previous value is saved in m_previousConsoleOutputCodePage and put
+			 * back by restoreConsoleOutputCodePage(). No-op when no console is attached
+			 * (WINDOWS subsystem, public release builds) or when it is already UTF-8.
+			 *
+			 * @version 0.8.38
+			 */
+			void enableConsoleUTF8Output () noexcept;
+
+			/**
+			 * @brief Restores the console output code page saved by enableConsoleUTF8Output().
+			 * @version 0.8.38
+			 */
+			void restoreConsoleOutputCodePage () noexcept;
+#endif
+
 			/* NOTE: Members ordered for optimal memory alignment (largest to smallest). */
 			std::filesystem::path m_cacheDirectory;
 			std::string m_processName;
@@ -615,6 +640,10 @@ namespace EmEn
 			mutable std::mutex m_consoleAccess;
 			int m_parentProcessID{-1};
 			int m_processID{-1};
+#if IS_WINDOWS
+			/* NOTE: 0 means "nothing to restore" (no console, or already UTF-8). */
+			unsigned int m_previousConsoleOutputCodePage{0};
+#endif
 			LogFormat m_logFormat{LogFormat::Text};
 			bool m_serviceInitialized{false};
 			bool m_isChildProcess{false};

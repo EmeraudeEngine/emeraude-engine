@@ -120,6 +120,38 @@ trace << "==============================";
 | `Tracer::fatal()` | `TraceFatal{}` | Unrecoverable errors |
 | N/A | `TraceAPI{}` | External API calls (Vulkan, OpenAL, etc.) |
 
+## Console Output Encoding (Windows)
+
+Traces are written as **raw bytes** to `std::cout`. On Windows the console renders those
+bytes through its *output code page*, which defaults to an OEM one (437, 850, 1252, …) —
+never UTF-8. A perfectly valid UTF-8 message therefore displayed as mojibake: an accented
+file path traced with `TraceInfo` came out as `Ã©` or `├⌐`, which reads exactly like an
+encoding bug in the traced data and sends you hunting in the wrong place.
+
+The `Tracer` constructor now calls `enableConsoleUTF8Output()` (`#if IS_WINDOWS`), which
+switches the attached console to `CP_UTF8` **before the first trace is emitted**. The
+previous code page is saved and restored by `restoreConsoleOutputCodePage()` in the
+destructor — the console object is shared with the parent shell, so leaving it on UTF-8
+after exit would change the shell's behaviour behind the user's back.
+
+| Situation | Behaviour |
+|---|---|
+| Development build (CONSOLE subsystem) | The console is switched to UTF-8, then restored at exit. |
+| Public release build (WINDOWS subsystem, no console) | `GetConsoleOutputCP()` returns 0 → no-op, nothing to restore. |
+| Several CEF sub-processes sharing one console | The first `Tracer` switches it; the others see `CP_UTF8` and take the early return, so they never save UTF-8 as a "previous" value to restore. |
+| Output redirected to a pipe or a file (IDE run window, `> log.txt`) | **The code page is irrelevant** — the bytes are UTF-8 and it is the reader's decoding that matters (IDE console encoding, text editor). |
+
+> [!IMPORTANT]
+> This fixes the **rendering** only. A trace showing a wrong character can still come from
+> genuinely corrupted data upstream — typically a `std::filesystem::path` built implicitly
+> from a UTF-8 `std::string` or `const char *`, which goes through the ANSI code page on
+> Windows. Always build such paths with `Base::IO::u8path()` and convert back with
+> `Base::IO::toU8String()`. Note that streaming a `std::filesystem::path` directly into a
+> trace (`<< somePath`) uses `path::operator<<`, i.e. a lossy ANSI conversion on Windows —
+> stream `IO::toU8String(somePath)` instead. The decisive test to tell the two apart: if
+> the *behaviour* is also wrong (`IO::fileExists()` failing on a file that exists), the
+> data is corrupted; if only the display is wrong, it is the console.
+
 ## Implementation Details
 
 The Trace classes use the **CRTP pattern** (`T_TraceHelperBase`) to avoid code duplication while maintaining zero overhead. The message is accumulated internally via `operator<<` and flushed as a single log entry when the object is destroyed (RAII).
