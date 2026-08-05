@@ -95,6 +95,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the effect display label, used by the GPU profiler scopes.
+			 * @note Every concrete effect should override this with its ClassId; the
+			 * default only exists so display-only helpers are not forced to.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			virtual
+			const char *
+			label () const noexcept
+			{
+				return "Effect";
+			}
+
+			/**
 			 * @brief Returns whether this effect provides SCENE reflections (SSR, RTR).
 			 * @note Drives the reflection cost ladder: while an enabled reflection provider is
 			 * in the scene stack, the Renderer suspends the continuous reflection probes

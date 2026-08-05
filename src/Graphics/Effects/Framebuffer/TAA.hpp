@@ -58,6 +58,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"TAAEffect"};
 
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
 			/**
 			 * @brief User-facing TAA parameters.
 			 * @note Overridden by the Core/Graphics/AntiAliasing/Temporal settings keys at create().

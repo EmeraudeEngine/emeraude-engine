@@ -728,6 +728,17 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Initialize the GPU profiler if enabled and the device supports timestamp queries. */
+		if ( m_device != nullptr && m_primaryServices.settings().getOrSetDefault< bool >(GraphicsGPUProfilerEnabledKey, DefaultGraphicsGPUProfilerEnabled) )
+		{
+			m_GPUProfiler = std::make_unique< Vulkan::GPUProfiler >(m_device, this->framesInFlight());
+
+			if ( !m_GPUProfiler->createOnHardware() )
+			{
+				m_GPUProfiler.reset();
+			}
+		}
+
 		return true;
 	}
 
@@ -767,6 +778,11 @@ namespace EmEn::Graphics
 
 		/* Release MDI resources before other Vulkan objects are destroyed. */
 		m_MDIBatchBuilder.reset();
+
+		/* Release the GPU profiler query pools while the device is still alive: the
+		 * unique_ptr member would otherwise destroy them at Renderer destruction,
+		 * long after vkDestroyDevice (loader error, undefined behavior). */
+		m_GPUProfiler.reset();
 
 		size_t error = 0;
 
@@ -1512,6 +1528,13 @@ namespace EmEn::Graphics
 		{
 			m_statistics.stop();
 
+			/* The fence guarantees this slot's timestamp queries are available: harvest
+			 * the timings of the frame submitted framesInFlight() frames ago, stall-free. */
+			if ( m_GPUProfiler != nullptr )
+			{
+				m_GPUProfiler->harvest(m_currentFrameIndex);
+			}
+
 			currentFrameScope.prepareForNewFrame();
 		}
 		else
@@ -1592,6 +1615,13 @@ namespace EmEn::Graphics
 			this->discardAcquiredImage(currentFrameScope, true);
 
 			return;
+		}
+
+		/* Query pool reset must be recorded outside a render pass: right here, before
+		 * any rendering strategy records its first pass. */
+		if ( m_GPUProfiler != nullptr )
+		{
+			m_GPUProfiler->beginFrame(*commandBuffer, m_currentFrameIndex);
 		}
 
 		/* Lazy creation/destruction of the internal scene target based on post-processor state.
@@ -1703,6 +1733,11 @@ namespace EmEn::Graphics
 		if ( scene != nullptr )
 		{
 			this->mainRenderTarget()->viewMatrices().archiveStateAfterRendering(m_currentReadStateIndex);
+		}
+
+		if ( m_GPUProfiler != nullptr )
+		{
+			m_GPUProfiler->endFrame(*commandBuffer);
 		}
 
 		if ( !commandBuffer->end() )
@@ -1877,7 +1912,16 @@ namespace EmEn::Graphics
 		{
 			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
+
 			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
+		}
+
+		Vulkan::GPUProfiler * profiler = m_GPUProfiler.get();
+
+		if ( profiler != nullptr )
+		{
+			profiler->beginScope(*commandBuffer, "ScenePass");
 		}
 
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
@@ -1933,10 +1977,17 @@ namespace EmEn::Graphics
 
 		commandBuffer->endRenderPass();
 
+		if ( profiler != nullptr )
+		{
+			profiler->endScope(*commandBuffer);
+		}
+
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
 		 * The internal target's color image is in COLOR_ATTACHMENT_OPTIMAL (matching GrabPass expectations). */
 		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
 		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "GrabPass"};
+
 			const auto * srcDepth = m_grabPass->hasDepth() ? m_sceneTarget->depthStencilImage().get() : nullptr;
 
 			m_grabPass->recordBlit(*commandBuffer, *m_sceneTarget->colorImage(), srcDepth);
@@ -1946,6 +1997,8 @@ namespace EmEn::Graphics
 		 * so they can sample the captured scene for refraction effects. */
 		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "TranslucentGBPass"};
+
 			if ( sceneTargetHasAlbedo && sceneTargetHasVelocity )
 			{
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2006,6 +2059,8 @@ namespace EmEn::Graphics
 		 * context (physical camera model: optics, exposure) to the effect chain. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
+
 			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr));
 		}
 
@@ -2015,6 +2070,11 @@ namespace EmEn::Graphics
 		 * replacing the former empty layout-establishing pass (a full-screen clear with no
 		 * draw call) followed by a LOAD pass. Pipelines are shared with the post-process
 		 * pass (compatible render passes). */
+		if ( profiler != nullptr )
+		{
+			profiler->beginScope(*commandBuffer, "FinalComposite");
+		}
+
 		commandBuffer->beginRenderPass(*m_swapChain->offscreenCompositeFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 		/* Process the final-pass effects (single-pass): the scene stack's display effects
@@ -2037,6 +2097,11 @@ namespace EmEn::Graphics
 		overlayManager.render(m_swapChain, *commandBuffer);
 
 		commandBuffer->endRenderPass();
+
+		if ( profiler != nullptr )
+		{
+			profiler->endScope(*commandBuffer);
+		}
 	}
 
 	void

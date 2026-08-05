@@ -58,6 +58,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"ToneMappingEffect"};
 
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
 			/**
 			 * @brief Available tone mapping operators.
 			 */

@@ -161,6 +161,39 @@ semaphores.
 - `Queue::waitIdle()` for synchronous compute completion
 - Compute shaders compiled via `Saphir::ShaderManager::getShaderModuleFromSourceCode()`
 
+### GPU Profiler (`GPUProfiler.cpp/.hpp`)
+
+Per-pass GPU timing via timestamp queries — the first tool for any "the frame is slow"
+question (RenderDoc is for draw-call-level dissection of ONE pass).
+
+- **One `VkQueryPool` per frame in flight** (128 timestamps each = 64 scopes). The results
+  of a slot's PREVIOUS submission are harvested right after the slot's in-flight fence
+  wait — availability is guaranteed, the read never stalls (no `WAIT` flag).
+- Timestamps: classic `vkCmdWriteTimestamp` pair, `TOP_OF_PIPE` at scope begin /
+  `BOTTOM_OF_PIPE` at scope end — the only combination giving meaningful approximate
+  timings (GPU passes overlap; intermediate stages are not measurable this way).
+- The tick→ms conversion uses `limits.timestampPeriod`; the subtraction is masked to the
+  graphics queue family's `timestampValidBits` (a mid-frame counter wrap yields the
+  correct duration instead of a bogus huge sample).
+- **Ownership:** `Renderer::m_GPUProfiler`, created at renderer init when the settings key
+  `Core/Graphics/GPUProfiler/Enabled` (default `false`) is on AND the device supports
+  timestamps. Null pointer when disabled — every call site null-checks (zero cost path).
+  **Torn down explicitly in `Renderer::onTerminate()`** while the device is alive: letting
+  the `unique_ptr` member die at Renderer destruction destroys the pools AFTER
+  `vkDestroyDevice` (loader error `VUID-vkDestroyQueryPool-device-parameter`).
+- **Scope placement:** `beginFrame()` (pool reset — must be OUTSIDE a render pass) right
+  after the main command buffer `begin()`; RAII `GPUProfiler::ScopedZone` around each pass
+  (`TLASBuild`, `ScenePass`, `PostFXChain` + one scope per REAL pass inside the chain,
+  `FinalComposite`). Effect labels come from `PostProcessEffect::label()` (returns the
+  effect's ClassId; override it on every new effect).
+- **Interleaving truth:** a shared-denoise effect has NO contiguous per-effect cost — the
+  attribution is per pass (`RTGIEffect/trace`, `SharedDenoise`, `RTGIEffect/temporal`,
+  `Combine`), mirroring the actual command stream. Do not "fix" this by summing.
+- **V1 limit:** only the MAIN frame command buffer. Shadow maps / render-to-textures are
+  separate submissions recorded BEFORE it — resetting the shared pool there would wipe
+  their queries (see TODO.md, "GPU profiler V2").
+- Console: `Core.RendererService.getGPUTimings([reset])` — see `docs/ai-runtime-control.md` §6.
+
 ### Swap-Chain Format Configuration
 
 The swap-chain surface format can be configured via settings:
@@ -242,6 +275,7 @@ void waitEvents(std::span< const VkEvent > events, ...);
 - `CommandBuffer.cpp/.hpp` - Command recording (uses std::span)
 - `TransferManager.cpp/.hpp` - CPU-GPU transfers
 - `LayoutManager.cpp/.hpp` - Shared descriptor set layout and pipeline layout manager (thread-safe)
+- `GPUProfiler.cpp/.hpp` - Per-pass GPU timing (timestamp queries, one pool per frame in flight)
 - `DescriptorSetLayout.cpp/.hpp` - Descriptor set layout creation and binding declarations
 
 ## Critical: LayoutManager Thread Safety

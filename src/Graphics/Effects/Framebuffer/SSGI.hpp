@@ -55,6 +55,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SSGIEffect"};
 
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
 			/**
 			 * @brief User-facing SSGI parameters.
 			 */

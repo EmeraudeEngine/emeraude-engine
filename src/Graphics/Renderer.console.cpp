@@ -84,6 +84,60 @@ namespace EmEn::Graphics
 			return true;
 		}, "Captures the current framebuffer and saves it as a PNG.");
 
+		this->bindCommand("getGPUTimings", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( m_GPUProfiler == nullptr )
+			{
+				outputs.emplace_back(Severity::Warning, "The GPU profiler is disabled. Set 'Core/Graphics/GPUProfiler/Enabled' to true and restart.");
+
+				return true;
+			}
+
+			/* Optional argument: "reset" clears the accumulated statistics (averages, maxima). */
+			if ( !arguments.empty() && arguments[0].asString() == "reset" )
+			{
+				m_GPUProfiler->resetStatistics();
+
+				outputs.emplace_back(Severity::Success, "GPU timing statistics reset.");
+
+				return true;
+			}
+
+			const auto timings = m_GPUProfiler->snapshot();
+
+			if ( timings.empty() )
+			{
+				outputs.emplace_back(Severity::Info, "No GPU timings harvested yet (needs a few rendered frames).");
+
+				return true;
+			}
+
+			/* Display order = command stream order; the depth column indents nested scopes.
+			 * The averages are ~60-frame rolling values (see GPUProfiler::AverageAlpha). */
+			std::stringstream table;
+			table << "GPU timings (ms):" "\n";
+			table << std::fixed << std::setprecision(3);
+
+			for ( const auto & timing : timings )
+			{
+				table << "  ";
+
+				for ( uint32_t level = 0; level < timing.depth; level++ )
+				{
+					table << "  ";
+				}
+
+				table << std::left << std::setw(static_cast< int >(40 - timing.depth * 2)) << timing.label
+					<< " last " << std::setw(8) << timing.lastMS
+					<< " avg " << std::setw(8) << timing.averageMS
+					<< " max " << std::setw(8) << timing.maximumMS
+					<< " samples " << timing.sampleCount << "\n";
+			}
+
+			outputs.emplace_back(Severity::Info, table.str());
+
+			return true;
+		}, "Returns the per-pass GPU timings (timestamp queries). Optional arg: 'reset' to clear the statistics.");
+
 		this->bindCommand("triggerRenderDocCapture", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			auto & renderDoc = m_vulkanInstance.renderDocCapture();
 

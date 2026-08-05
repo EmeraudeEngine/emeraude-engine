@@ -43,6 +43,7 @@
 #include "Renderer.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/PostProcessing.hpp"
+#include "Vulkan/GPUProfiler.hpp"
 #include "SceneRenderTarget.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Tracer.hpp"
@@ -1169,6 +1170,13 @@ namespace EmEn::Graphics
 		const Vulkan::TextureInterface * combineGroupInput = nullptr;
 		uint32_t combineGroupIndex = 0;
 
+		/* GPU profiler contract: the per-pass scopes below mirror the REAL command stream.
+		 * A shared-denoise effect has no contiguous per-effect cost — its trace, its share
+		 * of the group blur and its temporal resolve are interleaved with the other group
+		 * members — so the attribution is per PASS ("RTGIEffect/trace", "SharedDenoise",
+		 * "RTGIEffect/temporal", "Combine"), never per effect total. */
+		auto * const profiler = m_renderer.gpuProfiler();
+
 		const auto flushCombineGroup = [&] () {
 			if ( combineGroup.empty() )
 			{
@@ -1182,10 +1190,14 @@ namespace EmEn::Graphics
 			{
 				if ( effect->usesSharedDenoise() )
 				{
+					const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label(), "trace"};
+
 					effect->recordPreDenoisePasses(commandBuffer, *combineGroupInput, context);
 				}
 				else
 				{
+					const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label(), "internal"};
+
 					effect->recordOverlayPasses(commandBuffer, *combineGroupInput, context);
 				}
 			}
@@ -1195,6 +1207,8 @@ namespace EmEn::Graphics
 			 * some are unconditionally half-res), so the group is partitioned by extent and
 			 * each partition gets its own H+V pair. */
 			{
+				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, "SharedDenoise"};
+
 				std::vector< DenoisePass::GroupEntry > denoiseGroup;
 				denoiseGroup.reserve(combineGroup.size());
 
@@ -1246,12 +1260,16 @@ namespace EmEn::Graphics
 			{
 				if ( effect->usesSharedDenoise() )
 				{
+					const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label(), "temporal"};
+
 					effect->recordPostDenoisePasses(commandBuffer, context);
 				}
 			}
 
 			/* 4. The combine pass applies the whole group onto the chain color. */
 			{
+				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, "Combine"};
+
 				std::vector< CombinePass::GroupEntry > contributions;
 				contributions.reserve(combineGroup.size());
 
@@ -1342,7 +1360,11 @@ namespace EmEn::Graphics
 
 			flushCombineGroup();
 
-			currentTexture = &effect->execute(commandBuffer, *currentTexture, context);
+			{
+				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label()};
+
+				currentTexture = &effect->execute(commandBuffer, *currentTexture, context);
+			}
 		}
 
 		flushCombineGroup();

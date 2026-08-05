@@ -62,6 +62,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MotionBlurEffect"};
 
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
 			/**
 			 * @brief Tile size, in pixels, of the velocity reduction (McGuire's K).
 			 * @note Also the MAXIMUM blur radius: a velocity longer than one tile would reach

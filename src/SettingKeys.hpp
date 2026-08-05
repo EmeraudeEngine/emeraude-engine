@@ -354,6 +354,13 @@ namespace EmEn
 			constexpr auto GraphicsTexturePOMIterationsKey{"Core/Graphics/Texture/POMIterations"};
 			constexpr auto DefaultGraphicsTexturePOMIterations{0};
 
+			/* GPU Profiler (Vulkan timestamp queries).
+			 * Per-pass GPU timings of the main frame command buffer, harvested without
+			 * stall (one query pool per frame in flight) and served by the remote console
+			 * command Core.RendererService.getGPUTimings(). Zero cost when disabled. */
+			constexpr auto GraphicsGPUProfilerEnabledKey{"Core/Graphics/GPUProfiler/Enabled"};
+			constexpr auto DefaultGraphicsGPUProfilerEnabled{false};
+
 			/* Ray Tracing.
 			 * The root group holds the master switch and the acceleration-structure
 			 * (BLAS/TLAS) options; each ray-traced effect has its own sub-group. */

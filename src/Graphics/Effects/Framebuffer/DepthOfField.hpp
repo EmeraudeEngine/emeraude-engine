@@ -62,6 +62,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"DepthOfFieldEffect"};
 
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
 			/**
 			 * @brief User-facing depth of field parameters.
 			 * @note The first block mirrors the physical camera options and is ONLY used

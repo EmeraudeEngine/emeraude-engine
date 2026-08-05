@@ -10,6 +10,12 @@
 - GENERAL: Replace all "std::stringstream" by "std::format" (C++20) for simple keys, names or identifiers creation. WARNING: This doesn't work under macOS for targeting older SDKs.
 - GENERAL: Issue on Linux with X11, multi-monitors and NVIDIA proprietary driver. More info: https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406
 - RENDERING SYSTEM: Check sprite texture clamping to edges.
+- RENDERING SYSTEM: GPU profiler V2 — cover the shadow map and render-to-texture passes.
+  They are submitted through SEPARATE command buffers before the main one, so the V1
+  single-pool-per-frame reset (recorded at the top of the main command buffer) would wipe
+  their timestamps on the GPU timeline. Needs one query range (or pool) per submission.
+  V1 (`Vulkan::GPUProfiler`, main command buffer only) is documented in
+  `docs/ai-runtime-control.md` §6 and `src/Vulkan/AGENTS.md`.
 - RENDERING SYSTEM: Remove the dead camera velocity vector from the view UBOs — uploaded
   every frame (`ViewMatrices*UBO::updateViewCoordinates()`, `VelocityVectorOffset`) and
   declared in the generated GLSL view blocks, but read by NO shader. The velocity parameter

@@ -436,6 +436,31 @@ without inferring it through a curved reflection. A target that never rendered (
 "once" probe, a suspended target) is refused cleanly instead of being read in an undefined
 layout.
 
+### Reading per-pass GPU timings (built-in profiler)
+
+The engine has a built-in GPU profiler (Vulkan timestamp queries, `Vulkan::GPUProfiler`).
+When enabled, every pass of the main frame command buffer is timed on the GPU and the
+results are harvested stall-free (one query pool per frame in flight):
+
+```bash
+echo "Core.RendererService.getGPUTimings()" | nc -q 2 localhost 7777
+echo "Core.RendererService.getGPUTimings(reset)" | nc -q 2 localhost 7777   # clear avg/max
+```
+
+- **Gated by the settings key `Core/Graphics/GPUProfiler/Enabled` (default `false`)** —
+  set it to `true` in `settings.json` (app NOT running) and restart. Zero cost when disabled.
+- Output: one line per scope in command-stream order, indentation = nesting, with
+  `last` / `avg` (~60-frame rolling) / `max` / `samples` columns, all in milliseconds.
+- Scope granularity: the frame root, the TLAS build, the scene pass, the grab pass, the
+  post-process chain and inside it **one scope per real pass** — `<Effect>/trace`,
+  `SharedDenoise`, `<Effect>/temporal`, `Combine`, plus standalone effects (TAA...) —
+  and the final composite. Shared-denoise effects have NO contiguous per-effect total by
+  design: their passes are interleaved (this mirrors the actual command stream).
+- **V1 limit:** shadow map and render-to-texture passes are NOT covered (separate command
+  buffers submitted before the main one). Use RenderDoc below when those are the suspects.
+- This is the FIRST tool for any "the frame is slow" question — reach for RenderDoc only
+  when a single pass needs draw-call-level dissection.
+
 ### Triggering a RenderDoc GPU frame capture
 
 For deep GPU analysis (draw calls, bound descriptors, sampled images, pipeline state) the engine

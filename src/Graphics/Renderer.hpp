@@ -61,6 +61,7 @@
 #include "Saphir/ShaderManager.hpp"
 #include "SharedUBOManager.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
+#include "Vulkan/GPUProfiler.hpp"
 #include "VertexBufferFormatManager.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -650,6 +651,19 @@ namespace EmEn::Graphics
 			isRayTracingSettingEnabled () const noexcept
 			{
 				return m_rayTracingSettingEnabled;
+			}
+
+			/**
+			 * @brief Returns the GPU profiler service.
+			 * @note Null when the profiler is disabled (settings) or unsupported by the
+			 * device — every call site must null-check, which keeps the disabled path free.
+			 * @return Vulkan::GPUProfiler *
+			 */
+			[[nodiscard]]
+			Vulkan::GPUProfiler *
+			gpuProfiler () const noexcept
+			{
+				return m_GPUProfiler.get();
 			}
 
 			/**
@@ -1639,6 +1653,8 @@ namespace EmEn::Graphics
 			uint32_t m_RTLightCount{0};
 			/** @brief MDI batch builder for GPU-driven opaque rendering. */
 			std::unique_ptr< MDI::BatchBuilder > m_MDIBatchBuilder;
+			/** @brief Per-pass GPU timing service (timestamp queries). Null when disabled. */
+			std::unique_ptr< Vulkan::GPUProfiler > m_GPUProfiler;
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_rayTracingSettingEnabled{true};
