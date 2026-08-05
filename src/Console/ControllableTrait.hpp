@@ -117,6 +117,15 @@ namespace EmEn::Console
 			bool registerToObject (ControllableTrait & object) noexcept;
 
 			/**
+			 * @brief Removes this controllable object from its parent object, if any.
+			 * @note Called automatically on destruction. Call it explicitly to detach
+			 * a still-alive object from the console tree (e.g. a deactivated game act),
+			 * so another object can register under the same identifier.
+			 * @return void
+			 */
+			void unregisterFromParent () noexcept;
+
+			/**
 			 * @brief Executes an expression from the console.
 			 * @note This is a recursive method.
 			 * @param expression An expression object from the console.
@@ -187,5 +196,14 @@ namespace EmEn::Console
 			std::string m_identifier;
 			std::map< std::string, Command > m_commands;
 			std::map< std::string, ControllableTrait * > m_consoleObjects;
+			/** @brief The parent object this controllable is registered under (raw back-pointer,
+			 * cleared in both directions on destruction so the console tree never holds a
+			 * dangling entry — a stale entry means every command dispatched to that identifier
+			 * executes on freed memory). */
+			ControllableTrait * m_parentObject{nullptr};
+			/** @brief Whether onRegisterToConsole() already ran: commands are bound once for
+			 * the object's lifetime, not per registration (an object can unregister and
+			 * re-register, e.g. a game act cycling active/inactive). */
+			bool m_commandsBound{false};
 	};
 }

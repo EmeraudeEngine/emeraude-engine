@@ -51,6 +51,37 @@ namespace EmEn::Console
 		{
 			console->remove(*this);
 		}
+
+		/* Auto remove from the parent object: a stale map entry would dispatch
+		 * every command bound to this identifier onto freed memory. */
+		this->unregisterFromParent();
+
+		/* Orphan the children: their back-pointer must not outlive this object. */
+		for ( auto * subObject : m_consoleObjects | std::views::values )
+		{
+			if ( subObject != nullptr && subObject->m_parentObject == this )
+			{
+				subObject->m_parentObject = nullptr;
+			}
+		}
+	}
+
+	void
+	ControllableTrait::unregisterFromParent () noexcept
+	{
+		if ( m_parentObject == nullptr )
+		{
+			return;
+		}
+
+		const auto objectIt = m_parentObject->m_consoleObjects.find(m_identifier);
+
+		if ( objectIt != m_parentObject->m_consoleObjects.end() && objectIt->second == this )
+		{
+			m_parentObject->m_consoleObjects.erase(objectIt);
+		}
+
+		m_parentObject = nullptr;
 	}
 
 	bool
@@ -187,7 +218,12 @@ namespace EmEn::Console
 			return false;
 		}
 
-		this->onRegisterToConsole();
+		if ( !m_commandsBound )
+		{
+			this->onRegisterToConsole();
+
+			m_commandsBound = true;
+		}
 
 		return true;
 	}
@@ -195,6 +231,15 @@ namespace EmEn::Console
 	bool
 	ControllableTrait::registerToObject (ControllableTrait & object) noexcept
 	{
+		/* Idempotent: already registered under this parent. */
+		if ( m_parentObject == &object )
+		{
+			return true;
+		}
+
+		/* Re-registration under a new parent: detach from the previous one first. */
+		this->unregisterFromParent();
+
 		if ( object.m_consoleObjects.contains(m_identifier) )
 		{
 			TraceError{TracerTag} << "Sub object named '" << m_identifier << "' already exists !";
@@ -204,7 +249,14 @@ namespace EmEn::Console
 
 		object.m_consoleObjects.emplace(m_identifier, this);
 
-		this->onRegisterToConsole();
+		m_parentObject = &object;
+
+		if ( !m_commandsBound )
+		{
+			this->onRegisterToConsole();
+
+			m_commandsBound = true;
+		}
 
 		return true;
 	}

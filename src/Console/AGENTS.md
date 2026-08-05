@@ -95,6 +95,23 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777
 
 Example: `Core.RendererService.help()` shows every command reachable under `RendererService`, while `Core.RendererService.lsfunc()` shows only commands directly bound there.
 
+### Rule: registration lifecycle (parent tracking)
+
+`ControllableTrait::registerToObject(parent)` stores a **back-pointer to the parent**, and
+the destructor removes the object from the parent's sub-object map in both directions
+(2026-08-05). Before that, a destroyed sub-object left a **dangling raw pointer** in the
+parent's map: the identifier stayed "taken" forever (`Sub object named 'X' already exists`)
+and any command dispatched to it executed on freed memory (live segfault on
+`SceneManagerService.Act.*` after an act switch in projet-alpha).
+
+- `unregisterFromParent()` (public) detaches a still-alive object — use it when an object
+  is *deactivated* but kept (e.g. a game act cycling active/inactive), so the replacement
+  can register under the same identifier.
+- `registerToObject()` is **idempotent** for the same parent, and re-registering under a
+  new parent detaches from the previous one first.
+- `onRegisterToConsole()` (command binding) runs **once per object lifetime**, not per
+  registration — re-registering never re-binds (no `Command already exists` spam).
+
 ### Rule: mandatory help string at registration
 
 `ControllableTrait::bindCommand()` takes **three mandatory arguments** (name, binding, help). There is no default help value — every command must ship a useful one-line description so the `help` dump is never empty. Conventions for the help text:
