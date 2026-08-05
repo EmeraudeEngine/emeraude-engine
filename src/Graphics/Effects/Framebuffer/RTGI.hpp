@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -36,8 +35,8 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/GIDenoiser.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
-#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -92,39 +91,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Per-frame UBO shared by the trace, temporal-resolve and normal-history passes.
-			 * @note Replaces the former trace push constants: with the previous-frame matrices the
-			 * data exceeds the 128-byte Vulkan push constant minimum guarantee (maxPushConstantsSize).
-			 * Layout is std140-compatible (mat4 and vec4 members only).
-			 */
-			struct EMEN_API FrameUBOData
-			{
-				std::array< float, 16 > invViewProj;
-				std::array< float, 16 > prevViewProj;
-				std::array< float, 3 > invViewCol0;
-				float viewPosX;
-				std::array< float, 3 > invViewCol1;
-				float viewPosY;
-				std::array< float, 3 > invViewCol2;
-				float viewPosZ;
-				std::array< float, 4 > prevCamPos;
-				/* maxDistance, bias, sampleCount (as float), unused. */
-				std::array< float, 4 > traceParams;
-				/* alpha, depthTolerance, normalThreshold, flags (bit 0 = neighborhood clamp). */
-				std::array< float, 4 > temporalParams;
-				/* strength, clamp, unused, unused. */
-				std::array< float, 4 > bounceParams;
-				/* sky luminance in nits (0 = no sky), sky ray distance, unused, unused. */
-				std::array< float, 4 > skyParams;
-			};
-
-			/**
 			 * @brief Constructs a ray-tracing global illumination effect.
 			 * @param renderer A reference to the graphics renderer.
 			 */
 			explicit
 			RTGI (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
+				: IndirectPostProcessEffect{renderer},
+				m_denoiser{renderer, ClassId}
 			{
 
 			}
@@ -136,6 +109,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			RTGI (Renderer & renderer, const Parameters & parameters) noexcept
 				: IndirectPostProcessEffect{renderer},
+				m_denoiser{renderer, ClassId},
 				m_parameters{parameters}
 			{
 
@@ -261,40 +235,23 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
+			/* The temporal denoiser component (history ping-pong, temporal resolve,
+			 * normal history, frame UBO) — shared code with the other GI producers. */
+			GIDenoiser m_denoiser;
 			Parameters m_parameters;
 			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			/* Temporal history (half-res, ping-pong): RGB = resolved indirect radiance,
-			 * A = camera distance of the pixel (0 = invalid/sky). Plus the world-space
-			 * normal history used for disocclusion rejection. */
-			std::array< IntermediateRenderTarget, 2 > m_historyTargets;
-			std::array< IntermediateRenderTarget, 2 > m_normalHistoryTargets;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_normalCopyLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_temporalPerFrame;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_normalCopyPerFrame;
-			/* Per-frame UBOs shared by trace/temporal/normal-copy passes. */
-			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_frameUBOs;
 			/* Texture consumed by this frame's combine snippet: the freshly resolved
 			 * history when the temporal chain is active, the blurred trace otherwise.
 			 * Set by recordPostDenoisePasses() BEFORE the history ping-pong flip. */
 			const Vulkan::TextureInterface * m_combineSource{nullptr};
-			/* Ping-pong index of the history buffer written THIS frame. */
-			uint32_t m_historyWriteIndex{0};
-			/* Frame index of the animated-noise R2 sequence (advances once per recorded
-			 * frame, wraps at 4096 to stay exact in float32). */
-			uint32_t m_noiseFrameIndex{0};
-			/* False until a first frame filled the history (forces alpha=1, no feedback). */
-			bool m_historyValid{false};
 	};
 }

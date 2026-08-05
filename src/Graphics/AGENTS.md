@@ -1060,7 +1060,7 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 | **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | Multi-pass | Depth, HDR |
 | **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
 | **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
-| **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | 6-pass (Trace→BlurH→BlurV→Temporal→NormalHistory→Apply) | Depth, Normals, MaterialProps, Albedo, RT (TLAS+SSBOs) |
+| **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | 6-pass (Trace→BlurH→BlurV→Temporal→NormalHistory→Apply); Temporal+NormalHistory live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, RT (TLAS+SSBOs) |
 | **RTAO** | `Effects/Framebuffer/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
 | **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | Multi-pass | Depth, Normals, MaterialProps, Albedo |
 | **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals |
@@ -1144,10 +1144,41 @@ from reflecting themselves (e.g. floor reflecting floor).
 - `Scenes/SceneMetaData.hpp` — TLAS, mesh metadata, material data management
 - `Scenes/GPUMeshMetaData.hpp` — GPU-side mesh metadata struct layout
 
+### GIDenoiser — the shared GI temporal denoiser component (Aug 2026, SVGF work site)
+
+`Graphics/GIDenoiser.{hpp,cpp}` — the temporal machinery extracted VERBATIM from RTGI
+(stage 0 of the SVGF plan; measured non-regression: Sponza corridor ptp 0.733/0.790 within
+the 0.67–0.80 baseline envelope, identical GPU timings). **One instance is OWNED by each GI
+effect** (RTGI today, SSGI planned): the code is shared, the histories are NOT — two
+producers reprojecting into one history would corrupt each other. Like `DenoisePass`, it
+extends `IndirectPostProcessEffect` purely to reuse the fullscreen-pass infrastructure and
+is never inserted into a stack.
+
+The component owns: the resolved-irradiance history ping-pong (RGBA16F, A = camera
+distance), the world-normal history pair, the temporal-resolve and normal-copy pipelines,
+and the per-frame `FrameUBOData` UBO (moved from RTGI — the owner binds it into its own
+trace pass via `frameUBO(f)` and fills it via `updateFrameData(f, data)`, which also
+advances the animated-noise R2 index). Owner-facing flow, in `recordPre/PostDenoisePasses`:
+
+1. `setTemporalEnabled(flag)` then `create(w, h)` at the OWNER's working resolution
+   (UBOs always allocated; history VRAM and pipelines only when the temporal chain is on).
+2. Trace binds `historyReadTexture()` (multi-bounce feedback) — stable until the flip.
+3. `m_combineSource = recordResolve(cb, noisyInput, context)` — records temporal resolve +
+   normal history, flips the ping-pong, returns the texture the combine must consume
+   (the noisy input unchanged when the temporal chain is off).
+
+The SVGF stages (per-pixel moments/variance, variance-guided à-trous replacing the shared
+H/V blur, 1/N accumulation counter, then animated noise) will be built INSIDE this
+component — settings will live under the mirrored
+`RayTracing/GlobalIllumination/Denoiser/` + `ScreenSpace/GlobalIllumination/Denoiser/`
+groups (owner decisions, 2026-08-06).
+
 ### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 
 6-pass pipeline: one traced diffuse bounce per frame, temporally accumulated, with a
-multi-bounce feedback loop through the history buffer.
+multi-bounce feedback loop through the history buffer. Since Aug 2026 the temporal
+machinery (passes 4–5, history buffers, frame UBO) is delegated to an owned
+`GIDenoiser` instance (see the section above); the algorithm below is unchanged.
 
 1. **Trace** (half-res): cosine-weighted hemisphere rays via TLAS ray queries; at each hit,
    direct lighting (with shadow rays gated on the raster shadow-casting flag) PLUS the hit
@@ -1234,8 +1265,10 @@ DepthTolerance|NormalThreshold|NeighborhoodClamp`, `MultiBounce/Enabled|Strength
 temporal chain entirely (no history VRAM, apply reads blur V — the pre-Jul-2026 flow).
 
 **Code references:**
-- `Effects/Framebuffer/RTGI.hpp` — Parameters, `FrameUBOData` (std140), history members
-- `Effects/Framebuffer/RTGI.cpp` — 5 GLSL shaders (inline), ping-pong recording
+- `Effects/Framebuffer/RTGI.hpp` — Parameters, owned `GIDenoiser` instance
+- `Effects/Framebuffer/RTGI.cpp` — trace GLSL shader (inline), blur snippet, combine snippet
+- `Graphics/GIDenoiser.{hpp,cpp}` — `FrameUBOData` (std140), temporal/normal-copy shaders,
+  history ping-pong recording
 - `Graphics/ViewMatricesInterface.hpp` — frame-history contract (previous view/projection)
 
 ### Physical Camera — Camera-Driven Photographic Pipeline (Jul 2026)

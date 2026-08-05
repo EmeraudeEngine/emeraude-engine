@@ -1664,7 +1664,8 @@ entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` 
 
 **Known state:**
 - RTGI's former trace push constants were exactly 128 B; adding the previous-frame matrix
-  for temporal reprojection forced the migration to a **per-frame UBO** (`FrameUBOData`).
+  for temporal reprojection forced the migration to a **per-frame UBO** (`FrameUBOData`,
+  owned by `Graphics::GIDenoiser` since the Aug 2026 extraction).
   Use the same pattern for any effect whose per-frame data outgrows 128 B:
   `IndirectPostProcessEffect::getInputLayout(samplerCount, uniformBufferCount)` +
   `createPerFrameUniformBuffers()` + `updateUniformBufferData()`.

@@ -603,207 +603,6 @@ void main()
 }
 )GLSL";
 
-	/* Temporal resolve pass: exponential moving average between the current blurred GI and
-	 * the reprojected history. The history UV is found by projecting the pixel's world
-	 * position through the PREVIOUS frame's view-projection (static-geometry reprojection —
-	 * per-object motion vectors come later with the dedicated MRT attachment). History is
-	 * rejected on disocclusion (camera-distance mismatch, normal mismatch) and optionally
-	 * clamped to the current 3x3 neighbourhood range (anti-ghosting).
-	 * Output: RGB = resolved DEMODULATED indirect irradiance (receiver albedo applied at
-	 * the combine), A = camera distance (0 = invalid/sky).
-	 *
-	 * Descriptor set 0:
-	 *   binding 0: current blurred GI (blur V output)
-	 *   binding 1: depth texture
-	 *   binding 2: normals texture (view space)
-	 *   binding 3: GI history texture (previous resolved frame)
-	 *   binding 4: world-normal history texture (previous frame)
-	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
-	 *   binding 6: frame UBO (shared with the trace pass)
-	 */
-	constexpr auto RTGITemporalFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outResolved;
-
-layout(set = 0, binding = 0) uniform sampler2D giTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D normalTex;
-layout(set = 0, binding = 3) uniform sampler2D historyTex;
-layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
-layout(set = 0, binding = 5) uniform sampler2D velocityTex;
-
-layout(set = 0, binding = 6, std140) uniform FrameData
-{
-	mat4 invViewProj;
-	mat4 prevViewProj;
-	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
-	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
-	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
-	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
-	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
-};
-
-void main()
-{
-	float depth = texture(depthTex, vUV).r;
-
-	/* Sky/far-plane: no surface, invalid history marker (a = 0). */
-	if (depth >= 1.0)
-	{
-		outResolved = vec4(0.0);
-		return;
-	}
-
-	vec3 current = texture(giTex, vUV).rgb;
-
-	/* Reconstruct world-space position from NDC + depth via inverse VP. */
-	vec2 ndc = vUV * 2.0 - 1.0;
-	vec4 clipPos = vec4(ndc, depth, 1.0);
-	vec4 wp = invViewProj * clipPos;
-	vec3 worldPos = wp.xyz / wp.w;
-
-	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
-	float cameraDistance = length(worldPos - viewPos);
-
-	/* Current world-space normal, for the history normal comparison. */
-	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
-	vec3 worldNormal = normalize(invViewRot * normalize(texture(normalTex, vUV).rgb));
-
-	float alpha = temporalParams.x;
-
-	/* Reproject into the previous frame through the velocity buffer (per-object motion
-	 * vectors, NDC delta = current - previous). Velocity DILATION: use the velocity of
-	 * the 3x3 neighbour closest to the camera, so thin foreground silhouettes drag their
-	 * motion over the background edge pixels instead of smearing. */
-	vec2 texelD = 1.0 / vec2(textureSize(depthTex, 0));
-	vec2 closestOffset = vec2(0.0);
-	float closestDepth = depth;
-
-	for (int y = -1; y <= 1; y++)
-	{
-		for (int x = -1; x <= 1; x++)
-		{
-			vec2 offset = vec2(x, y) * texelD;
-			float d = texture(depthTex, vUV + offset).r;
-
-			if (d < closestDepth)
-			{
-				closestDepth = d;
-				closestOffset = offset;
-			}
-		}
-	}
-
-	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
-	vec2 prevUV = vUV - velocity * 0.5;
-
-	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
-	{
-		/* Off-screen: no history, full weight on the current estimate. */
-		outResolved = vec4(current, cameraDistance);
-		return;
-	}
-
-	vec4 history = texture(historyTex, prevUV);
-
-	/* Disocclusion test 1: camera-distance mismatch (rotation-invariant). */
-	float expectedDistance = length(worldPos - prevCamPos.xyz);
-	bool distanceValid = history.a > 0.0 && abs(history.a - expectedDistance) <= temporalParams.y * expectedDistance;
-
-	/* Disocclusion test 2: world-normal mismatch (silhouettes, grazing surfaces). */
-	vec3 prevNormal = texture(historyNormalTex, prevUV).xyz;
-	bool normalValid = dot(prevNormal, worldNormal) >= temporalParams.z;
-
-	if (!distanceValid || !normalValid)
-	{
-		outResolved = vec4(current, cameraDistance);
-		return;
-	}
-
-	/* History rectification (flag bit 0): VARIANCE CLIPPING — bound the history to
-	 * mean ± gamma * sigma of the current 3x3 neighborhood (M. Salvi, "An Excursion in
-	 * Temporal Supersampling", GDC 2016 — the same technique as the engine TAA). It
-	 * replaced the min/max clamp: with ANIMATED noise the per-frame estimates are
-	 * deliberately different, and a min/max box collapses onto whatever outlier the
-	 * current frame produced, killing the convergence the animation exists for. The
-	 * statistical bound keeps disocclusion ghosting bounded while letting the EMA
-	 * actually accumulate. bounceParams.z = gamma (Temporal/VarianceGamma key). */
-	if ((uint(temporalParams.w) & 1u) != 0u)
-	{
-		vec2 texel = 1.0 / vec2(textureSize(giTex, 0));
-		vec3 m1 = vec3(0.0);
-		vec3 m2 = vec3(0.0);
-
-		for (int y = -1; y <= 1; y++)
-		{
-			for (int x = -1; x <= 1; x++)
-			{
-				vec3 nb = texture(giTex, vUV + vec2(x, y) * texel).rgb;
-				m1 += nb;
-				m2 += nb * nb;
-			}
-		}
-
-		vec3 mu = m1 / 9.0;
-		vec3 sigma = sqrt(max(m2 / 9.0 - mu * mu, vec3(0.0)));
-
-		history.rgb = clamp(history.rgb, mu - bounceParams.z * sigma, mu + bounceParams.z * sigma);
-	}
-
-	outResolved = vec4(mix(history.rgb, current, alpha), cameraDistance);
-}
-)GLSL";
-
-	/* Normal history pass: converts the current view-space normals G-buffer to world space
-	 * (camera-rotation invariant) and stores it at history resolution for the NEXT frame's
-	 * temporal validation. The normals MRT attachment is rewritten every frame, so the
-	 * previous frame's normals must be explicitly retained.
-	 *
-	 * Descriptor set 0:
-	 *   binding 0: normals texture (view space, current frame)
-	 *   binding 1: frame UBO (shared with the trace pass)
-	 */
-	constexpr auto RTGINormalCopyFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outWorldNormal;
-
-layout(set = 0, binding = 0) uniform sampler2D normalTex;
-
-layout(set = 0, binding = 1, std140) uniform FrameData
-{
-	mat4 invViewProj;
-	mat4 prevViewProj;
-	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
-	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
-	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
-	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
-	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
-};
-
-void main()
-{
-	vec3 rawN = texture(normalTex, vUV).rgb;
-
-	if (dot(rawN, rawN) < 0.0001)
-	{
-		outWorldNormal = vec4(0.0);
-		return;
-	}
-
-	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
-
-	outWorldNormal = vec4(normalize(invViewRot * normalize(rawN)), 1.0);
-}
-)GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -844,12 +643,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalAnimatedNoiseKey, DefaultGraphicsRayTracingGITemporalAnimatedNoise);
 		m_parameters.multiBounceEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGIMultiBounceEnabledKey, DefaultGraphicsRayTracingGIMultiBounceEnabled);
 
-		/* History starts invalid: the first frame after (re)creation must not read the
-		 * uninitialized ping-pong images (alpha forced to 1, no multi-bounce feedback). */
-		m_historyValid = false;
-		m_historyWriteIndex = 0;
-		m_noiseFrameIndex = 0;
-
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )
 		{
@@ -873,28 +666,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Temporal history targets (half-res, ping-pong). Only allocated when the temporal
-		 * accumulation is enabled, so the disabled path costs no VRAM. */
-		if ( m_parameters.temporalEnabled )
+		/* The temporal denoiser component (history ping-pong + temporal resolve + normal
+		 * history + frame UBO). Created BEFORE the trace descriptor sets: they bind its
+		 * frame UBO and, when the temporal chain is active, its history texture. */
+		m_denoiser.setTemporalEnabled(m_parameters.temporalEnabled);
+
+		if ( !m_denoiser.create(halfW, halfH) )
 		{
-			for ( size_t index = 0; index < 2; ++index )
-			{
-				const auto suffix = std::to_string(index);
+			TraceError{ClassId} << "Failed to create the RTGI denoiser component !";
 
-				if ( !m_historyTargets[index].create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_History" + suffix) )
-				{
-					TraceError{ClassId} << "Failed to create RTGI history target #" << index << " !";
-
-					return false;
-				}
-
-				if ( !m_normalHistoryTargets[index].create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_NormalHistory" + suffix) )
-				{
-					TraceError{ClassId} << "Failed to create RTGI normal history target #" << index << " !";
-
-					return false;
-				}
-			}
+			return false;
 		}
 
 		/* ---- Descriptor set layouts ---- */
@@ -906,13 +687,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * the combine pass re-applies the albedo at full resolution. */
 		auto traceInputLayout = this->getInputLayout(3, 1);
 
-		/* Temporal resolve input: GI + depth + normals + history + normal history, plus the frame UBO. */
-		auto temporalInputLayout = this->getInputLayout(6, 1);
-
-		/* Normal history input: normals, plus the frame UBO. */
-		auto normalCopyInputLayout = this->getInputLayout(1, 1);
-
-		if ( traceInputLayout == nullptr || temporalInputLayout == nullptr || normalCopyInputLayout == nullptr )
+		if ( traceInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -949,23 +724,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
-		{
-			/* Temporal resolve: single set, no push constants (frame UBO). */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(temporalInputLayout);
-
-			m_temporalLayout = layoutManager.getPipelineLayout(sets, {});
-		}
-
-		{
-			/* Normal history: single set, no push constants (frame UBO). */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(normalCopyInputLayout);
-
-			m_normalCopyLayout = layoutManager.getPipelineLayout(sets, {});
-		}
-
-		if ( m_traceLayout == nullptr || m_temporalLayout == nullptr || m_normalCopyLayout == nullptr )
+		if ( m_traceLayout == nullptr )
 		{
 			return false;
 		}
@@ -992,39 +751,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		if ( m_parameters.temporalEnabled )
-		{
-			const auto temporalFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_Temporal_FS", ShaderType::FragmentShader, RTGITemporalFragmentShader);
-			const auto normalCopyFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTGI_NormalCopy_FS", ShaderType::FragmentShader, RTGINormalCopyFragmentShader);
-
-			if ( temporalFragment == nullptr || normalCopyFragment == nullptr )
-			{
-				TraceError{ClassId} << "Failed to compile RTGI temporal shaders !";
-
-				return false;
-			}
-
-			m_temporalPipeline = this->createFullscreenPipeline(ClassId, "RTGI_Temporal", vertexModule, temporalFragment, m_temporalLayout, m_historyTargets[0]);
-			m_normalCopyPipeline = this->createFullscreenPipeline(ClassId, "RTGI_NormalCopy", vertexModule, normalCopyFragment, m_normalCopyLayout, m_normalHistoryTargets[0]);
-
-			if ( m_temporalPipeline == nullptr || m_normalCopyPipeline == nullptr )
-			{
-				return false;
-			}
-		}
-
-		/* ---- Per-frame UBOs (shared by trace/temporal/normal-copy passes) ---- */
-		m_frameUBOs = this->createPerFrameUniformBuffers(sizeof(FrameUBOData), ClassId, "Frame_UBO");
-
-		if ( m_frameUBOs.empty() )
-		{
-			return false;
-		}
-
 		/* ---- Create descriptor sets ---- */
 
 		/* Trace: set 1 reads depth + normals + history (updated per-frame),
-		 * plus the frame UBO (written once here, rewritten CPU-side every frame). */
+		 * plus the denoiser's frame UBO (written once here, rewritten CPU-side every frame). */
 		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
 		if ( m_tracePerFrame.empty() )
@@ -1034,7 +764,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		for ( size_t f = 0; f < m_tracePerFrame.size(); ++f )
 		{
-			if ( !m_tracePerFrame[f]->writeUniformBufferObject(3, *m_frameUBOs[f]) )
+			if ( !m_tracePerFrame[f]->writeUniformBufferObject(3, m_denoiser.frameUBO(static_cast< uint32_t >(f))) )
 			{
 				return false;
 			}
@@ -1042,40 +772,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* The history binding must always hold a VALID descriptor (the shader statically
 			 * uses it even when the feedback is disabled at runtime). When the temporal chain
 			 * is off, bind the trace target as an inert placeholder (strength is 0). */
-			if ( !m_parameters.temporalEnabled )
+			if ( !m_denoiser.temporalActive() )
 			{
 				if ( !m_tracePerFrame[f]->writeCombinedImageSampler(2, m_traceTarget) )
-				{
-					return false;
-				}
-			}
-		}
-
-		/* Temporal resolve + normal history sets (per-frame; texture bindings are
-		 * rewritten every frame because of the history ping-pong). */
-		if ( m_parameters.temporalEnabled )
-		{
-			m_temporalPerFrame = this->createPerFrameDescriptorSets(temporalInputLayout, ClassId, "Temporal_DescSet");
-			m_normalCopyPerFrame = this->createPerFrameDescriptorSets(normalCopyInputLayout, ClassId, "NormalCopy_DescSet");
-
-			if ( m_temporalPerFrame.empty() || m_normalCopyPerFrame.empty() )
-			{
-				return false;
-			}
-
-			for ( size_t f = 0; f < m_temporalPerFrame.size(); ++f )
-			{
-				if ( !m_temporalPerFrame[f]->writeCombinedImageSampler(0, m_blurVTarget) )
-				{
-					return false;
-				}
-
-				if ( !m_temporalPerFrame[f]->writeUniformBufferObject(6, *m_frameUBOs[f]) )
-				{
-					return false;
-				}
-
-				if ( !m_normalCopyPerFrame[f]->writeUniformBufferObject(1, *m_frameUBOs[f]) )
 				{
 					return false;
 				}
@@ -1094,36 +793,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		m_combineSource = nullptr;
 
-		m_normalCopyPerFrame.clear();
-		m_temporalPerFrame.clear();
 		m_tracePerFrame.clear();
 
-		m_frameUBOs.clear();
-
-		m_normalCopyPipeline.reset();
-		m_temporalPipeline.reset();
 		m_tracePipeline.reset();
-		m_normalCopyLayout.reset();
-		m_temporalLayout.reset();
 		m_traceLayout.reset();
 
-		for ( auto & target : m_normalHistoryTargets )
-		{
-			target.destroy();
-		}
-
-		for ( auto & target : m_historyTargets )
-		{
-			target.destroy();
-		}
+		m_denoiser.destroy();
 
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
-
-		m_historyValid = false;
-		m_historyWriteIndex = 0;
-		m_noiseFrameIndex = 0;
 	}
 
 	void
@@ -1134,7 +813,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		const bool temporalActive = m_parameters.temporalEnabled && m_temporalPipeline != nullptr;
+		const bool temporalActive = m_denoiser.temporalActive();
 
 		/* ---- Per-frame descriptor updates (trace pass) ---- */
 
@@ -1150,12 +829,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		if ( temporalActive )
 		{
-			/* History ping-pong: this frame reads [1 - writeIdx]. The flip only happens at
-			 * the end of recordPostDenoisePasses(), so m_historyWriteIndex is stable here. */
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, m_historyTargets[1U - m_historyWriteIndex]));
+			/* History ping-pong: this frame reads the denoiser's read texture. The flip only
+			 * happens inside GIDenoiser::recordResolve(), so the binding is stable here. */
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, m_denoiser.historyReadTexture()));
 		}
 
-		/* ---- Frame UBO (shared by trace/temporal/normal-copy passes) ---- */
+		/* ---- Frame UBO (shared with the denoiser passes) ---- */
 		{
 			/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
 			const auto readStateIndex = this->renderer().currentReadStateIndex();
@@ -1185,9 +864,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const auto prevInvView = prevViewMat.inverse();
 			const auto * pinv = prevInvView.data();
 
-			const bool historyUsable = temporalActive && m_historyValid;
+			const bool historyUsable = m_denoiser.historyUsable();
 
-			const FrameUBOData ubo{
+			const GIDenoiser::FrameUBOData ubo{
 				.invViewProj = {
 					ivp[0], ivp[1], ivp[2], ivp[3],
 					ivp[4], ivp[5], ivp[6], ivp[7],
@@ -1207,7 +886,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.invViewCol2 = {inv[8], inv[9], inv[10]},
 				.viewPosZ = inv[14],
 				.prevCamPos = {pinv[12], pinv[13], pinv[14], 0.0F},
-				.traceParams = {m_parameters.maxDistance, m_parameters.bias, static_cast< float >(m_parameters.sampleCount), static_cast< float >(m_noiseFrameIndex)},
+				.traceParams = {m_parameters.maxDistance, m_parameters.bias, static_cast< float >(m_parameters.sampleCount), static_cast< float >(m_denoiser.noiseFrameIndex())},
 				.temporalParams = {
 					historyUsable ? m_parameters.temporalAlpha : 1.0F,
 					m_parameters.temporalDepthTolerance,
@@ -1231,14 +910,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.skyParams = {context.skyLuminance, context.constants.farPlane, 0.0F, 0.0F}
 			};
 
-			if ( !IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData)) )
-			{
-				TraceError{ClassId} << "Failed to update the RTGI frame UBO !";
-			}
-
-			/* Advance the animated-noise sequence once per recorded frame (wraps at 4096,
-			 * exactly representable in float32 so fract(n * R2) stays precise). */
-			m_noiseFrameIndex = (m_noiseFrameIndex + 1U) % 4096U;
+			/* The denoiser writes its UBO and advances the animated-noise sequence. */
+			static_cast< void >(m_denoiser.updateFrameData(frameIndex, ubo));
 		}
 
 		/* ---- Pass 1: Ray Trace GI ---- */
@@ -1347,73 +1020,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	void
 	RTGI::recordPostDenoisePasses (const CommandBuffer & commandBuffer, const FrameContext & context) noexcept
 	{
-		const auto frameIndex = this->renderer().currentFrameIndex();
-
-		const bool temporalActive = m_parameters.temporalEnabled && m_temporalPipeline != nullptr;
-		const uint32_t writeIdx = m_historyWriteIndex;
-		const uint32_t readIdx = 1U - writeIdx;
-
-		/* The combine snippet consumes the freshly resolved history when the temporal
-		 * chain is active — [writeIdx] is written THIS frame, captured here BEFORE the
-		 * ping-pong flip below — and the blurred trace otherwise. */
-		m_combineSource = temporalActive ? static_cast< const TextureInterface * >(&m_historyTargets[writeIdx]) : &m_blurVTarget;
-
-		if ( !temporalActive )
-		{
-			return;
-		}
-
-		/* ---- Per-frame descriptor updates (temporal chain) ---- */
-
-		/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
-		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
-		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
-
-		if ( context.depth != nullptr )
-		{
-			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
-		}
-
-		if ( context.normals != nullptr )
-		{
-			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(2, *context.normals));
-			static_cast< void >(m_normalCopyPerFrame[frameIndex]->writeCombinedImageSampler(0, *context.normals));
-		}
-
-		if ( context.velocity != nullptr )
-		{
-			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
-		}
-
-		/* ---- Pass 4: Temporal resolve + Pass 5: Normal history ---- */
-		{
-			/* NOTE: The pipelines were created against the [0] targets; recording into [1]
-			 * relies on Vulkan render pass compatibility (identical format/ops), exactly
-			 * like the shared denoise pipeline recording into both blur targets. */
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_historyTargets[writeIdx],
-				*m_temporalPipeline,
-				*m_temporalLayout,
-				*m_temporalPerFrame[frameIndex],
-				nullptr,
-				0
-			);
-
-			IndirectPostProcessEffect::recordFullscreenPass(
-				commandBuffer,
-				m_normalHistoryTargets[writeIdx],
-				*m_normalCopyPipeline,
-				*m_normalCopyLayout,
-				*m_normalCopyPerFrame[frameIndex],
-				nullptr,
-				0
-			);
-		}
-
-		/* Flip the history ping-pong for the next frame. */
-		m_historyWriteIndex = readIdx;
-		m_historyValid = true;
+		/* The denoiser records the temporal resolve + the normal-history retention and
+		 * flips its history ping-pong; the combine snippet consumes the freshly resolved
+		 * history when the temporal chain is active, the blurred trace otherwise. */
+		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_blurVTarget, context);
 	}
 
 	IndirectPostProcessEffect::CombineContribution
