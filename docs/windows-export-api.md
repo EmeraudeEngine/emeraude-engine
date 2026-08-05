@@ -1,28 +1,33 @@
 # Windows DLL export API (`EMEN_API`) — migration guide
 
-> Status: **migration complete and verified (2026-07), but OFF by default again (2026-08).**
-> The full MSVC cascade (base → engine → a consumer library → consumer executables) has been built
-> and linked with `EMERAUDE_USE_EXPLICIT_EXPORTS=ON` and the PCH enabled — the mechanism works and
-> the annotations are in the tree.
+> Status: **migration complete and verified (2026-07); ON by default on MSVC (since 2026-08-05),
+> OFF elsewhere.** The full MSVC cascade (base → engine → a consumer library → consumer
+> executables) builds and links with `EMERAUDE_USE_EXPLICIT_EXPORTS=ON`.
 >
-> The default was nonetheless reverted to **OFF** for two *permanent* costs of `ON`:
+> **Why ON is now mandatory on MSVC — export-all is dead.** The default had been reverted to OFF
+> in early 2026-08 (consumer link time, annotation duty — see the history in § 7). Within days the
+> engine's symbol surface crossed the **hard PE limit of 65535 exported ordinals per DLL**: the
+> auto-generated `exports.def` reached ~65.8k symbols and the link fails with
+> `LNK1189 (library limit of 65535 objects exceeded)` on the import library. This is a file-format
+> ceiling, not a toolchain setting — no flag raises it, and trimming a few hundred symbols only
+> postpones the failure by a few commits. `WINDOWS_EXPORT_ALL_SYMBOLS` is therefore **no longer a
+> viable mode for this engine on Windows**, and the two costs of `ON` below are now simply the
+> price of linking at all:
 >
-> 1. **Link time (decisive).** With `ON`, the consuming application takes
->    **much longer to link** — paid on every single link of the downstream project. Explicit
->    `dllimport`/`dllexport` puts the consumer's linker through a far larger import-resolution
->    surface than the compact export-all `.def`. Trading a few seconds of engine compile time (the
->    PCH) for a much longer consumer link is not a trade worth making.
+> 1. **Link time.** With `ON`, the consuming application takes **longer to link** — paid on every
+>    single link of the downstream project (explicit `dllimport`/`dllexport` puts the consumer's
+>    linker through a far larger import-resolution surface than a compact `.def`).
 > 2. **Maintenance.** Every new public symbol a consumer references out-of-line must carry
 >    `EMEN_API`, or the **consumer's** link breaks (`LNK2019` on `__imp_...`) — a failure that
->    surfaces one repository away from the change that caused it.
+>    surfaces one repository away from the change that caused it. Let the linker name what is
+>    missing (§ 5).
 >
-> `OFF` restores `WINDOWS_EXPORT_ALL_SYMBOLS` and costs the engine target its
-> PCH on MSVC, **and nothing else**: the guard lives at the engine's
-> `emeraude_base_target_enable_pch()` call site, so base and every consumer target keep theirs
-> (`EMERAUDE_ENABLE_PCH` is a separate, cascade-wide switch).
+> On non-MSVC platforms the option stays OFF and is inert: there is no `.def`; ELF/Mach-O export
+> via symbol visibility, unaffected by the ordinal limit.
 >
-> Turning it back `ON` is a one-liner in `CMakeLists.txt` — the annotated surface is already there.
-> If you do, expect to annotate any public API added since.
+> Side effect of ON: the engine target regains its MSVC PCH (the export-all/PCH incompatibility
+> guard no longer bites). The guard itself is kept in `CMakeLists.txt` for anyone forcing the
+> option OFF locally — but be aware that a forced OFF **no longer links** on MSVC.
 
 ## 1. Why this exists
 
@@ -45,12 +50,13 @@ auto-exporting and declare the public boundary explicitly with the `EMEN_API` ma
 
 ## 2. The toggle
 
-`option(EMERAUDE_USE_EXPLICIT_EXPORTS … OFF)` in `CMakeLists.txt`:
+`option(EMERAUDE_USE_EXPLICIT_EXPORTS …)` in `CMakeLists.txt` — default **ON on MSVC** (export-all
+exceeds the 65535 PE export limit, see the status note), **OFF elsewhere** (inert):
 
 | Mode | `WINDOWS_EXPORT_ALL_SYMBOLS` | `EMEN_API` expands to | Engine PCH on MSVC |
 |------|------------------------------|---------------------------|--------------------|
-| **OFF** (default) | `ON` | *nothing* (no-op) | disabled (guard at the call site) |
-| **ON** | `OFF` | `__declspec(dllexport)` while building the DLL (`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for consumers, `__attribute__((visibility("default")))` elsewhere | enabled — but a much longer consumer link |
+| **OFF** (default off-MSVC; **no longer links on MSVC** — `LNK1189`) | `ON` | *nothing* (no-op) | disabled (guard at the call site) |
+| **ON** (default on MSVC) | `OFF` | `__declspec(dllexport)` while building the DLL (`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for consumers, `__attribute__((visibility("default")))` elsewhere | enabled — but a longer consumer link |
 
 Because the macro is inert while the option is OFF, the public API can be annotated **one class at
 a time without ever breaking the default build**. The switch is flipped to ON only once the whole
@@ -287,3 +293,10 @@ The genuinely exposed case is the standalone exported RAII holder with no such m
       every *other* target (base, the consumer libraries, the consumer binaries — all
       `STATIC`/`OBJECT`/executables, never export-scanned) as soon as the option went OFF. It also
       removed an engine-specific concept from the foundation helper.
+- [x] **Default flipped back to ON, on MSVC only (2026-08-05)** — the engine crossed the hard PE
+      limit of 65535 exported ordinals per DLL (`exports.def` at ~65.8k symbols → `LNK1189`), so
+      the OFF/export-all mode of the previous item no longer links on Windows at all. The default
+      is platform-conditional in `CMakeLists.txt` (ON under MSVC, OFF elsewhere where the option
+      is inert). Verified: full cascade (base → engine DLL → projet-alpha) builds and links with
+      zero new `EMEN_API` annotations needed — the 2026-07 annotated surface still covers
+      everything the consumer references.

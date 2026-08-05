@@ -1,6 +1,7 @@
 # Development History Log
 
 ## Beta version 0.9.51 (in development)
+ - **`EMERAUDE_USE_EXPLICIT_EXPORTS` defaults back to On, on MSVC only** — the engine's symbol surface crossed the hard PE limit of 65535 exported ordinals per DLL, so `WINDOWS_EXPORT_ALL_SYMBOLS` can no longer link at all (`LNK1189`, exports.def at ~65.8k symbols). The July revert below is therefore void on Windows: explicit `EMEN_API` exports are the only viable mode there. The option stays Off on non-MSVC platforms, where it is inert (no `.def`; ELF/Mach-O export via symbol visibility). The engine target gets its MSVC PCH back as a side effect.
  - **Revert `EMERAUDE_USE_EXPLICIT_EXPORTS` to Off by default** — `On` makes the consuming application's link much longer, on every link (explicit `dllimport`/`dllexport` gives the consumer's linker a far larger import-resolution surface than the compact export-all `.def`), on top of the standing duty to annotate every new consumer-referenced public symbol. Also move the MSVC "export-all excludes the PCH" guard out of emeraude-base's shared helper into the engine's own PCH call site. The engine target is the only one in the cascade using `WINDOWS_EXPORT_ALL_SYMBOLS`, so it is now the only one that loses its precompiled header — every other target keeps it. The explicit-export migration itself stays in the tree and can be turned back on with one line.
  - Fix Vulkan validation errors.
  - macOS: minor fixes.

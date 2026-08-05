@@ -31,9 +31,7 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > **Precompiled header:** the engine target applies base's shared STL PCH via
 > `emeraude_base_target_enable_pch(${PROJECT_NAME} "${EMERAUDE_BASE_STL_PCH_HEADERS}")`, like every
 > other target in the cascade — the header list is always passed explicitly, as a CMake list.
-> `EMERAUDE_ENABLE_PCH` defaults to **On** and no
-> build overrides it, so the whole cascade (base, the engine, the consuming projects) compiles with its PCH —
-> **this target being the one exception, on MSVC only** (see the export-all guard below). Turn the
+> Turn the
 > switch off periodically (`-DEMERAUDE_ENABLE_PCH=OFF`): the PCH masks missing `#include`s and both
 > configs must stay green. **Windows is resolved (2026-07):** the old
 > `WINDOWS_EXPORT_ALL_SYMBOLS` + PCH incompatibility (PCH marker symbols leaking into the
@@ -42,19 +40,17 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > C4251/C4275 are disabled cascade-wide (decision "2b": emeraude-base types stay unexported,
 > consumers keep their static base copy). Full MSVC cascade verified (build + link with PCH).
 >
-> **`EMERAUDE_USE_EXPLICIT_EXPORTS` is nonetheless `Off` by default (reverted 2026-08).** `On` makes
-> the **consuming application's LINK much longer, on every link** — explicit
-> `dllimport`/`dllexport` puts the consumer's linker through a far larger import-resolution surface
-> than the compact export-all `.def`. It also carries a standing duty: any new public symbol a
-> consumer references out-of-line needs the macro or the **consumer's** link breaks (`LNK2019` on
-> `__imp_...`), one repository away from the change. Neither was worth the engine's own PCH — trading
-> seconds of engine compile time for a much longer consumer link is a bad deal.
-> Consequence of `Off`: export-all is back and
-> **this target has no PCH on MSVC**, nothing else. The guard sits at the
-> `emeraude_base_target_enable_pch()` call site in `CMakeLists.txt` (moved out of base's shared
-> helper in 2026-08 — it is the engine's concern, not the foundation's), so base and every consumer
-> target keep theirs. The annotations stay in the tree: flipping back `On` is a one-liner plus
-> whatever public API was added since. **macOS Objective-C++ is handled (2026-07):** the
+> **`EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to `On` on MSVC, `Off` elsewhere (2026-08-05).**
+> The brief 2026-08 revert to `Off` (motivated by the longer consuming-application link and the
+> standing `EMEN_API` annotation duty) died within days: the engine's symbol surface crossed the
+> **hard PE limit of 65535 exported ordinals per DLL** (`exports.def` at ~65.8k symbols →
+> `LNK1189`), so export-all **no longer links on Windows at all** — explicit exports are the only
+> viable mode there, and their costs are now just the price of linking. On non-MSVC platforms the
+> option is inert (no `.def`; export via symbol visibility), hence `Off`. Any new public symbol a
+> consumer references out-of-line needs `EMEN_API` or the **consumer's** link breaks (`LNK2019` on
+> `__imp_...`), one repository away from the change — let the linker name what is missing. The
+> export-all/PCH guard stays at the `emeraude_base_target_enable_pch()` call site in
+> `CMakeLists.txt` for anyone forcing the option `Off` locally (which no longer links on MSVC). **macOS Objective-C++ is handled (2026-07):** the
 > base helper auto-sets `SKIP_PRECOMPILE_HEADERS` on the engine's `.mm` sources (SerialPort,
 > WiFiScanner, StorageInfo, Window, Dialogs, …) — without it clang rejects the pure-C++ PCH in
 > those TUs (`Objective-C was disabled in PCH file but is currently enabled`), because CMake
