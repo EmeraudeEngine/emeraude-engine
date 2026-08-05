@@ -44,8 +44,10 @@ namespace
 	/* RTGI trace pass: one traced diffuse bounce per frame, plus the multi-bounce
 	 * temporal feedback. For each pixel, casts hemisphere rays against the TLAS. On hit,
 	 * samples the surface albedo (bindless texture or scalar), computes direct lighting
-	 * at the hit point, and re-injects the hit surface's accumulated indirect radiance
+	 * at the hit point, and re-injects the hit surface's accumulated indirect irradiance
 	 * from the previous frame's history (geometric series → multi-bounce at steady state).
+	 * The output is DEMODULATED: no receiver albedo — the whole denoise/temporal chain
+	 * carries irradiance and the combine pass re-applies the albedo at full resolution.
 	 *
 	 * Descriptor set 0 (RT data — bound from Renderer::rtDescriptorSet()):
 	 *   binding 0: accelerationStructureEXT (TLAS)
@@ -56,9 +58,8 @@ namespace
 	 * Descriptor set 1 (input textures + frame UBO — per-frame):
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
-	 *   binding 2: albedo G-buffer texture
-	 *   binding 3: GI history texture (previous resolved frame)
-	 *   binding 4: frame UBO (matrices + parameters — exceeds the 128-byte push constant minimum)
+	 *   binding 2: GI history texture (previous resolved frame)
+	 *   binding 3: frame UBO (matrices + parameters — exceeds the 128-byte push constant minimum)
 	 *
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
@@ -99,10 +100,9 @@ layout(set = 0, binding = 3) readonly buffer LightData
 /* Input textures + frame UBO (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
-layout(set = 1, binding = 2) uniform sampler2D albedoTex;
-layout(set = 1, binding = 3) uniform sampler2D historyTex;
+layout(set = 1, binding = 2) uniform sampler2D historyTex;
 
-layout(set = 1, binding = 4, std140) uniform FrameData
+layout(set = 1, binding = 3, std140) uniform FrameData
 {
 	mat4 invViewProj;
 	mat4 prevViewProj;
@@ -252,11 +252,13 @@ vec3 hemispherePoint (uint i, uint sampleCount, vec2 noise)
 	return vec3(cos(angle) * r, sin(angle) * r, z);
 }
 
-/* Multi-bounce feedback: fetch the accumulated indirect radiance the hit surface had in the
- * previous resolved frame. The history stores OUTGOING indirect radiance (receiver albedo
- * already applied), so the geometric series is naturally damped by the surface albedo and
- * converges as long as the albedo is physical (< 1). Validated against the camera distance
- * stored in the history alpha channel (0 = invalid/sky), clamped against fireflies. */
+/* Multi-bounce feedback: fetch the accumulated indirect irradiance the hit surface had in
+ * the previous resolved frame. The history stores DEMODULATED irradiance (E / PI — the
+ * receiver albedo is applied at full resolution in the combine pass), so the CALLER must
+ * multiply this value by the HIT surface's albedo to turn it into outgoing radiance; the
+ * geometric series is damped by that albedo product and converges as long as the albedo is
+ * physical (< 1). Validated against the camera distance stored in the history alpha channel
+ * (0 = invalid/sky), clamped against fireflies. */
 vec3 historyFeedback (vec3 hitPos)
 {
 	if (bounceParams.x <= 0.0)
@@ -463,13 +465,6 @@ void main()
 	 * For simplicity, we hard-limit to 16 lights for GI bounces. */
 	uint lightCount = min(uint(lightSSBO.lights.length()) / 4u, 16u);
 
-	/* Receiver albedo from the albedo G-buffer (sRGB attachment → linear on sample).
-	 * Without it, the indirect diffuse is added un-modulated: a coloured surface lit only
-	 * by (white) indirect light shows the raw incoming colour instead of albedo * irradiance.
-	 * NOTE: This replaced a per-pixel primary ray (camera → surface) that recovered the
-	 * albedo from the RT material SSBO before the albedo MRT attachment existed. */
-	vec3 receiverAlbedo = texture(albedoTex, vUV).rgb;
-
 	/* Accumulate indirect radiance. */
 	vec3 indirectLight = vec3(0.0);
 
@@ -506,7 +501,7 @@ void main()
 		{
 			/* The ray escaped: this direction sees the sky. Cosine weighting is implicit in the
 			 * hemisphere distribution, so the radiance enters the estimator unmodified (the
-			 * receiver albedo and the 1/N are applied once, after the loop). */
+			 * 1/N is applied once after the loop; the receiver albedo at the combine). */
 			indirectLight += skyRadiance(sampleDir);
 
 			continue;
@@ -567,8 +562,9 @@ void main()
 			/* The indirect radiance is the hit surface's albedo lit by direct light
 			 * (one traced bounce), PLUS the indirect radiance the hit surface itself
 			 * accumulated in the previous resolved frame (multi-bounce feedback).
-			 * The feedback is NOT multiplied by the hit albedo: the history already
-			 * stores outgoing radiance (receiver albedo applied at resolve time).
+			 * The feedback IS multiplied by the hit albedo: the history stores
+			 * DEMODULATED irradiance (receiver albedo deferred to the combine pass),
+			 * so the hit albedo converts it back into outgoing radiance here.
 			 * Cosine-weighted by the hemisphere sampling (implicit in the distribution).
 			 *
 			 * Range fade: the transfer itself is already governed by the solid angle, so a
@@ -580,13 +576,16 @@ void main()
 			float distFade = 1.0 - smoothstep(maxDistance * 0.8, maxDistance, hitT);
 
 			/* Lambert BRDF energy conservation: divide by PI. */
-			indirectLight += ((albedo / PI) * lighting + historyFeedback(hitPos)) * distFade;
+			indirectLight += ((albedo / PI) * lighting + albedo * historyFeedback(hitPos)) * distFade;
 		}
 	}
 
-	/* Normalize by sample count, then modulate by the receiver's albedo so the indirect diffuse
-	 * is albedo * irradiance (Intensity is applied in the apply pass). */
-	indirectLight = indirectLight / float(sampleCount) * receiverAlbedo;
+	/* Normalize by sample count. The signal stays DEMODULATED (irradiance estimate, NO receiver
+	 * albedo): the blur/temporal chain then denoises a smooth signal, and the albedo is
+	 * re-applied at FULL resolution in the combine pass — half-res + bilateral blur no longer
+	 * destroy the texture detail in GI-dominated (dark) areas. Standard albedo demodulation,
+	 * as in SVGF (Schied et al. 2017, HPG) and NVIDIA NRD. */
+	indirectLight = indirectLight / float(sampleCount);
 
 	outIndirect = vec4(indirectLight, 1.0);
 }
@@ -598,7 +597,8 @@ void main()
 	 * per-object motion vectors come later with the dedicated MRT attachment). History is
 	 * rejected on disocclusion (camera-distance mismatch, normal mismatch) and optionally
 	 * clamped to the current 3x3 neighbourhood range (anti-ghosting).
-	 * Output: RGB = resolved indirect radiance, A = camera distance (0 = invalid/sky).
+	 * Output: RGB = resolved DEMODULATED indirect irradiance (receiver albedo applied at
+	 * the combine), A = camera distance (0 = invalid/sky).
 	 *
 	 * Descriptor set 0:
 	 *   binding 0: current blurred GI (blur V output)
@@ -876,9 +876,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (set 1): depth + normals + albedo + GI history samplers, plus the
-		 * frame UBO (the per-frame data outgrew the 128-byte push constant minimum). */
-		auto traceInputLayout = this->getInputLayout(4, 1);
+		/* Trace input (set 1): depth + normals + GI history samplers, plus the frame UBO
+		 * (the per-frame data outgrew the 128-byte push constant minimum). The receiver
+		 * albedo is NOT read here anymore — the trace outputs demodulated irradiance and
+		 * the combine pass re-applies the albedo at full resolution. */
+		auto traceInputLayout = this->getInputLayout(3, 1);
 
 		/* Temporal resolve input: GI + depth + normals + history + normal history, plus the frame UBO. */
 		auto temporalInputLayout = this->getInputLayout(6, 1);
@@ -997,7 +999,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create descriptor sets ---- */
 
-		/* Trace: set 1 reads depth + normals + albedo + history (updated per-frame),
+		/* Trace: set 1 reads depth + normals + history (updated per-frame),
 		 * plus the frame UBO (written once here, rewritten CPU-side every frame). */
 		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
@@ -1008,7 +1010,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		for ( size_t f = 0; f < m_tracePerFrame.size(); ++f )
 		{
-			if ( !m_tracePerFrame[f]->writeUniformBufferObject(4, *m_frameUBOs[f]) )
+			if ( !m_tracePerFrame[f]->writeUniformBufferObject(3, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
@@ -1018,7 +1020,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * is off, bind the trace target as an inert placeholder (strength is 0). */
 			if ( !m_parameters.temporalEnabled )
 			{
-				if ( !m_tracePerFrame[f]->writeCombinedImageSampler(3, m_traceTarget) )
+				if ( !m_tracePerFrame[f]->writeCombinedImageSampler(2, m_traceTarget) )
 				{
 					return false;
 				}
@@ -1100,12 +1102,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	}
 
 	void
-	RTGI::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	RTGI::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto * inputAlbedo = context.albedo;
-
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -1123,15 +1123,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
 		}
 
-		/* Receiver albedo from the G-buffer. The binding must always be valid (statically
-		 * used by the shader): fall back to the scene color if the attachment is missing. */
-		static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, inputAlbedo != nullptr ? *inputAlbedo : inputColor));
-
 		if ( temporalActive )
 		{
 			/* History ping-pong: this frame reads [1 - writeIdx]. The flip only happens at
 			 * the end of recordPostDenoisePasses(), so m_historyWriteIndex is stable here. */
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[1U - m_historyWriteIndex]));
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, m_historyTargets[1U - m_historyWriteIndex]));
 		}
 
 		/* ---- Frame UBO (shared by trace/temporal/normal-copy passes) ---- */
@@ -1140,6 +1136,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const auto readStateIndex = this->renderer().currentReadStateIndex();
 			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 			const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+			/* JITTERED (the default projectionMatrix contract): the depth buffer was rasterized
+			 * with the TAA jitter, so unprojecting with the same matrix is geometrically exact.
+			 * NOTE (measured 2026-08-05): swapping this for unjitteredProjectionMatrix() — to
+			 * cancel the reprojection error against the unjittered previousProjectionMatrix() —
+			 * had NO measurable effect on the temporal peak-to-peak (runs within the ×1.85
+			 * run-to-run envelope). The GI temporal noise is content/RT-driven, not matrix-driven. */
 			const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 			const auto invViewProj = (projMat * viewMat).inverse();
 			const auto * ivp = invViewProj.data();
@@ -1389,13 +1391,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		contribution.prefix = "rtgi";
 		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", m_combineSource});
 		contribution.needsMaterialProperties = true;
+		contribution.needsAlbedo = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-		/* Same math as the retired RTGI_Apply_FS pass: emissive surfaces reject GI
-		 * (they emit their own light), then the user intensity scales the additive
-		 * blend. No albedo here — the receiver albedo is recovered at the trace. */
+		/* The traced signal is DEMODULATED irradiance: the receiver albedo is re-applied
+		 * HERE, at full resolution, so the half-res trace + bilateral blur + temporal chain
+		 * never touch the texture detail (albedo demodulation, as in SVGF / NVIDIA NRD —
+		 * same convention as SSGI). Emissive surfaces reject GI (they emit their own
+		 * light), then the user intensity scales the additive blend. */
 		contribution.code =
 			"\tvec3 rtgiGI = texture(rtgiTex, vUV).rgb;\n"
+			"\trtgiGI *= texture(emAlbedo, vUV).rgb;\n"
 			"\tvec4 rtgiMp = texture(emMaterialProps, vUV);\n"
 			"\tfloat rtgiEmissive = float(uint(rtgiMp.b * 255.0) & 0xFu) / 15.0;\n"
 			"\trtgiGI *= (1.0 - rtgiEmissive);\n"

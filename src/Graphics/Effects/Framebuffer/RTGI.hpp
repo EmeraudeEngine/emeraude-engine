@@ -46,7 +46,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * @note One-bounce diffuse indirect lighting using GL_EXT_ray_query.
 	 * For each pixel, casts hemisphere rays against the TLAS; on hit, samples
 	 * the surface albedo and computes direct lighting at the hit point to produce
-	 * indirect radiance (color bleeding). RT-only, no screen-space fallback.
+	 * indirect radiance (color bleeding). The traced signal is DEMODULATED (no
+	 * receiver albedo) through the denoise/temporal chain; the receiver albedo is
+	 * re-applied at full resolution in the combine pass so half-res tracing and
+	 * bilateral blur never soften texture detail. RT-only, no screen-space fallback.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
 	class EMEN_API RTGI final : public IndirectPostProcessEffect
@@ -154,11 +157,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::readsChainColorUpstream() */
 			[[nodiscard]]
 			bool
-			readsChainColorUpstream (const FrameContext & context) const noexcept override
+			readsChainColorUpstream (const FrameContext & /*context*/) const noexcept override
 			{
-				/* The trace pass reads the receiver albedo from the G-buffer and only
-				 * falls back to the chain color when that attachment is missing. */
-				return context.albedo == nullptr;
+				/* The trace pass outputs demodulated irradiance and reads nothing from
+				 * the chain color (the receiver albedo comes from the G-buffer, applied
+				 * at full resolution in the combine pass). */
+				return false;
 			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */

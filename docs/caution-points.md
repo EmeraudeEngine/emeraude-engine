@@ -532,6 +532,36 @@ if ( materialType == PBRResource::ClassId )
 > `Saphir/LightGenerator.{hpp,cpp}` (`albedoShaderExpression()`),
 > `Saphir/Generator/SceneRendering.{hpp,cpp}`, `Graphics/Effects/Framebuffer/*.{hpp,cpp}`
 > (signature), `SSGI.{hpp,cpp}` (consumer).
+>
+> **Update (Aug 2026):** RTGI now follows the SAME convention as SSGI — see the next section.
+
+### Fixed: RTGI Applied Receiver Albedo Before the Blur — Texture Detail Destroyed in Dark Areas (Aug 2026)
+
+> [!WARNING]
+> **Symptom:** in GI-dominated areas (dark zones, direct light ≈ 0) the RTGI contribution
+> visually REPLACES the pixel, and because the trace multiplied the receiver albedo at
+> HALF resolution BEFORE the bilateral blur + temporal accumulation, the texture detail
+> embedded in the GI term was blurred away — mushy stone/floor textures in shadowed Sponza.
+>
+> **Rule — albedo demodulation (applies to ANY future GI/denoise path):** the
+> denoise/temporal chain must carry **demodulated irradiance only**; the receiver albedo is
+> re-applied at FULL resolution in the combine pass (`CombineContribution::needsAlbedo` +
+> `gi *= texture(emAlbedo, vUV).rgb`). Standard practice: SVGF (Schied et al. 2017, HPG),
+> NVIDIA NRD. Both SSGI and RTGI now share this convention.
+>
+> **Energy coupling — multi-bounce feedback:** with a demodulated history, the feedback
+> read at bounce hits is irradiance, NOT outgoing radiance: it MUST be multiplied by the
+> HIT surface's albedo at consumption (`albedo * historyFeedback(hitPos)` in the trace
+> shader). Forgetting that factor makes the geometric series undamped (`1/(1-strength)`,
+> ×5+ energy runaway on bright walls); double-applying it kills the bounce fill.
+>
+> **Validated A/B (2026-08-05):** Sponza dark corridor — global luminance ratio 0.996,
+> floor texture gradient ×1.64; Cornell GI demo — uniform ≤2% run-to-run drift, colour
+> bleed hue preserved, no runaway.
+>
+> **Files:** `Graphics/Effects/Framebuffer/RTGI.{hpp,cpp}` (trace shader, descriptor set 1
+> renumbered — albedo binding removed, history=2, frame UBO=3; `combineContribution()`;
+> `readsChainColorUpstream()` now `false`).
 
 ### Fixed: RTAO/RTGI tMin Skipped Near Occluders + SSAO Double Intensity & Screen-Edge Band (Jul 2026)
 

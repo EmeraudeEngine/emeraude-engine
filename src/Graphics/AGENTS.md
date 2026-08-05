@@ -1151,8 +1151,9 @@ multi-bounce feedback loop through the history buffer.
 
 1. **Trace** (half-res): cosine-weighted hemisphere rays via TLAS ray queries; at each hit,
    direct lighting (with shadow rays gated on the raster shadow-casting flag) PLUS the hit
-   surface's accumulated indirect radiance from the previous resolved frame (multi-bounce
-   feedback). Receiver albedo read from the **albedo G-buffer** (no primary ray).
+   surface's accumulated indirect irradiance from the previous resolved frame (multi-bounce
+   feedback, multiplied by the HIT albedo — see energy algebra below). The output is
+   **DEMODULATED**: no receiver albedo anywhere in the traced signal (Aug 2026).
 2/3. **Blur H/V** (half-res): bilateral, depth+normal edge-stopping.
 4. **Temporal resolve** (half-res): reprojects the pixel's world position through the
    PREVIOUS frame's view-projection, validates history (camera-distance in history alpha +
@@ -1160,7 +1161,20 @@ multi-bounce feedback loop through the history buffer.
    Output → history ping-pong `[writeIdx]`, also consumed by the apply pass.
 5. **Normal history** (half-res): current view-space normals → world space, retained for
    the next frame's validation (the normals MRT is rewritten every frame).
-6. **Apply** (full-res): additive blend, emissive-masked via material properties G-buffer.
+6. **Apply** (full-res): multiplies by the receiver albedo (albedo G-buffer, `emAlbedo`,
+   `CombineContribution::needsAlbedo`) at FULL resolution, then additive blend,
+   emissive-masked via material properties G-buffer.
+
+**Albedo demodulation (Aug 2026):** the denoise/temporal chain carries **irradiance only**
+(`E/π`); the receiver albedo is re-applied at full resolution in the combine pass — the
+same convention as SSGI, and the standard practice of modern GI denoisers (SVGF, Schied et
+al. 2017, HPG; NVIDIA NRD). Rationale: multiplying the albedo at trace time (half-res,
+before the bilateral blur) destroyed texture detail exactly where GI dominates the final
+pixel (dark areas — direct light ≈ 0, so the blurry `blur(albedo × E)` term visually
+REPLACES the pixel). With demodulation the final term is `albedo_fullres × blur(E)`: the
+texture stays native-sharp regardless of `GIBlurRadius`/`PixelDoubling`. Validated A/B on
+Sponza (energy ratio 0.996, floor texture gradient ×1.64) and the Cornell GI demo
+(uniform ≤2% run-to-run drift, colour bleed hue preserved, no multi-bounce runaway).
 
 **Frame UBO instead of push constants:** the trace parameters (invViewProj + prevViewProj +
 camera data) exceed the **128-byte Vulkan push constant minimum guarantee**
@@ -1169,10 +1183,11 @@ trace/temporal/normal-history passes — created via
 `IndirectPostProcessEffect::createPerFrameUniformBuffers()`, bound through
 `getInputLayout(samplerCount, uniformBufferCount)` (samplers first, then UBOs).
 
-**Multi-bounce energy algebra:** the history stores OUTGOING indirect radiance (receiver
-albedo applied at trace time), so the feedback is NOT re-multiplied by the hit albedo —
-the geometric series `1/(1-albedo*strength)` is naturally damped by physical albedo (< 1)
-and converges. `MultiBounce/Clamp` bounds the re-injected radiance (anti-firefly).
+**Multi-bounce energy algebra:** the history stores DEMODULATED indirect irradiance
+(`E/π` — receiver albedo deferred to the combine pass), so the feedback IS multiplied by
+the HIT surface's albedo at consumption (`albedo * historyFeedback(hitPos)` in the trace) —
+the geometric series `1/(1-albedo*strength)` stays damped by physical albedo (< 1)
+and converges. `MultiBounce/Clamp` bounds the re-injected irradiance (anti-firefly).
 `MultiBounce/Strength` is a continuous bounce-depth dial: 0 = single bounce, 1 = full series.
 
 **History ping-pong correctness:** 2 half-res RGBA16F history targets (+2 normal history).
