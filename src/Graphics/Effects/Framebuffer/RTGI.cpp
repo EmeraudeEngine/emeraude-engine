@@ -629,9 +629,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsRayTracingGIIntensityKey, DefaultGraphicsRayTracingGIIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsRayTracingGIBiasKey, DefaultGraphicsRayTracingGIBias);
 		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGISampleCountKey, DefaultGraphicsRayTracingGISampleCount);
-		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIBlurRadiusKey, DefaultGraphicsRayTracingGIBlurRadius);
 		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDepthSigmaKey, DefaultGraphicsRayTracingGIDepthSigma);
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGINormalSigmaKey, DefaultGraphicsRayTracingGINormalSigma);
+		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDenoiserLuminanceSigmaKey, DefaultGraphicsRayTracingGIDenoiserLuminanceSigma);
+		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserIterationsKey, DefaultGraphicsRayTracingGIDenoiserIterations);
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalAlphaKey, DefaultGraphicsRayTracingGITemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalDepthToleranceKey, DefaultGraphicsRayTracingGITemporalDepthTolerance);
 		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalNormalThresholdKey, DefaultGraphicsRayTracingGITemporalNormalThreshold);
@@ -652,25 +653,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Blur targets (half-res, RGBA16F). */
-		if ( !m_blurHTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_BlurH") )
-		{
-			TraceError{ClassId} << "Failed to create RTGI blur H target !";
-
-			return false;
-		}
-
-		if ( !m_blurVTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_BlurV") )
-		{
-			TraceError{ClassId} << "Failed to create RTGI blur V target !";
-
-			return false;
-		}
-
-		/* The temporal denoiser component (history ping-pong + temporal resolve + normal
-		 * history + frame UBO). Created BEFORE the trace descriptor sets: they bind its
-		 * frame UBO and, when the temporal chain is active, its history texture. */
+		/* The denoiser component (temporal resolve + moments + à-trous + histories + frame
+		 * UBO). Created BEFORE the trace descriptor sets: they bind its frame UBO and, when
+		 * the temporal chain is active, its history texture. */
 		m_denoiser.setTemporalEnabled(m_parameters.temporalEnabled);
+		m_denoiser.setParameters(GIDenoiser::Parameters{
+			.depthSigma = m_parameters.depthSigma,
+			.normalSigma = m_parameters.normalSigma,
+			.luminanceSigma = m_parameters.luminanceSigma,
+			.atrousIterations = m_parameters.atrousIterations
+		});
 
 		if ( !m_denoiser.create(halfW, halfH) )
 		{
@@ -782,9 +774,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			}
 		}
 
-		/* Combine source default: the blurred trace. When the temporal chain is active,
-		 * recordPostDenoisePasses() retargets it to the freshly resolved history every frame. */
-		m_combineSource = &m_blurVTarget;
+		/* Combine source default: the raw trace. recordOverlayPasses() retargets it to the
+		 * denoiser output every frame when the temporal chain is active. */
+		m_combineSource = &m_traceTarget;
 
 		return true;
 	}
@@ -801,13 +793,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_denoiser.destroy();
 
-		m_blurVTarget.destroy();
-		m_blurHTarget.destroy();
 		m_traceTarget.destroy();
 	}
 
 	void
-	RTGI::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
+	RTGI::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -963,70 +953,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			m_traceTarget.endRenderPass(commandBuffer);
 		}
-	}
 
-	IndirectPostProcessEffect::DenoiseContribution
-	RTGI::denoiseContribution (const FrameContext & /*context*/) const noexcept
-	{
-		DenoiseContribution contribution;
-		contribution.prefix = "rtgi";
-		contribution.source = &m_traceTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
-		contribution.needsDepth = true;
-		contribution.needsNormals = true;
-		contribution.dynamics = Base::Math::Vector< 4, float >{m_parameters.depthSigma, m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F};
-
-		/* Same depth/normal-aware bilateral kernel as the retired RTGI_Blur_FS pass.
-		 * Dynamics0: x = depthSigma, y = normalSigma, z = blurRadius. */
-		contribution.code =
-			"\tvec2 rtgiTexel = 1.0 / vec2(textureSize(rtgiSrc, 0));\n"
-			"\tvec4 rtgiCenter = texture(rtgiSrc, vUV);\n"
-			"\tfloat rtgiCenterDepth = texture(emDepth, vUV).r;\n"
-			"\tvec3 rtgiCenterNormal = texture(emNormals, vUV).rgb;\n"
-			"\tvec4 rtgiResult = rtgiCenter;\n"
-			"\t/* Skip far-plane fragments. */\n"
-			"\tif (rtgiCenterDepth < 1.0)\n"
-			"\t{\n"
-			"\t\tint rtgiRadius = int(emDyn.rtgiDynamics0.z);\n"
-			"\t\tfloat rtgiSpatialSigma = float(rtgiRadius) * 0.5;\n"
-			"\t\tfloat rtgiInvSpatialSigma2 = 1.0 / (2.0 * rtgiSpatialSigma * rtgiSpatialSigma);\n"
-			"\t\tfloat rtgiInvDepthSigma2 = 1.0 / (2.0 * emDyn.rtgiDynamics0.x * emDyn.rtgiDynamics0.x);\n"
-			"\t\tvec4 rtgiSum = vec4(0.0);\n"
-			"\t\tfloat rtgiTotalWeight = 0.0;\n"
-			"\t\tfor (int rtgiI = -rtgiRadius; rtgiI <= rtgiRadius; rtgiI++)\n"
-			"\t\t{\n"
-			"\t\t\tvec2 rtgiUV = vUV + emDenoiseDir * rtgiTexel * float(rtgiI);\n"
-			"\t\t\tvec4 rtgiSample = texture(rtgiSrc, rtgiUV);\n"
-			"\t\t\tfloat rtgiDepth = texture(emDepth, rtgiUV).r;\n"
-			"\t\t\tvec3 rtgiNormal = texture(emNormals, rtgiUV).rgb;\n"
-			"\t\t\tfloat rtgiSpatialW = exp(-float(rtgiI * rtgiI) * rtgiInvSpatialSigma2);\n"
-			"\t\t\tfloat rtgiDepthDiff = abs(rtgiCenterDepth - rtgiDepth);\n"
-			"\t\t\tfloat rtgiDepthW = exp(-rtgiDepthDiff * rtgiDepthDiff * rtgiInvDepthSigma2);\n"
-			"\t\t\tfloat rtgiNormalDot = max(dot(rtgiCenterNormal, rtgiNormal), 0.0);\n"
-			"\t\t\tfloat rtgiNormalW = pow(rtgiNormalDot, 1.0 / max(emDyn.rtgiDynamics0.y, 0.001));\n"
-			"\t\t\tfloat rtgiW = rtgiSpatialW * rtgiDepthW * rtgiNormalW;\n"
-			"\t\t\trtgiSum += rtgiSample * rtgiW;\n"
-			"\t\t\trtgiTotalWeight += rtgiW;\n"
-			"\t\t}\n"
-			"\t\tif (rtgiTotalWeight > 0.0)\n"
-			"\t\t{\n"
-			"\t\t\trtgiResult = rtgiSum / rtgiTotalWeight;\n"
-			"\t\t}\n"
-			"\t}\n";
-
-		return contribution;
-	}
-
-	void
-	RTGI::recordPostDenoisePasses (const CommandBuffer & commandBuffer, const FrameContext & context) noexcept
-	{
-		/* The denoiser records the temporal resolve + the moments accumulation + the
-		 * normal-history retention and flips its history ping-pong; the combine snippet
-		 * consumes the freshly resolved history when the temporal chain is active, the
-		 * blurred trace otherwise. The moments read the RAW trace: the variance must
-		 * measure the estimator noise, not the already-blurred signal. */
-		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_blurVTarget, m_traceTarget, context);
+		/* ---- Denoise chain (SVGF order): temporal resolve on the RAW trace + moments
+		 * accumulation + normal history, then the variance-guided à-trous iterations.
+		 * The combine consumes the denoiser output (the raw trace when the temporal
+		 * chain is off — diagnostic mode, no spatial filter without its variance guide). */
+		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_traceTarget, context);
 	}
 
 	IndirectPostProcessEffect::CombineContribution

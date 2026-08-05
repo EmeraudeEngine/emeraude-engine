@@ -75,9 +75,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float intensity{1.5F};
 				float bias{0.02F};
 				uint32_t sampleCount{4};
-				uint32_t blurRadius{4};
+				/* À-trous edge-stopping sigmas + iteration count (GIDenoiser::Parameters). */
 				float depthSigma{1.0F};
 				float normalSigma{0.5F};
+				float luminanceSigma{4.0F};
+				uint32_t atrousIterations{4};
 				float temporalAlpha{0.1F};
 				float temporalDepthTolerance{0.05F};
 				float temporalNormalThreshold{0.8F};
@@ -144,23 +146,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return false;
 			}
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */
-			[[nodiscard]]
-			bool
-			usesSharedDenoise () const noexcept override
-			{
-				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
-			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
-			[[nodiscard]]
-			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPostDenoisePasses() */
-			void recordPostDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const FrameContext & context) noexcept override;
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses()
+			 * @note RTGI left the shared H/V DenoisePass with the SVGF chain: the à-trous
+			 * multi-iteration filter does not fit the two-pass separable shape. The whole
+			 * internal chain (trace → temporal resolve on the RAW trace → moments →
+			 * variance-guided à-trous) records here, through the owned GIDenoiser. */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]
@@ -242,19 +233,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * normal history, frame UBO) — shared code with the other GI producers. */
 			GIDenoiser m_denoiser;
 			Parameters m_parameters;
-			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
+			/* IRT: trace (half-res). The denoiser owns everything downstream. */
 			IntermediateRenderTarget m_traceTarget;
-			IntermediateRenderTarget m_blurHTarget;
-			IntermediateRenderTarget m_blurVTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
-			/* Texture consumed by this frame's combine snippet: the freshly resolved
-			 * history when the temporal chain is active, the blurred trace otherwise.
-			 * Set by recordPostDenoisePasses() BEFORE the history ping-pong flip. */
+			/* Texture consumed by this frame's combine snippet: the denoiser output when
+			 * the temporal chain is active, the raw trace otherwise. Set by
+			 * recordOverlayPasses() every frame. */
 			const Vulkan::TextureInterface * m_combineSource{nullptr};
 	};
 }

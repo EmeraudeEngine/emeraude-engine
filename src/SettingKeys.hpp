@@ -485,9 +485,14 @@ namespace EmEn
 			constexpr auto DefaultGraphicsRayTracingGITemporalNormalThreshold{0.8F};
 			/* Rectify the reprojected history against the current 3x3 neighbourhood statistics
 			 * (anti-ghosting). Since 2026-08: VARIANCE CLIPPING (mean ± gamma * sigma, Salvi
-			 * GDC 2016 — same technique as the TAA), no longer a min/max clamp. */
+			 * GDC 2016 — same technique as the TAA), no longer a min/max clamp.
+			 * ⚠ DEFAULT OFF since the SVGF reorder (owner decision, measured 2026-08-06): the
+			 * temporal resolve now integrates the RAW trace, and clipping against the raw 3x3
+			 * statistics pulls the history toward the noisy local distribution — about 5% of
+			 * GI energy lost on the Sponza corridor bench, no peak-to-peak gain. SVGF relies
+			 * on the double disocclusion validation alone; the key remains for A/B. */
 			constexpr auto GraphicsRayTracingGITemporalNeighborhoodClampKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NeighborhoodClamp"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalNeighborhoodClamp{true};
+			constexpr auto DefaultGraphicsRayTracingGITemporalNeighborhoodClamp{false};
 			/* Width of the variance-clipping bound, in standard deviations (gamma). Smaller =
 			 * tighter anti-ghosting but slower convergence; larger = smoother accumulation. */
 			constexpr auto GraphicsRayTracingGITemporalVarianceGammaKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/VarianceGamma"};
@@ -505,7 +510,18 @@ namespace EmEn
 			constexpr auto DefaultGraphicsRayTracingGITemporalAnimatedNoise{false};
 
 			/* Ray Tracing > Global Illumination > Denoiser (shared GIDenoiser component, SVGF).
-			 * Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
+			 * À-trous iterations over the temporally integrated irradiance (5x5 kernel,
+			 * footprint doubles each pass: 1, 2, 4, 8, 16 texels). 0 disables the spatial
+			 * filter entirely (temporal resolve only — the A/B lever). Replaces the former
+			 * shared bilateral blur H/V (the BlurRadius key is inert for RTGI since then). */
+			constexpr auto GraphicsRayTracingGIDenoiserIterationsKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/Iterations"};
+			constexpr auto DefaultGraphicsRayTracingGIDenoiserIterations{4U};
+			/* Luminance edge-stopping sigma, normalised by the LOCAL standard deviation
+			 * (SVGF auto-dosage: noisy → smooth hard, converged → preserve detail).
+			 * Larger = closer to a plain depth/normal bilateral (guidance off). */
+			constexpr auto GraphicsRayTracingGIDenoiserLuminanceSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/LuminanceSigma"};
+			constexpr auto DefaultGraphicsRayTracingGIDenoiserLuminanceSigma{4.0F};
+			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age
 			 * (white = young/disoccluded). Diagnostic only, costs nothing at 0. */

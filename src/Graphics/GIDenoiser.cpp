@@ -318,6 +318,180 @@ void main()
 }
 )GLSL";
 
+	/* À-trous wavelet filter pass (SVGF, Schied et al. 2017, HPG): one iteration of the
+	 * edge-avoiding à-trous transform over the temporally integrated irradiance. 5x5
+	 * B3-spline kernel whose footprint doubles each iteration (texel stride 1, 2, 4, 8, 16);
+	 * edge-stopping weights on depth, view-space normal and LUMINANCE — the luminance
+	 * difference is normalised by the local standard deviation (temporal variance from the
+	 * moments on the first iteration, then the variance filtered alongside the colour with
+	 * the w² propagation rule). Auto-dosage: a noisy pixel tolerates large luminance
+	 * differences (smooths hard), a converged one rejects them (preserves detail) — this is
+	 * what a fixed-radius bilateral blur cannot do, and the reason the frozen-pattern
+	 * marbling survives it.
+	 * Young history (< 4 frames — freshly disoccluded silhouettes under the TAA jitter, the
+	 * wind-animated foliage): the temporal variance reads zero there by construction, so the
+	 * first iteration falls back to a 3x3 SPATIAL variance estimate of the input luminance.
+	 *
+	 * Descriptor set 0:
+	 *   binding 0: input (first iteration: resolved history, RGB + camera distance in A;
+	 *              then: previous à-trous output, RGB + filtered variance in A)
+	 *   binding 1: moments texture (variance + age, first iteration only)
+	 *   binding 2: depth texture
+	 *   binding 3: normals texture (view space)
+	 * Push constants: stride, sigmas, first-iteration flag.
+	 */
+	constexpr auto GIDenoiserAtrousFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outFiltered;
+
+layout(set = 0, binding = 0) uniform sampler2D inputTex;
+layout(set = 0, binding = 1) uniform sampler2D momentsTex;
+layout(set = 0, binding = 2) uniform sampler2D depthTex;
+layout(set = 0, binding = 3) uniform sampler2D normalTex;
+
+layout(push_constant) uniform PushConstants
+{
+	float stepSize;		/* Texel stride of this iteration (1, 2, 4, 8, 16). */
+	float depthSigma;
+	float normalSigma;
+	float luminanceSigma;
+	float firstIteration;	/* > 0.5: variance from momentsTex (+ young-history spatial fallback). */
+} pc;
+
+const vec3 LumaWeights = vec3(0.2126, 0.7152, 0.0722);
+
+/* B3-spline half kernel (center, 1, 2). */
+const float Kernel[3] = float[3](0.375, 0.25, 0.0625);
+
+void main()
+{
+	vec4 center = texture(inputTex, vUV);
+	float centerDepth = texture(depthTex, vUV).r;
+
+	bool first = pc.firstIteration > 0.5;
+
+	/* Sky/far-plane: pass through (variance 0). */
+	if (centerDepth >= 1.0)
+	{
+		outFiltered = vec4(center.rgb, first ? 0.0 : center.a);
+		return;
+	}
+
+	vec2 texel = 1.0 / vec2(textureSize(inputTex, 0));
+
+	/* Variance of the CENTER pixel drives the luminance tolerance. */
+	float centerVar;
+
+	if (first)
+	{
+		vec4 moments = texture(momentsTex, vUV);
+
+		if (moments.b < 4.0)
+		{
+			/* Young history: the temporal variance is meaningless (single sample reads
+			 * zero — the filter would freeze exactly where it must smooth hardest).
+			 * Estimate it SPATIALLY from the 3x3 input neighbourhood instead. */
+			float m1 = 0.0;
+			float m2 = 0.0;
+
+			for (int y = -1; y <= 1; y++)
+			{
+				for (int x = -1; x <= 1; x++)
+				{
+					float l = dot(texture(inputTex, vUV + vec2(x, y) * texel).rgb, LumaWeights);
+					m1 += l;
+					m2 += l * l;
+				}
+			}
+
+			m1 /= 9.0;
+			m2 /= 9.0;
+			centerVar = max(m2 - m1 * m1, 0.0);
+		}
+		else
+		{
+			centerVar = max(moments.g - moments.r * moments.r, 0.0);
+		}
+	}
+	else
+	{
+		centerVar = max(center.a, 0.0);
+	}
+
+	vec3 centerNormal = texture(normalTex, vUV).rgb;
+	float centerLuma = dot(center.rgb, LumaWeights);
+
+	float invDepthSigma2 = 1.0 / (2.0 * pc.depthSigma * pc.depthSigma);
+	float invNormalSigma = 1.0 / max(pc.normalSigma, 0.001);
+	/* Luminance tolerance scales with the local noise (the SVGF auto-dosage). */
+	float lumaDenom = pc.luminanceSigma * sqrt(centerVar) + 0.0001;
+
+	/* Center tap. */
+	float centerWeight = Kernel[0] * Kernel[0];
+	vec3 sumColor = center.rgb * centerWeight;
+	float sumVariance = centerVar * centerWeight * centerWeight;
+	float sumWeight = centerWeight;
+
+	for (int y = -2; y <= 2; y++)
+	{
+		for (int x = -2; x <= 2; x++)
+		{
+			if (x == 0 && y == 0)
+			{
+				continue;
+			}
+
+			vec2 uv = vUV + vec2(x, y) * texel * pc.stepSize;
+			float qDepth = texture(depthTex, uv).r;
+
+			/* Sky samples carry no surface irradiance. */
+			if (qDepth >= 1.0)
+			{
+				continue;
+			}
+
+			vec4 q = texture(inputTex, uv);
+			vec3 qNormal = texture(normalTex, uv).rgb;
+
+			float h = Kernel[abs(x)] * Kernel[abs(y)];
+
+			float depthDiff = centerDepth - qDepth;
+			float weightZ = exp(-depthDiff * depthDiff * invDepthSigma2);
+
+			float weightN = pow(max(dot(centerNormal, qNormal), 0.0), invNormalSigma);
+
+			float qLuma = dot(q.rgb, LumaWeights);
+			float weightL = exp(-abs(centerLuma - qLuma) / lumaDenom);
+
+			float weight = h * weightZ * weightN * weightL;
+
+			/* Sample variance: temporal moments on the first iteration (a young
+			 * neighbour contributes zero — its colour is still filtered), the
+			 * alpha channel afterwards. */
+			float qVar;
+
+			if (first)
+			{
+				vec4 qMoments = texture(momentsTex, uv);
+				qVar = max(qMoments.g - qMoments.r * qMoments.r, 0.0);
+			}
+			else
+			{
+				qVar = max(q.a, 0.0);
+			}
+
+			sumColor += q.rgb * weight;
+			sumVariance += qVar * weight * weight;
+			sumWeight += weight;
+		}
+	}
+
+	outFiltered = vec4(sumColor / sumWeight, sumVariance / (sumWeight * sumWeight));
+}
+)GLSL";
+
 	/* Normal history pass: converts the current view-space normals G-buffer to world space
 	 * (camera-rotation invariant) and stores it at history resolution for the NEXT frame's
 	 * temporal validation. The normals MRT attachment is rewritten every frame, so the
@@ -425,6 +599,17 @@ namespace EmEn::Graphics
 
 				return false;
 			}
+
+			/* À-trous working pair — only when the spatial filter is enabled. */
+			if ( m_parameters.atrousIterations > 0 )
+			{
+				if ( !m_atrousTargets[index].create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, baseName + "_GIAtrous" + suffix) )
+				{
+					TraceError{ClassId} << "Failed to create the GI à-trous target #" << index << " !";
+
+					return false;
+				}
+			}
 		}
 
 		/* ---- Descriptor set layouts ---- */
@@ -437,7 +622,11 @@ namespace EmEn::Graphics
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
 
-		if ( temporalInputLayout == nullptr || normalCopyInputLayout == nullptr )
+		/* À-trous input: filter input + moments + depth + normals (parameters travel
+		 * through push constants). */
+		auto atrousInputLayout = this->getInputLayout(4, 0);
+
+		if ( temporalInputLayout == nullptr || normalCopyInputLayout == nullptr || atrousInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -462,7 +651,19 @@ namespace EmEn::Graphics
 			m_normalCopyLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
-		if ( m_temporalLayout == nullptr || m_normalCopyLayout == nullptr )
+		{
+			/* À-trous: single set + push constants (stride, sigmas, first-iteration flag). */
+			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
+			sets.emplace_back(atrousInputLayout);
+
+			m_atrousLayout = layoutManager.getPipelineLayout(sets, {VkPushConstantRange{
+				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				.offset = 0,
+				.size = sizeof(AtrousPushConstants)
+			}});
+		}
+
+		if ( m_temporalLayout == nullptr || m_normalCopyLayout == nullptr || m_atrousLayout == nullptr )
 		{
 			return false;
 		}
@@ -475,8 +676,9 @@ namespace EmEn::Graphics
 		const auto temporalFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Temporal_FS", ShaderType::FragmentShader, GIDenoiserTemporalFragmentShader);
 		const auto momentsFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Moments_FS", ShaderType::FragmentShader, GIDenoiserMomentsFragmentShader);
 		const auto normalCopyFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_NormalCopy_FS", ShaderType::FragmentShader, GIDenoiserNormalCopyFragmentShader);
+		const auto atrousFragment = m_parameters.atrousIterations > 0 ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Atrous_FS", ShaderType::FragmentShader, GIDenoiserAtrousFragmentShader) : nullptr;
 
-		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr )
+		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr || (m_parameters.atrousIterations > 0 && atrousFragment == nullptr) )
 		{
 			TraceError{ClassId} << "Failed to compile the GI denoiser shaders !";
 
@@ -493,6 +695,16 @@ namespace EmEn::Graphics
 		if ( m_temporalPipeline == nullptr || m_momentsPipeline == nullptr || m_normalCopyPipeline == nullptr )
 		{
 			return false;
+		}
+
+		if ( m_parameters.atrousIterations > 0 )
+		{
+			m_atrousPipeline = this->createFullscreenPipeline(ClassId, baseName + "_GIAtrous", vertexModule, atrousFragment, m_atrousLayout, m_atrousTargets[0]);
+
+			if ( m_atrousPipeline == nullptr )
+			{
+				return false;
+			}
 		}
 
 		/* ---- Per-frame descriptor sets (texture bindings are rewritten every frame
@@ -524,24 +736,65 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* À-trous sets, one flavour per INPUT (the input of the first iteration — the
+		 * freshly resolved history — flips parity every frame, so its binding is rewritten
+		 * per frame; the ping-pong inputs of the later iterations are static). */
+		if ( m_parameters.atrousIterations > 0 )
+		{
+			for ( size_t flavour = 0; flavour < m_atrousPerFrame.size(); ++flavour )
+			{
+				m_atrousPerFrame[flavour] = this->createPerFrameDescriptorSets(atrousInputLayout, ClassId, baseName + "_GIAtrous_DescSet" + std::to_string(flavour));
+
+				if ( m_atrousPerFrame[flavour].empty() )
+				{
+					return false;
+				}
+			}
+
+			for ( size_t f = 0; f < m_atrousPerFrame[1].size(); ++f )
+			{
+				if ( !m_atrousPerFrame[1][f]->writeCombinedImageSampler(0, m_atrousTargets[0]) )
+				{
+					return false;
+				}
+
+				if ( !m_atrousPerFrame[2][f]->writeCombinedImageSampler(0, m_atrousTargets[1]) )
+				{
+					return false;
+				}
+			}
+		}
+
 		return true;
 	}
 
 	void
 	GIDenoiser::destroy () noexcept
 	{
+		for ( auto & sets : m_atrousPerFrame )
+		{
+			sets.clear();
+		}
+
 		m_normalCopyPerFrame.clear();
 		m_momentsPerFrame.clear();
 		m_temporalPerFrame.clear();
 
 		m_frameUBOs.clear();
 
+		m_atrousPipeline.reset();
 		m_normalCopyPipeline.reset();
 		m_momentsPipeline.reset();
 		m_temporalPipeline.reset();
+		m_atrousLayout.reset();
 		m_normalCopyLayout.reset();
 		m_momentsLayout.reset();
 		m_temporalLayout.reset();
+
+		for ( auto & target : m_atrousTargets )
+		{
+			target.destroy();
+		}
 
 		for ( auto & target : m_momentsTargets )
 		{
@@ -581,11 +834,11 @@ namespace EmEn::Graphics
 	}
 
 	const TextureInterface *
-	GIDenoiser::recordResolve (const CommandBuffer & commandBuffer, const TextureInterface & noisyInput, const TextureInterface & rawInput, const FrameContext & context) noexcept
+	GIDenoiser::recordResolve (const CommandBuffer & commandBuffer, const TextureInterface & rawInput, const FrameContext & context) noexcept
 	{
 		if ( !this->temporalActive() )
 		{
-			return &noisyInput;
+			return &rawInput;
 		}
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
@@ -595,7 +848,10 @@ namespace EmEn::Graphics
 
 		/* ---- Per-frame descriptor updates ---- */
 
-		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(0, noisyInput));
+		/* SVGF order: the temporal resolve integrates the RAW estimate (the spatial filter
+		 * runs AFTER, on the integrated signal — a fixed blur before the accumulation is
+		 * what the à-trous replaces). */
+		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(0, rawInput));
 		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(0, rawInput));
 
 		/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
@@ -655,12 +911,70 @@ namespace EmEn::Graphics
 			0
 		);
 
+		/* ---- À-trous iterations (variance-guided, footprint doubling) ---- */
+
+		const TextureInterface * output = &m_historyTargets[writeIdx];
+
+		if ( m_parameters.atrousIterations > 0 && m_atrousPipeline != nullptr )
+		{
+			/* The first iteration reads the freshly resolved history, whose parity flips
+			 * every frame — rewrite its input binding; the guides too. */
+			static_cast< void >(m_atrousPerFrame[0][frameIndex]->writeCombinedImageSampler(0, m_historyTargets[writeIdx]));
+
+			for ( size_t flavour = 0; flavour < m_atrousPerFrame.size(); ++flavour )
+			{
+				static_cast< void >(m_atrousPerFrame[flavour][frameIndex]->writeCombinedImageSampler(1, m_momentsTargets[writeIdx]));
+
+				if ( context.depth != nullptr )
+				{
+					static_cast< void >(m_atrousPerFrame[flavour][frameIndex]->writeCombinedImageSampler(2, *context.depth));
+				}
+
+				if ( context.normals != nullptr )
+				{
+					static_cast< void >(m_atrousPerFrame[flavour][frameIndex]->writeCombinedImageSampler(3, *context.normals));
+				}
+			}
+
+			for ( uint32_t iteration = 0; iteration < m_parameters.atrousIterations; ++iteration )
+			{
+				/* Iteration 0 reads the resolved history (set flavour 0); iteration i > 0
+				 * reads atrous[(i-1) & 1] (set flavour 1 + ((i-1) & 1)). Output ping-pongs. */
+				const size_t flavour = iteration == 0 ? 0 : 1 + ((iteration - 1U) & 1U);
+				const uint32_t outputIdx = iteration & 1U;
+
+				const AtrousPushConstants constants{
+					.stepSize = static_cast< float >(1U << iteration),
+					.depthSigma = m_parameters.depthSigma,
+					.normalSigma = m_parameters.normalSigma,
+					.luminanceSigma = m_parameters.luminanceSigma,
+					.firstIteration = iteration == 0 ? 1.0F : 0.0F,
+					.padding0 = 0.0F,
+					.padding1 = 0.0F,
+					.padding2 = 0.0F
+				};
+
+				IndirectPostProcessEffect::recordFullscreenPass(
+					commandBuffer,
+					m_atrousTargets[outputIdx],
+					*m_atrousPipeline,
+					*m_atrousLayout,
+					*m_atrousPerFrame[flavour][frameIndex],
+					&constants,
+					sizeof(AtrousPushConstants)
+				);
+
+				output = &m_atrousTargets[outputIdx];
+			}
+		}
+
 		/* Flip the history ping-pong for the next frame. */
 		m_historyWriteIndex = readIdx;
 		m_historyValid = true;
 
-		/* The combine consumes the freshly resolved history ([writeIdx] was written
-		 * THIS frame — captured before the flip above). */
-		return &m_historyTargets[writeIdx];
+		/* The combine consumes the à-trous output (the freshly resolved history when the
+		 * spatial filter is disabled). The colour history fed back next frame remains the
+		 * TEMPORAL output — the multi-bounce algebra is unchanged by the spatial filter. */
+		return output;
 	}
 }

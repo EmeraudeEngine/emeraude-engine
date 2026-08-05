@@ -1060,7 +1060,7 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 | **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | Multi-pass | Depth, HDR |
 | **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
 | **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
-| **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | 6-pass (Trace→BlurH→BlurV→Temporal→NormalHistory→Apply); Temporal+NormalHistory live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, RT (TLAS+SSBOs) |
+| **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
 | **RTAO** | `Effects/Framebuffer/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
 | **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | Multi-pass | Depth, Normals, MaterialProps, Albedo |
 | **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals |
@@ -1169,8 +1169,36 @@ advances the animated-noise R2 index). Owner-facing flow, in `recordPre/PostDeno
 
 The SVGF stages are built INSIDE this component — settings live under the mirrored
 `RayTracing/GlobalIllumination/Denoiser/` + `ScreenSpace/GlobalIllumination/Denoiser/`
-groups (owner decisions, 2026-08-06). Remaining: variance-guided à-trous replacing the
-shared H/V blur (stage 2), 1/N accumulation counter (stage 3), animated noise (stage 4).
+groups (owner decisions, 2026-08-06). Remaining: 1/N accumulation counter (stage 3),
+animated noise default flip (stage 4), SSGI wiring.
+
+**Stage 2 — SVGF reorder + variance-guided à-trous (Aug 2026):** the GI producers LEFT the
+shared H/V `DenoisePass` (`usesSharedDenoise()` back to false — a multi-iteration à-trous
+does not fit the two-pass separable MRT shape; RTAO/CS/RTR keep merging theirs) and record
+their whole chain in `recordOverlayPasses()`. New order (canonical SVGF): trace → temporal
+resolve **of the RAW trace** + moments → à-trous 5×5 B3-spline, `Denoiser/Iterations`
+passes (default 4), footprint doubling (stride 1,2,4,8), edge-stopping on depth, view-space
+normal and **luminance normalised by the local standard deviation**
+(`Denoiser/LuminanceSigma`, default 4 — the SVGF auto-dosage), variance filtered alongside
+with the w² rule; first iteration falls back to a 3×3 SPATIAL variance estimate where the
+accumulation age < 4 (freshly disoccluded pixels — silhouettes under the TAA jitter, the
+animated foliage). The combine consumes the à-trous output; the multi-bounce colour history
+remains the TEMPORAL output (v1 — SVGF's first-iteration feedback is a later candidate).
+`Temporal/Enabled=false` now means RAW passthrough (diagnostic only: no spatial filter
+without its variance guide). The `BlurRadius` key is inert for RTGI.
+
+Measured (Sponza corridor bench, double runs): temporal ptp mean 0.67–0.83 → **0.46–0.50**,
+area > 2/255 divided by 4, GPU +2.9 ms half-res on the 3070 Ti (4 iterations, optimisation
+candidates: single-channel gathers, fewer taps on late iterations). Two structural findings:
+(1) `Temporal/NeighborhoodClamp` **default flipped to false** (owner decision) — clipping
+the history against the RAW 3×3 statistics costs ~5% GI energy for no stability gain
+(designed for the pre-blurred input that no longer exists; SVGF uses the double disocclusion
+validation alone); (2) the FROZEN noise seed turns stable bright outliers into
+"converged signal" the luminance guide protects — visible cyan fireflies. Exploratory
+stage-4 test (AnimatedNoise=true, settings only): fireflies dissolve, energy restored
+(luma 24.8 vs 25.2 old chain), ptp 0.69–0.73 with better tails than baseline — the ×2.4
+regression is gone; the residual leak is the fixed-alpha EMA (α/(2−α) ≈ 23%), exactly what
+the stage-3 1/N counter replaces (steady-state leak at N=64 ≈ 0.8%).
 
 **Stage 1 — per-pixel moments + variance (Aug 2026):** a third ping-pong pair
 (`_GIMoments`, RGBA16F) integrates the first/second raw moments of the **RAW estimate's
@@ -1199,23 +1227,27 @@ variance fallback must cover.
 
 ### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 
-6-pass pipeline: one traced diffuse bounce per frame, temporally accumulated, with a
-multi-bounce feedback loop through the history buffer. Since Aug 2026 the temporal
-machinery (passes 4–5, history buffers, frame UBO) is delegated to an owned
-`GIDenoiser` instance (see the section above); the algorithm below is unchanged.
+One traced diffuse bounce per frame, temporally accumulated, with a multi-bounce feedback
+loop through the history buffer. Since Aug 2026 everything downstream of the trace lives in
+the owned `GIDenoiser` instance (see the section above) and follows the SVGF order —
+temporal integration of the RAW trace first, variance-guided à-trous after:
 
-1. **Trace** (half-res): cosine-weighted hemisphere rays via TLAS ray queries; at each hit,
-   direct lighting (with shadow rays gated on the raster shadow-casting flag) PLUS the hit
-   surface's accumulated indirect irradiance from the previous resolved frame (multi-bounce
-   feedback, multiplied by the HIT albedo — see energy algebra below). The output is
-   **DEMODULATED**: no receiver albedo anywhere in the traced signal (Aug 2026).
-2/3. **Blur H/V** (half-res): bilateral, depth+normal edge-stopping.
-4. **Temporal resolve** (half-res): reprojects the pixel's world position through the
-   PREVIOUS frame's view-projection, validates history (camera-distance in history alpha +
-   world-normal history), optional 3x3 neighborhood clamp, then EMA (`Temporal/Alpha`).
-   Output → history ping-pong `[writeIdx]`, also consumed by the apply pass.
-5. **Normal history** (half-res): current view-space normals → world space, retained for
-   the next frame's validation (the normals MRT is rewritten every frame).
+1. **Trace** (half-res, RTGI-owned): cosine-weighted hemisphere rays via TLAS ray queries;
+   at each hit, direct lighting (with shadow rays gated on the raster shadow-casting flag)
+   PLUS the hit surface's accumulated indirect irradiance from the previous resolved frame
+   (multi-bounce feedback, multiplied by the HIT albedo — see energy algebra below). The
+   output is **DEMODULATED**: no receiver albedo anywhere in the traced signal (Aug 2026).
+2. **Temporal resolve** (half-res, GIDenoiser): reprojects through the velocity buffer
+   (3×3 depth-nearest dilation), validates history (camera-distance in history alpha +
+   world-normal history), optional variance clipping (`Temporal/NeighborhoodClamp`,
+   default OFF since the SVGF reorder), then EMA (`Temporal/Alpha`). Output → history
+   ping-pong `[writeIdx]` (also next frame's multi-bounce feedback source).
+3. **Moments** (half-res, GIDenoiser): m1/m2 of the raw trace luminance + accumulation age,
+   same reprojection/validation — the temporal variance guiding the à-trous.
+4. **Normal history** (half-res, GIDenoiser): current view-space normals → world space,
+   retained for the next frame's validation.
+5. **À-trous** (half-res, GIDenoiser, `Denoiser/Iterations` passes): variance-guided
+   edge-avoiding wavelet filter — see the GIDenoiser section.
 6. **Apply** (full-res): multiplies by the receiver albedo (albedo G-buffer, `emAlbedo`,
    `CombineContribution::needsAlbedo`) at FULL resolution, then additive blend,
    emissive-masked via material properties G-buffer.

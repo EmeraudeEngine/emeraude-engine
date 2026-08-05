@@ -97,6 +97,44 @@ namespace EmEn::Graphics
 			};
 
 			/**
+			 * @brief Denoiser parameters (SVGF à-trous filter).
+			 * @note Set by the owner BEFORE create() (VRAM gating) — the sigmas travel to the
+			 * shader through push constants, so setParameters() also works at runtime.
+			 */
+			struct EMEN_API Parameters
+			{
+				/* Depth edge-stopping sigma (gaussian on the raw depth difference). */
+				float depthSigma{1.0F};
+				/* Normal edge-stopping sigma (pow(dot, 1/sigma)). */
+				float normalSigma{0.5F};
+				/* Luminance edge-stopping sigma, normalised by the LOCAL standard deviation
+				 * (SVGF auto-dosage: noisy pixel → wide tolerance → smooth hard; converged
+				 * pixel → tight tolerance → preserve detail). SVGF paper default: 4. */
+				float luminanceSigma{4.0F};
+				/* À-trous iterations (5x5 kernel, footprint doubles each pass: 1,2,4,8,16).
+				 * 0 = no spatial filtering (temporal resolve only — A/B lever). */
+				uint32_t atrousIterations{4};
+			};
+
+			/**
+			 * @brief Push constants of the à-trous filter pass.
+			 */
+			struct EMEN_API AtrousPushConstants
+			{
+				/* Texel stride of this iteration (1, 2, 4, 8, 16). */
+				float stepSize;
+				float depthSigma;
+				float normalSigma;
+				float luminanceSigma;
+				/* > 0.5: first iteration — variance comes from the moments texture (with the
+				 * young-history spatial fallback), the input alpha is the camera distance. */
+				float firstIteration;
+				float padding0;
+				float padding1;
+				float padding2;
+			};
+
+			/**
 			 * @brief Constructs a GI denoiser component.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param ownerLabel The owning effect's ClassId, prefixed to every GPU object name.
@@ -106,6 +144,30 @@ namespace EmEn::Graphics
 				m_ownerLabel{ownerLabel}
 			{
 
+			}
+
+			/**
+			 * @brief Sets the denoiser parameters.
+			 * @note Call BEFORE create() so the à-trous targets are (not) allocated to match
+			 * atrousIterations; the sigmas alone may change at runtime.
+			 * @param parameters The new parameters.
+			 * @return void
+			 */
+			void
+			setParameters (const Parameters & parameters) noexcept
+			{
+				m_parameters = parameters;
+			}
+
+			/**
+			 * @brief Returns the current denoiser parameters.
+			 * @return const Parameters &
+			 */
+			[[nodiscard]]
+			const Parameters &
+			parameters () const noexcept
+			{
+				return m_parameters;
 			}
 
 			/**
@@ -218,26 +280,29 @@ namespace EmEn::Graphics
 			bool updateFrameData (uint32_t frameIndex, const FrameUBOData & data) noexcept;
 
 			/**
-			 * @brief Records the temporal resolve, the moments accumulation and the
-			 * normal-history retention passes.
-			 * @note Called outside any active render pass, after the owner's noisy estimate is
-			 * complete. Flips the history ping-pong. When the temporal chain is off, records
-			 * nothing and returns the noisy input unchanged.
+			 * @brief Records the whole denoise chain: temporal resolve + moments accumulation
+			 * of the RAW estimate, normal-history retention, then the variance-guided à-trous
+			 * iterations (SVGF order — temporal integration FIRST, spatial filtering on the
+			 * integrated signal).
+			 * @note Called outside any active render pass, after the owner's raw estimate is
+			 * complete. Flips the history ping-pong. The colour history fed back to the owner
+			 * (multi-bounce) is the TEMPORAL output, before the à-trous (v1 decision — the
+			 * SVGF first-iteration feedback is a later candidate). When the temporal chain is
+			 * off, records nothing and returns the raw input unchanged (diagnostic mode: the
+			 * à-trous variance guide REQUIRES the temporal moments).
 			 * @param commandBuffer A reference to the active command buffer.
-			 * @param noisyInput The owner's denoised-so-far estimate (blur output today).
-			 * @param rawInput The owner's RAW estimate (trace output, before any spatial
-			 * filtering) — the moments integrate ITS luminance, so the variance measures the
-			 * estimator noise the à-trous must remove, not the already-smoothed signal.
+			 * @param rawInput The owner's RAW estimate (trace output, before any filtering).
 			 * @param context The per-frame chain context.
 			 * @return const Vulkan::TextureInterface * The texture the owner's combine must consume.
 			 */
 			[[nodiscard]]
-			const Vulkan::TextureInterface * recordResolve (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & noisyInput, const Vulkan::TextureInterface & rawInput, const FrameContext & context) noexcept;
+			const Vulkan::TextureInterface * recordResolve (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & rawInput, const FrameContext & context) noexcept;
 
 		private:
 
 			/** @brief The owning effect's ClassId (GPU object name prefix). */
 			const char * m_ownerLabel;
+			Parameters m_parameters;
 			/* Temporal history (owner resolution, ping-pong): RGB = resolved indirect
 			 * irradiance, A = camera distance of the pixel (0 = invalid/sky). Plus the
 			 * world-space normal history used for disocclusion rejection. */
@@ -249,18 +314,26 @@ namespace EmEn::Graphics
 			 * the SVGF 1/N accumulation counter reuses this channel),
 			 * A = camera distance of the pixel (0 = invalid/sky), like the colour history. */
 			std::array< IntermediateRenderTarget, 2 > m_momentsTargets;
+			/* À-trous working pair (ping-pong across iterations, RGBA16F): RGB = filtered
+			 * irradiance, A = filtered variance (w² propagation rule). */
+			std::array< IntermediateRenderTarget, 2 > m_atrousTargets;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_momentsPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_atrousPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_momentsLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_normalCopyLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_atrousLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_temporalPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_momentsPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_normalCopyPerFrame;
+			/* À-trous sets, one flavour per INPUT: [0] reads the freshly resolved history
+			 * (first iteration), [1] reads atrous[0], [2] reads atrous[1]. */
+			std::array< std::vector< std::unique_ptr< Vulkan::DescriptorSet > >, 3 > m_atrousPerFrame;
 			/* Per-frame UBOs shared by the owner's trace and the denoiser passes. */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_frameUBOs;
 			/* Ping-pong index of the history buffer written THIS frame. */
