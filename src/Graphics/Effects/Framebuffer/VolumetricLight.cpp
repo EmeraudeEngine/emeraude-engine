@@ -125,7 +125,20 @@ void main()
 	vec2 deltaUV = (vUV - lightPos);
 	deltaUV *= (1.0 / float(numSamples)) * density;
 
-	vec2 sampleUV = vUV;
+	/* Dither the march start by a per-pixel fraction of ONE step (interleaved gradient
+	 * noise — J. Jimenez, "Next Generation Post Processing in Call of Duty: Advanced
+	 * Warfare", SIGGRAPH 2014). Without it, a small bright source (a door slit, a sky
+	 * gap) falls BETWEEN the uniform taps and each surviving tap paints a discrete ghost
+	 * copy of the source — a banded "dash train" along the radial direction, which then
+	 * flickers with the TAA jitter phase (the occlusion mask is cut from the jittered
+	 * depth buffer, and every sub-pixel wiggle of the silhouette replicates onto all
+	 * copies). The dither dissolves the banding into unstructured sub-step noise that
+	 * the radial accumulation and TAA smooth out. Deliberately STATIC per pixel: TAA
+	 * integrates over its own jitter; a frame-varying dither would fight the history
+	 * (measured on the RTGI animated-noise bench, engine caution-points). */
+	float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+
+	vec2 sampleUV = vUV - deltaUV * dither;
 	vec3 color = vec3(0.0);
 	float illuminationDecay = 1.0;
 

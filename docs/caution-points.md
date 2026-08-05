@@ -563,6 +563,36 @@ if ( materialType == PBRResource::ClassId )
 > renumbered — albedo binding removed, history=2, frame UBO=3; `combineContribution()`;
 > `readsChainColorUpstream()` now `false`).
 
+### Fixed: Undithered Radial God Rays = Flickering "Dash Train" Under TAA (Aug 2026)
+
+> [!WARNING]
+> **Symptom:** a receding line of small bright dashes on the floor (Sponza dark corridor,
+> toward the lit doorway), flipping violently with the TAA jitter phase — the single most
+> unstable feature of the whole frame on the temporal-stability map (peak-to-peak flips of
+> 220/255 while the GI mottle peaked at 12).
+>
+> **Root cause (VolumetricLight, radial-blur god rays):** the radial march took `numSamples`
+> UNIFORM steps from the pixel toward the light's screen position with no dither. A bright
+> source SMALLER than one step (a door slit, a sky gap in the occlusion mask) falls between
+> taps: each tap that does catch it paints a discrete ghost copy of the source along the
+> radial direction — banding, not noise. Under TAA the occlusion mask is cut from the
+> JITTERED depth buffer, so every sub-pixel wiggle of the source silhouette replicates onto
+> the entire dash train at once.
+>
+> **Fix:** offset the march start by a per-pixel fraction of ONE step using interleaved
+> gradient noise (J. Jimenez, "Next Generation Post Processing in Call of Duty: Advanced
+> Warfare", SIGGRAPH 2014). The banding dissolves into fine sub-step speckle that the radial
+> accumulation and TAA smooth. Measured (corridor bench, 8-shot series ×2): trail-region
+> pixels flipping >64/255 went 1979-2707 → 210-350 (÷9), full-frame p99.9 halved (50-59 → 26-32).
+>
+> **The dither is deliberately STATIC per pixel** — same rule as the RTGI noise (see
+> "Animated GI Noise" below): TAA integrates over its own jitter; a frame-varying dither
+> fights the history and regresses.
+>
+> **Rule for ANY stepped screen-space march** (god rays, SSR, SSGI, volumetric fog): never
+> ship uniform steps without a per-pixel dither of the march origin — undersampling shows up
+> as coherent, TAA-hostile banding on any source smaller than the step.
+
 ### Measured: Animated GI Noise Cannot Beat a Frozen Pattern Under a Fixed-Alpha EMA (Aug 2026)
 
 > [!WARNING]
