@@ -645,6 +645,36 @@ namespace EmEn
 			constexpr auto GraphicsScreenSpaceGINormalSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/NormalSigma"};
 			constexpr auto DefaultGraphicsScreenSpaceGINormalSigma{0.5F};
 
+			/* Screen Space > Global Illumination > Temporal (GIDenoiser resolve — SSGI's
+			 * first temporal accumulation; mirrors the RayTracing group, same semantics). */
+			constexpr auto GraphicsScreenSpaceGITemporalEnabledKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/Enabled"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalEnabled{true};
+			constexpr auto GraphicsScreenSpaceGITemporalAlphaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/Alpha"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalAlpha{0.1F};
+			constexpr auto GraphicsScreenSpaceGITemporalDepthToleranceKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/DepthTolerance"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalDepthTolerance{0.05F};
+			constexpr auto GraphicsScreenSpaceGITemporalNormalThresholdKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/NormalThreshold"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalNormalThreshold{0.8F};
+			constexpr auto GraphicsScreenSpaceGITemporalVarianceGammaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/VarianceGamma"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalVarianceGamma{1.0F};
+			constexpr auto GraphicsScreenSpaceGITemporalNeighborhoodClampKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/NeighborhoodClamp"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalNeighborhoodClamp{false};
+			constexpr auto GraphicsScreenSpaceGITemporalAnimatedNoiseKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/AnimatedNoise"};
+			constexpr auto DefaultGraphicsScreenSpaceGITemporalAnimatedNoise{true};
+
+			/* Screen Space > Global Illumination > Denoiser (shared GIDenoiser component —
+			 * mirrors the RayTracing group, same semantics and defaults). */
+			constexpr auto GraphicsScreenSpaceGIDenoiserIterationsKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/Iterations"};
+			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserIterations{4U};
+			constexpr auto GraphicsScreenSpaceGIDenoiserLuminanceSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/LuminanceSigma"};
+			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserLuminanceSigma{4.0F};
+			constexpr auto GraphicsScreenSpaceGIDenoiserAccumulationCounterKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/AccumulationCounter"};
+			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserAccumulationCounter{true};
+			constexpr auto GraphicsScreenSpaceGIDenoiserMaxAccumulationKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/MaxAccumulation"};
+			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserMaxAccumulation{64U};
+			constexpr auto GraphicsScreenSpaceGIDenoiserDebugViewKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/DebugView"};
+			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserDebugView{0U};
+
 			/* Screen-space reflections (SSR). */
 			/* Compute reflections at half resolution (pixel doubling) to save performance.
 			 * Default FALSE (owner decision): screen-space effects run full-res by default —

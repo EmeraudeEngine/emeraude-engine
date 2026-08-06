@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -841,9 +842,81 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameUBOData & data) noexcept
+	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameContext & context, const FrameInputs & inputs) noexcept
 	{
-		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &data, sizeof(FrameUBOData));
+		/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
+		const auto readStateIndex = this->renderer().currentReadStateIndex();
+		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
+		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		/* JITTERED (the default projectionMatrix contract): the depth buffer was rasterized
+		 * with the TAA jitter, so unprojecting with the same matrix is geometrically exact.
+		 * NOTE (measured 2026-08-05): swapping this for unjitteredProjectionMatrix() — to
+		 * cancel the reprojection error against the unjittered previousProjectionMatrix() —
+		 * had NO measurable effect on the temporal peak-to-peak (runs within the ×1.85
+		 * run-to-run envelope). The GI temporal noise is content/RT-driven, not matrix-driven. */
+		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+		const auto invViewProj = (projMat * viewMat).inverse();
+		const auto * ivp = invViewProj.data();
+
+		/* Inverse view rotation for normal transformation (view → world). */
+		const auto invView = viewMat.inverse();
+		const auto * inv = invView.data();
+
+		/* Previous rendered frame (ViewMatrices frame-history contract). Identity
+		 * until the first frame is archived — irrelevant then, since the history is
+		 * flagged invalid (alpha forced to 1, feedback strength forced to 0). */
+		const auto & prevViewMat = viewMatrices.previousViewMatrix();
+		const auto prevViewProj = viewMatrices.previousProjectionMatrix() * prevViewMat;
+		const auto * pvp = prevViewProj.data();
+
+		const auto prevInvView = prevViewMat.inverse();
+		const auto * pinv = prevInvView.data();
+
+		const bool historyUsable = this->historyUsable();
+
+		const FrameUBOData ubo{
+			.invViewProj = {
+				ivp[0], ivp[1], ivp[2], ivp[3],
+				ivp[4], ivp[5], ivp[6], ivp[7],
+				ivp[8], ivp[9], ivp[10], ivp[11],
+				ivp[12], ivp[13], ivp[14], ivp[15]
+			},
+			.prevViewProj = {
+				pvp[0], pvp[1], pvp[2], pvp[3],
+				pvp[4], pvp[5], pvp[6], pvp[7],
+				pvp[8], pvp[9], pvp[10], pvp[11],
+				pvp[12], pvp[13], pvp[14], pvp[15]
+			},
+			.invViewCol0 = {inv[0], inv[1], inv[2]},
+			.viewPosX = inv[12],
+			.invViewCol1 = {inv[4], inv[5], inv[6]},
+			.viewPosY = inv[13],
+			.invViewCol2 = {inv[8], inv[9], inv[10]},
+			.viewPosZ = inv[14],
+			.prevCamPos = {pinv[12], pinv[13], pinv[14], 0.0F},
+			.traceParams = {inputs.traceMaxDistance, inputs.traceBias, inputs.traceSampleCount, static_cast< float >(m_noiseFrameIndex)},
+			.temporalParams = {
+				historyUsable ? m_parameters.temporalAlpha : 1.0F,
+				m_parameters.temporalDepthTolerance,
+				m_parameters.temporalNormalThreshold,
+				static_cast< float >(
+					(m_parameters.temporalNeighborhoodClamp ? 1U : 0U) |
+					(this->temporalActive() && m_parameters.temporalAnimatedNoise ? 2U : 0U) |
+					(m_parameters.accumulationCounter ? 4U : 0U)
+				)
+			},
+			.bounceParams = {
+				historyUsable ? inputs.bounceStrength : 0.0F,
+				inputs.bounceClamp,
+				m_parameters.temporalVarianceGamma,
+				static_cast< float >(m_parameters.maxAccumulation)
+			},
+			/* THE SKY IS A LIGHT SOURCE — the scalars come straight from the producer
+			 * (0 = no sky term for the screen-space producers). */
+			.skyParams = {inputs.skyLuminance, inputs.skyDistance, 0.0F, 0.0F}
+		};
+
+		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));
 
 		if ( !success )
 		{
@@ -855,6 +928,33 @@ namespace EmEn::Graphics
 		m_noiseFrameIndex = (m_noiseFrameIndex + 1U) % 4096U;
 
 		return success;
+	}
+
+	IndirectPostProcessEffect::CombineContribution
+	GIDenoiser::debugCombineContribution (const char * prefix, uint32_t mode) const noexcept
+	{
+		const std::string p{prefix};
+
+		CombineContribution contribution;
+		contribution.prefix = prefix;
+		contribution.samplers.emplace_back(CombineSamplerInput{"Moments", &this->momentsTexture()});
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{static_cast< float >(mode), 0.0F, 0.0F, 0.0F});
+
+		contribution.code =
+			"\tvec4 " + p + "Mom = texture(" + p + "Moments, vUV);\n"
+			"\tfloat " + p + "Var = max(" + p + "Mom.g - " + p + "Mom.r * " + p + "Mom.r, 0.0);\n"
+			"\tif (emDyn." + p + "Dynamics0.x < 1.5)\n"
+			"\t{\n"
+			"\t\t/* Variance, amplified x1e6 and bounded (readable under any exposure). */\n"
+			"\t\tem_Color.rgb = vec3(min(" + p + "Var * 1e6, 1e4));\n"
+			"\t}\n"
+			"\telse\n"
+			"\t{\n"
+			"\t\t/* Accumulation age: white = young (< 4 frames, spatial-fallback zone). */\n"
+			"\t\tem_Color.rgb = " + p + "Mom.b < 4.0 ? vec3(1e4) : vec3(" + p + "Mom.b / 64.0 * 100.0);\n"
+			"\t}\n";
+
+		return contribution;
 	}
 
 	const TextureInterface *

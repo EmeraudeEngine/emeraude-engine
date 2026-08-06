@@ -35,6 +35,7 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/GIDenoiser.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -73,9 +74,24 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float thickness{0.5F};
 				uint32_t sampleCount{8};
 				uint32_t stepCount{16};
-				uint32_t blurRadius{4};
+				/* À-trous edge-stopping sigmas + iteration count (GIDenoiser::Parameters). */
 				float depthSigma{1.0F};
 				float normalSigma{0.5F};
+				float luminanceSigma{4.0F};
+				uint32_t atrousIterations{4};
+				/* GIDenoiser temporal resolve (SSGI's first temporal accumulation). */
+				float temporalAlpha{0.1F};
+				float temporalDepthTolerance{0.05F};
+				float temporalNormalThreshold{0.8F};
+				float temporalVarianceGamma{1.0F};
+				uint32_t denoiserMaxAccumulation{64};
+				/* Denoiser debug view (combine draws it INSTEAD of the GI): 0 = off,
+				 * 1 = temporal variance, 2 = accumulation age. */
+				uint32_t denoiserDebugView{0};
+				bool denoiserAccumulationCounter{true};
+				bool temporalEnabled{true};
+				bool temporalNeighborhoodClamp{false};
+				bool temporalAnimatedNoise{true};
 			};
 
 			/**
@@ -93,6 +109,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float thickness;
 				uint32_t sampleCount;
 				uint32_t stepCount;
+				/* Animated-noise frame index of the R2 sequence (< 0 = frozen pattern). */
+				float noiseFrameIndex;
 			};
 
 			/**
@@ -101,7 +119,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			explicit
 			SSGI (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
+				: IndirectPostProcessEffect{renderer},
+				m_denoiser{renderer, ClassId}
 			{
 
 			}
@@ -113,6 +132,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 */
 			SSGI (Renderer & renderer, const Parameters & parameters) noexcept
 				: IndirectPostProcessEffect{renderer},
+				m_denoiser{renderer, ClassId},
 				m_parameters{parameters}
 			{
 
@@ -142,20 +162,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */
-			[[nodiscard]]
-			bool
-			usesSharedDenoise () const noexcept override
-			{
-				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
-			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
-			[[nodiscard]]
-			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordOverlayPasses()
+			 * @note SSGI left the shared H/V DenoisePass with the SVGF chain: the whole
+			 * internal chain (trace → temporal resolve on the RAW trace → moments →
+			 * variance-guided à-trous) records here, through the owned GIDenoiser —
+			 * SSGI's FIRST temporal accumulation. */
+			void recordOverlayPasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]
@@ -201,6 +213,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresVelocity()
+			 * @note The GIDenoiser temporal resolve reprojects through the velocity buffer. */
+			[[nodiscard]]
+			bool
+			requiresVelocity () const noexcept override
+			{
+				return true;
+			}
+
 			/**
 			 * @brief Sets the SSGI parameters.
 			 * @param parameters The new parameters.
@@ -225,16 +246,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		private:
 
+			/* The temporal denoiser component (history ping-pong, temporal resolve,
+			 * moments, à-trous) — shared code with the other GI producers. */
+			GIDenoiser m_denoiser;
 			Parameters m_parameters;
-			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
+			/* IRT: trace (half-res). The denoiser owns everything downstream. */
 			IntermediateRenderTarget m_traceTarget;
-			IntermediateRenderTarget m_blurHTarget;
-			IntermediateRenderTarget m_blurVTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			/* Texture consumed by this frame's combine snippet: the denoiser output when
+			 * the temporal chain is active, the raw trace otherwise. Set by
+			 * recordOverlayPasses() every frame. */
+			const Vulkan::TextureInterface * m_combineSource{nullptr};
 	};
 }

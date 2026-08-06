@@ -72,6 +72,7 @@ layout(push_constant) uniform PushConstants
 	float thickness;
 	uint sampleCount;
 	uint stepCount;
+	float noiseFrameIndex;	/* R2 sequence index; < 0 = frozen pattern. */
 };
 
 /* Linearize depth from [0,1] range (Vulkan [0,1] depth convention). */
@@ -97,10 +98,20 @@ vec2 projectToUV (vec3 viewPos)
 	return ndc * 0.5 + 0.5;
 }
 
-/* Hash function for pseudo-random sampling. */
-float hash (vec2 p)
+/* PCG integer hash → decorrelated white noise from integer pixel coordinates (same
+ * upgrade as RTGI: the former fract(sin(dot(...))) hash has float-precision beating and
+ * produced a fixed grid/banding pattern the spatial denoiser cannot remove). */
+uint pcgHash (uint v)
 {
-	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+	v = v * 747796405u + 2891336453u;
+	uint s = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+	return (s >> 22u) ^ s;
+}
+
+vec2 hash2 (uvec2 p)
+{
+	uint h = pcgHash(p.x + pcgHash(p.y));
+	return vec2(float(h & 0xffffu), float((h >> 16u) & 0xffffu)) * (1.0 / 65535.0);
 }
 
 /* Generate a cosine-weighted hemisphere sample direction. */
@@ -147,8 +158,18 @@ void main()
 	 * view-space Z is negative for objects in front of the camera). */
 	vec3 normal = normalize(vec3(rawN.x, rawN.y, -rawN.z));
 
-	/* Per-pixel random rotation to break banding. */
-	vec2 noiseVec = vec2(hash(vUV), hash(vUV * 2.37));
+	/* Per-pixel random rotation to break banding. Temporal decorrelation: advance the
+	 * rotation every frame along the R2 low-discrepancy sequence (Roberts 2018) so the
+	 * GIDenoiser resolve AVERAGES the estimator error instead of freezing it as a static
+	 * pattern (stable outliers read as "converged signal" the variance guide protects).
+	 * The index is negative when the temporal chain is off: animated noise without
+	 * accumulation boils. */
+	vec2 noiseVec = hash2(uvec2(gl_FragCoord.xy));
+
+	if (noiseFrameIndex >= 0.0)
+	{
+		noiseVec = fract(noiseVec + noiseFrameIndex * vec2(0.7548776662, 0.5698402909));
+	}
 
 	/* Build a tangent-space basis around the view-space normal.
 	 * Robust construction: pick an up vector not parallel to the normal, then cross (same method
@@ -310,9 +331,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIThicknessKey, DefaultGraphicsScreenSpaceGIThickness);
 		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGISampleCountKey, DefaultGraphicsScreenSpaceGISampleCount);
 		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIStepCountKey, DefaultGraphicsScreenSpaceGIStepCount);
-		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIBlurRadiusKey, DefaultGraphicsScreenSpaceGIBlurRadius);
 		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIDepthSigmaKey, DefaultGraphicsScreenSpaceGIDepthSigma);
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGINormalSigmaKey, DefaultGraphicsScreenSpaceGINormalSigma);
+		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIDenoiserLuminanceSigmaKey, DefaultGraphicsScreenSpaceGIDenoiserLuminanceSigma);
+		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIDenoiserIterationsKey, DefaultGraphicsScreenSpaceGIDenoiserIterations);
+		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalAlphaKey, DefaultGraphicsScreenSpaceGITemporalAlpha);
+		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalDepthToleranceKey, DefaultGraphicsScreenSpaceGITemporalDepthTolerance);
+		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalNormalThresholdKey, DefaultGraphicsScreenSpaceGITemporalNormalThreshold);
+		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalVarianceGammaKey, DefaultGraphicsScreenSpaceGITemporalVarianceGamma);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIDenoiserMaxAccumulationKey, DefaultGraphicsScreenSpaceGIDenoiserMaxAccumulation);
+		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIDenoiserDebugViewKey, DefaultGraphicsScreenSpaceGIDenoiserDebugView);
+		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGIDenoiserAccumulationCounterKey, DefaultGraphicsScreenSpaceGIDenoiserAccumulationCounter);
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGITemporalEnabledKey, DefaultGraphicsScreenSpaceGITemporalEnabled);
+		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGITemporalNeighborhoodClampKey, DefaultGraphicsScreenSpaceGITemporalNeighborhoodClamp);
+		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGITemporalAnimatedNoiseKey, DefaultGraphicsScreenSpaceGITemporalAnimatedNoise);
 
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
@@ -325,17 +357,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Blur targets (half-res, RGBA16F). */
-		if ( !m_blurHTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "SSGI_BlurH") )
-		{
-			TraceError{ClassId} << "Failed to create SSGI blur H target !";
+		/* The denoiser component (temporal resolve + moments + à-trous + histories) —
+		 * SSGI's FIRST temporal accumulation. */
+		m_denoiser.setTemporalEnabled(m_parameters.temporalEnabled);
+		m_denoiser.setParameters(GIDenoiser::Parameters{
+			.depthSigma = m_parameters.depthSigma,
+			.normalSigma = m_parameters.normalSigma,
+			.luminanceSigma = m_parameters.luminanceSigma,
+			.atrousIterations = m_parameters.atrousIterations,
+			.temporalAlpha = m_parameters.temporalAlpha,
+			.temporalDepthTolerance = m_parameters.temporalDepthTolerance,
+			.temporalNormalThreshold = m_parameters.temporalNormalThreshold,
+			.temporalVarianceGamma = m_parameters.temporalVarianceGamma,
+			.maxAccumulation = m_parameters.denoiserMaxAccumulation,
+			.temporalNeighborhoodClamp = m_parameters.temporalNeighborhoodClamp,
+			.temporalAnimatedNoise = m_parameters.temporalAnimatedNoise,
+			.accumulationCounter = m_parameters.denoiserAccumulationCounter
+		});
 
-			return false;
-		}
-
-		if ( !m_blurVTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "SSGI_BlurV") )
+		if ( !m_denoiser.create(halfW, halfH) )
 		{
-			TraceError{ClassId} << "Failed to create SSGI blur V target !";
+			TraceError{ClassId} << "Failed to create the SSGI denoiser component !";
 
 			return false;
 		}
@@ -399,29 +441,34 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* Combine source default: the raw trace. recordOverlayPasses() retargets it to the
+		 * denoiser output every frame when the temporal chain is active. */
+		m_combineSource = &m_traceTarget;
+
 		return true;
 	}
 
 	void
 	SSGI::destroy () noexcept
 	{
+		m_combineSource = nullptr;
+
 		m_tracePerFrame.clear();
 
 		m_tracePipeline.reset();
 		m_traceLayout.reset();
 
-		m_blurVTarget.destroy();
-		m_blurHTarget.destroy();
+		m_denoiser.destroy();
+
 		m_traceTarget.destroy();
 	}
 
 	void
-	SSGI::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	SSGI::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
 		const auto & constants = context.constants;
-
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -438,6 +485,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, inputColor));
 
+		/* ---- Frame UBO of the denoiser (matrices + temporal parameters; SSGI has no
+		 * feedback loop and no sky term — the trace scalars travel through its own push
+		 * constants, only the noise index below is shared). ---- */
+		const bool animated = m_denoiser.temporalActive() && m_parameters.temporalAnimatedNoise;
+		const auto noiseFrameIndex = static_cast< float >(m_denoiser.noiseFrameIndex());
+
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, context, GIDenoiser::FrameInputs{}));
+
 		/* ---- Pass 1: Screen-Space GI Trace ---- */
 		{
 			const TracePushConstants pc{
@@ -450,7 +505,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.maxDistance = m_parameters.maxDistance,
 				.thickness = m_parameters.thickness,
 				.sampleCount = m_parameters.sampleCount,
-				.stepCount = m_parameters.stepCount
+				.stepCount = m_parameters.stepCount,
+				.noiseFrameIndex = animated ? noiseFrameIndex : -1.0F
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -463,64 +519,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				sizeof(TracePushConstants)
 			);
 		}
-	}
 
-	IndirectPostProcessEffect::DenoiseContribution
-	SSGI::denoiseContribution (const FrameContext & /*context*/) const noexcept
-	{
-		DenoiseContribution contribution;
-		contribution.prefix = "ssgi";
-		contribution.source = &m_traceTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
-		contribution.needsDepth = true;
-		contribution.needsNormals = true;
-		contribution.dynamics = Base::Math::Vector< 4, float >{m_parameters.depthSigma, m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F};
-
-		/* Same bilateral kernel as the retired SSGI_Blur_FS pass: depth/normal-aware
-		 * separable filter (identical to the RTGI bilateral blur).
-		 * dynamics0 = {depthSigma, normalSigma, blurRadius}. */
-		contribution.code =
-			"\tvec2 ssgiTexel = 1.0 / vec2(textureSize(ssgiSrc, 0));\n"
-			"\tvec4 ssgiCenterGI = texture(ssgiSrc, vUV);\n"
-			"\tfloat ssgiCenterDepth = texture(emDepth, vUV).r;\n"
-			"\tvec3 ssgiCenterNormal = texture(emNormals, vUV).rgb;\n"
-			"\tvec4 ssgiResult = ssgiCenterGI;\n"
-			"\tif (ssgiCenterDepth < 1.0)\n"
-			"\t{\n"
-			"\t\tvec4 ssgiSum = vec4(0.0);\n"
-			"\t\tfloat ssgiTotalWeight = 0.0;\n"
-			"\t\tint ssgiRadius = int(emDyn.ssgiDynamics0.z);\n"
-			"\t\tfloat ssgiSpatialSigma = float(ssgiRadius) * 0.5;\n"
-			"\t\tfloat ssgiInvSpatialSigma2 = 1.0 / (2.0 * ssgiSpatialSigma * ssgiSpatialSigma);\n"
-			"\t\tfloat ssgiInvDepthSigma2 = 1.0 / (2.0 * emDyn.ssgiDynamics0.x * emDyn.ssgiDynamics0.x);\n"
-			"\t\tfor (int ssgiI = -ssgiRadius; ssgiI <= ssgiRadius; ssgiI++)\n"
-			"\t\t{\n"
-			"\t\t\tvec2 ssgiSampleUV = vUV + emDenoiseDir * ssgiTexel * float(ssgiI);\n"
-			"\t\t\tvec4 ssgiSampleGI = texture(ssgiSrc, ssgiSampleUV);\n"
-			"\t\t\tfloat ssgiSampleDepth = texture(emDepth, ssgiSampleUV).r;\n"
-			"\t\t\tvec3 ssgiSampleNormal = texture(emNormals, ssgiSampleUV).rgb;\n"
-			"\t\t\tfloat ssgiSpatialW = exp(-float(ssgiI * ssgiI) * ssgiInvSpatialSigma2);\n"
-			"\t\t\tfloat ssgiDepthDiff = abs(ssgiCenterDepth - ssgiSampleDepth);\n"
-			"\t\t\tfloat ssgiDepthW = exp(-ssgiDepthDiff * ssgiDepthDiff * ssgiInvDepthSigma2);\n"
-			"\t\t\tfloat ssgiNormalDot = max(dot(ssgiCenterNormal, ssgiSampleNormal), 0.0);\n"
-			"\t\t\tfloat ssgiNormalW = pow(ssgiNormalDot, 1.0 / max(emDyn.ssgiDynamics0.y, 0.001));\n"
-			"\t\t\tfloat ssgiW = ssgiSpatialW * ssgiDepthW * ssgiNormalW;\n"
-			"\t\t\tssgiSum += ssgiSampleGI * ssgiW;\n"
-			"\t\t\tssgiTotalWeight += ssgiW;\n"
-			"\t\t}\n"
-			"\t\tssgiResult = (ssgiTotalWeight > 0.0) ? ssgiSum / ssgiTotalWeight : ssgiCenterGI;\n"
-			"\t}\n";
-
-		return contribution;
+		/* ---- Denoise chain (SVGF order): temporal resolve on the RAW trace + moments
+		 * accumulation + normal history, then the variance-guided à-trous iterations. */
+		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_traceTarget, context);
 	}
 
 	IndirectPostProcessEffect::CombineContribution
 	SSGI::combineContribution (const FrameContext & /*context*/) const noexcept
 	{
+		/* Denoiser debug views (diagnostic): draw the denoiser internals INSTEAD of the GI
+		 * contribution. */
+		if ( m_parameters.denoiserDebugView != 0U && m_denoiser.temporalActive() )
+		{
+			return m_denoiser.debugCombineContribution("ssgi", m_parameters.denoiserDebugView);
+		}
+
 		CombineContribution contribution;
 		contribution.prefix = "ssgi";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", m_combineSource});
 		contribution.needsMaterialProperties = true;
 		contribution.needsAlbedo = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});

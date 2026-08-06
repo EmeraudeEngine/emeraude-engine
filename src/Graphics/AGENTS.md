@@ -1062,7 +1062,7 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 | **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
 | **RTAO** | `Effects/Framebuffer/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
-| **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | Multi-pass | Depth, Normals, MaterialProps, Albedo |
+| **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR |
 | **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals |
 | **LensFlare** | `Effects/Framebuffer/LensFlare.hpp/cpp` | Multi-pass | Depth, HDR |
 | **FogEnvironment** | `Effects/Framebuffer/FogEnvironment.hpp/cpp` | 1-pass | Depth |
@@ -1168,10 +1168,22 @@ advances the animated-noise R2 index). Owner-facing flow, in `recordPre/PostDeno
    (the noisy input unchanged when the temporal chain is off).
 
 The SVGF stages are built INSIDE this component — settings live under the mirrored
-`RayTracing/GlobalIllumination/Denoiser/` + `ScreenSpace/GlobalIllumination/Denoiser/`
-groups (owner decisions, 2026-08-06). RTGI side COMPLETE (stages 0–4, owner-validated:
-"the only thing left vibrating is the VolumetricLight streak" — a separate subject).
-Remaining: SSGI wiring.
+`RayTracing/GlobalIllumination/{Temporal,Denoiser}/` +
+`ScreenSpace/GlobalIllumination/{Temporal,Denoiser}/` groups (owner decisions,
+2026-08-06). **CHANTIER COMPLETE**: RTGI stages 0–4 owner-validated live ("the only thing
+left vibrating is the VolumetricLight streak" — a separate subject), SSGI wired the same
+day — its FIRST temporal accumulation. The component assembles its own frame UBO
+(`updateFrameData(frameIndex, context, FrameInputs)` — matrices from the renderer's view
+state, temporal parameters from `GIDenoiser::Parameters`; the producer only supplies its
+trace scalars, zeroed when it has no feedback loop / sky term) and serves the debug views
+to any producer via `debugCombineContribution(prefix, mode)`.
+
+**SSGI wiring (Aug 2026):** SSGI owns its GIDenoiser instance (histories are per-producer),
+gained `requiresVelocity()`, left the shared H/V blur, and its trace noise was upgraded
+from the banding-prone `fract(sin(dot))` hash to PCG + the R2 animated sequence
+(`noiseFrameIndex` push constant, < 0 = frozen). Measured (Sponza corridor, RT off, double
+runs): ptp 0.367–0.395 → **0.306–0.338**, area > 2/255 halved, energy preserved
+(mean luma 24.30 vs 24.35). The `ScreenSpace/GlobalIllumination/BlurRadius` key is inert.
 
 **Stage 3 — per-pixel 1/N accumulation counter (Aug 2026):** the temporal blend weight is
 `max(1/(age+1), 1/MaxAccumulation)` instead of the fixed `Temporal/Alpha` (flag bit 2,

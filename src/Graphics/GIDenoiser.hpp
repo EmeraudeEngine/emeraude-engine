@@ -98,9 +98,10 @@ namespace EmEn::Graphics
 			};
 
 			/**
-			 * @brief Denoiser parameters (SVGF à-trous filter).
-			 * @note Set by the owner BEFORE create() (VRAM gating) — the sigmas travel to the
-			 * shader through push constants, so setParameters() also works at runtime.
+			 * @brief Denoiser parameters (SVGF temporal resolve + à-trous filter).
+			 * @note Set by the owner BEFORE create() (VRAM gating) — the scalar parameters
+			 * travel to the shaders through the frame UBO / push constants, so
+			 * setParameters() also works at runtime.
 			 */
 			struct EMEN_API Parameters
 			{
@@ -115,6 +116,43 @@ namespace EmEn::Graphics
 				/* À-trous iterations (5x5 kernel, footprint doubles each pass: 1,2,4,8,16).
 				 * 0 = no spatial filtering (temporal resolve only — A/B lever). */
 				uint32_t atrousIterations{4};
+				/* Fixed temporal blend weight — only rules when accumulationCounter is off. */
+				float temporalAlpha{0.1F};
+				/* Relative camera-distance tolerance of the disocclusion test. */
+				float temporalDepthTolerance{0.05F};
+				/* Minimum world-normal dot of the disocclusion test. */
+				float temporalNormalThreshold{0.8F};
+				/* Variance-clipping width in standard deviations (neighborhoodClamp). */
+				float temporalVarianceGamma{1.0F};
+				/* SVGF 1/N accumulation cap (steady-state blend weight floor = 1/N). */
+				uint32_t maxAccumulation{64};
+				/* Rectify the history against the raw 3x3 statistics. Default OFF: on the
+				 * RAW input it pulls the history toward the noisy local distribution
+				 * (measured ~5% GI energy loss for no stability gain). */
+				bool temporalNeighborhoodClamp{false};
+				/* Advance the producer's noise seed along the R2 sequence every frame. */
+				bool temporalAnimatedNoise{true};
+				/* Per-pixel 1/N blend weight instead of the fixed temporalAlpha. */
+				bool accumulationCounter{true};
+			};
+
+			/**
+			 * @brief Producer-provided scalars of the frame.
+			 * @note The denoiser assembles the matrices and its own temporal parameters;
+			 * the owner only supplies what its TRACE shader consumes. Producers without a
+			 * feedback loop or a sky term leave the corresponding fields at zero.
+			 */
+			struct EMEN_API FrameInputs
+			{
+				float traceMaxDistance{0.0F};
+				float traceBias{0.0F};
+				float traceSampleCount{0.0F};
+				/* Multi-bounce feedback (gated internally on history validity). */
+				float bounceStrength{0.0F};
+				float bounceClamp{0.0F};
+				/* Sky luminance in nits (0 = no sky term) and sky ray distance. */
+				float skyLuminance{0.0F};
+				float skyDistance{0.0F};
 			};
 
 			/**
@@ -272,13 +310,29 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Writes this frame's data into the UBO and advances the noise sequence.
+			 * @brief Assembles this frame's UBO (matrices from the renderer's view state,
+			 * temporal parameters from Parameters, trace scalars from the owner), writes it
+			 * and advances the animated-noise sequence.
 			 * @param frameIndex The frame-in-flight index.
-			 * @param data The frame data (assembled by the owner — it holds the trace scalars).
+			 * @param context The per-frame chain context.
+			 * @param inputs The owner's trace scalars.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateFrameData (uint32_t frameIndex, const FrameUBOData & data) noexcept;
+			bool updateFrameData (uint32_t frameIndex, const FrameContext & context, const FrameInputs & inputs) noexcept;
+
+			/**
+			 * @brief Returns the combine contribution of the denoiser DEBUG views, drawn
+			 * INSTEAD of the owner's GI contribution.
+			 * @note Binary-amplified — a linear scale is unreadable under the photometric
+			 * exposure (the tone mapper is a camera sensor, not a data scope). Only
+			 * meaningful when temporalActive().
+			 * @param prefix The owner's combine prefix (e.g. "rtgi").
+			 * @param mode 1 = temporal variance (x1e6, bounded), 2 = accumulation age.
+			 * @return IndirectPostProcessEffect::CombineContribution
+			 */
+			[[nodiscard]]
+			CombineContribution debugCombineContribution (const char * prefix, uint32_t mode) const noexcept;
 
 			/**
 			 * @brief Records the whole denoise chain: temporal resolve + moments accumulation
