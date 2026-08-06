@@ -592,6 +592,30 @@ if ( materialType == PBRResource::ClassId )
 > **Rule for ANY stepped screen-space march** (god rays, SSR, SSGI, volumetric fog): never
 > ship uniform steps without a per-pixel dither of the march origin — undersampling shows up
 > as coherent, TAA-hostile banding on any source smaller than the step.
+>
+> **RESIDUAL RESOLVED (2026-08-06) — the streaks themselves still vibrated ("le filet").**
+> Attribution A/B (effect removed): ~90% of the door+trail region's mid-tail instability
+> (pixels flipping >16/255: 4200–8500 → ~450) was still VolumetricLight. Three
+> SAMPLING-side hypotheses were implemented and measured NEUTRAL: a fractional 2×2-gather
+> occlusion mask, jitter-compensated depth sampling (vUV + jitterUV), and an unjittered
+> light-position projection. The actual mechanism: **a source narrower than a pixel
+> RASTERIZES differently at every TAA jitter offset** — the door slit's footprint in the
+> depth buffer genuinely changes with the Halton phase, so the occlusion mask flux truly
+> oscillates and the radial march integrates that into a streak-scale vibration. No stable
+> sampling can fix a source that really changes; **averaging over the jitter cycle can**:
+> a temporal EMA on the occlusion mask (ping-pong pair, blended in the occlusion pass,
+> `Parameters::temporalAlpha` default 0.2 ≈ 8 frames, 1 = off, no reprojection — the mask
+> is soft and view-anchored). Measured: the region returned exactly to the
+> effect-removed floor (px>16 ≈ 450, crop p99.9 40-53 → 11-12, full-frame p99.9 18-26 →
+> 6.6), energy preserved, owner-validated live (static + fast camera rotation, no visible
+> mask ghosting). The neutral sampling corrections were KEPT (principled, zero-cost:
+> the gather anti-aliases the half-res mask, the compensation stabilises the silhouette
+> position); the EMA is the active ingredient.
+>
+> **Lesson:** when a post-effect amplifies a tiny bright source (radial blur, bloom
+> streaks), check whether the source's RASTERIZED footprint is jitter-stable before
+> blaming the effect's sampling — a sub-pixel source under TAA is a genuinely oscillating
+> signal, and the only cure at the effect level is temporal.
 
 ### Measured: Animated GI Noise Cannot Beat a Frozen Pattern Under a Fixed-Alpha EMA (Aug 2026)
 

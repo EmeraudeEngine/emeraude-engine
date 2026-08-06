@@ -1057,7 +1057,7 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 | **Bloom** | `Effects/Framebuffer/Bloom.hpp/cpp` | Multi-pass | HDR |
 | **DepthOfField** | `Effects/Framebuffer/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
 | **ToneMapping** | `Effects/Framebuffer/ToneMapping.hpp/cpp` | Multi-pass (auto-exposure chain) | HDR, **camera-materialized** |
-| **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | Multi-pass | Depth, HDR |
+| **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | 2-pass (Occlusion+EMA ping-pong → RadialBlur); IGN-dithered march, jitter-compensated mask, `temporalAlpha` 0.2 (sub-pixel sources rasterize jitter-unstable — caution-points § dash train) | Depth, HDR |
 | **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
 | **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |

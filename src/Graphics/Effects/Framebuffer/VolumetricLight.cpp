@@ -58,6 +58,7 @@ layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D depthTex;
+layout(set = 0, binding = 1) uniform sampler2D previousMaskTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -77,17 +78,37 @@ layout(push_constant) uniform PushConstants
 	float depthThreshold;
 	uint numSamples;
 	float lightOnScreen;
+	float jitterUVX;
+	float jitterUVY;
+	float temporalAlpha;
 };
 
 void main()
 {
-	float depth = texture(depthTex, vUV).r;
+	/* JITTER COMPENSATION: the depth buffer is rasterized with the TAA sub-pixel offset,
+	 * so its content belongs at (pixel - jitter) — sampling at vUV + jitterUV reads the
+	 * value belonging AT vUV, keeping the mask silhouette position phase-stable. */
+	vec2 sampleUV = vUV + vec2(jitterUVX, jitterUVY);
 
-	/* Sky pixels emit light, geometry blocks it. */
-	float isLit = (depth >= depthThreshold) ? 1.0 : 0.0;
+	/* Sky pixels emit light, geometry blocks it. FRACTIONAL mask: average the binary
+	 * test over the 2x2 depth quad (one gather) instead of thresholding a single tap —
+	 * anti-aliases the half-res mask edge. (Thresholding an AVERAGED depth would be
+	 * wrong — the mean of a doorway depth and the far plane is meaningless; average the
+	 * TEST results.) */
+	vec4 quad = textureGather(depthTex, sampleUV, 0);
+	float isLit = dot(vec4(greaterThanEqual(quad, vec4(depthThreshold))), vec4(0.25));
 
 	vec3 lightColor = vec3(lightColorR, lightColorG, lightColorB);
-	outColor = vec4(lightColor * lightIntensity * isLit, isLit);
+	vec4 current = vec4(lightColor * lightIntensity * isLit, isLit);
+
+	/* TEMPORAL EMA of the mask: a source narrower than a pixel (a door slit) RASTERIZES
+	 * differently at every TAA jitter offset — its flux in the depth buffer genuinely
+	 * oscillates with the Halton phase, and the radial march integrates that into a
+	 * streak vibration. Stable sampling cannot fix a source that really changes
+	 * (fractional mask and jitter compensation both measured neutral); averaging over
+	 * the jitter cycle can. No reprojection: the mask is a soft, view-anchored quantity
+	 * and the streaks are blurrier still — the lag at alpha 0.2 is ~8 frames. */
+	outColor = mix(texture(previousMaskTex, vUV), current, temporalAlpha);
 }
 )GLSL";
 
@@ -117,6 +138,9 @@ layout(push_constant) uniform PushConstants
 	float depthThreshold;
 	uint numSamples;
 	float lightOnScreen;
+	float jitterUVX;
+	float jitterUVY;
+	float temporalAlpha;
 };
 
 void main()
@@ -178,12 +202,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
 
-		/* Create occlusion target (half-res). */
-		if ( !m_occlusionTarget.create(renderer, halfW, halfH, format, "VL_Occlusion") )
-		{
-			TraceError{TracerTag} << "Failed to create occlusion target !";
+		m_historyValid = false;
+		m_occlusionWriteIndex = 0;
 
-			return false;
+		/* Create occlusion targets (half-res, ping-pong: the pass blends the current
+		 * binary test with the previous frame's mask — see the shader note). */
+		for ( size_t index = 0; index < 2; ++index )
+		{
+			if ( !m_occlusionTargets[index].create(renderer, halfW, halfH, format, "VL_Occlusion" + std::to_string(index)) )
+			{
+				TraceError{TracerTag} << "Failed to create occlusion target #" << index << " !";
+
+				return false;
+			}
 		}
 
 		/* Create radial blur target (half-res). */
@@ -197,10 +228,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Single input layout (1 combined image sampler). */
+		/* Occlusion: depth + previous mask. Radial: occlusion mask. */
+		auto dualInputLayout = this->getInputLayout(2);
 		auto singleInputLayout = this->getInputLayout(1);
 
-		if ( singleInputLayout == nullptr )
+		if ( dualInputLayout == nullptr || singleInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -208,7 +240,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Pipeline layouts ---- */
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(singleInputLayout);
+			sets.emplace_back(dualInputLayout);
 
 			m_occlusionLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ScatterPushConstants)}
@@ -261,7 +293,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* ---- Create pipelines ---- */
-		m_occlusionPipeline = this->createFullscreenPipeline(ClassId, "VL_Occlusion", vertexModule, occlusionFragment, m_occlusionLayout, m_occlusionTarget);
+		/* NOTE: The occlusion pipeline is created against the [0] target; recording into
+		 * [1] relies on Vulkan render pass compatibility (identical format/ops), exactly
+		 * like the GIDenoiser history ping-pong. */
+		m_occlusionPipeline = this->createFullscreenPipeline(ClassId, "VL_Occlusion", vertexModule, occlusionFragment, m_occlusionLayout, m_occlusionTargets[0]);
 		m_radialPipeline = this->createFullscreenPipeline(ClassId, "VL_Radial", vertexModule, radialFragment, m_radialLayout, m_radialTarget);
 
 		if ( m_occlusionPipeline == nullptr || m_radialPipeline == nullptr )
@@ -269,28 +304,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* ---- Create descriptor sets ---- */
+		/* ---- Create descriptor sets (all per-frame: the ping-pong bindings rotate) ---- */
 
-		/* Occlusion: reads depth (updated per-frame). */
-		m_occlusionPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "VL_Occlusion_DescSet");
+		m_occlusionPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "VL_Occlusion_DescSet");
+		m_radialPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "VL_Radial_DescSet");
 
-		if ( m_occlusionPerFrame.empty() )
-		{
-			return false;
-		}
-
-		/* Radial blur: reads occlusion target (fixed, single set). */
-		const auto & pool = renderer.descriptorPool();
-
-		m_radialDescSet = std::make_unique< DescriptorSet >(pool, singleInputLayout);
-		m_radialDescSet->setIdentifier(ClassId, "Radial_DescSet", "DescriptorSet");
-
-		if ( !m_radialDescSet->create() )
-		{
-			return false;
-		}
-
-		if ( !m_radialDescSet->writeCombinedImageSampler(0, m_occlusionTarget) )
+		if ( m_occlusionPerFrame.empty() || m_radialPerFrame.empty() )
 		{
 			return false;
 		}
@@ -301,7 +320,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	void
 	VolumetricLight::destroy () noexcept
 	{
-		m_radialDescSet.reset();
+		m_radialPerFrame.clear();
 		m_occlusionPerFrame.clear();
 
 		m_radialPipeline.reset();
@@ -310,7 +329,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_occlusionLayout.reset();
 
 		m_radialTarget.destroy();
-		m_occlusionTarget.destroy();
+
+		for ( auto & target : m_occlusionTargets )
+		{
+			target.destroy();
+		}
+
+		m_historyValid = false;
+		m_occlusionWriteIndex = 0;
 	}
 
 	void
@@ -328,7 +354,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto readStateIndex = this->renderer().currentReadStateIndex();
 		const auto & viewMatrices =this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+		/* UNJITTERED: the light screen position is the origin of every radial sampling
+		 * line. Projected through the jittered matrix it wobbles with the Halton phase,
+		 * and the whole line of taps shifts sub-pixel across an occlusion source that can
+		 * be 1-2 half-res texels wide (a door slit) — the streaks vibrate. The position
+		 * is a GEOMETRIC anchor, not a depth-buffer lookup: it must be phase-stable. */
+		const auto & projMat = viewMatrices.unjitteredProjectionMatrix(readStateIndex);
 		const auto & camPos = viewMatrices.position(readStateIndex);
 
 		/* Light source direction (opposite of emission direction). */
@@ -363,18 +394,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto distFromCenter = std::sqrt(dx * dx + dy * dy);
 		lightOnScreen *= std::max(0.0F, std::min(1.0F, 1.0F - distFromCenter * 0.5F));
 
-		/* 2. Update per-frame occlusion descriptor with depth texture. */
+		/* 2. Update per-frame descriptors: depth + previous mask (ping-pong) for the
+		 * occlusion pass, this frame's mask for the radial pass. */
+		const uint32_t writeIdx = m_occlusionWriteIndex;
+		const uint32_t readIdx = 1U - writeIdx;
+
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputDepth));
 		}
 
+		static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(1, m_occlusionTargets[readIdx]));
+		static_cast< void >(m_radialPerFrame[frameIndex]->writeCombinedImageSampler(0, m_occlusionTargets[writeIdx]));
+
 		/* Build scatter push constants (shared by occlusion and radial passes). */
 		const ScatterPushConstants scatterPC{
 			.lightScreenX = screenX,
 			.lightScreenY = screenY,
-			.texelSizeX = 1.0F / static_cast< float >(m_occlusionTarget.width()),
-			.texelSizeY = 1.0F / static_cast< float >(m_occlusionTarget.height()),
+			.texelSizeX = 1.0F / static_cast< float >(m_occlusionTargets[0].width()),
+			.texelSizeY = 1.0F / static_cast< float >(m_occlusionTargets[0].height()),
 			.nearPlane = constants.nearPlane,
 			.farPlane = constants.farPlane,
 			.lightColorR = lightColor.red(),
@@ -386,13 +424,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.exposure = m_parameters.exposure,
 			.depthThreshold = m_parameters.depthThreshold,
 			.numSamples = m_parameters.numSamples,
-			.lightOnScreen = lightOnScreen
+			.lightOnScreen = lightOnScreen,
+			/* NDC jitter -> UV units (frame-history contract, same as the TAA resolve). */
+			.jitterUVX = context.projectionJitter.x() * 0.5F,
+			.jitterUVY = context.projectionJitter.y() * 0.5F,
+			/* First frame after (re)creation: the previous-mask image is uninitialised. */
+			.temporalAlpha = m_historyValid ? m_parameters.temporalAlpha : 1.0F
 		};
 
-		/* 4. Pass 1: Occlusion extraction. */
+		/* 4. Pass 1: Occlusion extraction + temporal EMA. */
 		IndirectPostProcessEffect::recordFullscreenPass(
 			commandBuffer,
-			m_occlusionTarget,
+			m_occlusionTargets[writeIdx],
 			*m_occlusionPipeline,
 			*m_occlusionLayout,
 			*m_occlusionPerFrame[frameIndex],
@@ -406,10 +449,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			m_radialTarget,
 			*m_radialPipeline,
 			*m_radialLayout,
-			*m_radialDescSet,
+			*m_radialPerFrame[frameIndex],
 			&scatterPC,
 			sizeof(ScatterPushConstants)
 		);
+
+		/* Flip the mask ping-pong for the next frame. */
+		m_occlusionWriteIndex = readIdx;
+		m_historyValid = true;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -72,6 +73,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float exposure{0.25F};
 				uint32_t numSamples{64};
 				float depthThreshold{0.9999F};
+				/* Temporal EMA weight of the occlusion mask (1 = no accumulation).
+				 * A source narrower than a pixel (a door slit) RASTERIZES differently at
+				 * every TAA jitter offset: its flux in the depth buffer genuinely
+				 * oscillates with the Halton phase and the radial march integrates that
+				 * into a streak vibration. Stable sampling cannot fix a source that
+				 * really changes — averaging over the jitter cycle can. 0.2 ≈ 8 frames. */
+				float temporalAlpha{0.2F};
 			};
 
 			/**
@@ -95,6 +103,14 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float depthThreshold;
 				uint32_t numSamples;
 				float lightOnScreen;
+				/* TAA sub-pixel jitter of the frame, in UV units (NDC jitter x 0.5).
+				 * The occlusion pass samples the depth at vUV + jitterUV so the mask
+				 * silhouette stays phase-stable (the buffer content is shifted BY the
+				 * jitter — frame-history contract, same convention as the TAA resolve). */
+				float jitterUVX;
+				float jitterUVY;
+				/* EMA weight of the occlusion mask (forced to 1 on the first frame). */
+				float temporalAlpha;
 			};
 
 			/**
@@ -233,8 +249,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			Parameters m_parameters;
-			/* Intermediate render targets. */
-			IntermediateRenderTarget m_occlusionTarget;
+			/* Intermediate render targets. The occlusion mask is a PING-PONG pair: the
+			 * pass blends the current binary test with the previous frame's mask (EMA)
+			 * to average the real flux oscillation of sub-pixel sources under the TAA
+			 * jitter (see Parameters::temporalAlpha). */
+			std::array< IntermediateRenderTarget, 2 > m_occlusionTargets;
 			IntermediateRenderTarget m_radialTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_occlusionPipeline;
@@ -242,11 +261,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_occlusionLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_radialLayout;
-			/* Descriptor sets. */
+			/* Descriptor sets (all per-frame: the ping-pong bindings rotate). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_occlusionPerFrame;
-			std::unique_ptr< Vulkan::DescriptorSet > m_radialDescSet;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_radialPerFrame;
 			/* Optional overrides (nullopt = read from LightSet at execute time). */
 			std::optional< Base::PixelFactory::Color<> > m_lightColorOverride;
 			std::optional< float > m_lightIntensityOverride;
+			/* Ping-pong index of the occlusion mask written THIS frame. */
+			uint32_t m_occlusionWriteIndex{0};
+			/* False until a first frame filled the mask history (forces alpha = 1). */
+			bool m_historyValid{false};
 	};
 }
