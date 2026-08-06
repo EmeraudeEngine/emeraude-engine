@@ -197,6 +197,7 @@ namespace EmEn::Vulkan
 			/* Std parameter sets (must outlive the session parameters creation). */
 			StdVideoH265ProfileTierLevel m_stdProfileTierLevel{};
 			StdVideoH265DecPicBufMgr m_stdDecPicBufMgr{};
+			StdVideoH265SequenceParameterSetVui m_stdVUI{};
 			StdVideoH265VideoParameterSet m_stdVPS{};
 			StdVideoH265SequenceParameterSet m_stdSPS{};
 			StdVideoH265PictureParameterSet m_stdPPS{};

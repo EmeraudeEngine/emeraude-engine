@@ -332,6 +332,23 @@ namespace EmEn::Vulkan
 			m_stdSPS.conf_win_bottom_offset = (alignedHeight - m_settings.height) / 2;
 		}
 
+		/* VUI: the frame timing MUST be authored here — without it the driver writes
+		 * its own (wrong) timing and players race through the stream (900 frames
+		 * played in 2 s). Also signals BT.709 directly in the bitstream. */
+		m_stdVUI = {};
+		m_stdVUI.flags.vui_timing_info_present_flag = 1;
+		m_stdVUI.vui_num_units_in_tick = 1;
+		m_stdVUI.vui_time_scale = m_settings.frameRate;
+		m_stdVUI.flags.video_signal_type_present_flag = 1;
+		m_stdVUI.flags.colour_description_present_flag = 1;
+		m_stdVUI.video_format = 5; /* Unspecified. */
+		m_stdVUI.colour_primaries = 1; /* BT.709. */
+		m_stdVUI.transfer_characteristics = 1; /* BT.709. */
+		m_stdVUI.matrix_coeffs = 1; /* BT.709. */
+
+		m_stdSPS.flags.vui_parameters_present_flag = 1;
+		m_stdSPS.pSequenceParameterSetVui = &m_stdVUI;
+
 		/* PPS — do NOT set cu_qp_delta_enabled_flag: the driver overrides the PPS
 		 * as it needs, and forcing it desynchronises the slice entropy (re-measured). */
 		m_stdPPS = {};
