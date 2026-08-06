@@ -88,9 +88,10 @@ namespace EmEn::Graphics
 				std::array< float, 4 > prevCamPos;
 				/* maxDistance, bias, sampleCount (as float), animated-noise frame index (R2). */
 				std::array< float, 4 > traceParams;
-				/* alpha, depthTolerance, normalThreshold, flags (bit 0 = variance clip, bit 1 = animated noise). */
+				/* alpha, depthTolerance, normalThreshold, flags (bit 0 = variance clip,
+				 * bit 1 = animated noise, bit 2 = 1/N accumulation counter). */
 				std::array< float, 4 > temporalParams;
-				/* strength, clamp, variance-clip gamma, unused. */
+				/* strength, clamp, variance-clip gamma, accumulation cap N. */
 				std::array< float, 4 > bounceParams;
 				/* sky luminance in nits (0 = no sky), sky ray distance, unused, unused. */
 				std::array< float, 4 > skyParams;

@@ -47,13 +47,14 @@ namespace
 	 * the combine), A = camera distance (0 = invalid/sky).
 	 *
 	 * Descriptor set 0:
-	 *   binding 0: current noisy GI (the owner's blur output)
+	 *   binding 0: current raw GI (the owner's trace output)
 	 *   binding 1: depth texture
 	 *   binding 2: normals texture (view space)
 	 *   binding 3: GI history texture (previous resolved frame)
 	 *   binding 4: world-normal history texture (previous frame)
 	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
-	 *   binding 6: frame UBO (shared with the owner's trace pass)
+	 *   binding 6: moments history texture (accumulation age for the 1/N counter)
+	 *   binding 7: frame UBO (shared with the owner's trace pass)
 	 */
 	constexpr auto GIDenoiserTemporalFragmentShader = R"GLSL(
 #version 450
@@ -67,8 +68,9 @@ layout(set = 0, binding = 2) uniform sampler2D normalTex;
 layout(set = 0, binding = 3) uniform sampler2D historyTex;
 layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
 layout(set = 0, binding = 5) uniform sampler2D velocityTex;
+layout(set = 0, binding = 6) uniform sampler2D momentsHistoryTex;
 
-layout(set = 0, binding = 6, std140) uniform FrameData
+layout(set = 0, binding = 7, std140) uniform FrameData
 {
 	mat4 invViewProj;
 	mat4 prevViewProj;
@@ -77,8 +79,8 @@ layout(set = 0, binding = 6, std140) uniform FrameData
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise, bit2 1/N counter). */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = accumulation cap N. */
 };
 
 void main()
@@ -158,6 +160,17 @@ void main()
 		return;
 	}
 
+	/* Per-pixel 1/N accumulation counter (flag bit 2, SVGF): the blend weight follows the
+	 * pixel's own accumulation age (from the moments history — the moments pass maintains
+	 * it with the SAME validation) instead of a fixed EMA. Fast convergence after a
+	 * disocclusion (1, 1/2, 1/3...), tiny steady-state variance leak (1/N at the cap). */
+	if ((uint(temporalParams.w) & 4u) != 0u && alpha < 1.0)
+	{
+		float age = texture(momentsHistoryTex, prevUV).b;
+		float maxN = max(bounceParams.w, 1.0);
+		alpha = max(1.0 / (age + 1.0), 1.0 / maxN);
+	}
+
 	/* History rectification (flag bit 0): VARIANCE CLIPPING — bound the history to
 	 * mean ± gamma * sigma of the current 3x3 neighborhood (M. Salvi, "An Excursion in
 	 * Temporal Supersampling", GDC 2016 — the same technique as the engine TAA). It
@@ -210,7 +223,8 @@ void main()
 	 *   binding 3: moments history texture (previous frame)
 	 *   binding 4: world-normal history texture (previous frame)
 	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
-	 *   binding 6: frame UBO (shared with the owner's trace pass)
+	 *   binding 6: unused (layout shared with the temporal pass)
+	 *   binding 7: frame UBO (shared with the owner's trace pass)
 	 */
 	constexpr auto GIDenoiserMomentsFragmentShader = R"GLSL(
 #version 450
@@ -225,7 +239,7 @@ layout(set = 0, binding = 3) uniform sampler2D momentsHistoryTex;
 layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
 layout(set = 0, binding = 5) uniform sampler2D velocityTex;
 
-layout(set = 0, binding = 6, std140) uniform FrameData
+layout(set = 0, binding = 7, std140) uniform FrameData
 {
 	mat4 invViewProj;
 	mat4 prevViewProj;
@@ -234,8 +248,8 @@ layout(set = 0, binding = 6, std140) uniform FrameData
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise, bit2 1/N counter). */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = accumulation cap N. */
 };
 
 void main()
@@ -310,9 +324,18 @@ void main()
 		return;
 	}
 
+	float maxN = max(bounceParams.w, 1.0);
+
+	/* Per-pixel 1/N accumulation counter (flag bit 2, SVGF) — same weight as the colour
+	 * resolve so both integrate identically. */
+	if ((uint(temporalParams.w) & 4u) != 0u)
+	{
+		alpha = max(1.0 / (history.b + 1.0), 1.0 / maxN);
+	}
+
 	float m1 = mix(history.r, luma, alpha);
 	float m2 = mix(history.g, luma * luma, alpha);
-	float age = min(history.b + 1.0, 64.0);
+	float age = min(history.b + 1.0, maxN);
 
 	outMoments = vec4(m1, m2, age, cameraDistance);
 }
@@ -614,10 +637,11 @@ namespace EmEn::Graphics
 
 		/* ---- Descriptor set layouts ---- */
 
-		/* Temporal resolve input: GI + depth + normals + history + normal history + velocity,
-		 * plus the frame UBO. The moments pass reuses the SAME shape (raw GI + depth +
-		 * normals + moments history + normal history + velocity + UBO). */
-		auto temporalInputLayout = this->getInputLayout(6, 1);
+		/* Temporal resolve input: GI + depth + normals + history + normal history + velocity
+		 * + moments history (1/N counter age), plus the frame UBO. The moments pass reuses
+		 * the SAME shape (raw GI + depth + normals + moments history + normal history +
+		 * velocity + unused + UBO). */
+		auto temporalInputLayout = this->getInputLayout(7, 1);
 
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
@@ -720,12 +744,12 @@ namespace EmEn::Graphics
 
 		for ( size_t f = 0; f < m_temporalPerFrame.size(); ++f )
 		{
-			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(6, *m_frameUBOs[f]) )
+			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(7, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
 
-			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(6, *m_frameUBOs[f]) )
+			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(7, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
@@ -857,8 +881,11 @@ namespace EmEn::Graphics
 		/* History ping-pong: this frame reads [readIdx] and writes [writeIdx]. */
 		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
 		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
+		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(6, m_momentsTargets[readIdx]));
 		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(3, m_momentsTargets[readIdx]));
 		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
+		/* Binding 6 is unused by the moments shader (shared layout) — keep it valid. */
+		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(6, m_momentsTargets[readIdx]));
 
 		if ( context.depth != nullptr )
 		{

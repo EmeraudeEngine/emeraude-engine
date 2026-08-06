@@ -633,6 +633,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGINormalSigmaKey, DefaultGraphicsRayTracingGINormalSigma);
 		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDenoiserLuminanceSigmaKey, DefaultGraphicsRayTracingGIDenoiserLuminanceSigma);
 		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserIterationsKey, DefaultGraphicsRayTracingGIDenoiserIterations);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserMaxAccumulationKey, DefaultGraphicsRayTracingGIDenoiserMaxAccumulation);
+		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsRayTracingGIDenoiserAccumulationCounterKey, DefaultGraphicsRayTracingGIDenoiserAccumulationCounter);
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalAlphaKey, DefaultGraphicsRayTracingGITemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalDepthToleranceKey, DefaultGraphicsRayTracingGITemporalDepthTolerance);
 		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalNormalThresholdKey, DefaultGraphicsRayTracingGITemporalNormalThreshold);
@@ -884,14 +886,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					m_parameters.temporalNormalThreshold,
 					static_cast< float >(
 						(m_parameters.temporalNeighborhoodClamp ? 1U : 0U) |
-						(temporalActive && m_parameters.temporalAnimatedNoise ? 2U : 0U)
+						(temporalActive && m_parameters.temporalAnimatedNoise ? 2U : 0U) |
+						(m_parameters.denoiserAccumulationCounter ? 4U : 0U)
 					)
 				},
 				.bounceParams = {
 					historyUsable && m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
 					m_parameters.multiBounceClamp,
 					m_parameters.temporalVarianceGamma,
-					0.0F
+					static_cast< float >(m_parameters.denoiserMaxAccumulation)
 				},
 				/* THE SKY IS A LIGHT SOURCE. The luminance comes from the scene background
 				 * (0 = no background, no sky light). The sky distance is how far a ray must

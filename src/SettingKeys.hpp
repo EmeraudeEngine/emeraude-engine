@@ -501,13 +501,15 @@ namespace EmEn
 			 * the temporal accumulation averages the sampling error instead of freezing it as a
 			 * static pattern. Only effective when the temporal chain is enabled — animated noise
 			 * without accumulation boils.
-			 * ⚠ DEFAULT OFF (measured 2026-08-05, Sponza corridor bench): with the fixed-alpha
-			 * EMA the animation REGRESSED temporal stability x2.4 (the EMA leaks ~23% of the
-			 * injected variance; a frozen pattern has near-zero temporal variance by
-			 * construction). Re-enable only together with a variance-guided spatial filter
-			 * (SVGF-style) that actually cuts the per-frame noise before the resolve. */
+			 * DEFAULT ON since the SVGF chain landed (owner decision, measured 2026-08-06):
+			 * with the variance-guided à-trous + the 1/N accumulation counter the animation is
+			 * net-positive — energy restored (a frozen pattern turns stable bright outliers
+			 * into "converged signal" the filter protects: fireflies), best distribution tails,
+			 * peak-to-peak 0.55 vs the 0.67-0.83 marbled baseline. History (2026-08-05): with
+			 * the FIXED-alpha EMA alone this regressed x2.4 — never enable it without the
+			 * spatial filter ahead of the resolve. */
 			constexpr auto GraphicsRayTracingGITemporalAnimatedNoiseKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/AnimatedNoise"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalAnimatedNoise{false};
+			constexpr auto DefaultGraphicsRayTracingGITemporalAnimatedNoise{true};
 
 			/* Ray Tracing > Global Illumination > Denoiser (shared GIDenoiser component, SVGF).
 			 * À-trous iterations over the temporally integrated irradiance (5x5 kernel,
@@ -521,6 +523,18 @@ namespace EmEn
 			 * Larger = closer to a plain depth/normal bilateral (guidance off). */
 			constexpr auto GraphicsRayTracingGIDenoiserLuminanceSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/LuminanceSigma"};
 			constexpr auto DefaultGraphicsRayTracingGIDenoiserLuminanceSigma{4.0F};
+			/* Per-pixel 1/N accumulation counter (SVGF): the temporal blend weight is
+			 * max(1/(age+1), 1/MaxAccumulation) instead of the fixed Temporal/Alpha — fast
+			 * convergence after a disocclusion (alpha 1, 1/2, 1/3...), tiny steady-state
+			 * variance leak (about 0.8% at N=64 versus about 23% at fixed alpha 0.1, the
+			 * factor that sank the first animated-noise attempt). Temporal/Alpha only rules
+			 * when this is off (A/B lever). */
+			constexpr auto GraphicsRayTracingGIDenoiserAccumulationCounterKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/AccumulationCounter"};
+			constexpr auto DefaultGraphicsRayTracingGIDenoiserAccumulationCounter{true};
+			/* Accumulation cap N (the steady-state blend weight floor is 1/N). Larger =
+			 * smoother but slower to react to lighting changes. */
+			constexpr auto GraphicsRayTracingGIDenoiserMaxAccumulationKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/MaxAccumulation"};
+			constexpr auto DefaultGraphicsRayTracingGIDenoiserMaxAccumulation{64U};
 			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age

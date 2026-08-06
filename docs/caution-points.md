@@ -613,10 +613,17 @@ if ( materialType == PBRResource::ClassId )
 >
 > **The rule:** seed animation is only viable AFTER the per-frame estimator noise is cut ahead
 > of the resolve — a variance-guided à-trous filter chain (SVGF, Schied et al. 2017) or more
-> samples. Until that denoiser chantier lands, `Temporal/AnimatedNoise` stays **default OFF**
-> (the infrastructure — R2 frame index, flag bit 1, variance clipping in the resolve — is in
-> place and key-gated). Measurement protocol: projet-alpha `docs/temporal-stability-measurement.md`
+> samples. Measurement protocol: projet-alpha `docs/temporal-stability-measurement.md`
 > (8-shot series ×2 runs — single runs differ by up to ×1.85 and prove nothing).
+>
+> **RESOLVED (2026-08-06):** the SVGF chain landed in `Graphics::GIDenoiser` (variance-guided
+> à-trous + per-pixel 1/N accumulation counter) and `Temporal/AnimatedNoise` flipped to
+> **default ON** (owner decision, owner-validated live). Measured with the full chain: ptp
+> 0.55–0.57 vs the 0.67–0.83 marbled baseline, energy restored, fireflies dissolved. The rule
+> above STANDS for any new temporal estimator: a frozen pattern also poisons the SPATIAL
+> filter — stable bright outliers have near-zero temporal variance, so a variance-guided
+> luminance weight protects them as "converged signal" (visible fireflies). Animation and
+> the denoiser are a package: neither works alone.
 
 ### Fixed: RTAO/RTGI tMin Skipped Near Occluders + SSAO Double Intensity & Screen-Edge Band (Jul 2026)
 

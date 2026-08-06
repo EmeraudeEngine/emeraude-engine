@@ -1169,8 +1169,25 @@ advances the animated-noise R2 index). Owner-facing flow, in `recordPre/PostDeno
 
 The SVGF stages are built INSIDE this component — settings live under the mirrored
 `RayTracing/GlobalIllumination/Denoiser/` + `ScreenSpace/GlobalIllumination/Denoiser/`
-groups (owner decisions, 2026-08-06). Remaining: 1/N accumulation counter (stage 3),
-animated noise default flip (stage 4), SSGI wiring.
+groups (owner decisions, 2026-08-06). RTGI side COMPLETE (stages 0–4, owner-validated:
+"the only thing left vibrating is the VolumetricLight streak" — a separate subject).
+Remaining: SSGI wiring.
+
+**Stage 3 — per-pixel 1/N accumulation counter (Aug 2026):** the temporal blend weight is
+`max(1/(age+1), 1/MaxAccumulation)` instead of the fixed `Temporal/Alpha` (flag bit 2,
+`Denoiser/AccumulationCounter` default true, `Denoiser/MaxAccumulation` default 64). The
+age lives in the moments history B channel (stage 1); the colour resolve samples it at the
+reprojected UV so colour and moments integrate with the SAME weight. Fast convergence after
+a disocclusion (1, 1/2, 1/3…), steady-state variance leak 1/N ≈ 1.6% at N=64 versus
+α/(2−α) ≈ 23% at fixed α=0.1 — the factor that sank the first animated-noise attempt.
+`Temporal/Alpha` only rules when the counter is off (A/B lever).
+
+**Stage 4 — animated noise DEFAULT ON (Aug 2026, owner decision):** with the à-trous +
+1/N in place, `Temporal/AnimatedNoise` flipped to default true. Measured (Sponza corridor,
+double runs): energy restored (mean luma 24.9 vs 22.9 frozen — a frozen pattern turns
+stable bright outliers into "converged signal" the luminance guide protects, i.e.
+fireflies), best distribution tails (>8/255: 0.33%), ptp mean 0.55–0.57 versus the
+0.67–0.83 marbled baseline. Owner-validated live: the GI shimmer is extinguished.
 
 **Stage 2 — SVGF reorder + variance-guided à-trous (Aug 2026):** the GI producers LEFT the
 shared H/V `DenoisePass` (`usesSharedDenoise()` back to false — a multi-iteration à-trous

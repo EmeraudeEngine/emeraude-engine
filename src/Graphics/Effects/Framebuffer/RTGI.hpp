@@ -80,6 +80,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float normalSigma{0.5F};
 				float luminanceSigma{4.0F};
 				uint32_t atrousIterations{4};
+				/* SVGF 1/N accumulation cap (steady-state blend weight floor = 1/N). */
+				uint32_t denoiserMaxAccumulation{64};
 				float temporalAlpha{0.1F};
 				float temporalDepthTolerance{0.05F};
 				float temporalNormalThreshold{0.8F};
@@ -89,6 +91,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/* Denoiser debug view (combine draws it INSTEAD of the GI): 0 = off,
 				 * 1 = temporal variance, 2 = accumulation age. */
 				uint32_t denoiserDebugView{0};
+				/* Per-pixel 1/N blend weight instead of the fixed Temporal/Alpha (A/B lever). */
+				bool denoiserAccumulationCounter{true};
 				bool temporalEnabled{true};
 				bool temporalNeighborhoodClamp{true};
 				bool temporalAnimatedNoise{true};
