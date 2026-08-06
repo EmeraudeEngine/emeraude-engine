@@ -278,7 +278,7 @@ namespace EmEn::Graphics
 
 		const auto now = std::chrono::steady_clock::now();
 
-		return (now - m_lastCaptureTime) >= m_frameDuration;
+		return now - m_lastCaptureTime >= m_frameDuration;
 	}
 
 	bool
@@ -541,7 +541,7 @@ namespace EmEn::Graphics
 		 * submitting so the grab buffer stays bounded. The skipped slots become
 		 * duplicated frames in the CFR output — the timeline never drifts. */
 		{
-			const std::lock_guard lock{m_currentSession->queueMutex};
+			const std::scoped_lock lock{m_currentSession->queueMutex};
 
 			if ( m_currentSession->frameQueue.size() >= m_maxQueuedFrames )
 			{
@@ -697,7 +697,8 @@ namespace EmEn::Graphics
 
 			/* Recycle the frame buffer back to the free pool. */
 			{
-				const std::lock_guard lock{queueMutex};
+				const std::scoped_lock lock{queueMutex};
+
 				freeFrames.push_back(std::move(localFrame));
 			}
 
@@ -720,7 +721,8 @@ namespace EmEn::Graphics
 					size_t queueDepth = 0;
 
 					{
-						const std::lock_guard lock{queueMutex};
+						const std::scoped_lock lock{queueMutex};
+
 						queueDepth = frameQueue.size();
 					}
 
@@ -1216,9 +1218,22 @@ namespace EmEn::Graphics
 			region.bufferOffset = 0;
 			region.bufferRowLength = 0;
 			region.bufferImageHeight = 0;
-			region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-			region.imageOffset = {0, 0, 0};
-			region.imageExtent = {m_recordWidth, m_recordHeight, 1};
+			region.imageSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			};
+			region.imageOffset = {
+				.x = 0,
+				.y = 0,
+				.z = 0
+			};
+			region.imageExtent = {
+				.width = m_recordWidth,
+				.height = m_recordHeight,
+				.depth = 1
+			};
 
 			vkCmdCopyImageToBuffer(
 				slot.commandBuffer->handle(),
@@ -1316,9 +1331,22 @@ namespace EmEn::Graphics
 			region.bufferOffset = 0;
 			region.bufferRowLength = 0;
 			region.bufferImageHeight = 0;
-			region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-			region.imageOffset = {0, 0, 0};
-			region.imageExtent = {m_recordWidth, m_recordHeight, 1};
+			region.imageSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			};
+			region.imageOffset = {
+				.x = 0,
+				.y = 0,
+				.z = 0
+			};
+			region.imageExtent = {
+				.width = m_recordWidth,
+				.height = m_recordHeight,
+				.depth = 1
+			};
 
 			vkCmdCopyImageToBuffer(
 				slot.commandBuffer->handle(),
@@ -1474,7 +1502,11 @@ namespace EmEn::Graphics
 		{
 			slot.image = std::make_shared< Vulkan::Image >(
 				device, VK_IMAGE_TYPE_2D, VK_FORMAT_B8G8R8A8_UNORM,
-				VkExtent3D{m_recordWidth, m_recordHeight, 1},
+				VkExtent3D{
+					.width = m_recordWidth,
+					.height = m_recordHeight,
+					.depth = 1
+				},
 				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 			);
 			slot.image->setIdentifier(ClassId, "HardwareSnapshot", "Image");
@@ -1486,7 +1518,13 @@ namespace EmEn::Graphics
 				return false;
 			}
 
-			constexpr VkImageSubresourceRange fullRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+			constexpr VkImageSubresourceRange fullRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			};
 
 			slot.view = std::make_shared< Vulkan::ImageView >(slot.image, VK_IMAGE_VIEW_TYPE_2D, fullRange);
 			slot.view->setIdentifier(ClassId, "HardwareSnapshot", "ImageView");
@@ -1674,7 +1712,8 @@ namespace EmEn::Graphics
 		m_lastCaptureTime = now;
 
 		{
-			const std::lock_guard lock{m_hardwareSession->queueMutex};
+			const std::scoped_lock lock{m_hardwareSession->queueMutex};
+
 			m_hardwareSession->readySlots.push_back(static_cast< size_t >(freeSlot - m_hardwareSlots.data()));
 		}
 
@@ -1779,6 +1818,7 @@ namespace EmEn::Graphics
 		if ( session->outputFile != nullptr )
 		{
 			std::fclose(session->outputFile);
+
 			session->outputFile = nullptr;
 		}
 
@@ -1844,7 +1884,7 @@ namespace EmEn::Graphics
 		FrameSlot frame;
 
 		{
-			const std::lock_guard lock{m_currentSession->queueMutex};
+			const std::scoped_lock lock{m_currentSession->queueMutex};
 
 			if ( !m_currentSession->freeFrames.empty() )
 			{
@@ -1867,7 +1907,8 @@ namespace EmEn::Graphics
 		frame.pts = static_cast< vpx_codec_pts_t >(elapsed.count() * m_targetFramerate);
 
 		{
-			const std::lock_guard lock{m_currentSession->queueMutex};
+			const std::scoped_lock lock{m_currentSession->queueMutex};
+
 			m_currentSession->frameQueue.push_back(std::move(frame));
 		}
 
