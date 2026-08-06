@@ -216,6 +216,13 @@ namespace EmEn::Vulkan
 
 		const auto transferOnlyQueueFamilyFound = this->searchTransferOnlyQueueConfiguration(queueFamilyProperties, queueCreateInfos, queuePriorityValues);
 
+		/* NOTE: Video-encode queue (Vulkan Video H.265 — RushMaker hardware path).
+		 * Searched only when the encode extensions were enabled by the instance. */
+		const auto videoEncodeRequested = std::ranges::any_of(extensions, [] (const char * ext) {
+			return std::strcmp(ext, VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME) == 0;
+		});
+		const auto videoEncodeQueueFamilyFound = videoEncodeRequested && this->searchVideoEncodeQueueConfiguration(queueFamilyProperties, queueCreateInfos, queuePriorityValues);
+
 		/* Logical device creation. */
 		if ( !this->createDevice(requirements, queueCreateInfos, extensions) )
 		{
@@ -268,6 +275,23 @@ namespace EmEn::Vulkan
 		else if ( !this->installQueues(queuePriorityValues, m_transferQueueConfiguration) )
 		{
 			return false;
+		}
+
+		/* NOTE: Register the queue to the video-encode configuration (hardware RushMaker). */
+		if ( videoEncodeQueueFamilyFound )
+		{
+			if ( !this->installQueues(queuePriorityValues, m_videoEncodeQueueConfiguration) )
+			{
+				return false;
+			}
+
+			m_videoEncodeH265Enabled = true;
+
+			Tracer::success(ClassId, "Vulkan Video H.265 hardware encode ready (dedicated video-encode queue).");
+		}
+		else if ( videoEncodeRequested )
+		{
+			Tracer::info(ClassId, "Vulkan Video extensions enabled but no video-encode queue family: falling back to software VP9.");
 		}
 
 		if ( m_showInformation )
@@ -623,6 +647,39 @@ namespace EmEn::Vulkan
 		m_transferQueueConfiguration.setQueueFamilyIndex(transferIndex.value());
 
 		TraceSuccess{ClassId} << "Transfer-only configured with queue family index #" << transferIndex.value() << " (queue count: " << queueCount << ").";
+
+		return true;
+	}
+
+	bool
+	Device::searchVideoEncodeQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	{
+		std::optional< uint32_t > videoEncodeIndex;
+
+		for ( uint32_t index = 0; index < queueFamilyProperties.size(); index++ )
+		{
+			const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
+
+			if ( properties.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR )
+			{
+				videoEncodeIndex = index;
+
+				break;
+			}
+		}
+
+		if ( !videoEncodeIndex.has_value() )
+		{
+			Tracer::debug(ClassId, "The device lacks a video-encode queue family!");
+
+			return false;
+		}
+
+		const auto queueCount = Device::addQueueFamilyToCreateInfo(videoEncodeIndex.value(), queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+		m_videoEncodeQueueConfiguration.setQueueFamilyIndex(videoEncodeIndex.value());
+
+		TraceSuccess{ClassId} << "Video-encode configured with queue family index #" << videoEncodeIndex.value() << " (queue count: " << queueCount << ").";
 
 		return true;
 	}

@@ -37,8 +37,10 @@
 #include "PixelFactory/FileIO.hpp"
 #include "MDI/BatchBuilder.hpp"
 #include "PrimaryServices.hpp"
+#include "VideoFrameConverter.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/VideoEncoderH265.hpp"
 
 namespace EmEn::Graphics
 {
@@ -83,6 +85,123 @@ namespace EmEn::Graphics
 
 			return true;
 		}, "Captures the current framebuffer and saves it as a PNG.");
+
+		this->bindCommand("testVideoFrameConverter", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* Self-test of the GPU BGRA->I420 converter (hardware video-encode path):
+			 * converts a procedural pattern and compares byte-for-byte against the CPU
+			 * reference running the same shared BT.709 integer math. */
+			VideoFrameConverter converter{this->device(), this->shaderManager()};
+
+			if ( !converter.create(1280U, 720U) )
+			{
+				outputs.emplace_back(Severity::Error, "Unable to create the video frame converter !");
+
+				return false;
+			}
+
+			uint64_t mismatchedBytes = 0;
+
+			if ( !converter.selfTest(mismatchedBytes) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "GPU/CPU conversion mismatch (" << mismatchedBytes << " bytes differ) !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, "GPU BGRA->I420 conversion matches the CPU reference byte-for-byte (1280x720, BT.709 integer path).");
+
+			return true;
+		}, "Self-tests the GPU BGRA->I420 converter against the CPU reference (hardware video encode path).");
+
+		this->bindCommand("testVideoEncoderH265", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* End-to-end hardware encode self-test: converts the procedural pattern once,
+			 * then encodes 90 frames (3 GOPs) through the Vulkan Video session and writes
+			 * an Annex-B .h265 elementary stream — decode it with ffprobe/ffplay. */
+			if ( !this->device()->videoEncodeH265Enabled() )
+			{
+				outputs.emplace_back(Severity::Warning, "No H.265 hardware encode support on this device.");
+
+				return false;
+			}
+
+			VideoFrameConverter converter{this->device(), this->shaderManager()};
+
+			if ( !converter.create(2880U, 1620U) )
+			{
+				outputs.emplace_back(Severity::Error, "Unable to create the video frame converter !");
+
+				return false;
+			}
+
+			uint64_t mismatchedBytes = 0;
+
+			if ( !converter.selfTest(mismatchedBytes) )
+			{
+				outputs.emplace_back(Severity::Error, "The converter self-test failed !");
+
+				return false;
+			}
+
+			Vulkan::VideoEncoderH265 encoder{this->device()};
+			Vulkan::VideoEncoderH265::Settings settings{};
+			settings.width = 2880;
+			settings.height = 1620;
+			settings.frameRate = 30;
+			settings.averageBitrateKbps = 8000;
+			settings.maximumBitrateKbps = 12000;
+			settings.idrPeriod = 1; /* TEMP: all-intra bench. */
+
+			if ( !encoder.create(settings) )
+			{
+				outputs.emplace_back(Severity::Error, "Unable to create the H.265 hardware encoder !");
+
+				return false;
+			}
+
+			const auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
+			const auto filepath = captureDirectory / "hw-encode-test.h265";
+
+			std::ofstream stream{filepath, std::ios::binary | std::ios::trunc};
+
+			if ( !stream.is_open() )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to open " << filepath << " !");
+
+				return false;
+			}
+
+			const auto & header = encoder.headerBytes();
+			stream.write(reinterpret_cast< const char * >(header.data()), static_cast< std::streamsize >(header.size()));
+
+			uint64_t totalBytes = header.size();
+			uint32_t idrCount = 0;
+			std::vector< uint8_t > packet;
+
+			for ( uint32_t frame = 0; frame < 90; frame++ )
+			{
+				bool wasIDR = false;
+
+				if ( !encoder.encodeFrame(*converter.lumaImage(), *converter.chromaImage(), packet, wasIDR) )
+				{
+					outputs.emplace_back(Severity::Error, std::stringstream{} << "Encode failed at frame " << frame << " !");
+
+					return false;
+				}
+
+				stream.write(reinterpret_cast< const char * >(packet.data()), static_cast< std::streamsize >(packet.size()));
+
+				totalBytes += packet.size();
+
+				if ( wasIDR )
+				{
+					idrCount++;
+				}
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "90 frames hardware-encoded (" << totalBytes << " bytes, " << idrCount << " IDR) -> " << filepath);
+
+			return true;
+		}, "End-to-end hardware H.265 encode self-test: writes an Annex-B .h265 stream in the captures directory.");
 
 		this->bindCommand("getGPUTimings", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( m_GPUProfiler == nullptr )

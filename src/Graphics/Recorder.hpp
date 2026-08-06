@@ -45,11 +45,14 @@
 /* Local inclusions for usages. */
 #include "vpx/vp8cx.h"
 #include "vpx/vpx_encoder.h"
+#include "VideoFrameConverter.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
+#include "Vulkan/VideoEncoderH265.hpp"
 #ifdef _MSC_VER
 	#pragma warning(push)
 	#pragma warning(disable: 4505) /* unreferenced function with internal linkage has been removed */
@@ -74,12 +77,20 @@ namespace EmEn::Graphics
 	 * @class Recorder
 	 * @brief Video recording service that captures the framebuffer and encodes it as VP9/IVF.
 	 *
-	 * Provides real-time video recording of the Vulkan swap-chain framebuffer using asynchronous
-	 * GPU readback, unbounded frame queue, and hardware-accelerated VP9 encoding.
+	 * Studio-quality video recording of the Vulkan swap-chain framebuffer using asynchronous
+	 * GPU readback, a bounded grab buffer, and SIMD-accelerated VP9 software encoding. There
+	 * is ONE mode: quality-first, constant frame rate (CFR) on the wall clock — the video
+	 * timeline is real time, so the separately recorded audio tracks stay in sync.
 	 * The recording pipeline operates in three stages:
-	 * 1. GPU async readback (double-buffered) captures BGRA frames from the swap-chain
-	 * 2. Unbounded frame queue accumulates frames for the encoding thread
-	 * 3. Dedicated encoding thread drains the queue, converts BGRA to I420, encodes VP9, and writes IVF container
+	 * 1. GPU async readback (double-buffered) captures BGRA frames from the swap-chain at
+	 *    the target FPS (wall-clock pacing)
+	 * 2. Bounded grab buffer accumulates frames for the encoding thread; above the bound,
+	 *    captures are skipped (backpressure) so a slow encode cannot balloon memory
+	 * 3. Dedicated encoding thread drains the buffer, converts BGRA to I420 (BT.709 limited
+	 *    range, signalled in the bitstream), encodes VP9 (VBR, lookahead), and writes the
+	 *    IVF container as CONSTANT frame rate: any missing capture slot (renderer slower
+	 *    than the target FPS, backpressure skip) is filled by re-encoding the previous
+	 *    image — a static VP9 frame costs almost nothing and the timeline never judders
 	 *
 	 * PTS timing uses wall-clock milliseconds with smoothing to handle variable game framerate
 	 * while maintaining correct playback speed. Recording dimensions are locked at start time.
@@ -136,6 +147,34 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool isRecording () const noexcept;
 
+
+			/**
+			 * @brief Returns the video file extension of the active encoding path.
+			 * @note "h265" (hardware Vulkan Video, muxed to MP4 by the assemble script)
+			 * when the device supports it, "ivf" (software VP9, muxed to WebM) otherwise.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char * videoFileExtension () const noexcept;
+
+			/**
+			 * @brief Returns whether the hardware H.265 path will be used.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hardwarePath () const noexcept;
+
+			/**
+			 * @brief Returns the target recording framerate.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			targetFramerate () const noexcept
+			{
+				return m_targetFramerate;
+			}
+
 			/**
 			 * @brief Checks if enough time has elapsed to capture the next frame.
 			 *
@@ -165,7 +204,9 @@ namespace EmEn::Graphics
 			 * image-to-buffer copy command. The copy executes asynchronously on the GPU.
 			 *
 			 * @pre shouldCaptureFrame() returned true.
-			 * @note If no async slots are available, the frame is silently dropped.
+			 * @note If no async slots are available, the frame is silently dropped. If the
+			 * encoder queue has reached its bound, the capture is skipped and counted
+			 * (backpressure) — wall-clock PTS keeps the video timeline correct.
 			 */
 			void captureAndSubmitFrame () noexcept;
 
@@ -262,8 +303,67 @@ namespace EmEn::Graphics
 			/** @brief Function signature for BGRA-to-I420 conversion implementations. */
 			using BGRAToI420Func = void (*)(const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v);
 
+			/**
+			 * @brief Starts a hardware (Vulkan Video H.265) recording session.
+			 * @param outputPath The .h265 elementary stream path.
+			 * @return bool True on success.
+			 */
+			[[nodiscard]]
+			bool startHardwareRecording (const std::filesystem::path & outputPath) noexcept;
+
+			/**
+			 * @brief Captures the current swap-chain image into a free hardware slot
+			 * (GPU image copy — the frame never reaches system memory).
+			 */
+			void captureHardwareFrame () noexcept;
+
+			/**
+			 * @brief Hardware encoding thread: converts and encodes captured slots at the
+			 * silicon's pace, filling missing CFR slots by re-encoding the previous frame.
+			 */
+			void hardwareEncodingLoop () noexcept;
+
+			/** @brief Stops the hardware session (drains, joins, finalizes the file). */
+			void stopHardwareRecording () noexcept;
+
 			/** @brief Number of async GPU readback slots for double-buffering. */
 			static constexpr size_t AsyncBufferCount{4};
+
+			/** @brief Number of hardware capture slots (swap-chain snapshots on the GPU). */
+			static constexpr size_t HardwareSlotCount{4};
+
+			/**
+			 * @struct HardwareSlot
+			 * @brief One GPU snapshot of the swap-chain for the hardware encode path.
+			 */
+			struct HardwareSlot
+			{
+				std::shared_ptr< Vulkan::Image > image; ///< BGRA snapshot (TRANSFER_DST + SAMPLED).
+				std::shared_ptr< Vulkan::ImageView > view; ///< Sampled view for the converter.
+				std::unique_ptr< Vulkan::CommandBuffer > commandBuffer; ///< Copy command buffer.
+				std::unique_ptr< Vulkan::Sync::Fence > fence; ///< Signaled when the snapshot copy completes.
+				int64_t cfrSlot{0}; ///< Constant-frame-rate slot of this capture.
+				bool pending{false}; ///< True while queued for encoding.
+			};
+
+			/**
+			 * @struct HardwareSession
+			 * @brief State of a hardware encoding session (producer: capture, consumer: encode thread).
+			 */
+			struct HardwareSession
+			{
+				std::FILE * outputFile{nullptr};
+				std::filesystem::path outputPath;
+				std::deque< size_t > readySlots;
+				std::mutex queueMutex;
+				std::condition_variable queueCV;
+				std::thread encodingThread;
+				std::atomic< bool > threadRunning{false};
+				uint64_t frameCount{0};
+				uint64_t duplicatedFrames{0};
+				std::atomic< uint64_t > skippedCaptures{0};
+				int64_t lastCfrSlot{-1};
+			};
 
 			/**
 			 * @struct AsyncReadbackSlot
@@ -327,10 +427,14 @@ namespace EmEn::Graphics
 				uint32_t recordWidth{0};
 				uint32_t recordHeight{0};
 				uint32_t targetFramerate{30};
+				uint32_t maxQueuedFrames{32}; ///< Grab buffer bound (for the adaptive-speed watermarks).
+				int cpuUsedBase{3}; ///< Preset encoder effort (quality target when the CPU keeps pace).
+				std::atomic< int > cpuUsedCurrent{3}; ///< Live encoder effort, adapted to sustain the capture rate.
 				uint64_t frameCount{0};
+				uint64_t duplicatedFrames{0}; ///< CFR filler frames re-encoded from the previous image.
 				std::atomic< uint64_t > captureCount{0};
-				vpx_codec_pts_t lastEncodedPts{0};
-				bool realtimeMode{true};
+				std::atomic< uint64_t > skippedCaptures{0};
+				vpx_codec_pts_t lastEncodedPts{-1}; ///< PTS of the last frame written; -1 = nothing encoded yet.
 				bool showStatistics{false};
 
 				/* SIMD dispatch. */
@@ -338,6 +442,17 @@ namespace EmEn::Graphics
 
 				/** @brief Encoding thread entry point. Drains queue, encodes, then calls finalize(). */
 				void encodingThreadFunc () noexcept;
+
+				/**
+				 * @brief Encodes the current vpxImage content at the given PTS and writes the packets.
+				 * @note Also used to duplicate the previous frame into empty CFR slots: called
+				 * BEFORE the next conversion overwrites the image planes, it re-encodes the
+				 * previous picture at the filler PTS for almost no cost.
+				 * @param pts The constant-frame-rate slot to encode into.
+				 * @param encodedBytes Running byte counter for the periodic statistics.
+				 * @return True on success, false when the encoder rejected the frame.
+				 */
+				bool encodeImageAt (vpx_codec_pts_t pts, uint64_t & encodedBytes) noexcept;
 
 				/** @brief Writes the 32-byte IVF file header. */
 				[[nodiscard]] 
@@ -380,11 +495,20 @@ namespace EmEn::Graphics
 			std::unique_ptr< EncodingSession > m_currentSession; ///< Active encoding session (null when not recording).
 			std::vector< std::unique_ptr< EncodingSession > > m_finishingSessions; ///< Sessions still encoding in background.
 
+			/* Hardware (Vulkan Video H.265) path. */
+			std::unique_ptr< VideoFrameConverter > m_frameConverter; ///< GPU BGRA->NV12 converter.
+			std::unique_ptr< Vulkan::VideoEncoderH265 > m_hardwareEncoder; ///< Hardware H.265 encoder.
+			std::shared_ptr< Vulkan::CommandPool > m_hardwareCommandPool; ///< Graphics pool for the snapshot copies.
+			std::array< HardwareSlot, HardwareSlotCount > m_hardwareSlots{}; ///< GPU snapshot slots.
+			std::unique_ptr< HardwareSession > m_hardwareSession; ///< Active hardware session (null on the software path).
+
 			/* Recording state (main thread only). */
 			std::atomic< bool > m_isRecording{false}; ///< True when capture is active on the main thread.
 
 			/* Timing and frame pacing. */
 			uint32_t m_targetFramerate{30}; ///< Target recording framerate (default 30 FPS).
+			uint32_t m_maxQueuedFrames{90}; ///< Grab buffer bound; captures are skipped above this depth (RAM guard).
+			int m_adaptedCpuUsed{-1}; ///< Last adapted encoder speed; warm-starts the next session (-1 = none yet).
 			std::chrono::steady_clock::time_point m_lastCaptureTime; ///< Last frame capture timestamp for pacing.
 			std::chrono::steady_clock::time_point m_recordStartTime; ///< Wall-clock time when recording started (PTS origin).
 			std::chrono::nanoseconds m_frameDuration{0}; ///< Duration between frames based on target FPS.
@@ -394,7 +518,6 @@ namespace EmEn::Graphics
 			uint32_t m_recordHeight{0}; ///< Recording height in pixels (even, locked at start).
 			/* State flags. */
 			bool m_useTransferQueue{false}; ///< True when dedicated transfer queue is available and in use.
-			bool m_realtimeMode{true}; ///< True for low-latency mode (CBR), false for quality mode (VBR).
 			bool m_showStatistics{false}; ///< True to log periodic encoding statistics.
 			
 			/**

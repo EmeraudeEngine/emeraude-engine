@@ -33,6 +33,29 @@ namespace EmEn
 	void
 	Core::onRegisterToConsole () noexcept
 	{
+		this->bindCommand("toggleRecording", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* RushMaker toggle (same as Shift+Ctrl+F12), for AI-driven capture sessions. */
+			if ( m_graphicsRenderer.recorder().isRecording() )
+			{
+				this->stopAudioVideoRecording();
+
+				outputs.emplace_back(Severity::Success, "Recording stopped (encoding finishes in background).");
+
+				return true;
+			}
+
+			if ( !this->startAudioVideoRecording() )
+			{
+				outputs.emplace_back(Severity::Error, "Unable to start the recording !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, "Recording started.");
+
+			return true;
+		}, "Toggles the RushMaker audio/video recording (same as Shift+Ctrl+F12).");
+
 		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");
 

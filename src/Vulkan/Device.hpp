@@ -197,6 +197,50 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether Vulkan Video H.265 hardware encode is available on this device.
+			 * @note True when VK_KHR_video_queue + VK_KHR_video_encode_queue + VK_KHR_video_encode_h265
+			 * are enabled AND a VIDEO_ENCODE queue family was configured. The RushMaker uses the
+			 * hardware path when true, the software VP9 fallback otherwise.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			videoEncodeH265Enabled () const noexcept
+			{
+				return m_videoEncodeH265Enabled;
+			}
+
+			/**
+			 * @brief Returns the queue family index for video-encode queues.
+			 * @warning Be sure of calling Device::videoEncodeH265Enabled() before trusting the index.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			getVideoEncodeFamilyIndex () const noexcept
+			{
+				return m_videoEncodeQueueConfiguration.queueFamilyIndex();
+			}
+
+			/**
+			 * @brief Returns a video-encode queue.
+			 * @warning This may return a nullptr!
+			 * @param priority The priority of the queue.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getVideoEncodeQueue (QueuePriority priority) const noexcept
+			{
+				if ( !m_videoEncodeQueueConfiguration.enabled() )
+				{
+					return nullptr;
+				}
+
+				return m_videoEncodeQueueConfiguration.queue(priority);
+			}
+
+			/**
 			 * @brief Returns whether the Win32 external-memory import extension (VK_KHR_external_memory_win32) is enabled on this device.
 			 * @note Used by the zero-copy CEF accelerated-paint path to import D3D11 shared textures as Vulkan images. Always false outside Windows.
 			 * @return bool
@@ -605,6 +649,16 @@ namespace EmEn::Vulkan
 			bool searchTransferOnlyQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
+			 * @brief Searches a queue family with video-encode capability (Vulkan Video).
+			 * @note Only called when the video-encode extensions were enabled by the instance.
+			 * @param queueFamilyProperties A reference to the family properties.
+			 * @param queueCreateInfos A writable reference to the queue create infos.
+			 * @param queuePriorities A writable reference to the queue priorities.
+			 * @return bool True when a VIDEO_ENCODE queue family was configured.
+			 */
+			bool searchVideoEncodeQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+
+			/**
 			 * @brief Creates the device with the defined and verified queues.
 			 * @param requirements A reference to a device requirement.
 			 * @param queueCreateInfos A reference to a list of CreateInfo for Vulkan queues.
@@ -634,10 +688,12 @@ namespace EmEn::Vulkan
 			DeviceQueueConfiguration m_graphicsQueueConfiguration;
 			DeviceQueueConfiguration m_computeQueueConfiguration;
 			DeviceQueueConfiguration m_transferQueueConfiguration;
+			DeviceQueueConfiguration m_videoEncodeQueueConfiguration;
 			mutable std::mutex m_logicalDeviceAccess;
 			mutable std::atomic_bool m_deviceLostReported{false};
 			bool m_showInformation{false};
 			bool m_basicSupport{false};
+			bool m_videoEncodeH265Enabled{false};
 			bool m_useMemoryAllocator{false};
 			bool m_rayTracingEnabled{false};
 			bool m_externalMemoryWin32Enabled{false};

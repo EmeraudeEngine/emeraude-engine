@@ -958,6 +958,77 @@ namespace EmEn::Vulkan
 				Tracer::info(ClassId, "Ray tracing not supported by this device.");
 			}
 
+			/* NOTE: Vulkan Video H.265 hardware encode (RushMaker hardware path).
+			 * VK_KHR_video_queue + VK_KHR_video_encode_queue are the codec-agnostic
+			 * infrastructure, VK_KHR_video_encode_h265 the codec. When absent, the
+			 * recorder falls back to the software VP9 path. */
+			if ( hasExtension(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME)
+				&& hasExtension(VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME)
+				&& hasExtension(VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME) )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME);
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME);
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME);
+
+				/* NOTE: The video encode command buffers use synchronization2 barriers
+				 * (the VIDEO_ENCODE pipeline stages only exist there). Core 1.3 feature. */
+				requirements.featuresVK13().synchronization2 = VK_TRUE;
+
+				Tracer::info(ClassId, "Vulkan Video H.265 encode extensions detected and enabled (hardware RushMaker path).");
+
+				/* Probe and log the H.265 encode capabilities (main profile, 4:2:0 8-bit). */
+				const auto fpGetVideoCapabilities = reinterpret_cast< PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR >(vkGetInstanceProcAddr(m_instance, "vkGetPhysicalDeviceVideoCapabilitiesKHR"));
+
+				if ( fpGetVideoCapabilities != nullptr )
+				{
+					VkVideoEncodeH265ProfileInfoKHR h265Profile{};
+					h265Profile.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_PROFILE_INFO_KHR;
+					h265Profile.stdProfileIdc = STD_VIDEO_H265_PROFILE_IDC_MAIN;
+
+					VkVideoProfileInfoKHR profile{};
+					profile.sType = VK_STRUCTURE_TYPE_VIDEO_PROFILE_INFO_KHR;
+					profile.pNext = &h265Profile;
+					profile.videoCodecOperation = VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR;
+					profile.chromaSubsampling = VK_VIDEO_CHROMA_SUBSAMPLING_420_BIT_KHR;
+					profile.lumaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR;
+					profile.chromaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR;
+
+					VkVideoEncodeH265CapabilitiesKHR h265Capabilities{};
+					h265Capabilities.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_CAPABILITIES_KHR;
+
+					VkVideoEncodeCapabilitiesKHR encodeCapabilities{};
+					encodeCapabilities.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_CAPABILITIES_KHR;
+					encodeCapabilities.pNext = &h265Capabilities;
+
+					VkVideoCapabilitiesKHR videoCapabilities{};
+					videoCapabilities.sType = VK_STRUCTURE_TYPE_VIDEO_CAPABILITIES_KHR;
+					videoCapabilities.pNext = &encodeCapabilities;
+
+					if ( fpGetVideoCapabilities(physicalDevice->handle(), &profile, &videoCapabilities) == VK_SUCCESS )
+					{
+						TraceInfo{ClassId} <<
+							"H.265 encode capabilities (main, 4:2:0 8-bit): "
+							"max " << videoCapabilities.maxCodedExtent.width << "x" << videoCapabilities.maxCodedExtent.height <<
+							", DPB slots " << videoCapabilities.maxDpbSlots <<
+							", active references " << videoCapabilities.maxActiveReferencePictures <<
+							", max bitrate " << (encodeCapabilities.maxBitrate / 1000000ULL) << " Mbps"
+							", quality levels " << encodeCapabilities.maxQualityLevels <<
+							", separate DPB images: " << ((videoCapabilities.flags & VK_VIDEO_CAPABILITY_SEPARATE_REFERENCE_IMAGES_BIT_KHR) != 0 ? "yes" : "NO (array required)") <<
+							", rate control modes: 0x" << std::hex << encodeCapabilities.rateControlModes << std::dec <<
+							", picture granularity " << videoCapabilities.pictureAccessGranularity.width << "x" << videoCapabilities.pictureAccessGranularity.height <<
+							", bitstream alignment " << videoCapabilities.minBitstreamBufferSizeAlignment << "/" << videoCapabilities.minBitstreamBufferOffsetAlignment << ".";
+					}
+					else
+					{
+						Tracer::warning(ClassId, "Unable to query H.265 encode capabilities.");
+					}
+				}
+			}
+			else
+			{
+				Tracer::info(ClassId, "Vulkan Video H.265 encode not supported by this device (RushMaker will use software VP9).");
+			}
+
 			/* NOTE: GPU device-lost diagnostics (best-effort, ZERO runtime cost until a fault occurs).
 			 * Enabled whenever supported so a DEVICE_LOST is self-documented even in normal/release runs
 			 * — see Device::dumpDeviceLostDiagnostics(). The two extensions are vendor-complementary:

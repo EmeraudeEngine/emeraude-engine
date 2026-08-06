@@ -1851,7 +1851,7 @@ namespace EmEn
 
 		if ( m_graphicsRenderer.recorder().usable() )
 		{
-			if ( m_graphicsRenderer.recorder().startRecording(captureDirectory / (filename + ".ivf")) )
+			if ( m_graphicsRenderer.recorder().startRecording(captureDirectory / (filename + "." + m_graphicsRenderer.recorder().videoFileExtension())) )
 			{
 				this->notifyUser("Video recording started...");
 			}
@@ -1902,37 +1902,48 @@ namespace EmEn
 				? m_graphicsRenderer.recorder().recommendedAudioBitrate() * m_audioManager.recorder().channelCount() / 2
 				: 128U;
 
+			/* Hardware H.265 -> MP4/AAC (the raw elementary stream needs the input
+			 * framerate); software VP9/IVF -> WebM/Opus. */
+			const std::string videoExtension{m_graphicsRenderer.recorder().videoFileExtension()};
+			const auto hardware = videoExtension == "h265";
+			const std::string videoInputOptions = hardware ? "-framerate " + std::to_string(m_graphicsRenderer.recorder().targetFramerate()) + " " : "";
+			const std::string audioCodec = hardware ? "aac" : "libopus";
+			const std::string containerExtension = hardware ? ".mp4" : ".webm";
+
 #if IS_WINDOWS
 			const auto scriptPath = captureDirectory / (filename + "_assemble.ps1");
 			std::ofstream script{scriptPath};
 
 			if ( script.is_open() )
 			{
-				script << "# RushMaker - Auto-generated script to assemble recording into WebM.\n";
+				script << "# RushMaker - Auto-generated script to assemble the recording.\n";
 				script << "# Run this script after stopping the recording.\n";
 				script << "Set-Location \"" << captureDirectory.string() << "\"\n";
-				script << "ffmpeg.exe -i \"" << filename << ".ivf\"";
+				script << "ffmpeg.exe " << videoInputOptions << "-i \"" << filename << "." << videoExtension << "\"";
 
 				if ( hasGameAudio && hasVoiceOver )
 				{
 					script << " -i \"" << filename << ".wav\" -i \"" << filename << "-voice.wav\"";
 					script << " -filter_complex \"[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[aout]\"";
-					script << " -map 0:v -map \"[aout]\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+					script << " -map 0:v -map \"[aout]\" -c:v copy -c:a " << audioCodec << " -b:a " << audioBitrate << "k";
 				}
 				else if ( hasGameAudio )
 				{
-					script << " -i \"" << filename << ".wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+					script << " -i \"" << filename << ".wav\" -c:v copy -c:a " << audioCodec << " -b:a " << audioBitrate << "k";
 				}
 				else if ( hasVoiceOver )
 				{
-					script << " -i \"" << filename << "-voice.wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+					script << " -i \"" << filename << "-voice.wav\" -c:v copy -c:a " << audioCodec << " -b:a " << audioBitrate << "k";
 				}
 				else
 				{
 					script << " -c:v copy";
 				}
 
-				script << " \"" << filename << ".webm\"\n";
+				/* Container-level colour tags (the VP9 bitstream itself already carries BT.709). */
+			script << " -colorspace bt709 -color_primaries bt709 -color_trc bt709";
+
+			script << " \"" << filename << containerExtension << "\"\n";
 
 				TraceSuccess{ClassId} << "RushMaker assemble script written to " << scriptPath;
 			}
@@ -1943,31 +1954,34 @@ namespace EmEn
 			if ( script.is_open() )
 			{
 				script << "#!/bin/bash\n";
-				script << "# RushMaker - Auto-generated script to assemble recording into WebM.\n";
+				script << "# RushMaker - Auto-generated script to assemble the recording.\n";
 				script << "# Run this script after stopping the recording.\n";
 				script << "cd \"" << captureDirectory.string() << "\"\n";
-				script << "ffmpeg -i \"" << filename << ".ivf\"";
+				script << "ffmpeg " << videoInputOptions << "-i \"" << filename << "." << videoExtension << "\"";
 
 				if ( hasGameAudio && hasVoiceOver )
 				{
 					script << " -i \"" << filename << ".wav\" -i \"" << filename << "-voice.wav\" \\\n";
 					script << "  -filter_complex \"[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[aout]\" \\\n";
-					script << "  -map 0:v -map \"[aout]\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+					script << "  -map 0:v -map \"[aout]\" -c:v copy -c:a " << audioCodec << " -b:a " << audioBitrate << "k";
 				}
 				else if ( hasGameAudio )
 				{
-					script << " -i \"" << filename << ".wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+					script << " -i \"" << filename << ".wav\" -c:v copy -c:a " << audioCodec << " -b:a " << audioBitrate << "k";
 				}
 				else if ( hasVoiceOver )
 				{
-					script << " -i \"" << filename << "-voice.wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+					script << " -i \"" << filename << "-voice.wav\" -c:v copy -c:a " << audioCodec << " -b:a " << audioBitrate << "k";
 				}
 				else
 				{
 					script << " -c:v copy";
 				}
 
-				script << " \"" << filename << ".webm\"\n";
+				/* Container-level colour tags (the VP9 bitstream itself already carries BT.709). */
+			script << " -colorspace bt709 -color_primaries bt709 -color_trc bt709";
+
+			script << " \"" << filename << containerExtension << "\"\n";
 
 				script.close();
 

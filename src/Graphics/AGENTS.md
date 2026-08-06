@@ -764,14 +764,119 @@ Without the global check, disabling shadow mapping via settings caused Vulkan va
 
 See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping and color projection architecture.
 
-## 10. Video Recording (Graphics::Recorder)
+## 10. Video Recording (Graphics::Recorder — "RushMaker" video track)
 
-Real-time video recording service that captures the Vulkan swap-chain framebuffer and encodes VP8/IVF.
+Studio-quality video recording of the Vulkan swap-chain framebuffer, encoded VP9/IVF.
+Part of the RushMaker studio workflow: separate tracks (video IVF + game audio WAV + voice-over WAV)
+assembled by an auto-generated ffmpeg script (`Core::startAudioVideoRecording()`).
+
+### ONE mode: studio CFR (owner decision, Aug 2026)
+The RushMaker produces promotion rushes — **image quality is the only metric**. There is no
+realtime/quality mode duality: one quality-first VBR configuration (16-frame lookahead,
+complexity AQ, `VPX_DL_GOOD_QUALITY`, bitrate ladder via `QualityPreset`), and the output is
+**constant frame rate on the wall clock** — the video timeline is real time, so the separately
+recorded audio tracks stay in sync and the engine remains interactive during capture.
+Should a low-latency capture need ever arise, it will be a **separate concept ("Streamer")**,
+not a mode of this recorder.
 
 ### Pipeline
-1. **GPU async readback** (4-slot round-robin) — copies swap-chain image to host-visible staging buffer
-2. **Unbounded frame queue** — accumulates BGRA frames for encoding thread
-3. **Dedicated encoding thread** — BGRA→I420 conversion (SIMD dispatched: scalar/SSSE3/AVX2), VP8 encoding, IVF container writing
+1. **GPU async readback** (4-slot round-robin) — copies swap-chain image to host-visible staging
+   buffer, paced at the target FPS on the wall clock (`shouldCaptureFrame()`)
+2. **Bounded grab buffer** (`Core/RushMaker/MaxQueuedFrames`, default 32) — gives the encoder time
+   to write the file; above the bound, captures are **skipped and counted** (backpressure) so a
+   slow encode cannot balloon RAM
+3. **Dedicated encoding thread** — BGRA→I420 conversion (SIMD dispatched: scalar/SSE4.1/AVX2),
+   VP9 encoding, IVF writing at **constant frame rate**: every missing capture slot (renderer
+   slower than the target FPS, backpressure skip) is filled by re-encoding the PREVIOUS image
+   (`EncodingSession::encodeImageAt()` called before the next conversion overwrites the planes —
+   a static VP9 frame costs almost nothing). The timeline never judders and never drifts.
+   Encoder threads are capped at **hardware_concurrency/4**: the runtime stays interactive —
+   half the cores at cpuUsed=1 measurably starved the logic and rendering threads (Aug 2026).
+
+### Time model (owner rule, Aug 2026): the ONLY realtime element is the capture
+The capture runs at the target FPS on the wall clock; the **encoder is free to take its
+time** — it works in libvpx's quality path (`VPX_DL_GOOD_QUALITY` on every encode, including
+the flush) and keeps draining in background after the recording stops. Never reintroduce
+`VPX_DL_REALTIME` (a libvpx deadline constant, not a recorder mode — the realtime notion was
+removed from this recorder entirely).
+
+### Adaptive encoder speed (real frames beat encoding effort)
+Software VP9 at maximum effort cannot hold 30 FPS at high resolution (measured Aug 2026:
+cpuUsed=1 at 2880×1620 ≈ 6 real FPS → 4 frames out of 5 were CFR duplicates — unusable rush).
+The encoding thread therefore **adapts `VP8E_SET_CPUUSED` live** (allowed mid-stream by libvpx),
+**inside the good-quality mode only** (speeds 1..5 — 6+ belongs to the realtime path, unused):
+once per second, if the grab buffer sits at its bound (captures being skipped), speed goes up
+one notch (real frames beat per-frame effort); when the buffer drains below a quarter, speed
+eases back toward the preset value. The next session **warm-starts** from the converged speed
+(`m_adaptedCpuUsed`) instead of replaying the ramp. The periodic stats print `Speed:` — watch
+it to know what the CPU actually sustains; the definitive fix for encoding at full effort and
+full rate is the Vulkan Video hardware chantier.
+Buffer knob: `Core/RushMaker/MaxQueuedFrames` (default 90 ≈ 3 s of elasticity at 30 FPS;
+one buffered frame = width×height×4 bytes ≈ 1.6 GB at 2880×1620 — raise it for short takes
+if RAM allows: zero skip, the encoder finishes in background). ⚠️ `getOrSetDefault` persists
+the first-seen value: an older settings.json may still carry 32.
+
+### Colorimetry (BT.709 — do not regress to BT.601)
+The BGRA→I420 conversion uses **BT.709 limited-range** coefficients — single source of truth:
+**`VideoColorConversion.hpp`** (`VideoColor::YCoef*/UCoef*/VCoef*`), consumed by the CPU
+scalar/SIMD paths (`Recorder.cpp`) AND by the GPU compute converter (the GLSL receives them
+through `VideoColor::glslDefines()`). The matrix is signalled in the VP9 bitstream
+(`VP9E_SET_COLOR_SPACE` = BT.709, studio range) and tagged at container level by the generated
+ffmpeg script (`-colorspace bt709 ...`). HD players assume BT.709; BT.601 coefficients on HD
+content shift hues on playback.
+
+### Hardware encode chantier (Vulkan Video H.265 — in progress, Aug 2026)
+- **M1 done** — device plumbing: `Vulkan/Instance.cpp` enables `VK_KHR_video_queue` +
+  `VK_KHR_video_encode_queue` + `VK_KHR_video_encode_h265` when present and logs the H.265
+  encode capabilities; `Vulkan/Device` configures the dedicated VIDEO_ENCODE queue family
+  (`videoEncodeH265Enabled()`, `getVideoEncodeQueue()`). Validated on the RTX 3070 Ti:
+  8192×8192 max, 16 DPB slots, 120 Mbps, 7 quality levels, queue family #4.
+- **M2 done** — `Graphics/VideoFrameConverter`: compute BGRA→NV12 planes (R8 luma full-res +
+  R8G8 chroma half-res), **integer math identical to the CPU converters** — validated
+  byte-for-byte via the console command `Core.RendererService.testVideoFrameConverter()`
+  (procedural hash pattern generated identically in GLSL and C++, no upload involved).
+- **M3 done** — `Vulkan/VideoEncoderH265`: session + memory binding, std VPS/SPS/PPS (driver
+  returns the encoded Annex-B header via `vkGetEncodedVideoSessionParametersKHR`), two-slot
+  DPB (separate images), VBR rate control from the presets, IDR+P GOP, encode-feedback query,
+  Annex-B packets. Validated end-to-end via `Core.RendererService.testVideoEncoderH265()`:
+  90 frames / 3 GOPs, ffmpeg decode with ZERO errors, decoded content matches the pattern.
+  **Three NVIDIA lessons paid for in blood (do not regress):**
+  1. `VkVideoEncodeH265RateControlLayerInfoKHR` MUST be chained to the rate-control layer —
+     without it `vkCmdControlVideoCoding` invalidates the command buffer
+     (`vkEndCommandBuffer` → `VK_ERROR_INITIALIZATION_FAILED`, validation layer silent).
+  2. Picture images (src + DPB) MUST be allocated aligned on
+     `pictureAccessGranularity` (32×32 on NVIDIA; we align on 64) — an under-aligned image
+     HANGS the encode engine (infinite `waitIdle`). The logical `codedExtent` stays exact.
+  3. Do NOT force `cu_qp_delta_enabled_flag` in the std PPS — the driver manages it; forcing
+     it desynchronises the P-slice entropy (decoder reads out-of-range `cu_qp_delta`).
+  Also required: the `synchronization2` device feature (video barriers are sync2-only) —
+  enabled with the video extensions in `Instance.cpp`.
+- **M4 done** — Recorder integration, validated pixel-exact against a live framebuffer
+  screenshot (animation-debug @ 2880×1620 Ultra). Hardware path when
+  `videoEncodeH265Enabled()`: swap-chain → GPU snapshot slots (image copy, NO CPU readback)
+  → `VideoFrameConverter::convertFrom()` (sampler variant) → `VideoEncoderH265` on a
+  dedicated encoding thread (CFR fillers by re-encoding the still-loaded planes). Software
+  VP9 path untouched as the cross-hardware fallback. `Core.toggleRecording()` console
+  command (= Shift+Ctrl+F12). The assemble script muxes `.h265`+WAV → MP4/AAC with BT.709
+  tags (`-framerate` input option is mandatory for a raw elementary stream).
+  **v1 is ALL-INTRA (idrPeriod 1)** — the professional mezzanine layout (frame-exact seek,
+  no error propagation, ideal for editing); hardware preset bitrates are raised accordingly
+  (8/16/30/60 Mbps).
+  ⚠️ **Open issue — P frames**: with references enabled, P frames predict from an empty
+  reconstruction (green frames) whatever the DPB organisation (separate images, layered
+  array, per-frame availability barriers, slot-index conventions, SPS minCB 8/16,
+  codedExtent variants — all bisected on a deterministic 2880×1620 structured-pattern
+  bench, `Core.RendererService.testVideoEncoderH265()`). IDR frames are pixel-perfect.
+  Next lead: trace the nvpro reference encoder with gfxreconstruct and diff the API
+  streams, or try explicit quality-level session parameters. All-intra sidesteps it.
+  More NVIDIA lessons (in addition to the M3 three): the bitstream buffer SIZE must be
+  aligned on minBitstreamBufferSizeAlignment (a misaligned dstBufferRange corrupts the
+  stream — 1280×720 was aligned by luck, 2880×1620 was not) and a bench with a STRUCTURED
+  test pattern is mandatory — corruption is invisible in noise (the M3 "clean" validation
+  was noise-blind).
+- **HDR10 lookahead (owner request)**: keep the profile/bit-depth parametric — Main 10 +
+  P010 planes (16-bit containers) + BT.2020/PQ shader variant sourcing the PRE-tonemap HDR
+  buffer + mastering-display SEI. Nothing in M2/M3 may hardcode 8-bit assumptions in the API.
 
 ### Symmetric API
 
@@ -792,8 +897,11 @@ When a dedicated transfer queue family is available, uses a two-step copy path:
 
 ### Code References
 - `Recorder.hpp` — Full class with Doxygen documentation
-- `Recorder.cpp:startRecording()` — VP8 init, async resource creation, thread start
-- `Recorder.cpp:encodingThreadFunc()` — BGRA→I420 + VP8 encode loop
+- `Recorder.cpp` (top) — Shared BT.709 conversion coefficients (single source of truth)
+- `Recorder.cpp:startRecording()` — VP9 init (incl. colour-space signalling), async resource creation, thread start
+- `Recorder.cpp:captureAndSubmitFrame()` — Backpressure gate + harvest + GPU copy submit
+- `Recorder.cpp:encodingThreadFunc()` — CFR filler loop + BGRA→I420 + VP9 encode
+- `Recorder.cpp:EncodingSession::encodeImageAt()` — Encode current image at a given PTS (also duplicates into empty CFR slots)
 - `Recorder.cpp:submitGPUCopy()` / `submitTransferQueueCopy()` — Async readback paths
 - `cmake/SetupLibVPX.cmake` — Build configuration for libvpx
 

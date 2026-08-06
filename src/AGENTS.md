@@ -296,6 +296,10 @@ The assembly script is generated only when **video is active**. It adapts to ava
 | yes | no | no | Video only → webm container |
 | no | * | * | No script generated |
 
+Every variant tags the output container with BT.709 colour metadata
+(`-colorspace bt709 -color_primaries bt709 -color_trc bt709`) — the VP9 bitstream itself
+already carries BT.709 (see `Graphics/AGENTS.md` § Video Recording, Colorimetry).
+
 **Code references:**
 - `Core.cpp:startAudioVideoRecording()` — Path generation, voice-over start, script generation
 - `Core.cpp:stopAudioVideoRecording()` — Voice-over stop, then audio/video stop

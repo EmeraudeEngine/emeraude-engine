@@ -750,15 +750,22 @@ namespace EmEn
 		/* RushMaker capture frame rate in FPS. */
 		constexpr auto RushMakerVideoFramerateKey{"Core/RushMaker/VideoFramerate"};
 		constexpr auto DefaultRushMakerVideoFramerate{30U};
-		/* Capture in real time (vs. offline deterministic rendering). */
-		constexpr auto RushMakerRealtimeModeKey{"Core/RushMaker/RealtimeMode"};
-		constexpr auto DefaultRushMakerRealtimeMode{true};
 		/* Encoding quality preset. Values: "Low", "Medium", "High", "Ultra". */
 		constexpr auto RushMakerQualityPresetKey{"Core/RushMaker/QualityPreset"};
 		constexpr auto DefaultRushMakerQualityPreset{"Medium"};
 		/* Log RushMaker activity. */
 		constexpr auto RushMakerShowInformationKey{"Core/RushMaker/ShowInformation"};
 		constexpr auto DefaultRushMakerShowInformation{false};
+		/* Grab buffer depth: frames buffered between the 30 Hz capture (the only
+		 * realtime element) and the encoder thread, which encodes at its own pace
+		 * (quality path) and drains after the recording stops. Above this depth
+		 * captures are skipped (they become duplicated frames in the constant frame
+		 * rate output) so a slow encode cannot balloon RAM — one buffered frame costs
+		 * width x height x 4 bytes (default 90 = 3 s at 30 FPS, ~1.6 GB at 2880x1620).
+		 * Raise it for short takes when RAM allows: zero skip, the encoder finishes
+		 * in background. */
+		constexpr auto RushMakerMaxQueuedFramesKey{"Core/RushMaker/MaxQueuedFrames"};
+		constexpr auto DefaultRushMakerMaxQueuedFrames{90U};
 		/* Capture a microphone voice-over track. */
 		constexpr auto RushMakerEnableVoiceOverKey{"Core/RushMaker/EnableVoiceOver"};
 		constexpr auto DefaultRushMakerEnableVoiceOver{false};
