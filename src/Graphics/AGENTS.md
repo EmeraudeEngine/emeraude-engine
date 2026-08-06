@@ -1889,9 +1889,21 @@ per-frame data belongs in FrameContext, NOT in a new parameter.
 
 ### IntermediateRenderTarget usage flags (Jul 2026)
 
-`IntermediateRenderTarget::create()` gives every target `COLOR_ATTACHMENT_BIT | SAMPLED_BIT` —
-enough to render into it and sample it, which is what almost every effect wants. Anything beyond
-that must be requested through the trailing `extraUsageFlags` parameter.
+`IntermediateRenderTarget::create()` gives every target `COLOR_ATTACHMENT_BIT | SAMPLED_BIT |
+TRANSFER_DST_BIT` — enough to render into it, sample it, and clear it. Anything beyond that must
+be requested through the trailing `extraUsageFlags` parameter.
+
+**Every IRT starts ZERO-CLEARED (Aug 2026).** `create()` clears the image to `(0,0,0,0)` before
+the initial transition to `SHADER_READ_ONLY_OPTIMAL`. This is a hard guarantee, not a nicety:
+temporal effects sample their history IRT before the first write (the VolumetricLight
+occlusion-mask EMA, the GIDenoiser ping-pong). Fresh device memory is UNDEFINED — desktop
+drivers happen to return zeroed pages, **Metal/MoltenVK returns real garbage**, and in float
+formats garbage bit patterns contain NaNs. A NaN entering an EMA feedback loop
+(`mix(history, current, alpha)`) never leaves it (`NaN * 0 = NaN`) and spreads to the whole
+frame through the additive combine. Measured on macOS (Apple M2): R/B channels NaN-flushed to 0
+at the UNORM swapchain write — every demo with VolumetricLight rendered as a green-only frame.
+A temporal effect whose history carries a validity marker (GIDenoiser: `history.a > 0.0`, false
+for NaN) is defended in depth; one that mixes blindly relies entirely on this clear.
 
 > [!WARNING]
 > **An image can only be TRANSITIONED to a layout its usage flags support.** If your effect reads

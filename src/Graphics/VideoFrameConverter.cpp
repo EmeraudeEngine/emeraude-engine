@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <string>
 
 /* Local inclusions. */
@@ -693,18 +694,17 @@ void main ()
 		}
 
 		const auto writePGM = [] (const std::filesystem::path & path, const std::vector< uint8_t > & data, uint32_t width, uint32_t height) {
-			std::FILE * file = std::fopen(path.c_str(), "wb");
+			std::ofstream file{path, std::ios::binary | std::ios::trunc};
 
-			if ( file == nullptr )
+			if ( !file.is_open() )
 			{
 				return false;
 			}
 
-			std::fprintf(file, "P5\n%u %u\n255\n", width, height);
-			std::fwrite(data.data(), 1, data.size(), file);
-			std::fclose(file);
+			file << "P5\n" << width << ' ' << height << "\n255\n";
+			file.write(reinterpret_cast< const char * >(data.data()), static_cast< std::streamsize >(data.size()));
 
-			return true;
+			return file.good();
 		};
 
 		auto lumaPath = basePath;

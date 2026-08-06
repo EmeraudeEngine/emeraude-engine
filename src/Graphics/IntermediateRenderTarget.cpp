@@ -61,7 +61,7 @@ namespace EmEn::Graphics
 			VK_IMAGE_TYPE_2D,
 			format,
 			VkExtent3D{width, height, 1},
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | extraUsageFlags
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | extraUsageFlags
 		);
 		m_image->setIdentifier(ClassId, identifier, "Image");
 
@@ -72,7 +72,13 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Transition to shader read layout (initial state for sampling). */
+		/* Clear to zero, then leave the image in shader read layout (initial state for sampling).
+		 * ⚠️ The clear is NOT cosmetic: a temporal effect samples its history IRT before the first
+		 * write (e.g. the VolumetricLight occlusion-mask EMA). Fresh device memory is UNDEFINED —
+		 * desktop drivers happen to hand back zeroed pages, Metal/MoltenVK hands back real garbage,
+		 * and in a float format garbage bit patterns contain NaNs. A NaN entering an EMA feedback
+		 * loop (mix(history, current, alpha)) never leaves it and spreads to the whole frame through
+		 * the additive combine (measured on macOS: R/B channels NaN-flushed to 0 — green screen). */
 		{
 			const auto & transferManager = renderer.transferManager();
 
@@ -80,6 +86,25 @@ namespace EmEn::Graphics
 				*m_image,
 				VK_IMAGE_ASPECT_COLOR_BIT,
 				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			) )
+			{
+				TraceError{ClassId} << "Unable to transition IRT '" << identifier << "' for the initial clear !";
+
+				return false;
+			}
+
+			if ( !transferManager.clearColorImage(*m_image, VkClearColorValue{.float32 = {0.0F, 0.0F, 0.0F, 0.0F}}) )
+			{
+				TraceError{ClassId} << "Unable to clear IRT '" << identifier << "' !";
+
+				return false;
+			}
+
+			if ( !transferManager.transitionImageLayout(
+				*m_image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 			) )
 			{
