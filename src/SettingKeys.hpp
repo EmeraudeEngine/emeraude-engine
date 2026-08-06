@@ -756,6 +756,11 @@ namespace EmEn
 		/* Log RushMaker activity. */
 		constexpr auto RushMakerShowInformationKey{"Core/RushMaker/ShowInformation"};
 		constexpr auto DefaultRushMakerShowInformation{false};
+		/* Force the software VP9 encoder even when the device supports hardware
+		 * H.265 (Vulkan Video). For A/B comparison of the two paths, and to produce
+		 * royalty-free WebM/VP9 on demand. */
+		constexpr auto RushMakerForceCPUEncodingKey{"Core/RushMaker/ForceCPUEncoding"};
+		constexpr auto DefaultRushMakerForceCPUEncoding{false};
 		/* Grab buffer depth: frames buffered between the 30 Hz capture (the only
 		 * realtime element) and the encoder thread, which encodes at its own pace
 		 * (quality path) and drains after the recording stops. Above this depth

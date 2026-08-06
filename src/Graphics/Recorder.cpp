@@ -131,6 +131,7 @@ namespace EmEn::Graphics
 
 		m_targetFramerate = settings.getOrSetDefault< unsigned int >(RushMakerVideoFramerateKey, DefaultRushMakerVideoFramerate);
 		m_showStatistics = settings.getOrSetDefault< bool >(RushMakerShowInformationKey, DefaultRushMakerShowInformation);
+		m_forceCPUEncoding = settings.getOrSetDefault< bool >(RushMakerForceCPUEncodingKey, DefaultRushMakerForceCPUEncoding);
 
 		const auto preset = String::toLower(settings.getOrSetDefault< std::string >(RushMakerQualityPresetKey, DefaultRushMakerQualityPreset));
 
@@ -201,7 +202,7 @@ namespace EmEn::Graphics
 		TraceInfo{ClassId} << "BGRAToI420: using scalar path.";
 #endif
 
-		TraceInfo{ClassId} << "Video recording configured : " << m_targetFramerate << " FPS (studio CFR), Preset: " << qualityPresetToString(m_qualityPreset);
+		TraceInfo{ClassId} << "Video recording configured : " << m_targetFramerate << " FPS (studio CFR), Preset: " << qualityPresetToString(m_qualityPreset) << ", Encoder: " << (this->hardwarePath() ? "hardware H.265" : (m_forceCPUEncoding ? "software VP9 (forced by settings)" : "software VP9 (no hardware support)"));
 
 		return true;
 	}
@@ -237,6 +238,11 @@ namespace EmEn::Graphics
 	bool
 	Recorder::hardwarePath () const noexcept
 	{
+		if ( m_forceCPUEncoding )
+		{
+			return false;
+		}
+
 		const auto device = m_renderer.device();
 
 		return device != nullptr && device->videoEncodeH265Enabled();

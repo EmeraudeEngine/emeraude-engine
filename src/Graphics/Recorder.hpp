@@ -159,6 +159,8 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns whether the hardware H.265 path will be used.
+			 * @note False when the device lacks Vulkan Video H.265 encode OR when
+			 * `Core/RushMaker/ForceCPUEncoding` is set (A/B lever).
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -519,6 +521,7 @@ namespace EmEn::Graphics
 			/* State flags. */
 			bool m_useTransferQueue{false}; ///< True when dedicated transfer queue is available and in use.
 			bool m_showStatistics{false}; ///< True to log periodic encoding statistics.
+			bool m_forceCPUEncoding{false}; ///< Force the software VP9 path on a hardware-capable device (A/B lever).
 			
 			/**
 			 * @enum QualityPreset

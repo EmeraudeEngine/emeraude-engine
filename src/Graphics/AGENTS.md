@@ -770,6 +770,17 @@ Studio-quality video recording of the Vulkan swap-chain framebuffer, encoded VP9
 Part of the RushMaker studio workflow: separate tracks (video IVF + game audio WAV + voice-over WAV)
 assembled by an auto-generated ffmpeg script (`Core::startAudioVideoRecording()`).
 
+### Encoder selection (hardware H.265 vs software VP9)
+ONE decision point: `Recorder::hardwarePath()`. Hardware when the device exposes Vulkan
+Video H.265 encode, software VP9 otherwise (the fallback is the cross-hardware guarantee:
+AMD/Intel/older GPUs record without any configuration). Everything downstream follows the
+choice automatically — file extension (`.h265` / `.ivf`), container and audio codec in the
+assemble script (MP4/AAC / WebM/Opus).
+**`Core/RushMaker/ForceCPUEncoding`** (default `false`) forces the software path on a
+hardware-capable device: A/B comparison of the two encoders, and royalty-free WebM/VP9 on
+demand. The startup log states which one is active — `Encoder: hardware H.265` /
+`software VP9 (forced by settings)` / `software VP9 (no hardware support)`.
+
 ### ONE mode: studio CFR (owner decision, Aug 2026)
 The RushMaker produces promotion rushes — **image quality is the only metric**. There is no
 realtime/quality mode duality: one quality-first VBR configuration (16-frame lookahead,
