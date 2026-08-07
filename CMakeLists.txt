@@ -66,18 +66,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
-# Windows DLL boundary — see docs/windows-export-api.md.
-# Default ON on MSVC (2026-08): the engine's symbol surface exceeded the hard PE limit of
-# 65535 exported ordinals per DLL, so WINDOWS_EXPORT_ALL_SYMBOLS can no longer link (LNK1189).
-# Explicit EMEN_API exports are the only viable mode on Windows. Elsewhere the option is
-# inert (ELF/Mach-O export via symbol visibility, no .def), hence Off to keep the
-# export-all semantics documented for non-MSVC readers.
-if ( MSVC )
-	set(EMERAUDE_USE_EXPLICIT_EXPORTS_DEFAULT On)
-else ()
-	set(EMERAUDE_USE_EXPLICIT_EXPORTS_DEFAULT Off)
+
+option(EMERAUDE_USE_FULL_EXPORTS "Export the whole annotated public API (EMEN_API + EMEN_LEAN_API) (Windows only)." "${MSVC}")
+option(EMERAUDE_USE_LEAN_EXPORTS "Export only the scopes annotated EMEN_LEAN_API, i.e. those actually consumed by the embedding application (Windows only)." Off)
+
+if ( EMERAUDE_USE_FULL_EXPORTS AND EMERAUDE_USE_LEAN_EXPORTS )
+	message(FATAL_ERROR "[EmeraudeEngine] EMERAUDE_USE_FULL_EXPORTS and EMERAUDE_USE_LEAN_EXPORTS are mutually exclusive. Enable exactly one (or neither to fall back on WINDOWS_EXPORT_ALL_SYMBOLS).")
 endif ()
-option(EMERAUDE_USE_EXPLICIT_EXPORTS "Use the explicit EMEN_API export macro instead of WINDOWS_EXPORT_ALL_SYMBOLS (Windows only, Default On on MSVC — export-all exceeds the 65535 PE export limit)." ${EMERAUDE_USE_EXPLICIT_EXPORTS_DEFAULT}) # See docs/windows-export-api.md.
+
 option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
@@ -202,32 +198,20 @@ endif ()
 add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
 
 if ( MSVC )
-	# Shared STL hot-set precompiled header (owned by emeraude-base, applied PRIVATE here).
-	# No-op when -DEMERAUDE_ENABLE_PCH=OFF.
-	#
-	# On MSVC the PCH is incompatible with WINDOWS_EXPORT_ALL_SYMBOLS: the PCH marker symbols leak into
-	# the auto-generated exports.def and fail to link (LNK2001 on a bogus '__'). This target is the ONLY
-	# one in the cascade concerned (the sole SHARED library using export-all), hence the guard here
-	# rather than in the shared helper — every other consumer keeps its PCH regardless of this option.
-	# See docs/windows-export-api.md.
-	# Public DLL boundary — see docs/windows-export-api.md.
-	#  - ON (default on MSVC since 2026-08): EMEN_API drives __declspec(dllexport/import) and
-	#    WINDOWS_EXPORT_ALL_SYMBOLS is dropped. Mandatory: the engine's symbol surface exceeds the
-	#    hard PE limit of 65535 exported ordinals per DLL, so export-all no longer links (LNK1189).
-	#    Costs: a longer consuming-application link, and every new public symbol a consumer
-	#    references out-of-line must carry EMEN_API (the migration itself is done and verified).
-	#  - OFF: WINDOWS_EXPORT_ALL_SYMBOLS produces the export set; the EMEN_API macro
-	#    (emeraude_export.hpp) is a no-op. On MSVC this mode costs this target its PCH (see the
-	#    guard above) and NO LONGER LINKS (see above) — kept only for the non-MSVC platforms,
-	#    where the whole mechanism is inert anyway.
-	if ( EMERAUDE_USE_EXPLICIT_EXPORTS )
+	if ( EMERAUDE_USE_FULL_EXPORTS OR EMERAUDE_USE_LEAN_EXPORTS )
 		emeraude_base_target_enable_pch(${PROJECT_NAME} "${EMERAUDE_BASE_STL_PCH_HEADERS}")
-		target_compile_definitions(${PROJECT_NAME} PUBLIC EMERAUDE_USE_EXPLICIT_EXPORTS)
+
+		if ( EMERAUDE_USE_FULL_EXPORTS )
+			message(STATUS "[EmeraudeEngine] Explicit exports: FULL (whole annotated public API).")
+			target_compile_definitions(${PROJECT_NAME} PUBLIC EMERAUDE_USE_FULL_EXPORTS)
+		else ()
+			message(STATUS "[EmeraudeEngine] Explicit exports: LEAN (EMEN_LEAN_API scopes only).")
+			target_compile_definitions(${PROJECT_NAME} PUBLIC EMERAUDE_USE_LEAN_EXPORTS)
+		endif ()
 
 		set(EMERAUDE_WINDOWS_EXPORT_ALL OFF)
 	else ()
 		message(STATUS "[EmeraudeEngine] PCH disabled on MSVC for '${PROJECT_NAME}' (WINDOWS_EXPORT_ALL_SYMBOLS + PCH break the DLL link).")
-
 		set(EMERAUDE_WINDOWS_EXPORT_ALL ON)
 	endif ()
 endif ()

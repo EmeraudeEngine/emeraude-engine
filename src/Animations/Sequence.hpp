@@ -44,7 +44,7 @@ namespace EmEn::Animations
 	 * @brief Define an animation sequence with key frames during a specific time measured in milliseconds.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
-	class EMEN_API Sequence final : public AnimationInterface
+	class EMEN_LEAN_API Sequence final : public AnimationInterface
 	{
 		public:
 

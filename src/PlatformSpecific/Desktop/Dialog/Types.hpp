@@ -99,7 +99,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return ButtonLayout
 	 */
 	[[nodiscard]]
-	EMEN_API ButtonLayout to_ButtonLayout (const std::string & value) noexcept;
+	EMEN_LEAN_API ButtonLayout to_ButtonLayout (const std::string & value) noexcept;
 
 	/**
 	 * @brief The type of message.
@@ -151,7 +151,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return MessageType
 	 */
 	[[nodiscard]]
-	EMEN_API MessageType to_MessageType (const std::string & value) noexcept;
+	EMEN_LEAN_API MessageType to_MessageType (const std::string & value) noexcept;
 
 	/**
 	 * @brief The user answer to dialog enumeration.
@@ -179,7 +179,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	EMEN_API const char * to_cstring (Answer value) noexcept;
+	EMEN_LEAN_API const char * to_cstring (Answer value) noexcept;
 
 	/**
 	 * @brief Returns a string version of the enum value.

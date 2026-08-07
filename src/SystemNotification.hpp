@@ -57,7 +57,7 @@ namespace EmEn
 	 * @note Permission is managed via Settings with key "Notifications/Permission".
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class EMEN_API SystemNotification final : public ServiceInterface
+	class EMEN_LEAN_API SystemNotification final : public ServiceInterface
 	{
 		public:
 

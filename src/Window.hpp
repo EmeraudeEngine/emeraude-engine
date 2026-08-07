@@ -86,7 +86,7 @@ namespace EmEn
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 */
-	class EMEN_API Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
+	class EMEN_LEAN_API Window final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait
 	{
 		public:
 

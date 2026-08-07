@@ -61,7 +61,7 @@ namespace EmEn::Overlay
 	 * @details There are no physical properties. This is just a group of surfaces and dispatch input event to it.
 	 * @exception EmEn::Base::NameableTrait A UI screen has a name.
 	 */
-	class EMEN_API UIScreen final : public Base::NameableTrait
+	class EMEN_LEAN_API UIScreen final : public Base::NameableTrait
 	{
 		public:
 

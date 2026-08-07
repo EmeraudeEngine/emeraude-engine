@@ -40,7 +40,7 @@ namespace EmEn::Net
 	/**
 	 * @brief Represents a single SSDP device response.
 	 */
-	struct EMEN_API SSDPDevice
+	struct EMEN_LEAN_API SSDPDevice
 	{
 		std::string address;
 		uint16_t port{0};
@@ -53,7 +53,7 @@ namespace EmEn::Net
 	 * Provides both a stateful socket (open/bind/send/receive/close) and a
 	 * self-contained static SSDP discovery method.
 	 */
-	class EMEN_API UDPClient final
+	class EMEN_LEAN_API UDPClient final
 	{
 		public:
 

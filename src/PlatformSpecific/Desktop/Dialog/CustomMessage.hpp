@@ -38,7 +38,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief A dialog with custom button labels.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract This is a user dialog box.
 	 */
-	class EMEN_API CustomMessage final : public Abstract
+	class EMEN_LEAN_API CustomMessage final : public Abstract
 	{
 		public:
 

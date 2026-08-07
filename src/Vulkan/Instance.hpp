@@ -67,7 +67,7 @@ namespace EmEn::Vulkan
 	 * @brief The Vulkan instance service class.
 	 * @extends EmEn::ServiceInterface This is a service
 	 */
-	class EMEN_API Instance final : public ServiceInterface
+	class EMEN_LEAN_API Instance final : public ServiceInterface
 	{
 		public:
 

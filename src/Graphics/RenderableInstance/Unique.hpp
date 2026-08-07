@@ -46,7 +46,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 * @brief This is a renderable object that uses an UBO to determine the location of the renderable object.
 	 * @extends EmEn::Graphics::RenderableInstance::Abstract It needs the base of a renderable instance.
 	 */
-	class EMEN_API Unique final : public Abstract
+	class EMEN_LEAN_API Unique final : public Abstract
 	{
 		public:
 

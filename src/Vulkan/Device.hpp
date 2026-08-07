@@ -59,7 +59,7 @@ namespace EmEn::Vulkan
 	 * @extends EmEn::Vulkan::AbstractObject This is the device, so a simple object is ok.
 	 * @extends EmEn::Base::NameableTrait To set a name on a device.
 	 */
-	class EMEN_API Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Base::NameableTrait
+	class EMEN_LEAN_API Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Base::NameableTrait
 	{
 		public:
 

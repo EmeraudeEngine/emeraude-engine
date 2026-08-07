@@ -94,7 +94,7 @@ namespace EmEn::Overlay
 	 * @brief The base class for overlay UIScreen surfaces.
 	 * @extends Base::NameableTrait A surface has a name.
 	 */
-	class EMEN_API Surface : public Base::NameableTrait
+	class EMEN_LEAN_API Surface : public Base::NameableTrait
 	{
 		public:
 

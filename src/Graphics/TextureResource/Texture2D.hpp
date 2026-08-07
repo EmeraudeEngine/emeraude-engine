@@ -75,7 +75,7 @@ namespace EmEn::Graphics::TextureResource
 	 * @see EmEn::Vulkan::TextureInterface
 	 * @version 0.8.35
 	 */
-	class EMEN_API Texture2D final : public Abstract
+	class EMEN_LEAN_API Texture2D final : public Abstract
 	{
 		friend class Resources::Container< Texture2D >;
 

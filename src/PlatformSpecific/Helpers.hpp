@@ -117,14 +117,14 @@ namespace EmEn::PlatformSpecific
 	* @warning Used only for Windows OS. Fails if the parent has no console.
 	* @return bool
 	*/
-	EMEN_API bool attachToParentConsole ();
+	EMEN_LEAN_API bool attachToParentConsole ();
 
 	/**
 	 * @brief Enables ANSI escape sequence processing on stdout and stderr.
 	 * @warning Used only for Windows OS. Requires an already attached console.
 	 * @return void
 	 */
-	EMEN_API void enableConsoleANSI ();
+	EMEN_LEAN_API void enableConsoleANSI ();
 
 	/**
 	 * @brief Waits for a key press before closing the console.

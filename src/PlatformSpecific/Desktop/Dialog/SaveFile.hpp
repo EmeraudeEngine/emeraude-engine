@@ -48,7 +48,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief The file box class.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract
 	 */
-	class EMEN_API SaveFile final : public Abstract
+	class EMEN_LEAN_API SaveFile final : public Abstract
 	{
 		public:
 

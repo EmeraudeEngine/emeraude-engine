@@ -51,7 +51,7 @@ namespace EmEn::Input
 	 * @brief The pointer controller class.
 	 * @extends EmEn::Input::PointerController This is an input controller.
 	 */
-	class EMEN_API PointerController final : public ControllerInterface
+	class EMEN_LEAN_API PointerController final : public ControllerInterface
 	{
 		public:
 

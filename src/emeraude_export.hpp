@@ -27,36 +27,34 @@
 #pragma once
 
 /*
- * EMEN_API — public boundary annotation for the engine shared library (Emeraude.dll).
- * See docs/windows-export-api.md for the full migration procedure and rationale.
+ * Public boundary annotations for Emeraude.dll — see docs/windows-export-api.md.
  *
- * Two modes, selected by the EMERAUDE_USE_EXPLICIT_EXPORTS build option (CMake):
- *
- *  - ON (default since the migration completed, 2026-07): the macro becomes
- *    __declspec(dllexport) while building the DLL (CMake auto-defines Emeraude_EXPORTS for the
- *    SHARED target) and __declspec(dllimport) for consumers (projet-alpha);
- *    WINDOWS_EXPORT_ALL_SYMBOLS is dropped. This is the end state required on MSVC, where
- *    WINDOWS_EXPORT_ALL_SYMBOLS + precompiled headers leak PCH marker symbols into the
- *    auto-generated exports.def and fail to link (LNK2001 on a bogus '__' symbol).
- *
- *  - OFF: the macro expands to NOTHING. The DLL's exported surface is produced by CMake's
- *    WINDOWS_EXPORT_ALL_SYMBOLS, as before the migration. Annotations are harmless no-ops —
- *    this was the staged path that let the public API be annotated class-by-class.
- *
- * Annotate public CLASSES (exports every member) and out-of-line free functions with EMEN_API.
- * Annotating a class does NOT pull in its bases: C4275/C4251 are disabled cascade-wide by
- * decision (same toolchain and CRT everywhere), so annotate only what the linker names.
+ *  | CMake option              | EMEN_LEAN_API | EMEN_API |                                    |
+ *  |---------------------------|---------------|----------|------------------------------------|
+ *  | EMERAUDE_USE_FULL_EXPORTS | exported      | exported | whole annotated API                |
+ *  | EMERAUDE_USE_LEAN_EXPORTS | exported      | inert    | consumed scopes only               |
+ *  | neither                   | inert         | inert    | WINDOWS_EXPORT_ALL_SYMBOLS         |
  */
-#if defined(EMERAUDE_USE_EXPLICIT_EXPORTS)
-	#if defined(_WIN32) || defined(__CYGWIN__)
-		#ifdef Emeraude_EXPORTS
-			#define EMEN_API __declspec(dllexport)
-		#else
-			#define EMEN_API __declspec(dllimport)
-		#endif
+
+// Shared expansion. Never annotate with it directly.
+#if defined(_WIN32) || defined(__CYGWIN__)
+	#ifdef Emeraude_EXPORTS
+		#define EMEN_API_IMPL __declspec(dllexport)
 	#else
-		#define EMEN_API __attribute__((visibility("default")))
+		#define EMEN_API_IMPL __declspec(dllimport)
 	#endif
+#else
+	#define EMEN_API_IMPL __attribute__((visibility("default")))
+#endif
+
+#if defined(EMERAUDE_USE_FULL_EXPORTS) || defined(EMERAUDE_USE_LEAN_EXPORTS)
+	#define EMEN_LEAN_API EMEN_API_IMPL
+#else
+	#define EMEN_LEAN_API
+#endif
+
+#if defined(EMERAUDE_USE_FULL_EXPORTS)
+	#define EMEN_API EMEN_API_IMPL
 #else
 	#define EMEN_API
 #endif

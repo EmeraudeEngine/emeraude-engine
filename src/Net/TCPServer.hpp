@@ -57,7 +57,7 @@ namespace EmEn::Net
 	 * thread / connection manager. This pattern fits both the WebModule
 	 * polling consumer and a LAN-game accept loop.
 	 */
-	class EMEN_API TCPServer final
+	class EMEN_LEAN_API TCPServer final
 	{
 		public:
 

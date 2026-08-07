@@ -88,7 +88,7 @@ namespace EmEn
 	 * @see TracerLogger, TracerEntry, T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class EMEN_API Tracer final
+	class EMEN_LEAN_API Tracer final
 	{
 		public:
 
@@ -773,7 +773,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceDebug final : public T_TraceHelperBase< TraceDebug, Severity::Debug >
+	class EMEN_LEAN_API TraceDebug final : public T_TraceHelperBase< TraceDebug, Severity::Debug >
 	{
 		public:
 
@@ -790,7 +790,7 @@ namespace EmEn
 	 * @note This is the Release build version. In Debug builds, full functionality is provided.
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceDebug final
+	class EMEN_LEAN_API TraceDebug final
 	{
 		public:
 
@@ -833,7 +833,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceSuccess final : public T_TraceHelperBase< TraceSuccess, Severity::Success >
+	class EMEN_LEAN_API TraceSuccess final : public T_TraceHelperBase< TraceSuccess, Severity::Success >
 	{
 		public:
 
@@ -854,7 +854,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceInfo final : public T_TraceHelperBase< TraceInfo, Severity::Info >
+	class EMEN_LEAN_API TraceInfo final : public T_TraceHelperBase< TraceInfo, Severity::Info >
 	{
 		public:
 
@@ -876,7 +876,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceWarning final : public T_TraceHelperBase< TraceWarning, Severity::Warning >
+	class EMEN_LEAN_API TraceWarning final : public T_TraceHelperBase< TraceWarning, Severity::Warning >
 	{
 		public:
 
@@ -898,7 +898,7 @@ namespace EmEn
 	 * @see T_TraceHelperBase
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceError final : public T_TraceHelperBase< TraceError, Severity::Error >
+	class EMEN_LEAN_API TraceError final : public T_TraceHelperBase< TraceError, Severity::Error >
 	{
 		public:
 
@@ -928,7 +928,7 @@ namespace EmEn
 	 * @see BlobTrait, Tracer
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceFatal final : public Base::BlobTrait
+	class EMEN_LEAN_API TraceFatal final : public Base::BlobTrait
 	{
 		public:
 
@@ -1032,7 +1032,7 @@ namespace EmEn
 	 * @see BlobTrait, Tracer
 	 * @version 0.8.38
 	 */
-	class EMEN_API TraceAPI final : public Base::BlobTrait
+	class EMEN_LEAN_API TraceAPI final : public Base::BlobTrait
 	{
 		public:
 

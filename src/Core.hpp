@@ -166,7 +166,7 @@ namespace EmEn
 	 * @extends EmEn::Base::ObservableTrait The core is observable.
 	 * @version 0.8.35
 	 */
-	class EMEN_API Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMEN_LEAN_API Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 

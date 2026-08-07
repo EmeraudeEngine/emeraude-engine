@@ -204,7 +204,7 @@ namespace EmEn::Scenes
 	 * @see @docs/scene-graph-architecture.md
 	 * @version 0.8.39
 	 */
-	class EMEN_API AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
+	class EMEN_LEAN_API AbstractEntity : public Base::FlagArrayTrait< 8 >, public Base::NameableTrait, public LocatableInterface, public Base::ObserverTrait, public Base::ObservableTrait
 	{
 		public:
 

@@ -44,7 +44,7 @@ namespace EmEn
 	/**
 	 * @brief Describe information about an application.
 	 */
-	class EMEN_API Identification final
+	class EMEN_LEAN_API Identification final
 	{
 		public:
 

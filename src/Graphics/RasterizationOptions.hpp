@@ -35,7 +35,7 @@ namespace EmEn::Graphics
 	 * @brief Defines options to rasterize a renderable instance.
 	 * @note These options are dynamic to gain control over the rendering of multiple instance of the same renderable object.
 	 */
-	class EMEN_API RasterizationOptions final
+	class EMEN_LEAN_API RasterizationOptions final
 	{
 		public:
 
