@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Geometry/Helpers.cpp
+ * src/Graphics/Geometry/Types.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Helpers.hpp"
+#include "Types.hpp"
 
 /* STL inclusions. */
 #include <sstream>

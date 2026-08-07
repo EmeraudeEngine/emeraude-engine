@@ -34,7 +34,7 @@
 #include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Helpers.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

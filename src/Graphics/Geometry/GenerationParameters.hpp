@@ -66,6 +66,17 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Returns the geometry flags.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			geometryFlags () const noexcept
+			{
+				return this->flags();
+			}
+
+			/**
 			 * @brief Sets the way the vertex color will be generated.
 			 * @param vertexColorGenMode The mode.
 			 * @return void
@@ -98,7 +109,19 @@ namespace EmEn::Graphics::Geometry
 			{
 				m_globalVertexColor = globalVertexColor;
 
+				/* NOTE: Mark the vertex color has been set. */
 				m_globalVertexColorSet = true;
+			}
+
+			/**
+			 * @brief Returns the global vertex color.
+			 * @return const Libraries::PixelFactory::Color< float > &
+			 */
+			[[nodiscard]]
+			const Base::PixelFactory::Color< float > &
+			globalVertexColor () const noexcept
+			{
+				return m_globalVertexColor;
 			}
 
 			/**
@@ -110,6 +133,17 @@ namespace EmEn::Graphics::Geometry
 			setTransformMatrix (const Base::Math::Matrix< 4, float > & transformMatrix) noexcept
 			{
 				m_transformMatrix = transformMatrix;
+			}
+
+			/**
+			 * @brief Returns the transform matrix.
+			 * @return const Base::Math::Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Matrix< 4, float > &
+			transformMatrix () const noexcept
+			{
+				return m_transformMatrix;
 			}
 
 			/**
@@ -158,6 +192,17 @@ namespace EmEn::Graphics::Geometry
 				m_textureCoordinatesMultiplier[X] = xMultiplier;
 				m_textureCoordinatesMultiplier[Y] = yMultiplier;
 				m_textureCoordinatesMultiplier[Z] = zMultiplier;
+			}
+
+			/**
+			 * @brief Returns the texture coordinate multipliers vector.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			textureCoordinatesMultiplier () const noexcept
+			{
+				return m_textureCoordinatesMultiplier;
 			}
 
 			/**
@@ -242,61 +287,6 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
-			 * @brief Sets the geometry surface flipping state.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			setFlipGeometry (bool state) noexcept
-			{
-				m_flipGeometry = state;
-			}
-
-			/**
-			 * @brief Returns the global vertex color.
-			 * @return const Libraries::PixelFactory::Color< float > &
-			 */
-			[[nodiscard]]
-			const Base::PixelFactory::Color< float > &
-			globalVertexColor () const noexcept
-			{
-				return m_globalVertexColor;
-			}
-
-			/**
-			 * @brief Returns the transform matrix.
-			 * @return const Base::Math::Matrix< 4, float > &
-			 */
-			[[nodiscard]]
-			const Base::Math::Matrix< 4, float > &
-			transformMatrix () const noexcept
-			{
-				return m_transformMatrix;
-			}
-
-			/**
-			 * @brief Returns the texture coordinate multipliers vector.
-			 * @return const Base::Math::Vector< 3, float > &
-			 */
-			[[nodiscard]]
-			const Base::Math::Vector< 3, float > &
-			textureCoordinatesMultiplier () const noexcept
-			{
-				return m_textureCoordinatesMultiplier;
-			}
-
-			/**
-			 * @brief Returns the geometry flags.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			geometryFlags () const noexcept
-			{
-				return this->flags();
-			}
-
-			/**
 			 * @brief Returns whether the center at bottom option is enabled.
 			 * @return bool
 			 */
@@ -305,6 +295,16 @@ namespace EmEn::Graphics::Geometry
 			isCenteredAtBottom () const noexcept
 			{
 				return m_centerAtBottom;
+			}
+			/**
+			 * @brief Sets the geometry surface flipping state.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			setFlipGeometry (bool state) noexcept
+			{
+				m_flipGeometry = state;
 			}
 
 			/**
@@ -330,7 +330,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param enableNormalsGeneration Enable the auto-generation of normal, if attribute is requested.
 			 * @param enableTextureCoordinatesGeneration Enable the auto-generation of texture coordinates from the vertex position, if attribute is requested.
 			 * @param enableVertexColorsGeneration Enable the auto-generation of vertex color from the vertex position, if attribute is requested.
-			 * @return Libraries::VertexFactory::ShapeBuilderOptions< float >
+			 * @return Base::VertexFactory::ShapeBuilderOptions< float >
 			 */
 			[[nodiscard]]
 			Base::VertexFactory::ShapeBuilderOptions< float > getShapeBuilderOptions (bool enableNormalsGeneration, bool enableTextureCoordinatesGeneration, bool enableVertexColorsGeneration) const noexcept;

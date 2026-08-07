@@ -46,6 +46,7 @@
 #include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/EffectsToolkit/CameraPresets.hpp"
 #include "Scenes/Scene.hpp"
+#include "Resources/Manager.hpp"
 
 namespace EmEn::Scenes
 {

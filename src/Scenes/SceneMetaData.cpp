@@ -37,7 +37,7 @@
 /* Local inclusions. */
 #include "GPUMeshMetaData.hpp"
 #include "BindlessTextureSet.hpp"
-#include "Graphics/Geometry/Helpers.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/SkinnedGeometryProcessor.hpp"

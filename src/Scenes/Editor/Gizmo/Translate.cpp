@@ -27,7 +27,7 @@
 #include "Translate.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Helpers.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"

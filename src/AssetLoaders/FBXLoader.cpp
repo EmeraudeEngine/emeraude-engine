@@ -42,7 +42,7 @@
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
 #include "AssetData.hpp"
-#include "Graphics/Geometry/Helpers.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/PBRResource.hpp"

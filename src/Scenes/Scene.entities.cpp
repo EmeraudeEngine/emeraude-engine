@@ -67,7 +67,7 @@ namespace EmEn::Scenes
 	void
 	Scene::resetNodeTree () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+		const std::scoped_lock lock{m_sceneNodesAccess};
 
 		m_rootNode->destroyTree();
 	}
@@ -185,14 +185,14 @@ namespace EmEn::Scenes
 
 		if ( m_renderingOctree != nullptr && staticEntity->isRenderable() )
 		{
-			const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
+			const std::scoped_lock lock{m_renderingOctreeAccess};
 
 			m_renderingOctree->erase(staticEntity);
 		}
 
 		if ( m_physicsOctree != nullptr )
 		{
-			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+			const std::scoped_lock lock{m_physicsOctreeAccess};
 
 			m_physicsOctree->erase(staticEntity);
 		}
@@ -330,7 +330,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::refreshAmbientLightProperties () noexcept
+	Scene::refreshAmbientLightProperties () const noexcept
 	{
 		const auto & color = m_lightSet.ambientLightColor();
 		/* When the sky drives the ambient (applyAmbient), the ambient pass reads the baked
@@ -446,7 +446,7 @@ namespace EmEn::Scenes
 
 		/* Suspend all static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & entity : m_staticEntities | std::views::values )
 			{
@@ -456,13 +456,13 @@ namespace EmEn::Scenes
 
 		/* Suspend all nodes in the tree. */
 		{
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< Node > crawler{m_rootNode};
 
 			while ( crawler.hasNextNode() )
 			{
-				if ( auto node = crawler.nextNode() )
+				if ( const auto node = crawler.nextNode() )
 				{
 					node->suspend();
 				}
@@ -481,7 +481,7 @@ namespace EmEn::Scenes
 
 		/* Wakeup all static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & entity : m_staticEntities | std::views::values )
 			{
@@ -491,7 +491,7 @@ namespace EmEn::Scenes
 
 		/* Wakeup all nodes in the tree. */
 		{
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< Node > crawler{m_rootNode};
 
@@ -511,7 +511,7 @@ namespace EmEn::Scenes
 		/* Check the entity in the rendering octree. */
 		if ( m_renderingOctree != nullptr && entity->isRenderable() )
 		{
-			const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeAccess};
+			const std::scoped_lock lockGuard{m_renderingOctreeAccess};
 
 			m_renderingOctree->updateOrInsert(entity);
 		}
@@ -534,7 +534,7 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+			const std::scoped_lock lock{m_physicsOctreeAccess};
 
 			m_physicsOctree->updateOrInsert(entity);
 		}
@@ -566,14 +566,14 @@ namespace EmEn::Scenes
 
 				if ( m_renderingOctree != nullptr && node->isRenderable() )
 				{
-					const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeAccess};
+					const std::scoped_lock lock{m_renderingOctreeAccess};
 
 					m_renderingOctree->erase(node);
 				}
 
 				if ( m_physicsOctree != nullptr )
 				{
-					const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+					const std::scoped_lock lock{m_physicsOctreeAccess};
 
 					m_physicsOctree->erase(node);
 				}

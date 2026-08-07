@@ -36,14 +36,19 @@
 #include <string_view>
 
 /* Local inclusions for usages. */
+#include "Math/Vector.hpp"
 #include "GenerationParameters.hpp"
 #include "IndexedVertexResource.hpp"
-#include "Math/Vector.hpp"
 #include "VertexFactory/CapUVMapping.hpp"
 #include "VertexFactory/Shape.hpp"
-#include "Resources/Manager.hpp"
 #include "VertexGridResource.hpp"
 #include "VertexResource.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	class Manager;
+}
 
 namespace EmEn::Graphics::Geometry
 {
@@ -61,7 +66,7 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Constructs the geometry resource generator.
 			 * @param resources A reference to the resource manager.
-			 * @param geometryFlags Flags value from geometry. Default 0.
+			 * @param geometryFlags Flags value from geometry (See EmEn::Graphics::Geometry::GeometryFlagBits). Default none.
 			 */
 			explicit
 			ResourceGenerator (Resources::Manager & resources, uint32_t geometryFlags = 0) noexcept
@@ -357,7 +362,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param length The length of the tube.
 			 * @param slices Circumferential subdivisions. Default 16.
 			 * @param stacks Longitudinal subdivisions. Default 1.
-			 * @param capped Whether to generate annular caps at both ends. Default true.
+			 * @param capMapping Whether to generate annular caps at both ends. Default true.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */

@@ -27,10 +27,11 @@
 #include "ResourceGenerator.hpp"
 
 /* Local inclusions. */
-#include "Hash/Hash.hpp"
-#include "PixelFactory/Color.hpp"
 #include "VertexFactory/ShapeAssembler.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Hash/Hash.hpp"
+#include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

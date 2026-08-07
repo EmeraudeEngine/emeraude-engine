@@ -1151,7 +1151,7 @@ namespace EmEn::Scenes
 			 * neutral, without background) and scales every IBL contribution in the shaders.
 			 * @return void
 			 */
-			void refreshAmbientLightProperties () noexcept;
+			void refreshAmbientLightProperties () const noexcept;
 
 			/**
 			 * @brief Derives the scene lighting from the background photometric description

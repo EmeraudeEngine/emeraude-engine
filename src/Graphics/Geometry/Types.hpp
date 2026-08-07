@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Geometry/Helpers.hpp
+ * src/Graphics/Geometry/Types.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -42,32 +42,32 @@ namespace EmEn::Graphics::Geometry
 		None = 0U,
 		/* Vertex attributes present in local data. */
 		/** @brief This flag tells the geometry to have normals in vertex attributes. */
-		EnableNormal = 1U << 0,
+		EnableNormal = 1U << 0U,
 		/**
 		 * @brief This flag tells the geometry to have tangents, bi-normals and normals (TBN) in vertex attributes.
 		 * @note Overrides GeometryFlagBits::EnableNormal flag.
 		 */
-		EnableTangentSpace = 1U << 1,
+		EnableTangentSpace = 1U << 1U,
 		/** @brief This flag tells the geometry to have primary texture coordinates in vertex attributes. */
-		EnablePrimaryTextureCoordinates = 1U << 2,
+		EnablePrimaryTextureCoordinates = 1U << 2U,
 		/** @brief This flag tells the geometry to have secondary texture coordinates in vertex attributes. */
-		EnableSecondaryTextureCoordinates = 1U << 3,
+		EnableSecondaryTextureCoordinates = 1U << 3U,
 		/** @brief This flag tells the geometry to have vertex colors in vertex attributes. */
-		EnableVertexColor = 1U << 4,
+		EnableVertexColor = 1U << 4U,
 		/** @brief This flag tells the geometry uses influence indexes to a uniform buffer for skeletal animations. */
-		EnableInfluence = 1U << 5,
+		EnableInfluence = 1U << 5U,
 		/** @brief This flag tells the geometry to have weights in vertex attributes. */
-		EnableWeight = 1U << 6,
+		EnableWeight = 1U << 6U,
 		/** @brief This flag tells the primary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
-		Enable3DPrimaryTextureCoordinates = 1U << 7,
+		Enable3DPrimaryTextureCoordinates = 1U << 7U,
 		/** @brief This flag tells the secondary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
-		Enable3DSecondaryTextureCoordinates = 1U << 8,
+		Enable3DSecondaryTextureCoordinates = 1U << 8U,
 		/** @brief This flag tells the VBO uses dynamic updates. */
-		EnableDynamicVertexBuffer = 1U << 9,
+		EnableDynamicVertexBuffer = 1U << 9U,
 		/** @brief This flag tells the vertex positions are expressed in world coordinates. */
-		EnableAbsolutePosition = 1U << 10,
+		EnableAbsolutePosition = 1U << 10U,
 		/** @brief This flag tells the index buffer uses the special index to restart primitives. */
-		EnablePrimitiveRestart = 1U << 11
+		EnablePrimitiveRestart = 1U << 11U
 	};
 
 	/** @brief SubGeometry flag bits. */
@@ -75,7 +75,7 @@ namespace EmEn::Graphics::Geometry
 	enum EMEN_API SubGeometryFlagBits : uint32_t
 	{
 		Regular = 0U,
-		EnableDoubleSidedFaces = 1U << 1
+		EnableDoubleSidedFaces = 1U << 1U
 	};
 
 	/**
