@@ -97,7 +97,7 @@ namespace EmEn
 	 * @see EmEn::Settings
 	 * @version 0.8.61
 	 */
-	class EMEN_API SettingStore final
+	class EMEN_LEAN_API SettingStore final
 	{
 		friend class Settings;
 
@@ -349,7 +349,7 @@ namespace EmEn
 	 * @see EmEn::SettingStore, EmEn::SettingValue, EmEn::SettingType
 	 * @version 0.8.61
 	 */
-	class EMEN_API Settings final : public ServiceInterface, public Console::ControllableTrait
+	class EMEN_LEAN_API Settings final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 

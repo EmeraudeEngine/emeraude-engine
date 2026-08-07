@@ -56,7 +56,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
-	class EMEN_API Camera final : public Abstract, public AVConsole::AbstractVirtualDevice
+	class EMEN_LEAN_API Camera final : public Abstract, public AVConsole::AbstractVirtualDevice
 	{
 		public:
 

@@ -117,7 +117,7 @@ namespace EmEn::Graphics::TextureResource
 	 * @extends EmEn::Vulkan::TextureInterface This provides GPU texture capabilities.
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class EMEN_API Abstract : public Vulkan::TextureInterface, public Resources::ResourceTrait
+	class EMEN_LEAN_API Abstract : public Vulkan::TextureInterface, public Resources::ResourceTrait
 	{
 		public:
 

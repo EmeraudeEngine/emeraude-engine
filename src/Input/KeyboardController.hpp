@@ -52,7 +52,7 @@ namespace EmEn::Input
 	 * @brief The keyboard controller class.
 	 * @extends EmEn::Input::ControllerInterface This is an input controller.
 	 */
-	class EMEN_API KeyboardController final : public ControllerInterface
+	class EMEN_LEAN_API KeyboardController final : public ControllerInterface
 	{
 		public:
 

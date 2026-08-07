@@ -124,7 +124,7 @@ namespace EmEn::Resources
 		 * @param primaryServices A reference to the primary services.
 		 * @param task The task to execute [std::move].
 		 */
-		EMEN_API void enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
+		EMEN_LEAN_API void enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
 
 		/**
 		 * @brief Starts the download of an external resource, using the local cache when possible.
@@ -138,7 +138,7 @@ namespace EmEn::Resources
 		 * or DownloadNotStarted (-1) when the request is not downloadable.
 		 */
 		[[nodiscard]]
-		EMEN_API int startDownload (PrimaryServices & primaryServices, LoadingRequest & request) noexcept;
+		EMEN_LEAN_API int startDownload (PrimaryServices & primaryServices, LoadingRequest & request) noexcept;
 
 		/**
 		 * @brief Marks a download as processed on the request, resolving the filesystem for it.

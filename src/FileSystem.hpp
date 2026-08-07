@@ -54,7 +54,7 @@ namespace EmEn
 	 * @brief The file system service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class EMEN_API FileSystem final : public ServiceInterface, public Console::ControllableTrait
+	class EMEN_LEAN_API FileSystem final : public ServiceInterface, public Console::ControllableTrait
 	{
 		public:
 

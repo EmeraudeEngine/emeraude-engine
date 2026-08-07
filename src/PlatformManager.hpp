@@ -43,7 +43,7 @@ namespace EmEn
 	 * @brief The platform manager service class initialize check Vulkan and initialize GLFW with it.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class EMEN_API PlatformManager final : public ServiceInterface
+	class EMEN_LEAN_API PlatformManager final : public ServiceInterface
 	{
 		public:
 

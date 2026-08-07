@@ -84,7 +84,7 @@ namespace EmEn::Scenes::Component
 	 * @extends EmEn::Base::ObservableTrait To transfer physical properties changes. FIXME: Observable is kept for future features.
 	 * @extends Animations::AnimatableInterface Component are animatable.
 	 */
-	class EMEN_API Abstract : public Base::NameableTrait, public Base::FlagArrayTrait< 16 >, public Base::ObservableTrait, public Animations::AnimatableInterface
+	class EMEN_LEAN_API Abstract : public Base::NameableTrait, public Base::FlagArrayTrait< 16 >, public Base::ObservableTrait, public Animations::AnimatableInterface
 	{
 		public:
 

@@ -58,28 +58,28 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @return ProgressMode
 	 */
 	[[nodiscard]]
-	EMEN_API ProgressMode to_ProgressMode (const std::string & string) noexcept;
+	EMEN_LEAN_API ProgressMode to_ProgressMode (const std::string & string) noexcept;
 
 	/**
 	 * @brief Tries to open a URL in an external web browser.
 	 * @param url A reference to a string.
 	 * @return bool
 	 */
-	EMEN_API bool openURL (const std::string & url) noexcept;
+	EMEN_LEAN_API bool openURL (const std::string & url) noexcept;
 
 	/**
 	 * @brief Tries to open a file with an external program.
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMEN_API bool openFile (const std::filesystem::path & filepath) noexcept;
+	EMEN_LEAN_API bool openFile (const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Tries to open a folder in an external program.
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMEN_API bool openFolder (const std::filesystem::path & filepath) noexcept;
+	EMEN_LEAN_API bool openFolder (const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Tries to open a file with an external text editor.
@@ -94,7 +94,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
-	EMEN_API bool showInFolder (const std::filesystem::path & filepath) noexcept;
+	EMEN_LEAN_API bool showInFolder (const std::filesystem::path & filepath) noexcept;
 
 	/**
 	 * @brief Runs a desktop application with arguments.
@@ -119,7 +119,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param state The flashing state.
 	 * @return void
 	 */
-	EMEN_API void flashTaskbarIcon (const Window & window, bool state) noexcept;
+	EMEN_LEAN_API void flashTaskbarIcon (const Window & window, bool state) noexcept;
 
 	/**
 	 * @brief Sets a progression inside the taskbar icon of the application.
@@ -128,5 +128,5 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param mode The progression mode. Only for Windows.
 	 * @return void
 	 */
-	EMEN_API void setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept;
+	EMEN_LEAN_API void setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept;
 }

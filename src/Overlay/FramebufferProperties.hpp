@@ -39,7 +39,7 @@ namespace EmEn::Overlay
 	/**
 	 * @brief Defines the framebuffer properties. This helps to create surfaces of the overlay according to HDPI usage.
 	 */
-	class EMEN_API FramebufferProperties final
+	class EMEN_LEAN_API FramebufferProperties final
 	{
 		public:
 
@@ -344,7 +344,7 @@ namespace EmEn::Overlay
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend EMEN_API std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
+			friend EMEN_LEAN_API std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
 
 			uint32_t m_width{0};
 			uint32_t m_height{0};

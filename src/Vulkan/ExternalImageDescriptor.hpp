@@ -49,7 +49,7 @@ namespace EmEn::Vulkan
 	 * (for CEF it does NOT outlive the OnAcceleratedPaint callback). The import and the GPU copy must
 	 * complete within that window, and the engine never closes the handle.
 	 */
-	struct EMEN_API ExternalImageDescriptor
+	struct EMEN_LEAN_API ExternalImageDescriptor
 	{
 		/** @brief Maximum number of DMA-BUF planes carried by the descriptor (Linux). */
 		static constexpr size_t MaxPlanes{4};

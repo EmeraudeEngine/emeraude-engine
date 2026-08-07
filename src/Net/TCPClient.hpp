@@ -54,7 +54,7 @@ namespace EmEn::Net
 	 * @note Multiple TCPClient instances are fully independent and safe to
 	 * use concurrently from different threads.
 	 */
-	class EMEN_API TCPClient final
+	class EMEN_LEAN_API TCPClient final
 	{
 		friend class TCPServer;
 

@@ -50,7 +50,7 @@ namespace EmEn::Vulkan
 	 * structures. Building geometry into the structure is handled externally.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject To allocate on a device.
 	 */
-	class EMEN_API AccelerationStructure final : public AbstractDeviceDependentObject
+	class EMEN_LEAN_API AccelerationStructure final : public AbstractDeviceDependentObject
 	{
 		public:
 

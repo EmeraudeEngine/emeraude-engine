@@ -42,7 +42,7 @@ namespace EmEn::Vulkan
 	 * @brief The device memory wrapper class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class EMEN_API DeviceMemory final : public AbstractDeviceDependentObject
+	class EMEN_LEAN_API DeviceMemory final : public AbstractDeviceDependentObject
 	{
 		public:
 

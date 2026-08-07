@@ -63,7 +63,7 @@ namespace EmEn
 	 * @note Pimpl idiom: the concrete services live in the implementation file,
 	 * keeping this header free of heavy service inclusions (compile firewall).
 	 */
-	class EMEN_API PrimaryServices final
+	class EMEN_LEAN_API PrimaryServices final
 	{
 		public:
 

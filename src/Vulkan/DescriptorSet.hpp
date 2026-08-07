@@ -53,7 +53,7 @@ namespace EmEn::Vulkan
 	 * @brief The descriptor set wrapper class.
 	 * @extends EmEn::Vulkan::AbstractObject This object will use the descriptor pool to get the device.
 	 */
-	class EMEN_API DescriptorSet final : public AbstractObject
+	class EMEN_LEAN_API DescriptorSet final : public AbstractObject
 	{
 		public:
 

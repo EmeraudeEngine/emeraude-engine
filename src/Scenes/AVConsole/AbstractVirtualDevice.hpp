@@ -46,7 +46,7 @@ namespace EmEn::Scenes::AVConsole
 	 * @brief This is the base class of each virtual multimedia device in the 3D world.
 	 * @extends std::enable_shared_from_this
 	 */
-	class EMEN_API AbstractVirtualDevice : public std::enable_shared_from_this< AbstractVirtualDevice >
+	class EMEN_LEAN_API AbstractVirtualDevice : public std::enable_shared_from_this< AbstractVirtualDevice >
 	{
 		public:
 

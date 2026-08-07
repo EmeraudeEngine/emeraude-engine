@@ -86,7 +86,7 @@ namespace EmEn::Resources
 	 * @see SourceType Enum defining resource data sources.
 	 * @version 0.8.40
 	 */
-	class EMEN_API LoadingRequest final
+	class EMEN_LEAN_API LoadingRequest final
 	{
 		public:
 

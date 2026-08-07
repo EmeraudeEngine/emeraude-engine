@@ -127,7 +127,7 @@ namespace EmEn::PlatformSpecific
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	EMEN_API inline
+	EMEN_LEAN_API inline
 	std::string
 	to_string (GPUDeviceType value)
 	{
@@ -137,7 +137,7 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Describe a GPU device from the system in order to get/print information.
 	 */
-	struct EMEN_API GPUDevice
+	struct EMEN_LEAN_API GPUDevice
 	{
 		/* The creator of the main part of device, like NVIDIA, AMD, Intel... */
 		std::string vendorName{"Unknown"};

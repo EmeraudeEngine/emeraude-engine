@@ -79,7 +79,7 @@ namespace EmEn::Vulkan
 	 * @extends std::enable_shared_from_this Adds the ability to self-replicate the smart pointer.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
-	class EMEN_API Image final : public AbstractDeviceDependentObject
+	class EMEN_LEAN_API Image final : public AbstractDeviceDependentObject
 	{
 		public:
 

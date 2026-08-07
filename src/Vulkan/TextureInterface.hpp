@@ -62,7 +62,7 @@ namespace EmEn::Vulkan
 	 * @brief Pure interface for any object usable as a texture in Vulkan.
 	 * @note This interface guarantees GPU texture capabilities without file loading logic.
 	 */
-	class EMEN_API TextureInterface
+	class EMEN_LEAN_API TextureInterface
 	{
 		public:
 

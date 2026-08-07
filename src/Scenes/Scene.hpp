@@ -269,7 +269,7 @@ namespace EmEn::Scenes
 	 * @see OctreeSector For spatial partitioning.
 	 * @version 0.8.35
 	 */
-	class EMEN_API Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
+	class EMEN_LEAN_API Scene final : public Base::NameableTrait, public Base::Time::EventTrait< uint32_t, std::milli >, public Base::ObserverTrait
 	{
 		public:
 

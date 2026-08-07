@@ -54,7 +54,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief Simple mesh renderable with only one layer.
 	 * @extends EmEn::Graphics::Renderable::Abstract
 	 */
-	class EMEN_API MeshResource final : public Abstract, public SkeletalDataTrait
+	class EMEN_LEAN_API MeshResource final : public Abstract, public SkeletalDataTrait
 	{
 		friend class Resources::Container< MeshResource >;
 

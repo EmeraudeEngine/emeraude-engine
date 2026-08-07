@@ -51,7 +51,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	 * @brief User dialog to select multiple files.
 	 * @extends EmEn::PlatformSpecific::Desktop::Dialog::Abstract
 	 */
-	class EMEN_API OpenFile final : public Abstract
+	class EMEN_LEAN_API OpenFile final : public Abstract
 	{
 		public:
 

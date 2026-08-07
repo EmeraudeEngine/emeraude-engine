@@ -75,7 +75,7 @@ namespace EmEn
 	 * @see Window, CursorType
 	 * @version 0.8.35
 	 */
-	class EMEN_API CursorAtlas final
+	class EMEN_LEAN_API CursorAtlas final
 	{
 		public:
 
