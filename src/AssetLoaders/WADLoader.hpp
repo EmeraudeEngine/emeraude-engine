@@ -68,6 +68,27 @@ namespace EmEn::AssetLoaders
 			static constexpr auto MapUnitsPerMeter{32.0F};
 
 			/**
+			 * @brief Luminance of a FULLY-LIT map surface, in nits (cd/m2).
+			 * @note A Doom map carries no photometry: its sector light levels are 0-255 ordinals
+			 * authored for a CRT, not luminances. Emitted raw into a photometric pipeline they land
+			 * near zero (measured: 0.038 mean output), so the map needs an ABSOLUTE anchor. The
+			 * surfaces are declared self-illuminating rather than lit — same reasoning as a skybox:
+			 * they carry their own baked lighting and must not be re-lit.
+			 * @note ⚠️ THIS VALUE AND THE DEMO'S FIXED EXPOSURE ARE ONE JOINT CALIBRATION. Never
+			 * move one without the other. A fully-lit Doom surface is treated as a SUNLIT surface
+			 * (~2000-5000 nits in the real world) rather than as white on an SDR monitor (~250), for
+			 * one reason: the map has to share the frame with a sky. At 250 nits the map read well
+			 * but sat 5 stops under a daylight sky, so the exposure that rendered the map correctly
+			 * blew the sky to pure white over half the frame on any outdoor map — the map itself was
+			 * exposed correctly the whole time, which is what makes that failure so confusing to
+			 * diagnose. At 2000 nits the map sits just under a clear sky and both fit in one frame.
+			 * The demo pairs this with f/8 at 1/125 s and ISO 125 (EV100 12.64, clipping at 7680
+			 * nits), which puts a fully-lit surface at 0.26 display-linear and leaves 26 of the 28
+			 * shipped skies unclipped. See DoomLoader::onEnabled() for the derivation.
+			 */
+			static constexpr auto FullBrightLuminance{2000.0F};
+
+			/**
 			 * @brief Constructs the WAD loader.
 			 * @param resources A reference to the resource manager.
 			 */

@@ -313,6 +313,23 @@ namespace EmEn::Graphics::Material
 			void enableVertexColor () noexcept;
 
 			/**
+			 * @brief Declares the material a binary CUTOUT: texels whose alpha falls below the
+			 * cutoff are discarded, and the material stays OPAQUE.
+			 * @note Opaque render list, depth write kept, no back-to-front sorting, state-sorted
+			 * batching preserved — unlike enableBlending(), which buys sorting a coverage mask does
+			 * not need. Requires a texture whose alpha channel is enabled
+			 * (setTextureResource(texture, true)); without it the flag emits no code.
+			 * @warning The cutoff is FIXED at 0.5 and deliberately not configurable: the shader
+			 * program cache keys on the material's DESCRIPTOR LAYOUT hash, not on its flags or
+			 * values, so baking a per-material cutoff literal into the generated GLSL could serve
+			 * one material's program to another with the same layout. 0.5 is the right value for a
+			 * mask authored as coverage, which is the only case this mode targets. A configurable
+			 * cutoff needs the cache key fixed first.
+			 * @return void
+			 */
+			void enableAlphaTest () noexcept;
+
+			/**
 			 * @brief Sets a color as material appearance.
 			 * @note Dynamic properties.
 			 * @param color A reference to a color.

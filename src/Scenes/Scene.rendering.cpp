@@ -59,8 +59,7 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target.
-		 * TODO: Get the view distance value from settings. */
+		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
@@ -170,8 +169,7 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target.
-		 * TODO: Get the view distance value from settings. */
+		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, viewDistance, isOrthographicProjection);
 
 		/* Historical behavior: re-rendered every frame. Callers wanting a one-shot or
@@ -211,8 +209,7 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target.
-		 * TODO: Get the view distance value from settings. */
+		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, viewDistance, isOrthographicProjection, colorBits);
 
 		/* An environment probe: continuous by default (callers flip to "once" via
@@ -258,8 +255,7 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target.
-		 * TODO: Get the view distance value from settings. */
+		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
@@ -294,8 +290,7 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target.
-		 * TODO: Get the view distance value from settings. */
+		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
@@ -470,7 +465,7 @@ namespace EmEn::Scenes
 		/* Rebuild the TLAS and RT metadata from RT-specific render lists (no frustum culling).
 		 * RT effects cast rays in world space and need ALL scene geometry, not just what's on screen. */
 		auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
-		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
+		m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
 
 		return true;
 	}
@@ -652,18 +647,18 @@ namespace EmEn::Scenes
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
-			std::shared_ptr< const Node > node{};
-
-			while ( (node = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
-				if ( !node->isRenderable() )
+				const auto & currentNode = crawler.currentNode();
+
+				if ( !currentNode->isRenderable() )
 				{
 					continue;
 				}
 
-				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
+				const auto & worldCoordinates = currentNode->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				node->forEachComponent([&] (const Component::Abstract & component) {
+				currentNode->forEachComponent([&] (const Component::Abstract & component) {
 					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr || !renderableInstance->isDisplayTBNSpaceEnabled() )
@@ -692,7 +687,7 @@ namespace EmEn::Scenes
 	Scene::publishStateForRendering () noexcept
 	{
 		/* TODO: Check to copy only relevant data to speed up the transfer. */
-		const uint32_t nextTarget = m_renderStateIndex == 0 ? 1 : 0;
+		const uint32_t nextTarget = m_renderStateIndex == 0U ? 1U : 0U;
 
 		/* Synchronize static entities. */
 		for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
@@ -704,11 +699,9 @@ namespace EmEn::Scenes
 		{
 			NodeCrawler< Node > crawler{m_rootNode};
 
-			std::shared_ptr< Node > currentNode;
-
-			while ( (currentNode = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
-				currentNode->publishStateForRendering(nextTarget);
+				crawler.currentNode()->publishStateForRendering(nextTarget);
 			}
 		}
 
@@ -908,21 +901,23 @@ namespace EmEn::Scenes
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
 			const std::scoped_lock lock{m_sceneNodesAccess};
 
+
+
 			NodeCrawler< const Node > crawler{m_rootNode};
 
-			std::shared_ptr< const Node > node;
-
-			while ( (node = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
+				const auto & currentNode = crawler.currentNode();
+
 				/* Check whether the scene node contains something to render. */
-				if ( !node->isRenderable() )
+				if ( !currentNode->isRenderable() )
 				{
 					continue;
 				}
 
-				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
+				const auto & worldCoordinates = currentNode->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				node->forEachComponent([&] (const Component::Abstract & component) {
+				currentNode->forEachComponent([&] (const Component::Abstract & component) {
 					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
@@ -941,7 +936,7 @@ namespace EmEn::Scenes
 				 * - CSM uses multiple cascade frustums; objects may be visible in any cascade */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap() && !node->isVisibleTo(frustum) ) )
+					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap() && !currentNode->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
@@ -1072,12 +1067,12 @@ namespace EmEn::Scenes
 
 		/* RT render lists: all opaque geometry without frustum culling, distance-only.
 		 * Only populated when ray tracing is active on the device. */
-		const auto rtEnabled = m_sceneMetaData.isRayTracingEnabled();
+		const auto RTEnabled = m_sceneMetaData.isRayTracingEnabled();
 
-		if ( rtEnabled )
+		if ( RTEnabled )
 		{
-			m_rtOpaqueList.clear();
-			m_rtOpaqueLightedList.clear();
+			m_RTOpaqueList.clear();
+			m_RTOpaqueLightedList.clear();
 		}
 
 		/* NOTE: The camera position doesn't move during calculation. */
@@ -1130,7 +1125,7 @@ namespace EmEn::Scenes
 			 * everywhere. Measured before this exclusion (Sponza, gallery): the ray-outcome
 			 * visualization was ENTIRELY red, i.e. every single ray hit the skybox shell beyond
 			 * the bounce range and contributed nothing, which is why shadows were pitch black. */
-			if ( rtEnabled && component != m_sceneVisualComponents[BackgroundVisualIndex] )
+			if ( RTEnabled && component != m_sceneVisualComponents[BackgroundVisualIndex] )
 			{
 				const auto * renderable = renderableInstance->renderable();
 
@@ -1153,8 +1148,14 @@ namespace EmEn::Scenes
 					if ( rtVisible )
 					{
 						const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-						auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
-						RenderBatch::create(rtList, 0.0F, renderableInstance, nullptr, 0);
+
+						RenderBatch::create(
+							isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList,
+							0.0F,
+							renderableInstance,
+							nullptr,
+							0
+						);
 					}
 				}
 			}
@@ -1194,14 +1195,14 @@ namespace EmEn::Scenes
 					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
 					 * looked up by the RT trace shader via materialIndices[geometryIndex]
 					 * (multi-geometry BLAS). Distance-only culling, no frustum. */
-					if ( rtEnabled && distance <= m_TLASDistance )
+					if ( RTEnabled && distance <= m_TLASDistance )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
 						if ( renderable != nullptr )
 						{
 							const auto layerCount = renderable->layerCount();
-							bool rtVisible = false;
+							bool RTVisible = false;
 
 							for ( uint32_t layer = 0; layer < layerCount; ++layer )
 							{
@@ -1209,16 +1210,23 @@ namespace EmEn::Scenes
 
 								if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
 								{
-									rtVisible = true;
+									RTVisible = true;
+
 									break;
 								}
 							}
 
-							if ( rtVisible )
+							if ( RTVisible )
 							{
 								const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-								auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
-								RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, 0);
+
+								RenderBatch::create(
+									isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList,
+									distance,
+									renderableInstance,
+									&worldCoordinates,
+									0
+								);
 							}
 						}
 					}
@@ -1241,19 +1249,19 @@ namespace EmEn::Scenes
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
-			std::shared_ptr< const Node > node;
-
-			while ( (node = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
+				const auto & currentNode = crawler.currentNode();
+
 				/* Check whether the scene node contains something to render. */
-				if ( !node->isRenderable() )
+				if ( !currentNode->isRenderable() )
 				{
 					continue;
 				}
 
-				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
+				const auto & worldCoordinates = currentNode->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				node->forEachComponent([&] (const Component::Abstract & component) {
+				currentNode->forEachComponent([&] (const Component::Abstract & component) {
 					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
@@ -1270,7 +1278,7 @@ namespace EmEn::Scenes
 
 					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
 					 * looked up by the RT trace shader via materialIndices[geometryIndex]. */
-					if ( rtEnabled && distance <= m_TLASDistance )
+					if ( RTEnabled && distance <= m_TLASDistance )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
@@ -1293,7 +1301,7 @@ namespace EmEn::Scenes
 							if ( rtVisible )
 							{
 								const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-								auto & rtList = isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList;
+								auto & rtList = isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList;
 								RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, 0);
 							}
 						}
@@ -1309,7 +1317,7 @@ namespace EmEn::Scenes
 
 					const bool isBillboardSprite = renderableInstance->renderable() != nullptr && renderableInstance->renderable()->isSprite();
 
-					if ( !isBillboardSprite && !renderTarget->isCubemap() && !node->isVisibleTo(frustum) )
+					if ( !isBillboardSprite && !renderTarget->isCubemap() && !currentNode->isVisibleTo(frustum) )
 					{
 						return;
 					}
@@ -1453,7 +1461,7 @@ namespace EmEn::Scenes
 				const bool useShadow = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled();
 				const bool useColorProjection = light->hasColorProjectionTexture();
 
-				RenderPassType passType;
+				auto passType = RenderPassType::None;
 
 				if ( useShadow && useColorProjection )
 				{
@@ -1502,7 +1510,7 @@ namespace EmEn::Scenes
 				const bool useShadow = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled();
 				const bool useColorProjection = light->hasColorProjectionTexture();
 
-				RenderPassType passType;
+				auto passType = RenderPassType::None;
 
 				if ( useShadow && useColorProjection )
 				{
@@ -1545,7 +1553,7 @@ namespace EmEn::Scenes
 				const bool useShadow = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled();
 				const bool useColorProjection = light->hasColorProjectionTexture();
 
-				RenderPassType passType;
+				auto passType = RenderPassType::None;
 
 				if ( useShadow && useColorProjection )
 				{
@@ -1634,18 +1642,18 @@ namespace EmEn::Scenes
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
-			std::shared_ptr< const Node > node{};
-
-			while ( (node = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
+				const auto & currentNode = crawler.currentNode();
+
 				/* Check whether the scene node contains something to render. */
-				if ( !node->isRenderable() )
+				if ( !currentNode->isRenderable() )
 				{
 					continue;
 				}
 
 				/* Go through each entity component to update visuals. */
-				node->forEachComponent([&function] (const Component::Abstract & component) {
+				currentNode->forEachComponent([&function] (const Component::Abstract & component) {
 					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
@@ -1879,5 +1887,4 @@ namespace EmEn::Scenes
 				break;
 		}
 	}
-
 }

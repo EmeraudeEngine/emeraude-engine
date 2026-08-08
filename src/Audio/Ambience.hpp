@@ -348,7 +348,7 @@ namespace EmEn::Audio
 			 * @brief Reset the current sound set.
 			 * @return void
 			 */
-			void reset () noexcept;
+			void resetSoundSet () noexcept;
 
 		private:
 

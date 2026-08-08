@@ -78,7 +78,7 @@ namespace EmEn::Graphics::Compute
 			return false;
 		}
 
-		auto & baker = renderer.iblBaker();
+		auto & baker = renderer.IBLBaker();
 
 		if ( !baker.ensureEnvironmentPipelines() )
 		{

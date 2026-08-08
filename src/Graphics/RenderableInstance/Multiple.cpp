@@ -446,7 +446,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		buffer[Matrix4Alignment] = projectionJitter.x();
 		buffer[Matrix4Alignment + 1] = projectionJitter.y();
-		buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndex());
+		buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
 
 		vkCmdPushConstants(
 			passContext.commandBuffer->handle(),
@@ -472,7 +472,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto handle = passContext.commandBuffer->handle();
 		const auto layout = pushContext.pipelineLayout->handle();
 		const auto flags = pushContext.stageFlags;
-		const auto frameIndex = static_cast< float >(this->frameIndex());
+		const auto frameIndex = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
 
 		/* Classic 2D rendering (Model is in VBO). */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);

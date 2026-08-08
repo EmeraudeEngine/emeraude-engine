@@ -47,7 +47,7 @@ namespace EmEn::Audio
 
 	Ambience::~Ambience ()
 	{
-		this->reset();
+		this->resetSoundSet();
 	}
 
 	bool
@@ -456,7 +456,7 @@ namespace EmEn::Audio
 	bool
 	Ambience::loadSoundSet (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
-		this->reset();
+		this->resetSoundSet();
 
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -542,7 +542,7 @@ namespace EmEn::Audio
 	}
 
 	void
-	Ambience::reset () noexcept
+	Ambience::resetSoundSet () noexcept
 	{
 		/* Release channels and filters. */
 		this->releaseSources();

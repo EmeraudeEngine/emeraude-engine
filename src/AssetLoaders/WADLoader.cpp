@@ -35,6 +35,8 @@
 #include <limits>
 #include <map>
 #include <numbers>
+#include <optional>
+#include <ranges>
 #include <unordered_map>
 
 /* Local inclusions. */
@@ -44,6 +46,8 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
+#include "Graphics/MovieResource.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
@@ -103,7 +107,25 @@ namespace
 			++length;
 		}
 
-		return {reinterpret_cast< const char * >(data), length};
+		/* UPPERCASED, and this is not cosmetic: WAD names are conventionally uppercase but the
+		 * convention is not enforced, and doom.wad ships counter-examples — TEKWALL4 references
+		 * its patch through a LOWERCASE PNAMES entry ('w94_1') while the lump is 'W94_1'. A
+		 * case-sensitive lookup silently fails to find the patch, the composed texture keeps its
+		 * cleared canvas, and the wall renders black. Normalizing at the single site where every
+		 * 8-char name is produced makes the lump directory, PNAMES, the sidedef texture names and
+		 * the sector flat names all comparable. ASCII only, deliberately: a WAD name is ASCII by
+		 * format, and std::toupper would drag a locale into a hot parsing loop. */
+		std::string name{reinterpret_cast< const char * >(data), length};
+
+		for ( auto & character : name )
+		{
+			if ( character >= 'a' && character <= 'z' )
+			{
+				character -= 'a' - 'A';
+			}
+		}
+
+		return name;
 	}
 
 	struct Lump
@@ -129,10 +151,21 @@ namespace
 		int16_t sector{-1};
 	};
 
+	/* Vanilla LINEDEF flags (linuxdoom-1.10 doomdata.h). Only the two pegging flags affect a
+	 * materializer: the others are collision, sound or automap concerns. Bits 0x0200 and above
+	 * are unused in vanilla, and ML_MAPPED is written at runtime by the automap. */
+	/* Only DONTPEGBOTTOM is consumed today: two-sidedness is detected from the presence of both
+	 * sidedefs rather than from ML_TWOSIDED, and honouring ML_DONTPEGTOP (0x0008) on the upper
+	 * walls remains an open alignment improvement. Unused constants are NOT kept here — an
+	 * anonymous-namespace constant nobody reads trips -Wunused-const-variable on clang/MSVC, and
+	 * this project builds with -Werror on three platforms. */
+	constexpr uint16_t LinedefDontPegBottom{0x0010};
+
 	struct Linedef
 	{
 		uint16_t v1{0};
 		uint16_t v2{0};
+		uint16_t flags{0};
 		int16_t rightSide{-1};
 		int16_t leftSide{-1};
 	};
@@ -228,10 +261,99 @@ namespace
 		float light{1.0F};
 	};
 
-	/* Per-texture triangle bucket: 3 corners per triangle, appended flat. */
-	using Buckets = std::map< std::string, std::vector< Corner > >;
+	/**
+	 * @brief How a surface consumes its texture. The SAME texture name can appear under several
+	 * classes in one map and each needs its OWN material, hence the compound bucket key.
+	 * @note Measured in doom.wad: WOOD1, GSTONE1, MARBLE2, SP_ROCK1, MARBFACE and FIREMAG3 are
+	 * each used BOTH as an ordinary wall and as a two-sided middle texture. Keying the buckets on
+	 * the name alone would force one material for both, so a grate would turn its solid twin
+	 * see-through, or the reverse.
+	 */
+	enum class SurfaceClass : uint8_t
+	{
+		/* Ordinary opaque surface: walls, floors, ceilings. */
+		Opaque = 0,
+		/* Two-sided middle texture whose composed image has uncovered texels: alpha-tested
+		 * cutout, drawn from both sides. */
+		Masked = 1
+	};
+
+	/* Bucket identity: a texture name plus how it is consumed. */
+	struct SurfaceKey
+	{
+		std::string name;
+		SurfaceClass surfaceClass{SurfaceClass::Opaque};
+
+		[[nodiscard]]
+		bool
+		operator< (const SurfaceKey & other) const noexcept
+		{
+			if ( name != other.name )
+			{
+				return name < other.name;
+			}
+
+			return surfaceClass < other.surfaceClass;
+		}
+	};
+
+	/* Per-surface triangle bucket: 3 corners per triangle, appended flat. */
+	using Buckets = std::map< SurfaceKey, std::vector< Corner > >;
 
 	constexpr auto SkyFlatName{"F_SKY1"};
+
+	/* ---- Animated flats and wall textures (vanilla p_spec.c animdefs[]). ---- */
+
+	/**
+	 * @brief One animation range, exactly as vanilla declares it.
+	 * @note ⚠️ A range is resolved by POSITION, never by enumerating names: it covers every entry
+	 * physically between start and end — in the WAD DIRECTORY for flats, in the concatenated
+	 * TEXTURE1+TEXTURE2 definition list for wall textures. Proof from shipped data: FIRELAV2 exists
+	 * in doom2.wad but sits OUTSIDE the FIRELAV3..FIRELAVA span, so that animation has exactly two
+	 * frames and FIRELAV2 is never shown. Counting the span is mandatory; assuming the numbering is
+	 * not. Ranges absent from the loaded WAD are skipped SILENTLY — SWATER exists in no id IWAD at
+	 * all, and every Doom II range is missing from doom.wad.
+	 */
+	struct AnimationRange
+	{
+		const char * startName;
+		const char * endName;
+		bool isTexture;
+	};
+
+	/**
+	 * @brief The complete vanilla table: 9 flat ranges then 13 wall-texture ranges.
+	 * @note Every vanilla entry runs at 8 tics per frame. Doom's tic rate is 35 Hz, so a frame
+	 * lasts 8/35 s = 228.571 ms (4.375 frame changes per second). Rounded to the nearest
+	 * millisecond below, which is all MovieResource's uint32 durations can express.
+	 */
+	constexpr std::array< AnimationRange, 22 > AnimationRanges{{
+		{"NUKAGE1", "NUKAGE3", false},
+		{"FWATER1", "FWATER4", false},
+		{"SWATER1", "SWATER4", false},
+		{"LAVA1", "LAVA4", false},
+		{"BLOOD1", "BLOOD3", false},
+		{"RROCK05", "RROCK08", false},
+		{"SLIME01", "SLIME04", false},
+		{"SLIME05", "SLIME08", false},
+		{"SLIME09", "SLIME12", false},
+		{"BLODGR1", "BLODGR4", true},
+		{"SLADRIP1", "SLADRIP3", true},
+		{"BLODRIP1", "BLODRIP4", true},
+		{"FIREWALA", "FIREWALL", true},
+		{"GSTFONT1", "GSTFONT3", true},
+		{"FIRELAV3", "FIRELAVA", true},
+		{"FIREMAG1", "FIREMAG3", true},
+		{"FIREBLU1", "FIREBLU2", true},
+		{"ROCKRED1", "ROCKRED3", true},
+		{"BFALL1", "BFALL4", true},
+		{"SFALL1", "SFALL4", true},
+		{"WFALL1", "WFALL4", true},
+		{"DBRAIN1", "DBRAIN4", true}
+	}};
+
+	/** @brief Vanilla frame duration: 8 tics at 35 tics per second. */
+	constexpr uint32_t AnimationFrameDurationMS{228};
 
 	/* ---- Composite wall texture assembly (TEXTURE1/TEXTURE2 + PNAMES + patches). ---- */
 
@@ -481,6 +603,7 @@ namespace EmEn::AssetLoaders
 			const auto * entry = lumpData(*linedefsLump) + (index * 14);
 			linedefs[index].v1 = readUInt16(entry);
 			linedefs[index].v2 = readUInt16(entry + 2);
+			linedefs[index].flags = readUInt16(entry + 4);
 			linedefs[index].rightSide = readInt16(entry + 10);
 			linedefs[index].leftSide = readInt16(entry + 12);
 		}
@@ -562,6 +685,10 @@ namespace EmEn::AssetLoaders
 		}
 
 		std::unordered_map< std::string, TextureDefinition > textureDefinitions;
+		/* ⚠️ The map above loses the DEFINITION ORDER, and Doom's animation ranges are resolved by
+		 * POSITION, not by name: a range spans every texture entry physically between its start and
+		 * end names in the concatenated TEXTURE1+TEXTURE2 list. Keep the order in parallel. */
+		std::vector< std::string > textureOrder;
 
 		for ( const auto * textureLumpName : {"TEXTURE1", "TEXTURE2"} )
 		{
@@ -604,7 +731,14 @@ namespace EmEn::AssetLoaders
 					});
 				}
 
-				textureDefinitions[readName8(entry)] = std::move(definition);
+				auto textureName = readName8(entry);
+
+				if ( !textureDefinitions.contains(textureName) )
+				{
+					textureOrder.push_back(textureName);
+				}
+
+				textureDefinitions[std::move(textureName)] = std::move(definition);
 			}
 		}
 
@@ -613,8 +747,16 @@ namespace EmEn::AssetLoaders
 
 		std::unordered_map< std::string, std::shared_ptr< TextureResource::Texture2D > > textureCache;
 		std::unordered_map< std::string, std::pair< float, float > > textureSizes;
+		/* Per-texture coverage verdict: true when the COMPOSED image leaves texels uncovered, i.e.
+		 * the patches do not fill the declared area. That is exactly Doom's notion of a masked
+		 * texture — transparency is the ABSENCE of a patch post, never a colour key (palette index
+		 * 0 is an ordinary opaque colour). Computed once while composing, then reused to classify
+		 * two-sided middle textures without re-examining the pixels. */
+		std::unordered_map< std::string, bool > textureHasHoles;
 
-		const auto createTexture = [&] (const std::string & name, uint16_t width, uint16_t height, const std::vector< uint8_t > & indexes, const std::vector< uint8_t > & coverage) -> std::shared_ptr< TextureResource::Texture2D > {
+		/* Palette indexes + coverage -> RGBA. Shared by the static texture path and the flipbook
+		 * path, which needs the same pixels as a Pixmap rather than as a Texture2D. */
+		const auto composeRGBA = [&palette] (uint16_t width, uint16_t height, const std::vector< uint8_t > & indexes, const std::vector< uint8_t > & coverage) {
 			std::vector< uint8_t > rgba(static_cast< size_t >(width) * height * 4);
 
 			for ( size_t pixel = 0; pixel < indexes.size(); ++pixel )
@@ -625,6 +767,81 @@ namespace EmEn::AssetLoaders
 				rgba[(pixel * 4) + 2] = palette[colorIndex + 2];
 				rgba[(pixel * 4) + 3] = coverage[pixel] != 0 ? 255 : 0;
 			}
+
+			return rgba;
+		};
+
+		/**
+		 * @brief Composes a name into PALETTE INDEXES plus a coverage mask: a composite wall texture
+		 * assembled from its patches, or a raw 64x64 flat. Returns nothing when the name is neither.
+		 * @note Extracted so the flipbook path can obtain the same pixels the static path uses,
+		 * without going through a Texture2D it would then have to unpack.
+		 */
+		struct ComposedPixels
+		{
+			std::vector< uint8_t > indexes;
+			std::vector< uint8_t > coverage;
+			uint16_t width{0};
+			uint16_t height{0};
+		};
+
+		const auto composeIndexed = [&] (const std::string & name) -> std::optional< ComposedPixels > {
+			if ( const auto definition = textureDefinitions.find(name); definition != textureDefinitions.end() )
+			{
+				const auto width = definition->second.width;
+				const auto height = definition->second.height;
+
+				if ( width == 0 || height == 0 )
+				{
+					return std::nullopt;
+				}
+
+				ComposedPixels composed{
+					.indexes = std::vector< uint8_t >(static_cast< size_t >(width) * height, 0),
+					.coverage = {},
+					.width = width,
+					.height = height
+				};
+				composed.coverage.assign(composed.indexes.size(), 0);
+
+				for ( const auto & patchRef : definition->second.patches )
+				{
+					if ( patchRef.patchIndex >= patchNames.size() )
+					{
+						continue;
+					}
+
+					const auto * patchLump = findLump(patchNames[patchRef.patchIndex]);
+
+					if ( patchLump == nullptr )
+					{
+						continue;
+					}
+
+					blitPatch(lumpData(*patchLump), patchLump->size, patchRef.originX, patchRef.originY, width, height, composed.indexes, composed.coverage);
+				}
+
+				return composed;
+			}
+
+			if ( const auto * flatLump = findLump(name); flatLump != nullptr && flatLump->size >= 4096 )
+			{
+				ComposedPixels composed{
+					.indexes = std::vector< uint8_t >(4096),
+					.coverage = std::vector< uint8_t >(4096, 1),
+					.width = 64,
+					.height = 64
+				};
+				std::memcpy(composed.indexes.data(), lumpData(*flatLump), 4096);
+
+				return composed;
+			}
+
+			return std::nullopt;
+		};
+
+		const auto createTexture = [&] (const std::string & name, uint16_t width, uint16_t height, const std::vector< uint8_t > & indexes, const std::vector< uint8_t > & coverage) -> std::shared_ptr< TextureResource::Texture2D > {
+			auto rgba = composeRGBA(width, height, indexes, coverage);
 
 			const auto imageName = "WAD:" + wadStem + "/Image/" + name;
 
@@ -668,45 +885,13 @@ namespace EmEn::AssetLoaders
 
 			std::shared_ptr< TextureResource::Texture2D > texture;
 
-			if ( const auto definition = textureDefinitions.find(name); definition != textureDefinitions.end() )
+			if ( const auto composed = composeIndexed(name); composed.has_value() )
 			{
-				/* Composite wall texture. */
-				const auto width = definition->second.width;
-				const auto height = definition->second.height;
-
-				std::vector< uint8_t > indexes(static_cast< size_t >(width) * height, 0);
-				std::vector< uint8_t > coverage(indexes.size(), 0);
-
-				for ( const auto & patchRef : definition->second.patches )
-				{
-					if ( patchRef.patchIndex >= patchNames.size() )
-					{
-						continue;
-					}
-
-					const auto * patchLump = findLump(patchNames[patchRef.patchIndex]);
-
-					if ( patchLump == nullptr )
-					{
-						continue;
-					}
-
-					blitPatch(lumpData(*patchLump), patchLump->size, patchRef.originX, patchRef.originY, width, height, indexes, coverage);
-				}
-
-				texture = createTexture(name, width, height, indexes, coverage);
-				textureSizes[name] = {static_cast< float >(width), static_cast< float >(height)};
-			}
-			else if ( const auto * flatLump = findLump(name); flatLump != nullptr && flatLump->size >= 4096 )
-			{
-				/* Raw 64×64 flat. */
-				std::vector< uint8_t > indexes(4096);
-				std::memcpy(indexes.data(), lumpData(*flatLump), 4096);
-
-				const std::vector< uint8_t > coverage(4096, 1);
-
-				texture = createTexture(name, 64, 64, indexes, coverage);
-				textureSizes[name] = {64.0F, 64.0F};
+				texture = createTexture(name, composed->width, composed->height, composed->indexes, composed->coverage);
+				textureSizes[name] = {static_cast< float >(composed->width), static_cast< float >(composed->height)};
+				textureHasHoles[name] = std::ranges::any_of(composed->coverage, [] (uint8_t covered) {
+					return covered == 0;
+				});
 			}
 
 			if ( texture == nullptr )
@@ -719,29 +904,161 @@ namespace EmEn::AssetLoaders
 			return texture;
 		};
 
-		/* ---- Sky texture pick (episode-based for ExMy, map-range for MAPxx). ---- */
-		std::string skyTextureName{"SKY1"};
+		/* ---- Animated flats and wall textures: one flipbook per resolved range. ---- */
 
-		if ( m_loadedMapName.size() == 4 && m_loadedMapName[0] == 'E' )
+		/* Every name of a resolved range maps to the SAME AnimatedTexture2D. Vanilla additionally
+		 * phase-shifts each name by its position in the range (a NUKAGE2 sector runs one frame ahead
+		 * of a NUKAGE1 one, the `+i` in P_UpdateSpecials); that offset is deliberately NOT
+		 * reproduced — owner decision — so the whole range shares one texture and one upload. */
+		std::unordered_map< std::string, std::shared_ptr< TextureResource::AnimatedTexture2D > > animatedTextures;
+
 		{
-			skyTextureName = std::string{"SKY"} + m_loadedMapName[1];
-		}
-		else if ( m_loadedMapName.starts_with("MAP") )
-		{
-			const auto mapNumber = std::atoi(m_loadedMapName.c_str() + 3);
-			skyTextureName = mapNumber <= 11 ? "RSKY1" : (mapNumber <= 20 ? "RSKY2" : "RSKY3");
+			/* Flats are indexed by WAD DIRECTORY position, scoped to the F_START/F_END block —
+			 * without that scoping a positional range would sweep unrelated lumps. */
+			const auto * flatsStart = findLump("F_START");
+			const auto * flatsEnd = findLump("F_END");
+
+			const auto rangeNames = [&] (const AnimationRange & range) -> std::vector< std::string > {
+				if ( range.isTexture )
+				{
+					const auto first = std::ranges::find(textureOrder, range.startName);
+					const auto last = std::ranges::find(textureOrder, range.endName);
+
+					if ( first == textureOrder.end() || last == textureOrder.end() || last < first )
+					{
+						return {};
+					}
+
+					return {first, last + 1};
+				}
+
+				if ( flatsStart == nullptr || flatsEnd == nullptr )
+				{
+					return {};
+				}
+
+				std::vector< std::string > names;
+				bool collecting = false;
+
+				for ( const auto & lump : lumps )
+				{
+					if ( &lump < flatsStart || &lump > flatsEnd )
+					{
+						continue;
+					}
+
+					if ( !collecting && lump.name == range.startName )
+					{
+						collecting = true;
+					}
+
+					if ( collecting )
+					{
+						names.push_back(lump.name);
+
+						if ( lump.name == range.endName )
+						{
+							return names;
+						}
+					}
+				}
+
+				return {};
+			};
+
+			for ( const auto & range : AnimationRanges )
+			{
+				const auto names = rangeNames(range);
+
+				/* Fewer than two frames means the range is absent from this WAD (SWATER ships in no id
+				 * IWAD; every Doom II range is missing from doom.wad). Vanilla skips silently and so do
+				 * we — a warning here would fire on every load of every IWAD. */
+				if ( names.size() < 2 )
+				{
+					continue;
+				}
+
+				std::vector< MovieResource::Frame > frames;
+				frames.reserve(names.size());
+
+				for ( const auto & frameName : names )
+				{
+					const auto pixels = composeIndexed(frameName);
+
+					if ( !pixels.has_value() )
+					{
+						frames.clear();
+
+						break;
+					}
+
+					Pixmap< uint8_t > pixmap;
+
+					if ( !pixmap.initialize(pixels->width, pixels->height, ChannelMode::RGBA, composeRGBA(pixels->width, pixels->height, pixels->indexes, pixels->coverage)) )
+					{
+						frames.clear();
+
+						break;
+					}
+
+					frames.emplace_back(std::move(pixmap), AnimationFrameDurationMS);
+				}
+
+				if ( frames.size() < 2 )
+				{
+					continue;
+				}
+
+				const auto frameWidth = static_cast< float >(frames[0].first.width());
+				const auto frameHeight = static_cast< float >(frames[0].first.height());
+				const auto resourceSuffix = std::string{range.startName} + '-' + range.endName;
+
+				/* ⚠️ Captured BY VALUE (moved): these lambdas run on the resource manager's loading
+				 * threads, so a reference to a local here is a dangling read. */
+				auto movie = m_resources.container< MovieResource >()->getOrCreateResource("WAD:" + wadStem + "/Movie/" + resourceSuffix, [movieFrames = std::move(frames)] (MovieResource & movieResource) mutable {
+					return movieResource.load(std::move(movieFrames));
+				});
+
+				if ( movie == nullptr )
+				{
+					continue;
+				}
+
+				/* NOT sRGB, same reasoning as the static path: the whole chain stays perceptual. */
+				auto animated = m_resources.container< TextureResource::AnimatedTexture2D >()->getOrCreateResource("WAD:" + wadStem + "/AnimTexture/" + resourceSuffix, [movie] (TextureResource::AnimatedTexture2D & texture) {
+					texture.enableSRGB(false);
+
+					return texture.load(movie);
+				});
+
+				if ( animated == nullptr )
+				{
+					continue;
+				}
+
+				for ( const auto & frameName : names )
+				{
+					animatedTextures[frameName] = animated;
+					textureSizes[frameName] = {frameWidth, frameHeight};
+				}
+
+				TraceInfo{TracerTag} << "Animated " << ( range.isTexture ? "texture" : "flat" ) << " range " <<
+					range.startName << ".." << range.endName << ": " << names.size() << " frames.";
+			}
 		}
 
-		if ( !textureDefinitions.contains(skyTextureName) )
-		{
-			skyTextureName.clear();
-		}
+		/* NOTE: no sky texture is resolved. Sky sectors emit no ceiling at all and the scene
+		 * background is what fills the opening, so the WAD's own SKY1..SKY4 / RSKY1..RSKY3
+		 * textures are deliberately never materialized. */
 
 		/* ---- Geometry assembly, in Doom map space (x, y horizontal, z = height, map units). ---- */
 		Buckets buckets;
 
-		/* Emits a vertical wall quad from (x1,y1) to (x2,y2), z from bottom to top. */
-		const auto emitWall = [&buckets] (const std::string & textureName, float texWidth, float texHeight, const MapVertex & from, const MapVertex & to, float bottom, float top, float uOffset, float vOffset, float light) {
+		/* Emits a vertical quad from (x1,y1) to (x2,y2), z from bottom to top, with the V range
+		 * given EXPLICITLY. Callers that peg the image to the quad's top use emitWall() below;
+		 * two-sided middle textures need their own V because their image is anchored in WORLD
+		 * space and then clipped, not stretched over the quad. */
+		const auto emitQuad = [&buckets] (const std::string & textureName, SurfaceClass surfaceClass, float texWidth, const MapVertex & from, const MapVertex & to, float bottom, float top, float uOffset, float vTop, float vBottom, float light) {
 			if ( textureName.empty() || textureName == "-" || top <= bottom )
 			{
 				return;
@@ -763,10 +1080,10 @@ namespace EmEn::AssetLoaders
 
 			const auto u0 = uOffset / texWidth;
 			const auto u1 = (uOffset + wallLength) / texWidth;
-			const auto v0 = vOffset / texHeight;
-			const auto v1 = (vOffset + (top - bottom)) / texHeight;
+			const auto v0 = vTop;
+			const auto v1 = vBottom;
 
-			auto & bucket = buckets[textureName];
+			auto & bucket = buckets[SurfaceKey{.name = textureName, .surfaceClass = surfaceClass}];
 
 			const Corner bottomLeft{
 				.x = from.x,
@@ -825,6 +1142,15 @@ namespace EmEn::AssetLoaders
 			bucket.push_back(bottomLeft);
 		};
 
+		/* Emits an ordinary opaque wall quad: the image is pegged to the quad's TOP and tiles
+		 * vertically from there (the sampler repeats), which is the upper/lower/one-sided rule. */
+		const auto emitWall = [&emitQuad] (const std::string & textureName, float texWidth, float texHeight, const MapVertex & from, const MapVertex & to, float bottom, float top, float uOffset, float vOffset, float light) {
+			const auto vTop = vOffset / texHeight;
+			const auto vBottom = (vOffset + (top - bottom)) / texHeight;
+
+			emitQuad(textureName, SurfaceClass::Opaque, texWidth, from, to, bottom, top, uOffset, vTop, vBottom, light);
+		};
+
 		for ( const auto & linedef : linedefs )
 		{
 			if ( linedef.v1 >= vertices.size() || linedef.v2 >= vertices.size() )
@@ -872,9 +1198,81 @@ namespace EmEn::AssetLoaders
 				continue;
 			}
 
-			/* Two-sided linedef: lower and upper steps, seen from each side.
-			 * The transparent middle textures (grates, cables) are skipped on purpose. */
+			/* Two-sided linedef: lower and upper steps, plus the MIDDLE texture (grates, fences,
+			 * cables), each seen from its own side. */
 			const auto skyOnBothSides = rightSector->ceilingFlat == SkyFlatName && leftSector->ceilingFlat == SkyFlatName;
+
+			/* Emits a two-sided MIDDLE texture, to vanilla's rules (linuxdoom-1.10
+			 * R_RenderMaskedSegRange). It is NOT a wall: the image is drawn EXACTLY ONCE, never
+			 * tiled vertically, anchored in world space and then CLIPPED to the opening — whatever
+			 * of the opening it does not cover stays see-through. Reproducing it with emitWall()
+			 * would stretch or tile it and misalign a large share of the faces.
+			 *   opening       = [max(floors), min(ceilings)]
+			 *   anchor (texel 0) = min(ceilings) + yOffset          (default, pegged to the top)
+			 *                    = max(floors) + texHeight + yOffset (ML_DONTPEGBOTTOM)
+			 *   V(z)          = (anchor - z) / texHeight, so V grows downward, 1 texel per map unit
+			 * Clipping the quad to both the one-texture-height span and the opening keeps V inside
+			 * [0,1] by construction. A POSITIVE yOffset slides the visible image UP. */
+			const auto emitMiddle = [&] (const Sidedef * side, const MapVertex & from, const MapVertex & to, float light) {
+				if ( side == nullptr || side->middleTexture.empty() || side->middleTexture == "-" )
+				{
+					return;
+				}
+
+				const auto [texWidth, texHeight] = sizeOf(side->middleTexture);
+
+				if ( texHeight <= 0.0F )
+				{
+					return;
+				}
+
+				const auto openTop = std::min(rightSector->ceilingHeight, leftSector->ceilingHeight);
+				const auto openBottom = std::max(rightSector->floorHeight, leftSector->floorHeight);
+
+				if ( openTop <= openBottom )
+				{
+					return;
+				}
+
+				const auto pegBottom = ( linedef.flags & LinedefDontPegBottom ) != 0;
+				const auto anchorZ = pegBottom ? openBottom + texHeight + side->yOffset : openTop + side->yOffset;
+
+				const auto quadTop = std::min(anchorZ, openTop);
+				const auto quadBottom = std::max(anchorZ - texHeight, openBottom);
+
+				if ( quadTop <= quadBottom )
+				{
+					return;
+				}
+
+				/* Only a texture whose composed image actually leaves texels uncovered pays for the
+				 * cutout. Measured in doom.wad: 6 of the 20 textures used as middle textures are
+				 * fully opaque 'fake wall' decoration, and they must stay ordinary opaque surfaces. */
+				static_cast< void >(resolveTexture(side->middleTexture));
+
+				const auto holes = textureHasHoles.find(side->middleTexture);
+				const auto surfaceClass = ( holes != textureHasHoles.end() && holes->second ) ? SurfaceClass::Masked : SurfaceClass::Opaque;
+
+				emitQuad(side->middleTexture, surfaceClass, texWidth, from, to, quadBottom, quadTop, side->xOffset,
+					(anchorZ - quadTop) / texHeight, (anchorZ - quadBottom) / texHeight, light);
+			};
+
+			emitMiddle(rightSide, vertex1, vertex2, rightSector->lightLevel);
+
+			/* The left side gets its own quad, vertices swapped so the face points left. Skipped when
+			 * it would be an exact duplicate: the material is already double-sided (CullingMode::None),
+			 * so two coincident quads would only z-fight. Differing offsets DO make two genuinely
+			 * different images and both are emitted — as in vanilla, where each sidedef is drawn from
+			 * its own viewing side. */
+			const auto sameMiddleOnBothSides = leftSide != nullptr && rightSide != nullptr &&
+				leftSide->middleTexture == rightSide->middleTexture &&
+				leftSide->xOffset == rightSide->xOffset &&
+				leftSide->yOffset == rightSide->yOffset;
+
+			if ( !sameMiddleOnBothSides )
+			{
+				emitMiddle(leftSide, vertex2, vertex1, leftSector->lightLevel);
+			}
 
 			/* Right side, facing the right sector. */
 			if ( leftSector->floorHeight > rightSector->floorHeight )
@@ -1062,7 +1460,8 @@ namespace EmEn::AssetLoaders
 				return;
 			}
 
-			auto & bucket = buckets[textureName];
+			/* Flats are never masked: a 64x64 raw flat covers every texel by construction. */
+			auto & bucket = buckets[SurfaceKey{.name = textureName, .surfaceClass = SurfaceClass::Opaque}];
 
 			const auto normalZ = isCeiling ? -1.0F : 1.0F;
 
@@ -1116,12 +1515,13 @@ namespace EmEn::AssetLoaders
 
 			if ( sector.ceilingFlat == SkyFlatName )
 			{
-				/* Sky ceiling: use the episode sky texture, fullbright. */
-				if ( !skyTextureName.empty() )
-				{
-					static_cast< void >(resolveTexture(skyTextureName));
-					emitFlat(skyTextureName, subSectorPolygons[subIdx], sector.ceilingHeight, true, 1.0F);
-				}
+				/* Sky ceiling: emit NOTHING. The scene background (skybox) shows through the
+				 * opening — it is drawn first with depth test AND depth write disabled on the
+				 * translation-free view, so every pixel the level does not cover is sky. This
+				 * is the modern equivalent of vanilla's sky visplane, and it composes with the
+				 * upper-wall suppression below (skyOnBothSides), which reproduces the sky hack
+				 * of R_StoreWallRange. A scene WITHOUT a background gets opaque black, never
+				 * garbage (the renderer clears to black). */
 			}
 			else
 			{
@@ -1209,7 +1609,11 @@ namespace EmEn::AssetLoaders
 		/* ---- Build the multi-material Shape (loader space: Y-up, meters). ---- */
 		auto shape = std::make_shared< Shape< float > >();
 
-		std::vector< std::string > materialOrder;
+		/* ⚠️ materialOrder, the sub-geometry groups below and the materialList/rasterizationOptions
+		 * built afterwards are all index-aligned BECAUSE they are produced by this single ordered
+		 * iteration of the bucket map. Keep it that way: a sub-geometry index IS a layer index IS
+		 * a material index. */
+		std::vector< SurfaceKey > materialOrder;
 		materialOrder.reserve(buckets.size());
 
 		const auto built = shape->build([&] (auto & groups, auto & shapeVertices, auto & triangles) {
@@ -1235,9 +1639,9 @@ namespace EmEn::AssetLoaders
 
 			bool firstBucket = true;
 
-			for ( const auto & [textureName, corners] : buckets )
+			for ( const auto & [surfaceKey, corners] : buckets )
 			{
-				materialOrder.push_back(textureName);
+				materialOrder.push_back(surfaceKey);
 
 				if ( !firstBucket )
 				{
@@ -1313,27 +1717,68 @@ namespace EmEn::AssetLoaders
 		std::vector< std::shared_ptr< Material::Interface > > materialList;
 		materialList.reserve(materialOrder.size());
 
-		for ( const auto & textureName : materialOrder )
+		for ( const auto & surfaceKey : materialOrder )
 		{
-			const auto texture = resolveTexture(textureName);
+			const auto isMasked = surfaceKey.surfaceClass == SurfaceClass::Masked;
 
+			/* An animated range wins over the static texture: every name of the range resolved to the
+			 * same AnimatedTexture2D, a Texture2DArray whose layer is selected by the per-draw
+			 * frameIndex push constant. Nothing animation-specific is declared on the material —
+			 * setTextureResource() raises PrimaryTextureCoordinatesUses3D from the texture's own
+			 * request3DTextureCoordinates(), create() raises IsAnimated from duration() > 0, and
+			 * Component::Visual ticks the animation time on the logic thread. */
+			std::shared_ptr< TextureResource::Abstract > texture;
+
+			if ( const auto animated = animatedTextures.find(surfaceKey.name); animated != animatedTextures.end() )
+			{
+				texture = animated->second;
+			}
+			else
+			{
+				texture = resolveTexture(surfaceKey.name);
+			}
+
+			/* ⚠️ The surface class is part of the material NAME, not just of the bucket key: the
+			 * resource container is keyed by name, so an opaque and a masked variant of the same
+			 * texture sharing one name would collide and whichever loaded first would impose its
+			 * mode on the other — a grate turning its solid twin see-through, or the reverse. */
 			std::stringstream materialName;
-			materialName << "WAD:" << wadStem << "/Material/" << textureName;
+			materialName << "WAD:" << wadStem << "/Material/" << surfaceKey.name << (isMasked ? "/Masked" : "");
 
-			auto material = m_resources.container< Material::BasicResource >()->getOrCreateResource(materialName.str(), [texture] (Material::BasicResource & materialResource) {
+			auto material = m_resources.container< Material::BasicResource >()->getOrCreateResource(materialName.str(), [texture, isMasked] (Material::BasicResource & materialResource) {
 				materialResource.enableVertexColor();
 
 				if ( texture != nullptr )
 				{
-					if ( !materialResource.setTextureResource(texture) )
+					/* A masked surface consumes the alpha channel the composition already wrote
+					 * (255 where a patch covers the texel, 0 where none does) and cuts out on it.
+					 * ALPHA-TEST, not blending: vanilla writes the texel straight to the framebuffer
+					 * and never reads the destination, so the transparency is strictly binary. This
+					 * keeps the layer in the opaque list with depth write on — no sorting needed. */
+					if ( !materialResource.setTextureResource(texture, isMasked) )
 					{
 						return false;
+					}
+
+					if ( isMasked )
+					{
+						materialResource.enableAlphaTest();
 					}
 				}
 				else if ( !materialResource.setColor(PixelFactory::Color< float >{0.5F, 0.5F, 0.5F, 1.0F}) )
 				{
 					return false;
 				}
+
+				/* The surface EMITS, it is not lit — the sector light level is already baked into
+				 * the vertex colors, so re-lighting would double-count it. Full self-illumination
+				 * mask, scaled to an absolute luminance: the emitted quantity is
+				 * texel x vertexColor x FullBrightLuminance, which anchors a 1993 [0,1] ordinal in
+				 * candela per square meter and lets a dim sector emit proportionally less.
+				 * ⚠️ The AMOUNT is the mask and is clamped to [0,1]; the luminance belongs to the
+				 * STRENGTH. Passing the nits through the amount silently clamps them to 1. */
+				materialResource.setAutoIlluminationAmount(1.0F);
+				materialResource.setEmissiveStrength(FullBrightLuminance);
 
 				return materialResource.setManualLoadSuccess(true);
 			});
@@ -1366,6 +1811,16 @@ namespace EmEn::AssetLoaders
 		meshDescriptor.renderable = mesh;
 		meshDescriptor.geometry = std::static_pointer_cast< Geometry::Interface >(geometry);
 		meshDescriptor.materials = std::move(materialList);
+		/* UNLIT, and it must stay that way: the sector light levels are already baked into the
+		 * vertex colors of unlit Basic materials, exactly like the original renderer. On the LIT
+		 * path the ambient/IBL pass is scaled by the background luminance, so installing a sky
+		 * would multiply every surface by the sky brightness and the baked look would be destroyed.
+		 * ⚠️ LATENT ONLY, and do not claim otherwise: with the light set disabled — which is the
+		 * case for every demo shipping this loader today — the mesh is already off the lit path, so
+		 * this flag changes nothing observable. It is armed for the day a scene enables the light
+		 * set with a map loaded. Verified by measurement: the map's pixels are BIT-IDENTICAL across
+		 * the whole 1-to-31800-nit sky store, so nothing reaches them from the sky today. */
+		meshDescriptor.lightingEnabled = false;
 
 		output.meshes.emplace_back(std::move(meshDescriptor));
 

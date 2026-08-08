@@ -1153,7 +1153,7 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			Compute::IBLBaker &
-			iblBaker () noexcept
+			IBLBaker () noexcept
 			{
 				return *m_iblBaker;
 			}

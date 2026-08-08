@@ -32,11 +32,9 @@
 /* Local inclusions. */
 #include "Audio/HardwareOutput.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
-#include "Graphics/IBLTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
 #include "Scenes/Component/Camera.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/Microphone.hpp"
 #include "Scenes/NodeCrawler.hpp"
 #include "SettingKeys.hpp"
@@ -61,7 +59,8 @@ namespace EmEn::Scenes
 		m_AVConsoleManager{name, graphicsRenderer, audioManager},
 		m_sceneMetaData{graphicsRenderer.device(), graphicsRenderer.accelerationStructureBuilder(), &graphicsRenderer.deferredDestructor()},
 		m_instanceTransforms{graphicsRenderer.device(), &graphicsRenderer.deferredDestructor()},
-		m_boundary{boundary}
+		m_boundary{boundary},
+		m_backgroundPhotometryDirty{m_backgroundResource != nullptr}
 	{
 		this->observe(&m_AVConsoleManager);
 		this->observe(m_rootNode.get());
@@ -83,7 +82,7 @@ namespace EmEn::Scenes
 
 		/* An asynchronously loading background pushes its photometry (luminance) once
 		 * loaded — see the polling block at the top of processLogics(). */
-		m_backgroundPhotometryDirty = m_backgroundResource != nullptr;
+
 
 		auto & settings = graphicsRenderer.primaryServices().settings();
 
@@ -120,7 +119,7 @@ namespace EmEn::Scenes
 			if ( m_ambience != nullptr )
 			{
 				m_ambience->stop();
-				m_ambience.reset();
+				m_ambience = nullptr;
 			}
 
 			/* NOTE: Other data are trivial. */
@@ -144,8 +143,8 @@ namespace EmEn::Scenes
 
 			/* NOTE: Releasing octrees provoked by the smart-pointer reset. */
 			//this->destroyOctrees();
-			m_physicsOctree.reset();
-			m_renderingOctree.reset();
+			m_physicsOctree = nullptr;
+			m_renderingOctree = nullptr;
 		}
 
 		/* From 'Managers deeply linked to the scene content' */
@@ -213,7 +212,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Component::Camera >
 	Scene::activeCamera () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_activeCameraAccess};
+		const std::scoped_lock lock{m_activeCameraAccess};
 
 		/* Self-healing: a camera whose entity died resolves to nullptr, and the
 		 * photographic effects dematerialize through the regular per-frame polling. */
@@ -223,7 +222,7 @@ namespace EmEn::Scenes
 	void
 	Scene::setActiveCamera (const std::shared_ptr< Component::Camera > & camera) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_activeCameraAccess};
+		const std::scoped_lock lock{m_activeCameraAccess};
 
 		m_activeCamera = camera;
 	}
@@ -332,86 +331,11 @@ namespace EmEn::Scenes
 			TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
 		}
 
-		/* FIXME: When re-enabling, the swap-chain does not have the correct ambient light parameters! */
-
 		inputManager.addKeyboardListener(&m_nodeController);
 
 		this->wakeupAllEntities();
 
 		return true;
-	}
-
-	void
-	Scene::updateEnvironmentIBL () noexcept
-	{
-		/* The bindless set is the mutex-protected source of truth for the adopted
-		 * environment cubemap (setBackground can run on any thread and the late adoption
-		 * of an async-loaded cubemap happens on the render thread). The engine default
-		 * black cubemap is never baked: the reserved IBL slots already park on it. */
-		const auto source = m_bindlessTextureSet.environmentCubemap();
-
-		if ( source != nullptr && source->isCreated() && source.get() != m_iblBakedSource
-			&& source.get() != static_cast< const Vulkan::TextureInterface * >(m_graphicsRenderer.getDefaultTextureCubemap().get()) )
-		{
-			auto & irradiance = m_iblIrradiance[m_iblWriteIndex];
-			auto & prefiltered = m_iblPrefiltered[m_iblWriteIndex];
-
-			if ( irradiance == nullptr )
-			{
-				irradiance = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::IrradianceCubemap);
-			}
-
-			if ( prefiltered == nullptr )
-			{
-				prefiltered = std::make_shared< Graphics::IBLTexture >(Graphics::IBLTexture::Role::PrefilteredCubemap);
-			}
-
-			/* NOTE: Whatever happens below, do not retry every logic tick on the same source. */
-			m_iblBakedSource = source.get();
-
-			if ( irradiance->create(m_graphicsRenderer) && prefiltered->create(m_graphicsRenderer) )
-			{
-				if ( m_graphicsRenderer.iblBaker().bakeEnvironment(*source, *irradiance, *prefiltered) )
-				{
-					/* Publish the prefiltered environment (UPDATE_AFTER_BIND hot-swap at
-					 * the manager's next sync) and flip the pair: frames in flight keep
-					 * sampling the previous bake untouched. The irradiance publication is
-					 * decided below, by the applyAmbient contract. */
-					m_bindlessTextureSet.setPrefilteredCubemap(prefiltered);
-
-					m_iblBakedIrradiance = irradiance;
-
-					m_iblWriteIndex = (m_iblWriteIndex + 1) % 2;
-
-					/* The environment IBL is scene LIGHT for every material (ambient-pass
-					 * irradiance, prefiltered reflections): a once-probe baked before this
-					 * point captured a darker world — re-bake it (deferred flag, thread-safe). */
-					this->signalOnDemandRenderTargets();
-				}
-				else
-				{
-					TraceError{ClassId} << "Unable to bake the environment IBL from '" << m_environmentCubemap->name() << "' !";
-				}
-			}
-			else
-			{
-				TraceError{ClassId} << "Unable to create the environment IBL textures !";
-			}
-		}
-
-		/* The irradiance SLOT publication follows the applyAmbient contract, even between
-		 * bakes (a scene can derive its lighting from the sky after the bake happened).
-		 * Unpublished, the slot parks on the default black cubemap: the ambient-pass IBL
-		 * diffuse term contributes nothing and the scalar ambient stands alone — that is
-		 * the anti-double-count contract of the manually-lit scenes (RTGI demos). */
-		const std::shared_ptr< Vulkan::TextureInterface > desiredIrradiance = m_iblAmbientEnabled ? m_iblBakedIrradiance : nullptr;
-
-		if ( desiredIrradiance != m_iblPublishedIrradiance )
-		{
-			m_bindlessTextureSet.setIrradianceCubemap(desiredIrradiance);
-
-			m_iblPublishedIrradiance = desiredIrradiance;
-		}
 	}
 
 	void
@@ -430,7 +354,13 @@ namespace EmEn::Scenes
 	Scene::processLogics (size_t engineCycle) noexcept
 	{
 		m_lifetimeUS += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
-		m_lifetimeMS += WorldPhysicsUpdateCycleDurationMS< uint32_t >;
+		/* ⚠️ DERIVED from the microsecond clock, never accumulated on its own.
+		 * WorldPhysicsUpdateCycleDurationMS is 1000/60 in INTEGER arithmetic = 16, so accumulating
+		 * it gained only 960 ms per real second: every consumer of lifetimeMS ran 4.2% SLOW, which
+		 * on a flipbook is an audible-scale error (a 228 ms Doom animation frame drifts a full
+		 * frame behind every ~24 cycles). The microsecond cycle is exact (16666), so millisecond
+		 * time is a projection of it. Still monotonic, still cheap. */
+		m_lifetimeMS = static_cast< uint32_t >(m_lifetimeUS / 1000ULL);
 
 		/* Deferred background photometry: requests come from ANY thread (console, input
 		 * callbacks, resource loading), the application mutates the scene (entities, lights,
@@ -457,7 +387,7 @@ namespace EmEn::Scenes
 
 		/* Update scene static entities logics. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+			const std::scoped_lock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -470,14 +400,14 @@ namespace EmEn::Scenes
 
 		/* Update scene nodes logics. */
 		{
-			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+			const std::scoped_lock lock{m_sceneNodesAccess};
 
 			NodeCrawler< Node > crawler{m_rootNode};
 
-			std::shared_ptr< Node > currentNode{};
-
-			while ( (currentNode = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
+				const auto & currentNode = crawler.currentNode();
+
 				if ( currentNode->processLogics(*this, engineCycle) )
 				{
 					this->checkEntityLocationInOctrees(currentNode);
@@ -521,37 +451,6 @@ namespace EmEn::Scenes
 		m_cycle++;
 	}
 
-	void
-	Scene::updateCSMCascades (const std::shared_ptr< RenderTarget::Abstract > & mainRenderTarget) const noexcept
-	{
-		{
-			const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
-
-			if ( mainRenderTarget == nullptr || m_renderToShadowMaps.empty() )
-			{
-				return;
-			}
-		}
-
-		/* Get frustum corners from the View's matrices (which come from the connected camera). */
-		const auto & viewMatrices = mainRenderTarget->viewMatrices();
-		const std::array< Vector< 3, float >, 8 > frustumCorners = viewMatrices.getFrustumCornersWorld();
-
-		/* Get near and far planes from the view matrices. */
-		const float nearPlane = viewMatrices.nearPlane();
-		const float farPlane = viewMatrices.farPlane();
-
-		/* Update all CSM-enabled directional lights with the camera frustum.
-		 * NOTE: We iterate through lights because they know their direction. */
-		for ( const auto & light : m_lightSet.directionalLights() )
-		{
-			if ( light->usesCSM() && light->isShadowCastingEnabled() )
-			{
-				light->updateCascades(frustumCorners, nearPlane, farPlane);
-			}
-		}
-	}
-
 	bool
 	Scene::contains (const Vector< 3, float > & worldPosition) const noexcept
 	{
@@ -579,7 +478,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::rebuildRenderingOctree (bool keepElements) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
+		const std::scoped_lock lock{m_renderingOctreeAccess};
 
 		if ( m_boundary <= 0.0F )
 		{
@@ -608,7 +507,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		m_renderingOctree.reset();
+		m_renderingOctree = nullptr;
 		m_renderingOctree = newOctree;
 
 		return true;
@@ -617,7 +516,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::rebuildPhysicsOctree (bool keepElements) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+		const std::scoped_lock lock{m_physicsOctreeAccess};
 
 		if ( m_boundary <= 0.0F )
 		{
@@ -646,7 +545,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		m_physicsOctree.reset();
+		m_physicsOctree = nullptr;
 		m_physicsOctree = newOctree;
 
 		return true;
@@ -663,7 +562,7 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
+			const std::scoped_lock lock{m_renderingOctreeAccess};
 
 			output <<
 				"Rendering octree :" "\n"
@@ -686,7 +585,7 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+			const std::scoped_lock lock{m_physicsOctreeAccess};
 
 			output <<
 				"Physics octree :" "\n"
@@ -766,7 +665,7 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		m_ambience->reset();
+		m_ambience->resetSoundSet();
 	}
 
 	bool
@@ -777,7 +676,9 @@ namespace EmEn::Scenes
 		{
 			if ( notificationCode == Renderer::WindowContentRefreshed && m_postProcessStack != nullptr )
 			{
-				if ( const auto mainRT = m_AVConsoleManager.graphicsRenderer().mainRenderTarget(); mainRT != nullptr )
+				const auto mainRT = m_AVConsoleManager.graphicsRenderer().mainRenderTarget();
+
+				if ( mainRT != nullptr )
 				{
 					const auto & extent = mainRT->extent();
 
@@ -798,7 +699,6 @@ namespace EmEn::Scenes
 			/* Keep listening. */
 			return true;
 		}
-
 
 		if ( observable->is(StaticEntity::getClassUID()) )
 		{
@@ -851,11 +751,9 @@ namespace EmEn::Scenes
 		{
 			NodeCrawler< const Node > crawler{m_rootNode};
 
-			std::shared_ptr< const Node > currentNode;
-
-			while ( (currentNode = crawler.nextNode()) != nullptr )
+			while ( crawler.fetchNextNode() )
 			{
-				currentNode->forEachComponent([&hasCamera, &hasMicrophone] (const Component::Abstract & component) {
+				crawler.currentNode()->forEachComponent([&hasCamera, &hasMicrophone] (const Component::Abstract & component) {
 					if ( component.isComponent(Component::Camera::ClassId) )
 					{
 						hasCamera = true;
@@ -967,16 +865,16 @@ namespace EmEn::Scenes
 	{
 		if ( m_renderingOctree != nullptr )
 		{
-			const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
+			const std::scoped_lock lock{m_renderingOctreeAccess};
 
-			m_renderingOctree.reset();
+			m_renderingOctree = nullptr;
 		}
 
 		if ( m_physicsOctree != nullptr )
 		{
-			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+			const std::scoped_lock lock{m_physicsOctreeAccess};
 
-			m_physicsOctree.reset();
+			m_physicsOctree = nullptr;
 		}
 	}
 }

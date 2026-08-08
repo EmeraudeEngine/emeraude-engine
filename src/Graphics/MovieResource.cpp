@@ -571,4 +571,54 @@ namespace EmEn::Graphics
 
 		return this->setLoadSuccess(true);
 	}
+
+	bool
+	MovieResource::load (std::vector< Frame > && frames) noexcept
+	{
+		if ( frames.empty() )
+		{
+			TraceError{ClassId} << "Unable to load the movie '" << this->name() << "': no frame provided !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		/* ⚠️ Uniform dimensions are a HARD requirement of the upload path, which reads the extent
+		 * from frame 0 and then concatenates every frame blindly. Refusing here turns a silent
+		 * texture corruption into a load failure with a name in the log. */
+		const auto width = frames[0].first.width();
+		const auto height = frames[0].first.height();
+
+		if ( width == 0 || height == 0 )
+		{
+			TraceError{ClassId} << "Unable to load the movie '" << this->name() << "': frame 0 is empty !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		for ( size_t frameIndex = 0; frameIndex < frames.size(); ++frameIndex )
+		{
+			const auto & pixmap = frames[frameIndex].first;
+
+			if ( pixmap.width() != width || pixmap.height() != height )
+			{
+				TraceError{ClassId} << "Unable to load the movie '" << this->name() << "': frame " << frameIndex <<
+					" is " << pixmap.width() << 'x' << pixmap.height() << " but frame 0 is " << width << 'x' << height << " !";
+
+				return this->setLoadSuccess(false);
+			}
+		}
+
+		m_frames = std::move(frames);
+
+		/* Mandatory: duration() stays 0 without it, and a zero duration is exactly what makes a
+		 * material decline to raise IsAnimated — the flipbook would load and never move. */
+		this->updateDuration();
+
+		return this->setLoadSuccess(true);
+	}
 }

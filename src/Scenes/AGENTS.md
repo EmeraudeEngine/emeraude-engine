@@ -167,9 +167,12 @@ ctest -R Scenes
 - `Scene.hpp` - Scene class declaration (~2260 lines), organized by concept
 - `Scene.cpp` - Core lifecycle, audio, octree management
 - `Scene.entities.cpp` - Node tree, static entities, modifiers
+- `Scene.lighting.cpp` - `applyBackgroundLighting()` and its deferred apply, ambient light properties, CSM cascades, environment IBL
 - `Scene.physics.cpp` - Collision detection, boundary clipping, sleep/wake collision. See [`@Physics/AGENTS.md`](../Physics/AGENTS.md) for normal convention
 - `Scene.rendering.cpp` - Render targets, shadow casting, rendering pipeline
+- `Scene.debug.cpp` - Debug displays (compass, ground zero, boundary planes, octrees)
 - `Node.cpp/.hpp` - Hierarchical dynamic entity (tree)
+- `NodeCrawler.hpp` - Header-only tree iterator. ⚠️ **Never yields the base node** — see "Node Tree Iteration — NodeCrawler Contract"
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)
 - `AbstractEntity.cpp/.hpp` - Common base for Component management
 - `LocatableInterface.cpp/.hpp` - Interface for coordinates/movement
@@ -229,10 +232,12 @@ The Scene class is split into multiple implementation files by concept for easie
 
 | File | Concepts | Lines |
 |------|----------|-------|
-| `Scene.cpp` | Core/Lifecycle, Audio, Octree management | ~750 |
-| `Scene.entities.cpp` | Entities (Node/StaticEntity), Observer notifications | ~480 |
-| `Scene.physics.cpp` | Modifiers, Collision detection, Boundary clipping | ~300 |
-| `Scene.rendering.cpp` | Render targets, Shadow casting, Rendering pipeline | ~1300 |
+| `Scene.cpp` | Core/Lifecycle, Audio, Octree management | ~875 |
+| `Scene.entities.cpp` | Entities (Node/StaticEntity), Observer notifications | ~540 |
+| `Scene.lighting.cpp` | `applyBackgroundLighting()` (+ deferred `…Now()`), ambient refresh, CSM cascades, environment IBL | ~290 |
+| `Scene.physics.cpp` | Modifiers, Collision detection, Boundary clipping | ~1225 |
+| `Scene.rendering.cpp` | Render targets, Shadow casting, Rendering pipeline | ~1890 |
+| `Scene.debug.cpp` | Debug displays (compass, ground zero, boundary planes, octrees) | ~335 |
 
 ### Section Comments Format
 
@@ -245,6 +250,82 @@ Each concept section is marked with:
 ```
 
 This allows quick navigation using search (e.g., `[CONCEPT: RENDERING]`).
+
+## Node Tree Iteration — NodeCrawler Contract
+
+`NodeCrawler< node_t >` (`Scenes/NodeCrawler.hpp`) is the only way the Scene walks the node tree —
+**12 call sites**: `Scene.cpp` ×2, `Scene.entities.cpp` ×5, `Scene.rendering.cpp` ×5. The API is
+`bool fetchNextNode()` plus the accessor `const std::shared_ptr< node_t > & currentNode()`; it
+replaced `std::shared_ptr< node_t > nextNode()`.
+
+> [!CAUTION]
+> **⚠️⚠️ The iteration NEVER yields the base node.**
+> - **Before** the first `fetchNextNode()`, `currentNode()` **is the base node** — the constructor
+>   seats it through `populateStack()`.
+> - **After** `fetchNextNode()` returns `false`, `currentNode()` is `nullptr` — so a while-loop body
+>   never sees a null node.
+>
+> Consequence for callers, and this is the whole point of the contract:
+> ```cpp
+> while ( crawler.fetchNextNode() ) { use(crawler.currentNode()); }   // DESCENDANTS ONLY
+> ```
+> A caller that must also process the base node handles it **before** the loop. Two sites in
+> `Scene.entities.cpp` do exactly that: **`getNodeStatistics()`** (the root's children count and
+> depth) and the `showTree` dump in **`getNodeSystemStatistics()`** (the root's own line). Both were
+> `do/while` loops and are now "process the base node, then `while (...)`", with the body factored
+> into a lambda so nothing is duplicated, each carrying a ⚠️ comment on the pre-loop call. The
+> conversion was forced by clang-tidy's `cppcoreguidelines-avoid-do-while`; the contract itself did
+> not change, only the shape of those two call sites.
+
+### ⚠️⚠️ Caution: The Stale-Local Bug (IT COMPILED CLEANLY)
+
+When the crawler lost its return value, all 12 call sites kept the local they used to assign:
+
+```cpp
+// BROKEN — compiles, zero warnings, wrong on every iteration
+const auto currentNode = m_rootNode;          // leftover of the old form:
+while ( crawler.fetchNextNode() )             //   while ( (currentNode = crawler.nextNode()) != nullptr )
+{
+    currentNode->doSomething();               // ALWAYS THE ROOT NODE
+}
+```
+
+The loops ran the correct NUMBER of times but operated **on the root node every iteration**.
+Per-site effect:
+
+| Site | Effect of the stale local |
+|------|---------------------------|
+| `Scene::processLogics()` | ran N times on the root, never on any other node |
+| `Scene::findNode()` | could only ever match the root |
+| `getNodeStatistics()` / tree dump | counted the root's children N times |
+| Camera / microphone detection | inspected the root only |
+| The 5 rendering crawlers (`Scene.rendering.cpp`) | would have rendered nothing node-attached |
+
+**Why it was nearly invisible on `doom-loader`:** the Doom level is a `StaticEntity` — the
+`m_staticEntities` path, which does not use the crawler at all — and the only `Node` is the player
+actor, which carries no visible mesh. `doom-loader` is therefore a **weak target** for this and must
+not be used as the witness; a demo with node-attached visuals is the real test.
+
+**Validated at runtime on the `animation-debug` demo (Aug 2026):** node-attached visuals render and
+animate correctly. That witness is decisive, not merely reassuring — with the stale local the
+crawlers only ever saw the ROOT node, so node-attached meshes rendered **not at all** (last row of
+the table above). Seeing them render *and* animate proves the five rendering crawlers
+(`Scene.rendering.cpp`) **and** the `Scene::processLogics()` crawler are repaired.
+
+### ⚠️ Dead End: Never Make `m_currentNode` a Reference Member
+
+An intermediate attempt declared the member as a reference to the caller's smart pointer. Two
+reasons never to retry it:
+
+1. **It does not compile.** Binding `shared_ptr< const Node > &` / `shared_ptr< Node > &` to const
+   lvalues → *"discards qualifiers"*, 6 instantiations.
+2. **It would have been wrong anyway.** Assigning through the reference writes into the **CALLER's**
+   variable, and two sites pass `m_rootNode` directly — the terminal `m_currentNode = nullptr` at
+   the end of the iteration would have **nulled the scene's root node**.
+
+**Residual nits deliberately left alone:** `populateStack()` also assigns `m_currentNode` (the
+constructor DEPENDS on that side effect to seat the base node — an implicit coupling), and the class
+constrains `requires std::is_class_v< Node >` instead of `node_t` (inert — true either way).
 
 ## Development Patterns
 
@@ -502,6 +583,7 @@ See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
 - **Smart pointers**: shared_ptr and weak_ptr for automatic hierarchy management
 - **Manager and Scene**: Handle fail-safe construction/destruction (in development)
 - **Root Node**: Immutable, cannot move nor receive Components
+- **NodeCrawler**: the iteration NEVER yields the base node; `currentNode()` is the base node before the first `fetchNextNode()` and `nullptr` after the last. Process the base node BEFORE the loop when you need it
 - **Y-down convention**: CartesianFrame uses Y-down everywhere
 - **No world cache**: On-demand recalculation (future optimization planned)
 - **Observers**: Automatic registration, do not register manually
@@ -779,6 +861,22 @@ The Scene dispatches renderable layers into 7 render lists (defined in `Scene.hp
 
 **Rendering order**: Opaque → Translucent → TranslucentGB (grab pass capture happens between Translucent and TranslucentGB).
 
+**The background is drawn FIRST, and without depth.** `Scene::registerSceneVisualComponents()` gives
+the background visual (`m_sceneVisualComponents[BackgroundVisualIndex]`, index 0)
+`setUseInfinityView(true)` + `disableDepthTest(true)` + `disableDepthWrite(true)` (plus shadow
+casting and receiving OFF). `populateRenderLists()` walks the scene visual components before the
+nodes and the static entities and inserts them at distance `0.0F`; the background takes the
+`isSpecial` branch of `insertIntoRenderLists()` (distance-only key, NOT the state-sorted composite),
+so its key is `0` in the `Opaque` multimap — head of the list, drained first. The geometry is a
+512 m cuboid (`Renderable::AbstractBackground::SkySize`) with flipped winding drawn on the
+translation-free infinity view: it fills every pixel, and the level geometry drawn afterwards with
+depth test + write ON simply overwrites it.
+
+That is what lets a loader emit **no geometry at all** where the sky must show through — the `F_SKY1`
+sectors of a Doom map are holes on purpose, no stencil and no portal involved. With no background
+installed those pixels are opaque black, never garbage. See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md)
+→ WADLoader.
+
 **Dispatch logic** in `Scene::insertIntoRenderLists()`:
 1. `renderable->isOpaque(layerIndex)` → Opaque/OpaqueLighted
 2. `renderable->requiresGrabPass(layerIndex)` → TranslucentGB/TranslucentGBLighted
@@ -976,6 +1074,31 @@ consumer.build(assetData, scene, parentNode);    // Node mode
 |--------|---------|--------|
 | `setFlattenHierarchy(true)` | `false` | Skip intermediate nodes, attach all meshes directly to parent |
 
+### Lighting Is Carried By the Descriptor (`MeshDescriptor::lightingEnabled`)
+
+`AssetDataConsumer` used to call `visual.getRenderableInstance()->enableLighting()`
+**unconditionally** at FIVE sites (both operating modes, hierarchy and flatten paths). All five now
+honour `AssetLoaders::MeshDescriptor::lightingEnabled`, through
+`Graphics::RenderableInstance::Abstract::setLightingState(bool)` — the symmetric form of
+`enableLighting()`, implemented with `enableFlag`/`disableFlag` because
+`Base::FlagTrait< uint32_t >` offers no `setFlag(flag, state)`, and adding one to emeraude-base is
+barred by the "Ave robustus!" feature freeze.
+
+- **Default is `true`** (boolean last in the struct layout) → **glTF and FBX behaviour is
+  unchanged**: a mesh coming from a lit format expects the light set, the ambient pass and the
+  environment IBL.
+- `AssetLoaders::WADLoader` sets `lightingEnabled = false` on its level mesh — the Doom sector light
+  levels are already baked into the vertex colors, so re-lighting would double-count them.
+
+> [!WARNING]
+> **This fixes a LATENT defect and is INERT today.** The dispatch test is
+> `m_lightSet.isEnabled() && renderableInstance->isLightingEnabled()` (`Scene.rendering.cpp`), and
+> the light set is only ever enabled by `Scene::applyBackgroundLighting()` (or a
+> `DefinitionResource`, or the console). The WAD demo installs a background but never calls it, so
+> the flag currently changes nothing that reaches the screen — **no measurement demonstrates it**,
+> and it must not be presented as if one did. It would bite the moment any demo enabled the light
+> set with a WAD level loaded. Owner decision: keep it, and document it as latent.
+
 ### Node Mode Behavior
 
 **Default (hierarchy preserved):** `processNodeAsNode()` recursively walks the glTF node tree. Automatic **identity flattening** skips nodes that have no mesh and no transform, reducing unnecessary depth.
@@ -1058,7 +1181,8 @@ Textures are created **on-demand during material loading** with the correct sRGB
 ### Code References
 
 - `AssetLoaders/GLTFLoader.hpp/.cpp` — Resource loading (phases 1-6). See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md)
-- `AssetLoaders/AssetData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor)
+- `AssetLoaders/AssetData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor — the latter carries `lightingEnabled`, default `true`)
+- `Graphics/RenderableInstance/Abstract.hpp:setLightingState()` — Symmetric form of `enableLighting()`, honoured at the consumer's five visual-setup sites
 - `AssetLoaders/Interface.hpp` — Loader interface + LoaderOptions
 - `Scenes/AssetDataConsumer.hpp/.cpp` — Scene builder (StaticEntity/Node modes, Y-up conversion)
 - `Graphics/Renderable/SimpleMeshResource.cpp:load(path)` — Transparent single-mesh glTF loading

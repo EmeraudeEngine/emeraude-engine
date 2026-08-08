@@ -119,6 +119,44 @@ The `StandardResource` material uses a float array with specific offsets (std140
 2. Shader side: Is the UBO struct layout matching?
 3. Descriptor: Is the correct byte offset used?
 
+### An alpha-tested material IS opaque — never teach `isOpaque()` about `AlphaTestEnabled` (Aug 2026)
+
+> [!CAUTION]
+> **`MaterialFlagBits::AlphaTestEnabled` (`1U << 16`, set by `BasicResource::enableAlphaTest()`) is a
+> binary CUTOUT: the fragment shader discards below a cutoff and the material STAYS OPAQUE.** The
+> intuitive "fix" — making `Material::Interface::isOpaque()` return `false` for it — breaks the feature
+> instead of completing it, in two places at once:
+>
+> 1. The Scene dispatches the layer into the **distance-sorted translucent list**: a per-frame sort and
+>    the loss of state-sorted batching, for a mask that has nothing to sort.
+> 2. `Vulkan::GraphicsPipeline::configureColorBlendState()` keys its default branch on
+>    `material.isOpaque()`. A `false` there flips `blendEnable` to `VK_TRUE` and installs the factors of
+>    `blendingMode()`, so the already-binary alpha gets **colour-blended** on top of the discard.
+>
+> The flag adds a discard and changes **NOTHING ELSE** about how the material is classified. That is the
+> whole point: `enableBlending()` is what a genuine gradient needs; a coverage mask must not pay for it.
+> Gating the discard on the blending mode was the original defect — it left no way to obtain a cutout
+> without also leaving the opaque list.
+>
+> **The cutoff is FIXED at 0.5 and deliberately not configurable.** Two structural blockers: the shader
+> **program cache keys on the DESCRIPTOR LAYOUT hash**, not on flags or values, so a per-material cutoff
+> literal baked into the generated GLSL could serve one material's program to another with the same
+> layout; and all twelve floats of `BasicResource`'s material-properties buffer are already claimed, so a
+> uniform-borne cutoff would require growing the block. The three paths now agree at 0.5 — colour
+> discard, shadow discard, and `GPURTMaterialData::alphaCutoff`. **Fix the cache key before making it
+> configurable.**
+>
+> **Related:** `isAlphaTest()` returns `true` for the flag (RT hit-time alpha test) and
+> `BasicResource::requiresAlphaTestedShadows()` does too — a cutout must cast a cutout shadow, not a
+> solid rectangle.
+>
+> **Full contract:** [`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § 5, "Alpha Test — the Binary
+> Cutout Contract".
+>
+> **Files involved:** `Graphics/Material/Interface.hpp` (flag, `isOpaque()`, `isAlphaTest()`),
+> `Graphics/Material/BasicResource.{hpp,cpp}` (`enableAlphaTest()`, discard generation,
+> `requiresAlphaTestedShadows()`), `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()`.
+
 ### Fresnel Effect (Reflection + Refraction)
 
 When both reflection AND refraction components are present:
@@ -1680,6 +1718,47 @@ entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` 
 >    `getRenderableInstanceReadyForRendering()`, i.e. INSIDE the Renderer's render-to-textures
 >    loop which holds the render target list mutex — walking the lists there froze the render
 >    thread (black screen). Atomic flag consumed by `Scene::beginRenderFrame()`.
+
+### Fixed: the NodeCrawler stale-local trap — it compiled with ZERO warnings (Aug 2026)
+
+`Scenes::NodeCrawler< node_t >` lost its returning accessor: the API is now
+`bool fetchNextNode()` + `const std::shared_ptr< node_t > & currentNode()`, where it used to be
+`std::shared_ptr< node_t > nextNode()`. Every one of the **12 call sites**
+(`Scene.cpp` ×2, `Scene.entities.cpp` ×5, `Scene.rendering.cpp` ×5) kept the local it used to
+assign from the old form:
+
+```cpp
+// BROKEN — compiles, zero warnings, wrong on EVERY iteration
+const auto currentNode = m_rootNode;      // leftover of: while ( (currentNode = crawler.nextNode()) != nullptr )
+while ( crawler.fetchNextNode() )
+{
+    currentNode->doSomething();           // ALWAYS THE ROOT NODE
+}
+```
+
+The loops ran the correct NUMBER of times and operated on the root node every time:
+`processLogics()` ran N times on the root, `findNode()` could only match the root, the statistics
+counted the root's children N times, camera/microphone detection inspected the root only, and the
+five rendering crawlers would have rendered nothing node-attached.
+
+**Two rules that follow:**
+1. **Never cache the crawler's node in a local.** Call `currentNode()` in the loop body.
+2. **The iteration NEVER yields the base node** — `while ( crawler.fetchNextNode() ) { ... }` walks
+   DESCENDANTS ONLY. `currentNode()` is the base node before the first fetch and `nullptr` after
+   the last, so a caller needing the base node processes it BEFORE the loop (the two converted
+   `do/while` sites in `Scene.entities.cpp` are the reference pattern).
+
+**Validated at runtime on the `animation-debug` demo (Aug 2026):** node-attached visuals render and
+animate correctly. That witness is decisive, not merely reassuring — with the stale local the
+crawlers only ever saw the ROOT node, so node-attached meshes rendered **not at all**. Seeing them
+render *and* animate therefore proves the five rendering crawlers (`Scene.rendering.cpp`) **and** the
+`processLogics()` crawler are repaired.
+
+⚠️ `doom-loader` remains a **weak target** for this and must not be used as the witness: the level is
+a `StaticEntity` (the `m_staticEntities` path does not use the crawler at all) and its only `Node` is
+the player, which carries no visible mesh. Any future regression check needs a demo with
+node-attached visuals. Full contract: [`src/Scenes/AGENTS.md`](../src/Scenes/AGENTS.md)
+§ "Node Tree Iteration — NodeCrawler Contract".
 
 ## Shader/GLSL Pitfalls
 

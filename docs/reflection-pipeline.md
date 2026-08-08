@@ -301,7 +301,11 @@ The trace pass is the interesting one:
 - **Ray flags are `NoneEXT`, not `OpaqueEXT`**, so candidate hits on `FORCE_NO_OPAQUE` instances
   (alpha-test materials) come back for confirmation. The shader samples the opacity — or the
   albedo alpha — at the candidate barycentrics and confirms only above `alphaCutoff`. This is
-  what lets rays pass through foliage and sprite texels.
+  what lets rays pass through foliage and sprite texels. A material qualifies when
+  `Material::Interface::isAlphaTest()` says so: `OpacityEnabled`, `BlendingEnabled`, or — since
+  Aug 2026 — `AlphaTestEnabled`, the binary-cutout flag that deliberately stays in the OPAQUE
+  raster list ([`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § 5, "Alpha Test — the Binary
+  Cutout Contract"). `alphaCutoff` is 0.5, the same fixed value as the raster and shadow discards.
 - **Material lookup is per sub-geometry**: `getHitMaterialIndex(instanceIndex, geomIdx)` reads
   `GPUMeshMetaData[2][geomIdx]`, clamping to 0 when the BLAS has more sub-geometries than the
   renderable has material slots (procedural sprite quads).

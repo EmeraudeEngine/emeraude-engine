@@ -97,8 +97,8 @@ namespace EmEn::Scenes
 					if ( firstMesh )
 					{
 						parentNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-							.setup([] (auto & visual) {
-								visual.getRenderableInstance()->enableLighting();
+							.setup([lightingEnabled = assetData.meshes[meshIndex].lightingEnabled] (auto & visual) {
+								visual.getRenderableInstance()->setLightingState(lightingEnabled);
 							})
 							.build(assetData.meshes[meshIndex].renderable);
 
@@ -109,8 +109,8 @@ namespace EmEn::Scenes
 						auto childNode = parentNode->createChild(nodeDesc.name);
 
 						childNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-							.setup([] (auto & visual) {
-								visual.getRenderableInstance()->enableLighting();
+							.setup([lightingEnabled = assetData.meshes[meshIndex].lightingEnabled] (auto & visual) {
+								visual.getRenderableInstance()->setLightingState(lightingEnabled);
 							})
 							.build(assetData.meshes[meshIndex].renderable);
 					}
@@ -162,8 +162,8 @@ namespace EmEn::Scenes
 				if ( staticEntity != nullptr )
 				{
 					staticEntity->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-						.setup([] (auto & visual) {
-							visual.getRenderableInstance()->enableLighting();
+						.setup([lightingEnabled = assetData.meshes[meshIndex].lightingEnabled] (auto & visual) {
+							visual.getRenderableInstance()->setLightingState(lightingEnabled);
 						})
 						.build(assetData.meshes[meshIndex].renderable);
 				}
@@ -219,8 +219,8 @@ namespace EmEn::Scenes
 			if ( meshIndex < assetData.meshes.size() && assetData.meshes[meshIndex].renderable != nullptr )
 			{
 				engineParent->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-					.setup([] (auto & visual) {
-						visual.getRenderableInstance()->enableLighting();
+					.setup([lightingEnabled = assetData.meshes[meshIndex].lightingEnabled] (auto & visual) {
+						visual.getRenderableInstance()->setLightingState(lightingEnabled);
 					})
 					.build(assetData.meshes[meshIndex].renderable);
 			}
@@ -239,8 +239,8 @@ namespace EmEn::Scenes
 				if ( meshIndex < assetData.meshes.size() && assetData.meshes[meshIndex].renderable != nullptr )
 				{
 					targetNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-						.setup([] (auto & visual) {
-							visual.getRenderableInstance()->enableLighting();
+						.setup([lightingEnabled = assetData.meshes[meshIndex].lightingEnabled] (auto & visual) {
+							visual.getRenderableInstance()->setLightingState(lightingEnabled);
 						})
 						.build(assetData.meshes[meshIndex].renderable);
 				}

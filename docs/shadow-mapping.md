@@ -129,7 +129,18 @@ Doing that makes alpha-cut geometry cast the shadow of its **QUAD**: the palm tr
 each material type samples its own opacity source. Any new material type that supports an
 opacity mask MUST implement it, otherwise its cut-outs silently cast solid shadows again.
 
-**Code reference:** `Saphir/Generator/ShadowCasting.cpp` (fragment shader generation).
+`BasicResource::requiresAlphaTestedShadows()` returns `true` for `MaterialFlagBits::AlphaTestEnabled`
+as well as for `BlendingMode::Normal` (Aug 2026). It previously required the blending mode alone, so a
+binary cutout — a grate, a fence, a Doom two-sided middle texture — cast a **solid** shadow, which is
+worse than no shadow at all. Both branches still need a texture whose alpha channel is enabled.
+
+The shadow discard uses the **same fixed 0.5 cutoff** as the colour pass, so the two agree by
+construction (the third path, `GPURTMaterialData::alphaCutoff`, agrees too). The cutoff is not
+configurable on purpose — the reasons live with the flag's contract in
+[`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § 5, "Alpha Test — the Binary Cutout Contract".
+
+**Code reference:** `Saphir/Generator/ShadowCasting.cpp` (fragment shader generation),
+`Graphics/Material/BasicResource.cpp:requiresAlphaTestedShadows()`.
 
 ## Cascaded Shadow Maps (CSM) — STATUS: PARTIALLY REPAIRED, STILL NOT USABLE (Jul 2026)
 

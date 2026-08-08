@@ -115,6 +115,16 @@ namespace EmEn::Graphics::RenderableInstance
 		const Vulkan::PipelineLayout * pipelineLayout{nullptr};
 
 		/**
+		 * @brief The material layer this draw call is about to render.
+		 * @note Needed because the animation FRAME INDEX is per layer: every layer of a
+		 * multi-layer mesh may carry its own flipbook with its own frame count, so the index
+		 * cannot be resolved once per instance. The instance stores the animation TIME and
+		 * RenderableInstance::Abstract::frameIndexFor(layerIndex) turns it into the index while
+		 * the push constants are written.
+		 */
+		uint32_t layerIndex{0};
+
+		/**
 		 * @brief Pre-computed shader stage flags for vkCmdPushConstants.
 		 *
 		 * Typically VK_SHADER_STAGE_VERTEX_BIT, or combined with

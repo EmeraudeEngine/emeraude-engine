@@ -110,7 +110,18 @@ namespace EmEn::Graphics::Material
 		UseTangentSpace = 1U << 12, /* Overrides MaterialFlagBits::UseNormalVectors */
 		UseVertexColors = 1U << 13,
 		DynamicColorEnabled = 1U << 14,
-		IsAnimated = 1U << 15
+		IsAnimated = 1U << 15,
+		/**
+		 * @brief Binary CUTOUT: the fragment shader discards texels below a cutoff and the
+		 * material stays OPAQUE — opaque render list, depth write kept, no back-to-front
+		 * sorting, state-sorted batching preserved.
+		 * @note This is NOT blending. It is the correct mode for a mask authored as COVERAGE
+		 * rather than as a gradient: cutout foliage, fences, and a Doom two-sided middle
+		 * texture (vanilla writes the texel straight to the framebuffer and never reads the
+		 * destination, so its transparency is strictly binary). Setting BlendingEnabled
+		 * instead would push the layer out of the opaque list and buy sorting nobody needs.
+		 */
+		AlphaTestEnabled = 1U << 16
 	};
 
 	/**
@@ -185,7 +196,10 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Returns whether the material has per-pixel opacity that the RT pipeline
 			 * must alpha-test at hit time (cutout foliage, sprites, glTF alphaMode=MASK/BLEND).
-			 * @note The engine expresses opacity in two ways depending on the material type:
+			 * @note The engine expresses opacity in three ways depending on the material type:
+			 *  - `AlphaTestEnabled` — a binary cutout that stays in the OPAQUE list; the mode to
+			 *	prefer for a coverage mask. Set through `BasicResource::enableAlphaTest()`; there is
+			 *	no generic setter on the interface, so it is NOT available on every material type.
 			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`.
 			 *  - PBR/Standard set `BlendingEnabled` and source opacity from the albedo
 			 *	texture alpha channel (or a dedicated opacity component) — without
@@ -204,15 +218,16 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				/* Two conventions express alpha cutouts in this engine:
+				/* Three conventions express alpha cutouts in this engine:
+				 *  - AlphaTestEnabled: an explicit binary cutout (BasicResource::enableAlphaTest()).
 				 *  - BasicResource sets OpacityEnabled via setOpacity().
 				 *  - PBR/Standard rely on BlendingEnabled with the alpha sourced from
 				 *	the albedo texture (no separate flag set today).
-				 * Both must enter the RT alpha-test path so the trace shader samples
+				 * All three must enter the RT alpha-test path so the trace shader samples
 				 * the opacity (or albedo .a fallback) at hit time. The earlier tie-dye
 				 * artefact with this broader check was caused by multi-instance/same-BLAS
 				 * material aliasing — resolved by the multi-geometry BLAS refactor. */
-				return this->isFlagEnabled(OpacityEnabled) || this->isFlagEnabled(BlendingEnabled);
+				return this->isFlagEnabled(OpacityEnabled) || this->isFlagEnabled(BlendingEnabled) || this->isFlagEnabled(AlphaTestEnabled);
 			}
 
 			/**

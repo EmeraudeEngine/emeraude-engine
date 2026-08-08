@@ -40,6 +40,89 @@ namespace EmEn::Scenes
 	using namespace Base::PixelFactory;
 	using namespace Graphics;
 
+	constexpr auto AxisCount{6U};
+
+	namespace
+	{
+		struct debugAxis
+		{
+			const char * label = nullptr;
+			Vector< 3, float > position;
+			Color< float > color;
+		};
+	}
+
+	/** @brief Debug entity name prefix for compass display. */
+	constexpr std::array< debugAxis , AxisCount > Landmarks{{
+		{
+			.label = "+Compass0",
+			.position = Vector< 3, float >::positiveX(),
+			.color = Red
+		},
+		{
+			.label = "+Compass1",
+			.position = Vector< 3, float >::positiveY(),
+			.color = Green
+		},
+		{
+			.label = "+Compass2",
+			.position = Vector< 3, float >::positiveZ(),
+			.color = Blue
+		},
+		{
+			.label = "+Compass3",
+			.position = Vector< 3, float >::negativeX(),
+			.color = Cyan
+		},
+		{
+			.label = "+Compass4",
+			.position = Vector< 3, float >::negativeY(),
+			.color = Magenta
+		},
+		{
+			.label = "+Compass5",
+			.position = Vector< 3, float >::negativeZ(),
+			.color = Yellow
+		}
+	}};
+
+	/** @brief Debug entity name prefix for ground zero plane. */
+	constexpr auto GroundZeroPlaneDisplay{"+GroundZeroPlane"};
+
+	/** @brief Debug entity name prefix for boundary planes. */
+	constexpr std::array< debugAxis , AxisCount > BoundaryPlanes{{
+		{
+			.label = "+BoundaryPlane0",
+			.position = Vector< 3, float >::positiveX(),
+			.color = Red
+		},
+		{
+			.label = "+BoundaryPlane1",
+			.position = Vector< 3, float >::positiveY(),
+			.color = Green
+		},
+		{
+			.label = "+BoundaryPlane2",
+			.position = Vector< 3, float >::positiveZ(),
+			.color = Blue
+		},
+		{
+			.label = "+BoundaryPlane3",
+			.position = Vector< 3, float >::negativeX(),
+			.color = Cyan
+		},
+		{
+			.label = "+BoundaryPlane4",
+			.position = Vector< 3, float >::negativeY(),
+			.color = Magenta
+		},
+		{
+			.label = "+BoundaryPlane5",
+			.position = Vector< 3, float >::negativeZ(),
+			.color = Yellow
+		}
+	}};
+
 	void
 	Scene::enableCompassDisplay (Resources::Manager & resources) noexcept
 	{
@@ -48,33 +131,14 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		constexpr std::array< std::pair< Vector< 3, float >, Color< float > >, 6 > landmarks{{
-			/* NOTE: X+ sphere color in bright red. */
-			{{100.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F, 1.0F}},
-			/* NOTE: Y+ sphere color in bright green. */
-			{{0.0F, 100.0F, 0.0F}, {0.0F, 1.0F, 0.0F, 1.0F}},
-			/* NOTE: Z+ sphere color in bright blue. */
-			{{0.0F, 0.0F, 100.0F}, {0.0F, 0.0F, 1.0F, 1.0F}},
-			/* NOTE: X- sphere color in cyan (complementary of red). */
-			{{-100.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 1.0F, 1.0F}},
-			/* NOTE: Y- sphere color in magenta (complementary of green). */
-			{{0.0F, -100.0F, 0.0F}, {1.0F, 0.0F, 1.0F, 1.0F}},
-			/* NOTE: Z- sphere color in yellow (complementary of blue). */
-			{{0.0F, 0.0F, -100.0F}, {1.0F, 1.0F, 0.0F, 1.0F}}
-		}};
-
-		size_t count = 0;
-
-		for ( const auto & [position, color] : landmarks )
+		for ( const auto & landmark : Landmarks )
 		{
-			const auto label = String::incrementalLabel(CompassDisplay, count);
-
 			const auto specificMesh = resources.container< Renderable::MeshResource >()
-				->getOrCreateResource(label, [&resources, color, label] (auto & meshResource) {
+				->getOrCreateResource(landmark.label, [&resources, &landmark] (auto & meshResource) {
 					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-					generator.parameters().setGlobalVertexColor(color);
+					generator.parameters().setGlobalVertexColor(landmark.color);
 
-					const auto geometry = generator.sphere(8.0F, 16, 8, label);
+					const auto geometry = generator.sphere(8.0F, 16, 8, landmark.label);
 
 					const auto material = resources.container< Material::BasicResource >()
 						->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
@@ -86,8 +150,8 @@ namespace EmEn::Scenes
 					return meshResource.load(geometry, material);
 				});
 
-			const auto meshInstance = this->createStaticEntity(label, position)
-				->componentBuilder< Component::Visual >(label)
+			const auto meshInstance = this->createStaticEntity(landmark.label, landmark.position * 100.0F)
+				->componentBuilder< Component::Visual >(landmark.label)
 				.setup([] (auto & component) {
 					const auto renderableInstance = component.getRenderableInstance();
 					renderableInstance->setUseInfinityView(true);
@@ -100,16 +164,16 @@ namespace EmEn::Scenes
 	void
 	Scene::disableCompassDisplay () noexcept
 	{
-		for ( int index = 0; index < 6; index++ )
+		for ( const auto & landmark : Landmarks )
 		{
-			this->removeStaticEntity((std::stringstream{} << CompassDisplay << index).str());
+			this->removeStaticEntity(landmark.label);
 		}
 	}
 
 	bool
 	Scene::compassDisplayEnabled () const noexcept
 	{
-		return m_staticEntities.contains((std::stringstream{} << CompassDisplay << 0).str());
+		return m_staticEntities.contains(Landmarks[0].label);
 	}
 
 	bool
@@ -200,34 +264,15 @@ namespace EmEn::Scenes
 		const auto planeSize = m_boundary * Double< float >;
 		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
-		const std::array< std::pair< Vector< 3, float >, Color< float > >, 6 > planes{{
-			/* NOTE: X+ plane color in bright red. */
-			{{m_boundary, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F, 1.0F}},
-			/* NOTE: Y+ plane color in bright green. */
-			{{0.0F, m_boundary, 0.0F}, {0.0F, 1.0F, 0.0F, 1.0F}},
-			/* NOTE: Z+ plane color in bright blue. */
-			{{0.0F, 0.0F, m_boundary}, {0.0F, 0.0F, 1.0F, 1.0F}},
-			/* NOTE: X- plane color in washed red. */
-			{{-m_boundary, 0.0F, 0.0F}, {0.2F, 0.1F, 0.1F, 1.0F}},
-			/* NOTE: Y- plane color in washed green. */
-			{{0.0F, -m_boundary, 0.0F}, {0.1F, 0.2F, 0.1F, 1.0F}},
-			/* NOTE: Z- plane color in washed blue. */
-			{{0.0F, 0.0F, -m_boundary}, {0.1F, 0.1F, 0.2F, 1.0F}}
-		}};
-
-		size_t count = 0;
-
-		for ( const auto & [position, color] : planes )
+		for ( const auto & plane : BoundaryPlanes )
 		{
-			const auto label = String::incrementalLabel(BoundaryPlanesDisplay, count);
-
 			const auto mesh = resources.container< Renderable::MeshResource >()
-				->getOrCreateResource(label, [&resources, color, planeSize, planeDivision, label] (auto & meshResource) {
+				->getOrCreateResource(plane.label, [&resources, &plane, planeSize, planeDivision] (auto & meshResource) {
 					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
 					generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);
-					generator.parameters().setGlobalVertexColor(color);
+					generator.parameters().setGlobalVertexColor(plane.color);
 
-					const auto geometryResource = generator.surface(planeSize, planeDivision, label);
+					const auto geometryResource = generator.surface(planeSize, planeDivision, plane.label);
 
 					const auto material = resources.container< Material::BasicResource >()
 						->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
@@ -239,20 +284,20 @@ namespace EmEn::Scenes
 					return meshResource.load(geometryResource, material, {PolygonMode::Line, CullingMode::None});
 				});
 
-			const auto entity = this->createStaticEntity(label, position);
+			const auto entity = this->createStaticEntity(plane.label, plane.position * m_boundary);
 
-			if ( position[X] != 0.0F )
+			if ( plane.position[X] != 0.0F )
 			{
 				entity->roll(Radian(QuartRevolution< float >), TransformSpace::Local);
 			}
 
-			if ( position[Z] != 0.0F )
+			if ( plane.position[Z] != 0.0F )
 			{
 				entity->pitch(Radian(QuartRevolution< float >), TransformSpace::Local);
 			}
 
 			const auto meshInstance = entity
-				->componentBuilder< Component::Visual >(label)
+				->componentBuilder< Component::Visual >(plane.label)
 				.setup([] (auto & component) {
 					component.getRenderableInstance()->disableDepthTest(true);
 				})
@@ -263,16 +308,16 @@ namespace EmEn::Scenes
 	void
 	Scene::disableBoundaryPlanesDisplay () noexcept
 	{
-		for ( int index = 0; index < 6; index++ )
+		for ( const auto & plane : BoundaryPlanes )
 		{
-			this->removeStaticEntity((std::stringstream{} << BoundaryPlanesDisplay << index).str());
+			this->removeStaticEntity(plane.label);
 		}
 	}
 
 	bool
 	Scene::boundaryPlanesDisplayEnabled () const noexcept
 	{
-		return m_staticEntities.contains((std::stringstream{} << BoundaryPlanesDisplay << 0).str());
+		return m_staticEntities.contains(BoundaryPlanes[0].label);
 	}
 
 	void

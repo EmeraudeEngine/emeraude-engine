@@ -41,7 +41,7 @@ namespace EmEn::Scenes
 	 * @tparam node_t The type of node
 	 */
 	template< typename node_t >
-	requires (std::is_class_v< Node >)
+	requires std::is_class_v< Node >
 	class NodeCrawler final
 	{
 		public:
@@ -51,7 +51,7 @@ namespace EmEn::Scenes
 			 * @param baseNode From which node to execute the crawling.
 			 */
 			explicit
-			NodeCrawler (const std::shared_ptr< node_t > & baseNode) noexcept
+			NodeCrawler (std::shared_ptr< node_t > baseNode) noexcept
 			{
 				this->populateStack(baseNode);
 			}
@@ -68,29 +68,46 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the next node.
-			 * @warning This will never return a discarded node waiting to be removed from the tree.
-			 * @return std::shared_ptr< type_t >
+			 * @brief Returns the node the crawler currently sits on.
+			 * @note BEFORE the first fetchNextNode() call this is the BASE node, which the
+			 * iteration itself never yields — the do/while call sites rely on exactly that to
+			 * process the base node first, then its descendants. AFTER fetchNextNode() returned
+			 * false it is nullptr, so a while-loop body never sees a null node.
+			 * @return const std::shared_ptr< node_t > &
 			 */
 			[[nodiscard]]
-			std::shared_ptr< node_t >
-			nextNode () noexcept
+			const std::shared_ptr< node_t > &
+			currentNode () const noexcept
+			{
+				return m_currentNode;
+			}
+
+			/**
+			 * @brief Advances to the next node, reachable through currentNode().
+			 * @note This will never select a discarded node waiting to be removed from the tree.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			fetchNextNode () noexcept
 			{
 				if ( m_nodes.empty() )
 				{
-					return nullptr;
+					m_currentNode = nullptr;
+
+					return false;
 				}
 
-				/* Gets the next node */
-				auto nextNode = m_nodes.top();
+				/* Gets the next node, then removes it from the stack. The member holds its own
+				 * reference, so popping the stack cannot release the node. */
+				m_currentNode = m_nodes.top();
 
-				/* Removes it from the stack. */
 				m_nodes.pop();
 
 				/* Prepares next nodes from current node children. */
-				this->populateStack(nextNode);
+				this->populateStack(m_currentNode);
 
-				return nextNode;
+				return true;
 			}
 
 		private:
@@ -104,6 +121,8 @@ namespace EmEn::Scenes
 			void
 			populateStack (const std::shared_ptr< node_t > & currentNode) noexcept
 			{
+				m_currentNode = currentNode;
+
 				for ( const auto & nodePair : currentNode->children() )
 				{
 					if ( nodePair.second->isDiscardable() )
@@ -116,5 +135,6 @@ namespace EmEn::Scenes
 			}
 
 			std::stack< std::shared_ptr< node_t > > m_nodes;
+			std::shared_ptr< node_t > m_currentNode;
 	};
 }

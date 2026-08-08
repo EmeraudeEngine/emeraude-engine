@@ -434,7 +434,8 @@ namespace EmEn::Scenes
 			 * @see boundary() To query current value.
 			 * @see size() To get full scene width.
 			 */
-			void setBoundary (float boundary) noexcept
+			void
+			setBoundary (float boundary) noexcept
 			{
 				m_boundary = std::abs(boundary);
 
@@ -1068,19 +1069,20 @@ namespace EmEn::Scenes
 			 * Holds the static entity mutex during iteration.
 			 *
 			 * @tparam function_t Callable with signature: void(const StaticEntity&)
-			 * @param processStaticEntity Callback receiving each entity by reference.
+			 * @param process Callback receiving each entity by reference.
 			 *
 			 * @see findStaticEntity() For lookup by name.
 			 */
 			template< typename function_t >
 			void
-			forEachStaticEntities (function_t && processStaticEntity) const noexcept requires (std::is_invocable_v< function_t, const StaticEntity & >)
+			forEachStaticEntities (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const StaticEntity & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+				const std::scoped_lock lock{m_staticEntitiesAccess};
 
 				for ( const auto & entity : m_staticEntities | std::views::values )
 				{
-					processStaticEntity(*entity);
+					std::forward< function_t >(process)(*entity);
 				}
 			}
 
@@ -1103,19 +1105,20 @@ namespace EmEn::Scenes
 			 * Automatically locks weak_ptr and skips expired modifiers.
 			 *
 			 * @tparam function_t Callable with signature: void(const AbstractModifier&)
-			 * @param processModifier Callback receiving each valid modifier.
+			 * @param process Callback receiving each valid modifier.
 			 *
 			 * @see Component::AbstractModifier For modifier interface.
 			 */
 			template< typename function_t >
 			void
-			forEachModifiers (function_t && processModifier) const noexcept requires (std::is_invocable_v< function_t, const Component::AbstractModifier & >)
+			forEachModifiers (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const Component::AbstractModifier & >)
 			{
 				for ( const auto & modifierWeak : m_modifiers )
 				{
 					if ( const auto modifier = modifierWeak.lock() )
 					{
-						processModifier(*modifier);
+						std::forward< function_t >(process)(*modifier);
 					}
 					else
 					{
@@ -1493,17 +1496,18 @@ namespace EmEn::Scenes
 			 * Use for batch operations on all shadow maps.
 			 *
 			 * @tparam function_t Callable with signature: void(const RenderTargetAccessList&)
-			 * @param processRenderTargets Callback receiving the shadow map list.
+			 * @param process Callback receiving the shadow map list.
 			 *
 			 * @see forEachRenderToShadowMap() For per-target iteration.
 			 */
 			template< typename function_t >
 			void
-			withRenderToShadowMaps (function_t && processRenderTargets) const noexcept requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
+			withRenderToShadowMaps (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+				const std::scoped_lock lock{m_renderToShadowMapAccess};
 
-				processRenderTargets(m_renderToShadowMaps);
+				std::forward< function_t >(process)(m_renderToShadowMaps);
 			}
 
 			/**
@@ -1513,21 +1517,22 @@ namespace EmEn::Scenes
 			 * (with debug warning).
 			 *
 			 * @tparam function_t Callable with signature: void(const shared_ptr<RenderTarget::Abstract>&)
-			 * @param processRenderTarget Callback receiving each valid shadow map.
+			 * @param process Callback receiving each valid shadow map.
 			 *
 			 * @see withRenderToShadowMaps() For batch access.
 			 */
 			template< typename function_t >
 			void
-			forEachRenderToShadowMap (function_t && processRenderTarget) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
+			forEachRenderToShadowMap (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+				const std::scoped_lock lock{m_renderToShadowMapAccess};
 
 				for ( const auto & renderTargetWeak : m_renderToShadowMaps )
 				{
 					if ( const auto renderTarget = renderTargetWeak.lock() )
 					{
-						processRenderTarget(renderTarget);
+						std::forward< function_t >(process)(renderTarget);
 					}
 					else
 					{
@@ -1543,17 +1548,18 @@ namespace EmEn::Scenes
 			 * Use for batch operations on all render-to-texture targets.
 			 *
 			 * @tparam function_t Callable with signature: void(const RenderTargetAccessList&)
-			 * @param processRenderTargets Callback receiving the texture target list.
+			 * @param process Callback receiving the texture target list.
 			 *
 			 * @see forEachRenderToTexture() For per-target iteration.
 			 */
 			template< typename function_t >
 			void
-			withRenderToTextures (function_t && processRenderTargets) const noexcept requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
+			withRenderToTextures (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
+				const std::scoped_lock lock{m_renderToTextureAccess};
 
-				processRenderTargets(m_renderToTextures);
+				std::forward< function_t >(process)(m_renderToTextures);
 			}
 
 			/**
@@ -1563,7 +1569,7 @@ namespace EmEn::Scenes
 			 * (with debug warning).
 			 *
 			 * @tparam function_t Callable with signature: void(const shared_ptr<RenderTarget::Abstract>&)
-			 * @param processRenderTarget Callback receiving each valid texture target.
+			 * @param process Callback receiving each valid texture target.
 			 *
 			 * @todo Pass the render target as a reference instead of shared_ptr.
 			 *
@@ -1571,15 +1577,16 @@ namespace EmEn::Scenes
 			 */
 			template< typename function_t >
 			void
-			forEachRenderToTexture (function_t && processRenderTarget) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
+			forEachRenderToTexture (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
+				const std::scoped_lock lock{m_renderToTextureAccess};
 
 				for ( const auto & renderTargetWeak : m_renderToTextures )
 				{
 					if ( const auto renderTarget = renderTargetWeak.lock() )
 					{
-						processRenderTarget(renderTarget);
+						std::forward< function_t >(process)(renderTarget);
 					}
 					else
 					{
@@ -1595,17 +1602,18 @@ namespace EmEn::Scenes
 			 * Use for batch operations on all render-to-view targets.
 			 *
 			 * @tparam function_t Callable with signature: void(const RenderTargetAccessList&)
-			 * @param processRenderTargets Callback receiving the view target list.
+			 * @param process Callback receiving the view target list.
 			 *
 			 * @see forEachRenderToView() For per-target iteration.
 			 */
 			template< typename function_t >
 			void
-			withRenderToViews (function_t && processRenderTargets) const noexcept requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
+			withRenderToViews (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
+				const std::scoped_lock lock{m_renderToViewAccess};
 
-				processRenderTargets(m_renderToViews);
+				std::forward< function_t >(process)(m_renderToViews);
 			}
 
 			/**
@@ -1615,7 +1623,7 @@ namespace EmEn::Scenes
 			 * (with debug warning).
 			 *
 			 * @tparam function_t Callable with signature: void(const shared_ptr<RenderTarget::Abstract>&)
-			 * @param processRenderTarget Callback receiving each valid view target.
+			 * @param process Callback receiving each valid view target.
 			 *
 			 * @todo Pass the render target as a reference instead of shared_ptr.
 			 *
@@ -1623,15 +1631,16 @@ namespace EmEn::Scenes
 			 */
 			template< typename function_t >
 			void
-			forEachRenderToView (function_t && processRenderTarget) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
+			forEachRenderToView (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
+				const std::scoped_lock lock{m_renderToViewAccess};
 
 				for ( const auto & renderTargetWeak : m_renderToViews )
 				{
 					if ( const auto renderTarget = renderTargetWeak.lock() )
 					{
-						processRenderTarget(renderTarget);
+						std::forward< function_t >(process)(renderTarget);
 					}
 					else
 					{
@@ -2243,6 +2252,7 @@ namespace EmEn::Scenes
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
 			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
+			 * @param advanceModelHistory
 			 * @return void
 			 */
 			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance, const Base::Math::Vector< 3, float > & cameraPosition, bool advanceModelHistory) noexcept;
@@ -2254,6 +2264,7 @@ namespace EmEn::Scenes
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param renderBatches A reference to a render batch.
 			 * @param bindlessTexturesManager A pointer to the bindless texture manager. Can be nullptr.
+			 * @param sceneTransformsDS
 			 * @return void
 			 */
 			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS) const noexcept;
@@ -2454,13 +2465,6 @@ namespace EmEn::Scenes
 			 * [PRIVATE: CONSTANTS]
 			 * ============================================================ */
 
-			/** @brief Debug entity name prefix for compass display. */
-			static constexpr auto CompassDisplay{"+Compass"};
-			/** @brief Debug entity name prefix for ground zero plane. */
-			static constexpr auto GroundZeroPlaneDisplay{"+GroundZeroPlane"};
-			/** @brief Debug entity name prefix for boundary planes. */
-			static constexpr auto BoundaryPlanesDisplay{"+BoundaryPlane"};
-
 			/** @brief Render list index for opaque objects (no lighting). */
 			static constexpr auto Opaque{0UL};
 			/** @brief Render list index for translucent objects (no lighting). */
@@ -2505,16 +2509,16 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::TextureResource::TextureCubemap > m_environmentCubemap;
 			/** @brief Baked environment IBL (irradiance + prefiltered), ping-pong pairs: a bake
 			 * writes the back pair while frames in flight sample the published front pair. */
-			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_iblIrradiance{};
-			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_iblPrefiltered{};
+			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_IBLIrradiance{};
+			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_IBLPrefiltered{};
 			/** @brief The irradiance of the last successful bake (published under the applyAmbient contract). */
-			std::shared_ptr< Graphics::IBLTexture > m_iblBakedIrradiance;
+			std::shared_ptr< Graphics::IBLTexture > m_IBLBakedIrradiance;
 			/** @brief The irradiance currently published to the bindless set (null = default black). */
-			std::shared_ptr< Vulkan::TextureInterface > m_iblPublishedIrradiance;
+			std::shared_ptr< Vulkan::TextureInterface > m_IBLPublishedIrradiance;
 			/** @brief Identity of the environment cubemap of the last bake attempt (see updateEnvironmentIBL()). */
-			const Vulkan::TextureInterface * m_iblBakedSource{nullptr};
+			const Vulkan::TextureInterface * m_IBLBakedSource{nullptr};
 			/** @brief Ping-pong write index of the IBL pairs. */
-			size_t m_iblWriteIndex{0};
+			size_t m_IBLWriteIndex{0};
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
 			std::shared_ptr< Graphics::Renderable::Abstract > m_groundLevelRenderable;
 			/** @brief Scene terrain/ground physics interface for collision. May be null. */
@@ -2542,9 +2546,9 @@ namespace EmEn::Scenes
 			/** @brief Render lists indexed by render category (Opaque, Translucent, TranslucentGB, etc.). */
 			std::array< RenderBatch::List, 7 > m_renderLists{};
 			/** @brief RT opaque render list (all scene geometry, no frustum culling). */
-			RenderBatch::List m_rtOpaqueList;
+			RenderBatch::List m_RTOpaqueList;
 			/** @brief RT opaque lighted render list (all scene geometry, no frustum culling). */
-			RenderBatch::List m_rtOpaqueLightedList;
+			RenderBatch::List m_RTOpaqueLightedList;
 			/** @brief Cached TLAS distance setting (read once at scene init, not per-frame). */
 			float m_TLASDistance{DefaultGraphicsRayTracingTLASDistance};
 			/** @brief Current main camera view distance for LOD computation. Updated per prepareRendering(). */
@@ -2649,7 +2653,7 @@ namespace EmEn::Scenes
 			/** @brief True when the sky drives the ambient (applyAmbient): the baked
 			 * irradiance is published and the scalar ambient pushed to the view UBOs is
 			 * zeroed (see refreshAmbientLightProperties / updateEnvironmentIBL). */
-			bool m_iblAmbientEnabled{false};
+			bool m_IBLAmbientEnabled{false};
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
 	};

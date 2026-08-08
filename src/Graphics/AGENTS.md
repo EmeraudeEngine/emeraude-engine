@@ -396,7 +396,7 @@ The GLSL struct is generated to match this layout exactly.
 
 `Material::Interface` provides two key query methods used by the rendering pipeline for render list dispatch:
 
-- **`isOpaque()`**: Returns `!BlendingEnabled`, but also returns `false` when `requiresGrabPass()` is `true` (a material requiring grab pass is inherently non-opaque).
+- **`isOpaque()`**: Returns `!BlendingEnabled`, but also returns `false` when `requiresGrabPass()` is `true` (a material requiring grab pass is inherently non-opaque). It deliberately ignores `AlphaTestEnabled` — see [Alpha Test](#alpha-test--the-binary-cutout-contract-aug-2026).
 - **`requiresGrabPass()`**: Virtual method (default `false`). Overridden by `PBRResource` based on material properties (e.g., transmission with screen-space refraction).
 
 These are propagated through `Renderable::Abstract::isOpaque(layerIndex)` and `Renderable::Abstract::requiresGrabPass(layerIndex)` to all concrete renderables, enabling the Scene to dispatch into 3 render categories: Opaque, Translucent, and TranslucentGB.
@@ -406,6 +406,87 @@ These are propagated through `Renderable::Abstract::isOpaque(layerIndex)` and `R
 - `Material/Interface.hpp:requiresGrabPass()` — virtual, default false
 - `Material/PBRResource.hpp:requiresGrabPass()` — override
 - `Renderable/Abstract.hpp:requiresGrabPass()` — pure virtual
+
+### Alpha Test — the Binary Cutout Contract (Aug 2026)
+
+`MaterialFlagBits::AlphaTestEnabled = 1U << 16` declares a material a **binary CUTOUT**: the fragment
+shader discards the texels whose alpha falls below a cutoff, and the material **STAYS OPAQUE** — opaque
+render list, depth write kept, no back-to-front sorting, state-sorted batching preserved.
+
+`BasicResource::enableAlphaTest()` sets the flag. It requires a texture whose alpha channel is enabled
+(`setTextureResource(texture, true)`); without one the flag emits no code. Like every other material
+setter it refuses to act once the resource is created (it warns and returns).
+
+The discard fires on that flag **INDEPENDENTLY of the blending mode**. Gating it on blending was exactly
+what used to force a cutout out of the opaque list: the only way to obtain a discard was to call
+`enableBlending()`, which bought a distance sort that a coverage mask does not need.
+
+| | `enableAlphaTest()` | `enableBlending(mode)` |
+|---|---|---|
+| Render list | **Opaque** (front-to-back, early-Z) | Translucent (back-to-front) |
+| Colour blending | disabled (`blendEnable = VK_FALSE`) | enabled, per `blendingMode()` |
+| Per-frame distance sort | none | mandatory |
+| State-sorted batching | preserved | given up to the distance order |
+| Transparency expressed | strictly binary — in or out | a genuine gradient |
+
+Depth write is untouched by the flag: a cutout writes depth like any other opaque surface (depth write
+is decided by the `RenderableInstance`, never by the material's transparency mode).
+
+> [!WARNING]
+> **`isOpaque()` must NOT be taught about `AlphaTestEnabled`, and must stay that way — an alpha-tested
+> material IS opaque.** Returning `false` there does two damaging things at once:
+>
+> 1. The Scene dispatches the layer into the **distance-sorted translucent list**, paying for a sort
+>    and losing the state-sorted batching, for a mask that has nothing to sort.
+> 2. `Vulkan::GraphicsPipeline::configureColorBlendState()` keys its default branch on
+>    `material.isOpaque()`: a `false` flips `blendEnable` to `VK_TRUE` and installs the blend factors of
+>    `blendingMode()`, so the cutout's already-binary alpha gets **colour-blended** on top.
+>
+> Either one defeats the flag entirely. This is the single invariant that makes the cutout mode worth
+> having: the flag adds a discard and changes **nothing else** about how the material is classified.
+
+**The two other paths honour the flag as well:**
+
+- **`isAlphaTest()`** returns `true` for `AlphaTestEnabled` (in addition to `OpacityEnabled` and
+  `BlendingEnabled`), so the **RT pipeline alpha-tests at hit time** — candidate hits are confirmed
+  against the material's cutoff instead of being taken as solid. See
+  [`docs/reflection-pipeline.md`](../../docs/reflection-pipeline.md).
+- **`BasicResource::requiresAlphaTestedShadows()`** now returns `true` for the flag too: a cutout must
+  cast a **CUTOUT shadow**, not a solid rectangle. It previously required `BlendingMode::Normal`, so an
+  alpha-tested grate shadowed solid. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md).
+
+> [!CAUTION]
+> **The cutoff is FIXED at 0.5 and deliberately NOT configurable.** Two structural reasons:
+>
+> 1. **The shader program cache keys on the material's DESCRIPTOR LAYOUT hash** — not on its flags, not
+>    on its values. A per-material cutoff literal baked into the generated GLSL could therefore serve one
+>    material's program to another material that happens to share the same layout. A configurable cutoff
+>    needs the cache key fixed FIRST — see
+>    [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md).
+> 2. **`BasicResource`'s material-properties buffer is FULL**: all twelve floats are claimed
+>    (diffuseColor 0-3, specularColor 4-7, shininess 8, opacity 9, autoIllumination 10, emissiveStrength
+>    11). A uniform-borne cutoff would require growing the block.
+>
+> 0.5 is the right value for a mask authored as coverage, which is the only case this mode targets, and
+> the **three paths now agree at 0.5**: the colour discard, the shadow discard, and
+> `GPURTMaterialData::alphaCutoff` (which already defaulted to 0.5).
+
+**Which mode for which authoring intent:**
+
+| The asset expresses… | Use |
+|---|---|
+| A **coverage mask** — cutout foliage, a fence, a grate, a Doom two-sided middle texture (vanilla writes the texel straight to the framebuffer and never reads the destination, so its transparency is strictly binary) | **alpha test** |
+| A **genuine gradient** — smoke, a soft particle, glass that tints what is behind it | **blending** |
+| **Refraction** — bending what is behind the surface | **grab pass** (`requiresGrabPass()` → TranslucentGB) |
+
+**Code references:**
+- `Material/Interface.hpp:MaterialFlagBits::AlphaTestEnabled` — the flag and its contract
+- `Material/Interface.hpp:isOpaque()` — blind to the flag ON PURPOSE
+- `Material/Interface.hpp:isAlphaTest()` — RT hit-time alpha test
+- `Material/BasicResource.hpp:enableAlphaTest()` — the setter
+- `Material/BasicResource.cpp:requiresAlphaTestedShadows()` — flag OR `BlendingMode::Normal`
+- `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side of the same 0.5
+- `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` — the `isOpaque()` branch
 
 ### Normal Map Scale
 

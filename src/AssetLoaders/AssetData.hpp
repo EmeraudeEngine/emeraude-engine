@@ -87,6 +87,16 @@ namespace EmEn::AssetLoaders
 		std::shared_ptr< Graphics::Renderable::Abstract > renderable;
 		std::shared_ptr< Graphics::Geometry::Interface > geometry;
 		std::vector< std::shared_ptr< Graphics::Material::Interface > > materials;
+		/**
+		 * @brief Declares whether the consumer must put this mesh on the LIT path.
+		 * @note Default true: a mesh coming from a lit format (glTF, FBX) expects the light
+		 * set, the ambient pass and the environment IBL. A loader that bakes its own lighting
+		 * into the vertex colors on unlit materials — the WAD materializer being the reference
+		 * case — MUST set this to false: on the lit path the ambient/IBL term is scaled by the
+		 * background luminance, so installing a sky would multiply the surfaces by the sky
+		 * brightness and destroy the baked look.
+		 */
+		bool lightingEnabled{true};
 	};
 
 	/**

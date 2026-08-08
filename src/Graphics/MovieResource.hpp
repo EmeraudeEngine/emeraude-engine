@@ -211,6 +211,20 @@ namespace EmEn::Graphics
 			bool loadWaterNormals (uint32_t size, uint32_t frameCount, uint32_t frameDuration, float scale = 8.0F, uint32_t seed = 0, uint32_t octaves = 4, float persistence = 0.5F, float strength = 2.0F, Base::ThreadPool * threadPool = nullptr) noexcept;
 
 			/**
+			 * @brief Loads the movie from frames the CALLER composed in memory.
+			 * @note The in-memory counterpart of the JSON paths: a procedural or format-specific
+			 * producer (a WAD materializer building a Doom flipbook out of palette-decoded patches,
+			 * for instance) has no file to point at and no reason to serialize one.
+			 * @warning EVERY frame must share the same dimensions. Vulkan::Image::create() takes the
+			 * extent from frame 0 and concatenates every frame's bytes into one staging buffer
+			 * WITHOUT validating the rest, so a mismatched frame silently corrupts the upload. This
+			 * method rejects the load instead.
+			 * @param frames The frames, each a pixmap and its duration in milliseconds. Moved from.
+			 * @return bool
+			 */
+			bool load (std::vector< Frame > && frames) noexcept;
+
+			/**
 			 * @brief Returns the average color of the movie.
 			 * @return Libraries::PixelFactory::Color< float >
 			 */

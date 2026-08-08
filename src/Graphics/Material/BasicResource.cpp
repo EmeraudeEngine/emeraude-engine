@@ -779,10 +779,18 @@ namespace EmEn::Graphics::Material
 			Code{fragmentShader, Location::Top} << "const vec4 " << m_textureComponent->variableName() << " = texture(" << m_textureComponent->samplerName() << ", " << texCoordVariable << ");";
 		}
 
+		/* BINARY CUTOUT (AlphaTestEnabled): discard at the coverage midpoint. The material stays
+		 * opaque, so this is the whole transparency mechanism — there is no blend behind it, and
+		 * the fragment must be rejected before it writes depth. Independent of the blending mode
+		 * ON PURPOSE: gating it on blending is what used to force a cutout out of the opaque list. */
+		if ( this->isFlagEnabled(AlphaTestEnabled) && m_textureComponent->alphaEnabled() )
+		{
+			Code{fragmentShader, Location::Top} << "if ( " << m_textureComponent->variableName() << ".a < 0.5 ) discard;";
+		}
 		/* Early discard for transparent pixels when alpha blending is enabled.
 		 * This prevents lighting calculations on pixels that will be discarded anyway,
 		 * and avoids specular highlights appearing on transparent areas. */
-		if ( m_textureComponent->alphaEnabled() && m_blendingMode == BlendingMode::Normal )
+		else if ( m_textureComponent->alphaEnabled() && m_blendingMode == BlendingMode::Normal )
 		{
 			Code{fragmentShader, Location::Top} << "if ( " << m_textureComponent->variableName() << ".a < 0.01 ) discard;";
 		}
@@ -862,6 +870,21 @@ namespace EmEn::Graphics::Material
 		}
 
 		this->enableFlag(UseVertexColors);
+	}
+
+	void
+	BasicResource::enableAlphaTest () noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to enable alpha test.";
+
+			return;
+		}
+
+		this->enableFlag(AlphaTestEnabled);
 	}
 
 	bool
@@ -1027,13 +1050,16 @@ namespace EmEn::Graphics::Material
 	bool
 	BasicResource::requiresAlphaTestedShadows () const noexcept
 	{
-		/* Only materials with alpha-enabled textures using normal blending need alpha-tested shadows. */
-		if ( m_textureComponent == nullptr )
+		if ( m_textureComponent == nullptr || !m_textureComponent->alphaEnabled() )
 		{
 			return false;
 		}
 
-		return m_textureComponent->alphaEnabled() && m_blendingMode == BlendingMode::Normal;
+		/* A binary CUTOUT must cast a CUTOUT shadow — a grate that shadows as a solid rectangle
+		 * is worse than no shadow at all. The shadow discard already uses the same 0.5 cutoff as
+		 * the colour pass, so the two agree by construction.
+		 * Blended materials keep their existing behaviour. */
+		return this->isFlagEnabled(AlphaTestEnabled) || m_blendingMode == BlendingMode::Normal;
 	}
 
 	bool

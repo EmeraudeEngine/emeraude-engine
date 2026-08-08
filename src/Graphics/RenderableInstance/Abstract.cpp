@@ -1087,6 +1087,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Build push constant context (pre-computed values for this program). */
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
+			.layerIndex = layerIndex,
 			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled()
@@ -1094,10 +1095,16 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates);
 
-		/* Draw with correct frame index for animated materials. */
-		if ( material != nullptr && material->isAnimated() )
+		/* ⚠️ The third argument is the SUB-GEOMETRY index, not a frame index. The two coincide
+		 * for a SPRITE only: SpriteResource bakes one quad group per frame AND enables 3D primary
+		 * texture coordinates, so selecting its sub-geometry IS selecting its frame. Every other
+		 * animated renderable drives its flipbook through the frameIndex PUSH CONSTANT on a
+		 * Texture2DArray, and its sub-geometry index must stay the LAYER index.
+		 * Discriminating on material->isAnimated() conflated the two and silently made every
+		 * animated layer of a multi-layer mesh draw layer 0's triangles. */
+		if ( const auto * geometry = m_renderable->geometry(LODLevel); geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.draw(*m_renderable->geometry(LODLevel), m_frameIndex, this->instanceCount());
+			commandBuffer.draw(*geometry, this->frameIndexFor(layerIndex), this->instanceCount());
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
@@ -1162,6 +1169,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Build push constant context (pre-computed values for this program). */
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
+			.layerIndex = layerIndex,
 			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
@@ -1290,9 +1298,13 @@ namespace EmEn::Graphics::RenderableInstance
 				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
 			}
 		}
-		else if ( material->isAnimated() )
+		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
+		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
+		 * addresses its frames that way. A flipbook on 2D UVs is driven by the frameIndex push
+		 * constant and needs its LAYER index here. */
+		else if ( geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, m_frameIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), this->instanceCount());
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
@@ -1392,6 +1404,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Build push constant context. */
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
+			.layerIndex = layerIndex,
 			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
@@ -1560,9 +1573,13 @@ namespace EmEn::Graphics::RenderableInstance
 				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
 			}
 		}
-		else if ( material->isAnimated() )
+		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
+		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
+		 * addresses its frames that way. A flipbook on 2D UVs is driven by the frameIndex push
+		 * constant and needs its LAYER index here. */
+		else if ( geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, m_frameIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), this->instanceCount());
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
@@ -1614,6 +1631,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Build push constant context (pre-computed values for this program). */
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
+			.layerIndex = layerIndex,
 			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled()

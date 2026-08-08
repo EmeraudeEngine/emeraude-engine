@@ -262,6 +262,30 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Sets the lighting code generation state in shaders.
+			 * @note The symmetric form of enableLighting(), for callers that materialize
+			 * meshes of both kinds and carry the choice as data — a mesh whose lighting is
+			 * already baked into its vertex colors on unlit materials must stay OFF, or the
+			 * ambient/IBL pass (scaled by the background luminance) multiplies it by the sky.
+			 * @param state The lighting state.
+			 * @return Abstract *
+			 */
+			Abstract *
+			setLightingState (bool state) noexcept
+			{
+				if ( state )
+				{
+					this->enableFlag(EnableLighting);
+				}
+				else
+				{
+					this->disableFlag(EnableLighting);
+				}
+
+				return this;
+			}
+
+			/**
 			 * @brief Returns whether the lighting code generation is enabled in shaders.
 			 * @return bool
 			 */
@@ -907,29 +931,68 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Returns whether this instance is animated with frames.
+			 * @note Scans EVERY layer, not just layer 0: a multi-layer mesh may animate any subset
+			 * of its layers, and keying on layer 0 alone left the whole instance un-ticked whenever
+			 * the first material happened to be static — which is the common case for a mesh whose
+			 * layers are ordered by texture name.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isAnimated () const noexcept
 			{
-				if ( !this->renderable()->isReadyForInstantiation() )
+				const auto renderable = this->renderable();
+
+				if ( !renderable->isReadyForInstantiation() )
 				{
 					return false;
 				}
 
-				return this->renderable()->material(0)->isAnimated();
+				const auto layerCount = renderable->layerCount();
+
+				for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
+				{
+					if ( const auto * material = renderable->material(layerIndex); material != nullptr && material->isAnimated() )
+					{
+						return true;
+					}
+				}
+
+				return false;
 			}
 
 			/**
-			 * @brief Updates the frame animation.
+			 * @brief Stores the animation time; the frame index itself is resolved PER LAYER at draw.
+			 * @note ⚠️ The instance keeps the TIME, not a resolved index. Each layer's flipbook has
+			 * its own frame count — a Doom map mixes 2, 3 and 4-frame animations in one mesh — so a
+			 * single shared index would sample out of range on the shorter ones. Resolution happens
+			 * in frameIndexFor(), called once per layer while the push constants are written.
 			 * @param sceneTimeMS The current scene time.
 			 * @return void
 			 */
 			void
 			updateFrameIndex (uint32_t sceneTimeMS) noexcept
 			{
-				m_frameIndex = this->renderable()->material(0)->frameIndexAt(sceneTimeMS);
+				m_animationTimeMS = sceneTimeMS;
+			}
+
+			/**
+			 * @brief Returns the frame index of a given layer at the stored animation time.
+			 * @param layerIndex The material layer index.
+			 * @return uint32_t Zero for a static layer, which is also its only valid index.
+			 */
+			[[nodiscard]]
+			uint32_t
+			frameIndexFor (uint32_t layerIndex) const noexcept
+			{
+				const auto * material = this->renderable()->material(layerIndex);
+
+				if ( material == nullptr || !material->isAnimated() )
+				{
+					return 0;
+				}
+
+				return material->frameIndexAt(m_animationTimeMS);
 			}
 
 			/**
@@ -1016,14 +1079,15 @@ namespace EmEn::Graphics::RenderableInstance
 			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex, uint32_t LODLevel) const noexcept = 0;
 
 			/**
-			 * @brief Returns the current animation frame index.
+			 * @brief Returns the animation time, in milliseconds, the frame indices derive from.
+			 * @note NOT a frame index — that is per layer, see frameIndexFor().
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
 			uint32_t
-			frameIndex () const noexcept
+			animationTimeMS () const noexcept
 			{
-				return m_frameIndex;
+				return m_animationTimeMS;
 			}
 
 			/**
@@ -1112,7 +1176,7 @@ namespace EmEn::Graphics::RenderableInstance
 			Base::Math::Matrix< 4, float > m_lastModelMatrix;
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
-			uint32_t m_frameIndex{0};
+			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */
 			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
 			uint32_t m_instanceTransformsSlot{0};
 			/* Skeletal skinning GPU resources (per-instance).
