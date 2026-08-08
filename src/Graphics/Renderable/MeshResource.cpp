@@ -30,8 +30,8 @@
 #include "emeraude_config.hpp"
 
 /* Local inclusions. */
-#include "AssetLoaders/AssetData.hpp"
-#include "AssetLoaders/GLTFLoader.hpp"
+#include "SceneLoaders/SceneData.hpp"
+#include "SceneLoaders/GLTFLoader.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
 #include "Graphics/Renderer.hpp"
@@ -102,18 +102,18 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* Load via AssetLoaders. */
-		AssetLoaders::GLTFLoader loader{static_cast< Resources::Manager & >(this->serviceProvider())};
-		AssetLoaders::AssetData assetData;
+		/* Load via SceneLoaders. */
+		SceneLoaders::GLTFLoader loader{static_cast< Resources::Manager & >(this->serviceProvider())};
+		SceneLoaders::SceneData sceneData;
 
-		if ( !loader.load(filepath, assetData) )
+		if ( !loader.load(filepath, sceneData) )
 		{
 			TraceError{ClassId} << "Failed to load glTF asset: " << filepath;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !assetData.isSingleMesh() )
+		if ( !sceneData.isSingleMesh() )
 		{
 			TraceError{ClassId} <<
 				"Asset '" << filepath << "' contains multiple mesh nodes. "
@@ -122,9 +122,9 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		const auto nodeIdx = assetData.singleMeshNodeIndex();
-		const auto meshIdx = assetData.nodes[nodeIdx].meshIndex.value();
-		const auto & meshDesc = assetData.meshes[meshIdx];
+		const auto nodeIdx = sceneData.singleMeshNodeIndex();
+		const auto meshIdx = sceneData.nodes[nodeIdx].meshIndex.value();
+		const auto & meshDesc = sceneData.meshes[meshIdx];
 
 		/* Attach geometry + material (same pattern as load(Json)). */
 		if ( !this->setGeometry(meshDesc.geometry) )

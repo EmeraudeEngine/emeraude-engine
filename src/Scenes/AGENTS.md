@@ -874,7 +874,7 @@ depth test + write ON simply overwrites it.
 
 That is what lets a loader emit **no geometry at all** where the sky must show through — the `F_SKY1`
 sectors of a Doom map are holes on purpose, no stencil and no portal involved. With no background
-installed those pixels are opaque black, never garbage. See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md)
+installed those pixels are opaque black, never garbage. See [`@SceneLoaders/AGENTS.md`](../SceneLoaders/AGENTS.md)
 → WADLoader.
 
 **Dispatch logic** in `Scene::insertIntoRenderLists()`:
@@ -1027,20 +1027,20 @@ Lights without shadow use only the shared UBO descriptor set (binding 0). Shadow
 - `Component/AbstractLightEmitter.cpp:registerColorProjectionInBindless()` - Bindless registration
 - `Component/AbstractLightEmitter.cpp:onNotification()` - Async texture load callback
 
-## GLTFLoader → AssetLoaders (Refactored)
+## GLTFLoader → SceneLoaders (Refactored)
 
-> **MOVED:** `Scenes::GLTFLoader` has been refactored into `AssetLoaders::GLTFLoader` (`src/AssetLoaders/`).
-> The loader no longer depends on Scenes/ types. See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md) for the full loader documentation.
+> **MOVED:** `Scenes::GLTFLoader` has been refactored into `SceneLoaders::GLTFLoader` (`src/SceneLoaders/`).
+> The loader no longer depends on Scenes/ types. See [`@SceneLoaders/AGENTS.md`](../SceneLoaders/AGENTS.md) for the full loader documentation.
 >
-> Scene-side consumption is now handled by `Scenes::AssetDataConsumer`.
+> Scene-side consumption is now handled by `Scenes::SceneDataConsumer`.
 
 ### Overview
 
-`AssetDataConsumer` (`Scenes/AssetDataConsumer.hpp`) builds scene objects from an `AssetLoaders::AssetData`.
+`SceneDataConsumer` (`Scenes/SceneDataConsumer.hpp`) builds scene objects from an `SceneLoaders::SceneData`.
 
 ### Two Operating Modes
 
-`AssetDataConsumer::build()` operates in one of two modes:
+`SceneDataConsumer::build()` operates in one of two modes:
 
 | Mode | Condition | Entity Type | Use Case |
 |------|-----------|-------------|----------|
@@ -1049,15 +1049,29 @@ Lights without shadow use only the shared UBO descriptor set (binding 0). Shadow
 
 ```cpp
 // Step 1: Load resources (no Scene dependency)
-AssetLoaders::GLTFLoader loader{act.resourceManager()};
-AssetLoaders::AssetData assetData;
-loader.load(gltfPath, assetData);
+SceneLoaders::GLTFLoader loader{act.resourceManager()};
+SceneLoaders::SceneData sceneData;
+loader.load(gltfPath, sceneData);
 
 // Step 2: Build scene hierarchy
-Scenes::AssetDataConsumer consumer;
-consumer.build(assetData, scene);                // StaticEntity mode
-consumer.build(assetData, scene, parentNode);    // Node mode
+Scenes::SceneDataConsumer consumer;
+consumer.setCreateLights(true);                  // OFF by default — see the warning below
+consumer.build(sceneData, scene);                // StaticEntity mode
+consumer.build(sceneData, scene, parentNode);    // Node mode
 ```
+
+> [!WARNING]
+> **`setCreateLights()` is OFF by default, deliberately** (owner decision, 2026-08-08). A demo
+> that lights its own scene must never have an asset's emitters appear behind its back: a
+> photometric calibration is a whole, and uninvited lights silently rebalance the exposure the
+> scene was tuned for. Turn it on only when the asset **is** the lighting authority.
+>
+> Two consequences inside the consumer, both easy to break:
+> - a **light-only node survives flattening** — dropping it would drop the emitter with it;
+> - in `StaticEntity` mode a node with a light but **no mesh still gets an entity**, since the
+>   emitter needs an owner.
+>
+> Cameras declared by an asset are **never instantiated** — they stay data in `SceneData`.
 
 ### Configuration Options
 
@@ -1076,9 +1090,9 @@ consumer.build(assetData, scene, parentNode);    // Node mode
 
 ### Lighting Is Carried By the Descriptor (`MeshDescriptor::lightingEnabled`)
 
-`AssetDataConsumer` used to call `visual.getRenderableInstance()->enableLighting()`
+`SceneDataConsumer` used to call `visual.getRenderableInstance()->enableLighting()`
 **unconditionally** at FIVE sites (both operating modes, hierarchy and flatten paths). All five now
-honour `AssetLoaders::MeshDescriptor::lightingEnabled`, through
+honour `SceneLoaders::MeshDescriptor::lightingEnabled`, through
 `Graphics::RenderableInstance::Abstract::setLightingState(bool)` — the symmetric form of
 `enableLighting()`, implemented with `enableFlag`/`disableFlag` because
 `Base::FlagTrait< uint32_t >` offers no `setFlag(flag, state)`, and adding one to emeraude-base is
@@ -1087,7 +1101,7 @@ barred by the "Ave robustus!" feature freeze.
 - **Default is `true`** (boolean last in the struct layout) → **glTF and FBX behaviour is
   unchanged**: a mesh coming from a lit format expects the light set, the ambient pass and the
   environment IBL.
-- `AssetLoaders::WADLoader` sets `lightingEnabled = false` on its level mesh — the Doom sector light
+- `SceneLoaders::WADLoader` sets `lightingEnabled = false` on its level mesh — the Doom sector light
   levels are already baked into the vertex colors, so re-lighting would double-count them.
 
 > [!WARNING]
@@ -1180,11 +1194,11 @@ Textures are created **on-demand during material loading** with the correct sRGB
 
 ### Code References
 
-- `AssetLoaders/GLTFLoader.hpp/.cpp` — Resource loading (phases 1-6). See [`@AssetLoaders/AGENTS.md`](../AssetLoaders/AGENTS.md)
-- `AssetLoaders/AssetData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor — the latter carries `lightingEnabled`, default `true`)
+- `SceneLoaders/GLTFLoader.hpp/.cpp` — Resource loading (phases 1-6). See [`@SceneLoaders/AGENTS.md`](../SceneLoaders/AGENTS.md)
+- `SceneLoaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor — the latter carries `lightingEnabled`, default `true`)
 - `Graphics/RenderableInstance/Abstract.hpp:setLightingState()` — Symmetric form of `enableLighting()`, honoured at the consumer's five visual-setup sites
-- `AssetLoaders/Interface.hpp` — Loader interface + LoaderOptions
-- `Scenes/AssetDataConsumer.hpp/.cpp` — Scene builder (StaticEntity/Node modes, Y-up conversion)
+- `SceneLoaders/Interface.hpp` — Loader interface + LoaderOptions
+- `Scenes/SceneDataConsumer.hpp/.cpp` — Scene builder (StaticEntity/Node modes, Y-up conversion)
 - `Graphics/Renderable/SimpleMeshResource.cpp:load(path)` — Transparent single-mesh glTF loading
 - `Graphics/Renderable/MeshResource.cpp:load(path)` — Transparent multi-material glTF loading
 

@@ -1152,7 +1152,7 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 > returned. Capturing a local buffer by reference is a use-after-free: symptoms range from
 > "The manual loading function has return an error !" spam (garbage data failing validation)
 > to hard segfaults. **Move buffers into the lambda** (`[pixels = std::move(rgba)]`,
-> `[shape]`, `[geometry, materialList, ...]`). Caught while writing `AssetLoaders::WADLoader`
+> `[shape]`, `[geometry, materialList, ...]`). Caught while writing `SceneLoaders::WADLoader`
 > (Jul 2026); GLTFLoader/FBXLoader already follow the rule — keep it that way.
 
 ## Scene Rendering

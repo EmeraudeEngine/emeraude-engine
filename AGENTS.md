@@ -207,7 +207,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | | Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) | OpenAL spatial audio. |
 | | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) | Keyboard/Mouse/Pad. |
 | **Data** | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) | Async loading. |
-| | AssetLoaders | [`src/AssetLoaders/AGENTS.md`](src/AssetLoaders/AGENTS.md) | Composite format loaders (glTF, FBX stub). |
+| | SceneLoaders | [`src/SceneLoaders/AGENTS.md`](src/SceneLoaders/AGENTS.md) | Composite format loaders (glTF, FBX stub). |
 | | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) | Scene graph. |
 | | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. Skeletal data types in emeraude-base (`Base::Animation`), runtime eval here. |
 | **Tools/UI** | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) | UI & Debug. |
@@ -313,6 +313,7 @@ how to add new commands.
 -   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
 -   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
 -   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
+-   **Scene Loaders & OpenUSD:** [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) (**design; USD not yet implemented** — the `SceneData` extension to lights/cameras/instancers, tinyusdz, and the **absorption rule**: nothing USD survives `load()`, a missing capability is added to `Scenes`. Also defines the Intel Jungle Ruins scene as the engine's **GOLD GOAL** — the owner's *Saint Graal*, the scene whose completion says the runtime has arrived, and the benchmark it is measured against until then. Read before touching any loader or `SceneData`).
 -   **Windows Export API:** [`docs/windows-export-api.md`](docs/windows-export-api.md) (`EMEN_API` migration — required on MSVC with PCH; in progress).
 
 > [!CRITICAL]
@@ -427,7 +428,7 @@ All outbound references from this file, grouped by type.
 | Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) |
 | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) |
 | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) |
-| AssetLoaders | [`src/AssetLoaders/AGENTS.md`](src/AssetLoaders/AGENTS.md) |
+| SceneLoaders | [`src/SceneLoaders/AGENTS.md`](src/SceneLoaders/AGENTS.md) |
 | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) |
 | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) |
 | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) |
@@ -457,4 +458,5 @@ All outbound references from this file, grouped by type.
 | Runtime Session | [`docs/runtime-session.md`](docs/runtime-session.md) |
 | Pipeline Caching | [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) |
 | Toolkit System | [`docs/toolkit-system.md`](docs/toolkit-system.md) |
+| Scene Loaders & OpenUSD | [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) |
 | Windows Export API | [`docs/windows-export-api.md`](docs/windows-export-api.md) |

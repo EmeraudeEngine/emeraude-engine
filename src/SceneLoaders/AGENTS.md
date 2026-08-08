@@ -1,26 +1,57 @@
-# AssetLoaders — Composite Format Loading
+# SceneLoaders — Composite Format Loading
 
 Context for developing composite asset format loaders in the Emeraude Engine.
 
 ## Module Overview
 
-Format-agnostic namespace for loading multi-resource asset files (glTF, FBX, etc.) into engine resource containers. Produces a common intermediate representation (`AssetData`) that can be consumed by scene builders or mesh resources independently.
+Format-agnostic namespace for loading multi-resource asset files (glTF, FBX, etc.) into engine resource containers. Produces a common intermediate representation (`SceneData`) that can be consumed by scene builders or mesh resources independently.
+
+> [!IMPORTANT]
+> **This layer loads *scenes*.** Whether a given file yields a single model or a complete scene
+> (lights, cameras, instancers) is decided by **the format**, not by the caller — hence
+> `SceneLoaders` / `SceneData` (renamed from `AssetLoaders` / `AssetData`, 2026-08-08). It lives
+> engine-side rather than in emeraude-base precisely because emeraude-base only knows raw,
+> classic geometry formats; composite scene description belongs here.
+>
+> **Absorption rule.** A loader translates *everything* into native engine scene logic. When
+> the scene layer cannot express a source concept, the missing capability is added to `Scenes`
+> — never a foreign construct kept alive, never a workaround in the loader. See
+> [`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md).
 
 ## Architecture
 
 ### Design Philosophy
 
-AssetLoaders sits between `Base/` (raw data) and `Scenes/` (scene graph). Each loader:
+SceneLoaders sits between `Base/` (raw data) and `Scenes/` (scene graph). Each loader:
 1. Parses a composite file format (glTF, FBX, USDZ...)
 2. Creates engine resources in containers (images, textures, materials, geometry, meshes, skeletons, clips)
 3. Attaches skeletal data to renderables automatically via `SkeletalDataTrait`
-4. Produces a format-agnostic `AssetData` describing the node hierarchy — no Scene/Node/Entity types
+4. Produces a format-agnostic `SceneData` describing the node hierarchy — no Scene/Node/Entity types
 
 ### Layer Rules
 
 - **CAN depend on:** `Resources/`, `Graphics/`, `Animations/`, `Base/`
 - **CANNOT depend on:** `Scenes/`, `Physics/`, `Audio/`, `Input/`
-- **No Scene types:** `AssetData` uses `NodeDescriptor` (pure data), never `Node`, `StaticEntity`, or `Component::Visual`
+- **No Scene types:** `SceneData` uses `NodeDescriptor` (pure data), never `Node`, `StaticEntity`, or `Component::Visual`
+
+### Capability declaration (added 2026-08-08)
+
+`LoaderCapabilityBits` (`Interface.hpp`): `Geometry`, `Skinning`, `Animations`, `Lights`,
+`Cameras`.
+
+> [!WARNING]
+> The mask describes **the loader**, not the file format. FBX carries lights and cameras; our
+> FBX loader does not read them, so it must not advertise them. Current state:
+>
+> | Loader | Capabilities |
+> |--------|--------------|
+> | `GLTFLoader` | `Geometry \| Skinning \| Animations \| Lights \| Cameras` |
+> | `FBXLoader` | `Geometry \| Skinning \| Animations` |
+> | `WADLoader` | `Geometry` (a Doom level's lighting is BAKED, by design) |
+>
+> **Why it exists:** probing the produced `SceneData` for an empty light table cannot tell
+> *"this loader ignores lights"* from *"this asset declares none"* — and both happen. Ask the
+> capabilities before concluding anything about a scene's lighting.
 
 ### Common Interface
 
@@ -29,8 +60,11 @@ All loaders implement `Interface` (`Interface.hpp`):
 ```cpp
 class Interface {
     void setOptions(LoaderOptions options) noexcept;
-    virtual bool load(const std::filesystem::path & filepath, AssetData & output) noexcept = 0;
+    virtual bool load(const std::filesystem::path & filepath, SceneData & output) noexcept = 0;
     virtual bool supportsExtension(std::string_view extension) const noexcept = 0;
+
+    /* Mask of LoaderCapabilityBits. Pure virtual: a loader cannot inherit a lie. */
+    virtual uint32_t capabilities() const noexcept = 0;
 
     /* Default: returns false. Loaders override to opt in. */
     virtual bool loadAnimationClipsOnly(
@@ -49,7 +83,7 @@ class Interface {
 - `uniformScale` — `float`, default `1.0F`. Uniform scale applied at load time, **coherently across the full skinned-mesh pipeline**: vertex positions (in `loadMeshes`), joint local TRS translations + inverse bind matrix translation columns (in `loadSkins`), and animation translation keyframes (in `sampleAnimStack`, covers both `load()` embedded clips AND `loadAnimationClipsOnly()` external clips). Rotations and scales of joint TRS plus per-vertex influence weights are never touched. Linear (rotation + uniform 1×1 scale) parts of the inverse bind matrix are unaffected by uniform scaling around origin, so only the translation column needs scaling there. **Critical**: the same factor must be passed to BOTH the rig load (`load()`) AND every subsequent `loadAnimationClipsOnly()` against that rig — otherwise animation translation keyframes describe positions in a different unit than the scaled bind pose, joints snap to wrong positions on every keyframe, and the rig visually collapses on the first animated frame. Also propagates to the renderable's bounding box, so collision shapes derived from the bbox reflect the scaled size automatically. Use cases: enlarging a Mixamo humanoid that ships at 1.7 m to 1.9 m for a knight silhouette (validated end-to-end on the Paladin); shrinking oversized Maya/Blender assets without re-export.
 - `stripRootMotion` — `bool`, default `false`. When set, `loadAnimationClipsOnly()` zeroes the **horizontal (X, Z) components** of every translation keyframe on every root joint of the produced clips. Rotation + scale of the root and *all* channels of every other joint stay intact. The vertical (Y) component is preserved on purpose: it carries both the bind-pose hip-height offset (~0.85 m on a Mixamo humanoid — wiping it would sink the model halfway into the ground) and the natural up/down bounce of walking, jumping or crouching. Idiomatic "convert per-action FBX into in-place clip" pass at load time. Required for any FBX (Mixamo, Maya/Blender per-action) where the root bone carries forward locomotion AND the actor's displacement is also driven by gameplay code (physics force, navmesh) — without this, the two motions stack and the model snaps backward at every clip loop. Has no effect on `load()` (full-pipeline import) — only on `loadAnimationClipsOnly()`. **Future work — Option C (root-motion mode):** instead of stripping, extract the root delta per frame and feed it back to the actor as actual displacement (foot-planting, no foot-sliding, animation-driven speed). Would replace the actor-side `addForce` for animation-driven characters; tracked as a TODO for the locomotion subsystem.
 
-**Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::AssetDataConsumer`.
+**Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::SceneDataConsumer`.
 
 ### Double-sided materials (honored since Jun 2026)
 
@@ -119,30 +153,59 @@ It bails early if no `ComponentType::Diffuse` has been registered yet — emitti
 
 `loadAnimationClipsOnly()` covers the **split-animation workflow** (Mixamo per-action exports, Maya/Blender per-action FBX). The asset file is opened, every `anim_stack` is sampled against the bones of `targetSkeleton` resolved **by joint name**, and the produced clips are appended to `output`. Joints with no matching node are silently dropped (kept at bind pose). See FBXLoader section for the concrete implementation.
 
-### AssetData — Common Intermediate Format
+### SceneData — Common Intermediate Format
 
-`AssetData` (`AssetData.hpp`) is the format-agnostic output:
+`SceneData` (`SceneData.hpp`) is the format-agnostic output:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `meshes` | `vector<MeshDescriptor>` | Loaded renderables + geometry + materials |
 | `skeletons` | `vector<shared_ptr<SkeletonResource>>` | Skeletal data |
 | `animationClips` | `vector<shared_ptr<AnimationClipResource>>` | Animation clips |
-| `nodes` | `vector<NodeDescriptor>` | Format-agnostic hierarchy (name, localFrame, meshIndex, childIndices) |
+| `lights` | `vector<LightDescriptor>` | Punctual lights, in **photometric units** (see below) |
+| `cameras` | `vector<CameraDescriptor>` | Authored camera viewpoints — **data only** |
+| `nodes` | `vector<NodeDescriptor>` | Format-agnostic hierarchy (name, localFrame, meshIndex, lightIndex, cameraIndex, childIndices) |
 | `rootNodeIndices` | `vector<size_t>` | Root node indices |
 | `skinJointNodeIndices` | `unordered_set<size_t>` | Joint nodes to skip in scene building |
+
+#### Lights — the unit contract (added 2026-08-08)
+
+> [!IMPORTANT]
+> `LightDescriptor::intensity` carries the unit **the engine itself uses**, which is also what
+> glTF `KHR_lights_punctual` specifies — they agree term for term, so the glTF path applies **no
+> conversion factor at all**:
+>
+> | Type | Unit | Engine setter |
+> |------|------|---------------|
+> | `Directional` | **lux** (illuminance) | `DirectionalLight::setIlluminance()` |
+> | `Point` | **candela** (luminous intensity) | `PointLight::setIntensity()` |
+> | `Spot` | **candela** | `SpotLight::setIntensity()` |
+>
+> A loader whose source format uses another unit MUST convert **once, here**. A descriptor whose
+> unit depended on the producing format would defeat the point of a format-agnostic contract.
+>
+> Cone angles are stored in **DEGREES** (glTF authors radians — `GLTFLoader` converts).
+> `range` is a **culling bound, never a dimmer**: the falloff is carried by the inverse square.
+> `0.0F` means the asset declared none, and the engine default is left alone.
+
+#### Cameras are data, never instantiated
+
+An authored camera is a viewpoint, not a game camera (owner decision, 2026-08-08). The consumer
+never turns one into a `Component::Camera` on its own — the caller decides. `yFieldOfView` is in
+**degrees**; feed it to `Camera::setFieldOfView()`, which derives the focal length through the
+camera's own sensor height, so the framing stays a lens.
 
 Helper methods:
 - `isSingleMesh()` — true if exactly one node has a mesh (skeleton joints don't count)
 - `singleMeshNodeIndex()` — index of the single mesh-bearing node
 
-**`MeshDescriptor::lightingEnabled`** (`bool`, default `true`, booleans last in the struct layout) declares whether the consumer must put this mesh on the **LIT path**. Default `true` means glTF and FBX behaviour is unchanged — a mesh coming from a lit format expects the light set, the ambient pass and the environment IBL. A loader that bakes its own lighting into the vertex colors on unlit materials — `WADLoader` is the reference case — sets it to `false`. `Scenes::AssetDataConsumer` previously called `visual.getRenderableInstance()->enableLighting()` **unconditionally at five sites**; all five now honor the descriptor's flag through the new `Graphics::RenderableInstance::Abstract::setLightingState(bool)`, the symmetric form of `enableLighting()`. It is implemented with `enableFlag`/`disableFlag` because `Base::FlagTrait< uint32_t >` offers no `setFlag(flag, state)` — and adding one to emeraude-base is barred by the *"Ave robustus!"* feature freeze.
+**`MeshDescriptor::lightingEnabled`** (`bool`, default `true`, booleans last in the struct layout) declares whether the consumer must put this mesh on the **LIT path**. Default `true` means glTF and FBX behaviour is unchanged — a mesh coming from a lit format expects the light set, the ambient pass and the environment IBL. A loader that bakes its own lighting into the vertex colors on unlit materials — `WADLoader` is the reference case — sets it to `false`. `Scenes::SceneDataConsumer` previously called `visual.getRenderableInstance()->enableLighting()` **unconditionally at five sites**; all five now honor the descriptor's flag through the new `Graphics::RenderableInstance::Abstract::setLightingState(bool)`, the symmetric form of `enableLighting()`. It is implemented with `enableFlag`/`disableFlag` because `Base::FlagTrait< uint32_t >` offers no `setFlag(flag, state)` — and adding one to emeraude-base is barred by the *"Ave robustus!"* feature freeze.
 
 ### Two Consumption Paths
 
 ```
-AssetData
-    ├── Scenes::AssetDataConsumer  → Scene hierarchy (Nodes / StaticEntities)
+SceneData
+    ├── Scenes::SceneDataConsumer  → Scene hierarchy (Nodes / StaticEntities)
     └── SimpleMeshResource::load(path) / MeshResource::load(path)  → Single mesh resource
 ```
 
@@ -161,11 +224,52 @@ Loads glTF 2.0 / GLB files. Uses `fastgltf` library (vendored, static).
 | 3 | `loadMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
 | 4 | `loadSkins()` | `SkeletonResource` + `Skin` |
 | 5 | `loadAnimations()` | `AnimationClipResource` |
-| 6 | `buildNodeDescriptors()` | `NodeDescriptor` hierarchy in `AssetData` |
+| 6 | `buildNodeDescriptors()` | `NodeDescriptor` hierarchy in `SceneData` |
 
 Phases 4-5 skipped when `skipSkinning = true`.
 
 **Resource naming:** `glTF:{stem}/{Category}/{name}` (e.g., `glTF:Fox/Mesh/fox1`)
+
+### USDLoader (OpenUSD via tinyusdz — stage inventory only, Aug 2026)
+
+Reads `.usd` / `.usda` / `.usdc` / `.usdz`. Its reference asset, Intel's Jungle Ruins, is the
+engine's **GOLD GOAL** (owner: *"le Saint Graal"*) — see
+[`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md) § 8. **`capabilities()` returns `None`**: it currently
+produces a stage inventory and no scene data. The mask grows as each translation milestone
+lands. Full design: [`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md).
+
+> [!CAUTION]
+> **`tinyusdz::LoadUSDFromFile()` composes NOTHING.** It reads the root layer, parses the
+> `subLayers` metadata, and returns success — a 19-sublayer stage comes back holding 2 prims.
+> Composition is an explicit, separate pipeline and the loader uses it:
+>
+> ```
+> LoadLayerFromFile → CompositeSublayers → LayerToStage
+> ```
+>
+> **`CompositeAllArcs()` is deliberately NOT called.** It resolves references, payloads,
+> inherits and variants eagerly; measured on Intel Jungle Ruins that is **24 minutes and 15 GB
+> resident with no convergence**. Sublayers alone take seconds at ~3 GB and yield the whole
+> non-instanced scene. Prototype references are resolved on demand, per element.
+> ⇒ **`inherits` and `variants` are not applied on this path.**
+
+> [!WARNING]
+> **An unresolved reference fails SILENTLY and takes its whole prim with it.** tinyusdz stores
+> each sublayer's working directory as the raw relative path written in the file, never joined
+> with the root, so a reference made from inside a sublayer is looked up relative to the
+> *process* working directory. Symptom measured before the fix: 84 meshes loaded, **0
+> PointInstancer prototypes, no error raised**. The loader defends against it by (a) composing
+> from an absolute path and (b) seeding the resolver with **every** directory of the stage tree.
+>
+> This is why the loader's first functional output is an **inventory**: byte-scanning a USDC
+> crate cannot tell you what a stage contains (crate files compress their token table), and a
+> plausible-looking scene with missing prototypes is indistinguishable from a correct one
+> without counting prims.
+
+`patches/tinyusdz.patch` in ext-deps-generator carries two fixes: the missing install rules
+(upstream installs only its optional C API), and an RAII guard restoring the asset resolver's
+state after recursion — without it, every sibling sublayer after the first resolves against the
+wrong directory. Upstream left a `TODO` asking for exactly that.
 
 ### FBXLoader (Phase 5 — Full Pipeline + LoaderOptions Plumbed)
 
@@ -186,7 +290,7 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 | 3 | `loadMeshes()` | **implemented** (+ skin influences/weights) | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
 | 4 | `loadSkins()` | **implemented** | `SkeletonResource` + `Skin` |
 | 5 | `loadAnimations()` | **implemented** (⚠ coord-space bug — see note below) | `AnimationClipResource` |
-| 6 | `buildNodeDescriptors()` | **implemented** | `NodeDescriptor` hierarchy in `AssetData` |
+| 6 | `buildNodeDescriptors()` | **implemented** | `NodeDescriptor` hierarchy in `SceneData` |
 
 **Mesh loading specifics:**
 
@@ -194,7 +298,7 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 - Multi-material meshes are split into sub-geometry groups (one per `ufbx_mesh_part`).
 - Per-corner vertex emission (position/normal/UV via `ufbx_get_vertex_vec3`/`vec2`) — the same vertex is written 3 times per triangle. A deduplication pass via `ufbx_generate_indices` can be added later if the overhead becomes measurable.
 - **UV V-flip on read** — FBX stores UVs with V=0 at the bottom (OpenGL convention) ; the engine and Vulkan use V=0 at the top, matching glTF. The loader stores `(u, 1.0F - v)` in the vertex stream so embedded textures sample the correct region. **Without this flip, FBX models render with shuffled / black-region UVs** (regression marker — see `Paladin` recette below).
-- Winding pre-compensates for the 180° X rotation applied by `AssetDataConsumer` (indices 1 and 2 swapped), identical to GLTFLoader.
+- Winding pre-compensates for the 180° X rotation applied by `SceneDataConsumer` (indices 1 and 2 swapped), identical to GLTFLoader.
 - Materials are resolved per-part via `mesh.materials.data[partIdx]->typed_id` → `m_materials[...]`, falling back to the default PBR resource when the FBX has no material connected.
 
 **Image/material loading specifics:**
@@ -218,12 +322,12 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 - Parent joint resolution walks `bone_node->parent` until another cluster's bone is hit; isolated clusters map to `NoParent` (skeleton root).
 - `cluster->geometry_to_bone` is used as the inverse bind matrix (local vertex → bone space), converted from ufbx's 3×4 affine into the engine's 4×4 column-major `Matrix<4, float>` via `convertUfbxMatrix`.
 - Skinned meshes are tracked in `m_meshToSkinIndex` at emission time; at the end of `load()`, each skinned renderable gets `setSkeletalData(skeleton, skin, clips)` via `Renderable::SkeletalDataTrait`, exactly like GLTFLoader.
-- Bone element ids are added to `AssetData::skinJointNodeIndices` so the scene consumer does not instantiate them as regular scene nodes — joint transforms are owned by the `SkeletalAnimator`.
+- Bone element ids are added to `SceneData::skinJointNodeIndices` so the scene consumer does not instantiate them as regular scene nodes — joint transforms are owned by the `SkeletalAnimator`.
 
 **LoaderOptions support:**
 
 - `skipSkinning` — bypasses `loadSkins()`, `loadAnimations()` and per-vertex influence emission in `loadMeshes()`. A mesh that would otherwise have been skinned is loaded as a static pose.
-- `excludedNodeNames` — matched against `ufbx_node.name` during `buildNodeDescriptors()`. Any node whose own name **or any ancestor's name** is in the set is dropped from `AssetData::nodes` along with its entire subtree. Handy for stripping rig helpers, dummies, LOD levels or debug locators.
+- `excludedNodeNames` — matched against `ufbx_node.name` during `buildNodeDescriptors()`. Any node whose own name **or any ancestor's name** is in the set is dropped from `SceneData::nodes` along with its entire subtree. Handy for stripping rig helpers, dummies, LOD levels or debug locators.
 
 **Animation specifics (étape 4):**
 
@@ -238,11 +342,11 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 For the **split-animation workflow** (a rig FBX + many per-action FBX next to it — Mixamo, Maya, Blender per-action exports):
 
 ```cpp
-AssetLoaders::FBXLoader loader{resources};
-AssetLoaders::AssetData assetData;
-loader.load("Paladin/base_model.fbx", assetData);   // rig + skin + bind pose
+SceneLoaders::FBXLoader loader{resources};
+SceneLoaders::SceneData sceneData;
+loader.load("Paladin/base_model.fbx", sceneData);   // rig + skin + bind pose
 
-const auto & skeleton = *assetData.skeletons[0];
+const auto & skeleton = *sceneData.skeletons[0];
 
 std::vector<std::shared_ptr<AnimationClipResource>> clips;
 for ( const auto & entry : std::filesystem::directory_iterator{"Paladin/"} ) {
@@ -253,7 +357,7 @@ for ( const auto & entry : std::filesystem::directory_iterator{"Paladin/"} ) {
 
 /* Replace (don't append): base_model.fbx ships with a bind-pose anim_stack
  * which would otherwise sit at index 0 and freeze the auto-play. */
-for ( const auto & meshDesc : assetData.meshes ) {
+for ( const auto & meshDesc : sceneData.meshes ) {
     if ( auto * trait = dynamic_cast<Renderable::SkeletalDataTrait *>(meshDesc.renderable.get()) ) {
         trait->setAnimationClips(clips);
     }
@@ -567,7 +671,7 @@ load-bearing.
 **Unlit on purpose — `MeshDescriptor::lightingEnabled = false`:**
 
 The loader sets `meshDescriptor.lightingEnabled = false` on its level mesh (field documented under
-*AssetData* above). The level is self-illuminating by construction — baked vertex colors on unlit
+*SceneData* above). The level is self-illuminating by construction — baked vertex colors on unlit
 `BasicResource` — and the lit path's ambient/IBL term is scaled by the background luminance, so
 putting the level on it would multiply every surface by the sky brightness and destroy the baked
 look.
@@ -598,7 +702,7 @@ look.
 - ⚠️ **`UP = -Y` in this engine**: a `lookAt` target with a **more negative** Y looks **UP**. Getting
   that backwards produced a bogus *"the sky lights the level ×41"* conclusion in the session that
   introduced the skybox. That ×41 figure still appears in two code comments —
-  `AssetData.hpp` (`MeshDescriptor::lightingEnabled`) and `WADLoader.cpp` (the
+  `SceneData.hpp` (`MeshDescriptor::lightingEnabled`) and `WADLoader.cpp` (the
   `meshDescriptor.lightingEnabled = false` block) — the *mechanism* they describe is real, the
   **number is not measured**. Treat it as unverified, and reword those comments when the file is
   next touched. (`RenderableInstance::Abstract::setLightingState()` describes the same mechanism
@@ -624,22 +728,22 @@ the masked variant suffixed `/Masked` — see the compound key above), `WAD:{ste
 
 ## Consumers
 
-### Scenes::AssetDataConsumer (`Scenes/AssetDataConsumer.hpp`)
+### Scenes::SceneDataConsumer (`Scenes/SceneDataConsumer.hpp`)
 
-Transforms `AssetData` into scene objects:
+Transforms `SceneData` into scene objects:
 
 ```cpp
-AssetDataConsumer consumer;
+SceneDataConsumer consumer;
 consumer.setFlattenHierarchy(false);  // optional
-consumer.build(assetData, scene);               // StaticEntity mode
-consumer.build(assetData, scene, parentNode);   // Node mode
+consumer.build(sceneData, scene);               // StaticEntity mode
+consumer.build(sceneData, scene, parentNode);   // Node mode
 ```
 
 Handles Y-up → Y-down conversion (180° X rotation on parentNode).
 
 Honors `MeshDescriptor::lightingEnabled` at **all five** visual-creation sites via
 `RenderableInstance::Abstract::setLightingState(bool)` — it no longer calls `enableLighting()`
-unconditionally (see *AssetData* above).
+unconditionally (see *SceneData* above).
 
 ### SimpleMeshResource::load(path) / MeshResource::load(path)
 
@@ -656,16 +760,16 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
 
 ## Important Files
 
-- `AssetLoaders/AssetData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, AssetData)
-- `AssetLoaders/Interface.hpp` — Loader interface + LoaderOptions
-- `AssetLoaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation
-- `AssetLoaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)
-- `AssetLoaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)
-- `Scenes/AssetDataConsumer.hpp/.cpp` — Scene-side consumer (Node/StaticEntity builder, honors `lightingEnabled`)
+- `SceneLoaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, SceneData)
+- `SceneLoaders/Interface.hpp` — Loader interface + LoaderOptions
+- `SceneLoaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation
+- `SceneLoaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)
+- `SceneLoaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)
+- `Scenes/SceneDataConsumer.hpp/.cpp` — Scene-side consumer (Node/StaticEntity builder, honors `lightingEnabled`)
 
 ## Critical Rules
 
 1. **Never add Scene dependencies** to this namespace — that's the whole point of the separation
 2. **Lambda capture safety** — same rules as before: never capture `this`, pre-resolve shared_ptr
 3. **Default resource on every error path** — never leave a nullptr slot
-4. **Y-up conversion is NOT done here** — it's the consumer's responsibility (AssetDataConsumer or the actor code)
+4. **Y-up conversion is NOT done here** — it's the consumer's responsibility (SceneDataConsumer or the actor code)

@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/LoaderOptions.hpp
+ * src/SceneLoaders/LoaderOptions.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -36,12 +36,12 @@
 #include <unordered_set>
 
 /* Forward declarations. */
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	struct MeshDescriptor;
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	/**
 	 * @brief Material container selected for the resources produced by a loader.
@@ -57,7 +57,7 @@ namespace EmEn::AssetLoaders
 	/**
 	 * @brief Options that affect resource loading (shared by all loaders).
 	 * @note flattenHierarchy is NOT here — it only affects scene building,
-	 * not resource loading, and belongs in Scenes::AssetDataConsumer.
+	 * not resource loading, and belongs in Scenes::SceneDataConsumer.
 	 */
 	struct EMEN_API LoaderOptions
 	{

@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/AssetData.hpp
+ * src/SceneLoaders/SceneData.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -39,6 +40,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Color.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Animations
@@ -65,7 +67,7 @@ namespace EmEn::Graphics
 	}
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	/**
 	 * @brief Format-agnostic description of a node in the loaded asset.
@@ -76,7 +78,97 @@ namespace EmEn::AssetLoaders
 		std::string name;
 		Base::Math::CartesianFrame< float > localFrame;
 		std::optional< size_t > meshIndex;
+		std::optional< size_t > lightIndex;
+		std::optional< size_t > cameraIndex;
 		std::vector< size_t > childIndices;
+	};
+
+	/**
+	 * @brief Type of a punctual light declared by an asset.
+	 */
+	enum class LightType : uint8_t
+	{
+		Directional,
+		Point,
+		Spot,
+		/**
+		 * @brief An environment dome: a whole-sky emitter carrying an image, not a position.
+		 * @note This is what USD calls a DomeLight and glTF has no equivalent for. Its
+		 * @a textureAssetPath is the sky itself — the engine turns it into a cubemap background
+		 * and derives its ambient and IBL from the texels, so it must NOT be instantiated as a
+		 * punctual emitter.
+		 */
+		Environment
+	};
+
+	/**
+	 * @brief Describes a light declared by an asset, in PHOTOMETRIC units.
+	 * @note The unit of @a intensity depends on @a type and follows the engine's photometric
+	 * contract exactly, which is also the glTF `KHR_lights_punctual` contract:
+	 * a directional light carries an ILLUMINANCE in lux, a point or spot light carries a
+	 * LUMINOUS INTENSITY in candela. A loader MUST convert its source unit here, once, rather
+	 * than leaving the consumer to guess — a descriptor whose unit depends on the producing
+	 * format would defeat the whole point of a format-agnostic contract.
+	 */
+	struct EMEN_API LightDescriptor
+	{
+		std::string name;
+		Base::PixelFactory::Color< float > color{1.0F, 1.0F, 1.0F, 1.0F};
+		/**
+		 * @brief Illuminance in lux (directional) or luminous intensity in candela (point, spot).
+		 */
+		float intensity{0.0F};
+		/**
+		 * @brief Culling distance beyond which the contribution is dropped, in engine units.
+		 * @note `0.0F` means the asset declared no range. It is NOT a dimmer: the engine's
+		 * falloff is carried by the inverse square, the radius is a culling window.
+		 */
+		float range{0.0F};
+		/**
+		 * @brief Spot cone angles in DEGREES, converted from whatever the source format uses.
+		 * @note Ignored unless @a type is Spot.
+		 */
+		float innerConeAngle{0.0F};
+		float outerConeAngle{0.0F};
+		/**
+		 * @brief Absolute path to the environment image (Environment type only).
+		 * @note Resolved by the loader against the asset, so the consumer never has to know
+		 * where the source file lived.
+		 */
+		std::string textureAssetPath;
+		LightType type{LightType::Point};
+	};
+
+	/**
+	 * @brief Describes a camera declared by an asset.
+	 * @note Authored viewpoints are DATA: the consumer never instantiates them on its own
+	 * (owner decision, 2026-08-08). A caller turns one into a `Component::Camera`, uses it as a
+	 * benchmark viewpoint, or ignores it. The node carrying the camera holds its pose.
+	 */
+	struct EMEN_API CameraDescriptor
+	{
+		std::string name;
+		/**
+		 * @brief Vertical field of view in DEGREES (perspective only).
+		 * @note The engine derives the focal length from this through the camera's own sensor
+		 * height, so the framing stays a lens — never feed an angle to the renderer directly.
+		 */
+		float yFieldOfView{0.0F};
+		/**
+		 * @brief Orthographic half-extents (orthographic only).
+		 */
+		float xMagnification{0.0F};
+		float yMagnification{0.0F};
+		float distanceNear{0.1F};
+		/**
+		 * @brief `0.0F` means the asset asked for an infinite projection.
+		 */
+		float distanceFar{0.0F};
+		/**
+		 * @brief `0.0F` means the asset left it to the render target.
+		 */
+		float aspectRatio{0.0F};
+		bool orthographic{false};
 	};
 
 	/**
@@ -105,12 +197,18 @@ namespace EmEn::AssetLoaders
 	 * The node hierarchy is described via NodeDescriptors without any
 	 * dependency on the Scenes/ subsystem.
 	 */
-	struct EMEN_API AssetData
+	struct EMEN_API SceneData
 	{
 		/* Resources (already in engine containers). */
 		std::vector< MeshDescriptor > meshes;
 		std::vector< std::shared_ptr< Animations::SkeletonResource > > skeletons;
 		std::vector< std::shared_ptr< Animations::AnimationClipResource > > animationClips;
+
+		/* Scene description carried by the format, referenced by NodeDescriptor indices.
+		 * Empty when the format cannot carry them, or when the loader does not read them —
+		 * ask Interface::capabilities() to tell the two apart before loading. */
+		std::vector< LightDescriptor > lights;
+		std::vector< CameraDescriptor > cameras;
 
 		/* Node hierarchy (format-agnostic). */
 		std::vector< NodeDescriptor > nodes;

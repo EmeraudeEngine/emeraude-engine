@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/GLTFLoader.cpp
+ * src/SceneLoaders/GLTFLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -38,7 +38,7 @@
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
-#include "AssetData.hpp"
+#include "SceneData.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
@@ -63,7 +63,7 @@
 #include "VertexFactory/Shape.hpp"
 #include "Tracer.hpp"
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	using namespace Graphics;
 	using namespace Graphics::Geometry;
@@ -165,7 +165,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	bool
-	GLTFLoader::load (const std::filesystem::path & filepath, AssetData & output) noexcept
+	GLTFLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
 		/* Generate a resource prefix from the filename. */
 		m_resourcePrefix = "glTF:" + filepath.stem().string() + "/";
@@ -276,6 +276,11 @@ namespace EmEn::AssetLoaders
 			}
 		}
 
+		/* Lights and cameras MUST be collected before the node descriptors, which index into
+		 * these tables and bound-check against their size. */
+		GLTFLoader::loadLights(asset, output);
+		GLTFLoader::loadCameras(asset, output);
+
 		/* Build format-agnostic node descriptors. */
 		this->buildNodeDescriptors(asset, output);
 
@@ -283,6 +288,18 @@ namespace EmEn::AssetLoaders
 		output.skeletons = m_skeletons;
 		output.animationClips = m_animationClips;
 		output.skinJointNodeIndices = m_skinJointNodeIndices;
+
+		/* Inventory of what the asset actually declared. Without it, "the scene is not lit" is
+		 * indistinguishable from "the asset declares no light", and every diagnosis starts blind
+		 * — the Sponza glTF, for one, declares 24 lights whose intensity is all zero. */
+		TraceInfo{ClassId} <<
+			filepath.filename().string() << " loaded: " <<
+			output.nodes.size() << " nodes, " <<
+			output.meshes.size() << " meshes, " <<
+			output.skeletons.size() << " skeletons, " <<
+			output.animationClips.size() << " clips, " <<
+			output.lights.size() << " lights, " <<
+			output.cameras.size() << " cameras.";
 
 		return true;
 	}
@@ -723,7 +740,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	bool
-	GLTFLoader::loadMeshes (const fastgltf::Asset & asset, AssetData & output) noexcept
+	GLTFLoader::loadMeshes (const fastgltf::Asset & asset, SceneData & output) noexcept
 	{
 		m_meshes.resize(asset.meshes.size());
 		m_shapes.resize(asset.meshes.size());
@@ -1091,7 +1108,7 @@ namespace EmEn::AssetLoaders
 			m_meshes[meshIndex] = mesh;
 			m_shapes[meshIndex] = shape;
 
-			/* Store in AssetData for consumer access. */
+			/* Store in SceneData for consumer access. */
 			MeshDescriptor descriptor;
 			descriptor.renderable = mesh;
 			descriptor.geometry = std::static_pointer_cast< Geometry::Interface >(geometry);
@@ -1117,7 +1134,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	void
-	GLTFLoader::loadSkins (const fastgltf::Asset & asset, AssetData & /*output*/) noexcept
+	GLTFLoader::loadSkins (const fastgltf::Asset & asset, SceneData & /*output*/) noexcept
 	{
 		if ( asset.skins.empty() )
 		{
@@ -1259,7 +1276,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	void
-	GLTFLoader::loadAnimations (const fastgltf::Asset & asset, AssetData & /*output*/) noexcept
+	GLTFLoader::loadAnimations (const fastgltf::Asset & asset, SceneData & /*output*/) noexcept
 	{
 		if ( asset.animations.empty() )
 		{
@@ -1437,7 +1454,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	void
-	GLTFLoader::buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) const noexcept
+	GLTFLoader::buildNodeDescriptors (const fastgltf::Asset & asset, SceneData & output) const noexcept
 	{
 		/* Determine the default scene. */
 		size_t sceneIndex = 0;
@@ -1483,6 +1500,18 @@ namespace EmEn::AssetLoaders
 				descriptor.meshIndex = glTFNode.meshIndex.value();
 			}
 
+			/* Lights and cameras are referenced by index, exactly like meshes. The node carries
+			 * their pose; the descriptor tables carry their parameters. */
+			if ( glTFNode.lightIndex.has_value() && glTFNode.lightIndex.value() < output.lights.size() )
+			{
+				descriptor.lightIndex = glTFNode.lightIndex.value();
+			}
+
+			if ( glTFNode.cameraIndex.has_value() && glTFNode.cameraIndex.value() < output.cameras.size() )
+			{
+				descriptor.cameraIndex = glTFNode.cameraIndex.value();
+			}
+
 			/* Process children. */
 			descriptor.childIndices.reserve(glTFNode.children.size());
 
@@ -1502,6 +1531,118 @@ namespace EmEn::AssetLoaders
 			output.rootNodeIndices.push_back(nodeIndex);
 
 			buildNode(buildNode, nodeIndex);
+		}
+	}
+
+	void
+	GLTFLoader::loadLights (const fastgltf::Asset & asset, SceneData & output) noexcept
+	{
+		output.lights.reserve(asset.lights.size());
+
+		for ( const auto & glTFLight : asset.lights )
+		{
+			LightDescriptor descriptor;
+			descriptor.name = std::string{glTFLight.name};
+			descriptor.color = Base::PixelFactory::Color< float >{
+				static_cast< float >(glTFLight.color[0]),
+				static_cast< float >(glTFLight.color[1]),
+				static_cast< float >(glTFLight.color[2]),
+				1.0F
+			};
+
+			/* KHR_lights_punctual and the engine's photometric contract agree TERM FOR TERM:
+			 * illuminance in lux for a directional light, luminous intensity in candela for a
+			 * point or a spot. There is deliberately no conversion factor here — if an exporter
+			 * ever writes something else, it will show up as a wrong magnitude, not as a wrong
+			 * model. */
+			descriptor.intensity = static_cast< float >(glTFLight.intensity);
+
+			if ( glTFLight.range.has_value() )
+			{
+				descriptor.range = static_cast< float >(glTFLight.range.value());
+			}
+
+			switch ( glTFLight.type )
+			{
+				case fastgltf::LightType::Directional :
+					descriptor.type = LightType::Directional;
+					break;
+
+				case fastgltf::LightType::Point :
+					descriptor.type = LightType::Point;
+					break;
+
+				case fastgltf::LightType::Spot :
+					descriptor.type = LightType::Spot;
+
+					/* glTF authors cone angles in RADIANS, the engine takes DEGREES. */
+					if ( glTFLight.innerConeAngle.has_value() )
+					{
+						descriptor.innerConeAngle = Base::Math::Degree(static_cast< float >(glTFLight.innerConeAngle.value()));
+					}
+
+					if ( glTFLight.outerConeAngle.has_value() )
+					{
+						descriptor.outerConeAngle = Base::Math::Degree(static_cast< float >(glTFLight.outerConeAngle.value()));
+					}
+					break;
+			}
+
+			TraceDebug{ClassId} <<
+				"Light '" << descriptor.name << "': " <<
+				( descriptor.type == LightType::Directional ? "directional " : ( descriptor.type == LightType::Point ? "point " : "spot " ) ) <<
+				descriptor.intensity << ( descriptor.type == LightType::Directional ? " lux" : " cd" ) <<
+				", range " << descriptor.range <<
+				", cone " << descriptor.innerConeAngle << "/" << descriptor.outerConeAngle << " deg.";
+
+			output.lights.emplace_back(std::move(descriptor));
+		}
+	}
+
+	void
+	GLTFLoader::loadCameras (const fastgltf::Asset & asset, SceneData & output) noexcept
+	{
+		output.cameras.reserve(asset.cameras.size());
+
+		for ( const auto & glTFCamera : asset.cameras )
+		{
+			CameraDescriptor descriptor;
+			descriptor.name = std::string{glTFCamera.name};
+
+			if ( const auto * perspective = std::get_if< fastgltf::Camera::Perspective >(&glTFCamera.camera) )
+			{
+				/* glTF authors a VERTICAL field of view in radians. The engine takes degrees and
+				 * derives the focal length through its own sensor height — the framing therefore
+				 * stays a lens, which is the engine's rule. */
+				descriptor.yFieldOfView = Base::Math::Degree(static_cast< float >(perspective->yfov));
+				descriptor.distanceNear = static_cast< float >(perspective->znear);
+
+				if ( perspective->zfar.has_value() )
+				{
+					descriptor.distanceFar = static_cast< float >(perspective->zfar.value());
+				}
+
+				if ( perspective->aspectRatio.has_value() )
+				{
+					descriptor.aspectRatio = static_cast< float >(perspective->aspectRatio.value());
+				}
+			}
+			else if ( const auto * orthographic = std::get_if< fastgltf::Camera::Orthographic >(&glTFCamera.camera) )
+			{
+				descriptor.orthographic = true;
+				descriptor.xMagnification = static_cast< float >(orthographic->xmag);
+				descriptor.yMagnification = static_cast< float >(orthographic->ymag);
+				descriptor.distanceNear = static_cast< float >(orthographic->znear);
+				descriptor.distanceFar = static_cast< float >(orthographic->zfar);
+			}
+
+			TraceDebug{ClassId} <<
+				"Camera '" << descriptor.name << "': " <<
+				( descriptor.orthographic ? "orthographic" : "perspective" ) <<
+				", yFOV " << descriptor.yFieldOfView << " deg" <<
+				", near " << descriptor.distanceNear << ", far " << descriptor.distanceFar << ".";
+
+			output.cameras.emplace_back(std::move(descriptor));
 		}
 	}
 }

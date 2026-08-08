@@ -222,6 +222,21 @@ namespace EmEn::Graphics::Renderable
 				return m_environmentCubemap;
 			}
 
+			/**
+			 * @brief Sets the cubemap the scene derives its environment lighting from.
+			 * @note ⚠️ Only the name-based load paths set this on their own. A skybox built from a
+			 * MATERIAL — the path a loader takes when it produces the cubemap itself, as USD's
+			 * DomeLight does — has no way to declare its IBL source otherwise, and the scene
+			 * silently keeps `+DefaultTextureCubemap`: the sky renders correctly while every
+			 * surface is lit by the wrong environment, with no error anywhere.
+			 * @param cubemap A reference to the cubemap texture the sky is made of.
+			 */
+			void
+			setEnvironmentCubemap (const std::shared_ptr< TextureResource::TextureCubemap > & cubemap) noexcept
+			{
+				m_environmentCubemap = cubemap;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */

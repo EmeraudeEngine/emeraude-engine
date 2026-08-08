@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/FBXLoader.cpp
+ * src/SceneLoaders/FBXLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -41,7 +41,7 @@
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
-#include "AssetData.hpp"
+#include "SceneData.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
@@ -68,7 +68,7 @@
 #include "VertexFactory/Shape.hpp"
 #include "Tracer.hpp"
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	using namespace Base::Animation;
 	using namespace Base::Math;
@@ -241,7 +241,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	bool
-	FBXLoader::load (const std::filesystem::path & filepath, AssetData & output) noexcept
+	FBXLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
 		m_resourcePrefix = "FBX:" + filepath.stem().string() + "/";
 
@@ -725,7 +725,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	bool
-	FBXLoader::loadMeshes (const ufbx_scene & scene, AssetData & output) noexcept
+	FBXLoader::loadMeshes (const ufbx_scene & scene, SceneData & output) noexcept
 	{
 		output.meshes.reserve(scene.meshes.count);
 
@@ -1169,7 +1169,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	void
-	FBXLoader::loadSkins (const ufbx_scene & scene, AssetData & /*output*/) noexcept
+	FBXLoader::loadSkins (const ufbx_scene & scene, SceneData & /*output*/) noexcept
 	{
 		if ( scene.skin_deformers.count == 0 )
 		{
@@ -1331,7 +1331,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	void
-	FBXLoader::loadAnimations (const ufbx_scene & scene, AssetData & /*output*/) noexcept
+	FBXLoader::loadAnimations (const ufbx_scene & scene, SceneData & /*output*/) noexcept
 	{
 		if ( scene.anim_stacks.count == 0 || scene.skin_deformers.count == 0 )
 		{
@@ -1690,10 +1690,10 @@ namespace EmEn::AssetLoaders
 	}
 
 	void
-	FBXLoader::buildNodeDescriptors (const ufbx_scene & scene, AssetData & output) noexcept
+	FBXLoader::buildNodeDescriptors (const ufbx_scene & scene, SceneData & output) noexcept
 	{
 		/* Build a lookup from ufbx_node to its index in the ufbx scene,
-		 * which becomes the corresponding index in AssetData::nodes. */
+		 * which becomes the corresponding index in SceneData::nodes. */
 		std::unordered_map< const ufbx_node *, size_t > nodeIndexMap;
 		nodeIndexMap.reserve(scene.nodes.count);
 

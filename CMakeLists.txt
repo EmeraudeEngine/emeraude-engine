@@ -400,6 +400,8 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupUFBX) # FBX parsing library
 
+	include(SetupTinyUSDZ) # OpenUSD parsing library (USDA / USDC crate / USDZ)
+
 	include(SetupBC7EncRDO) # BC7 texture compression
 
 	include(SetupOpenAL)

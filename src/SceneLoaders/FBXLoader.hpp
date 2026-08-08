@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/FBXLoader.hpp
+ * src/SceneLoaders/FBXLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -75,18 +75,18 @@ namespace EmEn::Graphics
 	}
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	/**
 	 * @brief Loads FBX composite assets into engine resource containers.
-	 * @note Produces an AssetData with format-agnostic node descriptors.
+	 * @note Produces an SceneData with format-agnostic node descriptors.
 	 * Uses ufbx (vendored) for parsing. No dependency on Scenes/ types.
 	 */
 	class EMEN_API FBXLoader final : public Interface
 	{
 		public:
 
-			static constexpr auto ClassId{"AssetLoaders::FBXLoader"};
+			static constexpr auto ClassId{"SceneLoaders::FBXLoader"};
 
 			/**
 			 * @brief Constructs the loader with access to the resource manager.
@@ -99,11 +99,11 @@ namespace EmEn::AssetLoaders
 
 			}
 
-			/** @copydoc EmEn::AssetLoaders::Interface::load() */
+			/** @copydoc EmEn::SceneLoaders::Interface::load() */
 			[[nodiscard]]
-			bool load (const std::filesystem::path & filepath, AssetData & output) noexcept override;
+			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::AssetLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
@@ -111,7 +111,19 @@ namespace EmEn::AssetLoaders
 				return extension == ".fbx";
 			}
 
-			/** @copydoc EmEn::AssetLoaders::Interface::loadAnimationClipsOnly() */
+			/**
+			 * @copydoc EmEn::SceneLoaders::Interface::capabilities()
+			 * @note FBX carries lights and cameras; this loader does not read them yet. The mask
+			 * states what is DELIVERED, so they stay out until the code exists.
+			 */
+			[[nodiscard]]
+			uint32_t
+			capabilities () const noexcept override
+			{
+				return Geometry | Skinning | Animations;
+			}
+
+			/** @copydoc EmEn::SceneLoaders::Interface::loadAnimationClipsOnly() */
 			[[nodiscard]]
 			bool loadAnimationClipsOnly (
 				const std::filesystem::path & filepath,
@@ -128,13 +140,13 @@ namespace EmEn::AssetLoaders
 			bool loadMaterials (const ufbx_scene & scene) noexcept;
 
 			[[nodiscard]]
-			bool loadMeshes (const ufbx_scene & scene, AssetData & output) noexcept;
+			bool loadMeshes (const ufbx_scene & scene, SceneData & output) noexcept;
 
-			void loadSkins (const ufbx_scene & scene, AssetData & output) noexcept;
+			void loadSkins (const ufbx_scene & scene, SceneData & output) noexcept;
 
-			void loadAnimations (const ufbx_scene & scene, AssetData & output) noexcept;
+			void loadAnimations (const ufbx_scene & scene, SceneData & output) noexcept;
 
-			void buildNodeDescriptors (const ufbx_scene & scene, AssetData & output) noexcept;
+			void buildNodeDescriptors (const ufbx_scene & scene, SceneData & output) noexcept;
 
 			/**
 			 * @brief Resamples one anim_stack into per-joint T/R/S channels.

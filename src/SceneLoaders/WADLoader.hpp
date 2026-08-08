@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/WADLoader.hpp
+ * src/SceneLoaders/WADLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -43,7 +43,7 @@ namespace EmEn::Resources
 	class Manager;
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	/**
 	 * @brief Loads a classic Doom-engine WAD (IWAD/PWAD) and materializes ONE map as static
@@ -55,7 +55,7 @@ namespace EmEn::AssetLoaders
 	 * level MATERIALIZER, not a game loader.
 	 * @note Both map naming schemes are supported (ExMy and MAPxx); the map is selected by
 	 * 1-based index in directory order (setMapIndex) or by explicit name (setMapName).
-	 * @extends EmEn::AssetLoaders::Interface This is an asset loader.
+	 * @extends EmEn::SceneLoaders::Interface This is an asset loader.
 	 */
 	class EMEN_API WADLoader final : public Interface
 	{
@@ -154,16 +154,29 @@ namespace EmEn::AssetLoaders
 				return m_playerStartDirection;
 			}
 
-			/** @copydoc EmEn::AssetLoaders::Interface::load() */
+			/** @copydoc EmEn::SceneLoaders::Interface::load() */
 			[[nodiscard]]
-			bool load (const std::filesystem::path & filepath, AssetData & output) noexcept override;
+			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::AssetLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
 			{
 				return extension == ".wad" || extension == ".WAD";
+			}
+
+			/**
+			 * @copydoc EmEn::SceneLoaders::Interface::capabilities()
+			 * @note A Doom level carries its lighting BAKED into vertex colours on unlit
+			 * materials — there is no punctual light to deliver, by design. See
+			 * MeshDescriptor::lightingEnabled.
+			 */
+			[[nodiscard]]
+			uint32_t
+			capabilities () const noexcept override
+			{
+				return Geometry;
 			}
 
 		private:

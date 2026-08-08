@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/GLTFLoader.hpp
+ * src/SceneLoaders/GLTFLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -74,18 +74,18 @@ namespace EmEn::Graphics
 	}
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	/**
 	 * @brief Loads glTF/glb composite assets into engine resource containers.
-	 * @note Produces an AssetData with format-agnostic node descriptors.
+	 * @note Produces an SceneData with format-agnostic node descriptors.
 	 * No dependency on Scenes/ types (Scene, Node, StaticEntity).
 	 */
 	class EMEN_API GLTFLoader final : public Interface
 	{
 		public:
 
-			static constexpr auto ClassId{"AssetLoaders::GLTFLoader"};
+			static constexpr auto ClassId{"SceneLoaders::GLTFLoader"};
 
 			/**
 			 * @brief Constructs the loader with access to the resource manager.
@@ -98,16 +98,24 @@ namespace EmEn::AssetLoaders
 
 			}
 
-			/** @copydoc EmEn::AssetLoaders::Interface::load() */
+			/** @copydoc EmEn::SceneLoaders::Interface::load() */
 			[[nodiscard]]
-			bool load (const std::filesystem::path & filepath, AssetData & output) noexcept override;
+			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::AssetLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
 			{
 				return extension == ".gltf" || extension == ".glb";
+			}
+
+			/** @copydoc EmEn::SceneLoaders::Interface::capabilities() */
+			[[nodiscard]]
+			uint32_t
+			capabilities () const noexcept override
+			{
+				return Geometry | Skinning | Animations | Lights | Cameras;
 			}
 
 		private:
@@ -119,13 +127,29 @@ namespace EmEn::AssetLoaders
 			bool loadMaterials (const fastgltf::Asset & asset) noexcept;
 
 			[[nodiscard]]
-			bool loadMeshes (const fastgltf::Asset & asset, AssetData & output) noexcept;
+			bool loadMeshes (const fastgltf::Asset & asset, SceneData & output) noexcept;
 
-			void loadSkins (const fastgltf::Asset & asset, AssetData & output) noexcept;
+			void loadSkins (const fastgltf::Asset & asset, SceneData & output) noexcept;
 
-			void loadAnimations (const fastgltf::Asset & asset, AssetData & output) noexcept;
+			void loadAnimations (const fastgltf::Asset & asset, SceneData & output) noexcept;
 
-			void buildNodeDescriptors (const fastgltf::Asset & asset, AssetData & output) const noexcept;
+			/**
+			 * @brief Collects the punctual lights declared by the asset, in photometric units.
+			 * @note Must run BEFORE buildNodeDescriptors(), which indexes into output.lights.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param output A reference to the scene data to populate.
+			 */
+			static void loadLights (const fastgltf::Asset & asset, SceneData & output) noexcept;
+
+			/**
+			 * @brief Collects the authored camera viewpoints declared by the asset.
+			 * @note Must run BEFORE buildNodeDescriptors(), which indexes into output.cameras.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param output A reference to the scene data to populate.
+			 */
+			static void loadCameras (const fastgltf::Asset & asset, SceneData & output) noexcept;
+
+			void buildNodeDescriptors (const fastgltf::Asset & asset, SceneData & output) const noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

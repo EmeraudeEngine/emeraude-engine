@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/Interface.hpp
+ * src/SceneLoaders/Interface.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,7 +26,11 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string_view>
@@ -44,18 +48,41 @@ namespace EmEn
 		class AnimationClipResource;
 	}
 
-	namespace AssetLoaders
+	namespace SceneLoaders
 	{
-		struct AssetData;
+		struct SceneData;
 	}
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
+	/**
+	 * @brief Declares what a loader implementation actually delivers in a SceneData.
+	 * @note This describes THE LOADER, not the file format. FBX can carry lights and cameras;
+	 * our FBX loader does not read them, so it must not advertise them. A caller uses this to
+	 * decide how to treat the result — for instance whether to light the scene itself —
+	 * WITHOUT hard-coding format names or probing the produced SceneData for emptiness, which
+	 * cannot distinguish "the loader ignores lights" from "this asset declares none".
+	 */
+	enum EMEN_API LoaderCapabilityBits : uint32_t
+	{
+		None = 0U,
+		/** Meshes, their materials and the node hierarchy. */
+		Geometry = 1U << 0,
+		/** Skeletons and per-vertex skinning data. */
+		Skinning = 1U << 1,
+		/** Animation clips embedded in the asset. */
+		Animations = 1U << 2,
+		/** Punctual lights, in the photometric units of LightDescriptor. */
+		Lights = 1U << 3,
+		/** Authored camera viewpoints. */
+		Cameras = 1U << 4
+	};
+
 	/**
 	 * @brief Common interface for composite asset format loaders.
 	 * @note Implementations load resources into engine containers and produce
-	 * a format-agnostic AssetData describing the node hierarchy.
+	 * a format-agnostic SceneData describing the node hierarchy.
 	 * No dependency on Scenes/ types.
 	 */
 	class EMEN_API Interface
@@ -88,11 +115,11 @@ namespace EmEn::AssetLoaders
 			/**
 			 * @brief Loads a composite asset from a file.
 			 * @param filepath Path to the asset file.
-			 * @param output The AssetData to populate with loaded resources and hierarchy.
+			 * @param output The SceneData to populate with loaded resources and hierarchy.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool load (const std::filesystem::path & filepath, AssetData & output) noexcept = 0;
+			virtual bool load (const std::filesystem::path & filepath, SceneData & output) noexcept = 0;
 
 			/**
 			 * @brief Checks if this loader supports the given file extension.
@@ -101,6 +128,15 @@ namespace EmEn::AssetLoaders
 			 */
 			[[nodiscard]]
 			virtual bool supportsExtension (std::string_view extension) const noexcept = 0;
+
+			/**
+			 * @brief Returns what this loader actually produces, as a mask of LoaderCapabilityBits.
+			 * @note Pure virtual on purpose: a loader that gains or loses a capability MUST
+			 * restate it here, and a new loader cannot silently inherit a lie.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			virtual uint32_t capabilities () const noexcept = 0;
 
 			/**
 			 * @brief Loads animation clips from an asset file and binds them to an existing skeleton.

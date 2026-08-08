@@ -1,5 +1,5 @@
 /*
- * src/AssetLoaders/WADLoader.cpp
+ * src/SceneLoaders/WADLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -41,7 +41,7 @@
 
 /* Local inclusions. */
 #include "VertexFactory/Shape.hpp"
-#include "AssetData.hpp"
+#include "SceneData.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
@@ -440,7 +440,7 @@ namespace
 	}
 }
 
-namespace EmEn::AssetLoaders
+namespace EmEn::SceneLoaders
 {
 	using namespace Base;
 	using namespace Base::Math;
@@ -455,7 +455,7 @@ namespace EmEn::AssetLoaders
 	}
 
 	bool
-	WADLoader::load (const std::filesystem::path & filepath, AssetData & output) noexcept
+	WADLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
 		/* ---- Read the whole WAD in memory (a full IWAD is ~15 MB). ---- */
 		std::vector< uint8_t > wad;
@@ -1806,7 +1806,7 @@ namespace EmEn::AssetLoaders
 			return false;
 		}
 
-		/* ---- AssetData: one mesh, one root node. ---- */
+		/* ---- SceneData: one mesh, one root node. ---- */
 		MeshDescriptor meshDescriptor;
 		meshDescriptor.renderable = mesh;
 		meshDescriptor.geometry = std::static_pointer_cast< Geometry::Interface >(geometry);
