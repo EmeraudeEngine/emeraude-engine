@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/USDLoader.hpp
+ * src/Scenes/Loaders/USDLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -67,7 +67,7 @@ namespace EmEn::Graphics::Material
 	class Interface;
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief OpenUSD scene loader, backed by tinyusdz (USDA, USDC crate, USDZ).
@@ -75,13 +75,13 @@ namespace EmEn::SceneLoaders
 	 * translated into native engine scene logic and dropped. Where the scene layer cannot
 	 * express a USD concept, the capability is added to Scenes — never a USD construct kept
 	 * alive, never a workaround here. See docs/scene-loaders-usd.md.
-	 * @extends EmEn::SceneLoaders::Interface
+	 * @extends EmEn::Scenes::Loaders::Interface
 	 */
 	class EMEN_API USDLoader final : public Interface
 	{
 		public:
 
-			static constexpr auto ClassId{"SceneLoaders::USDLoader"};
+			static constexpr auto ClassId{"USDLoader"};
 
 			/**
 			 * @brief Constructs an OpenUSD loader.
@@ -89,11 +89,11 @@ namespace EmEn::SceneLoaders
 			 */
 			explicit USDLoader (Resources::Manager & resources) noexcept;
 
-			/** @copydoc EmEn::SceneLoaders::Interface::load() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::load() */
 			[[nodiscard]]
 			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
@@ -102,7 +102,7 @@ namespace EmEn::SceneLoaders
 			}
 
 			/**
-			 * @copydoc EmEn::SceneLoaders::Interface::capabilities()
+			 * @copydoc EmEn::Scenes::Loaders::Interface::capabilities()
 			 * @note Deliberately None: this loader currently produces a STAGE INVENTORY and no
 			 * scene data at all. The mask states what is delivered, so it grows only as each
 			 * translation milestone lands — geometry, then materials, then instancing, then

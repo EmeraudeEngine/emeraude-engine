@@ -30,8 +30,8 @@
 #include "emeraude_config.hpp"
 
 /* Local inclusions. */
-#include "SceneLoaders/SceneData.hpp"
-#include "SceneLoaders/GLTFLoader.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
+#include "Scenes/Loaders/GLTFLoader.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
 #include "Graphics/Material/PBRResource.hpp"
@@ -160,9 +160,9 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* Load via SceneLoaders. */
-		SceneLoaders::GLTFLoader loader{static_cast< Resources::Manager & >(this->serviceProvider())};
-		SceneLoaders::SceneData sceneData;
+		/* Load via Scenes::Loaders. */
+		Scenes::Loaders::GLTFLoader loader{static_cast< Resources::Manager & >(this->serviceProvider())};
+		Scenes::Loaders::SceneData sceneData;
 
 		if ( !loader.load(filepath, sceneData) )
 		{

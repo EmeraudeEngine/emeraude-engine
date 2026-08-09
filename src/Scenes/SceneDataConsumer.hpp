@@ -38,7 +38,7 @@
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace SceneLoaders
+	namespace Scenes::Loaders
 	{
 		struct SceneData;
 		struct NodeDescriptor;
@@ -55,7 +55,7 @@ namespace EmEn::Scenes
 {
 	/**
 	 * @brief Consumes an SceneData to build Scene node hierarchies or static entities.
-	 * @note This is the Scene-level counterpart of SceneLoaders::Interface.
+	 * @note This is the Scene-level counterpart of Scenes::Loaders::Interface.
 	 * It takes format-agnostic SceneData and creates engine Scene objects.
 	 */
 	class EMEN_API SceneDataConsumer final
@@ -121,13 +121,13 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool build (const SceneLoaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode = nullptr) noexcept;
+			bool build (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode = nullptr) noexcept;
 
 		private:
 
-			void processNodeAsStatic (const SceneLoaders::SceneData & sceneData, size_t nodeIndex, Scene & scene, const Base::Math::CartesianFrame< float > & parentWorldFrame) noexcept;
+			void processNodeAsStatic (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, Scene & scene, const Base::Math::CartesianFrame< float > & parentWorldFrame) noexcept;
 
-			void processNodeAsNode (const SceneLoaders::SceneData & sceneData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept;
+			void processNodeAsNode (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept;
 
 			/**
 			 * @brief Attaches the light referenced by a node descriptor to an engine entity.
@@ -138,7 +138,7 @@ namespace EmEn::Scenes
 			 * @param entity A reference to the entity that will own the light component.
 			 */
 			template< typename entity_t >
-			void attachLight (const SceneLoaders::SceneData & sceneData, const SceneLoaders::NodeDescriptor & nodeDescriptor, entity_t & entity) const noexcept;
+			void attachLight (const Scenes::Loaders::SceneData & sceneData, const Scenes::Loaders::NodeDescriptor & nodeDescriptor, entity_t & entity) const noexcept;
 
 			/**
 			 * @brief Turns every instance set of an asset into spatial cells of scene entities.
@@ -149,7 +149,7 @@ namespace EmEn::Scenes
 			 * @param rootFrame The frame applied to the whole asset.
 			 * @return size_t The number of cells created, all sets together.
 			 */
-			size_t buildInstanceSets (const SceneLoaders::SceneData & sceneData, Scene & scene, const Base::Math::CartesianFrame< float > & rootFrame) const noexcept;
+			size_t buildInstanceSets (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const Base::Math::CartesianFrame< float > & rootFrame) const noexcept;
 
 			float m_instanceCellSize{32.0F};
 			bool m_flattenHierarchy{false};

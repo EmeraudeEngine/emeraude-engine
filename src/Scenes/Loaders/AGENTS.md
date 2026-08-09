@@ -1,4 +1,4 @@
-# SceneLoaders — Composite Format Loading
+# Scenes::Loaders — Composite Format Loading
 
 Context for developing composite asset format loaders in the Emeraude Engine.
 
@@ -9,7 +9,7 @@ Format-agnostic namespace for loading multi-resource asset files (glTF, FBX, etc
 > [!IMPORTANT]
 > **This layer loads *scenes*.** Whether a given file yields a single model or a complete scene
 > (lights, cameras, instancers) is decided by **the format**, not by the caller — hence
-> `SceneLoaders` / `SceneData` (renamed from `AssetLoaders` / `AssetData`, 2026-08-08). It lives
+> `Loaders` / `SceneData` (renamed from `AssetLoaders` / `AssetData`, 2026-08-08). It lives
 > engine-side rather than in emeraude-base precisely because emeraude-base only knows raw,
 > classic geometry formats; composite scene description belongs here.
 >
@@ -22,7 +22,7 @@ Format-agnostic namespace for loading multi-resource asset files (glTF, FBX, etc
 
 ### Design Philosophy
 
-SceneLoaders sits between `Base/` (raw data) and `Scenes/` (scene graph). Each loader:
+Scenes::Loaders sits between `Base/` (raw data) and `Scenes/` (scene graph). Each loader:
 1. Parses a composite file format (glTF, FBX, USDZ...)
 2. Creates engine resources in containers (images, textures, materials, geometry, meshes, skeletons, clips)
 3. Attaches skeletal data to renderables automatically via `SkeletalDataTrait`
@@ -407,8 +407,8 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 For the **split-animation workflow** (a rig FBX + many per-action FBX next to it — Mixamo, Maya, Blender per-action exports):
 
 ```cpp
-SceneLoaders::FBXLoader loader{resources};
-SceneLoaders::SceneData sceneData;
+Scenes::Loaders::FBXLoader loader{resources};
+Scenes::Loaders::SceneData sceneData;
 loader.load("Paladin/base_model.fbx", sceneData);   // rig + skin + bind pose
 
 const auto & skeleton = *sceneData.skeletons[0];
@@ -825,11 +825,11 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
 
 ## Important Files
 
-- `SceneLoaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, SceneData)
-- `SceneLoaders/Interface.hpp` — Loader interface + LoaderOptions
-- `SceneLoaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation
-- `SceneLoaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)
-- `SceneLoaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)
+- `Scenes/Loaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, SceneData)
+- `Scenes/Loaders/Interface.hpp` — Loader interface + LoaderOptions
+- `Scenes/Loaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation
+- `Scenes/Loaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)
+- `Scenes/Loaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)
 - `Scenes/SceneDataConsumer.hpp/.cpp` — Scene-side consumer (Node/StaticEntity builder, honors `lightingEnabled`)
 
 ## Critical Rules

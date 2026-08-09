@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/WADLoader.cpp
+ * src/Scenes/Loaders/WADLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -440,7 +440,7 @@ namespace
 	}
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	using namespace Base;
 	using namespace Base::Math;

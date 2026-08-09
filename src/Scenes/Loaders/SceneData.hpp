@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/SceneData.hpp
+ * src/Scenes/Loaders/SceneData.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -67,7 +67,7 @@ namespace EmEn::Graphics
 	}
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief Format-agnostic description of a node in the loaded asset.

@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/USDLoader.cpp
+ * src/Scenes/Loaders/USDLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -61,7 +61,7 @@
 #include "Tracer.hpp"
 #include "VertexFactory/Shape.hpp"
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/* Above this, a prim tree is noise rather than information. */
 	static constexpr size_t PrimTreeReportLimit{80};

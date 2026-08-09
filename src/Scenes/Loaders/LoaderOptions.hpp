@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/LoaderOptions.hpp
+ * src/Scenes/Loaders/LoaderOptions.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -36,12 +36,12 @@
 #include <unordered_set>
 
 /* Forward declarations. */
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	struct MeshDescriptor;
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief Material container selected for the resources produced by a loader.

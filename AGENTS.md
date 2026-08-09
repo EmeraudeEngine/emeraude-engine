@@ -207,7 +207,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | | Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) | OpenAL spatial audio. |
 | | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) | Keyboard/Mouse/Pad. |
 | **Data** | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) | Async loading. |
-| | SceneLoaders | [`src/SceneLoaders/AGENTS.md`](src/SceneLoaders/AGENTS.md) | Composite format loaders (glTF, FBX stub). |
+| | Scenes::Loaders | [`src/Scenes/Loaders/AGENTS.md`](src/Scenes/Loaders/AGENTS.md) | Composite format loaders (glTF, FBX stub). |
 | | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) | Scene graph. |
 | | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. Skeletal data types in emeraude-base (`Base::Animation`), runtime eval here. |
 | **Tools/UI** | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) | UI & Debug. |
@@ -428,7 +428,7 @@ All outbound references from this file, grouped by type.
 | Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) |
 | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) |
 | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) |
-| SceneLoaders | [`src/SceneLoaders/AGENTS.md`](src/SceneLoaders/AGENTS.md) |
+| Scenes::Loaders | [`src/Scenes/Loaders/AGENTS.md`](src/Scenes/Loaders/AGENTS.md) |
 | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) |
 | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) |
 | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) |

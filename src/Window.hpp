@@ -614,7 +614,7 @@ namespace EmEn
 			 * Anything called here therefore runs re-entrantly with respect to the operation being
 			 * waited on: keep that operation on a worker thread and this call on the main one.
 			 *
-			 * @see SceneLoaders::Interface::loadAsync()
+			 * @see Scenes::Loaders::Interface::loadAsync()
 			 */
 			void
 			pumpEvents () const noexcept

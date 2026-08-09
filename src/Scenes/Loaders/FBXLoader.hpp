@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/FBXLoader.hpp
+ * src/Scenes/Loaders/FBXLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -75,7 +75,7 @@ namespace EmEn::Graphics
 	}
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief Loads FBX composite assets into engine resource containers.
@@ -86,7 +86,7 @@ namespace EmEn::SceneLoaders
 	{
 		public:
 
-			static constexpr auto ClassId{"SceneLoaders::FBXLoader"};
+			static constexpr auto ClassId{"FBXLoader"};
 
 			/**
 			 * @brief Constructs the loader with access to the resource manager.
@@ -99,11 +99,11 @@ namespace EmEn::SceneLoaders
 
 			}
 
-			/** @copydoc EmEn::SceneLoaders::Interface::load() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::load() */
 			[[nodiscard]]
 			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
@@ -112,7 +112,7 @@ namespace EmEn::SceneLoaders
 			}
 
 			/**
-			 * @copydoc EmEn::SceneLoaders::Interface::capabilities()
+			 * @copydoc EmEn::Scenes::Loaders::Interface::capabilities()
 			 * @note FBX carries lights and cameras; this loader does not read them yet. The mask
 			 * states what is DELIVERED, so they stay out until the code exists.
 			 */
@@ -123,7 +123,7 @@ namespace EmEn::SceneLoaders
 				return Geometry | Skinning | Animations;
 			}
 
-			/** @copydoc EmEn::SceneLoaders::Interface::loadAnimationClipsOnly() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::loadAnimationClipsOnly() */
 			[[nodiscard]]
 			bool loadAnimationClipsOnly (
 				const std::filesystem::path & filepath,

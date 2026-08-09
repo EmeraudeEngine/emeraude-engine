@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/FBXLoader.cpp
+ * src/Scenes/Loaders/FBXLoader.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -68,7 +68,7 @@
 #include "VertexFactory/Shape.hpp"
 #include "Tracer.hpp"
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	using namespace Base::Animation;
 	using namespace Base::Math;

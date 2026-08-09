@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/WADLoader.hpp
+ * src/Scenes/Loaders/WADLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -43,7 +43,7 @@ namespace EmEn::Resources
 	class Manager;
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief Loads a classic Doom-engine WAD (IWAD/PWAD) and materializes ONE map as static
@@ -55,7 +55,7 @@ namespace EmEn::SceneLoaders
 	 * level MATERIALIZER, not a game loader.
 	 * @note Both map naming schemes are supported (ExMy and MAPxx); the map is selected by
 	 * 1-based index in directory order (setMapIndex) or by explicit name (setMapName).
-	 * @extends EmEn::SceneLoaders::Interface This is an asset loader.
+	 * @extends EmEn::Scenes::Loaders::Interface This is an asset loader.
 	 */
 	class EMEN_API WADLoader final : public Interface
 	{
@@ -154,11 +154,11 @@ namespace EmEn::SceneLoaders
 				return m_playerStartDirection;
 			}
 
-			/** @copydoc EmEn::SceneLoaders::Interface::load() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::load() */
 			[[nodiscard]]
 			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
@@ -167,7 +167,7 @@ namespace EmEn::SceneLoaders
 			}
 
 			/**
-			 * @copydoc EmEn::SceneLoaders::Interface::capabilities()
+			 * @copydoc EmEn::Scenes::Loaders::Interface::capabilities()
 			 * @note A Doom level carries its lighting BAKED into vertex colours on unlit
 			 * materials — there is no punctual light to deliver, by design. See
 			 * MeshDescriptor::lightingEnabled.

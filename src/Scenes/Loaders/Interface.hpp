@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/Interface.hpp
+ * src/Scenes/Loaders/Interface.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -49,13 +49,13 @@ namespace EmEn
 		class AnimationClipResource;
 	}
 
-	namespace SceneLoaders
+	namespace Scenes::Loaders
 	{
 		struct SceneData;
 	}
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief Declares what a loader implementation actually delivers in a SceneData.

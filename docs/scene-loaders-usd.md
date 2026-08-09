@@ -8,7 +8,7 @@
 > [`renderable-instance-system.md`](renderable-instance-system.md),
 > [`resource-management.md`](resource-management.md),
 > [`coordinate-system.md`](coordinate-system.md),
-> [`../src/SceneLoaders/AGENTS.md`](../src/SceneLoaders/AGENTS.md).
+> [`../src/Scenes/Loaders/AGENTS.md`](../src/Scenes/Loaders/AGENTS.md).
 
 ## 1. Purpose
 
@@ -450,7 +450,7 @@ duplicates correctly dropped). Plants upright, each with its own rotation and sc
 
 ## 5. Contract Changes
 
-### 5.1 Rename — `AssetLoaders` becomes `SceneLoaders` ✅ **DONE (2026-08-08)**
+### 5.1 Rename — `AssetLoaders` becomes `Loaders` ✅ **DONE (2026-08-08)**
 
 The layer loads *scenes*; the format decides whether a given file yields a single model or a
 complete scene. It lives engine-side, not in emeraude-base, precisely because emeraude-base
@@ -458,15 +458,15 @@ only knows raw geometry formats.
 
 | Current | New |
 |---------|-----|
-| `EmEn::AssetLoaders` / `src/AssetLoaders/` | `EmEn::SceneLoaders` / `src/SceneLoaders/` |
-| `AssetLoaders::Interface` | `SceneLoaders::Interface` |
+| `EmEn::AssetLoaders` / `src/AssetLoaders/` | `EmEn::Scenes::Loaders` / `src/Scenes/Loaders/` |
+| `AssetLoaders::Interface` | `Scenes::Loaders::Interface` |
 | `AssetData` | `SceneData` |
 | `Scenes::AssetDataConsumer` | `Scenes::SceneDataConsumer` |
 
 Done **before** USD lands, as an isolated mechanical pass, so the name never lies in the
 interval.
 
-### 5.2 `SceneLoaders::Interface` — unification ✅ **DONE (2026-08-08)**
+### 5.2 `Scenes::Loaders::Interface` — unification ✅ **DONE (2026-08-08)**
 
 The interface is the single point every format conforms to. USD conforms like the others.
 Beyond the rename it gains a **capability declaration**: a caller must be able to ask what a
@@ -616,7 +616,7 @@ This reorders the work, and one distinction must not be blurred:
 
 Each milestone compiles and is verifiable on its own.
 
-1. **Rename** — `SceneLoaders` / `SceneData` / `SceneDataConsumer`, mechanical pass, no
+1. **Rename** — `Loaders` / `SceneData` / `SceneDataConsumer`, mechanical pass, no
    behaviour change.
 2. **Contract extension** — lights, cameras, instancers in `SceneData`; capability declaration
    on `Interface`; **wired to glTF first** to validate against a known format.

@@ -30,16 +30,16 @@
 #include <numbers>
 
 /* Local inclusions. */
-#include "SceneLoaders/SceneData.hpp"
+#include "Math/Vector.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "InstanceCluster.hpp"
-#include "Math/Vector.hpp"
-#include "Node.hpp"
+#include "Loaders/SceneData.hpp"
+#include "Component/DirectionalLight.hpp"
+#include "Component/PointLight.hpp"
+#include "Component/SpotLight.hpp"
+#include "Component/Visual.hpp"
 #include "Scene.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
-#include "Scenes/Component/PointLight.hpp"
-#include "Scenes/Component/SpotLight.hpp"
-#include "Scenes/Component/Visual.hpp"
+#include "Node.hpp"
 #include "StaticEntity.hpp"
 #include "Tracer.hpp"
 
@@ -48,7 +48,7 @@ namespace EmEn::Scenes
 	using namespace Base::Math;
 
 	bool
-	SceneDataConsumer::build (const SceneLoaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
+	SceneDataConsumer::build (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
 	{
 		/* glTF is Y-up, engine is Y-down: 180° rotation around X.
 		 * Build the root transform that will be applied to all children. */
@@ -72,7 +72,7 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-		const bool useStaticEntities = (parentNode == nullptr);
+		const bool useStaticEntities = parentNode == nullptr;
 
 		if ( useStaticEntities )
 		{
@@ -147,7 +147,7 @@ namespace EmEn::Scenes
 	}
 
 	size_t
-	SceneDataConsumer::buildInstanceSets (const SceneLoaders::SceneData & sceneData, Scene & scene, const CartesianFrame< float > & rootFrame) const noexcept
+	SceneDataConsumer::buildInstanceSets (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const CartesianFrame< float > & rootFrame) const noexcept
 	{
 		if ( sceneData.instanceSets.empty() )
 		{
@@ -224,7 +224,7 @@ namespace EmEn::Scenes
 
 	template< typename entity_t >
 	void
-	SceneDataConsumer::attachLight (const SceneLoaders::SceneData & sceneData, const SceneLoaders::NodeDescriptor & nodeDescriptor, entity_t & entity) const noexcept
+	SceneDataConsumer::attachLight (const Scenes::Loaders::SceneData & sceneData, const Scenes::Loaders::NodeDescriptor & nodeDescriptor, entity_t & entity) const noexcept
 	{
 		if ( !m_createLights || !nodeDescriptor.lightIndex.has_value() )
 		{
@@ -246,7 +246,7 @@ namespace EmEn::Scenes
 		 * as-is. Converting here would mean converting twice. */
 		switch ( light.type )
 		{
-			case SceneLoaders::LightType::Directional :
+			case Scenes::Loaders::LightType::Directional :
 				entity.template componentBuilder< Component::DirectionalLight >(componentName)
 					.setup([&light] (auto & component) {
 						component.setColor(light.color);
@@ -255,7 +255,7 @@ namespace EmEn::Scenes
 					.build();
 				break;
 
-			case SceneLoaders::LightType::Point :
+			case Scenes::Loaders::LightType::Point :
 				entity.template componentBuilder< Component::PointLight >(componentName)
 					.setup([&light] (auto & component) {
 						component.setColor(light.color);
@@ -271,7 +271,7 @@ namespace EmEn::Scenes
 					.build();
 				break;
 
-			case SceneLoaders::LightType::Spot :
+			case Scenes::Loaders::LightType::Spot :
 				entity.template componentBuilder< Component::SpotLight >(componentName)
 					.setup([&light] (auto & component) {
 						component.setColor(light.color);
@@ -294,17 +294,17 @@ namespace EmEn::Scenes
 			 * light: it has no position, and instantiating it here would add an uninvited emitter
 			 * to a scene whose exposure was balanced without it. The caller turns it into a
 			 * background and derives the ambient and the IBL from its texels — see
-			 * `SceneLoaders::LightType::Environment` and `JungleRuins::installEnvironment()`.
+			 * `Scenes::Loaders::LightType::Environment` and `JungleRuins::installEnvironment()`.
 			 *
 			 * Listed explicitly rather than left to a `default:` so that adding a light type to
 			 * the contract keeps breaking this switch at COMPILE TIME. */
-			case SceneLoaders::LightType::Environment :
+			case Scenes::Loaders::LightType::Environment :
 				break;
 		}
 	}
 
 	void
-	SceneDataConsumer::processNodeAsStatic (const SceneLoaders::SceneData & sceneData, size_t nodeIndex, Scene & scene, const CartesianFrame< float > & parentWorldFrame) noexcept
+	SceneDataConsumer::processNodeAsStatic (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, Scene & scene, const CartesianFrame< float > & parentWorldFrame) noexcept
 	{
 		if ( nodeIndex >= sceneData.nodes.size() )
 		{
@@ -361,7 +361,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneDataConsumer::processNodeAsNode (const SceneLoaders::SceneData & sceneData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept
+	SceneDataConsumer::processNodeAsNode (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept
 	{
 		if ( nodeIndex >= sceneData.nodes.size() )
 		{

@@ -112,7 +112,7 @@ else ()
     # Globbing
     set(
         EMERAUDE_DIRECTORIES
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/SceneLoaders
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Scenes::Loaders
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Animations
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Console

@@ -1,5 +1,5 @@
 /*
- * src/SceneLoaders/GLTFLoader.hpp
+ * src/Scenes/Loaders/GLTFLoader.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -74,7 +74,7 @@ namespace EmEn::Graphics
 	}
 }
 
-namespace EmEn::SceneLoaders
+namespace EmEn::Scenes::Loaders
 {
 	/**
 	 * @brief Loads glTF/glb composite assets into engine resource containers.
@@ -85,7 +85,7 @@ namespace EmEn::SceneLoaders
 	{
 		public:
 
-			static constexpr auto ClassId{"SceneLoaders::GLTFLoader"};
+			static constexpr auto ClassId{"GLTFLoader"};
 
 			/**
 			 * @brief Constructs the loader with access to the resource manager.
@@ -98,11 +98,11 @@ namespace EmEn::SceneLoaders
 
 			}
 
-			/** @copydoc EmEn::SceneLoaders::Interface::load() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::load() */
 			[[nodiscard]]
 			bool load (const std::filesystem::path & filepath, SceneData & output) noexcept override;
 
-			/** @copydoc EmEn::SceneLoaders::Interface::supportsExtension() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::supportsExtension() */
 			[[nodiscard]]
 			bool
 			supportsExtension (std::string_view extension) const noexcept override
@@ -110,7 +110,7 @@ namespace EmEn::SceneLoaders
 				return extension == ".gltf" || extension == ".glb";
 			}
 
-			/** @copydoc EmEn::SceneLoaders::Interface::capabilities() */
+			/** @copydoc EmEn::Scenes::Loaders::Interface::capabilities() */
 			[[nodiscard]]
 			uint32_t
 			capabilities () const noexcept override
