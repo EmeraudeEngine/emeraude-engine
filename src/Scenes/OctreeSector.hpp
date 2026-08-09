@@ -1696,7 +1696,6 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			/**
 			 * @brief Internal insertion implementation using a specific collision primitive.
 			 *
 			 * This is the core insertion algorithm that recursively inserts an element into

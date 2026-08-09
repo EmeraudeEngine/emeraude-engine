@@ -425,13 +425,28 @@ namespace EmEn::Scenes
 			bool
 			isVisibleTo (const Graphics::Frustum & frustum) const noexcept override
 			{
+				/* ⚠️⚠️ THE VISUAL EXTENT DECIDES VISIBILITY — not the collision model, and never the
+				 * origin alone. `getWorldRenderBoundingBox()` is the union of what the components
+				 * actually draw; the rendering octree already places entities with it, and testing
+				 * anything else here throws that away one step later.
+				 *
+				 * Symptom when this falls back to the point: an entity vanishes while it still
+				 * fills part of the screen. Observed on instanced vegetation — turning the camera
+				 * ON THE SPOT made whole cells of plants pop in and out, because the cell's
+				 * CENTROID was leaving the frustum while its plants were not. A collidable entity
+				 * hid it, since its collision AABB happens to approximate the visual one. */
+				if ( const auto renderBox = this->getWorldRenderBoundingBox(); renderBox.isValid() )
+				{
+					return frustum.isSeeing(renderBox);
+				}
+
 				if ( !this->hasCollisionModel() )
 				{
-					/* No collision model: use point visibility (position only). */
+					/* Draws nothing measurable and has no collision model: the position is all
+					 * there is to test. */
 					return frustum.isSeeing(m_logicStateCoordinates.position());
 				}
 
-				/* Use AABB from collision model for frustum culling. */
 				const auto worldAABB = this->collisionModel()->getAABB(m_logicStateCoordinates);
 
 				return frustum.isSeeing(worldAABB);

@@ -770,13 +770,21 @@ namespace EmEn::Scenes
 	bool
 	Node::isVisibleTo (const Frustum & frustum) const noexcept
 	{
+		/* ⚠️⚠️ THE VISUAL EXTENT DECIDES VISIBILITY — see StaticEntity::isVisibleTo() for the full
+		 * reasoning and the symptom this caused on instanced vegetation. Culling a node on its
+		 * ORIGIN makes it disappear while it still covers the screen. */
+		if ( const auto renderBox = this->getWorldRenderBoundingBox(); renderBox.isValid() )
+		{
+			return frustum.isSeeing(renderBox);
+		}
+
 		if ( !this->hasCollisionModel() )
 		{
-			/* No collision model: use point visibility (position only). */
+			/* Draws nothing measurable and has no collision model: the position is all there is
+			 * to test. */
 			return frustum.isSeeing(this->getWorldPosition());
 		}
 
-		/* Use AABB from collision model for frustum culling. */
 		const auto worldCoords = this->getWorldCoordinates();
 		const auto worldAABB = this->collisionModel()->getAABB(worldCoords);
 
