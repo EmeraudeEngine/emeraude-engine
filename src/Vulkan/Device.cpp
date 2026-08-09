@@ -72,6 +72,37 @@ namespace EmEn::Vulkan
 	using namespace Base;
 	using namespace Graphics;
 
+	std::string
+	Device::memoryStatisticsString () const noexcept
+	{
+		if ( m_memoryAllocatorHandle == VK_NULL_HANDLE )
+		{
+			return "No memory allocator.";
+		}
+
+		VmaTotalStatistics statistics{};
+
+		vmaCalculateStatistics(m_memoryAllocatorHandle, &statistics);
+
+		const auto & total = statistics.total.statistics;
+
+		std::stringstream output;
+
+		output <<
+			"GPU memory: " <<
+			( static_cast< double >(total.allocationBytes) / 1048576.0 ) << " MiB used in " << total.allocationCount << " allocations, " <<
+			( static_cast< double >(total.blockBytes) / 1048576.0 ) << " MiB reserved in " << total.blockCount << " blocks";
+
+		if ( total.allocationCount > 0 )
+		{
+			output << " (" << ( static_cast< double >(total.blockBytes) / static_cast< double >(total.allocationCount) / 1024.0 ) << " KiB reserved per allocation)";
+		}
+
+		output << ".";
+
+		return output.str();
+	}
+
 	bool
 	Device::installQueues (const std::map< uint32_t, StaticVector< float, 16 > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept
 	{

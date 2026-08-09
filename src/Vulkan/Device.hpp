@@ -30,6 +30,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 
 /* Third-party forward declarations (the VMA implementation header is only
  * needed by the few .cpp files that call vma* functions — VmaAllocator is
@@ -162,6 +163,23 @@ namespace EmEn::Vulkan
 			{
 				return m_useMemoryAllocator;
 			}
+
+			/**
+			 * @brief Returns a human-readable summary of the GPU memory the allocator holds.
+			 *
+			 * @note Reports what VMA has RESERVED from the driver (block bytes) alongside what is
+			 * actually in use (allocation bytes). The gap between the two is the suballocator's
+			 * slack, and it is the number that matters when many small buffers are created: a
+			 * thousand tiny allocations can reserve orders of magnitude more than they hold.
+			 *
+			 * @note Without this, "the process eats memory" cannot be told from "the GPU
+			 * allocator eats memory", and the search starts in the wrong place — which is exactly
+			 * what happened while chasing a 26 MB-per-instance-object cost.
+			 *
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string memoryStatisticsString () const noexcept;
 
 			/**
 			 * @brief Returns the memory allocator handle.
