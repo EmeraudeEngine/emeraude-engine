@@ -1207,3 +1207,142 @@ Textures are created **on-demand during material loading** with the correct sRGB
 For complete architecture, diagrams, and advanced patterns:
 - @docs/scene-graph-architecture.md
 - @docs/shadow-mapping.md - Shadow mapping, PCF, global controls, color projection
+
+## Bounding volumes — render vs collision (2026-08-09)
+
+`Component::Abstract` exposes **two** extents. They differ in CARDINALITY, not merely in value —
+that is what makes them two contracts rather than two names:
+
+| | Cardinality | Why |
+|---|---|---|
+| **Render** | **one** general box / sphere | Culling asks a single question: *is any part of this inside the frustum?* One wide envelope answers it exactly, in one test. An envelope that is too large costs a few useless draw calls. |
+| **Collision** | **a group** of primitives | Collision asks *where* and *against what*. One wide envelope answers WRONG — the tree whose canopy you hit at ankle height. An envelope that is too large produces incorrect behaviour, not wasted work. |
+
+> [!IMPORTANT]
+> **Target contract**: `renderBoundingBox()` stays singular; the collision side becomes a LIST of
+> primitives. The single-box collision accessors below are the INTERIM state — correct for
+> simple objects, insufficient for anything with a real silhouette.
+
+Current state:
+
+| Accessor | Meaning | `Visual` | `MultipleVisuals` |
+|----------|---------|----------|-------------------|
+| `localBoundingBox()` / `localBoundingSphere()` | **PHYSICAL** — what the collision model is built from | renderable's box | box of a **single** instance |
+| `renderBoundingBox()` / `renderBoundingSphere()` | **VISUAL** — what frustum culling and the rendering octree must use | renderable's box | **union of every instance** |
+
+> [!CAUTION]
+> **The rendering octree inserted every entity as a POINT at its origin.** Only the physics
+> octree (`enable_volume == true`) ever used a volume; the rendering branch called
+> `insertWithPrimitive(element, element->getWorldCoordinates().position())` and nothing else. A
+> 250-unit terrain tile, or a cell holding a thousand instanced trees, was therefore culled by
+> whether its ORIGIN landed in a visible sector — it vanished while filling half the screen.
+>
+> **Fixed (2026-08-09):** both `insert()` and `update()` use `getWorldRenderBoundingBox()` when
+> the element exposes one, detected with `if constexpr ( requires { ... } )` so the octree stays
+> generic and element types that know nothing about rendering keep the point path.
+>
+> ⚠️ The `update()` point path has a "still inside its last subsector, nothing to do" shortcut.
+> That shortcut is **unsound for volumes**: an element whose origin has not moved can still have
+> grown — an animated pose, a rebuilt instance set — and now span sectors it is not registered
+> in. It is skipped whenever a render box is available.
+>
+> Widening the COLLISION extent to fix any of this would have been the wrong cure: a forest cell
+> would become one solid block. Hence the split.
+
+> [!NOTE]
+> `MultipleVisuals` caches its visual extent and **recomputes it when the renderable finishes
+> loading** — the renderable's own box is empty before that, so a union built at construction
+> is empty too, and the component would be culled as a point anyway. The eight corners are
+> transformed individually: under rotation, transforming only the min/max pair yields a box that
+> does not contain the shape.
+
+### Open: compound collision shapes
+
+A collision extent is currently **one** box or sphere per component, and `AbstractEntity` builds
+a single `AABBCollisionModel` from it. Real objects need several: a tree is a narrow trunk at
+ground level and a wide canopy above it — one AABB around both makes you collide with foliage at
+ankle height. Moving the collision extent to a **list** of primitives is a separate project: it
+touches the collision model, the broad phase and the narrow phase, all of which assume one shape
+per entity. Owner-identified, not scheduled.
+
+## Instance clustering — `Scenes/InstanceCluster.hpp` (2026-08-09)
+
+`buildInstanceClusters()` splits an instance set into a fixed metric grid, one entity per
+non-empty cell, transforms stored RELATIVE to the cell centroid. The rendering octree then culls
+whole cells with no new culling path. Cells are anchored on the centroid rather than the grid
+intersection, so relative coordinates stay small — precision no longer depends on how far the
+scene sits from the origin.
+
+> [!NOTE]
+> **RESOLVED (2026-08-09) — it was never the instance objects.**
+>
+> | Cell size | Cells | RSS before | RSS after |
+> |-----------|-------|------------|-----------|
+> | 32 units | 4006 | **104 GB** | **3279 MB** |
+> | 500 units | 16 | 3.5 GB | — |
+>
+> Same 20 000 instances, same geometry, no change to `RenderableInstance::Multiple`. The cost was
+> the octree's **all-levels storage**: an element was copied into every sector it touched, at
+> every depth. A cell spanning a boundary near the root multiplied itself down whole subtrees.
+> Small cells span more boundaries, hence the ratio that looked like a per-instance cost.
+>
+> Cell size can now be chosen for culling quality rather than dictated by the memory budget.
+> See "Octree storage and traversal" below — the fix moved elements to a single sector, which
+> **changes what a traversal must read**.
+>
+> Eliminated along the way, and still true: VMA dedicated allocations (`Buffer::createWithVMA`
+> uses `VMA_MEMORY_USAGE_AUTO` with no dedicated bit, and suballocates — measured 277 MiB in 4056
+> allocations over 10 blocks); `SceneInstanceTransforms` (a `Scene` member, one per scene, not per
+> entity); the VBO size itself.
+
+> [!WARNING]
+> Any test that creates a number of objects proportional to a parameter must run capped:
+> `systemd-run --user --scope -p MemoryMax=8G -p MemorySwapMax=0 --quiet -- <cmd>`.
+> The uncapped first run took the machine to 1 GB available and made it unusable.
+
+## Octree storage and traversal — `Scenes/OctreeSector.hpp` (2026-08-09)
+
+**Storage invariant: one element, one sector — the deepest that FULLY CONTAINS it.**
+`insertWithPrimitive()` descends only into a subsector that entirely contains the primitive
+(`isFullyContaining()`); otherwise the element stays where it is. It replaces the former
+*all-levels* storage, where an element was copied into every sector it touched at every depth —
+the cause of the 104 GB above.
+
+> [!CAUTION]
+> **The invariant changes what a traversal must read, and getting that wrong is silent.**
+>
+> An element that straddles a boundary now sits on an INNER node. The bigger it is, the higher it
+> sits: **a ground plane straddles every boundary and lives at the ROOT.** Two consequences, both
+> of which shipped as bugs before being caught:
+>
+> 1. **Reading `sector.elements()` of leaves only misses everything large.** The physics broad
+>    phase did exactly that (`forLeafSectors` + `elements()`), so no body was ever offered the
+>    ground as a collider — **you fall through the floor**, with no error anywhere.
+> 2. **`m_elements.empty()` no longer proves an empty subtree.** An inner node can hold nothing
+>    while its children are full, so the old early-exit prunes populated branches.
+>
+> **Contract:** the candidate set of a leaf is `leaf.elements() ∪ elements of ALL its ancestors`.
+> `forLeafSectors()` accumulates that chain on the way down into a single reused buffer and hands
+> it to the callback as `(leaf, candidates, ownedOffset)`. Never call `elements()` on a sector to
+> build a query result.
+>
+> ⚠️ `ownedOffset` is not decoration. Candidates before it are INHERITED, and any per-sector
+> predicate is unsound for them — `isTouchingRootBorder()` in particular: an inherited element may
+> straddle the world edge while first being met in a leaf that does not touch it. Only elements
+> the leaf OWNS are fully inside it.
+>
+> ⚠️ An element held by an ancestor is offered to EVERY leaf below it. A caller acting **per pair**
+> is usually already safe (`testedEntityPairs`). A caller acting **per element** must deduplicate —
+> `resolveCollisions()` phase 1 keeps a `correctedEntities` set, without which a straddling body
+> receives its position correction once per leaf of the subtree. *(This also fixes a pre-existing
+> defect: under all-levels storage the same body was corrected once per leaf it touched.)*
+
+**Rendering is not concerned — and that is itself worth knowing.** `Scene.rendering.cpp` never
+queries the rendering octree: it iterates the entities and tests `distance > viewDistance ||
+!isVisibleTo(frustum)`. The rendering octree is built and maintained for nothing. Culling by
+octree sector remains an open optimization (see "Performance Notes").
+
+> [!CAUTION]
+> `StaticEntity::isVisibleTo()` tests the **collision model** AABB, or a bare point when there is
+> none. The `renderBoundingBox()` introduced for exactly this purpose is read by no culling path
+> yet — the render/collision split is only half wired.

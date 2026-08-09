@@ -106,10 +106,10 @@ namespace EmEn::Scenes::Component
 				return strcmp(ClassId, classID) == 0;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::renderBoundingBox() const */
 			[[nodiscard]]
 			const Base::Math::Space3D::AACuboid< float > &
-			localBoundingBox () const noexcept override
+			renderBoundingBox () const noexcept override
 			{
 				/* Skinned mesh with a live pose: the ANIMATED box (joints + flesh margin,
 				 * see updateAnimatedBoundingBox), because the bind-pose box culls whatever
@@ -122,10 +122,10 @@ namespace EmEn::Scenes::Component
 				return m_renderableInstance->renderable()->boundingBox();
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingSphere() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::renderBoundingSphere() const */
 			[[nodiscard]]
 			const Base::Math::Space3D::Sphere< float > &
-			localBoundingSphere () const noexcept override
+			renderBoundingSphere () const noexcept override
 			{
 				return m_renderableInstance->renderable()->boundingSphere();
 			}

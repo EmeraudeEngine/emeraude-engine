@@ -745,7 +745,8 @@ namespace EmEn::Scenes
 			 *
 			 * This is the primary insertion method that dispatches to the appropriate collision primitive
 			 * based on the template parameter enable_volume:
-			 * - When enable_volume=false (rendering octree): Uses only the element's position point.
+			 * - When enable_volume=false (rendering octree): Uses the element's VISUAL extent
+			 *   (getWorldRenderBoundingBox()), falling back to its position point when it has none.
 			 * - When enable_volume=true (physics octree): Uses the element's collision model AABB
 			 *   or position for Point types (as determined by element->collisionModel()).
 			 *
@@ -790,6 +791,22 @@ namespace EmEn::Scenes
 				}
 				else
 				{
+					/* ⚠️ This branch used to insert every renderable as a POINT at its origin, so
+					 * a 250-unit terrain tile — or a cell holding a thousand instanced trees —
+					 * was culled by whether its ORIGIN landed in a visible sector. It vanished
+					 * while filling half the screen. The VISUAL extent is used instead, and the
+					 * point remains the fallback for anything that reports none. */
+					/* Detected at compile time rather than required: the octree is generic, and an
+					 * element type that knows nothing about rendering must not be forced to
+					 * implement it just to be stored. */
+					if constexpr ( requires { element->getWorldRenderBoundingBox(); } )
+					{
+						if ( const auto renderBox = element->getWorldRenderBoundingBox(); renderBox.isValid() )
+						{
+							return this->insertWithPrimitive(element, renderBox);
+						}
+					}
+
 					return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
 				}
 			}
@@ -832,11 +849,14 @@ namespace EmEn::Scenes
 					}
 				}
 
-				/* Fast path: element already present, just update it. */
-				if ( m_elements.contains(element) )
-				{
-					return this->update(element);
-				}
+				/* ⚠️ The root no longer holds a copy of every element, so "is it in this set" cannot
+				 * answer "is it in the tree" — the old fast path silently stopped updating
+				 * anything stored below the root. Erasing then re-inserting is the simple correct
+				 * form under the one-element-one-sector rule: erase() walks the subtree, and
+				 * insert() re-files the element at whatever depth its CURRENT volume fits. An
+				 * element that has grown or moved therefore changes sector instead of staying
+				 * registered where it no longer belongs. */
+				this->erase(element, false);
 
 				/* Element not present, insert it. */
 				return this->insert(element);
@@ -912,6 +932,21 @@ namespace EmEn::Scenes
 				}
 				else
 				{
+					/* Same compile-time detection as insert(): the VISUAL extent when the element
+					 * has one, its position otherwise. */
+					if constexpr ( requires { element->getWorldRenderBoundingBox(); } )
+					{
+						if ( const auto renderBox = element->getWorldRenderBoundingBox(); renderBox.isValid() )
+						{
+							/* ⚠️ No "still in the same subsector" early-out here, unlike the point
+							 * path below. An element whose ORIGIN has not left its subsector can
+							 * still have grown — an animated pose, a rebuilt instance set — so its
+							 * box now spans sectors it is not registered in. The point shortcut is
+							 * only sound for something that has no extent. */
+							return this->checkElementOverlapWithPrimitive(element, renderBox);
+						}
+					}
+
 					const auto position = element->getWorldCoordinates().position();
 
 					/* NOTE: Does the element moved out the last registered subsector boundaries? */
@@ -950,32 +985,31 @@ namespace EmEn::Scenes
 			 * @see autoCollapseEnabled()
 			 */
 			bool
-			erase (const std::shared_ptr< element_t > & element) noexcept
+			erase (const std::shared_ptr< element_t > & element, bool warnWhenMissing = true) noexcept
 			{
-				/* The node is not present in this sector. */
-				if ( !m_elements.contains(element) )
-				{
-					if ( this->isRoot() )
-					{
-						TraceWarning{ClassId} << "Element '" << element->name() << "' is not part of the octree !";
-					}
+				/* ⚠️ No early-out on "not in this sector". Under the one-element-one-sector rule an
+				 * element deep in the tree is absent from every ancestor, so bailing out at the
+				 * root — what this did while the root held a copy of everything — would never
+				 * erase anything. The whole subtree is walked instead. */
+				auto erased = m_elements.erase(element) > 0;
 
-					return false;
-				}
-
-				/* Removes the node from the set. */
-				m_elements.erase(element);
-
-				/* If this sector is a leaf, we are done. */
-				if ( !this->isStillLeaf() )
+				if ( !this->isLeaf() )
 				{
 					for ( const auto & subSector : m_subSectors )
 					{
-						subSector->erase(element);
+						if ( subSector->erase(element, false) )
+						{
+							erased = true;
+						}
 					}
 				}
 
-				return true;
+				if ( !erased && warnWhenMissing && this->isRoot() )
+				{
+					TraceWarning{ClassId} << "Element '" << element->name() << "' is not part of the octree !";
+				}
+
+				return erased;
 			}
 
 			/**
@@ -1194,21 +1228,29 @@ namespace EmEn::Scenes
 			void
 			forTouchedSector (const primitive_t & primitive, function_t && function) const noexcept
 			{
-				/* NOTE: Sector empty or out of bound. */
-				if ( m_elements.empty() || !this->isCollidingWith(primitive) )
+				if ( !this->isCollidingWith(primitive) )
 				{
 					return;
 				}
 
-				/* NOTE: This is a final sector, we can execute the function here. */
-				if ( this->isLeaf() )
+				/* ⚠️ Elements live at the deepest sector that CONTAINS them, so a straddling one
+				 * sits on an inner node. Restricting the callback to leaves — what this did while
+				 * every level held a copy — would make those elements invisible.
+				 *
+				 * ⚠️ And an empty sector no longer proves an empty subtree: an inner node can hold
+				 * nothing while its children are full. The old early-exit on `m_elements.empty()`
+				 * would prune a populated branch. The tree is shallow now that subdivision
+				 * terminates, so the traversal costs little. */
+				if ( !m_elements.empty() )
 				{
 					function(*this);
+				}
 
+				if ( this->isLeaf() )
+				{
 					return;
 				}
 
-				/* NOTE: Go deeper in the tree before executing the function. */
 				for ( const auto & subSector : m_subSectors )
 				{
 					subSector->forTouchedSector(primitive, function);
@@ -1216,21 +1258,42 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Executes a callback function on every non-empty leaf sector in the subtree.
+			 * @brief Executes a callback on every leaf sector, with its full candidate set.
 			 *
 			 * Recursively traverses the octree rooted at this sector and invokes the callback on
-			 * all leaf sectors that contain at least one element. Empty sectors and their entire
-			 * subtrees are skipped via early-exit optimization.
+			 * every leaf whose candidate set is not empty.
+			 *
+			 * ⚠️ The candidate set of a leaf is the leaf's own elements UNION those of ALL its
+			 * ancestors, and that union is the whole point of this method. An element lives in
+			 * exactly ONE sector — the deepest that fully contains it — so anything straddling a
+			 * boundary sits on an inner node. A ground plane straddles every boundary there is and
+			 * therefore sits at the ROOT: a traversal reading only `elements()` of each leaf would
+			 * never propose it as a collider, and bodies would fall through it.
+			 *
+			 * ⚠️ There is no early-exit on an empty sector either. An inner node can hold nothing
+			 * while its children are full, so `m_elements.empty()` no longer proves an empty
+			 * subtree — it used to, back when every level held a copy of every element it touched.
+			 *
+			 * The ancestor contribution is accumulated ON THE WAY DOWN into a single buffer reused
+			 * for the whole walk: entering a sector appends its elements, leaving it truncates
+			 * back. The per-leaf cost is therefore the leaf's own elements, not the depth.
 			 *
 			 * @tparam function_t The callable type (automatically deduced). Must be invocable with
-			 *					signature: void(const OctreeSector&).
-			 * @param function The callable to execute on each non-empty leaf sector.
+			 *					signature: void(const OctreeSector &, const std::vector< std::shared_ptr< element_t > > &, size_t).
+			 * @param function The callable to execute on each leaf. It receives the leaf sector,
+			 * the candidate set, and the offset at which the leaf's OWN elements start: candidates
+			 * before that offset are inherited from ancestors.
+			 *
+			 * @note The offset matters for any per-sector predicate. `isTouchingRootBorder()`, for
+			 * instance, is only sound for the elements the leaf owns — those are fully inside it.
+			 * An inherited candidate may straddle the world edge while being met, for the first
+			 * time, in a leaf that does not touch it.
+			 *
+			 * @note An element held by an ancestor is proposed to EVERY leaf below it. A caller
+			 * that acts per element (rather than per pair) must deduplicate; a caller that acts
+			 * per pair usually already does, to handle elements shared across sectors.
 			 *
 			 * @note Zero-overhead callbacks: template type avoids std::function allocation.
-			 * @note Fast early-exit: empty sectors are skipped without descending to children.
-			 * @note Only leaf sectors invoke the callback - intermediate nodes are just traversed.
-			 * @note Common usage: Iterate over all elements in the octree, broad-phase collision
-			 *	   detection (check all pairs within each leaf), serialization.
 			 *
 			 * @see forTouchedSector()
 			 */
@@ -1238,25 +1301,9 @@ namespace EmEn::Scenes
 			void
 			forLeafSectors (function_t && function) const noexcept
 			{
-				/* NOTE: Sector empty, skip entirely. */
-				if ( m_elements.empty() )
-				{
-					return;
-				}
+				std::vector< std::shared_ptr< element_t > > candidates;
 
-				/* NOTE: This is a leaf sector, execute the function here. */
-				if ( this->isLeaf() )
-				{
-					function(*this);
-
-					return;
-				}
-
-				/* NOTE: Go deeper in the tree. */
-				for ( const auto & subSector : m_subSectors )
-				{
-					subSector->forLeafSectors(function);
-				}
+				this->walkLeafSectors(function, candidates);
 			}
 
 			/**
@@ -1496,6 +1543,45 @@ namespace EmEn::Scenes
 		private:
 
 			/**
+			 * @brief Carries the ancestor elements down the tree for forLeafSectors().
+			 *
+			 * @tparam function_t The callable type (automatically deduced).
+			 * @param function A reference to the callable to execute on each leaf.
+			 * @param candidates A reference to the buffer accumulating the ancestor chain. It is
+			 * created once by forLeafSectors() and reused for the whole walk.
+			 *
+			 * @note The truncation on the way out is what makes the buffer reusable: a sibling
+			 * visited next must see the ancestors' contribution, and nothing of this sector.
+			 *
+			 * @see forLeafSectors()
+			 */
+			template< typename function_t >
+			void
+			walkLeafSectors (function_t & function, std::vector< std::shared_ptr< element_t > > & candidates) const noexcept
+			{
+				const auto inheritedCount = candidates.size();
+
+				candidates.insert(candidates.end(), m_elements.begin(), m_elements.end());
+
+				if ( this->isLeaf() )
+				{
+					if ( !candidates.empty() )
+					{
+						function(*this, candidates, inheritedCount);
+					}
+				}
+				else
+				{
+					for ( const auto & subSector : m_subSectors )
+					{
+						subSector->walkLeafSectors(function, candidates);
+					}
+				}
+
+				candidates.resize(inheritedCount);
+			}
+
+			/**
 			 * @brief Evaluates sector state and triggers expansion or collapse as needed.
 			 *
 			 * This method is called after element insertion or removal to determine whether
@@ -1550,6 +1636,67 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns whether this sector contains a point.
+			 * @param point A reference to the point.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFullyContaining (const Base::Math::Vector< 3, float > & point) const noexcept
+			{
+				return Base::Math::Space3D::isColliding(*this, point);
+			}
+
+			/**
+			 * @brief Returns whether this sector contains a box ENTIRELY.
+			 * @note This is the test the storage invariant rests on: an element is stored in the
+			 * deepest sector that contains it whole. Anything straddling a boundary stays at the
+			 * parent, so subdividing always reduces a sector's population and the recursion ends.
+			 * @param box A reference to the box.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFullyContaining (const Base::Math::Space3D::AACuboid< float > & box) const noexcept
+			{
+				if ( !box.isValid() )
+				{
+					return false;
+				}
+
+				const auto & sectorMinimum = this->minimum();
+				const auto & sectorMaximum = this->maximum();
+				const auto & boxMinimum = box.minimum();
+				const auto & boxMaximum = box.maximum();
+
+				return
+					boxMinimum[Base::Math::X] >= sectorMinimum[Base::Math::X] && boxMaximum[Base::Math::X] <= sectorMaximum[Base::Math::X] &&
+					boxMinimum[Base::Math::Y] >= sectorMinimum[Base::Math::Y] && boxMaximum[Base::Math::Y] <= sectorMaximum[Base::Math::Y] &&
+					boxMinimum[Base::Math::Z] >= sectorMinimum[Base::Math::Z] && boxMaximum[Base::Math::Z] <= sectorMaximum[Base::Math::Z];
+			}
+
+			/**
+			 * @brief Returns whether this sector contains a sphere ENTIRELY.
+			 * @param sphere A reference to the sphere.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFullyContaining (const Base::Math::Space3D::Sphere< float > & sphere) const noexcept
+			{
+				const auto & sectorMinimum = this->minimum();
+				const auto & sectorMaximum = this->maximum();
+				const auto & position = sphere.position();
+				const auto radius = sphere.radius();
+
+				return
+					position[Base::Math::X] - radius >= sectorMinimum[Base::Math::X] && position[Base::Math::X] + radius <= sectorMaximum[Base::Math::X] &&
+					position[Base::Math::Y] - radius >= sectorMinimum[Base::Math::Y] && position[Base::Math::Y] + radius <= sectorMaximum[Base::Math::Y] &&
+					position[Base::Math::Z] - radius >= sectorMinimum[Base::Math::Z] && position[Base::Math::Z] + radius <= sectorMaximum[Base::Math::Z];
+			}
+
+			/**
+			/**
 			 * @brief Internal insertion implementation using a specific collision primitive.
 			 *
 			 * This is the core insertion algorithm that recursively inserts an element into
@@ -1586,20 +1733,28 @@ namespace EmEn::Scenes
 					return false;
 				}
 
-				if ( !m_elements.emplace(element).second )
-				{
-					return false;
-				}
-
+				/* ⚠️ ONE ELEMENT, ONE SECTOR. The element descends only while a child contains it
+				 * ENTIRELY; the moment it straddles a boundary it stays here.
+				 *
+				 * The previous rule stored it in EVERY sector it touched, at every level. With
+				 * points that was harmless — a point falls in exactly one child, so subdividing
+				 * always reduced a sector's population and the recursion ended. With volumes it
+				 * was catastrophic: a straddling element lands in several children, the count
+				 * does not drop, the sector subdivides again, and the stored references grow as
+				 * 8^depth. Measured on 4006 volumetric entities: 104 GB of repeated pointers,
+				 * against 3.3 GB for the same scene. */
 				if ( !this->isStillLeaf() )
 				{
 					for ( auto & subSector: m_subSectors )
 					{
-						subSector->insertWithPrimitive(element, primitive);
+						if ( subSector->isFullyContaining(primitive) )
+						{
+							return subSector->insertWithPrimitive(element, primitive);
+						}
 					}
 				}
 
-				return true;
+				return m_elements.emplace(element).second;
 			}
 
 			/**

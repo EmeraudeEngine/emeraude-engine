@@ -50,6 +50,8 @@
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Math/CartesianFrame.hpp"
+#include "Math/OrientedCuboid.hpp"
+#include "Math/Space3D/AACuboid.hpp"
 #include "StaticVector.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 
@@ -314,6 +316,35 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionModel(std::unique_ptr< Physics::CollisionModelInterface >) */
 			void setCollisionModel (std::unique_ptr< Physics::CollisionModelInterface > model) noexcept override;
+
+			/**
+			 * @brief Returns the world-space VISUAL extent of this entity.
+			 *
+			 * @note This is what the rendering octree places the entity with, and it is
+			 * deliberately not the collision model.
+			 *
+			 * @note ⚠️ Before this existed, the rendering octree inserted every entity as a POINT
+			 * at its origin (`OctreeSector::insert`, `enable_volume == false` branch). A 250-unit
+			 * terrain tile, or a cell holding a thousand instanced trees, was therefore culled by
+			 * whether its ORIGIN fell in a visible sector — it vanished while filling half the
+			 * screen. Returns an invalid box when the entity draws nothing, and callers must fall
+			 * back to the position point in that case.
+			 *
+			 * @return Base::Math::Space3D::AACuboid< float >
+			 */
+			[[nodiscard]]
+			Base::Math::Space3D::AACuboid< float >
+			getWorldRenderBoundingBox () const noexcept
+			{
+				if ( !m_renderBoundingBox.isValid() )
+				{
+					return {};
+				}
+
+				const Base::Math::OrientedCuboid< float > orientedBox{m_renderBoundingBox, this->getWorldCoordinates()};
+
+				return orientedBox.getAxisAlignedBox();
+			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::hasCollisionModel() const */
 			[[nodiscard]]
@@ -1178,6 +1209,7 @@ namespace EmEn::Scenes
 			mutable std::mutex m_componentsMutex;		   ///< Protects m_components for thread-safe access.
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
+			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
 			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).

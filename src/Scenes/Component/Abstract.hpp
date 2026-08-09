@@ -262,8 +262,14 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the local bounding box of this component.
+			 * @brief Returns the local COLLISION bounding box of this component.
 			 * @note Can be invalid. On a non-overridden method, this will return a null bounding box.
+			 * @note ⚠️ This is the PHYSICAL extent, and it is what the collision model is built
+			 * from. By DEFAULT it follows the render extent — the natural datum is what the
+			 * component looks like, and collision inherits it unless stated otherwise. A
+			 * component whose physical shape differs from its silhouette overrides this: an
+			 * instanced component covering a whole forest cell must not become one solid
+			 * collider, so it reports a SINGLE instance here while its render extent is the union.
 			 * @return const Base::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
@@ -271,11 +277,11 @@ namespace EmEn::Scenes::Component
 			const Base::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept
 			{
-				return NullBoundingBox;
+				return this->renderBoundingBox();
 			}
 
 			/**
-			 * @brief Returns the local bounding sphere of this component.
+			 * @brief Returns the local COLLISION bounding sphere of this component.
 			 * @note Can be invalid. On non-overridden method, this will return a null bounding sphere.
 			 * @return const Base::Math::Space3D::Sphere< float > &
 			 */
@@ -283,6 +289,42 @@ namespace EmEn::Scenes::Component
 			virtual
 			const Base::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept
+			{
+				return this->renderBoundingSphere();
+			}
+
+			/**
+			 * @brief Returns the local RENDER bounding box of this component.
+			 *
+			 * @note This is the VISUAL extent — everything this component actually draws — and it
+			 * is what frustum culling and the rendering octree must use. It is the PRIMARY of the
+			 * two: the collision extent follows it by default, not the other way round. A
+			 * component that draws nothing leaves it null and overrides the collision side only.
+			 *
+			 * @note ⚠️ Rendering used to be placed by the COLLISION model, which meant a renderable
+			 * with no collider entered the octree as a POINT and was culled as such. Any component
+			 * that draws must answer this honestly, or it will disappear from the screen while
+			 * being perfectly inside the frustum.
+			 *
+			 * @return const Base::Math::Space3D::AACuboid< float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Space3D::AACuboid< float > &
+			renderBoundingBox () const noexcept
+			{
+				return NullBoundingBox;
+			}
+
+			/**
+			 * @brief Returns the local RENDER bounding sphere of this component.
+			 * @note See renderBoundingBox() — same contract, spherical.
+			 * @return const Base::Math::Space3D::Sphere< float > &
+			 */
+			[[nodiscard]]
+			virtual
+			const Base::Math::Space3D::Sphere< float > &
+			renderBoundingSphere () const noexcept
 			{
 				return NullBoundingSphere;
 			}

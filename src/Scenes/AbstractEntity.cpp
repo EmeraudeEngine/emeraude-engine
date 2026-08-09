@@ -127,6 +127,8 @@ namespace EmEn::Scenes
 			m_collisionModel->resetShapeParameters();
 		}
 
+		m_renderBoundingBox.reset();
+
 		/* NOTE: Reset flags. */
 		this->setRenderingAbilityState(false);
 		this->setCollidable(false);
@@ -136,10 +138,14 @@ namespace EmEn::Scenes
 
 			for ( const auto & component : m_components )
 			{
-				/* Checks render ability. */
+				/* Checks render ability, and accumulates the VISUAL extent that the rendering
+				 * octree places this entity with. Kept separate from the collision model on
+				 * purpose: culling asks "is any of this visible", collision asks "against what". */
 				if ( component->isRenderable() )
 				{
 					this->setRenderingAbilityState(true);
+
+					m_renderBoundingBox.merge(component->renderBoundingBox());
 				}
 
 				/* Gets physical properties of a component. */

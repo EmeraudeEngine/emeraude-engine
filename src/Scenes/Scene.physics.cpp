@@ -101,16 +101,35 @@ namespace EmEn::Scenes
 		 * - Use dominant collision (deepest penetration) for velocity bounce
 		 * ============================================================ */
 
-		m_physicsOctree->forLeafSectors([this] (const OctreeSector< AbstractEntity, true > & leafSector) {
+		/* ⚠️ An element straddling a sector boundary lives on an inner node, and is therefore
+		 * proposed as a candidate to EVERY leaf below it. Correcting it once per leaf would
+		 * multiply its correction by the size of that subtree. */
+		std::unordered_set< const AbstractEntity * > correctedEntities;
+
+		m_physicsOctree->forLeafSectors([this, &correctedEntities] (const OctreeSector< AbstractEntity, true > & leafSector, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
 			const bool sectorAtBorder = leafSector.isTouchingRootBorder();
 
-			for ( const auto & entity : leafSector.elements() )
+			for ( size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex )
 			{
+				const auto & entity = candidates[candidateIndex];
+
 				/* Skip non-movable or paused entities. */
 				if ( !entity->hasMovableAbility() || entity->isSimulationPaused() )
 				{
 					continue;
 				}
+
+				/* The first leaf that meets the entity is the one that corrects it. */
+				if ( !correctedEntities.insert(entity.get()).second )
+				{
+					continue;
+				}
+
+				/* An element the leaf OWNS is fully inside it, so the leaf's border flag settles
+				 * the question. An INHERITED one may straddle the world edge while being met, for
+				 * the first time, in a leaf that does not touch it — there, only the test itself
+				 * can decide. */
+				const bool entityAtBorder = candidateIndex < ownedOffset ? true : sectorAtBorder;
 
 				auto * movable = entity->getMovableTrait();
 
@@ -127,7 +146,7 @@ namespace EmEn::Scenes
 				const MovableTrait * dominantEntity{nullptr};
 
 				/* 1.1 - Boundary collisions (only for sectors at world border). */
-				if ( sectorAtBorder )
+				if ( entityAtBorder )
 				{
 					const float prevMax = maxPenetration;
 					this->accumulateBoundaryCorrection(entity, positionCorrection, dominantNormal, maxPenetration);
@@ -165,7 +184,7 @@ namespace EmEn::Scenes
 				{
 					const float prevMax = maxPenetration;
 					const MovableTrait * collidedEntity = nullptr;
-					this->accumulateStaticEntityCorrections(entity, leafSector, positionCorrection, dominantNormal, maxPenetration, collidedEntity);
+					this->accumulateStaticEntityCorrections(entity, candidates, positionCorrection, dominantNormal, maxPenetration, collidedEntity);
 
 					if ( maxPenetration > prevMax )
 					{
@@ -217,9 +236,9 @@ namespace EmEn::Scenes
 		std::unordered_set< uint64_t > testedEntityPairs;
 		std::vector< std::shared_ptr< AbstractEntity > > involvedEntities;
 
-		m_physicsOctree->forLeafSectors([&dynamicManifolds, &testedEntityPairs, &involvedEntities] (const OctreeSector< AbstractEntity, true > & leafSector) {
-			const auto & elements = leafSector.elements();
-
+		/* The pair set already deduplicates, which is what makes an inherited candidate — offered
+		 * to every leaf below its sector — cost only the first encounter. */
+		m_physicsOctree->forLeafSectors([&dynamicManifolds, &testedEntityPairs, &involvedEntities] (const OctreeSector< AbstractEntity, true > & /*leafSector*/, const std::vector< std::shared_ptr< AbstractEntity > > & elements, size_t /*ownedOffset*/) {
 			for ( auto elementIt = elements.begin(); elementIt != elements.end(); ++elementIt )
 			{
 				const auto & entityA = *elementIt;
@@ -288,11 +307,11 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept
+	Scene::detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, const std::vector< std::shared_ptr< AbstractEntity > > & elements, std::unordered_set< uint64_t > & testedEntityPairs, std::vector< ContactManifold > & manifolds) const noexcept
 	{
 		const bool sectorAtBorder = sector.isTouchingRootBorder();
 
-		for ( const auto & entity : sector.elements() )
+		for ( const auto & entity : elements )
 		{
 			/* Skip entities that are not movable or have simulation paused. */
 			if ( !entity->hasMovableAbility() || entity->isSimulationPaused() )
@@ -311,8 +330,6 @@ namespace EmEn::Scenes
 		}
 
 		/* 1.1.3 - Entity-Entity collisions within this sector. */
-		const auto & elements = sector.elements();
-
 		for ( auto elementIt = elements.begin(); elementIt != elements.end(); ++elementIt )
 		{
 			/* NOTE: The entity A can be a node or a static entity. */
@@ -1159,7 +1176,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) const noexcept
+	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) const noexcept
 	{
 		/* No collision model means no collision simulation. */
 		if ( !entity->hasCollisionModel() )
@@ -1170,8 +1187,10 @@ namespace EmEn::Scenes
 		const auto * entityModel = entity->collisionModel();
 		const auto entityWorldCoords = entity->getWorldCoordinates();
 
-		/* Iterate through all entities in this sector looking for static entities. */
-		for ( const auto & otherEntity : sector.elements() )
+		/* Iterate through the sector's candidate set looking for static entities. It includes the
+		 * elements of every ancestor sector, which is where anything straddling a boundary lives —
+		 * a ground plane straddles them all and sits at the root. */
+		for ( const auto & otherEntity : candidates )
 		{
 			/* Skip self. */
 			if ( entity.get() == otherEntity.get() )
