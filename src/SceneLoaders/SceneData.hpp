@@ -192,6 +192,39 @@ namespace EmEn::SceneLoaders
 	};
 
 	/**
+	 * @brief Describes many copies of ONE mesh, each with its own placement.
+	 * @note This is not a USD notion. USD carries it as a `PointInstancer`, glTF as
+	 * `EXT_mesh_gpu_instancing`, FBX as duplicated nodes a loader may choose to fold — the
+	 * contract states the INTENT ("the same renderable, N times, here"), never the encoding,
+	 * so a consumer serves every format through one path.
+	 *
+	 * @warning A set is a HINT about redundancy, not an instruction to draw. How the instances
+	 * reach the GPU — one instanced entity, spatial cells, a culling compute pass — belongs to
+	 * the consumer, because only the scene knows its own culling machinery. A loader that
+	 * decided that here would be re-implementing the renderer.
+	 *
+	 * @note Frames are expressed in the SAME space as the meshes of the same SceneData, so
+	 * whatever conversion the consumer applies to a mesh node applies here unchanged. A loader
+	 * baking its own axis conversion into vertices MUST bake the very same one into these
+	 * frames, or the vegetation lands mirrored while the ground looks right.
+	 */
+	struct EMEN_API InstanceSetDescriptor
+	{
+		std::string name;
+		/**
+		 * @brief The world placement of every copy: position, rotation and scale.
+		 */
+		std::vector< Base::Math::CartesianFrame< float > > instances;
+		/**
+		 * @brief Index into SceneData::meshes of the renderable every instance draws.
+		 * @note The mesh it points at is NOT expected to appear in the node hierarchy: a
+		 * prototype exists to be instanced, and drawing it once more at the asset's origin is a
+		 * bug that looks like a stray object floating in the scene.
+		 */
+		size_t meshIndex{0};
+	};
+
+	/**
 	 * @brief Format-agnostic result of loading a composite asset.
 	 * @note All resources are already registered in engine containers.
 	 * The node hierarchy is described via NodeDescriptors without any
@@ -209,6 +242,7 @@ namespace EmEn::SceneLoaders
 		 * ask Interface::capabilities() to tell the two apart before loading. */
 		std::vector< LightDescriptor > lights;
 		std::vector< CameraDescriptor > cameras;
+		std::vector< InstanceSetDescriptor > instanceSets;
 
 		/* Node hierarchy (format-agnostic). */
 		std::vector< NodeDescriptor > nodes;

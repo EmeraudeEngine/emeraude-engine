@@ -72,6 +72,18 @@ namespace EmEn::Scenes
 		 * being able to tell one instance from its neighbour.
 		 */
 		float cellSize{32.0F};
+		/**
+		 * @brief Declares whether the instances belong on the LIT path.
+		 *
+		 * @warning ⚠️⚠️ A renderable instance is born UNLIT. Leaving this to the renderer's
+		 * default is what turns a whole forest into black silhouettes, with nothing in the log
+		 * to say so — the geometry, the placement and the materials are all correct.
+		 *
+		 * @note Default true, matching `MeshDescriptor::lightingEnabled`. Set it to false only
+		 * for content whose lighting is already baked into its vertices, which the ambient and
+		 * IBL terms would otherwise count twice.
+		 */
+		bool lightingEnabled{true};
 	};
 
 	/**

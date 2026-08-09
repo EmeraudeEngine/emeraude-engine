@@ -28,15 +28,19 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <numbers>
 #include <system_error>
 #include <memory>
 #include <utility>
 #include <vector>
 #include <array>
+#include <tuple>
 
 /* Third-party inclusions. */
 #include "tinyusdz.hh"
+#include "usdGeom.hh"
 #include "usdLux.hh"
 #include "composition.hh"
 #include "asset-resolution.hh"
@@ -275,6 +279,260 @@ namespace EmEn::SceneLoaders
 		}
 	}
 
+	void
+	USDLoader::collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept
+	{
+		using namespace Base::Math;
+
+		if ( const auto * pointInstancer = prim.as< tinyusdz::GeomPointInstancer >(); pointInstancer != nullptr )
+		{
+			Instancer instancer;
+			instancer.path = primPath;
+
+			/* ⚠️ AXIS BAKE, INSTANCE EDITION. The vertices of a prototype went through
+			 *
+			 *     C : engine = (usd.x, usd.z, -usd.y)
+			 *
+			 * in buildMeshes(). An instance carries a TRANSFORM, not a point, so it cannot be fed
+			 * through C directly: a transform changes basis by CONJUGATION, C·T·C⁻¹. Applied to an
+			 * already-baked prototype vertex, that reproduces the source placement exactly:
+			 *
+			 *     C·(T·p) = (C·T·C⁻¹)·(C·p)
+			 *
+			 * C is the rotation of +90° about X (it sends y to z and z to -y, determinant +1), so
+			 * the conjugation has a closed form on each part of the transform, and no matrix is
+			 * needed:
+			 *   - a translation is simply carried through C;
+			 *   - a rotation quaternion is conjugated by C's own quaternion;
+			 *   - a scale, being sign-blind, has its Y and Z factors SWAPPED.
+			 *
+			 * Skipping the conjugation and merely permuting the position is the trap: the forest
+			 * lands in the right places, and every plant is rotated wrong — which reads as a bad
+			 * asset rather than a bad conversion. */
+			const auto bakePosition = [metersPerUnit] (const auto & position) {
+				return Vector< 3, float >{
+					static_cast< float >(position[0]) * metersPerUnit,
+					static_cast< float >(position[2]) * metersPerUnit,
+					-static_cast< float >(position[1]) * metersPerUnit
+				};
+			};
+
+			/* The quaternion of C, a +90° rotation about X: (sin(45°), 0, 0, cos(45°)). */
+			const Quaternion< float > axisChange{std::numbers::sqrt2_v< float > / 2.0F, 0.0F, 0.0F, std::numbers::sqrt2_v< float > / 2.0F};
+			const auto axisChangeInverse = axisChange.conjugated();
+
+			std::vector< tinyusdz::value::point3f > positions;
+			std::vector< tinyusdz::value::quath > orientations;
+			std::vector< tinyusdz::value::float3 > scales;
+
+			if ( const auto value = pointInstancer->positions.get_value(); value.has_value() )
+			{
+				if ( !value.value().get_scalar(&positions) )
+				{
+					TraceWarning{ClassId} << "Instancer '" << primPath << "' has time-sampled positions, which are not read.";
+				}
+			}
+
+			if ( const auto value = pointInstancer->protoIndices.get_value(); value.has_value() )
+			{
+				std::vector< int32_t > indices;
+
+				if ( value.value().get_scalar(&indices) )
+				{
+					instancer.prototypeIndices = std::move(indices);
+				}
+			}
+
+			if ( const auto value = pointInstancer->orientations.get_value(); value.has_value() )
+			{
+				(void)value.value().get_scalar(&orientations);
+			}
+
+			if ( const auto value = pointInstancer->scales.get_value(); value.has_value() )
+			{
+				(void)value.value().get_scalar(&scales);
+			}
+
+			/* The prototypes relationship is the ONLY thing tying an instance to what it draws:
+			 * `protoIndices[i]` indexes INTO this target list, not into anything global. */
+			if ( pointInstancer->prototypes.has_value() )
+			{
+				const auto & relation = pointInstancer->prototypes.value();
+
+				if ( relation.is_path() )
+				{
+					instancer.prototypePaths.emplace_back(relation.targetPath.full_path_name());
+				}
+				else if ( relation.is_pathvector() )
+				{
+					for ( const auto & target : relation.targetPathVector )
+					{
+						instancer.prototypePaths.emplace_back(target.full_path_name());
+					}
+				}
+			}
+
+			instancer.instances.reserve(positions.size());
+
+			for ( size_t index = 0; index < positions.size(); ++index )
+			{
+				auto rotation = Quaternion< float >{};
+
+				if ( index < orientations.size() )
+				{
+					/* USD stores an orientation as a HALF-precision quaternion, real part first.
+					 * The engine's constructor takes (x, y, z, w). */
+					const auto & source = orientations[index];
+
+					const Quaternion< float > sourceRotation{
+						tinyusdz::value::half_to_float(source.imag[0]),
+						tinyusdz::value::half_to_float(source.imag[1]),
+						tinyusdz::value::half_to_float(source.imag[2]),
+						tinyusdz::value::half_to_float(source.real)
+					};
+
+					rotation = axisChange * sourceRotation * axisChangeInverse;
+					rotation.normalize();
+				}
+
+				auto scale = Vector< 3, float >{1.0F, 1.0F, 1.0F};
+
+				if ( index < scales.size() )
+				{
+					scale[0] = scales[index][0];
+					scale[1] = scales[index][2];
+					scale[2] = scales[index][1];
+				}
+
+				instancer.instances.emplace_back(CartesianFrame< float >::fromQuaternion(bakePosition(positions[index]), rotation, scale));
+			}
+
+			if ( !instancer.instances.empty() )
+			{
+				instancers.emplace_back(std::move(instancer));
+			}
+			else
+			{
+				TraceWarning{ClassId} << "Instancer '" << primPath << "' declares no usable position.";
+			}
+		}
+
+		for ( const auto & child : prim.children() )
+		{
+			USDLoader::collectInstancers(child, primPath + "/" + child.element_name(), metersPerUnit, instancers);
+		}
+	}
+
+	size_t
+	USDLoader::buildInstanceSets (const std::vector< Instancer > & instancers, const std::map< std::string, size_t > & builtMeshesByPath, SceneData & output) noexcept
+	{
+		size_t instanceTotal = 0;
+
+		for ( const auto & instancer : instancers )
+		{
+			for ( size_t prototypeIndex = 0; prototypeIndex < instancer.prototypePaths.size(); ++prototypeIndex )
+			{
+				const auto & prototypePath = instancer.prototypePaths[prototypeIndex];
+
+				/* A prototype is a SUBTREE, not a mesh: it may hold several meshes, and each of
+				 * them must follow every instance. Matching on the path prefix is what keeps the
+				 * two apart without assuming a shape the asset never promised. */
+				std::vector< size_t > prototypeMeshIndices;
+
+				for ( const auto & [meshPath, meshIndex] : builtMeshesByPath )
+				{
+					if ( meshPath == prototypePath || meshPath.starts_with(prototypePath + "/") )
+					{
+						prototypeMeshIndices.push_back(meshIndex);
+					}
+				}
+
+				if ( prototypeMeshIndices.empty() )
+				{
+					TraceWarning{ClassId} << "Instancer '" << instancer.path << "' references prototype '" << prototypePath << "', which produced no mesh.";
+
+					continue;
+				}
+
+				/* An instance whose protoIndices entry does not name THIS prototype belongs to
+				 * another one. An instancer with a single prototype and no index array is the
+				 * common case and means "all of them". */
+				std::vector< Base::Math::CartesianFrame< float > > selected;
+
+				if ( instancer.prototypeIndices.empty() )
+				{
+					selected = instancer.instances;
+				}
+				else
+				{
+					selected.reserve(instancer.instances.size());
+
+					for ( size_t index = 0; index < instancer.instances.size(); ++index )
+					{
+						if ( index < instancer.prototypeIndices.size() && static_cast< size_t >(instancer.prototypeIndices[index]) == prototypeIndex )
+						{
+							selected.push_back(instancer.instances[index]);
+						}
+					}
+				}
+
+				if ( selected.empty() )
+				{
+					continue;
+				}
+
+				for ( const auto meshIndex : prototypeMeshIndices )
+				{
+					InstanceSetDescriptor descriptor;
+					descriptor.name = prototypePath;
+					descriptor.meshIndex = meshIndex;
+					descriptor.instances = selected;
+
+					output.instanceSets.emplace_back(std::move(descriptor));
+				}
+
+				instanceTotal += selected.size() * prototypeMeshIndices.size();
+			}
+		}
+
+		return instanceTotal;
+	}
+
+	std::filesystem::path
+	USDLoader::findCaseInsensitive (const std::filesystem::path & wanted) noexcept
+	{
+		std::error_code pathError;
+
+		const auto directory = wanted.parent_path();
+
+		if ( !std::filesystem::is_directory(directory, pathError) || pathError )
+		{
+			return {};
+		}
+
+		const auto lowered = [] (std::string text) {
+			std::ranges::transform(text, text.begin(), [] (unsigned char character) {
+				return static_cast< char >(std::tolower(character));
+			});
+
+			return text;
+		};
+
+		const auto target = lowered(wanted.filename().string());
+
+		const std::filesystem::directory_iterator end;
+
+		for ( auto it = std::filesystem::directory_iterator{directory, std::filesystem::directory_options::skip_permission_denied, pathError}; !pathError && it != end; it.increment(pathError) )
+		{
+			if ( lowered(it->path().filename().string()) == target )
+			{
+				return it->path();
+			}
+		}
+
+		return {};
+	}
+
 	std::vector< std::shared_ptr< Graphics::Material::Interface > >
 	USDLoader::buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept
 	{
@@ -309,11 +567,58 @@ namespace EmEn::SceneLoaders
 			}
 
 			std::error_code pathError;
-			const auto fullPath = std::filesystem::weakly_canonical(stageDirectory / assetIdentifier, pathError);
+			auto fullPath = std::filesystem::weakly_canonical(stageDirectory / assetIdentifier, pathError);
 
 			if ( pathError || !std::filesystem::exists(fullPath) )
 			{
-				TraceWarning{ClassId} << "Texture '" << assetIdentifier << "' not found next to the stage.";
+				/* ⚠️⚠️ CASE. An asset authored on Windows or macOS records whatever spelling the
+				 * DCC felt like, on a filesystem that does not care. On Linux it does, and the
+				 * texture simply is not found. Measured on Jungle Ruins: the very same material
+				 * asks for `anthurium_botany_01_BaseColor.tif` while the file on disk is
+				 * `Anthurium_Botany_01_BaseColor.tif` — and asks for `..._Normal.png` with the
+				 * right case.
+				 *
+				 * The result is the WORST kind of failure to read: the normal map lands, the base
+				 * colour does not, so the geometry is lit, detailed, and pure white. It looks like
+				 * a lighting or material bug, and nothing points at a filename.
+				 *
+				 * So a miss is retried case-insensitively within the directory. Bounded to one
+				 * listing of one directory, and only on a path that already failed. */
+				fullPath = USDLoader::findCaseInsensitive(fullPath);
+
+				if ( fullPath.empty() )
+				{
+					TraceWarning{ClassId} << "Texture '" << assetIdentifier << "' not found next to the stage.";
+
+					return nullptr;
+				}
+
+				TraceWarning{ClassId} << "Texture '" << assetIdentifier << "' only matched by IGNORING CASE: '" << fullPath.filename().string() << "'. The asset's spelling is wrong for a case-sensitive filesystem.";
+			}
+
+			/* ⚠️⚠️ A FORMAT WE CANNOT DECODE MUST NOT REACH THE RESOURCE MANAGER. `PixelFactory`
+			 * reads JPEG, PNG, Targa and HDR — and Jungle Ruins ships its plant base colours as
+			 * 4096² TIFF. Handing such a path to the image container yields a resource that FAILS
+			 * to load, the texture built on it fails in turn, and the material goes down with it:
+			 * the plants stopped rendering ENTIRELY.
+			 *
+			 * That is strictly worse than not finding the file at all, which simply falls back to
+			 * the shader's flat colour — and it is exactly the trap this project's "loading never
+			 * returns a broken resource" rule exists to prevent. So the extension is checked
+			 * FIRST, and an unreadable one is reported and skipped, colour intact. */
+			const auto extension = [] (std::string text) {
+				std::ranges::transform(text, text.begin(), [] (unsigned char character) {
+					return static_cast< char >(std::tolower(character));
+				});
+
+				return text;
+			}(fullPath.extension().string());
+
+			if ( extension != ".jpg" && extension != ".jpeg" && extension != ".png" && extension != ".tga" && extension != ".hdr" && extension != ".tif" && extension != ".tiff" )
+			{
+				TraceWarning{ClassId} <<
+					"Texture '" << fullPath.filename().string() << "' uses the unsupported '" << extension <<
+					"' format; the material keeps its flat colour. PixelFactory reads JPEG, PNG, Targa, TIFF and HDR.";
 
 				return nullptr;
 			}
@@ -422,7 +727,7 @@ namespace EmEn::SceneLoaders
 	}
 
 	size_t
-	USDLoader::buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output) noexcept
+	USDLoader::buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept
 	{
 		using namespace Graphics;
 		using namespace Base::Math;
@@ -477,12 +782,41 @@ namespace EmEn::SceneLoaders
 		 *
 		 * A mesh referenced by several nodes is therefore built once per node: same geometry,
 		 * different placement. */
-		std::vector< std::pair< size_t, tinyusdz::value::matrix4d > > drawList;
+		/* ⚠️ THREE KINDS OF MESH COME OUT OF TYDRA, and only one of them is drawn where it stands.
+		 *
+		 * 1. `/_class_/…` — USD CLASSES. Abstract templates that exist to be inherited from; they
+		 *    are not scene content. Tydra converts them like anything else, and drawing them puts
+		 *    a full copy of every prototype at the asset's origin, on top of each other. Measured
+		 *    on one Anthurium element: 12 meshes out of Tydra for 6 real prototypes.
+		 * 2. A PROTOTYPE subtree of a PointInstancer — built, kept, but NEVER given a node: it is
+		 *    drawn by its instances, and a node here would draw it one extra time, alone, at
+		 *    whatever place the asset stores its prototypes.
+		 * 3. Everything else — ordinary geometry, which gets its node as usual.
+		 *
+		 * Whether a class ends up drawn is not a matter of taste: `_class_` is USD's own marker
+		 * for "not renderable", and honouring it is part of reading the format. */
+		std::vector< std::tuple< size_t, tinyusdz::value::matrix4d, std::string > > drawList;
 
-		const auto collectNodes = [&drawList] (auto & self, const tinyusdz::tydra::Node & node) -> void {
+		size_t skippedClassCount = 0;
+
+		std::map< std::string, tinyusdz::value::matrix4d > prototypeRootMatrices;
+
+		const auto collectNodes = [&drawList, &skippedClassCount, &prototypeRootMatrices, &prototypePaths] (auto & self, const tinyusdz::tydra::Node & node) -> void {
+			if ( node.abs_path.starts_with("/_class_") )
+			{
+				skippedClassCount++;
+
+				return;
+			}
+
+			if ( std::ranges::find(prototypePaths, node.abs_path) != prototypePaths.end() )
+			{
+				prototypeRootMatrices.emplace(node.abs_path, node.global_matrix);
+			}
+
 			if ( node.nodeType == tinyusdz::tydra::NodeType::Mesh && node.id >= 0 )
 			{
-				drawList.emplace_back(static_cast< size_t >(node.id), node.global_matrix);
+				drawList.emplace_back(static_cast< size_t >(node.id), node.global_matrix, node.abs_path);
 			}
 
 			for ( const auto & child : node.children )
@@ -496,12 +830,56 @@ namespace EmEn::SceneLoaders
 			collectNodes(collectNodes, node);
 		}
 
-		TraceInfo{ClassId} << drawList.size() << " mesh placements collected from the node hierarchy.";
+		const auto isPrototype = [&prototypePaths] (const std::string & path) {
+			return std::ranges::any_of(prototypePaths, [&path] (const auto & prototypePath) {
+				return path == prototypePath || path.starts_with(prototypePath + "/");
+			});
+		};
+
+		/* ⚠️ A prototype's own placement is NOT its instances' placement. Its mesh is baked in the
+		 * prototype's local space and every instance then positions it; folding the prototype's
+		 * world matrix in as well would offset the entire forest by wherever the asset happens to
+		 * park its prototypes.
+		 *
+		 * Tydra only hands out ABSOLUTE matrices, so this pass assumes a prototype root sits at
+		 * the identity — true of every element of Jungle Ruins. Rather than trust that silently,
+		 * the assumption is CHECKED: a prototype root carrying a transform says so in the log
+		 * instead of producing a forest quietly shifted off the terrain. */
+		for ( const auto & [primPath, matrix] : prototypeRootMatrices )
+		{
+			bool isIdentity = true;
+
+			for ( size_t row = 0; row < 4 && isIdentity; ++row )
+			{
+				for ( size_t column = 0; column < 4; ++column )
+				{
+					const auto expected = ( row == column ) ? 1.0 : 0.0;
+
+					if ( std::abs(matrix.m[row][column] - expected) > 1e-5 )
+					{
+						isIdentity = false;
+
+						break;
+					}
+				}
+			}
+
+			if ( !isIdentity )
+			{
+				TraceWarning{ClassId} <<
+					"Prototype '" << primPath << "' carries a transform of its own, which this pass does not "
+					"factor out: its instances will be offset by it.";
+			}
+		}
+
+		TraceInfo{ClassId} <<
+			drawList.size() << " mesh placements collected from the node hierarchy (" <<
+			skippedClassCount << " class subtrees skipped, " << prototypePaths.size() << " instancer prototypes declared).";
 
 		size_t builtCount = 0;
 		size_t meshIndex = 0;
 
-		for ( const auto & [sourceMeshIndex, worldMatrix] : drawList )
+		for ( const auto & [sourceMeshIndex, worldMatrix, primPath] : drawList )
 		{
 			if ( sourceMeshIndex >= renderScene.meshes.size() )
 			{
@@ -509,6 +887,8 @@ namespace EmEn::SceneLoaders
 
 				continue;
 			}
+
+			const bool instancedOnly = isPrototype(primPath);
 
 			const auto & renderMesh = renderScene.meshes[sourceMeshIndex];
 
@@ -688,14 +1068,22 @@ namespace EmEn::SceneLoaders
 
 			output.meshes.emplace_back(std::move(descriptor));
 
-			/* One node per mesh for this pass: the render scene's own hierarchy is not walked
-			 * yet, so every mesh sits at the stage origin with its baked coordinates. */
-			NodeDescriptor node;
-			node.name = resourceName;
-			node.meshIndex = output.meshes.size() - 1;
+			builtMeshesByPath.emplace(primPath, output.meshes.size() - 1);
 
-			output.nodes.emplace_back(std::move(node));
-			output.rootNodeIndices.push_back(output.nodes.size() - 1);
+			/* A prototype stops HERE: it is a resource its instances will draw, never a node.
+			 * Giving it one is the classic instancing bug — the whole forest is correct, plus one
+			 * stray copy of every species sitting at the prototype's own place. */
+			if ( !instancedOnly )
+			{
+				/* One node per mesh for this pass: the render scene's own hierarchy is not walked
+				 * yet, so every mesh sits at the stage origin with its baked coordinates. */
+				NodeDescriptor node;
+				node.name = resourceName;
+				node.meshIndex = output.meshes.size() - 1;
+
+				output.nodes.emplace_back(std::move(node));
+				output.rootNodeIndices.push_back(output.nodes.size() - 1);
+			}
 
 			builtCount++;
 			meshIndex++;
@@ -807,6 +1195,12 @@ namespace EmEn::SceneLoaders
 			return false;
 		}
 
+		if ( !warning.empty() )
+		{
+			TraceWarning{ClassId} << "While compositing the sublayers of '" << filepath.filename().string() << "' : " << warning;
+			warning.clear();
+		}
+
 		/* ⚠️ `CompositeAllArcs()` is DELIBERATELY not called here (owner decision, 2026-08-08).
 		 * It resolves references, payloads, inherits and variants EAGERLY, in one pass. On Jungle
 		 * Ruins that means ingesting 450 MB of ASCII prototype layers before anything can be
@@ -829,6 +1223,12 @@ namespace EmEn::SceneLoaders
 				TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' : " << error;
 
 				return false;
+			}
+
+			if ( !warning.empty() )
+			{
+				TraceWarning{ClassId} << "While compositing the arcs of '" << filepath.filename().string() << "' : " << warning;
+				warning.clear();
 			}
 		}
 		else
@@ -863,12 +1263,43 @@ namespace EmEn::SceneLoaders
 			return false;
 		}
 
+		/* ⚠️ THIS IS NOT COSMETIC LOGGING. tinyusdz reports through `warn` what it silently gave
+		 * up on, and dropping that string on the floor is what cost a whole session: every
+		 * PointInstancer of this asset was being discarded by `LayerToStage` — the prim type was
+		 * missing from its reconstruction table — and it said so, here, every single time.
+		 * A prim that cannot be reconstructed takes its ENTIRE SUBTREE with it, so a swallowed
+		 * warning is not a missing detail, it is a missing half of the scene. */
+		if ( !warning.empty() )
+		{
+			TraceWarning{ClassId} << "While building the stage of '" << filepath.filename().string() << "' : " << warning;
+			warning.clear();
+		}
+
 		USDLoader::reportInventory(filepath, stage);
 
 		for ( const auto & prim : stage.root_prims() )
 		{
 			USDLoader::collectEnvironmentLights(prim, absoluteFilepath.parent_path(), output);
 		}
+
+		/* PointInstancers are read from the PRIMS: Tydra has no notion of them whatsoever, so
+		 * nothing downstream would ever mention the vegetation. */
+		std::vector< Instancer > instancers;
+
+		for ( const auto & prim : stage.root_prims() )
+		{
+			USDLoader::collectInstancers(prim, "/" + prim.element_name(), metersPerUnit, instancers);
+		}
+
+		std::vector< std::string > prototypePaths;
+
+		for ( const auto & instancer : instancers )
+		{
+			prototypePaths.insert(prototypePaths.end(), instancer.prototypePaths.begin(), instancer.prototypePaths.end());
+		}
+
+		std::ranges::sort(prototypePaths);
+		prototypePaths.erase(std::ranges::unique(prototypePaths).begin(), prototypePaths.end());
 
 		/* Tydra hands back renderer-ready data: triangulated faces, indexed vertices, resolved
 		 * material bindings. Re-deriving that from raw prims would be duplicated work — the
@@ -894,8 +1325,15 @@ namespace EmEn::SceneLoaders
 
 		m_resourcePrefix = "usd:" + filepath.stem().string();
 
+		std::map< std::string, size_t > builtMeshesByPath;
+
 		const auto materials = this->buildMaterials(renderScene, absoluteFilepath.parent_path());
-		const auto builtCount = this->buildMeshes(renderScene, metersPerUnit, materials, output);
+		const auto builtCount = this->buildMeshes(renderScene, metersPerUnit, prototypePaths, materials, output, builtMeshesByPath);
+		const auto instanceCount = USDLoader::buildInstanceSets(instancers, builtMeshesByPath, output);
+
+		TraceInfo{ClassId} <<
+			instancers.size() << " point instancers read: " << instanceCount << " instances over " <<
+			output.instanceSets.size() << " sets, from " << prototypePaths.size() << " prototypes.";
 
 		TraceInfo{ClassId} <<
 			filepath.filename().string() << " converted: " <<
@@ -913,6 +1351,8 @@ namespace EmEn::SceneLoaders
 			", metersPerUnit " << metersPerUnit <<
 			", timeCodes " << metas.startTimeCode.get_value() << " to " << metas.endTimeCode.get_value() << ".";
 
-		return builtCount > 0;
+		/* An element made entirely of instances builds no drawable node at all, and is still a
+		 * complete success. Judging on meshes alone would call the vegetation a failure. */
+		return builtCount > 0 || !output.instanceSets.empty();
 	}
 }

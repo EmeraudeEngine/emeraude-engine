@@ -164,6 +164,7 @@ It bails early if no `ComponentType::Diffuse` has been registered yet — emitti
 | `animationClips` | `vector<shared_ptr<AnimationClipResource>>` | Animation clips |
 | `lights` | `vector<LightDescriptor>` | Punctual lights, in **photometric units** (see below) |
 | `cameras` | `vector<CameraDescriptor>` | Authored camera viewpoints — **data only** |
+| `instanceSets` | `vector<InstanceSetDescriptor>` | One renderable drawn N times — see below |
 | `nodes` | `vector<NodeDescriptor>` | Format-agnostic hierarchy (name, localFrame, meshIndex, lightIndex, cameraIndex, childIndices) |
 | `rootNodeIndices` | `vector<size_t>` | Root node indices |
 | `skinJointNodeIndices` | `unordered_set<size_t>` | Joint nodes to skip in scene building |
@@ -187,6 +188,37 @@ It bails early if no `ComponentType::Diffuse` has been registered yet — emitti
 > Cone angles are stored in **DEGREES** (glTF authors radians — `GLTFLoader` converts).
 > `range` is a **culling bound, never a dimmer**: the falloff is carried by the inverse square.
 > `0.0F` means the asset declared none, and the engine default is left alone.
+
+#### Instance sets — redundancy is a HINT, not a draw order (added 2026-08-09)
+
+`InstanceSetDescriptor` = `{ name, instances (vector<CartesianFrame<float>>), meshIndex }`.
+
+It states the INTENT — *the same renderable, N times, here* — never the encoding. USD carries it
+as a `PointInstancer`, glTF as `EXT_mesh_gpu_instancing`, FBX as duplicated nodes a loader may
+fold. **Not a USD tax**: one consumer path serves every format.
+
+> [!IMPORTANT]
+> **How the instances reach the GPU is the CONSUMER's call**, because only the scene knows its own
+> culling machinery. `Scenes::SceneDataConsumer` splits each set into spatial cells via
+> `buildInstanceClusters()` (cell size through `setInstanceCellSize()`, default 32 units), so the
+> rendering octree culls whole cells with no new culling path. A loader deciding that would be
+> re-implementing the renderer.
+
+> [!WARNING]
+> **The mesh a set points at must NOT appear in `nodes`.** A prototype exists to be instanced;
+> giving it a node draws one stray copy at the asset's origin — the classic instancing bug, and it
+> looks like a random object floating in the scene rather than a loader mistake.
+
+> [!WARNING]
+> **Frames live in the same space as the meshes of the same `SceneData`.** A loader baking its own
+> axis conversion into vertices MUST bake the very same one into these frames — and for a
+> TRANSFORM that bake is a **conjugation** `C·T·C⁻¹`, never a permutation of the position. Get it
+> wrong and every instance sits in the right place, rotated wrong.
+
+> [!CAUTION]
+> An asset can hold **no drawable node at all** and still be complete — every `PI_*.usd` element
+> of Jungle Ruins is pure instances. `SceneDataConsumer::build()` returned early on an empty node
+> table and would have dropped them while reporting success. It now checks both collections.
 
 #### Cameras are data, never instantiated
 
@@ -230,13 +262,14 @@ Phases 4-5 skipped when `skipSkinning = true`.
 
 **Resource naming:** `glTF:{stem}/{Category}/{name}` (e.g., `glTF:Fox/Mesh/fox1`)
 
-### USDLoader (OpenUSD via tinyusdz — stage inventory only, Aug 2026)
+### USDLoader (OpenUSD via tinyusdz — geometry, materials, sky, INSTANCING, Aug 2026)
 
 Reads `.usd` / `.usda` / `.usdc` / `.usdz`. Its reference asset, Intel's Jungle Ruins, is the
 engine's **GOLD GOAL** (owner: *"le Saint Graal"*) — see
-[`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md) § 8. **`capabilities()` returns `None`**: it currently
-produces a stage inventory and no scene data. The mask grows as each translation milestone
-lands. Full design: [`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md).
+[`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md) § 8. It now translates
+meshes, materials, dome lights and **point instancers**. **`capabilities()` still returns
+`None`** — a known lag between the mask and what is delivered, to be corrected. Full design:
+[`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders-usd.md).
 
 > [!CAUTION]
 > **`tinyusdz::LoadUSDFromFile()` composes NOTHING.** It reads the root layer, parses the
@@ -266,10 +299,42 @@ lands. Full design: [`../../docs/scene-loaders-usd.md`](../../docs/scene-loaders
 > plausible-looking scene with missing prototypes is indistinguishable from a correct one
 > without counting prims.
 
-`patches/tinyusdz.patch` in ext-deps-generator carries two fixes: the missing install rules
-(upstream installs only its optional C API), and an RAII guard restoring the asset resolver's
-state after recursion — without it, every sibling sublayer after the first resolves against the
-wrong directory. Upstream left a `TODO` asking for exactly that.
+> [!CAUTION]
+> **ALWAYS PRINT tinyusdz's `warn` STRING.** Every composition entry point returns one, and it is
+> where the library says what it silently gave up on. `LayerToStage` was discarding **every
+> `PointInstancer` of the asset with its entire subtree** — the prim type was missing from its
+> reconstruction table — and it said so, every single time, in a string the loader threw away.
+> That cost a full session of diagnosis. All four steps now trace it.
+
+#### Point instancers — read from the PRIMS, never from Tydra
+
+`PointInstancer` appears **zero times** in the whole of `src/tydra/`: Tydra will never report
+instances, and `RenderScene::instances` is about something else. `collectInstancers()` walks the
+prims directly. Tydra does *descend* into a prototype and convert its meshes, exposing
+`RenderMesh::abs_path` — which is what ties an instancer to the renderable it draws, with no
+patch to Tydra.
+
+Three traps, all paid on this asset (details in `docs/scene-loaders-usd.md` § 4.6):
+
+1. **A transform is conjugated, not permuted.** `C·T·C⁻¹` where `C` is the +90°-about-X axis
+   change. Closed form: translation through `C`, orientation quaternion conjugated by `C`'s
+   quaternion, scale with **Y and Z swapped**. Permuting the position alone yields a forest in the
+   right places, every plant rotated wrong.
+2. **`/_class_` subtrees are skipped.** USD classes are abstract templates; Tydra converts them
+   anyway. 12 meshes out for 6 real prototypes on one element — drawing them stacks a copy of
+   every species at the origin.
+3. **A prototype gets NO node**, only a resource. A node draws it one extra time, alone.
+
+⚠️ A prototype root is assumed to sit at the identity (Tydra exposes absolute matrices only).
+The assumption is **checked and logged**, never trusted silently.
+
+`patches/tinyusdz.patch` in ext-deps-generator carries four fixes: the missing install rules
+(upstream installs only its optional C API); an RAII guard restoring the asset resolver's state
+after recursion — without it, every sibling sublayer after the first resolves against the wrong
+directory, and upstream left a `TODO` asking for exactly that; a header include path only valid
+inside the source tree; and the **missing PrimSpec→Prim table rows** for `GeomPointInstancer` and
+five UsdLux types, all implemented upstream yet never listed, whose absence deletes the prim and
+everything under it.
 
 ### FBXLoader (Phase 5 — Full Pipeline + LoaderOptions Plumbed)
 

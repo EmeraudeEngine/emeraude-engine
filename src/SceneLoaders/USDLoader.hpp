@@ -39,6 +39,9 @@
 #include <memory>
 #include <vector>
 
+/* Local inclusions for usages. */
+#include "Math/CartesianFrame.hpp"
+
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
@@ -137,6 +140,18 @@ namespace EmEn::SceneLoaders
 			 * @param stageDirectory The directory the stage was read from.
 			 * @return std::vector< std::shared_ptr< Graphics::Material::Interface > > Indexed by RenderMaterial index.
 			 */
+			/**
+			 * @brief Retries a missing path by matching its filename WITHOUT case.
+			 * @note Assets authored on Windows or macOS carry whatever spelling the DCC recorded, on
+			 * a filesystem that does not care. On Linux the file is simply not found, and a missing
+			 * base colour beside a resolved normal map renders as lit, detailed, pure WHITE geometry —
+			 * a failure that looks like a material bug and never points at a filename.
+			 * @param wanted The path that failed to resolve.
+			 * @return std::filesystem::path Empty when nothing matches.
+			 */
+			[[nodiscard]]
+			static std::filesystem::path findCaseInsensitive (const std::filesystem::path & wanted) noexcept;
+
 			[[nodiscard]]
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
 
@@ -146,11 +161,51 @@ namespace EmEn::SceneLoaders
 			 * alike — the engine then sees nothing but its own convention.
 			 * @param renderScene A reference to the Tydra render scene.
 			 * @param metersPerUnit The stage's linear unit.
+			 * @param prototypePaths The prim paths whose meshes are instanced rather than drawn.
+			 * @param materials The translated materials, indexed by RenderMaterial index.
 			 * @param output A reference to the scene data to populate.
+			 * @param builtMeshesByPath Receives, for every mesh built, its USD prim path.
 			 * @return size_t The number of meshes actually built.
 			 */
 			[[nodiscard]]
-			size_t buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output) noexcept;
+			size_t buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept;
+
+			/**
+			 * @brief Describes one PointInstancer read straight from the stage.
+			 * @note Tydra knows NOTHING about PointInstancer — zero occurrence in its whole
+			 * source — so this is read from the prims, not from the render scene. It is also why
+			 * the prototypes must be kept off the ordinary draw path by hand: Tydra happily
+			 * converts them into meshes like any other, and they would then be drawn once more,
+			 * alone, wherever the asset happens to store them.
+			 */
+			struct Instancer
+			{
+				std::string path;
+				std::vector< std::string > prototypePaths;
+				std::vector< Base::Math::CartesianFrame< float > > instances;
+				std::vector< int32_t > prototypeIndices;
+			};
+
+			/**
+			 * @brief Walks a prim subtree and reads every PointInstancer it holds.
+			 * @note Positions, orientations and scales are converted into the engine's own space
+			 * HERE, by the same bake the vertices go through, so a set of instances and the mesh
+			 * it instances always agree.
+			 * @param prim A reference to the prim to visit.
+			 * @param primPath The absolute path of that prim.
+			 * @param metersPerUnit The stage's linear unit.
+			 * @param instancers The list being filled.
+			 */
+			static void collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
+
+			/**
+			 * @brief Turns the collected instancers into instance sets referencing built meshes.
+			 * @param instancers The instancers read from the stage.
+			 * @param builtMeshesByPath Every mesh built, by USD prim path.
+			 * @param output A reference to the scene data to populate.
+			 * @return size_t The total number of instances declared.
+			 */
+			static size_t buildInstanceSets (const std::vector< Instancer > & instancers, const std::map< std::string, size_t > & builtMeshesByPath, SceneData & output) noexcept;
 
 			/**
 			 * @brief Walks a prim subtree and collects environment (dome) lights.

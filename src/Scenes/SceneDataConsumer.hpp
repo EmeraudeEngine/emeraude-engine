@@ -95,6 +95,24 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Sets the edge length of an instance cell, in world units.
+			 * @note An instance set is never built as one entity: it is split into spatial cells
+			 * so the rendering octree can cull them like any other entity. This is the size of
+			 * those cells, and it is a CONTENT decision — roughly the distance at which a viewer
+			 * stops telling one instance from its neighbour. See Scenes::InstanceClusterOptions
+			 * for what each end of the trade-off costs.
+			 * @param cellSize The edge length. Ignored when not strictly positive.
+			 */
+			void
+			setInstanceCellSize (float cellSize) noexcept
+			{
+				if ( cellSize > 0.0F )
+				{
+					m_instanceCellSize = cellSize;
+				}
+			}
+
+			/**
 			 * @brief Builds Scene objects from an SceneData.
 			 * @param sceneData The loaded asset data (resources + node descriptors).
 			 * @param scene Reference to the scene.
@@ -122,6 +140,18 @@ namespace EmEn::Scenes
 			template< typename entity_t >
 			void attachLight (const SceneLoaders::SceneData & sceneData, const SceneLoaders::NodeDescriptor & nodeDescriptor, entity_t & entity) const noexcept;
 
+			/**
+			 * @brief Turns every instance set of an asset into spatial cells of scene entities.
+			 * @note The root frame is applied to each instance exactly as it is to a mesh node,
+			 * so instances and geometry always land in the same space.
+			 * @param sceneData The loaded asset data.
+			 * @param scene A reference to the scene receiving the cells.
+			 * @param rootFrame The frame applied to the whole asset.
+			 * @return size_t The number of cells created, all sets together.
+			 */
+			size_t buildInstanceSets (const SceneLoaders::SceneData & sceneData, Scene & scene, const Base::Math::CartesianFrame< float > & rootFrame) const noexcept;
+
+			float m_instanceCellSize{32.0F};
 			bool m_flattenHierarchy{false};
 			bool m_createLights{false};
 	};

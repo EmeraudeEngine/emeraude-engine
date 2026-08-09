@@ -1,13 +1,14 @@
 # Scene Loaders & OpenUSD Integration — Design Document
 
-> Status: **design approved, implementation not started**.
+> Status: **phase 1 in progress** — geometry, materials, sky and INSTANCING render.
+> Milestones and what remains: § 7.
 > Owner decisions recorded below are binding. Any deviation requires a new decision.
 >
 > Related: [`scene-graph-architecture.md`](scene-graph-architecture.md),
 > [`renderable-instance-system.md`](renderable-instance-system.md),
 > [`resource-management.md`](resource-management.md),
 > [`coordinate-system.md`](coordinate-system.md),
-> [`../src/AssetLoaders/AGENTS.md`](../src/AssetLoaders/AGENTS.md).
+> [`../src/SceneLoaders/AGENTS.md`](../src/SceneLoaders/AGENTS.md).
 
 ## 1. Purpose
 
@@ -152,13 +153,14 @@ The library builds with `TINYUSDZ_CXX_EXCEPTIONS=Off`, with no third-party depen
 source patch needed to compile: **the accepted `-fno-exceptions` risk is retired on Linux.**
 Everything below was found afterwards, against the real asset.
 
-**Three upstream defects**, all in the v0.9.4 release tag:
+**Four upstream defects**, all in the v0.9.4 release tag:
 
 | Defect | Effect | Handling |
 |--------|--------|----------|
 | `LoadUSDFromFile()` composes nothing | A 19-sublayer stage returns **2 prims** and reports success | Use the explicit pipeline: `LoadLayerFromFile` → `CompositeSublayers` → `LayerToStage` |
 | The asset resolver's state is never restored after recursion (upstream leaves a `TODO` right above the mutation) | After descending into one sublayer, every following **sibling** resolves against the child's directory; composition aborts | RAII save/restore guard, `patches/tinyusdz.patch` |
 | `CompositeSublayersInPlace()` is declared in the header but never implemented | Undefined reference at link time | Use the plain `CompositeSublayers()`; `LayerToStageInPlace()` IS implemented and is used |
+| **`GeomPointInstancer` missing from the PrimSpec→Prim table** of `composition-reconstruct.cc`, though `ReconstructPrim<GeomPointInstancer>` is fully implemented in `prim-reconstruct.cc` | `LayerToStage` drops **every** `PointInstancer` **with its entire subtree**. The whole vegetation of the asset disappeared, and the only trace was a `warn` string the loader did not print | Missing table rows added in `patches/tinyusdz.patch`, together with the five UsdLux types in the same situation (§ 4.5) |
 
 **One behaviour to design around, not a defect:** tinyusdz stores each sublayer's working
 directory as the raw relative path written in the file (`elements/Anthurium`), never joined
@@ -255,27 +257,82 @@ already performs the equirectangular → cubemap projection (2:1 auto-detected) 
 > acquisition timeout** — the same Wayland surface loss as § 4.2, now caused by the load plus
 > the 8K HDR projection. Both need a session of their own; neither is in the loader.
 
-### 4.5 PointInstancer — measured blocker, and the instancing design it forces
+### 4.5 PointInstancer — root cause found and fixed ✅ **VEGETATION ON SCREEN (2026-08-09)**
 
-**The vegetation is unreachable today.** Every `PI_*.usd` file is a USDC crate, and the
-`PointInstancer` prim is silently absent from the composed stage. Measured on
-`elements/Anthurium/PI_Anthurium.usd`, the smallest of them:
+**Where the prim was actually lost.** Not in the crate reader, and not in composition. The
+`PointInstancer` reaches the `Layer` perfectly — all six of them in `PI_Anthurium.usd`, each
+with five properties and its prototype subtree — and is destroyed one step later, by
+`LayerToStage`. Its PrimSpec→Prim table, in `composition-reconstruct.cc`, simply had **no entry
+for `GeomPointInstancer`**, while `ReconstructPrim<GeomPointInstancer>` is fully implemented two
+files away in `prim-reconstruct.cc`.
 
-| Composition | Prims | `/World` (holds the instancer) | `/_class_` (holds the prototypes) |
+> ⚠️⚠️ **A prim that table cannot reconstruct is dropped WITH ITS ENTIRE SUBTREE.**
+> `ReconstructPrimFromPrimSpecRec()` only recurses into children when the parent was
+> reconstructed, so one missing table row deletes a whole branch of the scene.
+
+Measured on `elements/Anthurium/PI_Anthurium.usd`, the smallest element:
+
+| Stage | Layer | Stage before fix | Stage after fix |
 |---|---|---|---|
-| sublayers only | 8 | **empty** | 6 `Model` stubs |
-| + references resolved | 56 | **empty** | 6 prototypes, meshes and materials filled |
+| `/World` | 6 `PointInstancer`, 5 props each | **empty** | 6 `PointInstancer`, prototypes intact |
 
-So composition is not the culprit: the prim is missing from the very first read. tinyusdz
-**does** register a `GeomPointInstancer` handler on the crate path
-(`usdc-reader-prim.cc:195` and `:553`), and no warning is raised. This needs a focused session
-against the library's own debug output — not another guess.
+**It said so all along.** tinyusdz emitted
+`TODO or unsupported prim type: PointInstancer`, six times, through the `warn` string of
+`LayerToStage`. `USDLoader` never printed that string. **This is what cost a full session**, and
+why the loader now traces the warning of *every* composition step — see § 4.6.
 
 > ⚠️ Do NOT conclude "tinyusdz does not support PointInstancer" from grepping `usdc-reader.cc`:
 > the crate reader is split across `usdc-reader-prim.cc`, `-property.cc` and `-reconstruct.cc`,
-> and the support lives in the first. That mistake was made twice in one session.
+> and the support lives in the first. That mistake was made twice before the real cause showed up
+> somewhere else entirely.
 
-**The design this forces, once the data is reachable.** A 40 km² forest must never become one
+**The fix** (`patches/tinyusdz.patch`, fourth hunk): the missing table rows. `GeomPointInstancer`
+plus the five UsdLux types in the same situation — `DomeLight_1`, `GeometryLight`, `PortalLight`,
+`LightFilter`, `PluginLightFilter` — all implemented upstream, none listed. Only the first is
+exercised by an asset we own; the other five are closed because their *absence* is what is known
+to be harmful.
+
+#### What the asset actually holds, measured element by element
+
+Every `PI_*.usd` composes, prototypes included, with `LoaderOptions::resolveReferences`:
+
+| Element | Instancers | Instances | Time | Peak RSS |
+|---|---:|---:|---:|---:|
+| `PI_S_RiverForest` | 195 | 2 407 967 | 605 s | 14.4 GB |
+| `PI_S_RiverSeedling` | 80 | 2 266 462 | 9.2 s | 563 MB |
+| `PI_S_Moss` | 138 | 2 034 610 | 1.1 s | 399 MB |
+| `PI_S_ShrubSorrel` | 133 | 630 176 | 0.8 s | 150 MB |
+| `PI_S_QueenForest` | 195 | 613 806 | 737 s | 18.0 GB |
+| `PI_Grass_B` | 5 | 339 865 | 0.3 s | 74 MB |
+| `PI_Grass_A` | 6 | 280 985 | 0.9 s | 68 MB |
+| `PI_RiverSapling` | 5 | 45 000 | 16.6 s | 328 MB |
+| `PI_Pyramid_GrassB` | 5 | 44 000 | 0.02 s | 16 MB |
+| `PI_Shrub` | 4 | 11 337 | 0.6 s | 25 MB |
+| `PI_Nettle` | 6 | 330 | 0.9 s | 27 MB |
+| `PI_Anthurium` | 6 | 138 | 1.9 s | 46 MB |
+| **Total** | **778** | **8 674 676** | **~23 min** | **18 GB (peak, one element)** |
+
+The cost is **not** proportional to instance count: `RiverSeedling` delivers 2.2 M instances in
+9 seconds, while `QueenForest` needs 12 minutes for 0.6 M. What it follows is the size of the
+`*_classes.usda` prototype layer (236 MB and 196 MB for the two slow ones). The bottleneck is
+**ASCII prototype parsing**, not instancing.
+
+⚠️ `PI_Pyramid_GrassB` composes in 0.02 s and yields **0 mesh** — its reference does not resolve.
+Its 44 000 instances therefore have nothing to draw. Not yet diagnosed.
+
+#### The full stage sees the instancers but cannot draw them
+
+On `JungleRuins_Karma.usda` with sublayers only (the default path), the loader now reports
+**778 point instancers, 773 prototypes** where it previously reported zero — and 778 warnings
+saying each prototype produced no mesh, because references are not resolved on that path. The
+positions of the entire vegetation are available; the prototypes are not.
+
+⚠️⚠️ **Do not "fix" this by turning `resolveReferences` on for the whole stage.**
+`CompositeAllArcs()` on the root layer was measured at 24 minutes and 15 GB with **no
+convergence** (§ 4.4). Per element it terminates, and it is bounded — which is why the
+element-by-element route is the one that works.
+
+**The design the data forces.** A 40 km² forest must never become one
 `Multiple` holding every transform. The engine already owns the right structure:
 
 - `Scenes/OctreeSector` culls ENTITIES by frustum. Splitting a PointInstancer's transforms into
@@ -300,6 +357,96 @@ What it does not do, in the order it will hurt:
 Beyond cell-level culling, the next step is GPU-driven: a compute pass culling and selecting LOD
 per instance into a compacted list, behind `vkCmdDrawIndexedIndirect`. The engine already has
 dormant MDI infrastructure (`Core/Graphics/MDI/Enabled`, default false, one known bug).
+
+### 4.6 Translating an instancer — the three traps, all paid
+
+**Tydra is no help here and never will be.** `PointInstancer` appears **zero times** in the whole
+of `src/tydra/`. Instances are therefore read straight from the prims, by
+`USDLoader::collectInstancers()`. Tydra does, however, *descend* into a prototype and convert its
+meshes like any other, handing back `RenderMesh::abs_path` — which is exactly what ties an
+instancer to the renderable its instances draw, without patching Tydra.
+
+**Trap 1 — the axis bake does not apply to a transform.** Vertices go through
+`C : engine = (usd.x, usd.z, -usd.y)`. An instance carries a *transform*, and a transform changes
+basis by **conjugation**, `C·T·C⁻¹`, because the prototype's vertices are already baked:
+
+```
+C·(T·p) = (C·T·C⁻¹)·(C·p)
+```
+
+`C` is the rotation of +90° about X (determinant +1), so each part has a closed form and no
+matrix is needed: the translation goes through `C`, the orientation quaternion is conjugated by
+`C`'s own quaternion, and the scale — being sign-blind — simply has **Y and Z swapped**.
+Permuting the position alone puts every plant in the right place with the wrong rotation, which
+reads as a broken asset rather than a broken conversion.
+
+**Trap 2 — `/_class_` is not scene content.** USD classes are abstract templates, and Tydra
+converts them like anything else. On one Anthurium element that is 12 meshes out for 6 real
+prototypes: drawing them stacks a full copy of every species at the asset's origin. The loader
+skips any node whose `abs_path` starts with `/_class_`.
+
+**Trap 3 — a prototype must NOT get a node.** It is drawn by its instances; giving it a node in
+`SceneData::nodes` draws it one extra time, alone, wherever the asset parks its prototypes. It is
+built as a resource, recorded in the path→mesh map, and deliberately left out of the hierarchy.
+
+⚠️ A prototype root is assumed to sit at the identity — true of every Jungle Ruins element, since
+Tydra only exposes absolute matrices. The assumption is **checked and logged**, never trusted
+silently: a prototype carrying its own transform says so instead of shifting the forest.
+
+### 4.7 Why the vegetation rendered WHITE — three defects behind one symptom
+
+Instances placed correctly and still wrong on screen. Each cause looked like the previous one's
+consequence, and none of them was where the symptom pointed.
+
+**1. Instance cells were UNLIT — black silhouettes.** `buildInstanceClusters()` built its
+`Component::MultipleVisuals` and stopped there. A renderable instance is born with
+`EnableLighting` OFF; every one of `SceneDataConsumer`'s five Visual sites sets it, this one did
+not. `InstanceClusterOptions::lightingEnabled` now carries `MeshDescriptor::lightingEnabled`
+through — never hard-coded, because baked-lighting content must stay off the lit path.
+
+**2. Texture paths differ by CASE.** The material asks for
+`anthurium_botany_01_BaseColor.tif`; the file is `Anthurium_Botany_01_BaseColor.tif`. The normal
+map, in the same material, is spelled correctly. On Windows or macOS nothing shows; on Linux the
+base colour vanishes and the normal map does not — so the plants render lit, detailed and pure
+WHITE. `USDLoader::findCaseInsensitive()` retries a failed path against one directory listing and
+logs loudly, because the asset's spelling is genuinely wrong.
+
+**3. A broken image resource takes the MATERIAL down with it.** Once found, the TIFF still failed
+to decode, `ImageResource` errored, the texture built on it failed, and the plants stopped
+rendering ENTIRELY — strictly worse than never finding the file, which merely falls back to a
+flat colour. The loader now checks the extension BEFORE handing anything to the resource manager.
+
+> ⚠️⚠️ Fixing (2) without (3) is a REGRESSION: the file starts being found, and the object
+> disappears. That is exactly what happened, and it is the shape to expect whenever a fallback
+> path is more forgiving than the real one.
+
+### 4.8 TIFF — the format the whole vegetation is written in
+
+All 10 TIFF files of the asset sit under `textures/Plants/`: the **base colour and translucency of
+seven species** (Anthurium, Grass_Medium ×2, Moss, Nettle, Shrub_04, Shrub_Sorrel), 4096×4096,
+**16 bits per channel**, uncompressed, ~98 MB each. `PixelFactory` read JPEG, PNG, Targa and HDR.
+
+So no amount of instancing work could ever have produced a coloured plant.
+
+**Owner decision (2026-08-09): libtiff, through `ext-deps-generator`**, the same path as libpng
+and libjpeg — a targeted exception to the *"Ave robustus!"* feature freeze on emeraude-base.
+Added: `libraries/libtiff.yaml` (pinned to the **v4.7.2 release**, no RC), `SetupTIFF.cmake`, and
+`PixelFactory::FileFormatTIFF`.
+
+⚠️ **WebP and JBIG codecs are OFF in the build.** libtiff enables them when it finds the
+libraries, and the engine then fails to link on `WebPGetFeaturesInternal` and `jbg_dec_in`.
+Deflate, LZMA, Zstd and JPEG ride on libraries the cascade already links, so they stay on.
+
+⚠️ Decoding goes through `TIFFReadRGBAImageOriented()` rather than the strip/tile API: TIFF is a
+container, not a format, and that entry point collapses every variant to 8-bit RGBA. **A 16-bit
+source is down-converted** — acceptable for a texture, and a separate reader's job if full
+precision is ever needed. `ORIENTATION_TOPLEFT` is what keeps the output canonical; the plain
+`TIFFReadRGBAImage()` returns the image bottom-up, which renders vertically mirrored with nothing
+in the log to say so.
+
+**Verified on screen (2026-08-09)**, `--load-demo jungle-ruins --demo-options 2`: 6 instancers,
+138 instances, 6 sets, 42 cells of 32 units; 12 source meshes for 6 built (the 6 `/_class_`
+duplicates correctly dropped). Plants upright, each with its own rotation and scale.
 
 ## 5. Contract Changes
 
@@ -343,11 +490,46 @@ consumer can decide how to treat the result without hard-coding format names.
 > component types created (`PointLight` / `SpotLight` / `DirectionalLight`), and the poses after
 > axis conversion (glTF `(0, 3, 0)` → engine `(0, -3, 0)`).
 
-> **Scoping note.** `pointInstancers[]` is deliberately **NOT** part of this delivery. No loader
-> can fill it yet, and designing an instancer descriptor against a format not yet parsed would
-> produce a structure to redo at milestone 6 — the placeholder § Rule 1 forbids. The glTF path
-> also revealed that Sponza's 24 lights all carry `intensity: 0.0`, which is why the
-> hand-authored `PhotometricProbe` asset exists (§ 7.2, milestone 2).
+> **Instancing landed later, on purpose.** It was deliberately kept out of the lights/cameras
+> delivery — designing an instancer descriptor against a format not yet parsed would have
+> produced a structure to redo. It was designed on 2026-08-09 against real data, once the prims
+> were actually reachable. See `InstanceSetDescriptor` below. The glTF path also revealed that
+> Sponza's 24 lights all carry `intensity: 0.0`, which is why the hand-authored
+> `PhotometricProbe` asset exists (§ 7.2, milestone 2).
+
+#### `InstanceSetDescriptor` ✅ **DONE (2026-08-09)**
+
+```cpp
+struct InstanceSetDescriptor
+{
+    std::string name;
+    std::vector< Base::Math::CartesianFrame< float > > instances;
+    size_t meshIndex{0};
+};
+```
+
+Carried by `SceneData::instanceSets`. It states the INTENT — *the same renderable, N times,
+here* — and never the encoding, so USD's `PointInstancer`, glTF's `EXT_mesh_gpu_instancing` and
+folded FBX duplicates all reach a consumer through one path.
+
+> ⚠️ **A set is a hint about redundancy, not an instruction to draw.** How the instances reach
+> the GPU belongs to the consumer, because only the scene knows its own culling machinery. A
+> loader deciding that would be re-implementing the renderer.
+
+> ⚠️ **The mesh a set points at must NOT appear in the node hierarchy.** A prototype exists to be
+> instanced; a node for it draws one stray copy at the asset's origin.
+
+> ⚠️ Frames live in the SAME space as the meshes of the same `SceneData`. A loader baking its own
+> axis conversion into vertices MUST bake the very same one into these frames — see § 4.6,
+> trap 1, which is a conjugation and not a permutation.
+
+`Scenes::SceneDataConsumer` turns each set into spatial cells through
+`buildInstanceClusters()`, applying the asset's root frame exactly as it does to a mesh node.
+Cell size via `setInstanceCellSize()` (default 32 units).
+
+> ⚠️⚠️ `SceneDataConsumer::build()` used to return early on an empty node table. An asset made
+> **entirely** of instances — every `PI_*.usd` element of Jungle Ruins — has no drawable node at
+> all, and would have been dropped while reporting success. The guard now checks both.
 
 `SceneData` currently carries meshes, skeletons, animation clips and a flat node hierarchy.
 It gains, as optional collections mirroring the existing `meshIndex` pattern:
@@ -441,11 +623,15 @@ Each milestone compiles and is verifiable on its own.
 3. **tinyusdz integration** ✅ **DONE on Linux (2026-08-08)** — `ext-deps-generator`,
    `Setup*.cmake`, stage inventory dump (§ 3.5) as the first functional output.
    Windows and macOS builds are untried. See § 4.1 for what this cost.
-4. **Geometry and materials** 🔶 **translation works, rendering crashes (2026-08-08)** — meshes,
+4. **Geometry and materials** ✅ **renders (2026-08-09)** — meshes,
    `UsdPreviewSurface` → PBR, cutout, two-sided, axis and unit baking. See § 4.3.
 5. **Texture residency** — BC7 transcoding, mip generation, disk cache; enough for the scene
    to fit in VRAM.
-6. **PointInstancer** — mapping to `Multiple`. **No culling.** Draw everything.
+6. **PointInstancer** ✅ **DONE (2026-08-09)** — root cause of the missing prims found and
+   fixed upstream (§ 4.5), `InstanceSetDescriptor` contract (§ 5.3), translation into
+   spatial cells (§ 4.6). Vegetation verified on screen on one element. **No culling** beyond
+   what the octree already does per cell. REMAINS: the full stage needs every element
+   composed separately (~23 min, 8.67 M instances), and `PI_Pyramid_GrassB` resolves to 0 mesh.
 7. **Sky and camera** — equirect → cubemap, photometric mapping of `DomeLight` and `Camera`.
 8. **`JungleRuins` demo** in projet-alpha, with its `--demo-options` and CC-BY attribution.
 

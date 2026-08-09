@@ -32,6 +32,7 @@
 /* Local inclusions. */
 #include "SceneLoaders/SceneData.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "InstanceCluster.hpp"
 #include "Math/Vector.hpp"
 #include "Node.hpp"
 #include "Scene.hpp"
@@ -49,17 +50,27 @@ namespace EmEn::Scenes
 	bool
 	SceneDataConsumer::build (const SceneLoaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
 	{
-		if ( sceneData.rootNodeIndices.empty() )
-		{
-			Tracer::warning(ClassId, "SceneData has no root nodes, nothing to build.");
-
-			return true;
-		}
-
 		/* glTF is Y-up, engine is Y-down: 180° rotation around X.
 		 * Build the root transform that will be applied to all children. */
 		CartesianFrame< float > yUpToYDownFrame;
 		yUpToYDownFrame.rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), true);
+
+		/* ⚠️ An asset can be made ENTIRELY of instances and hold no drawable node at all — every
+		 * `PI_*.usd` element of Jungle Ruins is exactly that. Returning here on an empty node
+		 * table would drop its whole content while reporting success. */
+		if ( sceneData.rootNodeIndices.empty() )
+		{
+			if ( sceneData.instanceSets.empty() )
+			{
+				Tracer::warning(ClassId, "SceneData has no root node and no instance set, nothing to build.");
+
+				return true;
+			}
+
+			this->buildInstanceSets(sceneData, scene, yUpToYDownFrame);
+
+			return true;
+		}
 
 		const bool useStaticEntities = (parentNode == nullptr);
 
@@ -130,7 +141,85 @@ namespace EmEn::Scenes
 			}
 		}
 
+		this->buildInstanceSets(sceneData, scene, yUpToYDownFrame);
+
 		return true;
+	}
+
+	size_t
+	SceneDataConsumer::buildInstanceSets (const SceneLoaders::SceneData & sceneData, Scene & scene, const CartesianFrame< float > & rootFrame) const noexcept
+	{
+		if ( sceneData.instanceSets.empty() )
+		{
+			return 0;
+		}
+
+		InstanceClusterOptions options;
+		options.cellSize = m_instanceCellSize;
+
+		size_t cellCount = 0;
+		size_t instanceCount = 0;
+
+		const auto & rootMatrix = rootFrame.getModelMatrix();
+
+		for ( const auto & instanceSet : sceneData.instanceSets )
+		{
+			if ( instanceSet.instances.empty() || instanceSet.meshIndex >= sceneData.meshes.size() )
+			{
+				continue;
+			}
+
+			const auto & renderable = sceneData.meshes[instanceSet.meshIndex].renderable;
+
+			if ( renderable == nullptr )
+			{
+				continue;
+			}
+
+			/* The asset's root frame multiplies every instance, exactly as it multiplies a mesh
+			 * node in processNodeAsStatic(). Doing it here rather than in the loader keeps the
+			 * loader's output in ONE space — the asset's — whatever the consumer then decides.
+			 *
+			 * The scale is read back from the column lengths before CartesianFrame normalises the
+			 * direction vectors, which is where a naive copy silently loses it. */
+			std::vector< CartesianFrame< float > > worldInstances;
+			worldInstances.reserve(instanceSet.instances.size());
+
+			for ( const auto & instance : instanceSet.instances )
+			{
+				const auto worldMatrix = rootMatrix * instance.getModelMatrix();
+
+				const Vector< 3, float > worldScale{
+					Vector< 3, float >{worldMatrix[M4x4Col0Row0], worldMatrix[M4x4Col0Row1], worldMatrix[M4x4Col0Row2]}.length(),
+					Vector< 3, float >{worldMatrix[M4x4Col1Row0], worldMatrix[M4x4Col1Row1], worldMatrix[M4x4Col1Row2]}.length(),
+					Vector< 3, float >{worldMatrix[M4x4Col2Row0], worldMatrix[M4x4Col2Row1], worldMatrix[M4x4Col2Row2]}.length()
+				};
+
+				worldInstances.emplace_back(worldMatrix, worldScale);
+			}
+
+			/* The mesh decides, exactly as it does for a Visual: an instanced mesh whose lighting is
+			 * already baked must not be lit twice. */
+			options.lightingEnabled = sceneData.meshes[instanceSet.meshIndex].lightingEnabled;
+
+			const auto cells = buildInstanceClusters(scene, instanceSet.name, renderable, worldInstances, options);
+
+			if ( cells == 0 )
+			{
+				TraceWarning{ClassId} << "Instance set '" << instanceSet.name << "' produced no cell out of " << worldInstances.size() << " instances.";
+
+				continue;
+			}
+
+			cellCount += cells;
+			instanceCount += worldInstances.size();
+		}
+
+		TraceInfo{ClassId} <<
+			sceneData.instanceSets.size() << " instance sets built: " <<
+			instanceCount << " instances over " << cellCount << " cells of " << m_instanceCellSize << " units.";
+
+		return cellCount;
 	}
 
 	template< typename entity_t >
@@ -199,6 +288,17 @@ namespace EmEn::Scenes
 						}
 					})
 					.build();
+				break;
+
+			/* ⚠️ An environment dome is a WHOLE-SKY emitter carrying an image, not a punctual
+			 * light: it has no position, and instantiating it here would add an uninvited emitter
+			 * to a scene whose exposure was balanced without it. The caller turns it into a
+			 * background and derives the ambient and the IBL from its texels — see
+			 * `SceneLoaders::LightType::Environment` and `JungleRuins::installEnvironment()`.
+			 *
+			 * Listed explicitly rather than left to a `default:` so that adding a light type to
+			 * the contract keeps breaking this switch at COMPILE TIME. */
+			case SceneLoaders::LightType::Environment :
 				break;
 		}
 	}
