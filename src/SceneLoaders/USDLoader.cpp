@@ -59,6 +59,9 @@
 
 namespace EmEn::SceneLoaders
 {
+	/* Above this, a prim tree is noise rather than information. */
+	static constexpr size_t PrimTreeReportLimit{80};
+
 	USDLoader::USDLoader (Resources::Manager & resources) noexcept
 		: m_resources{resources}
 	{
@@ -103,6 +106,31 @@ namespace EmEn::SceneLoaders
 		for ( const auto & child : prim.children() )
 		{
 			USDLoader::collectInventory(child, depth + 1, inventory);
+		}
+	}
+
+	void
+	USDLoader::reportPrimTree (const tinyusdz::Prim & prim, size_t depth, size_t & remaining) noexcept
+	{
+		if ( remaining == 0 )
+		{
+			return;
+		}
+
+		remaining--;
+
+		auto typeName = prim.prim_type_name();
+
+		if ( typeName.empty() )
+		{
+			typeName = prim.type_name();
+		}
+
+		TraceInfo{ClassId} << std::string(depth * 2, ' ') << "/" << prim.element_name() << "  [" << ( typeName.empty() ? "<typeless>" : typeName ) << "]";
+
+		for ( const auto & child : prim.children() )
+		{
+			USDLoader::reportPrimTree(child, depth + 1, remaining);
 		}
 	}
 
@@ -156,6 +184,17 @@ namespace EmEn::SceneLoaders
 		for ( const auto & [typeName, count] : inventory.primTypeCounts )
 		{
 			TraceInfo{ClassId} << "  " << count << " x " << typeName;
+		}
+
+		/* Bounded on purpose: an element is worth dumping whole, a full stage is not. */
+		if ( inventory.primCount <= PrimTreeReportLimit )
+		{
+			auto remaining = PrimTreeReportLimit;
+
+			for ( const auto & prim : stage.root_prims() )
+			{
+				USDLoader::reportPrimTree(prim, 0, remaining);
+			}
 		}
 	}
 
@@ -781,7 +820,21 @@ namespace EmEn::SceneLoaders
 		 *
 		 * Consequence to keep in mind: `inherits` and `variants` are NOT applied on this path.
 		 * Variant selection through LoaderOptions lands with the on-demand resolver, not before. */
-		auto composited = std::make_unique< tinyusdz::Layer >(std::move(sublayered));
+		auto composited = std::make_unique< tinyusdz::Layer >();
+
+		if ( m_options.resolveReferences )
+		{
+			if ( !tinyusdz::CompositeAllArcs(resolver, sublayered, composited.get(), &warning, &error) )
+			{
+				TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' : " << error;
+
+				return false;
+			}
+		}
+		else
+		{
+			*composited = std::move(sublayered);
+		}
 
 		/* The stage metrics must be read BEFORE the layer is consumed by the converter. */
 		const auto & metas = composited->metas();

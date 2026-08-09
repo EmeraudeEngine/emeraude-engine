@@ -70,6 +70,17 @@ namespace EmEn::SceneLoaders
 		 */
 		std::function< void (MeshDescriptor &) > onMeshLoaded;
 		MaterialMode materialMode{MaterialMode::PBR};
+		/**
+		 * @brief Resolves references, payloads, inherits and variants in addition to sublayers.
+		 *
+		 * @note USD-only. Sublayer composition alone yields a stage's own geometry; anything
+		 * pulled in by a REFERENCE — a PointInstancer's prototypes, typically — needs this.
+		 *
+		 * ⚠️ It is off by default because the cost is unbounded: on the whole Intel Jungle Ruins
+		 * stage it was measured at 24 minutes and 15 GB resident, still growing linearly when it
+		 * was killed. Enable it per ELEMENT, never on a full stage, until deferred loading exists.
+		 */
+		bool resolveReferences{false};
 		bool skipSkinning{false};
 		/**
 		 * @brief Forces every material part of the loaded model to render

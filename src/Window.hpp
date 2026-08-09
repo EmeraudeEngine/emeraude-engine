@@ -601,6 +601,28 @@ namespace EmEn
 			void waitValidWindowSize () const noexcept;
 
 			/**
+			 * @brief Drains the pending OS window events once, delivering callbacks.
+			 *
+			 * @note This exists for the ONE case the main loop cannot cover: a long operation that
+			 * legitimately owns the main thread — loading a large asset, above all. While it runs,
+			 * nothing drains the queue, and a Wayland compositor CLOSES an application that stops
+			 * answering its pings. The window dies mid-load and the stage is torn down the instant
+			 * the operation returns; the swap-chain acquisition timeout that follows is the last
+			 * symptom, not the fault.
+			 *
+			 * ⚠️ Callbacks ARE delivered — that is the point, the compositor must see a live client.
+			 * Anything called here therefore runs re-entrantly with respect to the operation being
+			 * waited on: keep that operation on a worker thread and this call on the main one.
+			 *
+			 * @see SceneLoaders::Interface::loadAsync()
+			 */
+			void
+			pumpEvents () const noexcept
+			{
+				glfwPollEvents();
+			}
+
+			/**
 			 * @brief Executes a function with all GLFW callbacks temporarily disabled.
 			 * @details This method is useful on Windows where vkCreateSwapchainKHR() can deadlock
 			 * if GLFW callbacks are triggered during swap-chain recreation. The method:

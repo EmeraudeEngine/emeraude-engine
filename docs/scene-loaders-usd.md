@@ -255,6 +255,52 @@ already performs the equirectangular → cubemap projection (2:1 auto-detected) 
 > acquisition timeout** — the same Wayland surface loss as § 4.2, now caused by the load plus
 > the 8K HDR projection. Both need a session of their own; neither is in the loader.
 
+### 4.5 PointInstancer — measured blocker, and the instancing design it forces
+
+**The vegetation is unreachable today.** Every `PI_*.usd` file is a USDC crate, and the
+`PointInstancer` prim is silently absent from the composed stage. Measured on
+`elements/Anthurium/PI_Anthurium.usd`, the smallest of them:
+
+| Composition | Prims | `/World` (holds the instancer) | `/_class_` (holds the prototypes) |
+|---|---|---|---|
+| sublayers only | 8 | **empty** | 6 `Model` stubs |
+| + references resolved | 56 | **empty** | 6 prototypes, meshes and materials filled |
+
+So composition is not the culprit: the prim is missing from the very first read. tinyusdz
+**does** register a `GeomPointInstancer` handler on the crate path
+(`usdc-reader-prim.cc:195` and `:553`), and no warning is raised. This needs a focused session
+against the library's own debug output — not another guess.
+
+> ⚠️ Do NOT conclude "tinyusdz does not support PointInstancer" from grepping `usdc-reader.cc`:
+> the crate reader is split across `usdc-reader-prim.cc`, `-property.cc` and `-reconstruct.cc`,
+> and the support lives in the first. That mistake was made twice in one session.
+
+**The design this forces, once the data is reachable.** A 40 km² forest must never become one
+`Multiple` holding every transform. The engine already owns the right structure:
+
+- `Scenes/OctreeSector` culls ENTITIES by frustum. Splitting a PointInstancer's transforms into
+  spatial buckets — one `Component::MultipleVisuals` per cell, each with its own bounding box —
+  makes whole cells disappear from the batch without a single new culling system.
+- `Component::MultipleVisuals` is exactly the shape a PointInstancer has: one prototype, N
+  transforms. There is **no automatic grouping** in the engine — `RenderBatch` keys on
+  `(renderableInstance, coordinates, subGeometry, LOD)` and nothing merges separate entities
+  sharing a renderable. That is a feature here: the loader decides the grouping.
+
+What `RenderableInstance::Multiple` already does, measured, so nobody rebuilds it: a per-instance
+VBO carrying the model matrix, optionally the normal matrix, optionally the previous model matrix
+(64–192 bytes/instance, feeding motion vectors), uploaded **only when dirty**, never per frame.
+
+What it does not do, in the order it will hurt:
+1. **No per-instance culling.** `setActiveInstanceCount()` truncates the FIRST N — a particle
+   mechanism used only by `ParticlesEmitter`, not a spatial one.
+2. **No per-instance LOD.** The level is chosen per draw call, so the tree at 2 m and the tree at
+   800 m render at the same detail.
+3. **Motion history paid on static content** — 64 bytes/instance that never change.
+
+Beyond cell-level culling, the next step is GPU-driven: a compute pass culling and selecting LOD
+per instance into a compacted list, behind `vkCmdDrawIndexedIndirect`. The engine already has
+dormant MDI infrastructure (`Core/Graphics/MDI/Enabled`, default false, one known bug).
+
 ## 5. Contract Changes
 
 ### 5.1 Rename — `AssetLoaders` becomes `SceneLoaders` ✅ **DONE (2026-08-08)**

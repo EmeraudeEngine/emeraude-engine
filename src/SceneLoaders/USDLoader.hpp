@@ -181,6 +181,17 @@ namespace EmEn::SceneLoaders
 			 */
 			static void reportInventory (const std::filesystem::path & filepath, const tinyusdz::Stage & stage) noexcept;
 
+			/**
+			 * @brief Prints the prim tree, path and type, bounded.
+			 * @note A type histogram says WHAT a stage contains; it cannot say where, nor under
+			 * what. When a prim is expected and missing, the tree is the only thing that tells
+			 * "it was dropped" from "it is there under another type".
+			 * @param prim A reference to the prim to visit.
+			 * @param depth The current depth.
+			 * @param remaining Lines left in the budget, decremented as they are printed.
+			 */
+			static void reportPrimTree (const tinyusdz::Prim & prim, size_t depth, size_t & remaining) noexcept;
+
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;
 	};

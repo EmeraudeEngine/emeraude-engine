@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -120,6 +121,40 @@ namespace EmEn::SceneLoaders
 			 */
 			[[nodiscard]]
 			virtual bool load (const std::filesystem::path & filepath, SceneData & output) noexcept = 0;
+
+			/**
+			 * @brief Loads a composite asset from a file, on a worker thread.
+			 *
+			 * @param filepath Path to the asset file.
+			 * @param output The SceneData to populate. It MUST outlive the returned future, and
+			 * must not be touched until that future is ready.
+			 * @return std::future< bool >
+			 *
+			 * @note WHY THIS EXISTS. A synchronous load owns the calling thread for as long as the
+			 * asset takes — minutes, on a 1.8 GB USD stage. When that thread is the MAIN one, the
+			 * window event loop stops being pumped, and a Wayland compositor closes an application
+			 * that stops answering its pings. The window dies mid-load; the app only finds out once
+			 * the load returns, and tears the stage down immediately. The 60 s swap-chain
+			 * acquisition timeout that follows is the last consequence, not the fault — raising it
+			 * changes nothing.
+			 *
+			 * ⚠️ A DEDICATED THREAD, deliberately, and NOT the resource manager's thread pool:
+			 * load() creates resources through getOrCreateResource(), whose factories run ON that
+			 * pool and are waited upon. Occupying a pool slot for the whole load would invite a
+			 * deadlock against the very tasks it is waiting for.
+			 *
+			 * ⚠️ The caller is responsible for keeping the main loop alive while this runs — that
+			 * is the entire point. Pumping window events belongs to the caller; a loader must know
+			 * nothing about windowing.
+			 */
+			[[nodiscard]]
+			std::future< bool >
+			loadAsync (const std::filesystem::path & filepath, SceneData & output) noexcept
+			{
+				return std::async(std::launch::async, [this, filepath, &output] () {
+					return this->load(filepath, output);
+				});
+			}
 
 			/**
 			 * @brief Checks if this loader supports the given file extension.
