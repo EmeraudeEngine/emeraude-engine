@@ -27,6 +27,7 @@
 #include "InstanceCluster.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <map>
@@ -51,12 +52,52 @@ namespace EmEn::Scenes
 			return 0;
 		}
 
-		if ( !(options.cellSize > 0.0F) )
+		if ( options.targetInstancesPerCell == 0 || !(options.minimumCellSize > 0.0F) || options.maximumCellSize < options.minimumCellSize )
 		{
-			TraceError{TracerTag} << "A cell size must be strictly positive, got " << options.cellSize << ".";
+			TraceError{TracerTag} << "Invalid clustering options: target " << options.targetInstancesPerCell << " per cell, bounds [" << options.minimumCellSize << ", " << options.maximumCellSize << "].";
 
 			return 0;
 		}
+
+		/* ⚠️⚠️ THE EDGE LENGTH IS DERIVED, NEVER GIVEN. A length is meaningless without the
+		 * content's scale, and a single asset spans both extremes: with a fixed 32-unit grid,
+		 * Jungle Ruins packed 6 649 instances into a moss cell and 3.3 into a forest one — same
+		 * code, same frame — turning 613 806 trees into 184 733 scene entities.
+		 *
+		 * The set's own extent answers it. Vegetation lies on a surface rather than filling a
+		 * volume, so the density that matters is the one measured on the GROUND plane: spreading
+		 * `count` instances over `areaXZ` at `target` per cell asks for cells of
+		 *
+		 *     edge = sqrt(areaXZ * target / count)
+		 *
+		 * A set collapsed onto a line or a point has no usable area — hence the bounds, which are
+		 * a guard against degeneracy and not a tuning knob. */
+		Vector< 3, float > minimum = instances[0].position();
+		Vector< 3, float > maximum = minimum;
+
+		for ( const auto & instance : instances )
+		{
+			const auto & position = instance.position();
+
+			for ( size_t axis = 0; axis < 3; ++axis )
+			{
+				minimum[axis] = std::min(minimum[axis], position[axis]);
+				maximum[axis] = std::max(maximum[axis], position[axis]);
+			}
+		}
+
+		const auto extentX = maximum[X] - minimum[X];
+		const auto extentZ = maximum[Z] - minimum[Z];
+		const auto areaXZ = extentX * extentZ;
+
+		auto cellSize = options.maximumCellSize;
+
+		if ( areaXZ > 0.0F )
+		{
+			cellSize = std::sqrt(areaXZ * static_cast< float >(options.targetInstancesPerCell) / static_cast< float >(instances.size()));
+		}
+
+		cellSize = std::clamp(cellSize, options.minimumCellSize, options.maximumCellSize);
 
 		/* An ordered map keyed by the integer cell coordinates: no hash to write, and the
 		 * iteration order is deterministic, so the entity names a run produces are stable. */
@@ -71,9 +112,9 @@ namespace EmEn::Scenes
 			/* std::floor, NOT a cast: a cast truncates towards zero, which folds the cells on
 			 * either side of an axis into one and doubles their size across the origin. */
 			const CellKey key{
-				static_cast< int64_t >(std::floor(position[X] / options.cellSize)),
-				static_cast< int64_t >(std::floor(position[Y] / options.cellSize)),
-				static_cast< int64_t >(std::floor(position[Z] / options.cellSize))
+				static_cast< int64_t >(std::floor(position[X] / cellSize)),
+				static_cast< int64_t >(std::floor(position[Y] / cellSize)),
+				static_cast< int64_t >(std::floor(position[Z] / cellSize))
 			};
 
 			cells[key].push_back(index);
@@ -137,7 +178,7 @@ namespace EmEn::Scenes
 
 		TraceInfo{TracerTag} <<
 			baseName << ": " << instances.size() << " instances split into " << builtCount <<
-			" cells of " << options.cellSize << " units (" <<
+			" cells of " << cellSize << " units (" <<
 			( builtCount > 0 ? instances.size() / builtCount : 0 ) << " per cell on average).";
 
 		return builtCount;

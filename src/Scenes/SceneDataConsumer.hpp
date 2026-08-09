@@ -95,20 +95,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the edge length of an instance cell, in world units.
+			 * @brief Sets how many instances a spatial cell should hold, on average.
 			 * @note An instance set is never built as one entity: it is split into spatial cells
-			 * so the rendering octree can cull them like any other entity. This is the size of
-			 * those cells, and it is a CONTENT decision — roughly the distance at which a viewer
-			 * stops telling one instance from its neighbour. See Scenes::InstanceClusterOptions
-			 * for what each end of the trade-off costs.
-			 * @param cellSize The edge length. Ignored when not strictly positive.
+			 * so the rendering octree can cull them like any other entity. The cells' edge length
+			 * is DERIVED from this count and the set's own extent — see
+			 * Scenes::InstanceClusterOptions for why a length would be the wrong knob.
+			 * @param count The target population of a cell. Ignored when zero.
 			 */
 			void
-			setInstanceCellSize (float cellSize) noexcept
+			setInstanceTargetPerCell (size_t count) noexcept
 			{
-				if ( cellSize > 0.0F )
+				if ( count > 0 )
 				{
-					m_instanceCellSize = cellSize;
+					m_instanceTargetPerCell = count;
 				}
 			}
 
@@ -151,7 +150,7 @@ namespace EmEn::Scenes
 			 */
 			size_t buildInstanceSets (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const Base::Math::CartesianFrame< float > & rootFrame) const noexcept;
 
-			float m_instanceCellSize{32.0F};
+			size_t m_instanceTargetPerCell{1024};
 			bool m_flattenHierarchy{false};
 			bool m_createLights{false};
 	};

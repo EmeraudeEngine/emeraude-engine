@@ -60,18 +60,35 @@ namespace EmEn::Scenes
 	struct EMEN_API InstanceClusterOptions
 	{
 		/**
-		 * @brief Edge length of a cell, in world units.
+		 * @brief How many instances a cell should hold, on average.
 		 *
 		 * @note This is the whole trade-off, and it has no universally right value:
-		 * - **too large** and a cell survives culling as soon as one of its instances is visible,
-		 *   so the GPU draws thousands of instances for a corner of the screen;
-		 * - **too small** and the entity count explodes, each carrying its own draw call and its
-		 *   own octree membership — the CPU pays what the GPU saves.
+		 * - **too few per cell** and the entity count explodes, each carrying its own draw call
+		 *   and its own octree membership — the CPU pays what the GPU saves;
+		 * - **too many per cell** and a cell survives culling as soon as one of its instances is
+		 *   visible, so the GPU draws thousands of instances for a corner of the screen.
 		 *
-		 * The useful size follows the CONTENT: roughly the distance at which a viewer stops
-		 * being able to tell one instance from its neighbour.
+		 * @warning ⚠️⚠️ **This used to be a LENGTH (`cellSize`, 32 units) and that was wrong.**
+		 * A length has no meaning without the content's scale, and one asset spans both extremes:
+		 * measured on Jungle Ruins with a fixed 32-unit grid, the moss packed 6 649 instances per
+		 * cell while the queen forest — the same code, the same frame — got **3.3**, turning
+		 * 613 806 instances into **184 733 scene entities**. The content's density varied by a
+		 * factor of two thousand; the constant did not move. A COUNT keeps its meaning whatever
+		 * the scale, which is why the knob is expressed this way.
+		 *
+		 * The edge length is derived from it and from the set's own extent — see
+		 * `buildInstanceClusters()`.
 		 */
-		float cellSize{32.0F};
+		size_t targetInstancesPerCell{1024};
+		/**
+		 * @brief Bounds clamping the derived edge length, in world units.
+		 *
+		 * @note They exist for the degenerate cases the derivation cannot handle on its own: a
+		 * set collapsed onto a point or a line has no usable area, and a handful of instances
+		 * spread over kilometres would ask for a cell larger than the scene.
+		 */
+		float minimumCellSize{1.0F};
+		float maximumCellSize{4096.0F};
 		/**
 		 * @brief Declares whether the instances belong on the LIT path.
 		 *
