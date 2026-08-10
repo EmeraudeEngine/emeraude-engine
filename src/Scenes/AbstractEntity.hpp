@@ -30,9 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <any>
 #include <cstddef>
 #include <cstdint>
+#include <any>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -432,7 +432,7 @@ namespace EmEn::Scenes
 			bool
 			hasComponent () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::scoped_lock lock{m_componentsMutex};
 
 				return !m_components.empty();
 			}
@@ -481,7 +481,8 @@ namespace EmEn::Scenes
 			std::shared_ptr< component_t >
 			getComponent (std::string_view name) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
-				const std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::scoped_lock lock{m_componentsMutex};
+
 				for ( const auto & component : m_components )
 				{
 					if ( component->name() == name )
@@ -509,7 +510,8 @@ namespace EmEn::Scenes
 			Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
 			getComponentsOfType () noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
-				const std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::scoped_lock lock{m_componentsMutex};
+
 				Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
 
 				for ( const auto & component : m_components )
@@ -539,10 +541,11 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) noexcept requires (std::is_invocable_v< function_t, Component::Abstract & >)
 			{
-				const std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::scoped_lock lock{m_componentsMutex};
+
 				for ( const auto & component : m_components )
 				{
-					processComponent(*component.get());
+					std::forward< function_t >(processComponent)(*component.get());
 				}
 			}
 
@@ -560,10 +563,11 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) const noexcept requires (std::is_invocable_v< function_t, const Component::Abstract & >)
 			{
-				const std::lock_guard< std::mutex > lock(m_componentsMutex);
+				const std::scoped_lock lock{m_componentsMutex};
+
 				for ( const auto & component : m_components )
 				{
-					processComponent(*component.get());
+					std::forward< function_t >(processComponent)(*component.get());
 				}
 			}
 

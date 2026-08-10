@@ -55,6 +55,11 @@ namespace EmEn::Graphics::Effects::Display
 
 			/**
 			 * @brief Constructs a display sharpen effect.
+			 */
+			Sharpen () noexcept = default;
+
+			/**
+			 * @brief Constructs a display sharpen effect.
 			 * @param parameters The effect parameters.
 			 */
 			explicit

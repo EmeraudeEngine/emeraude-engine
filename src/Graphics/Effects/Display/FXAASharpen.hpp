@@ -61,6 +61,11 @@ namespace EmEn::Graphics::Effects::Display
 
 			/**
 			 * @brief Constructs a display FXAA + sharpen effect.
+			 */
+			FXAASharpen () noexcept = default;
+
+			/**
+			 * @brief Constructs a display FXAA + sharpen effect.
 			 * @param parameters The effect parameters.
 			 */
 			explicit
