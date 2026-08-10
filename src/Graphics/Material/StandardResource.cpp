@@ -1764,7 +1764,18 @@ namespace EmEn::Graphics::Material
 			 * `SurfaceDiffuseColor * 0.05`, which would otherwise reference an undeclared
 			 * identifier (regression observed via FBXLoader → MaterialMode::Standard with
 			 * a textured albedo on the Paladin asset). */
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Diffuse, simpleGenerator, fragmentShader, materialSet) )
+			/* The diffuse texel is multiplied by the diffuse colour, which acts as a TINT factor:
+			 * glTF baseColorFactor and FBX base_color both specify the PRODUCT when a texture is
+			 * also present. Unconditional on purpose — the shader program cache keys on the
+			 * descriptor layout, not on values. DefaultDiffuseColor is White so this is an
+			 * identity until a caller sets a tint. */
+			auto tintedDiffuseGenerator = [this] (FragmentShader & shader, const Texture * component) {
+				Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ") * " << MaterialUB(UniformBlock::Component::DiffuseColor) << ";";
+
+				return true;
+			};
+
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Diffuse, tintedDiffuseGenerator, fragmentShader, materialSet) )
 			{
 				TraceError{ClassId} << "Unable to generate fragment code for the diffuse component of material '" << this->name() << "' !";
 

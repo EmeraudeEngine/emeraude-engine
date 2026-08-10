@@ -27,8 +27,10 @@
 #include "GLTFLoader.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <variant>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "fastgltf/core.hpp"
@@ -169,6 +171,15 @@ namespace EmEn::Scenes::Loaders
 	{
 		/* Generate a resource prefix from the filename. */
 		m_resourcePrefix = "glTF:" + filepath.stem().string() + "/";
+
+		/* stripRootMotion only ever acted on loadAnimationClipsOnly(), which this loader
+		 * does not implement (glTF carries its clips inside the asset, so the split-animation
+		 * workflow has no glTF equivalent). Say so instead of ignoring the option: a caller
+		 * porting FBX code over would otherwise believe the root motion had been stripped. */
+		if ( m_options.stripRootMotion )
+		{
+			Tracer::warning(ClassId, "LoaderOptions::stripRootMotion has no effect on glTF: the option only applies to loadAnimationClipsOnly(), which this loader does not implement.");
+		}
 
 		/* Parse the glTF/glb asset. */
 		auto gltfFile = fastgltf::GltfDataBuffer::FromPath(filepath);
@@ -631,9 +642,14 @@ namespace EmEn::Scenes::Loaders
 					isAlphaBlend
 				] (auto & materialResource) {
 					/* Albedo. */
+					/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
+					 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
+					 * the texture and dropping the factor tints nothing and silently loses the
+					 * factor's alpha; the colour goes to the material's tint slot instead. */
 					if ( albedoTex != nullptr )
 					{
 						materialResource.setAlbedoComponent(albedoTex);
+						materialResource.setAlbedoColor(albedoColor);
 					}
 					else
 					{
@@ -876,7 +892,11 @@ namespace EmEn::Scenes::Loaders
 						size_t index = 0;
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, posAccessor, [&] (const fastgltf::math::fvec3 & v) {
-							vertices[globalVertexOffset + index].setPosition(Vector< 3, float >{v.x(), v.y(), v.z()});
+							vertices[globalVertexOffset + index].setPosition(Vector< 3, float >{
+								v.x() * m_options.uniformScale,
+								v.y() * m_options.uniformScale,
+								v.z() * m_options.uniformScale
+							});
 							index++;
 						});
 					}
@@ -1190,7 +1210,17 @@ namespace EmEn::Scenes::Loaders
 						}
 					}
 
-					inverseBindMatrices[index] = Matrix< 4, float >{data};
+					auto ibm = Matrix< 4, float >{data};
+
+					/* Scale the translation column to keep the binding math coherent with the
+					 * scaled vertex positions and scaled joint TRS translations. The linear part
+					 * (rotation + uniform 1x1 scale) is unaffected by uniform scaling around the
+					 * origin, so only the translation column needs it. */
+					ibm[M4x4Col3Row0] *= m_options.uniformScale;
+					ibm[M4x4Col3Row1] *= m_options.uniformScale;
+					ibm[M4x4Col3Row2] *= m_options.uniformScale;
+
+					inverseBindMatrices[index] = ibm;
 					index++;
 				});
 			}
@@ -1233,7 +1263,11 @@ namespace EmEn::Scenes::Loaders
 				/* Extract local TRS from the node. GLTF stores parent-relative transforms. */
 				if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
 				{
-					engineJoints[j].translation = {trs->translation.x(), trs->translation.y(), trs->translation.z()};
+					engineJoints[j].translation = {
+						trs->translation.x() * m_options.uniformScale,
+						trs->translation.y() * m_options.uniformScale,
+						trs->translation.z() * m_options.uniformScale
+					};
 					engineJoints[j].rotation = Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()};
 					engineJoints[j].scale = {trs->scale.x(), trs->scale.y(), trs->scale.z()};
 				}
@@ -1360,22 +1394,54 @@ namespace EmEn::Scenes::Loaders
 
 				const auto & outputAccessor = asset.accessors[glTFSampler.outputAccessor];
 
+				/* GLTF CUBICSPLINE packs THREE values per keyframe in the output accessor —
+				 * in-tangent, value, out-tangent — where STEP and LINEAR pack one. Reading that
+				 * accessor flat and indexing it against the timestamps turns the leading tangents
+				 * into keyframe values: the clip then plays wrong, with no diagnostic whatsoever.
+				 * This stride is the whole difference. */
+				const size_t valuesPerKeyFrame = interp == ChannelInterpolation::CubicSpline ? 3 : 1;
+
 				switch ( glTFChannel.path )
 				{
 					case fastgltf::AnimationPath::Translation :
+					case fastgltf::AnimationPath::Scale :
 					{
-						channel.target = ChannelTarget::Translation;
-						size_t index = 0;
+						const bool isTranslation = glTFChannel.path == fastgltf::AnimationPath::Translation;
 
-						channel.vectorKeyFrames.resize(timestamps.size());
+						channel.target = isTranslation ? ChannelTarget::Translation : ChannelTarget::Scale;
+
+						/* A translation is a LENGTH, so it follows uniformScale, and so do its tangents,
+						 * which are lengths per second. A scale is a RATIO and never does. */
+						const auto valueScale = isTranslation ? m_options.uniformScale : 1.0F;
+
+						std::vector< Vector< 3, float > > values;
+						values.reserve(timestamps.size() * valuesPerKeyFrame);
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
-							if ( index < timestamps.size() )
-							{
-								channel.vectorKeyFrames[index] = {.time=timestamps[index], .value={v.x(), v.y(), v.z()}};
-								index++;
-							}
+							values.push_back(Vector< 3, float >{v.x() * valueScale, v.y() * valueScale, v.z() * valueScale});
 						});
+
+						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
+
+						channel.vectorKeyFrames.resize(keyFrameCount);
+
+						for ( size_t index = 0; index < keyFrameCount; ++index )
+						{
+							auto & keyFrame = channel.vectorKeyFrames[index];
+
+							keyFrame.time = timestamps[index];
+
+							if ( valuesPerKeyFrame == 3 )
+							{
+								keyFrame.inTangent = values[index * 3];
+								keyFrame.value = values[(index * 3) + 1];
+								keyFrame.outTangent = values[(index * 3) + 2];
+							}
+							else
+							{
+								keyFrame.value = values[index];
+							}
+						}
 
 						break;
 					}
@@ -1383,39 +1449,35 @@ namespace EmEn::Scenes::Loaders
 					case fastgltf::AnimationPath::Rotation :
 					{
 						channel.target = ChannelTarget::Rotation;
-						size_t index = 0;
 
-						channel.quaternionKeyFrames.resize(timestamps.size());
+						std::vector< Quaternion< float > > values;
+						values.reserve(timestamps.size() * valuesPerKeyFrame);
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, outputAccessor, [&] (const fastgltf::math::fvec4 & v) {
-							if ( index < timestamps.size() )
-							{
-								channel.quaternionKeyFrames[index] = {
-									.time = timestamps[index],
-									.value = Quaternion< float >{v.x(), v.y(), v.z(), v.w()}
-								};
-
-								index++;
-							}
+							values.push_back(Quaternion< float >{v.x(), v.y(), v.z(), v.w()});
 						});
 
-						break;
-					}
+						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
 
-					case fastgltf::AnimationPath::Scale :
-					{
-						channel.target = ChannelTarget::Scale;
-						size_t index = 0;
+						channel.quaternionKeyFrames.resize(keyFrameCount);
 
-						channel.vectorKeyFrames.resize(timestamps.size());
+						for ( size_t index = 0; index < keyFrameCount; ++index )
+						{
+							auto & keyFrame = channel.quaternionKeyFrames[index];
 
-						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
-							if ( index < timestamps.size() )
+							keyFrame.time = timestamps[index];
+
+							if ( valuesPerKeyFrame == 3 )
 							{
-								channel.vectorKeyFrames[index] = {.time=timestamps[index], .value={v.x(), v.y(), v.z()}};
-								index++;
+								keyFrame.inTangent = values[index * 3];
+								keyFrame.value = values[(index * 3) + 1];
+								keyFrame.outTangent = values[(index * 3) + 2];
 							}
-						});
+							else
+							{
+								keyFrame.value = values[index];
+							}
+						}
 
 						break;
 					}
@@ -1423,7 +1485,6 @@ namespace EmEn::Scenes::Loaders
 					default :
 						continue;
 				}
-
 				channels.push_back(std::move(channel));
 			}
 

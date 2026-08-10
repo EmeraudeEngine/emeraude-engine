@@ -626,6 +626,19 @@ namespace EmEn::Graphics::Material
 			void setDiffuseColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
 			/**
+			 * @brief Changes the albedo color. Cross-material alias of setDiffuseColor().
+			 * @note Exists so a caller driving both PBRResource and StandardResource through one
+			 * generic lambda can set the albedo tint without knowing the concrete container.
+			 * @param color A reference to a color.
+			 * @return void
+			 */
+			void
+			setAlbedoColor (const Base::PixelFactory::Color< float > & color) noexcept
+			{
+				this->setDiffuseColor(color);
+			}
+
+			/**
 			 * @brief Changes the specular color.
 			 * @note This is a dynamic property.
 			 * @param color A reference to a color.
@@ -917,7 +930,10 @@ namespace EmEn::Graphics::Material
 
 			/* Default values. */
 			static constexpr auto DefaultAmbientColor{Base::PixelFactory::DarkGrey};
-			static constexpr auto DefaultDiffuseColor{Base::PixelFactory::Grey};
+			/* White, NOT grey: the diffuse colour is also the TINT factor multiplying the diffuse
+			 * texture in the generated shader, so its neutral value has to be the multiplicative
+			 * identity. A grey default would darken every textured material by half. */
+			static constexpr auto DefaultDiffuseColor{Base::PixelFactory::White};
 			static constexpr auto DefaultSpecularColor{Base::PixelFactory::White};
 			static constexpr auto DefaultAutoIlluminationColor{Base::PixelFactory::White};
 			static constexpr auto DefaultShininess{32.0F}; /* Blinn-Phong EXPONENT (C++ API unit). */

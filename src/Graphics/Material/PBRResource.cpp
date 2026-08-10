@@ -2736,9 +2736,15 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* Albedo component. */
+		/* Albedo component.
+		 * The sampled texel is multiplied by the albedo colour, which acts as a TINT factor —
+		 * this is what glTF baseColorFactor and FBX base_color mean when a texture is also
+		 * present, and both specify the PRODUCT. The multiplication is unconditional on
+		 * purpose: the shader program cache keys on the descriptor layout, never on values,
+		 * so a value-dependent variant could serve one material's program to another.
+		 * DefaultAlbedoColor is White precisely so this stays an identity when untouched. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Albedo, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ");";
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ") * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )

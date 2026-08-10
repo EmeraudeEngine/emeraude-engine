@@ -245,6 +245,21 @@ namespace EmEn::Scenes::Loaders
 	{
 		m_resourcePrefix = "FBX:" + filepath.stem().string() + "/";
 
+		/* Reset the per-asset state: a loader instance is reusable across files, and every
+		 * one of these collections is indexed against the CURRENT scene. Carrying them over
+		 * mixes two assets' index spaces. */
+		m_images.clear();
+		m_textures.clear();
+		m_materials.clear();
+		m_meshes.clear();
+		m_shapes.clear();
+		m_skeletons.clear();
+		m_skins.clear();
+		m_meshToSkinIndex.clear();
+		m_animationClips.clear();
+		m_skinJointNodes.clear();
+		m_skinJointNodeIndices.clear();
+
 		/* ufbx load options: bring the scene directly into engine conventions
 		 * so no axis/unit post-processing is needed downstream. */
 		ufbx_load_opts opts{};
@@ -257,6 +272,14 @@ namespace EmEn::Scenes::Loaders
 		 * adjust_pre-compensated) and the evaluated animation curves — see
 		 * AGENTS.md for the known limitation. */
 		opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
+		/* An FBX node can carry a "geometry transform" that affects its attached mesh
+		 * but not its children. Left at the default PRESERVE, that transform lives only
+		 * in `ufbx_node.geometry_transform` and a loader reading `local_transform` alone
+		 * places the mesh WRONG, silently. 3ds Max and Maya emit them routinely.
+		 * MODIFY_GEOMETRY bakes it into the vertices — the same strategy already used
+		 * for the axis conversion above — and falls back to helper nodes only when the
+		 * same mesh is instanced several times with different geometry transforms. */
+		opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
 		opts.load_external_files = true;
 		opts.generate_missing_normals = true;
 
@@ -639,9 +662,14 @@ namespace EmEn::Scenes::Loaders
 				emissiveTex = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
 				isAlphaBlend
 			] (auto & materialResource) {
+				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
+				 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
+				 * the texture and dropping the factor tints nothing and silently loses the
+				 * factor's alpha; the colour goes to the material's tint slot instead. */
 				if ( albedoTex != nullptr )
 				{
 					materialResource.setAlbedoComponent(albedoTex);
+					materialResource.setAlbedoColor(albedoColor);
 				}
 				else
 				{
@@ -1317,14 +1345,16 @@ namespace EmEn::Scenes::Loaders
 
 			/* Collect bone nodes so the scene consumer can skip instantiating
 			 * them as regular scene nodes — bone transforms are owned by the
-			 * SkeletalAnimator, not by the scene graph. */
+			 * SkeletalAnimator, not by the scene graph.
+			 * The NODE POINTER is what gets stored: the descriptor index it maps to is
+			 * only known once buildNodeDescriptors() has compacted the node table. */
 			for ( size_t ci = 0; ci < jointCount; ++ci )
 			{
 				const ufbx_skin_cluster * cluster = skin.clusters.data[ci];
 
 				if ( cluster != nullptr && cluster->bone_node != nullptr )
 				{
-					m_skinJointNodeIndices.insert(static_cast< size_t >(cluster->bone_node->element_id));
+					m_skinJointNodes.insert(cluster->bone_node);
 				}
 			}
 		}
@@ -1519,6 +1549,7 @@ namespace EmEn::Scenes::Loaders
 		opts.target_axes = ufbx_axes_right_handed_y_up;
 		opts.target_unit_meters = 1.0F;
 		opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
+		opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
 		opts.load_external_files = false;
 		opts.generate_missing_normals = false;
 
@@ -1752,7 +1783,18 @@ namespace EmEn::Scenes::Loaders
 				continue;
 			}
 
-			nodeIndexMap[node] = output.nodes.size();
+			const auto descriptorIndex = output.nodes.size();
+
+			nodeIndexMap[node] = descriptorIndex;
+
+			/* Resolve the bone nodes collected by loadSkins() to their COMPACTED descriptor
+			 * index. Doing it here is the whole point: this is the only place where the
+			 * mapping exists. A bone that is excluded never gets an index, and therefore
+			 * never makes the consumer skip an unrelated node. */
+			if ( m_skinJointNodes.contains(node) )
+			{
+				m_skinJointNodeIndices.insert(descriptorIndex);
+			}
 
 			NodeDescriptor descriptor;
 			descriptor.name = buildNodeName(m_resourcePrefix, *node);

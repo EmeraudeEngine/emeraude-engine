@@ -34,6 +34,7 @@
 /* Local inclusions. */
 #include "AnimationClipResource.hpp"
 #include "Animation/AnimationChannel.hpp"
+#include "Math/Base.hpp"
 #include "Math/TransformUtils.hpp"
 #include "SkeletonResource.hpp"
 
@@ -109,10 +110,16 @@ namespace EmEn::Animations
 			return a.value;
 		}
 
-		/* Linear interpolation. */
 		const auto span = b.time - a.time;
 		const auto t = (span > 0.0F) ? (time - a.time) / span : 0.0F;
 
+		/* GLTF cubic: the tangents are scaled by the segment duration inside the evaluator. */
+		if ( channel.interpolation == ChannelInterpolation::CubicSpline )
+		{
+			return cubicSplineInterpolation(a.value, a.outTangent, b.value, b.inTangent, span, t);
+		}
+
+		/* Linear interpolation. */
 		return Vector< 3, float >{
 			a.value[0] + (b.value[0] - a.value[0]) * t,
 			a.value[1] + (b.value[1] - a.value[1]) * t,
@@ -150,10 +157,20 @@ namespace EmEn::Animations
 			return a.value;
 		}
 
-		/* Spherical linear interpolation. */
 		const auto span = b.time - a.time;
 		const auto t = (span > 0.0F) ? (time - a.time) / span : 0.0F;
 
+		/* GLTF cubic on a rotation is evaluated component-wise, so the result is NOT unit
+		 * length and must be normalized before it reaches the joint matrix. */
+		if ( channel.interpolation == ChannelInterpolation::CubicSpline )
+		{
+			auto result = cubicSplineInterpolation(a.value, a.outTangent, b.value, b.inTangent, span, t);
+			result.normalize();
+
+			return result;
+		}
+
+		/* Spherical linear interpolation. */
 		return Quaternion< float >::slerp(a.value, b.value, t, 0.05F);
 	}
 

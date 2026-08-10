@@ -53,6 +53,15 @@ Scenes::Loaders sits between `Base/` (raw data) and `Scenes/` (scene graph). Eac
 > *"this loader ignores lights"* from *"this asset declares none"* — and both happen. Ask the
 > capabilities before concluding anything about a scene's lighting.
 
+> [!CAUTION]
+> **The mask's grain is the DOMAIN, never the feature — do not read it as a completeness claim.**
+> `GLTFLoader` returns every bit, and that is accurate at the grain the mask has, yet the loader
+> still reads only `TRIANGLES` primitives, a single UV set, no vertex colours, no authored
+> tangents, no morph targets, and never populates `instanceSets`. `Geometry` means *"this loader
+> produces geometry"*, not *"this loader reads all of the format's geometry"*. An audit of what
+> each loader actually consumes is the only answer to *"is this format fully supported?"* — the
+> honest current answer for both glTF and FBX is **no**, and the gaps are listed per loader below.
+
 ### Common Interface
 
 All loaders implement `Interface` (`Interface.hpp`):
@@ -81,7 +90,17 @@ class Interface {
 - `skipSkinning` — skip bone weights, skins, and animations
 - `forceDoubleSided` — `bool`, default `false`. Forces **every** material part of the loaded model to `RasterizationOptions{ CullingMode::None }`, OR-ed with the per-material asset flag (see *Double-sided materials* below). Symmetric across `FBXLoader` (applied per material part, default-material parts included) and `GLTFLoader` (per primitive). Use it when the asset's format/exporter cannot carry a double-sided flag the loader can read — the canonical case is **Mixamo FBX rigs**, which ship plain `FbxSurfacePhong` materials: ufbx only surfaces `double_sided` for glTF-style materials, so these models always import single-sided and thin shells (inner armour, cloth) render with see-through holes. Blunt instrument (whole model); for per-mesh selectivity use the `onMeshLoaded` hook instead. Two-sided lighting (back-face normal flip) is already engine-side, so forced back-faces are correctly lit. Validated on the Paladin (`src/Actor/Paladin.cpp`).
 - `uniformScale` — `float`, default `1.0F`. Uniform scale applied at load time, **coherently across the full skinned-mesh pipeline**: vertex positions (in `loadMeshes`), joint local TRS translations + inverse bind matrix translation columns (in `loadSkins`), and animation translation keyframes (in `sampleAnimStack`, covers both `load()` embedded clips AND `loadAnimationClipsOnly()` external clips). Rotations and scales of joint TRS plus per-vertex influence weights are never touched. Linear (rotation + uniform 1×1 scale) parts of the inverse bind matrix are unaffected by uniform scaling around origin, so only the translation column needs scaling there. **Critical**: the same factor must be passed to BOTH the rig load (`load()`) AND every subsequent `loadAnimationClipsOnly()` against that rig — otherwise animation translation keyframes describe positions in a different unit than the scaled bind pose, joints snap to wrong positions on every keyframe, and the rig visually collapses on the first animated frame. Also propagates to the renderable's bounding box, so collision shapes derived from the bbox reflect the scaled size automatically. Use cases: enlarging a Mixamo humanoid that ships at 1.7 m to 1.9 m for a knight silhouette (validated end-to-end on the Paladin); shrinking oversized Maya/Blender assets without re-export.
-- `stripRootMotion` — `bool`, default `false`. When set, `loadAnimationClipsOnly()` zeroes the **horizontal (X, Z) components** of every translation keyframe on every root joint of the produced clips. Rotation + scale of the root and *all* channels of every other joint stay intact. The vertical (Y) component is preserved on purpose: it carries both the bind-pose hip-height offset (~0.85 m on a Mixamo humanoid — wiping it would sink the model halfway into the ground) and the natural up/down bounce of walking, jumping or crouching. Idiomatic "convert per-action FBX into in-place clip" pass at load time. Required for any FBX (Mixamo, Maya/Blender per-action) where the root bone carries forward locomotion AND the actor's displacement is also driven by gameplay code (physics force, navmesh) — without this, the two motions stack and the model snaps backward at every clip loop. Has no effect on `load()` (full-pipeline import) — only on `loadAnimationClipsOnly()`. **Future work — Option C (root-motion mode):** instead of stripping, extract the root delta per frame and feed it back to the actor as actual displacement (foot-planting, no foot-sliding, animation-driven speed). Would replace the actor-side `addForce` for animation-driven characters; tracked as a TODO for the locomotion subsystem.
+
+  > [!WARNING]
+  > **`GLTFLoader` ignored this option ENTIRELY until Aug 2026** — zero occurrences in the whole
+  > file, while this very paragraph described its semantics. A caller passing `uniformScale = 0.01F`
+  > to a glTF got a model at scale 1 and no warning: a documented option that is a silent no-op is
+  > worse than an absent one, because the caller has no reason to check. It is now applied at the
+  > same four sites as the FBX path — vertex positions, joint local TRS translations, the inverse
+  > bind matrix translation columns, and the translation keyframes (**including their CUBICSPLINE
+  > in/out tangents**, which are lengths per second and scale exactly like the values they
+  > interpolate). A scale channel is a RATIO and is never touched.
+- `stripRootMotion` — `bool`, default `false`. When set, `loadAnimationClipsOnly()` zeroes the **horizontal (X, Z) components** of every translation keyframe on every root joint of the produced clips. Rotation + scale of the root and *all* channels of every other joint stay intact. The vertical (Y) component is preserved on purpose: it carries both the bind-pose hip-height offset (~0.85 m on a Mixamo humanoid — wiping it would sink the model halfway into the ground) and the natural up/down bounce of walking, jumping or crouching. Idiomatic "convert per-action FBX into in-place clip" pass at load time. Required for any FBX (Mixamo, Maya/Blender per-action) where the root bone carries forward locomotion AND the actor's displacement is also driven by gameplay code (physics force, navmesh) — without this, the two motions stack and the model snaps backward at every clip loop. Has no effect on `load()` (full-pipeline import) — only on `loadAnimationClipsOnly()`. **`GLTFLoader` does not implement `loadAnimationClipsOnly()`** (glTF carries its clips inside the asset, so the split-animation workflow has no glTF equivalent), which makes the option inapplicable there: since Aug 2026 the glTF path **logs a warning** instead of ignoring it, so a caller porting FBX code over cannot believe the root motion was stripped. **Future work — Option C (root-motion mode):** instead of stripping, extract the root delta per frame and feed it back to the actor as actual displacement (foot-planting, no foot-sliding, animation-driven speed). Would replace the actor-side `addForce` for animation-driven characters; tracked as a TODO for the locomotion subsystem.
 
 **Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::SceneDataConsumer`.
 
@@ -262,6 +281,46 @@ Phases 4-5 skipped when `skipSkinning = true`.
 
 **Resource naming:** `glTF:{stem}/{Category}/{name}` (e.g., `glTF:Fox/Mesh/fox1`)
 
+#### CUBICSPLINE — the output accessor has a STRIDE OF THREE (fixed Aug 2026)
+
+> [!CAUTION]
+> A glTF `CUBICSPLINE` sampler packs **three values per keyframe** in its output accessor —
+> in-tangent, value, out-tangent — where `STEP` and `LINEAR` pack one. The loader used to read
+> that accessor **flat** and index it against the timestamps, so the leading tangents became
+> keyframe values and every cubic clip played wrong. The interpolation mode was mapped correctly,
+> which is exactly what made it invisible: nothing was missing, everything was shifted.
+>
+> The fix is the `valuesPerKeyFrame` stride in `loadAnimations()`, plus the in/out tangents now
+> being stored in the keyframes. **Test any change here against a CUBICSPLINE asset** — a LINEAR
+> one cannot distinguish the two code paths.
+
+**The mode is now delivered end to end.** `EmEn::Base::Animation` already carried both halves —
+`VectorKeyFrame`/`QuaternionKeyFrame` in/out tangent storage and `Math::cubicSplineInterpolation()`
+(GLTF Hermite basis, tangents scaled by the segment duration inside the evaluator), with unit tests
+whose own comment noted the mode was *"declared but undeliverable"*. What was missing was the
+consumer: `Animations::SkeletalAnimator` only ever branched on `Step` and fell through to
+lerp/slerp. It now has a `CubicSpline` branch in **both** `sampleVectorChannel()` and
+`sampleQuaternionChannel()`.
+
+> [!WARNING]
+> **A cubic rotation is evaluated COMPONENT-WISE, so its result is not unit length** and is
+> normalized before it reaches the joint matrix. Skipping that normalization scales the joint's
+> whole subtree — a rig that stretches on the segments between keyframes and snaps back on them.
+
+#### Known gaps (glTF 2.0)
+
+Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
+`TRIANGLES` is the only primitive mode read; authored `TANGENT` is ignored and always recomputed
+(the bitangent `w` is lost); no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
+(4 influences max); no morph targets; `alphaMode: MASK` and `alphaCutoff` are never read (foliage
+and cutouts import as full quads, **while the engine has had `MaterialFlagBits::AlphaTestEnabled`
+since the WADLoader**); glTF samplers (`wrapS/T`, filters) and the per-`TextureInfo` `texCoord`
+index are ignored; `KHR_texture_transform` is absent; **`KHR_materials_specular`, `ior`,
+`anisotropy` and `volume` are enabled on the parser and never read**, which makes the code look
+supportive of them; animation channels targeting a node that is not a joint of `skins[0]` are
+dropped, so rigid-node animation (doors, platforms, props) is impossible; `instanceSets` is never
+populated (`EXT_mesh_gpu_instancing` not enabled).
+
 ### USDLoader (OpenUSD via tinyusdz — geometry, materials, sky, INSTANCING, Aug 2026)
 
 Reads `.usd` / `.usda` / `.usdc` / `.usdz`. Its reference asset, Intel's Jungle Ruins, is the
@@ -339,6 +398,37 @@ everything under it.
 ### FBXLoader (Phase 5 — Full Pipeline + LoaderOptions Plumbed)
 
 Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependencies/ufbx`, pinned to **v0.21.3**).
+
+> [!CAUTION]
+> **Geometry transforms — an FBX node transform that a loader reading `local_transform` alone
+> DOES NOT SEE (fixed Aug 2026).** An FBX node can carry a *geometry transform* that affects its
+> attached mesh but **not** its children. Left at ufbx's default
+> `UFBX_GEOMETRY_TRANSFORM_HANDLING_PRESERVE`, it lives only in `ufbx_node.geometry_transform` /
+> `geometry_to_node`, and `extractFrameFromNode()` — which reads `node.local_transform` — never
+> compensated for it. **3ds Max and Maya emit them routinely**, so affected meshes imported at the
+> wrong place, silently, with a perfectly clean log. The loader now passes
+> `UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY`, baking it into the vertices — the same
+> strategy already used for the axis conversion — with helper nodes as ufbx's own fallback when
+> one mesh is instanced several times with different geometry transforms. Set on **both**
+> `load()` and `loadAnimationClipsOnly()` so the two never disagree.
+
+> [!CAUTION]
+> **`skinJointNodeIndices` is an index into `SceneData::nodes`, NOT a ufbx `element_id`
+> (fixed Aug 2026).** `loadSkins()` used to insert `cluster->bone_node->element_id` — an index
+> into `scene.elements[]`, all element types pooled together — while
+> `SceneDataConsumer::build()` consumes the set as an index into `SceneData::nodes`, which
+> `buildNodeDescriptors()` **COMPACTS** (the root and every excluded subtree are skipped). The two
+> numbering schemes do not coincide, and the consumer's early `return` on a match **drops the
+> matched node together with its entire subtree**. It survived because a node carrying a mesh is
+> protected by the `!nodeDesc.meshIndex.has_value()` guard and Mixamo rigs put their meshes
+> directly under the root — pure luck, not design. `loadSkins()` now collects **`ufbx_node`
+> pointers** (`m_skinJointNodes`) and `buildNodeDescriptors()` resolves them to real descriptor
+> indices, which is the only place where the compaction is known. `GLTFLoader` was always correct
+> here; the two loaders now agree.
+>
+> Related: `load()` now **resets its per-asset state** at entry. Every one of those collections is
+> indexed against the current scene, and a loader instance is reusable across files — `GLTFLoader`
+> already cleared its own.
 
 **Axis/unit conversion is delegated to ufbx at load time** via `ufbx_load_opts`:
 - `target_axes = ufbx_axes_right_handed_y_up` — output is Y-up right-handed like glTF.

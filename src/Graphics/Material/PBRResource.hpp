@@ -1276,7 +1276,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ClearCoatNormalScaleOffset{49UL};
 
 			/* Default values. */
-			static constexpr auto DefaultAlbedoColor{Base::PixelFactory::Grey};
+			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
+			 * texture in the generated shader, so its neutral value has to be the multiplicative
+			 * identity. A grey default would darken every textured material by half. */
+			static constexpr auto DefaultAlbedoColor{Base::PixelFactory::White};
 			static constexpr auto DefaultRoughness{0.5F};
 			static constexpr auto DefaultMetalness{0.0F};
 			static constexpr auto DefaultNormalScale{1.0F};

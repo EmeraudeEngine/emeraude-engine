@@ -727,6 +727,41 @@ Optional software frame rate limiter for precise FPS control.
 
 ## 8. Material Component System
 
+### Base colour — the texture is TINTED by the colour (Aug 2026)
+
+When the albedo/diffuse component is a **Texture**, the generated fragment code multiplies the
+sampled texel by the material's base colour:
+
+```glsl
+const vec4 SurfaceAlbedoColor = texture(AlbedoSampler, uv) * MaterialUB(AlbedoColor);   /* PBRResource */
+const vec4 SurfaceDiffuseColor = texture(DiffuseSampler, uv) * MaterialUB(DiffuseColor); /* StandardResource */
+```
+
+This is what every source format means: glTF `baseColorFactor` and FBX `base_color` both specify
+the **PRODUCT** of factor and texture. Both loaders used to call `setAlbedoComponent(texture)` and
+**drop the factor entirely** — a material tinted by factor over a neutral texture imported
+untinted, and the factor's **alpha went with it**. They now set the tint through
+`setAlbedoColor()` / `setDiffuseColor()` alongside the texture component.
+
+> [!IMPORTANT]
+> **`DefaultAlbedoColor` and `DefaultDiffuseColor` are `White`, and that is load-bearing — they
+> were `Grey`.** The colour is now a multiplicative factor on the textured path, so its neutral
+> value MUST be the multiplicative identity. Leaving them grey would have darkened **every**
+> textured material in the engine by half. Only a material that configures no colour at all sees
+> any change, and white is the correct neutral there too.
+
+> [!WARNING]
+> **The multiplication is UNCONDITIONAL, and must stay that way.** The shader program cache keys
+> on the material's **descriptor layout**, never on its flags or values, so a variant emitted only
+> when the tint differs from white could serve one material's program to another sharing the same
+> layout. Same reasoning as the fixed 0.5 alpha-test cutoff — see
+> [Alpha Test](#alpha-test--the-binary-cutout-contract-aug-2026).
+
+> [!NOTE]
+> `AlbedoColor` / `DiffuseColor` are declared **unconditionally** in `getUniformBlock()`, whatever
+> the component's filling type — the uniform block is a fixed layout mirroring the whole
+> `m_materialProperties` array. That is precisely why the textured path may reference them.
+
 ### FillingType Enum
 
 Material components use `FillingType` to determine how data is sourced:

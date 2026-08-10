@@ -172,6 +172,14 @@ namespace EmEn::Scenes::Loaders
 			std::vector< Base::Animation::Skin< float > > m_skins;
 			std::unordered_map< uint32_t, size_t > m_meshToSkinIndex;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
+			/* Bone nodes collected by loadSkins(). They are stored as ufbx POINTERS, never as
+			 * element ids: SceneData::skinJointNodeIndices is consumed as an index into
+			 * SceneData::nodes, which buildNodeDescriptors() COMPACTS (the root and every
+			 * excluded subtree are skipped). The two numbering schemes do not coincide, and
+			 * feeding an element id to the consumer makes it drop an unrelated node together
+			 * with its whole subtree. buildNodeDescriptors() resolves these pointers to real
+			 * node indices once the compaction is known. */
+			std::unordered_set< const ufbx_node * > m_skinJointNodes;
 			std::unordered_set< size_t > m_skinJointNodeIndices;
 	};
 }
