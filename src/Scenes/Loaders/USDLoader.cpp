@@ -38,12 +38,16 @@
 #include <array>
 #include <tuple>
 
+/* STL inclusions. */
+#include <cstring>
+
 /* Third-party inclusions. */
 #include "tinyusdz.hh"
 #include "usdGeom.hh"
 #include "usdLux.hh"
 #include "composition.hh"
 #include "asset-resolution.hh"
+#include "io-util.hh"
 #include "tydra/render-data.hh"
 #include "tydra/render-data-converter.hh"
 
@@ -53,6 +57,7 @@
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/StreamIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
@@ -65,6 +70,486 @@ namespace EmEn::Scenes::Loaders
 {
 	/* Above this, a prim tree is noise rather than information. */
 	static constexpr size_t PrimTreeReportLimit{80};
+
+	/**
+	 * @brief A memory-mapped USDZ archive, its asset table, and the resolution of asset paths
+	 * against it.
+	 *
+	 * @note ⚠️ tinyusdz cannot do this on its own, and the two gaps are QUIET:
+	 * `SetupUSDZAssetResolution()` registers handlers for IMAGES ONLY (png/jpg/exr/hdr — its own
+	 * TODO says "[ ] USD: usda, usdc, usd"), so a nested `.usd` layer is never read out of the
+	 * archive; and `USDZResolveAsset()` compares the table VERBATIM, never joining the asking
+	 * layer's directory, so `./Assembly/assembly_Lobby.usd` misses an entry stored as
+	 * `Users/.../kit_usdz_tejdxcvk/Assembly/assembly_Lobby.usd`. Hence our own three handlers.
+	 *
+	 * @note The archive is MAPPED, never extracted: layers are parsed and images decoded straight
+	 * out of the mapping. A 1.6 GB archive therefore costs its table, not its bytes.
+	 */
+	class USDZArchive final
+	{
+		public:
+
+			USDZArchive () noexcept = default;
+
+			USDZArchive (const USDZArchive &) = delete;
+			USDZArchive (USDZArchive &&) = delete;
+			USDZArchive & operator= (const USDZArchive &) = delete;
+			USDZArchive & operator= (USDZArchive &&) = delete;
+
+			~USDZArchive ()
+			{
+				if ( m_mapped )
+				{
+					std::string error;
+
+					tinyusdz::io::UnmapFile(m_handle, &error);
+				}
+			}
+
+			/**
+			 * @brief Maps the archive and reads its asset table.
+			 * @param filepath An absolute path to the .usdz file.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			open (const std::filesystem::path & filepath) noexcept
+			{
+				std::string error;
+
+				if ( !tinyusdz::io::MMapFile(filepath.string(), &m_handle, false, &error) )
+				{
+					TraceError{USDLoader::ClassId} << "Unable to map the archive '" << filepath.string() << "' : " << error;
+
+					return false;
+				}
+
+				m_mapped = true;
+
+				std::string warning;
+
+				/* ⚠️ `assetOnMemory` = true: the table keeps a POINTER into our mapping instead of
+				 * copying the whole archive into `USDZAsset::data`. That is the difference between
+				 * 21 MB and 1.6 GB resident before a single prim is read. */
+				if ( !tinyusdz::ReadUSDZAssetInfoFromMemory(reinterpret_cast< const uint8_t * >(m_handle.addr), static_cast< size_t >(m_handle.size), true, &m_asset, &warning, &error) )
+				{
+					TraceError{USDLoader::ClassId} << "Unable to read the asset table of '" << filepath.filename().string() << "' : " << error;
+
+					return false;
+				}
+
+				if ( !warning.empty() )
+				{
+					TraceWarning{USDLoader::ClassId} << "While reading the asset table of '" << filepath.filename().string() << "' : " << warning;
+				}
+
+				/* The first USD entry in ARCHIVE ORDER is the root layer — that is what the USDZ
+				 * specification mandates, and it is what every exporter writes. */
+				size_t rootOffset = 0;
+
+				for ( const auto & [name, range] : m_asset.asset_map )
+				{
+					if ( !isUSDName(name) )
+					{
+						continue;
+					}
+
+					if ( m_rootAssetName.empty() || range.first < rootOffset )
+					{
+						m_rootAssetName = name;
+						rootOffset = range.first;
+					}
+				}
+
+				if ( m_rootAssetName.empty() )
+				{
+					TraceError{USDLoader::ClassId} << "'" << filepath.filename().string() << "' holds no USD layer at all.";
+
+					return false;
+				}
+
+				if ( const auto separator = m_rootAssetName.find_last_of('/'); separator != std::string::npos )
+				{
+					m_baseDirectory = m_rootAssetName.substr(0, separator);
+				}
+
+				TraceInfo{USDLoader::ClassId} <<
+					"Archive '" << filepath.filename().string() << "' mapped: " << m_asset.asset_map.size() <<
+					" entries, root layer '" << m_rootAssetName << "'.";
+
+				return true;
+			}
+
+			/** @brief Returns the archive-relative name of the root layer. */
+			[[nodiscard]]
+			const std::string &
+			rootAssetName () const noexcept
+			{
+				return m_rootAssetName;
+			}
+
+			/** @brief Returns the directory the root layer sits in, inside the archive. */
+			[[nodiscard]]
+			const std::string &
+			baseDirectory () const noexcept
+			{
+				return m_baseDirectory;
+			}
+
+			/**
+			 * @brief Installs this archive as the resolver's source for every asset kind.
+			 * @note The resolver is REMEMBERED, because the handler signature does not carry the
+			 * current working path and the composition sets it on the resolver alone.
+			 * @param resolver A reference to the resolver to equip.
+			 */
+			void
+			equip (tinyusdz::AssetResolutionResolver & resolver) noexcept
+			{
+				m_resolver = &resolver;
+
+				tinyusdz::AssetResolutionHandler handler;
+				handler.resolve_fun = &USDZArchive::resolveHandler;
+				handler.size_fun = &USDZArchive::sizeHandler;
+				handler.read_fun = &USDZArchive::readHandler;
+				handler.write_fun = nullptr;
+				handler.userdata = this;
+
+				/* "*" is the wildcard fallback; the explicit extensions come first because
+				 * `AssetResolutionResolver::resolve()` looks the exact one up before the wildcard. */
+				for ( const auto * extension : {"usd", "usda", "usdc", "USD", "USDA", "USDC", "png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "tga", "TGA", "exr", "EXR", "hdr", "HDR", "mdl", "MDL", "*"} )
+				{
+					resolver.register_asset_resolution_handler(extension, handler);
+				}
+
+				resolver.set_current_working_path(m_baseDirectory);
+				resolver.set_search_paths({m_baseDirectory});
+			}
+
+			/**
+			 * @brief Resolves an authored asset path to an archive entry name.
+			 *
+			 * @note Four steps, weakest last:
+			 *  1. verbatim, then lexically normalized;
+			 *  2. joined with the resolver's current working path, its search paths, then the
+			 *     archive's own root directory;
+			 *  3. longest UNIQUE path suffix.
+			 *
+			 * @warning ⚠️⚠️ STEP 3 MATCHES A SUFFIX, NEVER A BASENAME, AND REFUSES AN AMBIGUOUS ONE.
+			 * A Kit export bakes its materials into `Materials/Bake/baked_textures_<hash>/` and
+			 * names every file inside identically. Measured on WorldLobby.usdz: 285 images under
+			 * only 119 distinct filenames, with `mtl-base_color.jpg` appearing SIXTY times. A
+			 * basename match resolves all sixty to whichever entry came first — sixty materials
+			 * wearing one skin, no error raised anywhere, and a scene that merely looks "wrong"
+			 * rather than broken. The suffix keeps `baked_textures_<hash>/mtl-base_color.jpg`
+			 * distinct; when even that is ambiguous the answer is REFUSED, so the material keeps its
+			 * flat colour instead of someone else's texture.
+			 *
+			 * @param wanted The authored asset path.
+			 * @param searchPaths The search paths the composition is currently using.
+			 * @param resolved A reference to the string receiving the archive entry name.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			resolve (const std::string & wanted, const std::vector< std::string > & searchPaths, std::string & resolved) const noexcept
+			{
+				if ( m_asset.asset_map.contains(wanted) )
+				{
+					resolved = wanted;
+
+					return true;
+				}
+
+				const auto normalized = USDZArchive::normalize(wanted);
+
+				if ( m_asset.asset_map.contains(normalized) )
+				{
+					resolved = normalized;
+
+					return true;
+				}
+
+				/* Step 2 — every directory the composition could mean, strongest first. */
+				std::vector< std::string > bases;
+				bases.reserve(searchPaths.size() + 2);
+
+				if ( m_resolver != nullptr && !m_resolver->current_working_path().empty() )
+				{
+					bases.emplace_back(m_resolver->current_working_path());
+				}
+
+				bases.insert(bases.end(), searchPaths.begin(), searchPaths.end());
+				bases.emplace_back(m_baseDirectory);
+
+				for ( const auto & base : bases )
+				{
+					if ( base.empty() )
+					{
+						continue;
+					}
+
+					const auto candidate = USDZArchive::normalize(base + '/' + wanted);
+
+					if ( m_asset.asset_map.contains(candidate) )
+					{
+						resolved = candidate;
+
+						return true;
+					}
+				}
+
+				/* Step 3 — unique suffix. */
+				const std::string * match = nullptr;
+				size_t matchCount = 0;
+
+				for ( const auto & [name, range] : m_asset.asset_map )
+				{
+					if ( name.size() < normalized.size() )
+					{
+						continue;
+					}
+
+					const auto offset = name.size() - normalized.size();
+
+					if ( name.compare(offset, normalized.size(), normalized) != 0 )
+					{
+						continue;
+					}
+
+					/* Anchored on a separator, so "grass.jpg" cannot match "tallgrass.jpg". */
+					if ( offset > 0 && name[offset - 1] != '/' )
+					{
+						continue;
+					}
+
+					match = &name;
+
+					if ( ++matchCount > 1 )
+					{
+						break;
+					}
+				}
+
+				if ( matchCount == 1 )
+				{
+					resolved = *match;
+
+					return true;
+				}
+
+				if ( matchCount > 1 )
+				{
+					TraceWarning{USDLoader::ClassId} <<
+						"Asset '" << wanted << "' matches SEVERAL archive entries by suffix; refusing to guess. "
+						"The asset is dropped rather than replaced by the wrong one.";
+				}
+
+				return false;
+			}
+
+			/**
+			 * @brief Returns the bytes of an archive entry, in place.
+			 * @param resolvedName An archive entry name, as returned by resolve().
+			 * @param size A reference to the value receiving the entry size in bytes.
+			 * @return const std::byte * Null when the entry is unknown or empty.
+			 */
+			[[nodiscard]]
+			const std::byte *
+			bytes (const std::string & resolvedName, size_t & size) const noexcept
+			{
+				const auto it = m_asset.asset_map.find(resolvedName);
+
+				if ( it == m_asset.asset_map.cend() || it->second.second <= it->second.first )
+				{
+					size = 0;
+
+					return nullptr;
+				}
+
+				size = it->second.second - it->second.first;
+
+				return reinterpret_cast< const std::byte * >(m_asset.addr) + it->second.first;
+			}
+
+		private:
+
+			/** @brief Whether an archive entry name designates a USD layer. */
+			[[nodiscard]]
+			static bool
+			isUSDName (const std::string & name) noexcept
+			{
+				const auto dot = name.find_last_of('.');
+
+				if ( dot == std::string::npos )
+				{
+					return false;
+				}
+
+				auto extension = name.substr(dot + 1);
+
+				std::ranges::transform(extension, extension.begin(), [] (unsigned char character) {
+					return static_cast< char >(std::tolower(character));
+				});
+
+				return extension == "usd" || extension == "usda" || extension == "usdc";
+			}
+
+			/**
+			 * @brief Collapses '.', '..' and separators, WITHOUT touching the filesystem.
+			 * @note std::filesystem cannot serve here: these are archive names, not paths, and a
+			 * canonicalisation would resolve them against the process working directory.
+			 * @param path The path to normalize.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			static std::string
+			normalize (const std::string & path) noexcept
+			{
+				std::vector< std::string > parts;
+				std::string current;
+
+				const auto flush = [&parts, &current] () {
+					if ( current == ".." )
+					{
+						if ( !parts.empty() )
+						{
+							parts.pop_back();
+						}
+					}
+					else if ( !current.empty() && current != "." )
+					{
+						parts.emplace_back(current);
+					}
+
+					current.clear();
+				};
+
+				for ( const auto character : path )
+				{
+					if ( character == '/' || character == '\\' )
+					{
+						flush();
+
+						continue;
+					}
+
+					current += character;
+				}
+
+				flush();
+
+				std::string result;
+
+				for ( const auto & part : parts )
+				{
+					if ( !result.empty() )
+					{
+						result += '/';
+					}
+
+					result += part;
+				}
+
+				return result;
+			}
+
+			static int
+			resolveHandler (const char * assetName, const std::vector< std::string > & searchPaths, std::string * resolvedName, std::string * error, void * userdata) noexcept
+			{
+				const auto * archive = static_cast< const USDZArchive * >(userdata);
+
+				if ( archive == nullptr || assetName == nullptr || resolvedName == nullptr )
+				{
+					return -2;
+				}
+
+				if ( !archive->resolve(assetName, searchPaths, *resolvedName) )
+				{
+					if ( error != nullptr )
+					{
+						*error += std::string{"not in archive: "} + assetName + "\n";
+					}
+
+					return -1;
+				}
+
+				return 0;
+			}
+
+			static int
+			sizeHandler (const char * resolvedName, uint64_t * byteCount, std::string * error, void * userdata) noexcept
+			{
+				const auto * archive = static_cast< const USDZArchive * >(userdata);
+
+				if ( archive == nullptr || resolvedName == nullptr || byteCount == nullptr )
+				{
+					return -2;
+				}
+
+				size_t size = 0;
+
+				if ( archive->bytes(resolvedName, size) == nullptr )
+				{
+					if ( error != nullptr )
+					{
+						*error += std::string{"not in archive: "} + resolvedName + "\n";
+					}
+
+					return -1;
+				}
+
+				*byteCount = size;
+
+				return 0;
+			}
+
+			static int
+			readHandler (const char * resolvedName, uint64_t requestedBytes, uint8_t * output, uint64_t * byteCount, std::string * error, void * userdata) noexcept
+			{
+				const auto * archive = static_cast< const USDZArchive * >(userdata);
+
+				if ( archive == nullptr || resolvedName == nullptr || output == nullptr || byteCount == nullptr )
+				{
+					return -2;
+				}
+
+				size_t size = 0;
+				const auto * source = archive->bytes(resolvedName, size);
+
+				if ( source == nullptr )
+				{
+					if ( error != nullptr )
+					{
+						*error += std::string{"not in archive: "} + resolvedName + "\n";
+					}
+
+					return -1;
+				}
+
+				if ( size > requestedBytes )
+				{
+					if ( error != nullptr )
+					{
+						*error += std::string{"entry larger than the requested read: "} + resolvedName + "\n";
+					}
+
+					return -2;
+				}
+
+				std::memcpy(output, source, size);
+
+				*byteCount = size;
+
+				return 0;
+			}
+
+			tinyusdz::io::MMapFileHandle m_handle{};
+			tinyusdz::USDZAsset m_asset;
+			std::string m_rootAssetName;
+			std::string m_baseDirectory;
+			const tinyusdz::AssetResolutionResolver * m_resolver{nullptr};
+			bool m_mapped{false};
+	};
 
 	USDLoader::USDLoader (Resources::Manager & resources) noexcept
 		: m_resources{resources}
@@ -533,6 +1018,230 @@ namespace EmEn::Scenes::Loaders
 		return {};
 	}
 
+	size_t
+	USDLoader::buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, SceneData & output) noexcept
+	{
+		using namespace Base::Math;
+
+		/* ⚠️ THE ANCHOR. See the header for what was measured and why this factor and not another.
+		 * `intensity` is read as a luminance in cd/m², scaled by the emitter's area because
+		 * `normalize = false` is what every light of this asset declares, then normalized by 4*pi. */
+		const auto toCandela = [] (const tinyusdz::tydra::RenderLight & light, float area) {
+			return light.intensity * std::pow(2.0F, light.exposure) * area / (4.0F * std::numbers::pi_v< float >);
+		};
+
+		size_t translated = 0;
+
+		for ( const auto & renderLight : renderScene.lights )
+		{
+			LightDescriptor descriptor;
+			descriptor.name = renderLight.name.empty() ? "usd-light-" + std::to_string(translated) : renderLight.name;
+			descriptor.color = {renderLight.color[0], renderLight.color[1], renderLight.color[2], 1.0F};
+
+			/* Radii and lengths are LENGTHS: they go through `metersPerUnit` like a position. */
+			const auto radius = renderLight.radius * metersPerUnit;
+
+			switch ( renderLight.type )
+			{
+				/* A dome has an image and no position. It is collected as an Environment by
+				 * collectEnvironmentLights(), which also reads the image path Tydra drops. */
+				case tinyusdz::tydra::RenderLight::Type::Dome :
+				case tinyusdz::tydra::RenderLight::Type::Portal :
+					continue;
+
+				case tinyusdz::tydra::RenderLight::Type::Distant :
+					descriptor.type = LightType::Directional;
+					/* A directional light carries an ILLUMINANCE in lux and has no area — the
+					 * 4*pi normalisation of a punctual emitter does not apply to a parallel beam. */
+					descriptor.intensity = renderLight.intensity * std::pow(2.0F, renderLight.exposure);
+					break;
+
+				case tinyusdz::tydra::RenderLight::Type::Point :
+				case tinyusdz::tydra::RenderLight::Type::Sphere :
+					descriptor.type = LightType::Point;
+					/* Sphere: the full 4*pi*r^2. */
+					descriptor.intensity = toCandela(renderLight, 4.0F * std::numbers::pi_v< float > * radius * radius);
+					break;
+
+				case tinyusdz::tydra::RenderLight::Type::Disk :
+				case tinyusdz::tydra::RenderLight::Type::Rect :
+				case tinyusdz::tydra::RenderLight::Type::Cylinder :
+				case tinyusdz::tydra::RenderLight::Type::Geometry :
+				{
+					const auto area = renderLight.type == tinyusdz::tydra::RenderLight::Type::Rect
+						? renderLight.width * metersPerUnit * renderLight.height * metersPerUnit
+						: std::numbers::pi_v< float > * radius * radius;
+
+					/* ⚠️ A cone narrower than the full hemisphere makes it a SPOT, and the engine
+					 * needs both angles. USD carries one angle plus a SOFTNESS in [0,1]; the inner
+					 * cone is that softness eating into the outer one. A softness of 0 therefore
+					 * gives a hard edge (inner == outer), which is what these fixtures declare. */
+					if ( renderLight.shapingConeAngle < 180.0F )
+					{
+						descriptor.type = LightType::Spot;
+						descriptor.outerConeAngle = renderLight.shapingConeAngle;
+						descriptor.innerConeAngle = renderLight.shapingConeAngle * (1.0F - std::clamp(renderLight.shapingConeSoftness, 0.0F, 1.0F));
+					}
+					else
+					{
+						descriptor.type = LightType::Point;
+					}
+
+					descriptor.intensity = toCandela(renderLight, area);
+				}
+					break;
+			}
+
+			output.lights.emplace_back(descriptor);
+
+			/* ⚠️ A LIGHT WITHOUT A NODE IS NEVER INSTANTIATED. The descriptor carries no transform
+			 * on purpose — the placement belongs to the hierarchy — so a node must be emitted and
+			 * declared a root, exactly as buildMeshes() does for a mesh. Forgetting this yields a
+			 * scene whose light list is full and whose image is black, with nothing reported. */
+			NodeDescriptor node;
+			node.name = "usd:light/" + descriptor.name + "-" + std::to_string(output.lights.size() - 1);
+			node.lightIndex = output.lights.size() - 1;
+
+			/* Same bake as the geometry — engine = (x, z, -y) * metersPerUnit. A light placed with
+			 * any other convention lands somewhere else than the room it is meant to light. */
+			node.localFrame.setPosition({
+				renderLight.position[0] * metersPerUnit,
+				renderLight.position[2] * metersPerUnit,
+				-renderLight.position[1] * metersPerUnit
+			});
+
+			/* A spot and a directional light AIM. The direction goes through the direction bake —
+			 * no `metersPerUnit`, a direction has no length to convert. */
+			if ( descriptor.type == LightType::Spot || descriptor.type == LightType::Directional )
+			{
+				const Vector< 3, float > direction{
+					renderLight.direction[0],
+					renderLight.direction[2],
+					-renderLight.direction[1]
+				};
+
+				if ( !direction.isZero() )
+				{
+					/* A frame is oriented toward a TARGET, so the direction becomes a point one
+					 * unit ahead of the light. */
+					node.localFrame.lookAt(node.localFrame.position() + direction.normalized(), false);
+				}
+			}
+
+			output.nodes.emplace_back(std::move(node));
+			output.rootNodeIndices.push_back(output.nodes.size() - 1);
+
+			translated++;
+		}
+
+		if ( translated > 0 )
+		{
+			TraceInfo{ClassId} << translated << " punctual light(s) translated.";
+		}
+
+		return translated;
+	}
+
+	std::shared_ptr< Graphics::TextureResource::Abstract >
+	USDLoader::archiveTexture (const std::string & assetIdentifier, bool sRGB) noexcept
+	{
+		using namespace Graphics;
+		using namespace Base::PixelFactory;
+
+		std::string entryName;
+
+		if ( !m_archive->resolve(assetIdentifier, {}, entryName) )
+		{
+			TraceWarning{ClassId} << "Texture '" << assetIdentifier << "' is not in the archive; the material keeps its flat colour.";
+
+			return nullptr;
+		}
+
+		/* ⚠️ The format comes from the ENTRY NAME, and only Jpeg, PNG and Targa can be decoded from
+		 * memory. A format we cannot read must be refused HERE: handing such an entry to the image
+		 * container yields a resource that fails to load, the texture built on it fails in turn, and
+		 * the material goes down with it — strictly worse than no texture, which merely falls back
+		 * to the shader's flat colour. */
+		const auto extension = [&entryName] () {
+			const auto dot = entryName.find_last_of('.');
+
+			auto text = dot == std::string::npos ? std::string{} : entryName.substr(dot + 1);
+
+			std::ranges::transform(text, text.begin(), [] (unsigned char character) {
+				return static_cast< char >(std::tolower(character));
+			});
+
+			return text;
+		}();
+
+		auto format = Pixmap< uint8_t >::Format::None;
+
+		if ( extension == "jpg" || extension == "jpeg" )
+		{
+			format = Pixmap< uint8_t >::Format::Jpeg;
+		}
+		else if ( extension == "png" )
+		{
+			format = Pixmap< uint8_t >::Format::PNG;
+		}
+		else if ( extension == "tga" )
+		{
+			format = Pixmap< uint8_t >::Format::Targa;
+		}
+		else
+		{
+			TraceWarning{ClassId} <<
+				"Archived texture '" << entryName << "' uses the '" << extension <<
+				"' format, which cannot be decoded from memory; the material keeps its flat colour. "
+				"StreamIO reads JPEG, PNG and Targa.";
+
+			return nullptr;
+		}
+
+		/* ⚠️⚠️ The archive is captured BY VALUE. `getOrCreateResource()` runs this factory on the
+		 * THREAD POOL, so it executes AFTER load() has returned and after the loader itself may be
+		 * gone; a bare pointer into the mapping would be read from an unmapped range, minutes later,
+		 * on a worker. The shared pointer keeps the mapping alive exactly as long as some factory
+		 * still needs it, and costs nothing but a refcount. */
+		auto image = m_resources.container< ImageResource >()
+			->getOrCreateResource(m_resourcePrefix + "/image/" + entryName, [archive = m_archive, entryName, format] (auto & imageResource) {
+				size_t size = 0;
+				const auto * data = archive->bytes(entryName, size);
+
+				if ( data == nullptr )
+				{
+					return false;
+				}
+
+				Pixmap< uint8_t > pixmap;
+
+				constexpr ReadOptions options{
+					.targetChannelMode = TargetChannelMode::RGBA
+				};
+
+				/* Decoded IN PLACE from the mapping — no extraction, no intermediate copy. */
+				if ( !StreamIO::read(data, size, format, pixmap, options) )
+				{
+					return false;
+				}
+
+				return imageResource.load(std::move(pixmap));
+			});
+
+		if ( image == nullptr )
+		{
+			return nullptr;
+		}
+
+		return m_resources.container< TextureResource::Texture2D >()
+			->getOrCreateResource(m_resourcePrefix + "/texture/" + entryName + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
+				/* Set sRGB BEFORE load(): the flag must be in place when the VkImage is created. */
+				textureResource.enableSRGB(sRGB);
+
+				return textureResource.load(image);
+			});
+	}
+
 	std::vector< std::shared_ptr< Graphics::Material::Interface > >
 	USDLoader::buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept
 	{
@@ -564,6 +1273,12 @@ namespace EmEn::Scenes::Loaders
 			if ( assetIdentifier.empty() )
 			{
 				return nullptr;
+			}
+
+			/* An archive image never exists on disk: it is decoded straight out of the mapping. */
+			if ( m_archive != nullptr )
+			{
+				return this->archiveTexture(assetIdentifier, sRGB);
 			}
 
 			std::error_code pathError;
@@ -673,14 +1388,43 @@ namespace EmEn::Scenes::Loaders
 			const auto metalnessTexture = shaderSource.has_value() ? resolveTexture(shaderSource.value().metallic.texture_id, false) : nullptr;
 			const auto normalTexture = shaderSource.has_value() ? resolveTexture(shaderSource.value().normal.texture_id, false) : nullptr;
 
+			/* ⚠️ OPACITY IS PART OF THE SURFACE, and ignoring it does not make glass "a bit wrong":
+			 * a UsdPreviewSurface pane declares `inputs:diffuseColor = (0, 0, 0)` with
+			 * `inputs:opacity = 0` — black BECAUSE it is meant to be seen through. Read as an opaque
+			 * material, a whole curtain wall renders as a solid BLACK BLOCK, and the failure reads as
+			 * a lighting or a material bug rather than a missing input.
+			 *
+			 * Measured on World Lobby: exactly 6 materials carry opacity 0 (`Glass` ×4,
+			 * `Clear_Glass`, `Tinted_Glass`), each with a real `ior` (1.20 to 1.52); all 135 others
+			 * are opaque. So this is six materials deciding whether the building has windows.
+			 *
+			 * ⚠️ `opacityThreshold` FIRST: a non-zero threshold is a CUTOUT — an alpha TEST that
+			 * keeps the material opaque (opaque list, depth write, no sorting), never blending.
+			 * Reaching for blending there would defeat the flag and cost sorting for nothing.
+			 *
+			 * NOT read yet, and deliberately: `ior`. Refraction and its Fresnel belong to the
+			 * transmission path (`setTransmissionComponent()`), which is a separate calibration —
+			 * mapping opacity to plain alpha blending already turns the black block into glazing. */
+			const auto opacityValue = shaderSource.has_value() ? std::clamp(shaderSource.value().opacity.value, 0.0F, 1.0F) : 1.0F;
+			const auto opacityThreshold = shaderSource.has_value() ? shaderSource.value().opacityThreshold.value : 0.0F;
+			const auto isCutout = opacityThreshold > 0.0F;
+			const auto isTranslucent = !isCutout && opacityValue < 1.0F;
+
 			const auto albedoValue = shaderSource.has_value()
-				? Color< float >{shaderSource.value().diffuseColor.value[0], shaderSource.value().diffuseColor.value[1], shaderSource.value().diffuseColor.value[2], 1.0F}
+				? Color< float >{shaderSource.value().diffuseColor.value[0], shaderSource.value().diffuseColor.value[1], shaderSource.value().diffuseColor.value[2], opacityValue}
 				: Color< float >{0.5F, 0.5F, 0.5F, 1.0F};
 			const auto roughnessValue = shaderSource.has_value() ? shaderSource.value().roughness.value : 0.5F;
 			const auto metalnessValue = shaderSource.has_value() ? shaderSource.value().metallic.value : 0.0F;
 
+			if ( isTranslucent || isCutout )
+			{
+				TraceInfo{ClassId} <<
+					"Material '" << materialName << "' is " << ( isCutout ? "a CUTOUT (alpha test)" : "TRANSLUCENT" ) <<
+					" — opacity " << opacityValue << ", threshold " << opacityThreshold << ".";
+			}
+
 			auto material = m_resources.container< Material::PBRResource >()
-				->getOrCreateResource(materialName, [albedoTexture, roughnessTexture, metalnessTexture, normalTexture, albedoValue, roughnessValue, metalnessValue] (auto & materialResource) {
+				->getOrCreateResource(materialName, [albedoTexture, roughnessTexture, metalnessTexture, normalTexture, albedoValue, roughnessValue, metalnessValue, isTranslucent, isCutout] (auto & materialResource) {
 					if ( albedoTexture != nullptr )
 					{
 						materialResource.setAlbedoComponent(albedoTexture);
@@ -711,6 +1455,21 @@ namespace EmEn::Scenes::Loaders
 					if ( normalTexture != nullptr )
 					{
 						materialResource.setNormalComponent(normalTexture);
+					}
+
+					/* ⚠️ `enableAlphaTest()` exists on `BasicResource` ONLY — a PBR material has no
+					 * cutout path in the engine today (Material::Interface documents the flag as
+					 * settable through BasicResource alone). So a cutout falls back to blending
+					 * here: visually close, but it pays sorting and loses depth write, and it does
+					 * NOT alpha-test at ray-hit time. Giving PBRResource its own alpha test is a
+					 * named engine gap, not something to fake with a wrong flag.
+					 *
+					 * No material of the reference asset exercises this: all 141 report
+					 * `opacityThreshold = 0`. The branch is here so the next asset does not silently
+					 * lose its cutouts. */
+					if ( isTranslucent || isCutout )
+					{
+						materialResource.enableBlending(BlendingMode::Normal);
 					}
 
 					return materialResource.setManualLoadSuccess(true);
@@ -1125,6 +1884,29 @@ namespace EmEn::Scenes::Loaders
 		std::string warning;
 		std::string error;
 
+		/* A USDZ is a stage whose layers and images live INSIDE the file. Everything below —
+		 * composition, then texture reading — must therefore go through the archive rather than the
+		 * filesystem, so the archive is opened first and equips the resolver. */
+		const auto extension = [] (std::string text) {
+			std::ranges::transform(text, text.begin(), [] (unsigned char character) {
+				return static_cast< char >(std::tolower(character));
+			});
+
+			return text;
+		}(absoluteFilepath.extension().string());
+
+		if ( extension == ".usdz" )
+		{
+			m_archive = std::make_shared< USDZArchive >();
+
+			if ( !m_archive->open(absoluteFilepath) )
+			{
+				m_archive.reset();
+
+				return false;
+			}
+		}
+
 		/* ⚠️ `LoadUSDFromFile()` reads the ROOT LAYER ONLY. It parses the subLayers metadata but
 		 * composes nothing, so a 19-sublayer stage comes back holding 2 prims and reports
 		 * success. Composition in tinyusdz is an EXPLICIT, separate pipeline, and it is the one
@@ -1137,20 +1919,6 @@ namespace EmEn::Scenes::Loaders
 		 * `CompositeSublayers()` exists. `LayerToStageInPlace()` IS implemented and is used
 		 * below, because it frees each PrimSpec as it converts instead of holding the layer and
 		 * the stage at once — which matters when the composed layer is measured in gigabytes. */
-		tinyusdz::Layer layer;
-
-		if ( !tinyusdz::LoadLayerFromFile(absoluteFilepath.string(), &layer, &warning, &error) )
-		{
-			TraceError{ClassId} << "Unable to read layer '" << filepath.string() << "' : " << error;
-
-			return false;
-		}
-
-		if ( !warning.empty() )
-		{
-			TraceWarning{ClassId} << "While reading '" << filepath.filename().string() << "' : " << warning;
-			warning.clear();
-		}
 
 		/* Sublayers, references and payloads are all relative to the root layer's directory —
 		 * except that tinyusdz stores each sublayer's working directory as the RAW relative path
@@ -1164,9 +1932,19 @@ namespace EmEn::Scenes::Loaders
 		 * eleven silently missing `*_classes.usda` prototype layers into resolved ones. */
 		tinyusdz::AssetResolutionResolver resolver;
 
-		std::vector< std::string > searchPaths{absoluteFilepath.parent_path().string()};
+		std::vector< std::string > searchPaths;
 
+		if ( m_archive != nullptr )
 		{
+			/* Inside an archive there are no directories to walk: the table IS the namespace. */
+			m_archive->equip(resolver);
+
+			searchPaths.emplace_back(m_archive->baseDirectory());
+		}
+		else
+		{
+			searchPaths.emplace_back(absoluteFilepath.parent_path().string());
+
 			std::error_code walkError;
 			const std::filesystem::recursive_directory_iterator end;
 
@@ -1182,9 +1960,37 @@ namespace EmEn::Scenes::Loaders
 			{
 				TraceWarning{ClassId} << "Partial stage directory scan for '" << filepath.filename().string() << "' : " << walkError.message();
 			}
+
+			resolver.set_search_paths(searchPaths);
 		}
 
-		resolver.set_search_paths(searchPaths);
+		tinyusdz::Layer layer;
+
+		if ( m_archive != nullptr )
+		{
+			/* ⚠️ Through the RESOLVER, not the filesystem. `LoadLayerFromFile()` would read the
+			 * archive's leading bytes and hand back the first USD it finds with an empty working
+			 * directory, so every nested layer would then be looked up against the process working
+			 * directory instead of the archive. */
+			if ( !tinyusdz::LoadLayerFromAsset(resolver, m_archive->rootAssetName(), &layer, &warning, &error) )
+			{
+				TraceError{ClassId} << "Unable to read the root layer of '" << filepath.filename().string() << "' : " << error;
+
+				return false;
+			}
+		}
+		else if ( !tinyusdz::LoadLayerFromFile(absoluteFilepath.string(), &layer, &warning, &error) )
+		{
+			TraceError{ClassId} << "Unable to read layer '" << filepath.string() << "' : " << error;
+
+			return false;
+		}
+
+		if ( !warning.empty() )
+		{
+			TraceWarning{ClassId} << "While reading '" << filepath.filename().string() << "' : " << warning;
+			warning.clear();
+		}
 
 		tinyusdz::Layer sublayered;
 
@@ -1305,7 +2111,13 @@ namespace EmEn::Scenes::Loaders
 		 * material bindings. Re-deriving that from raw prims would be duplicated work — the
 		 * engine's own job starts at the translation into native scene logic. */
 		tinyusdz::tydra::RenderSceneConverterEnv env{stage};
-		env.usd_filename = absoluteFilepath.string();
+		env.usd_filename = m_archive != nullptr ? m_archive->rootAssetName() : absoluteFilepath.string();
+
+		/* ⚠️ Tydra carries its OWN resolver, and it is NOT the one composition used. Left as a
+		 * filesystem resolver on an archive, a texture is not merely "unresolved": Tydra drops the
+		 * whole UsdUVTexture, so `renderScene.textures` comes back EMPTY and the materials look
+		 * like the asset never had any. */
+		env.asset_resolver = resolver;
 		env.set_search_paths(searchPaths);
 
 		tinyusdz::tydra::RenderSceneConverter converter;
@@ -1331,9 +2143,14 @@ namespace EmEn::Scenes::Loaders
 		const auto builtCount = this->buildMeshes(renderScene, metersPerUnit, prototypePaths, materials, output, builtMeshesByPath);
 		const auto instanceCount = USDLoader::buildInstanceSets(instancers, builtMeshesByPath, output);
 
+		/* The asset's own interior lighting. Skipping it leaves a scene that can only be lit from
+		 * outside, which on an interior means "lit by nothing plausible". */
+		const auto lightCount = USDLoader::buildLights(renderScene, metersPerUnit, output);
+
 		TraceInfo{ClassId} <<
 			instancers.size() << " point instancers read: " << instanceCount << " instances over " <<
-			output.instanceSets.size() << " sets, from " << prototypePaths.size() << " prototypes.";
+			output.instanceSets.size() << " sets, from " << prototypePaths.size() << " prototypes, " <<
+			lightCount << " punctual lights.";
 
 		TraceInfo{ClassId} <<
 			filepath.filename().string() << " converted: " <<

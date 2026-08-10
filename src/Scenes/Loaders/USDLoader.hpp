@@ -67,8 +67,21 @@ namespace EmEn::Graphics::Material
 	class Interface;
 }
 
+namespace EmEn::Graphics::TextureResource
+{
+	class Abstract;
+}
+
 namespace EmEn::Scenes::Loaders
 {
+	/**
+	 * @brief A memory-mapped USDZ archive and its asset table, defined in USDLoader.cpp.
+	 * @note Held through a shared pointer on purpose: the image resource factories run on the
+	 * THREAD POOL and outlive load(), so the mapping must be owned by whoever still needs it.
+	 * See USDLoader.cpp for the resolution rules — they carry the traps.
+	 */
+	class USDZArchive;
+
 	/**
 	 * @brief OpenUSD scene loader, backed by tinyusdz (USDA, USDC crate, USDZ).
 	 * @note Composition is resolved at load time and NOTHING of USD survives it: the stage is
@@ -152,6 +165,16 @@ namespace EmEn::Scenes::Loaders
 			[[nodiscard]]
 			static std::filesystem::path findCaseInsensitive (const std::filesystem::path & wanted) noexcept;
 
+			/**
+			 * @brief Decodes one image out of the mapped archive into an engine texture.
+			 * @note Reads the archive bytes IN PLACE — no extraction to disk, no intermediate copy.
+			 * @param assetIdentifier The asset path Tydra reported for the image.
+			 * @param sRGB Whether the texture holds colour rather than data.
+			 * @return std::shared_ptr< Graphics::TextureResource::Abstract > Null when unusable.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::TextureResource::Abstract > archiveTexture (const std::string & assetIdentifier, bool sRGB) noexcept;
+
 			[[nodiscard]]
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
 
@@ -208,6 +231,35 @@ namespace EmEn::Scenes::Loaders
 			static size_t buildInstanceSets (const std::vector< Instancer > & instancers, const std::map< std::string, size_t > & builtMeshesByPath, SceneData & output) noexcept;
 
 			/**
+			 * @brief Translates the render scene's punctual lights into engine light descriptors.
+			 *
+			 * @note ⚠️ THE PHOTOMETRIC ANCHOR LIVES HERE, and it is a CALIBRATION, not a formula.
+			 * USD's `inputs:intensity` is DIMENSIONLESS while the engine works in candela, so a
+			 * conversion factor has to be chosen. The one in force (owner decision, 2026-08-10)
+			 * reads `intensity` as a LUMINANCE in cd/m², multiplies by the emitter's AREA — which
+			 * is what `normalize = false` means — and normalizes by 4π:
+			 *
+			 *     candela = intensity * 2^exposure * area / (4 * pi)
+			 *
+			 * Measured on the World Lobby's 25 ceiling DiskLights (intensity 60000, radius 0.5 m,
+			 * 4 m above the floor): 3751 cd, so 234 lux at the floor — the real range of a building
+			 * lobby (200-500 lux). The two rejected readings gave 2945 and 3750 lux, outdoor levels.
+			 *
+			 * @warning ⚠️ An emitter's AREA is part of the conversion, so a light's radius is NOT
+			 * decoration: two fixtures of the same intensity and different size do not light alike.
+			 *
+			 * @note Dome lights are deliberately skipped — they carry an image and no position, and
+			 * are collected by collectEnvironmentLights() as `LightType::Environment`.
+			 *
+			 * @param renderScene A reference to the Tydra render scene.
+			 * @param metersPerUnit The stage's linear unit.
+			 * @param output A reference to the scene data to populate.
+			 * @return size_t The number of lights translated.
+			 */
+			[[nodiscard]]
+			static size_t buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, SceneData & output) noexcept;
+
+			/**
 			 * @brief Walks a prim subtree and collects environment (dome) lights.
 			 * @note Tydra's RenderLight does not carry the dome's image path, so the prim is read
 			 * directly. Dropping it silently loses the asset's own sky.
@@ -249,5 +301,9 @@ namespace EmEn::Scenes::Loaders
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;
+
+			/* Non-null only while a USDZ is being loaded, and for as long as an image factory still
+			 * holds a copy of it. */
+			std::shared_ptr< USDZArchive > m_archive;
 	};
 }
