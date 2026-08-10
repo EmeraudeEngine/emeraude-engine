@@ -41,6 +41,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
+#include "Math/Vector.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
@@ -54,6 +55,7 @@ namespace tinyusdz
 	namespace tydra
 	{
 		struct RenderScene;
+		struct XformNode;
 	}
 }
 
@@ -81,6 +83,27 @@ namespace EmEn::Scenes::Loaders
 	 * See USDLoader.cpp for the resolution rules — they carry the traps.
 	 */
 	class USDZArchive;
+
+	/**
+	 * @brief Where a light sits and where it aims, in RAW USD units and USD axes.
+	 *
+	 * @note ⚠️ THIS EXISTS BECAUSE TYDRA NEVER FILLS `RenderLight::position` OR
+	 * `RenderLight::direction`. `render-light-converter.cc` writes seventeen fields and contains not
+	 * one occurrence of `transform`, `position` or `direction`, so those members always hold the
+	 * struct's defaults — (0,0,0) and (0,-1,0). Reading them yields a stage whose every light is
+	 * stacked at the world origin, correctly valued and illuminating nothing.
+	 *
+	 * @note NOT baked into engine space: the bake belongs to buildLights(), next to the one the
+	 * geometry goes through, so the two conventions stay written in the same place.
+	 */
+	struct LightPlacement
+	{
+		/** @brief World position, in stage units. */
+		Base::Math::Vector< 3, float > position;
+
+		/** @brief World emission direction — a UsdLux light emits along its LOCAL -Z. */
+		Base::Math::Vector< 3, float > direction;
+	};
 
 	/**
 	 * @brief OpenUSD scene loader, backed by tinyusdz (USDA, USDC crate, USDZ).
@@ -251,13 +274,42 @@ namespace EmEn::Scenes::Loaders
 			 * @note Dome lights are deliberately skipped — they carry an image and no position, and
 			 * are collected by collectEnvironmentLights() as `LightType::Environment`.
 			 *
+			 * @warning ⚠️⚠️ THE PLACEMENT DOES NOT COME FROM `RenderLight`, and must never be taken
+			 * from it: Tydra leaves `position` and `direction` at their struct defaults in every code
+			 * path, so reading them stacks the whole lighting rig on the world origin. It comes from
+			 * @a placements, keyed on `RenderLight::abs_path` — the element name is not usable, all
+			 * 25 ceiling fixtures of the reference asset being named "LightBloomDisc". A light with no
+			 * entry there is DROPPED and reported, never placed at the origin.
+			 *
 			 * @param renderScene A reference to the Tydra render scene.
 			 * @param metersPerUnit The stage's linear unit.
+			 * @param placements A reference to the placements collected by collectLightPlacements().
 			 * @param output A reference to the scene data to populate.
 			 * @return size_t The number of lights translated.
 			 */
 			[[nodiscard]]
-			static size_t buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, SceneData & output) noexcept;
+			static size_t buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept;
+
+			/**
+			 * @brief Walks a stage's xform hierarchy and records every prim's world placement.
+			 *
+			 * @note Built from `tinyusdz::tydra::BuildXformNodeFromStage()`, which is the library's own
+			 * equivalent of pxrUSD's GetLocalToWorldMatrix: the parent chain is composed by tinyusdz,
+			 * not by hand here.
+			 *
+			 * @note Every node is recorded, not only the lights. Filtering by prim type would be a
+			 * second place to keep in sync with UsdLux, for a map that costs a few thousand entries on
+			 * a whole stage.
+			 *
+			 * @warning ⚠️ USD is a ROW-VECTOR convention — translation in the matrix's LAST ROW, basis
+			 * vectors as ROWS. Reading it column-major transposes the rotation, which does not fail: it
+			 * aims every light somewhere plausible and wrong.
+			 *
+			 * @param node A reference to the xform node to walk.
+			 * @param placements A reference to the map to populate, keyed by absolute prim path.
+			 * @return void
+			 */
+			static void collectLightPlacements (const tinyusdz::tydra::XformNode & node, std::map< std::string, LightPlacement > & placements) noexcept;
 
 			/**
 			 * @brief Walks a prim subtree and collects environment (dome) lights.

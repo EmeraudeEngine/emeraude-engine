@@ -1883,6 +1883,47 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 
 Parallax Occlusion Mapping ray-marching is expensive at far distances, especially on large surfaces. The engine implements distance-based fade (8-18 world units) to mitigate this. See: `Graphics/AGENTS.md` (POM section).
 
+### A HARD-EDGED SPOT DIVIDED BY ZERO IN EVERY RASTER SHADER (fixed 2026-08-10)
+
+The spot cone factor is generated as:
+
+```glsl
+const float epsilon = innerCos - outerCos;
+const float spotFactor = clamp((theta - outerCos) / epsilon, 0.0, 1.0);
+```
+
+> [!CAUTION]
+> **`inner == outer` is not a degenerate case — it is how a HARD CONE EDGE is expressed**, and it is
+> exactly what USD's `shaping:cone:softness = 0` means, which is what **every fixture of an
+> Omniverse Kit export declares**. `epsilon` is then **zero**: the division is `0/0` for fragments
+> on the edge and `x/0` elsewhere, the result is **driver-dependent**, and it came back as a **pure
+> black frame** on 25 correctly-placed 3750 cd ceiling spots — with no error, no validation message
+> and a light set truthfully reporting all 25.
+
+**The ray-traced path had always guarded it** (`RTR.cpp`, `RTGI.cpp`:
+`max(innerCos - outerCos, 0.0001)`); the four raster generators had not. Fixed identically in all
+four, which is the rule for this codegen — **a shading change must cover every generator, not just
+PBR**:
+
+- `Saphir/LightGenerator.PerVertex.cpp`
+- `Saphir/LightGenerator.PerFragment.cpp`
+- `Saphir/LightGenerator.PerFragment.NormalMap.cpp`
+- `Saphir/LightGenerator.PBR.cpp`
+
+**Diagnostic value**: this defect is invisible to every tool the project normally reaches for. No
+Vulkan validation error, no shader compile warning, no log line — only pixels. When a light is
+provably present in the light set and provably placed, and the frame is still black, **suspect the
+generated cone/attenuation arithmetic before suspecting the light**.
+
+### A radius of 0 DISABLES attenuation, it does not disable the light
+
+`AbstractLightEmitter::DefaultRadius` is `0.0F`, and the codegen guards on it:
+`if ( lightRadius > 0.0 )`. So a point or spot light with no radius has **no distance falloff at
+all** — it is not dimmed to nothing, it reaches everywhere in its cone. `SceneDataConsumer` only
+calls `setRadius()` when a loader declared a range (`LightDescriptor::range > 0`), so asset-imported
+lights land in exactly that state. Worth knowing before blaming a radius for a dark scene: the
+symptom of a zero radius is an **over**-lit room, never an under-lit one.
+
 ---
 
 ## Build / Compiler

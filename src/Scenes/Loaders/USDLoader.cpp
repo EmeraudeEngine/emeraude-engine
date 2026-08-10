@@ -50,6 +50,7 @@
 #include "io-util.hh"
 #include "tydra/render-data.hh"
 #include "tydra/render-data-converter.hh"
+#include "tydra/scene-access.hh"
 
 /* Local inclusions. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
@@ -1018,8 +1019,44 @@ namespace EmEn::Scenes::Loaders
 		return {};
 	}
 
+	void
+	USDLoader::collectLightPlacements (const tinyusdz::tydra::XformNode & node, std::map< std::string, LightPlacement > & placements) noexcept
+	{
+		/* Every node is recorded, not just the lights: the map is keyed by absolute prim path and the
+		 * caller looks up whatever Tydra reports, so filtering by prim type here would only be a
+		 * second place to keep in sync with UsdLux. A whole stage is a few thousand entries. */
+		const auto & world = node.get_world_matrix();
+
+		/* ⚠️ USD is a ROW-VECTOR convention: the translation sits in the LAST ROW (m[3][0..2]) and the
+		 * local basis vectors are the ROWS, not the columns. Reading it column-major transposes the
+		 * rotation — which does not fail, it just aims every light somewhere plausible and wrong. */
+		LightPlacement placement;
+
+		placement.position = {
+			static_cast< float >(world.m[3][0]),
+			static_cast< float >(world.m[3][1]),
+			static_cast< float >(world.m[3][2])
+		};
+
+		/* ⚠️ A UsdLux light emits along its own LOCAL -Z. That is the specification for DiskLight,
+		 * RectLight, DistantLight and the shaping cone alike — not -Y, and not the stage's up axis
+		 * (this stage is Z-up, which makes the two easy to confuse). */
+		placement.direction = {
+			-static_cast< float >(world.m[2][0]),
+			-static_cast< float >(world.m[2][1]),
+			-static_cast< float >(world.m[2][2])
+		};
+
+		placements.emplace(node.absolute_path.full_path_name(), placement);
+
+		for ( const auto & child : node.children )
+		{
+			USDLoader::collectLightPlacements(child, placements);
+		}
+	}
+
 	size_t
-	USDLoader::buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, SceneData & output) noexcept
+	USDLoader::buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept
 	{
 		using namespace Base::Math;
 
@@ -1031,12 +1068,42 @@ namespace EmEn::Scenes::Loaders
 		};
 
 		size_t translated = 0;
+		size_t unplaced = 0;
 
 		for ( const auto & renderLight : renderScene.lights )
 		{
 			LightDescriptor descriptor;
 			descriptor.name = renderLight.name.empty() ? "usd-light-" + std::to_string(translated) : renderLight.name;
 			descriptor.color = {renderLight.color[0], renderLight.color[1], renderLight.color[2], 1.0F};
+
+			/* ⚠️⚠️ THE PLACEMENT COMES FROM THE XFORM TREE, NEVER FROM `renderLight`. Tydra's light
+			 * converter fills seventeen fields — colour, intensity, exposure, temperature, cone,
+			 * shadows — and touches `transform`, `position` and `direction` in NO code path at all
+			 * (`render-light-converter.cc` contains zero occurrences of the three words). They keep
+			 * the struct's defaults: position (0,0,0) and direction (0,-1,0).
+			 *
+			 * Measured on WorldLobby.usdz: 29 fixtures read at their correct 3750 cd, all stacked at
+			 * the world ORIGIN twenty metres from the room they belong to, aiming horizontally once
+			 * baked. The frame came out PURE BLACK with a light set reporting 25 spots and 4 points,
+			 * and not one warning anywhere — the loader had faithfully read fields nobody wrote.
+			 *
+			 * Joined on `abs_path`, which the converter DOES fill and which is unique by
+			 * construction. The element name is NOT usable: all 25 ceiling fixtures of this asset are
+			 * named "LightBloomDisc". */
+			const auto placement = placements.find(renderLight.abs_path);
+
+			if ( placement == placements.cend() )
+			{
+				/* Reported, never guessed: a light silently left at the origin is precisely the defect
+				 * described above, and it must not be reintroduced by a failed lookup. */
+				unplaced++;
+
+				TraceWarning{ClassId} <<
+					"Light '" << renderLight.abs_path << "' has no entry in the stage's xform tree; "
+					"it is dropped rather than placed at the origin.";
+
+				continue;
+			}
 
 			/* Radii and lengths are LENGTHS: they go through `metersPerUnit` like a position. */
 			const auto radius = renderLight.radius * metersPerUnit;
@@ -1105,9 +1172,9 @@ namespace EmEn::Scenes::Loaders
 			/* Same bake as the geometry — engine = (x, z, -y) * metersPerUnit. A light placed with
 			 * any other convention lands somewhere else than the room it is meant to light. */
 			node.localFrame.setPosition({
-				renderLight.position[0] * metersPerUnit,
-				renderLight.position[2] * metersPerUnit,
-				-renderLight.position[1] * metersPerUnit
+				placement->second.position[0] * metersPerUnit,
+				placement->second.position[2] * metersPerUnit,
+				-placement->second.position[1] * metersPerUnit
 			});
 
 			/* A spot and a directional light AIM. The direction goes through the direction bake —
@@ -1115,9 +1182,9 @@ namespace EmEn::Scenes::Loaders
 			if ( descriptor.type == LightType::Spot || descriptor.type == LightType::Directional )
 			{
 				const Vector< 3, float > direction{
-					renderLight.direction[0],
-					renderLight.direction[2],
-					-renderLight.direction[1]
+					placement->second.direction[0],
+					placement->second.direction[2],
+					-placement->second.direction[1]
 				};
 
 				if ( !direction.isZero() )
@@ -1136,7 +1203,12 @@ namespace EmEn::Scenes::Loaders
 
 		if ( translated > 0 )
 		{
-			TraceInfo{ClassId} << translated << " punctual light(s) translated.";
+			TraceInfo{ClassId} << translated << " punctual light(s) translated and placed.";
+		}
+
+		if ( unplaced > 0 )
+		{
+			TraceWarning{ClassId} << unplaced << " light(s) dropped for want of a placement — see the warnings above.";
 		}
 
 		return translated;
@@ -2144,8 +2216,31 @@ namespace EmEn::Scenes::Loaders
 		const auto instanceCount = USDLoader::buildInstanceSets(instancers, builtMeshesByPath, output);
 
 		/* The asset's own interior lighting. Skipping it leaves a scene that can only be lit from
-		 * outside, which on an interior means "lit by nothing plausible". */
-		const auto lightCount = USDLoader::buildLights(renderScene, metersPerUnit, output);
+		 * outside, which on an interior means "lit by nothing plausible".
+		 *
+		 * ⚠️ The PLACEMENT has to be collected separately, from the stage's xform hierarchy, because
+		 * Tydra's light converter never writes a light's transform (see buildLights() for what that
+		 * cost). `BuildXformNodeFromStage()` is tinyusdz's own equivalent of pxrUSD's
+		 * GetLocalToWorldMatrix, so the parent chain is composed by the library rather than by hand. */
+		std::map< std::string, LightPlacement > lightPlacements;
+
+		{
+			tinyusdz::tydra::XformNode xformRoot;
+
+			if ( tinyusdz::tydra::BuildXformNodeFromStage(stage, &xformRoot) )
+			{
+				USDLoader::collectLightPlacements(xformRoot, lightPlacements);
+			}
+			else
+			{
+				/* Not fatal, and deliberately loud: the geometry carries its own transforms from
+				 * Tydra, so the stage still renders — lit by nothing. Silence here would reproduce
+				 * exactly the black-frame-without-an-error the placement pass was written to end. */
+				TraceError{ClassId} << "Unable to build the xform hierarchy of '" << filepath.filename().string() << "'; every punctual light will be dropped.";
+			}
+		}
+
+		const auto lightCount = USDLoader::buildLights(renderScene, metersPerUnit, lightPlacements, output);
 
 		TraceInfo{ClassId} <<
 			instancers.size() << " point instancers read: " << instanceCount << " instances over " <<

@@ -730,3 +730,143 @@ Per the project rule, in order: (1) projet-alpha compiles across the whole casca
 - tinyusdz `-fno-exceptions` behaviour in practice (§ 4).
 - Whether automatic geometry LOD and texture streaming (§ 8.2) become projects of their own
   once the scene renders and has been measured.
+---
+
+## 11. USDZ Archives — World Lobby (2026-08-10, IN PROGRESS)
+
+Second reference asset, complementary to JungleRuins: where JungleRuins is a stage spread over a
+**directory tree**, `WorldLobby.usdz` is a **single 1.6 GB file** — an NVIDIA Omniverse Kit export
+holding 353 entries, 38 USD layers and 285 images. Demo: `projet-alpha --load-demo world-lobby`.
+
+> [!WARNING]
+> **STATUS: THE SCENE DOES NOT RENDER YET.** Geometry, materials and textures are correct and were
+> seen on screen; the **lighting is not**. Measured on the last capture: 97.9 % of the frame at
+> **exactly zero**, brightest pixel **0.015** sRGB-encoded. Two of the three causes are found and
+> fixed (below); at least one remains. Do not read the sections below as "done".
+
+### 11.1 The archive is MAPPED, never extracted
+
+`USDZArchive` (defined in `USDLoader.cpp`) memory-maps the file and reads the asset table with
+`assetOnMemory = true`, so the table holds **pointers into the mapping** instead of copying the
+archive. Layers are parsed and images decoded in place — a 1.6 GB archive costs its table (21 MB),
+not its bytes. The archive is held through a `shared_ptr` because image factories run on the
+**thread pool** and outlive `load()`.
+
+Two tinyusdz gaps make this necessary, and both are quiet:
+
+- `SetupUSDZAssetResolution()` registers handlers for **images only** (its own TODO says
+  `[ ] USD: usda, usdc, usd`), so a nested `.usd` layer is never read out of the archive.
+- `USDZResolveAsset()` compares the table **verbatim**, never joining the asking layer's directory.
+
+Hence three handlers of our own, registered for every extension plus the `*` wildcard.
+
+> [!CAUTION]
+> **Asset resolution matches a PATH SUFFIX, never a basename, and refuses an ambiguous one.** A Kit
+> export bakes materials into `Materials/Bake/baked_textures_<hash>/` and names every file inside
+> identically: **285 images under 119 distinct filenames**, with `mtl-base_color.jpg` appearing
+> **sixty times**. A basename match resolves all sixty to whichever entry came first — sixty
+> materials wearing one skin, no error raised, a scene that merely looks "wrong". When even the
+> suffix is ambiguous the answer is **refused**, so the material keeps its flat colour.
+
+> [!CAUTION]
+> **Tydra carries its OWN resolver, and it is not the one composition used.** Left as a filesystem
+> resolver on an archive, a texture is not merely unresolved: Tydra drops the whole `UsdUVTexture`,
+> `renderScene.textures` comes back **empty**, and the materials look like the asset never had any.
+> `env.asset_resolver = resolver` is load-bearing.
+
+### 11.2 Composition is PAYLOAD-driven here, not sublayer-driven
+
+The root layer's whole body is two `prepend payload` arcs. Sublayer composition alone resolves
+neither and returns **ten prims while reporting success** — which is what demo option `0` shows on
+purpose. `resolveReferences` is therefore mandatory, and this is the **opposite trade-off from
+JungleRuins**: a USDZ is bounded by its own file, so arc resolution costs **1.75 s and 2.6 GB peak**
+for the whole stage, against 24 minutes and 15 GB there.
+
+Composed result: 2806 prims, depth 9, **942 meshes, 155 materials**, 5 cameras, 25 DiskLight,
+4 SphereLight, 1 DomeLight. `upAxis Z`, `metersPerUnit 0.01`.
+
+### 11.3 Punctual lights — `buildLights()`
+
+**The photometric anchor** (owner decision, 2026-08-10) reads `inputs:intensity` as a luminance in
+cd/m², multiplies by the emitter's **area** — which is what `normalize = false` means — and
+normalizes by 4π:
+
+```
+candela = intensity * 2^exposure * area / (4 * pi)
+```
+
+Verified in the running light set: the 25 ceiling DiskLights (intensity 60000, radius 0.5 m after
+`metersPerUnit`, 4 m above the floor) come out at **3750 cd**, i.e. 234 lux at floor level — the
+real range of a building lobby (200-500 lux). The two rejected readings gave 2945 and 3750 **lux**,
+outdoor levels.
+
+> [!NOTE]
+> **The 4 SphereLights come out at 0.0032 cd, and that is a faithful reading, not a bug.** Their
+> authored radius is 0.5 stage unit = **5 mm**, and the area enters the conversion. A 5 mm emitter
+> is physically dim. Given their colour (1.0, 0.60, 0.30 ≈ 2900 K, matching the asset's own
+> `Light_2900K` material) the author clearly meant something else — an open point, not a defect.
+> Owner decision 2026-08-10: recorded, left alone; 25 disks at 3750 cd carry the room.
+
+> [!CAUTION]
+> **⚠️⚠️ TYDRA NEVER PLACES A LIGHT. `render-light-converter.cc` writes seventeen fields — colour,
+> intensity, exposure, temperature, cone, shadows — and contains ZERO occurrences of `transform`,
+> `position` and `direction`.** Those members keep the struct defaults: position `(0,0,0)`,
+> direction `(0,-1,0)`.
+>
+> Cost, measured: 29 fixtures read at their correct 3750 cd, **all stacked on the world origin**
+> twenty metres from the room they belong to, aiming horizontally once baked. **Pure black frame**,
+> a light set truthfully reporting 25 spots and 4 points, and **not one warning anywhere** — the
+> loader had faithfully read fields nobody wrote.
+>
+> The placement now comes from `collectLightPlacements()`, which walks the tree built by
+> `tinyusdz::tydra::BuildXformNodeFromStage()` (the library's own equivalent of pxrUSD's
+> `GetLocalToWorldMatrix`). Joined on **`abs_path`**, which the converter DOES fill and which is
+> unique by construction — **the element name is NOT usable, all 25 ceiling fixtures of this asset
+> are named `LightBloomDisc`**. A light with no entry is **dropped and reported**, never silently
+> placed at the origin.
+
+Two conventions carried by that walk, each of which fails silently if got wrong:
+
+- **USD is a ROW-VECTOR convention**: translation in the matrix's **last row** (`m[3][0..2]`), basis
+  vectors as **rows**. Reading it column-major transposes the rotation — it does not fail, it aims
+  every light somewhere plausible and wrong.
+- **A UsdLux light emits along its LOCAL -Z.** Not -Y, and not the stage's up axis — this stage is
+  Z-up, which makes the two easy to confuse.
+
+Verified in the scene graph dump: spots land at `Y ≈ -3.8 … -4.5` (≈ 4 m above the floor, `UP = -Y`)
+with direction `(0, 1, 0)`, i.e. straight down. 29/29 placed, 0 dropped.
+
+### 11.4 Opacity — six materials decide whether the building has windows
+
+A `UsdPreviewSurface` glass pane declares `inputs:diffuseColor = (0,0,0)` with `inputs:opacity = 0`
+— black **because** it is meant to be seen through. Read as opaque, a whole curtain wall renders as
+a solid **black block**, and the failure reads as a lighting or material bug rather than a missing
+input. Exactly 6 of the 141 materials carry opacity 0 (`Glass` ×4, `Clear_Glass`, `Tinted_Glass`),
+each with a real `ior` (1.20 to 1.52).
+
+`opacityThreshold` is read **first**: a non-zero threshold is a **cutout** — an alpha test that
+keeps the material opaque — never blending. No material of this asset exercises it (all 141 report
+0); the branch exists so the next asset does not silently lose its cutouts.
+
+Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the transmission path
+(`setTransmissionComponent()`), a separate calibration.
+
+### 11.5 Still open on this asset
+
+1. **THE SCENE IS STILL EFFECTIVELY UNLIT** (see the warning at the top of § 11). Placement, cone
+   and light-set enabling are fixed; something in the chain from 3750 cd to a lit fragment is not.
+   **Next step: isolate with a known-good control** — put one engine-authored light in the scene
+   (`Core.SceneManagerService.setBackground(name, true)` is the available console lever) and see
+   whether the geometry lights up at all. That separates "the lit path is broken" from "the USD
+   lights are mis-valued". Do NOT tune the exposure triad to chase it.
+2. **85 × `Unsafe asset path: ../../Materials/Bake/…`** — the patch fixed the **composition** path
+   (`ValidateAndNormalizeRelativeAssetPath`) but **not Tydra's image loader**, which still calls the
+   strict validator. Identical count across every run to date.
+3. **28 meshes have no `st` UV set** (`ConvertMesh: Failed to get texture coordinate`).
+4. **The DomeLight carries no image** (`intensity 1000, image '<none>'`), so there is nothing to
+   install as an environment.
+5. **USD cameras are not translated at all** — `SceneData` carries no camera. The demo's viewpoint
+   is placed by hand.
+6. **`PBRResource` has no alpha-test path** (`enableAlphaTest()` exists on `BasicResource` only), so
+   a cutout currently falls back to blending: visually close, but it pays sorting, loses depth write
+   and does not alpha-test at ray-hit time.

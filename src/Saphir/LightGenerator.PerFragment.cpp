@@ -280,7 +280,15 @@ namespace EmEn::Saphir
 				"if ( " << LightFactor << " > 0.0 )" << Line::End <<
 				'{' << Line::End <<
 				"	const float theta = dot(" << rayDirectionViewSpace << ", " << LightGenerator::variable(SpotLightDirectionViewSpace) << ");" << Line::End <<
-				"	const float epsilon = " << innerCosAngle << " - " << outerCosAngle << ";" << Line::End <<
+				/* ⚠️ THE GUARD IS LOAD-BEARING: epsilon is ZERO for a HARD-EDGED spot.
+				 * inner == outer is not a degenerate case, it is how a hard cone edge is
+				 * expressed — and it is exactly what USD's `shaping:cone:softness = 0`
+				 * means, which is what every fixture of a Kit export declares. Unguarded,
+				 * the division is 0/0 for the fragments ON the edge and x/0 elsewhere;
+				 * the result is driver-dependent and it came back as a PURE BLACK FRAME
+				 * on 25 correctly-placed 3750 cd ceiling spots, with no error anywhere.
+				 * The ray-traced path (RTR/RTGI) has always guarded it the same way. */
+				"	const float epsilon = max(" << innerCosAngle << " - " << outerCosAngle << ", 0.0001);" << Line::End <<
 				"	const float spotFactor = clamp((theta - " << outerCosAngle << ") / epsilon, 0.0, 1.0);" << Line::End <<
 				"	" << LightFactor << " *= spotFactor;" << Line::End <<
 				'}' << Line::End;
