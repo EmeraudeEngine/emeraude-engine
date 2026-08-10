@@ -1005,6 +1005,67 @@ geometry is drawn and the light is enabled — the contribution is simply five o
 below what the auto-exposure is metering, so it reads as "the asset disappeared". When something
 vanishes after a photometric change, check the UNITS before suspecting the renderer.
 
+### Fixed: a radius of ZERO meant "no attenuation" to the GPU and "cull me everywhere" to the CPU (Aug 2026)
+
+> [!CAUTION]
+> **The CPU and the GPU disagreed about what a null light radius means, and the CPU won.** A light
+> correctly placed, correctly valued, enabled, and listed in the light set lit **nothing at all** —
+> no log line, no validation error, no warning. Found on `WorldLobby.usdz`, whose 29 fixtures were
+> every one of them in this state.
+
+The two readings, before the fix:
+
+| Side | Code | Reading of `radius == 0` |
+|------|------|--------------------------|
+| GPU | `if ( lightRadius > 0.0 )` gates the distance attenuation | **unbounded reach**, no attenuation window |
+| CPU | `touch()` built `Sphere{m_radius, position}` | **degenerate sphere** |
+
+The CPU reading was fatal because of two lines nobody reads together:
+
+- `Space3D::Sphere::isValid()` is `m_radius > 0`;
+- `isColliding(Sphere, Sphere)` returns **false immediately** when either sphere is invalid.
+
+So `touch()` answered false **unconditionally** — not "point outside sphere", not even true for geometry
+sitting on the emitter. And `Scene.rendering.cpp` culls on exactly that answer, for point lights and
+spotlights alike:
+
+```cpp
+if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere) )
+{
+    continue;
+}
+```
+
+⚠️ **That check is ON by default** — the flag is `DisableLightDistanceCheck`, opt-in to disable. A
+zero-radius light was therefore dropped from **every draw of the scene**.
+
+**The fix, in two halves — the second is not optional.**
+
+1. `SpotLight::touch()` and `PointLight::touch()` (both overloads each) now return `true` when
+   `m_radius <= 0`, so a null radius means unbounded reach on both sides. `DirectionalLight::touch()`
+   already did exactly this.
+2. `SceneDataConsumer::attachLight()` now DERIVES a culling bound when the asset declares no range,
+   via `Graphics::Photometry::cullingRadiusFromIntensity()` — `r = sqrt(I / E)` with `E` =
+   `Photometry::CullingIlluminance` (1 lux). Without this half, half one turns every rangeless asset
+   light into an unbounded one: bound to every draw, one light pass each. **USD declares no range on
+   any light type**, so this is the branch every USD fixture takes — 3751 cd gives ~61 m, against a
+   lobby some 20 m across.
+
+⚠️ **Why 1 lux**: it is far below anything an interior scene grades against (a lit room reads
+200-500 lx), so the cut cannot produce a visible boundary, while still bounding reach to something the
+culling can reject. The 0.05 lx photopic floor gives ~274 m and culls nothing; 5 lx gives ~27 m and
+can clip a dim far surface.
+
+⚠️ **The measurement that isolated it** was a KNOWN-GOOD CONTROL, not a code read: the player's
+flashlight lit the same scene perfectly. The only relevant difference was `setRadius(30.0F)` in
+`Player.cpp`. When asset lights fail and an engine-made light succeeds in the same frame, compare the
+two **setters**, not the two shaders — the lit path was never the suspect.
+
+⚠️ **Do not restate "a null radius disables the attenuation, so the symptom is an OVER-lit room"**
+without this correction. That was true of the shader in isolation and false of the engine, because the
+light never reached the shader. It is exactly the kind of half-truth that sends the next session
+hunting an exposure bug.
+
 ### Fixed: the legacy specular was not energy-normalised, and `Shininess` was authored as a glossiness (Jul 2026)
 
 **Two independent defects that compounded into one symptom** — every sunlit Standard surface read as

@@ -103,6 +103,12 @@ namespace EmEn::Scenes::Component
 			/* Default variables. */
 			static constexpr auto DefaultColor{Base::PixelFactory::White};
 			static constexpr auto DefaultIntensity{1.0F};
+			/* ⚠️ A NULL RADIUS MEANS UNBOUNDED REACH, on the CPU as on the GPU: the shader gates
+			 * its distance attenuation on `if ( lightRadius > 0.0 )`, and `touch()` answers true
+			 * without testing. The two MUST keep saying the same thing — while `touch()` still
+			 * built a sphere from it, a zero radius made an invalid sphere, `isColliding()`
+			 * refused it outright, and the light was culled from every draw in the scene while
+			 * the shader stood ready to light it. See `SpotLight::touch()`. */
 			static constexpr auto DefaultRadius{0.0F};
 			static constexpr auto DefaultInnerAngle{30.0F};
 			static constexpr auto DefaultOuterAngle{45.0F};

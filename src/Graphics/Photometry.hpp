@@ -140,6 +140,43 @@ namespace EmEn::Graphics::Photometry
 	}
 
 	/**
+	 * @brief The illuminance below which a punctual light is considered to contribute nothing.
+	 * @note One lux is roughly deep civil twilight. It sits well under anything an interior
+	 * scene grades against (a lit room reads 200-500 lx), so a light cut at this threshold
+	 * cannot produce a visible boundary, while still bounding its reach to something the
+	 * culling can actually reject. Chosen over the 0.05 lx photopic floor, which yields radii
+	 * so large that no draw is ever culled, and over 5 lx, which can clip a dim far surface.
+	 */
+	constexpr float CullingIlluminance{1.0F};
+
+	/**
+	 * @brief Returns the distance at which a luminous intensity falls to a given illuminance.
+	 * @note The inverse of illuminanceFromIntensity(): `r = sqrt(I / E)`. This is how a light
+	 * that declares no range of its own gets a CULLING BOUND — a distance past which it is not
+	 * worth shading, derived from its photometry rather than guessed.
+	 * @warning The result is a culling bound, NOT a dimmer: the shader keeps applying the plain
+	 * inverse-square law inside it. Feeding it back as an attenuation range would darken the
+	 * scene twice.
+	 * @param candela The luminous intensity, in candela.
+	 * @param minIlluminanceLux The illuminance considered negligible, in lux. Default CullingIlluminance.
+	 * @return float The culling radius, in meters.
+	 */
+	[[nodiscard]]
+	inline
+	float
+	cullingRadiusFromIntensity (float candela, float minIlluminanceLux = CullingIlluminance) noexcept
+	{
+		constexpr auto MinIlluminance{1e-6F};
+
+		if ( candela <= 0.0F )
+		{
+			return 0.0F;
+		}
+
+		return std::sqrt(candela / std::max(minIlluminanceLux, MinIlluminance));
+	}
+
+	/**
  * @brief Returns the exposure value at ISO 100 of a camera setting (the APEX equation).
  * @note `EV100 = log2(N² / t * 100 / S)`, after Lagarde & de Rousiers, "Moving Frostbite
 	 * to Physically Based Rendering" (SIGGRAPH 2014). Halving the shutter speed, opening one

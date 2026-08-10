@@ -157,6 +157,17 @@ namespace EmEn::Scenes::Component
 	bool
 	PointLight::touch (const Vector< 3, float > & position) const noexcept
 	{
+		/* ⚠️⚠️ A NULL RADIUS MEANS UNBOUNDED REACH, exactly as it does in the shader, where
+		 * `if ( lightRadius > 0.0 )` is what gates the distance attenuation. Answering "false"
+		 * here would cull the light out of EVERY draw instead: `Sphere::isValid()` is
+		 * `radius > 0`, and `isColliding()` refuses an invalid sphere OUTRIGHT, so a degenerate
+		 * sphere touches nothing at all — not even geometry sitting on the emitter.
+		 * See `SpotLight::touch()` for the measurement that uncovered this. */
+		if ( m_radius <= 0.0F )
+		{
+			return true;
+		}
+
 		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
 
 		return Space3D::isColliding(position, boundingSphere);
@@ -165,6 +176,13 @@ namespace EmEn::Scenes::Component
 	bool
 	PointLight::touch (const Space3D::Sphere< float > & target) const noexcept
 	{
+		/* A null radius means unbounded reach — see the overload above for what answering
+		 * "false" here costs. This is the overload the render loop actually calls. */
+		if ( m_radius <= 0.0F )
+		{
+			return true;
+		}
+
 		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
 
 		return Space3D::isColliding(boundingSphere, target);

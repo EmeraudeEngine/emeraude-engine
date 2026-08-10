@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Math/Vector.hpp"
+#include "Graphics/Photometry.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "InstanceCluster.hpp"
 #include "Loaders/SceneData.hpp"
@@ -262,10 +263,16 @@ namespace EmEn::Scenes
 						component.setIntensity(light.intensity);
 
 						/* The range is a CULLING BOUND, not a dimmer. An asset that declares
-						 * none leaves the engine default alone. */
+						 * none gets one DERIVED FROM ITS PHOTOMETRY — the distance at which it
+						 * stops contributing — rather than the engine default. See the spot
+						 * case below for why leaving the default alone is not an option. */
 						if ( light.range > 0.0F )
 						{
 							component.setRadius(light.range);
+						}
+						else
+						{
+							component.setRadius(Graphics::Photometry::cullingRadiusFromIntensity(light.intensity));
 						}
 					})
 					.build();
@@ -282,9 +289,23 @@ namespace EmEn::Scenes
 						 * wrong culling radius. */
 						component.setConeAngles(light.innerConeAngle, light.outerConeAngle);
 
+						/* ⚠️⚠️ AN ASSET LIGHT WITHOUT A RANGE STILL NEEDS A CULLING BOUND.
+						 * `AbstractLightEmitter::DefaultRadius` is 0, and a null radius now means
+						 * UNBOUNDED reach (see `SpotLight::touch()`): every such light would be
+						 * bound to every draw of the scene, one light pass each. Deriving the
+						 * distance at which the fixture stops contributing keeps the culling
+						 * able to reject anything at all.
+						 *
+						 * USD declares no range on any of its light types, so this is the branch
+						 * every USD fixture takes — 3751 cd gives about 61 m, against a lobby
+						 * some 20 m across. */
 						if ( light.range > 0.0F )
 						{
 							component.setRadius(light.range);
+						}
+						else
+						{
+							component.setRadius(Graphics::Photometry::cullingRadiusFromIntensity(light.intensity));
 						}
 					})
 					.build();

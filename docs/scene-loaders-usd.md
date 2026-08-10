@@ -739,10 +739,19 @@ Second reference asset, complementary to JungleRuins: where JungleRuins is a sta
 holding 353 entries, 38 USD layers and 285 images. Demo: `projet-alpha --load-demo world-lobby`.
 
 > [!WARNING]
-> **STATUS: THE SCENE DOES NOT RENDER YET.** Geometry, materials and textures are correct and were
-> seen on screen; the **lighting is not**. Measured on the last capture: 97.9 % of the frame at
-> **exactly zero**, brightest pixel **0.015** sRGB-encoded. Two of the three causes are found and
-> fixed (below); at least one remains. Do not read the sections below as "done".
+> **STATUS: THE SCENE IS LIT — CONFIRMED BY MEASUREMENT (2026-08-11). The open question is now
+> EXPOSURE, not lighting.** Three causes were found and fixed; the third (§ 11.3, every fixture
+> culled on a null radius) is what held the frame black.
+>
+> | Measure | Before (2026-08-10) | After (2026-08-11) |
+> |---|---|---|
+> | Pixels at exactly zero | **97.9 %** | **8.5 %** |
+> | Floor, display-linear | ≈ 0.0012 | **0.301** (target 0.245) |
+> | Frame clipped at 1.0 | — | **18.8 %** (was 41.5 % before the triad was re-derived) |
+>
+> The exposure was re-derived from the MEASURED room illuminance and now reads
+> **`f/4 · 1/50 s · ISO 160`** — § 11.6. What remains open is the **floor albedo**, still assumed at
+> 0.7 and never sampled.
 
 ### 11.1 The archive is MAPPED, never extracted
 
@@ -836,6 +845,24 @@ Two conventions carried by that walk, each of which fails silently if got wrong:
 Verified in the scene graph dump: spots land at `Y ≈ -3.8 … -4.5` (≈ 4 m above the floor, `UP = -Y`)
 with direction `(0, 1, 0)`, i.e. straight down. 29/29 placed, 0 dropped.
 
+> [!CAUTION]
+> **⚠️⚠️ USD DECLARES NO RANGE ON ANY LIGHT TYPE, AND A RANGELESS LIGHT USED TO BE CULLED FROM EVERY
+> DRAW.** This was the third cause of the black frame, and the one that survived the two fixes above.
+> `SceneDataConsumer::attachLight()` called `setRadius()` only when the descriptor carried a range,
+> so all 29 fixtures kept `AbstractLightEmitter::DefaultRadius` — **zero** — and a zero radius made
+> `touch()` build an invalid sphere that `isColliding()` refuses outright. Correctly placed,
+> correctly valued, enabled, listed in the light set, and **bound to not one draw call**.
+>
+> The consumer now derives a culling bound from the photometry when the asset declares none —
+> `Graphics::Photometry::cullingRadiusFromIntensity()`, `r = sqrt(I / E)` at 1 lux, giving **~61 m**
+> for a 3751 cd ceiling disk — and the engine now reads a null radius as **unbounded** on the CPU
+> too, matching the shader. Full account, both halves and why neither is optional:
+> [`caution-points.md` § "a radius of ZERO meant …"](caution-points.md).
+>
+> ⚠️ **What isolated it was a known-good control, not a code read**: the player's flashlight lit the
+> same scene perfectly, and its only relevant difference was an explicit `setRadius(30.0F)`. When
+> asset lights fail while an engine-made light succeeds in the same frame, **compare the setters**.
+
 ### 11.4 Opacity — six materials decide whether the building has windows
 
 A `UsdPreviewSurface` glass pane declares `inputs:diffuseColor = (0,0,0)` with `inputs:opacity = 0`
@@ -853,12 +880,9 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
 
 ### 11.5 Still open on this asset
 
-1. **THE SCENE IS STILL EFFECTIVELY UNLIT** (see the warning at the top of § 11). Placement, cone
-   and light-set enabling are fixed; something in the chain from 3750 cd to a lit fragment is not.
-   **Next step: isolate with a known-good control** — put one engine-authored light in the scene
-   (`Core.SceneManagerService.setBackground(name, true)` is the available console lever) and see
-   whether the geometry lights up at all. That separates "the lit path is broken" from "the USD
-   lights are mis-valued". Do NOT tune the exposure triad to chase it.
+1. **THE FLOOR ALBEDO HAS NEVER BEEN MEASURED** — 0.7 is an assumption, and it is now the last
+   unpinned term in the photometric chain (§ 11.6). Closing it means sampling the floor's baked
+   base-colour texture; 0.86 would account for the whole `+0.30 EV` residual on its own.
 2. **85 × `Unsafe asset path: ../../Materials/Bake/…`** — the patch fixed the **composition** path
    (`ValidateAndNormalizeRelativeAssetPath`) but **not Tydra's image loader**, which still calls the
    strict validator. Identical count across every run to date.
@@ -870,3 +894,72 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
 6. **`PBRResource` has no alpha-test path** (`enableAlphaTest()` exists on `BasicResource` only), so
    a cutout currently falls back to blending: visually close, but it pays sorting, loses depth write
    and does not alpha-test at ray-hit time.
+
+### 11.6 The measured floor — and why the DISAGREEMENT points at the prediction, not the anchor
+
+First frame ever measured with the room actually lit (2026-08-11, 2880×1620, flashlight off —
+verified two ways, see below):
+
+| Quantity | Value |
+|---|---|
+| Unclipped foreground floor patch | **0.631 display-linear** |
+| Predicted (§ 11.3 anchor + `f/2.8 · 1/50 · ISO 200`) | 0.222 |
+| Ratio | **2.87× — `+1.52 EV`** |
+| Frame clipped at 1.0 | **41.5 %** |
+
+Back-computed from the measurement: `L = 0.631 × 1.2 × 2^7.61 ≈ 148 cd/m²`, so with the assumed 0.7
+albedo the floor receives **≈ 664 lux**.
+
+> [!IMPORTANT]
+> **The 234 lux figure was ONE fixture at nadir; the floor is lit by TWENTY-FIVE.** That is almost
+> certainly the whole discrepancy. A ceiling grid of 25 disks at 4 m, each 3751 cd, delivers several
+> times the single-nadir value at any given floor point once the off-axis contributions are summed —
+> and 2.87× is a modest, physically ordinary figure for such a grid. **664 lux is also a credible
+> building lobby** (200-500 lux nominal, a bright entrance hall runs higher).
+>
+> So the reading is: **the anchor in `buildLights()` is probably sound, and the DERIVATION of the
+> exposure triad used a per-fixture illuminance where it needed a whole-room one.** Correcting that
+> input is not "tuning the triad by eye" — the prohibition stands against eyeballing, not against
+> fixing a wrong input to the derivation.
+
+**Proven by the floor profile, without another run.** Sampling the floor across the frame gives
+0.617 – 0.654 over the whole left half — **flat to within 3 %**, rising monotonically only towards
+the bright right-hand wall, with **no periodic bright pools anywhere**. Twenty-five narrow
+hard-edged cones would print twenty-five crisp discs and a floor alternating light and dark. They do
+not. The overlap is total, so the summing explanation holds and the anchor is exonerated.
+
+**Re-derived and re-measured (owner decision 2026-08-11).** The triad became **`f/4 · 1/50 s ·
+ISO 160`** (EV100 8.97), taking the correction on the aperture and the sensitivity and leaving the
+shutter alone so the 180-degree motion blur is untouched — f/4 is also the honest register for an
+architectural interior, where f/2.8 was a portrait depth of field. Result, five unclipped floor
+patches at the demo's default viewpoint:
+
+| | Before | After |
+|---|---|---|
+| Floor, display-linear | 0.631 | **0.301** (median; 0.288 – 0.323 over five patches) |
+| Frame clipped at 1.0 | 41.5 % | **18.8 %** |
+
+The floor now reads as grey stone with its tile joints and texture; the fixtures still clip, which is
+correct for a luminaire seen directly.
+
+⚠️ **The residual is `+0.30 EV` above the 0.245 target, and that is inside the method's own error
+bars — do not chase it.** The 0.245 came from back-computing 664 lux out of a SINGLE patch in a
+capture taken at a different viewpoint, and the room is not uniform. Two candidates account for it
+entirely: the 0.7 albedo assumption (0.86 would close it exactly) and the choice of measurement
+spot. **Closing it properly means sampling the floor's baked base-colour texture** — the albedo has
+never been measured, and it cancels out of neither the prediction nor the back-computation.
+
+⚠️ **Two captures from different viewpoints cannot be divided.** The ratio between the before and
+after frames is 2.09 while the triad moved by 1.35 EV (2.55×) — the difference is the framing, not
+the sensor. Compare exposures on ABSOLUTE values against the target, or hold the viewpoint fixed
+(`Act.getOrientation()` prints a replayable `setPosition` / `lookAt` pair for exactly this).
+
+⚠️ **41.5 % of the frame clips**, mostly the right-hand wall and the fixture bodies themselves, so
+**the frame mean is a floor, not a value**. Any exposure work here must be measured on unclipped
+patches only.
+
+⚠️ **How the flashlight was ruled out**, since it is the project's known-good control and would have
+invalidated the whole measurement: (1) the floor chroma is **neutral everywhere** (R/G 0.99-1.00,
+B/G 0.98-1.00) while the flashlight is `LightYellow` and carries a projection texture; (2) floor
+luminance **rises** with distance from the player (0.631 → 0.646 → 0.776) instead of decaying by
+inverse square from the eye. Owner confirmed it was off.
