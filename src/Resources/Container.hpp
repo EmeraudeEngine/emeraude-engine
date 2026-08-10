@@ -1128,7 +1128,13 @@ namespace EmEn::Resources
 			 * @param resourceFlags Construction flags for new resource (default: 0).
 			 * @return Shared pointer to resource (may still be loading), or nullptr on failure.
 			 * @warning Returns nullptr if manual loading mode cannot be enabled (name conflict).
-			 * @see getOrCreateResource() For synchronous creation
+			 * @warning ⚠️ LIFETIME: the creation function is COPIED and enqueued; it runs on a worker
+			 * thread an arbitrary time later — after the caller's frame, and possibly after the caller
+			 * OBJECT itself is gone. Capture everything BY VALUE (shared_ptr copies included): a `[&]`
+			 * capture of a local, or of `this`, is a use-after-free that surfaces as a SIGSEGV inside
+			 * ThreadPool::worker() long after the scene reported a successful load. Resolve dependent
+			 * resources on the calling thread first — getResource() also returns immediately.
+			 * @see getOrCreateResourceSync() For synchronous creation
 			 * @note Thread-safe: locks m_resourcesAccess internally.
 			 * @note Returns immediately; loading occurs asynchronously in thread pool.
 			 * @version 0.8.35
