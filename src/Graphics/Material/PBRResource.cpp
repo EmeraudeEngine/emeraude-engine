@@ -1286,6 +1286,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Sync each texture component's UV transform (KHR_texture_transform / JSON "UVW" keys)
+		 * into its material UBO slot — the components are the single source of truth. */
+		this->syncComponentUVWTransforms();
+
 		/* Initialize the material data in the GPU. */
 		if ( !this->updateVideoMemory() )
 		{
@@ -1293,6 +1297,62 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
+
+		return true;
+	}
+
+	void
+	PBRResource::syncComponentUVWTransforms () noexcept
+	{
+		static constexpr std::pair< ComponentType, size_t > slots[] = {
+			{ComponentType::Albedo, AlbedoUVWTransformOffset},
+			{ComponentType::Roughness, RoughnessUVWTransformOffset},
+			{ComponentType::Metalness, MetalnessUVWTransformOffset},
+			{ComponentType::Normal, NormalUVWTransformOffset},
+			{ComponentType::AmbientOcclusion, AmbientOcclusionUVWTransformOffset},
+			{ComponentType::AutoIllumination, AutoIlluminationUVWTransformOffset}
+		};
+
+		for ( const auto & [componentType, offset] : slots )
+		{
+			const auto componentIt = m_components.find(componentType);
+
+			if ( componentIt == m_components.cend() || componentIt->second->type() != Component::Type::Texture )
+			{
+				continue;
+			}
+
+			const auto * textureComponent = static_cast< const Texture * >(componentIt->second.get());
+
+			m_materialProperties[offset] = textureComponent->UVWScale()[0];
+			m_materialProperties[offset + 1] = textureComponent->UVWScale()[1];
+			m_materialProperties[offset + 2] = textureComponent->UVWOffset()[0];
+			m_materialProperties[offset + 3] = textureComponent->UVWOffset()[1];
+		}
+	}
+
+	bool
+	PBRResource::setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to change a component UV transform.";
+
+			return false;
+		}
+
+		const auto componentIt = m_components.find(componentType);
+
+		if ( componentIt == m_components.cend() || componentIt->second->type() != Component::Type::Texture )
+		{
+			return false;
+		}
+
+		auto * textureComponent = static_cast< Texture * >(componentIt->second.get());
+		textureComponent->setUVWScale({scale[0], scale[1], 1.0F});
+		textureComponent->setUVWOffset({offset[0], offset[1], 0.0F});
 
 		return true;
 	}
@@ -2116,6 +2176,13 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SpecularColorFactor);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ClearCoatNormalScale);
+		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::MetalnessUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientOcclusionUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWTransform);
 
 		return block;
 	}
@@ -2307,6 +2374,58 @@ namespace EmEn::Graphics::Material
 		}
 
 		return ShaderVariable::Primary2DTextureCoordinates;
+	}
+
+	std::string
+	PBRResource::transformedTexCoords (ComponentType componentType, const Texture * component) const noexcept
+	{
+		/* The per-component UV transform (KHR_texture_transform / JSON "UVW" keys) is a
+		 * material UBO vec4 (scale.xy, offset.zw) applied UNCONDITIONALLY — the neutral
+		 * value is the identity, and going through the UBO (values, never GLSL literals)
+		 * respects the shader program cache contract. 2D coordinates only: volumetric
+		 * textures keep the plain lookup. */
+		if ( component->isVolumetricTexture() )
+		{
+			return textCoords(component);
+		}
+
+		const char * transformKey = nullptr;
+
+		switch ( componentType )
+		{
+			case ComponentType::Albedo :
+				transformKey = UniformBlock::Component::AlbedoUVWTransform;
+				break;
+
+			case ComponentType::Roughness :
+				transformKey = UniformBlock::Component::RoughnessUVWTransform;
+				break;
+
+			case ComponentType::Metalness :
+				transformKey = UniformBlock::Component::MetalnessUVWTransform;
+				break;
+
+			case ComponentType::Normal :
+				transformKey = UniformBlock::Component::NormalUVWTransform;
+				break;
+
+			case ComponentType::AmbientOcclusion :
+				transformKey = UniformBlock::Component::AmbientOcclusionUVWTransform;
+				break;
+
+			case ComponentType::AutoIllumination :
+				transformKey = UniformBlock::Component::AutoIlluminationUVWTransform;
+				break;
+
+			default :
+				/* No transform slot for this component: plain coordinates. */
+				return textCoords(component);
+		}
+
+		std::stringstream expression;
+		expression << "(" << textCoords(component) << " * " << MaterialUB(transformKey) << ".xy + " << MaterialUB(transformKey) << ".zw)";
+
+		return expression.str();
 	}
 
 	bool
@@ -2737,7 +2856,7 @@ namespace EmEn::Graphics::Material
 		 * for post-process effects (RTR, SSR, SSAO, RTAO). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
 			Code{shader, Location::Top} <<
-				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
 				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
 
 			return true;
@@ -2756,7 +2875,7 @@ namespace EmEn::Graphics::Material
 		 * so a value-dependent variant could serve one material's program to another.
 		 * DefaultAlbedoColor is White precisely so this stays an identity when untouched. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Albedo, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ") * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Albedo, component) << ") * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -2773,7 +2892,7 @@ namespace EmEn::Graphics::Material
 		 * Inversion (smoothness/gloss source) applies to the texel BEFORE the factor, so every
 		 * consumer (BRDF, IBL LOD, G-buffer) reads the final value from this single variable. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Roughness, [this] (FragmentShader & shader, const Texture * component) {
-			const std::string texel = "texture(" + std::string{component->samplerName()} + ", " + textCoords(component) + ")." + component->sourceChannelSwizzle();
+			const std::string texel = "texture(" + std::string{component->samplerName()} + ", " + transformedTexCoords(ComponentType::Roughness, component) + ")." + component->sourceChannelSwizzle();
 
 			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << ( m_invertRoughness ? "(1.0 - " + texel + ")" : texel ) << " * " << MaterialUB(UniformBlock::Component::Roughness) << ";";
 
@@ -2789,7 +2908,7 @@ namespace EmEn::Graphics::Material
 		 * Same contracts as roughness: source channel from the component (glTF packed
 		 * metallic-roughness: Blue), material scalar as multiplying factor ('metallicFactor * texel'). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Metalness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Metalness) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Metalness, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Metalness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -2933,7 +3052,7 @@ namespace EmEn::Graphics::Material
 
 		/* Auto-Illumination (emissive) component. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ");";
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AutoIllumination, component) << ");";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -2946,7 +3065,7 @@ namespace EmEn::Graphics::Material
 		/* Ambient Occlusion component (baked texture). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::AmbientOcclusion, [this] (FragmentShader & shader, const Texture * component) {
 			/* NOTE: AO is typically stored in a grayscale texture (red channel). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AmbientOcclusion, component) << ").r;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3074,7 +3193,10 @@ namespace EmEn::Graphics::Material
 				return false;
 			}
 		}
-		else if ( m_isUsingEnvironmentCubemapForTransmission && generator.bindlessTexturesEnabled() )
+		/* NOTE: A grab-pass transmission material FALLS BACK to the cubemap here when the
+		 * grab pass is unavailable (low quality / no bindless) — without this, such a
+		 * material would render with NO transmission at all in the fallback tier. */
+		else if ( ( m_isUsingEnvironmentCubemapForTransmission || m_isUsingGrabPassForTransmission ) && generator.bindlessTexturesEnabled() )
 		{
 			if ( !this->generateBindlessTransmissionFragmentShader(generator, fragmentShader) )
 			{

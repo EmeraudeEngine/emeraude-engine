@@ -350,6 +350,20 @@ namespace EmEn::Graphics::Material
 			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultTextureFactor, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
+			 * @brief Sets the UV transform of a texture component (KHR_texture_transform).
+			 * @warning This function is available before creation time. The rotation part of the
+			 * extension is NOT supported (logged and ignored by the loaders).
+			 * @note Applied in the shader as 'uv * scale + offset'. Stored on the component
+			 * (single source of truth, JSON "UVW"/"UVWOffset" keys land there too) and synced
+			 * to the material UBO slots at creation time.
+			 * @param componentType The targeted component (Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination).
+			 * @param scale The UV scale factors.
+			 * @param offset The UV offsets.
+			 * @return bool True when the component exists as a texture and supports a transform slot.
+			 */
+			bool setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset) noexcept;
+
+			/**
 			 * @brief Sets the normal component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
@@ -1171,6 +1185,24 @@ namespace EmEn::Graphics::Material
 			const char * textCoords (const Component::Texture * component) const noexcept;
 
 			/**
+			 * @brief Returns the GLSL texture coordinates expression with the component's UV
+			 * transform applied (uv * scale + offset, from the material UBO — identity neutral).
+			 * @param componentType The component type (selects the UBO transform slot).
+			 * @param component A pointer to the texture component.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component) const noexcept;
+
+			/**
+			 * @brief Copies each texture component's UV transform into its material UBO slot.
+			 * @note Called at creation time, before the first video memory update — the
+			 * components are the single source of truth (loader and JSON paths both land there).
+			 * @return void
+			 */
+			void syncComponentUVWTransforms () noexcept;
+
+			/**
 			 * @brief Generates fragment shader code for bindless reflection using the scene's environment cubemap.
 			 * @note Used when automatic reflection is enabled AND bindless textures are supported.
 			 * @param generator A reference to the shader generator.
@@ -1244,6 +1276,12 @@ namespace EmEn::Graphics::Material
 			 * float emissiveStrength	   (offset 48) - KHR_materials_emissive_strength HDR multiplier
 			 * float clearCoatNormalScale   (offset 49) - Clear coat normal map scale
 			 * float padding[2]			 (offset 50-51) - STD140 padding
+			 * vec4 albedoUVWTransform	  (offset 52-55) - UV transform (scale.xy, offset.zw), KHR_texture_transform
+			 * vec4 roughnessUVWTransform   (offset 56-59) - UV transform (scale.xy, offset.zw)
+			 * vec4 metalnessUVWTransform   (offset 60-63) - UV transform (scale.xy, offset.zw)
+			 * vec4 normalUVWTransform	  (offset 64-67) - UV transform (scale.xy, offset.zw)
+			 * vec4 aoUVWTransform		  (offset 68-71) - UV transform (scale.xy, offset.zw)
+			 * vec4 emissiveUVWTransform	(offset 72-75) - UV transform (scale.xy, offset.zw)
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1277,6 +1315,15 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SpecularColorOffset{44UL};
 			static constexpr auto EmissiveStrengthOffset{48UL};
 			static constexpr auto ClearCoatNormalScaleOffset{49UL};
+			/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw).
+			 * Neutral (1,1,0,0) — applied UNCONDITIONALLY at the sampling sites, so the neutral
+			 * value MUST be the identity (same precedent as DefaultAlbedoColor/DefaultTextureFactor). */
+			static constexpr auto AlbedoUVWTransformOffset{52UL};
+			static constexpr auto RoughnessUVWTransformOffset{56UL};
+			static constexpr auto MetalnessUVWTransformOffset{60UL};
+			static constexpr auto NormalUVWTransformOffset{64UL};
+			static constexpr auto AmbientOcclusionUVWTransformOffset{68UL};
+			static constexpr auto AutoIlluminationUVWTransformOffset{72UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -1323,7 +1370,7 @@ namespace EmEn::Graphics::Material
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
 			BlendingMode m_blendingMode{BlendingMode::None};
-			std::array< float, 52 > m_materialProperties{
+			std::array< float, 76 > m_materialProperties{
 				/* Albedo color (4) */
 				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
 				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
@@ -1349,7 +1396,15 @@ namespace EmEn::Graphics::Material
 				/* SpecularColorFactor (4) */
 				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
 				/* EmissiveStrength (1), ClearCoatNormalScale (1) + padding (2) for STD140 alignment */
-				DefaultEmissiveStrength, DefaultClearCoatNormalScale, 0.0F, 0.0F
+				DefaultEmissiveStrength, DefaultClearCoatNormalScale, 0.0F, 0.0F,
+				/* Per-component UV transforms (6 x vec4 = scale.xy, offset.zw), identity neutral:
+				 * Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination. */
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F
 			};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;

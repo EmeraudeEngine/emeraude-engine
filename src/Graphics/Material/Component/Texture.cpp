@@ -172,6 +172,29 @@ namespace EmEn::Graphics::Material::Component
 			}
 		}
 
+		/* Check the optional UVW offset (uv * scale + offset). */
+		if ( data.isMember(JKUVWOffset) )
+		{
+			if ( const auto & jsonNode = data[JKUVWOffset]; jsonNode.isArray() )
+			{
+				for ( auto index = 0; index < 3; index++ )
+				{
+					if ( !jsonNode[index].isNumeric() )
+					{
+						TraceError{ClassId} << "Json array #" << index << " value is not numeric !";
+
+						break;
+					}
+
+					m_UVWOffset[index] = jsonNode[index].asFloat();
+				}
+			}
+			else
+			{
+				TraceError{ClassId} << "The '" << JKUVWOffset << "' key must be a numeric value array ! ";
+			}
+		}
+
 		if ( data.isMember(JKEnableAlpha) )
 		{
 			if ( const auto & jsonNode = data[JKEnableAlpha]; jsonNode.isBool() )

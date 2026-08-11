@@ -219,6 +219,29 @@ namespace EmEn::Graphics::Material::Component
 			}
 
 			/**
+			 * @brief Offsets the texture coordinates (KHR_texture_transform 'offset').
+			 * @note Applied AFTER the scale in the shader: uv * scale + offset.
+			 * @param UVWOffset A reference to a vector to offset the texture coordinates.
+			 * @return void
+			 */
+			void
+			setUVWOffset (const Base::Math::Vector< 3, float > & UVWOffset) noexcept
+			{
+				m_UVWOffset = UVWOffset;
+			}
+
+			/**
+			 * @brief Returns the texture coordinates offset.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			UVWOffset () const noexcept
+			{
+				return m_UVWOffset;
+			}
+
+			/**
 			 * @brief Returns the texture channel.
 			 * @return uint32_t
 			 */
@@ -376,6 +399,7 @@ namespace EmEn::Graphics::Material::Component
 			static constexpr auto JKChannel{"Channel"};
 			static constexpr auto JKSourceChannel{"SourceChannel"};
 			static constexpr auto JKUVWScale{"UVW"};
+			static constexpr auto JKUVWOffset{"UVWOffset"};
 			static constexpr auto JKEnableAlpha{"EnableAlpha"};
 
 			const char * m_samplerName;
@@ -383,6 +407,7 @@ namespace EmEn::Graphics::Material::Component
 			std::shared_ptr< Vulkan::TextureInterface > m_texture;
 			std::shared_ptr< TextureResource::Abstract > m_textureResource;
 			Base::Math::Vector< 3, float > m_UVWScale{1.0F, 1.0F, 1.0F};
+			Base::Math::Vector< 3, float > m_UVWOffset{0.0F, 0.0F, 0.0F};
 			uint32_t m_UVWChannel{0};
 			uint32_t m_binding{0};
 			Base::PixelFactory::Channel m_sourceChannel{Base::PixelFactory::Channel::Red};

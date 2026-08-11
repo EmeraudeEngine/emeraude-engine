@@ -792,6 +792,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Sync each texture component's UV transform (KHR_texture_transform / JSON "UVW" keys)
+		 * into its material UBO slot — the components are the single source of truth. */
+		this->syncComponentUVWTransforms();
+
 		/* Initialize the material data in the GPU. */
 		if ( !this->updateVideoMemory() )
 		{
@@ -799,6 +803,66 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
+
+		return true;
+	}
+
+	void
+	StandardResource::syncComponentUVWTransforms () noexcept
+	{
+		static constexpr std::pair< ComponentType, size_t > slots[] = {
+			{ComponentType::Diffuse, DiffuseUVWTransformOffset},
+			{ComponentType::Normal, NormalUVWTransformOffset},
+			{ComponentType::Opacity, OpacityUVWTransformOffset},
+			{ComponentType::AutoIllumination, AutoIlluminationUVWTransformOffset}
+		};
+
+		for ( const auto & [componentType, offset] : slots )
+		{
+			const auto componentIt = m_components.find(componentType);
+
+			if ( componentIt == m_components.cend() || componentIt->second->type() != Component::Type::Texture )
+			{
+				continue;
+			}
+
+			const auto * textureComponent = static_cast< const Texture * >(componentIt->second.get());
+
+			m_materialProperties[offset] = textureComponent->UVWScale()[0];
+			m_materialProperties[offset + 1] = textureComponent->UVWScale()[1];
+			m_materialProperties[offset + 2] = textureComponent->UVWOffset()[0];
+			m_materialProperties[offset + 3] = textureComponent->UVWOffset()[1];
+		}
+	}
+
+	bool
+	StandardResource::setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to change a component UV transform.";
+
+			return false;
+		}
+
+		/* Cross-material alias: the loaders talk PBR (Albedo), Standard stores Diffuse. */
+		if ( componentType == ComponentType::Albedo )
+		{
+			componentType = ComponentType::Diffuse;
+		}
+
+		const auto componentIt = m_components.find(componentType);
+
+		if ( componentIt == m_components.cend() || componentIt->second->type() != Component::Type::Texture )
+		{
+			return false;
+		}
+
+		auto * textureComponent = static_cast< Texture * >(componentIt->second.get());
+		textureComponent->setUVWScale({scale[0], scale[1], 1.0F});
+		textureComponent->setUVWOffset({offset[0], offset[1], 0.0F});
 
 		return true;
 	}
@@ -1434,6 +1498,11 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionIOR);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::HeightScale);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
+		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DiffuseUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::OpacityUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWTransform);
 
 		return block;
 	}
@@ -1658,6 +1727,49 @@ namespace EmEn::Graphics::Material
 		return ShaderVariable::Primary2DTextureCoordinates;
 	}
 
+	std::string
+	StandardResource::transformedTexCoords (ComponentType componentType, const Texture * component) const noexcept
+	{
+		/* Same contract as PBRResource: the per-component UV transform is a material UBO
+		 * vec4 (scale.xy, offset.zw), identity neutral, applied UNCONDITIONALLY — values
+		 * through the UBO, never GLSL literals (shader program cache contract). */
+		if ( component->isVolumetricTexture() )
+		{
+			return textCoords(component);
+		}
+
+		const char * transformKey = nullptr;
+
+		switch ( componentType )
+		{
+			case ComponentType::Diffuse :
+				transformKey = UniformBlock::Component::DiffuseUVWTransform;
+				break;
+
+			case ComponentType::Normal :
+				transformKey = UniformBlock::Component::NormalUVWTransform;
+				break;
+
+			case ComponentType::Opacity :
+				transformKey = UniformBlock::Component::OpacityUVWTransform;
+				break;
+
+			case ComponentType::AutoIllumination :
+				transformKey = UniformBlock::Component::AutoIlluminationUVWTransform;
+				break;
+
+			default :
+				/* No transform slot for this component (Ambient, Specular, ReflectivityMap...):
+				 * plain coordinates. */
+				return textCoords(component);
+		}
+
+		std::stringstream expression;
+		expression << "(" << textCoords(component) << " * " << MaterialUB(transformKey) << ".xy + " << MaterialUB(transformKey) << ".zw)";
+
+		return expression.str();
+	}
+
 	bool
 	StandardResource::generateFragmentShaderCode (Generator::Abstract & generator, LightGenerator & lightGenerator, FragmentShader & fragmentShader) const noexcept
 	{
@@ -1731,7 +1843,7 @@ namespace EmEn::Graphics::Material
 		{
 			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
 				Code{shader, Location::Top} <<
-					"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+					"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
 					"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
 
 				return true;
@@ -1770,7 +1882,7 @@ namespace EmEn::Graphics::Material
 			 * descriptor layout, not on values. DefaultDiffuseColor is White so this is an
 			 * identity until a caller sets a tint. */
 			auto tintedDiffuseGenerator = [this] (FragmentShader & shader, const Texture * component) {
-				Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ") * " << MaterialUB(UniformBlock::Component::DiffuseColor) << ";";
+				Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Diffuse, component) << ") * " << MaterialUB(UniformBlock::Component::DiffuseColor) << ";";
 
 				return true;
 			};
@@ -1793,7 +1905,7 @@ namespace EmEn::Graphics::Material
 		/* Opacity component. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
 			Code{shader, Location::Top} <<
-				"const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";" << Line::End <<
+				"const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Opacity, component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";" << Line::End <<
 				"if ( " << component->variableName() << " <= " << m_alphaThresholdToDiscard << " ) { discard; }" << Line::End;
 
 			return true;
@@ -1806,7 +1918,7 @@ namespace EmEn::Graphics::Material
 
 		/* Auto-illumination component. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ") * " << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << ';';
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AutoIllumination, component) << ") * " << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << ';';
 
 			return true;
 		}, fragmentShader, materialSet) )

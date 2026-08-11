@@ -397,6 +397,28 @@ namespace EmEn::Graphics::Material
 			}
 
 			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no transmission.
+			 * @return bool Always true.
+			 */
+			bool
+			setTransmissionComponentFromGrabPass (float /*factor*/) noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief Sets the UV transform of a texture component (KHR_texture_transform).
+			 * @warning This function is available before creation time.
+			 * @note Cross-material alias: ComponentType::Albedo maps to the Diffuse component.
+			 * Components without a transform slot (Ambient, Specular, ReflectivityMap) return false.
+			 * @param componentType The targeted component.
+			 * @param scale The UV scale factors.
+			 * @param offset The UV offsets.
+			 * @return bool True when the component exists as a texture and supports a transform slot.
+			 */
+			bool setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset) noexcept;
+
+			/**
 			 * @brief No-op alias for API parity with PBRResource — Standard has no iridescence.
 			 * @return bool Always true.
 			 */
@@ -916,6 +938,24 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			const char * textCoords (const Component::Texture * component) const noexcept;
 
+			/**
+			 * @brief Returns the GLSL texture coordinates expression with the component's UV
+			 * transform applied (uv * scale + offset, from the material UBO — identity neutral).
+			 * @note Cross-material alias mapping: ComponentType::Albedo targets the Diffuse slot.
+			 * @param componentType The component type (selects the UBO transform slot).
+			 * @param component A pointer to the texture component.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component) const noexcept;
+
+			/**
+			 * @brief Copies each texture component's UV transform into its material UBO slot.
+			 * @note Called at creation time, before the first video memory update.
+			 * @return void
+			 */
+			void syncComponentUVWTransforms () noexcept;
+
 			/* Uniform buffer object offset to write data. */
 			static constexpr auto AmbientColorOffset{0UL};
 			static constexpr auto DiffuseColorOffset{4UL};
@@ -930,6 +970,12 @@ namespace EmEn::Graphics::Material
 			static constexpr auto RefractionIOROffset{22UL};
 			static constexpr auto HeightScaleOffset{23UL};
 			static constexpr auto EmissiveStrengthOffset{24UL};
+			/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw).
+			 * Neutral (1,1,0,0) — applied UNCONDITIONALLY at the sampling sites. */
+			static constexpr auto DiffuseUVWTransformOffset{28UL};
+			static constexpr auto NormalUVWTransformOffset{32UL};
+			static constexpr auto OpacityUVWTransformOffset{36UL};
+			static constexpr auto AutoIlluminationUVWTransformOffset{40UL};
 
 			/* Default values. */
 			static constexpr auto DefaultAmbientColor{Base::PixelFactory::DarkGrey};
@@ -962,7 +1008,7 @@ namespace EmEn::Graphics::Material
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
 			BlendingMode m_blendingMode{BlendingMode::None};
-			std::array< float, 28 > m_materialProperties{
+			std::array< float, 44 > m_materialProperties{
 				/* Ambient color (4), */
 				DefaultAmbientColor.red(), DefaultAmbientColor.green(), DefaultAmbientColor.blue(), DefaultDiffuseColor.alpha(),
 				/* Diffuse color (4), */
@@ -976,7 +1022,13 @@ namespace EmEn::Graphics::Material
 				/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), HeightScale (1). */
 				DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, DefaultHeightScale,
 				/* EmissiveStrength (1) + padding (3) for STD140 alignment */
-				DefaultEmissiveStrength, 0.0F, 0.0F, 0.0F
+				DefaultEmissiveStrength, 0.0F, 0.0F, 0.0F,
+				/* Per-component UV transforms (4 x vec4 = scale.xy, offset.zw), identity neutral:
+				 * Diffuse, Normal, Opacity, AutoIllumination. */
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F
 			};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;

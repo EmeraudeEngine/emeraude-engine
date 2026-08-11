@@ -461,6 +461,7 @@ namespace EmEn::Scenes::Loaders
 			fastgltf::Extensions::KHR_materials_sheen |
 			fastgltf::Extensions::KHR_materials_specular |
 			fastgltf::Extensions::KHR_materials_transmission |
+			fastgltf::Extensions::KHR_texture_transform |
 			fastgltf::Extensions::KHR_materials_anisotropy |
 			fastgltf::Extensions::KHR_materials_volume |
 			fastgltf::Extensions::KHR_lights_punctual |
@@ -915,6 +916,49 @@ namespace EmEn::Scenes::Loaders
 
 			const auto & PBRData = glTFMaterial.pbrData;
 
+			/* KHR_texture_transform: per-texture-info UV scale/offset (the tiling of tire
+			 * treads, brake discs, car paint flakes...). Ignoring it does not fail — the
+			 * texture renders STRETCHED over the whole UV range (measured on CarConcept).
+			 * The rotation part and a texCoordIndex override are NOT supported: logged. */
+			struct UVTransform
+			{
+				Vector< 2, float > scale{1.0F, 1.0F};
+				Vector< 2, float > offset{0.0F, 0.0F};
+				bool present{false};
+			};
+
+			const auto readUVTransform = [&glTFMaterial] (const auto & textureInfoOpt) -> UVTransform {
+				UVTransform out;
+
+				if ( !textureInfoOpt.has_value() || textureInfoOpt->transform == nullptr )
+				{
+					return out;
+				}
+
+				const auto & transform = *textureInfoOpt->transform;
+				out.scale = {transform.uvScale.x(), transform.uvScale.y()};
+				out.offset = {transform.uvOffset.x(), transform.uvOffset.y()};
+				out.present = true;
+
+				if ( transform.rotation != 0.0F )
+				{
+					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform rotation is not supported, ignored.";
+				}
+
+				if ( transform.texCoordIndex.has_value() && *transform.texCoordIndex != 0 )
+				{
+					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform texCoord override is not supported (multi-UV gap), ignored.";
+				}
+
+				return out;
+			};
+
+			const auto albedoUVTransform = readUVTransform(PBRData.baseColorTexture);
+			const auto metallicRoughnessUVTransform = readUVTransform(PBRData.metallicRoughnessTexture);
+			const auto normalUVTransform = readUVTransform(glTFMaterial.normalTexture);
+			const auto aoUVTransform = readUVTransform(glTFMaterial.occlusionTexture);
+			const auto emissiveUVTransform = readUVTransform(glTFMaterial.emissiveTexture);
+
 			/* Albedo (sRGB: perceptual color data). */
 			auto albedoTex = PBRData.baseColorTexture.has_value()
 				? resolveTexture(PBRData.baseColorTexture->textureIndex, true) : nullptr;
@@ -1040,6 +1084,7 @@ namespace EmEn::Scenes::Loaders
 					metallicRoughnessTex = std::move(metallicRoughnessTex), roughnessFactor, metallicFactor,
 					normalTex = std::move(normalTex), normalScale,
 					aoTex = std::move(aoTex), aoStrength,
+					albedoUVTransform, metallicRoughnessUVTransform, normalUVTransform, aoUVTransform, emissiveUVTransform,
 					emissiveTex = std::move(emissiveTex), emissiveStrength, emissiveColor, hasEmissiveColor,
 					clearcoatFactor, clearcoatRoughness,
 					sheenColor, sheenRoughness,
@@ -1057,6 +1102,11 @@ namespace EmEn::Scenes::Loaders
 					{
 						materialResource.setAlbedoComponent(albedoTex);
 						materialResource.setAlbedoColor(albedoColor);
+
+						if ( albedoUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::Albedo, albedoUVTransform.scale, albedoUVTransform.offset);
+						}
 					}
 					else
 					{
@@ -1073,6 +1123,13 @@ namespace EmEn::Scenes::Loaders
 					{
 						materialResource.setRoughnessComponent(metallicRoughnessTex, roughnessFactor, false, Base::PixelFactory::Channel::Green);
 						materialResource.setMetalnessComponent(metallicRoughnessTex, metallicFactor, Base::PixelFactory::Channel::Blue);
+
+						/* ONE glTF texture info, TWO engine components: same transform on both. */
+						if ( metallicRoughnessUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::Roughness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset);
+							materialResource.setComponentUVWTransform(ComponentType::Metalness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset);
+						}
 					}
 					else
 					{
@@ -1098,18 +1155,33 @@ namespace EmEn::Scenes::Loaders
 					if ( normalTex != nullptr )
 					{
 						materialResource.setNormalComponent(normalTex, normalScale);
+
+						if ( normalUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::Normal, normalUVTransform.scale, normalUVTransform.offset);
+						}
 					}
 
 					/* Ambient occlusion. */
 					if ( aoTex != nullptr )
 					{
 						materialResource.setAmbientOcclusionComponent(aoTex, aoStrength);
+
+						if ( aoUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::AmbientOcclusion, aoUVTransform.scale, aoUVTransform.offset);
+						}
 					}
 
 					/* Emissive. */
 					if ( emissiveTex != nullptr )
 					{
 						materialResource.setAutoIlluminationComponent(emissiveTex, emissiveStrength);
+
+						if ( emissiveUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::AutoIllumination, emissiveUVTransform.scale, emissiveUVTransform.offset);
+						}
 					}
 					else if ( hasEmissiveColor )
 					{
@@ -1128,10 +1200,15 @@ namespace EmEn::Scenes::Loaders
 						materialResource.setSheenComponent(sheenColor, sheenRoughness);
 					}
 
-					/* Transmission (KHR_materials_transmission). */
+					/* Transmission (KHR_materials_transmission).
+					 * GRAB PASS, not the prefiltered cubemap: the extension's semantics is seeing
+					 * THROUGH the surface (a car window shows the interior). The cubemap variant
+					 * refracts the sky only — measured on CarConcept, the glass hid the cabin.
+					 * The codegen falls back to the cubemap when the grab pass is unavailable
+					 * (low quality / no bindless). */
 					if ( transmissionFactor > 0.0F )
 					{
-						materialResource.setTransmissionComponent(transmissionFactor);
+						materialResource.setTransmissionComponentFromGrabPass(transmissionFactor);
 					}
 
 					/* Iridescence (KHR_materials_iridescence). */

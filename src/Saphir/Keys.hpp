@@ -786,6 +786,16 @@ namespace EmEn::Saphir
 				constexpr auto ReflectionAmount{"reflectionAmount"};
 				constexpr auto RefractionAmount{"refractionAmount"};
 				constexpr auto RefractionIOR{"refractionIOR"};
+				/* Per-component UV transform (KHR_texture_transform): vec4 = (scale.xy, offset.xy),
+				 * neutral (1,1,0,0). Applied UNCONDITIONALLY at the sampling sites. */
+				constexpr auto AlbedoUVWTransform{"albedoUVWTransform"};
+				constexpr auto RoughnessUVWTransform{"roughnessUVWTransform"};
+				constexpr auto MetalnessUVWTransform{"metalnessUVWTransform"};
+				constexpr auto NormalUVWTransform{"normalUVWTransform"};
+				constexpr auto AmbientOcclusionUVWTransform{"ambientOcclusionUVWTransform"};
+				constexpr auto AutoIlluminationUVWTransform{"autoIlluminationUVWTransform"};
+				constexpr auto DiffuseUVWTransform{"diffuseUVWTransform"};
+				constexpr auto OpacityUVWTransform{"opacityUVWTransform"};
 				/* Material specific (PBR) */
 				constexpr auto AlbedoColor{"albedoColor"};
 				constexpr auto Roughness{"roughness"};
