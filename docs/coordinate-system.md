@@ -68,6 +68,23 @@ recognised as one root cause:
 inverts the winding". A rotation has determinant +1 and NEVER inverts winding. The swap is in fact
 compensating this mirror.
 
+### The per-asset workaround that IS applied: the loader axis flip (Aug 2026)
+
+Rather than change the engine-wide convention, an asset can be **mirrored at import**, in its
+geometry, through `LoaderOptions::swapX / swapY / swapZ` (see
+[`src/Scenes/Loaders/AGENTS.md`](../src/Scenes/Loaders/AGENTS.md) § *Axis flip*). An **odd** number of
+flags makes the import orientation-reversing, which cancels the reversal documented above.
+
+- For glTF/FBX the flag is **`swapZ`**: composed with the consumer's `diag(1,-1,-1)` it gives
+  `diag(1,-1,1)` — chirality fixed, up axis still up. `swapY` also fixes the chirality but renders the
+  scene upside down.
+- Validated on Sponza (`src/Builtin/Sponza.cpp`): inscriptions read correctly, nothing inside-out.
+- ⚠️ The triangle-winding swap listed in the table above is now driven by the flip's **parity**
+  (`AxisFlip::mustSwapTriangleWinding()`) in all four loaders, and the false justification has been
+  corrected in each of them.
+- ⚠️ This is a **workaround, per asset**, not a fix: the pipeline is still orientation-reversing, so
+  any procedurally generated chiral content is still mirrored, and every asset needs its flag.
+
 **Two coherent fixes exist; neither is applied yet** (the choice is an engine-wide decision):
 1. Keep Y-down and make **+Z the FORWARD axis** (the real Vulkan idiom) → `diag(+,+,+)`.
 2. Keep -Z forward and **flip Y in the projection** (`[1][1] = -a`), which also means removing the
@@ -133,6 +150,12 @@ glm::vec3 cameraDirection(0.0f, 0.2f, -1.0f);
 ## Winding Conventions for Parametric Geometry
 
 The `emitTriangle` lambda used in all `ShapeGenerator` gem/shape generators **swaps B and C**: calling `emitTriangle(A, B, C)` actually emits vertices in order `(A, C, B)`. This is the engine's winding convention for front-facing triangles.
+
+> [!WARNING]
+> This swap is the **same compensation** as the one the four asset loaders apply, and it has the same
+> cause: the orientation-reversing projection documented in § OPEN DEFECT above. Procedural geometry
+> has no chiral detail to betray it, which is why it went unnoticed here. Whichever of the two
+> convention fixes is chosen, **this generator swap must be re-evaluated with the loaders'**.
 
 ### Front Face Determination
 

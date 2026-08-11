@@ -38,6 +38,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "AxisFlip.hpp"
 #include "LoaderOptions.hpp"
 
 /* Forward declarations. */
@@ -69,15 +70,15 @@ namespace EmEn::Scenes::Loaders
 	{
 		None = 0U,
 		/** Meshes, their materials and the node hierarchy. */
-		Geometry = 1U << 0,
+		Geometry = 1U << 0U,
 		/** Skeletons and per-vertex skinning data. */
-		Skinning = 1U << 1,
+		Skinning = 1U << 1U,
 		/** Animation clips embedded in the asset. */
-		Animations = 1U << 2,
+		Animations = 1U << 2U,
 		/** Punctual lights, in the photometric units of LightDescriptor. */
-		Lights = 1U << 3,
+		Lights = 1U << 3U,
 		/** Authored camera viewpoints. */
-		Cameras = 1U << 4
+		Cameras = 1U << 4U
 	};
 
 	/**
@@ -111,6 +112,23 @@ namespace EmEn::Scenes::Loaders
 			getOptions () noexcept
 			{
 				return m_options;
+			}
+
+			/**
+			 * @brief Returns the axis negation this load must be routed through.
+			 * @warning ⚠️ EVERY loader MUST use this instead of reading `swapX/swapY/swapZ` itself.
+			 * The flip is not a coordinate sign: it also conjugates rotations, inverse bind
+			 * matrices and animation keyframes, and it decides the TRIANGLE WINDING through its
+			 * parity (`AxisFlip::mustSwapTriangleWinding()`). Hard-coding the index swap — which
+			 * every loader used to do — renders the whole asset inside-out as soon as an odd number
+			 * of axes is negated. See `AxisFlip.hpp` for the complete rule.
+			 * @return AxisFlip
+			 */
+			[[nodiscard]]
+			AxisFlip
+			axisFlip () const noexcept
+			{
+				return AxisFlip{m_options.swapX, m_options.swapY, m_options.swapZ};
 			}
 
 			/**

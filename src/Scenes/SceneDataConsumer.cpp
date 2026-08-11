@@ -52,7 +52,12 @@ namespace EmEn::Scenes
 	SceneDataConsumer::build (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
 	{
 		/* glTF is Y-up, engine is Y-down: 180° rotation around X.
-		 * Build the root transform that will be applied to all children. */
+		 * Build the root transform that will be applied to all children.
+		 *
+		 * ⚠️ This is a ROTATION (determinant +1): it REORIENTS, it never mirrors. It therefore
+		 * cannot fix the chirality difference documented in `docs/coordinate-system.md` § OPEN
+		 * DEFECT — that is what `LoaderOptions::swapX/swapY/swapZ` is for, applied loader-side in
+		 * the geometry. The two compose: with `swapZ`, the net mapping is `diag(1,-1,1)`. */
 		CartesianFrame< float > yUpToYDownFrame;
 		yUpToYDownFrame.rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), true);
 

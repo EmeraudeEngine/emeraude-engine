@@ -766,7 +766,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept
+	USDLoader::collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, const AxisFlip & axisFlip, std::vector< Instancer > & instancers) noexcept
 	{
 		using namespace Base::Math;
 
@@ -795,12 +795,14 @@ namespace EmEn::Scenes::Loaders
 			 * Skipping the conjugation and merely permuting the position is the trap: the forest
 			 * lands in the right places, and every plant is rotated wrong — which reads as a bad
 			 * asset rather than a bad conversion. */
-			const auto bakePosition = [metersPerUnit] (const auto & position) {
-				return Vector< 3, float >{
+			/* ⚠️ The axis flip is COMPOSED INTO the bake — one place, so an instance can never end
+			 * up mirrored differently from the prototype it draws. */
+			const auto bakePosition = [metersPerUnit, axisFlip] (const auto & position) {
+				return axisFlip.vector(
 					static_cast< float >(position[0]) * metersPerUnit,
 					static_cast< float >(position[2]) * metersPerUnit,
 					-static_cast< float >(position[1]) * metersPerUnit
-				};
+				);
 			};
 
 			/* The quaternion of C, a +90° rotation about X: (sin(45°), 0, 0, cos(45°)). */
@@ -890,7 +892,10 @@ namespace EmEn::Scenes::Loaders
 					scale[2] = scales[index][1];
 				}
 
-				instancer.instances.emplace_back(CartesianFrame< float >::fromQuaternion(bakePosition(positions[index]), rotation, scale));
+				/* ⚠️ The instance rotation is conjugated by the flip AFTER the USD axis change, and
+				 * the scale is left alone (M·diag(s)·M = diag(s)). Mirroring the position without
+				 * the rotation puts every plant in the right spot facing the wrong way. */
+				instancer.instances.emplace_back(CartesianFrame< float >::fromQuaternion(bakePosition(positions[index]), axisFlip.rotation(rotation), scale));
 			}
 
 			if ( !instancer.instances.empty() )
@@ -905,7 +910,7 @@ namespace EmEn::Scenes::Loaders
 
 		for ( const auto & child : prim.children() )
 		{
-			USDLoader::collectInstancers(child, primPath + "/" + child.element_name(), metersPerUnit, instancers);
+			USDLoader::collectInstancers(child, primPath + "/" + child.element_name(), metersPerUnit, axisFlip, instancers);
 		}
 	}
 
@@ -1056,7 +1061,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	size_t
-	USDLoader::buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept
+	USDLoader::buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, const AxisFlip & axisFlip, SceneData & output) noexcept
 	{
 		using namespace Base::Math;
 
@@ -1171,21 +1176,23 @@ namespace EmEn::Scenes::Loaders
 
 			/* Same bake as the geometry — engine = (x, z, -y) * metersPerUnit. A light placed with
 			 * any other convention lands somewhere else than the room it is meant to light. */
-			node.localFrame.setPosition({
+			node.localFrame.setPosition(axisFlip.vector(
 				placement->second.position[0] * metersPerUnit,
 				placement->second.position[2] * metersPerUnit,
 				-placement->second.position[1] * metersPerUnit
-			});
+			));
 
 			/* A spot and a directional light AIM. The direction goes through the direction bake —
 			 * no `metersPerUnit`, a direction has no length to convert. */
 			if ( descriptor.type == LightType::Spot || descriptor.type == LightType::Directional )
 			{
-				const Vector< 3, float > direction{
+				/* ⚠️ The aim is mirrored with the placement: a light moved but not re-aimed lights
+				 * the wrong wall, and nothing reports it. */
+				const auto direction = axisFlip.vector(
 					placement->second.direction[0],
 					placement->second.direction[2],
 					-placement->second.direction[1]
-				};
+				);
 
 				if ( !direction.isZero() )
 				{
@@ -1581,21 +1588,28 @@ namespace EmEn::Scenes::Loaders
 		 * lighting is subtly wrong, which then gets blamed on the material system.
 		 *
 		 * `metersPerUnit` scales positions ONLY — a direction has no length to convert. */
-		const auto bakePosition = [metersPerUnit] (const auto & p) {
-			return Vector< 3, float >{
+		/* ⚠️ The axis flip is COMPOSED INTO both bakes, so positions, normals and tangents cannot
+		 * drift apart. A normal needs no special case: the inverse-transpose of a diagonal ±1
+		 * matrix is the matrix itself. */
+		const auto axisFlip = this->axisFlip();
+
+		const auto bakePosition = [metersPerUnit, axisFlip] (const auto & p) {
+			return axisFlip.vector(
 				static_cast< float >(p[0]) * metersPerUnit,
 				static_cast< float >(p[2]) * metersPerUnit,
 				-static_cast< float >(p[1]) * metersPerUnit
-			};
+			);
 		};
 
-		const auto bakeDirection = [] (const auto & d) {
-			return Vector< 3, float >{
+		const auto bakeDirection = [axisFlip] (const auto & d) {
+			return axisFlip.vector(
 				static_cast< float >(d[0]),
 				static_cast< float >(d[2]),
 				-static_cast< float >(d[1])
-			};
+			);
 		};
+
+		const bool swapWinding = axisFlip.mustSwapTriangleWinding();
 
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
 			if ( m_options.materialMode == MaterialMode::Standard )
@@ -1809,11 +1823,20 @@ namespace EmEn::Scenes::Loaders
 					const auto b = indices[triangle * 3 + 1];
 					const auto c = indices[triangle * 3 + 2];
 
-					/* ⚠️ The winding is swapped for the same reason GLTFLoader swaps it: the axis
-					 * bake above sends the source's front faces to the back. Get this wrong and
-					 * the scene renders inside-out — visible immediately, so it is verified on
-					 * screen rather than argued about. */
-					triangles.emplace_back(a, c, b);
+					/* ⚠️⚠️ The swap compensates the engine's ORIENTATION-REVERSING projection
+					 * (`docs/coordinate-system.md` § OPEN DEFECT) — NOT the axis bake, whose
+					 * determinant is deliberately kept at +1 a few lines above. That is precisely
+					 * why this loader had to swap even though its bake preserves handedness. An odd
+					 * number of axis flips reverses orientation and therefore the winding as well,
+					 * so the swap must then be skipped or every face renders inside-out. */
+					if ( swapWinding )
+					{
+						triangles.emplace_back(a, c, b);
+					}
+					else
+					{
+						triangles.emplace_back(a, b, c);
+					}
 				}
 
 				return true;
@@ -2166,7 +2189,7 @@ namespace EmEn::Scenes::Loaders
 
 		for ( const auto & prim : stage.root_prims() )
 		{
-			USDLoader::collectInstancers(prim, "/" + prim.element_name(), metersPerUnit, instancers);
+			USDLoader::collectInstancers(prim, "/" + prim.element_name(), metersPerUnit, this->axisFlip(), instancers);
 		}
 
 		std::vector< std::string > prototypePaths;
@@ -2240,7 +2263,7 @@ namespace EmEn::Scenes::Loaders
 			}
 		}
 
-		const auto lightCount = USDLoader::buildLights(renderScene, metersPerUnit, lightPlacements, output);
+		const auto lightCount = USDLoader::buildLights(renderScene, metersPerUnit, lightPlacements, this->axisFlip(), output);
 
 		TraceInfo{ClassId} <<
 			instancers.size() << " point instancers read: " << instanceCount << " instances over " <<

@@ -154,10 +154,15 @@ namespace EmEn::Scenes::Loaders
 			 * the joint. Sample rate is 30 Hz (Mixamo canonical).
 			 * @param stack The FBX animation stack to evaluate.
 			 * @param jointToNode Per-joint ufbx_node mapping. Entries can be null.
+			 * @param uniformScale The uniform scale applied to translation keyframes.
+			 * @param axisFlip The axis negation the whole import is routed through: translation
+			 * keyframes are mirrored, rotation keyframes CONJUGATED, scale keyframes untouched.
+			 * ⚠️ It must be the very same flip the bind pose was built with, or the rig snaps to the
+			 * unmirrored pose on the first animated frame.
 			 * @return std::vector< Base::Animation::AnimationChannel< float > >
 			 */
 			[[nodiscard]]
-			static std::vector< Base::Animation::AnimationChannel< float > > sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept;
+			static std::vector< Base::Animation::AnimationChannel< float > > sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale, const AxisFlip & axisFlip) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

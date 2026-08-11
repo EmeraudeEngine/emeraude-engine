@@ -1598,15 +1598,27 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				/* Engine world space (Y-down, after the consumer's 180° X rotation):
-				 * Xw = x, Yw = -height, Zw = -y. */
-				m_playerStartPosition = {startX * scale, -floorHeight * scale, -startY * scale};
-				m_playerStartDirection = {std::cos(startAngle), 0.0F, -std::sin(startAngle)};
+				 * Xw = x, Yw = -height, Zw = -y.
+				 *
+				 * ⚠️ The axis flip applies here too, and it may be applied to this ALREADY-CONVERTED
+				 * triple because the consumer's rotation and the flip are both diagonal, hence
+				 * commute. A player start left unmirrored while the level is mirrored spawns the
+				 * player inside a wall. */
+				const auto axisFlip = this->axisFlip();
+
+				m_playerStartPosition = axisFlip.vector(startX * scale, -floorHeight * scale, -startY * scale);
+				m_playerStartDirection = axisFlip.vector(std::cos(startAngle), 0.0F, -std::sin(startAngle));
 
 				break;
 			}
 		}
 
 		/* ---- Build the multi-material Shape (loader space: Y-up, meters). ---- */
+		/* ⚠️ Same flip as the player start above, and the winding follows its PARITY — see
+		 * AxisFlip.hpp. */
+		const auto axisFlip = this->axisFlip();
+		const bool swapWinding = axisFlip.mustSwapTriangleWinding();
+
 		auto shape = std::make_shared< Shape< float > >();
 
 		/* ⚠️ materialOrder, the sub-geometry groups below and the materialList/rasterizationOptions
@@ -1661,10 +1673,11 @@ namespace EmEn::Scenes::Loaders
 					{
 						const auto & corner = corners[(triangle * 3) + cornerIdx];
 
-						/* Doom map space → loader space (Y-up, right-handed): X = x, Y = height, Z = y. */
+						/* Doom map space → loader space (Y-up, right-handed): X = x, Y = height, Z = y,
+						 * then through the axis flip — position and normal alike. */
 						const ShapeVertex< float > vertex{
-							Vector< 3, float >{corner.x * scale, corner.z * scale, corner.y * scale},
-							Vector< 3, float >{corner.nx, corner.nz, corner.ny},
+							axisFlip.vector(corner.x * scale, corner.z * scale, corner.y * scale),
+							axisFlip.vector(corner.nx, corner.nz, corner.ny),
 							Vector< 3, float >{corner.u, corner.v, 0.0F}
 						};
 
@@ -1672,12 +1685,26 @@ namespace EmEn::Scenes::Loaders
 						colorIndexes[cornerIdx] = colorIndexFor(corner.light);
 					}
 
-					/* Winding swap (indices 1 and 2): the consumer applies a 180° X rotation
-					 * (Y-up → Y-down) which inverts the winding — same convention as GLTF/FBX. */
-					auto & shapeTriangle = triangles.emplace_back(baseVertex, baseVertex + 2, baseVertex + 1);
-					shapeTriangle.setVertexColorIndex(0, colorIndexes[0]);
-					shapeTriangle.setVertexColorIndex(1, colorIndexes[2]);
-					shapeTriangle.setVertexColorIndex(2, colorIndexes[1]);
+					/* ⚠️⚠️ The swap compensates the engine's ORIENTATION-REVERSING projection
+					 * (`docs/coordinate-system.md` § OPEN DEFECT), not the consumer's 180° X
+					 * rotation as this comment used to claim — a rotation never inverts a winding.
+					 * An odd number of axis flips reverses the winding too, so the swap must then be
+					 * skipped. ⚠️ The per-corner COLOUR INDEXES must follow the very same order as
+					 * the vertex indexes, or the baked lighting lands on the wrong corners. */
+					if ( swapWinding )
+					{
+						auto & shapeTriangle = triangles.emplace_back(baseVertex, baseVertex + 2, baseVertex + 1);
+						shapeTriangle.setVertexColorIndex(0, colorIndexes[0]);
+						shapeTriangle.setVertexColorIndex(1, colorIndexes[2]);
+						shapeTriangle.setVertexColorIndex(2, colorIndexes[1]);
+					}
+					else
+					{
+						auto & shapeTriangle = triangles.emplace_back(baseVertex, baseVertex + 1, baseVertex + 2);
+						shapeTriangle.setVertexColorIndex(0, colorIndexes[0]);
+						shapeTriangle.setVertexColorIndex(1, colorIndexes[1]);
+						shapeTriangle.setVertexColorIndex(2, colorIndexes[2]);
+					}
 				}
 
 				if ( !groups.empty() )

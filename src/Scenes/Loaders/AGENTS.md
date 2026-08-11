@@ -69,6 +69,10 @@ All loaders implement `Interface` (`Interface.hpp`):
 ```cpp
 class Interface {
     void setOptions(LoaderOptions options) noexcept;
+
+    /* The axis negation this load is routed through. EVERY loader uses this instead of
+     * reading swapX/swapY/swapZ itself — it also decides the triangle winding. */
+    AxisFlip axisFlip() const noexcept;
     virtual bool load(const std::filesystem::path & filepath, SceneData & output) noexcept = 0;
     virtual bool supportsExtension(std::string_view extension) const noexcept = 0;
 
@@ -88,6 +92,7 @@ class Interface {
 - `onMeshLoaded` — `std::function<void(MeshDescriptor &)>` callback invoked once per mesh, right after the renderable, geometry and materials have been registered in their containers and pushed to `output.meshes` (before nodes are wired). Lets the caller patch the descriptor in place — typical use cases: enable IBL reflection on PBR materials (`pbr->setReflectionComponentFromEnvironmentCubemap`), swap a renderable, override geometry. Symmetric across `FBXLoader` and `GLTFLoader` (5 invocation sites total: 4 in FBXLoader including the fallback paths, 1 in GLTFLoader).
 - `materialMode` — `MaterialMode { PBR, Standard }`, default `PBR`. Selects which material container the loader populates. Both loaders go through the same generic configuration lambda thanks to the cross-material setter aliases on `StandardResource` (see *Cross-material setters* below). Both PBR and Standard paths are validated end-to-end on the Paladin asset.
 - `skipSkinning` — skip bone weights, skins, and animations
+- `swapX` / `swapY` / `swapZ` — `bool`, default `false`. **Negate** that axis of the asset at import, in the geometry itself. See *Axis flip* below — do not use them without reading it, the winding depends on their parity.
 - `forceDoubleSided` — `bool`, default `false`. Forces **every** material part of the loaded model to `RasterizationOptions{ CullingMode::None }`, OR-ed with the per-material asset flag (see *Double-sided materials* below). Symmetric across `FBXLoader` (applied per material part, default-material parts included) and `GLTFLoader` (per primitive). Use it when the asset's format/exporter cannot carry a double-sided flag the loader can read — the canonical case is **Mixamo FBX rigs**, which ship plain `FbxSurfacePhong` materials: ufbx only surfaces `double_sided` for glTF-style materials, so these models always import single-sided and thin shells (inner armour, cloth) render with see-through holes. Blunt instrument (whole model); for per-mesh selectivity use the `onMeshLoaded` hook instead. Two-sided lighting (back-face normal flip) is already engine-side, so forced back-faces are correctly lit. Validated on the Paladin (`src/Actor/Paladin.cpp`).
 - `uniformScale` — `float`, default `1.0F`. Uniform scale applied at load time, **coherently across the full skinned-mesh pipeline**: vertex positions (in `loadMeshes`), joint local TRS translations + inverse bind matrix translation columns (in `loadSkins`), and animation translation keyframes (in `sampleAnimStack`, covers both `load()` embedded clips AND `loadAnimationClipsOnly()` external clips). Rotations and scales of joint TRS plus per-vertex influence weights are never touched. Linear (rotation + uniform 1×1 scale) parts of the inverse bind matrix are unaffected by uniform scaling around origin, so only the translation column needs scaling there. **Critical**: the same factor must be passed to BOTH the rig load (`load()`) AND every subsequent `loadAnimationClipsOnly()` against that rig — otherwise animation translation keyframes describe positions in a different unit than the scaled bind pose, joints snap to wrong positions on every keyframe, and the rig visually collapses on the first animated frame. Also propagates to the renderable's bounding box, so collision shapes derived from the bbox reflect the scaled size automatically. Use cases: enlarging a Mixamo humanoid that ships at 1.7 m to 1.9 m for a knight silhouette (validated end-to-end on the Paladin); shrinking oversized Maya/Blender assets without re-export.
 
@@ -103,6 +108,79 @@ class Interface {
 - `stripRootMotion` — `bool`, default `false`. When set, `loadAnimationClipsOnly()` zeroes the **horizontal (X, Z) components** of every translation keyframe on every root joint of the produced clips. Rotation + scale of the root and *all* channels of every other joint stay intact. The vertical (Y) component is preserved on purpose: it carries both the bind-pose hip-height offset (~0.85 m on a Mixamo humanoid — wiping it would sink the model halfway into the ground) and the natural up/down bounce of walking, jumping or crouching. Idiomatic "convert per-action FBX into in-place clip" pass at load time. Required for any FBX (Mixamo, Maya/Blender per-action) where the root bone carries forward locomotion AND the actor's displacement is also driven by gameplay code (physics force, navmesh) — without this, the two motions stack and the model snaps backward at every clip loop. Has no effect on `load()` (full-pipeline import) — only on `loadAnimationClipsOnly()`. **`GLTFLoader` does not implement `loadAnimationClipsOnly()`** (glTF carries its clips inside the asset, so the split-animation workflow has no glTF equivalent), which makes the option inapplicable there: since Aug 2026 the glTF path **logs a warning** instead of ignoring it, so a caller porting FBX code over cannot believe the root motion was stripped. **Future work — Option C (root-motion mode):** instead of stripping, extract the root delta per frame and feed it back to the actor as actual displacement (foot-planting, no foot-sliding, animation-driven speed). Would replace the actor-side `addForce` for animation-driven characters; tracked as a TODO for the locomotion subsystem.
 
 **Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::SceneDataConsumer`.
+
+### Axis flip — `swapX` / `swapY` / `swapZ` (added Aug 2026)
+
+**What it is for.** The engine's world→screen mapping is **orientation-reversing** — measured, see
+[`docs/coordinate-system.md`](../../../docs/coordinate-system.md) § OPEN DEFECT. Importers, on the
+other hand, convert with a **rotation** (the consumer's 180° X rotation, determinant +1), and a
+rotation can never undo a chirality difference. So every chiral detail of every imported asset lands
+**mirrored** on screen: carved text reads backwards, a logo is flipped, a left hand becomes a right
+one. Enabling an **odd** number of these flags makes the import orientation-reversing too, and the
+two reversals cancel.
+
+Verified on Sponza (`src/Builtin/Sponza.cpp`, `options.swapZ = true`): the atrium's inscriptions read
+correctly, the scene stays upright, and no face renders inside-out.
+
+⚠️⚠️ **`swapZ` is the flag for glTF and FBX, NOT `swapY`.** The consumer still applies its 180° X
+rotation `diag(1,-1,-1)`; composed with `swapZ` = `diag(1,1,-1)` it yields `diag(1,-1,1)` — chirality
+fixed, up axis still up. `swapY` fixes the chirality too and renders the scene **upside down**. This
+is the first thing anyone will get wrong.
+
+**The rule lives in ONE place: `AxisFlip` (`AxisFlip.hpp`), reached through `Interface::axisFlip()`.**
+Never read the three booleans directly. `M = diag(±1,±1,±1)` is diagonal, so `M⁻¹ = M`, hence:
+
+| Quantity | Transform | Why |
+|---|---|---|
+| Point, vector, normal, tangent | `M · v` | The inverse-transpose of `M` IS `M` — normals need no special case |
+| Translation of a TRS | `M · t` | |
+| Rotation quaternion `(w, v)` | `(w, det(M) · M · v)` | ⚠️ a reflection conjugates the axis **and inverts the angle** |
+| Scale of a TRS | unchanged | `M · diag(s) · M = diag(s)` |
+| 4×4 transform (node, inverse bind matrix) | `M · T · M` | Conjugation, so a hierarchy telescopes |
+| Triangle winding | swapped **iff** `det(M) = +1` | ⚠️ see below |
+
+⚠️⚠️ **The `det(M)` factor on the quaternion is not decoration.** Without it the bind pose looks
+correct and the animation plays **backwards** — a defect that gets blamed on the animation blender.
+
+⚠️⚠️ **The winding follows the PARITY, and the historical unconditional swap is the EVEN case.** All
+four loaders used to swap indices 1↔2 unconditionally, justified by a comment claiming the 180° X
+rotation inverted the winding. That claim is **false**: a rotation has determinant +1 and never
+inverts a winding. The swap actually compensates the orientation-reversing projection, which is also
+why `USDLoader` had to swap despite deliberately keeping its own axis bake at determinant +1. Ask
+`AxisFlip::mustSwapTriangleWinding()`; an odd flip count reverses the winding, and swapping on top of
+that renders **every face inside-out**.
+
+⚠️ **Why the mirror belongs to the GEOMETRY and the conjugation to the HIERARCHY.** Mirroring the
+vertices (`M·v`) while conjugating every node (`M·T·M`) telescopes to a single mirror at the root and
+keeps every node transform a **proper rotation**. Putting the reflection on the root node instead
+would require a **negative scale** in the scene graph, which breaks normals, physics and bounding
+boxes. That is the whole reason for this design (owner decision, Aug 2026).
+
+⚠️ **Resource cache keys.** Geometry, mesh, skeleton and animation-clip resources are cached BY NAME
+and their content depends on the flip, so `AxisFlip::resourceNameSuffix()` is part of their key.
+Images, textures and materials are deliberately NOT keyed — the flip does not touch them, and
+duplicating 84 images per variant would cost memory for nothing.
+
+⚠️ **Caller-visible consequence.** Enabling a flag negates a **world coordinate** for the whole
+asset: every camera position, `lookAt` target, light placement and actor spawn hard-coded against
+that asset must be mirrored on the same axis. `Sponza.cpp` shows the migration (5 placements
+mirrored). Defaults are `false` on all three, so existing scenes are untouched.
+
+**Coverage — all four loaders, full pipeline:**
+
+| Site | glTF | FBX | USD | WAD |
+|---|---|---|---|---|
+| Vertex positions | ✅ | ✅ | ✅ (composed into `bakePosition`) | ✅ |
+| Normals | ✅ | ✅ | ✅ (composed into `bakeDirection`) | ✅ |
+| Tangents | n/a (generated from mirrored data) | n/a | ✅ | n/a |
+| Node local frames | ✅ | ✅ | ✅ (lights) | n/a |
+| Instance-set frames | n/a | n/a | ✅ (position + rotation) | n/a |
+| Joint bind TRS (translation + rotation) | ✅ | ✅ | n/a | n/a |
+| Inverse bind matrices | ✅ | ✅ | n/a | n/a |
+| Animation keyframes (translation + rotation) | ✅ | ✅ (both `load()` and `loadAnimationClipsOnly()`) | n/a | n/a |
+| Triangle winding (parity) | ✅ | ✅ | ✅ | ✅ (+ per-corner colour indexes) |
+| Player start (position + direction) | n/a | n/a | n/a | ✅ |
+| Resource cache key | ✅ | ✅ | — | — |
 
 ### Double-sided materials (honored since Jun 2026)
 
@@ -975,7 +1053,10 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
 ## Important Files
 
 - `Scenes/Loaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, SceneData)
-- `Scenes/Loaders/Interface.hpp` — Loader interface + LoaderOptions
+- `Scenes/Loaders/Interface.hpp` — Loader interface + LoaderOptions + `axisFlip()`
+- `Scenes/Loaders/AxisFlip.hpp` — ⚠️ **the single authority on the import mirror**: point/vector,
+  quaternion conjugation (with its `det(M)` angle inversion), matrix conjugation, frame conjugation,
+  triangle-winding parity, resource-name suffix. Header-only: it runs per vertex.
 - `Scenes/Loaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation. Also hosts `MeshoptBufferCache` +
   `MeshoptBufferAdapter` (`EXT_meshopt_compression`), defined in the **.cpp** because their interface
   speaks fastgltf types, which must never leak into a public engine header — hence the forward
@@ -991,4 +1072,6 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
 1. **Never add Scene dependencies** to this namespace — that's the whole point of the separation
 2. **Lambda capture safety** — same rules as before: never capture `this`, pre-resolve shared_ptr
 3. **Default resource on every error path** — never leave a nullptr slot
-4. **Y-up conversion is NOT done here** — it's the consumer's responsibility (SceneDataConsumer or the actor code)
+4. **Y-up → Y-down ROTATION is NOT done here** — it stays the consumer's responsibility (`SceneDataConsumer` or the actor code). ⚠️ The axis **FLIP** (`swapX/swapY/swapZ`) IS done here, in the geometry, and is a different thing: the rotation reorients, the flip mirrors. See *Axis flip* above.
+5. **Never hard-code the triangle winding swap** — ask `AxisFlip::mustSwapTriangleWinding()`. An odd number of axis flips reverses the winding, and a hard-coded swap then renders every face inside-out.
+6. **Never read `swapX/swapY/swapZ` directly** — go through `Interface::axisFlip()`, so positions, normals, rotations, matrices and the winding stay one single decision.
