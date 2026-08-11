@@ -175,5 +175,29 @@ namespace EmEn::Scenes::Loaders
 		 * the scaled size automatically.
 		 */
 		float uniformScale{1.0F};
+		/**
+		 * @brief Intensity of the environment (image-based) specular reflection given to every
+		 * material the loader produces. `0.0F` disables it entirely.
+		 *
+		 * ⚠️ Default `0.0F` — OFF, opt-in per asset (owner decision, Aug 2026). The environment
+		 * cubemap is UNOCCLUDED and its sample is scaled to the sky's ABSOLUTE luminance
+		 * (`LightGenerator::reflectionIntensity()` × environmentLuminance): any smooth dielectric
+		 * or metal INDOORS mirrors the outdoor sky/vegetation at full photometric brightness even
+		 * in shade — measured on Sponza (glass roughness 0, metal doors metalness 0.88): glowing
+		 * green panels in a dark corridor. Until reflections are occluded (local probes /
+		 * specular occlusion — separate work), only scenes whose materials actually SEE the
+		 * environment should enable this (e.g. an object showcase like DamagedHelmet passes 1.0F).
+		 *
+		 * When enabled it feeds TWO channels at once:
+		 * 1. the IBL specular sampled from the scene's environment cubemap;
+		 * 2. the REFLECTIVITY published to the material-properties G-buffer, which SSR and RTR read.
+		 *    See `LightGenerator::materialPropertiesExpression()`: declaring a reflection promotes
+		 *    the material from priority 3 (`metalness * (1 - roughness)`, which collapses to ~0 on a
+		 *    rough surface) to priority 2 (`max(iblIntensity * (1 - roughness), metalness)`, where
+		 *    metal keeps a high reflectivity whatever its roughness). A rough metal asset with the
+		 *    option off therefore gets NEITHER image-based specular NOR screen-space/ray-traced
+		 *    reflections — that trade-off is the price of the missing occlusion, not a bug.
+		 */
+		float environmentReflectionIntensity{0.0F};
 	};
 }
