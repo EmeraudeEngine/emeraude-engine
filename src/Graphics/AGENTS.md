@@ -696,6 +696,18 @@ The bindless set is bound during lighting passes when `renderPassUsesColorProjec
 - `Renderer::createDefaultResources()` - Default cubemap initialization
 - `Renderer::clearDefaultResources()` - Cleanup before shutdown
 
+### GrabPass — NEED-DRIVEN arming (Aug 2026)
+
+The grab blit (scene capture for TranslucentGB refraction/transmission) records whenever the
+frame contains TranslucentGB objects (`Scene::hasTranslucentGBObjects()`); `Renderer::enableGrabPass(true)`
+remains a manual force-on.
+> [!WARNING]
+> The flag alone used to gate the blit and NOTHING in the engine ever set it: the machinery
+> was pre-allocated but dead, and every grab-pass material sampled an unfilled bindless slot
+> (measured on CarConcept: uniform sky-blue glass, no interior, and NO "GrabPass" zone in
+> `getGPUTimings()`). **The GPU timings are the one-command diagnostic**: a grab-pass material
+> on screen without a GrabPass zone in the frame = the blit is not armed.
+
 ## 7. Frame Rate Limiter
 
 Optional software frame rate limiter for precise FPS control.
@@ -801,6 +813,19 @@ const float SurfaceMetalness = texture(MetalnessSampler, uv).b * MaterialUB(Meta
   material `flags` as 2-bit indices (`RoughnessChannelShift`/`MetalnessChannelShift`), plus
   `RoughnessTexInverted` for gloss sources. The RTR hit shading applies channel, inversion and
   factor exactly like the raster (see `Effects/Framebuffer/RTR.cpp`) — keep both sides in sync.
+
+### Per-component UV transform — UBO values, never literals (Aug 2026)
+
+Texture components carry a UV transform (`uv * scale + offset`) stored ON the component
+(`Component::Texture::setUVWScale/setUVWOffset`, JSON keys `"UVW"` / `"UVWOffset"`) and synced
+at creation into per-component material UBO vec4 slots — PBR: Albedo/Roughness/Metalness/
+Normal/AmbientOcclusion/AutoIllumination; Standard: Diffuse/Normal/Opacity/AutoIllumination.
+Applied UNCONDITIONALLY with the identity neutral (1,1,0,0) — same precedent as the White
+albedo. Public API: `setComponentUVWTransform()` (Standard maps Albedo→Diffuse; components
+without a slot return false). Source: glTF `KHR_texture_transform` via the loader.
+⚠️ The `m_UVWScale` member existed for years but NO codegen consumed it — a transform that
+is stored but never applied fails SILENTLY (stretched textures, zero log).
+⚠️ RT hit shading does not apply these transforms yet — known parity gap.
 
 ### FillingType Enum
 

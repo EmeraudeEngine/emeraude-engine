@@ -1822,8 +1822,13 @@ namespace EmEn::Graphics
 
 		commandBuffer->endRenderPass();
 
-		/* Grab pass: capture the resolved scene into a sample-able texture (same frame). */
-		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
+		/* Grab pass: capture the resolved scene into a sample-able texture (same frame).
+		 * NEED-DRIVEN: armed whenever the frame contains TranslucentGB objects (grab-pass
+		 * transmission/refraction materials) — `enableGrabPass(true)` remains a manual
+		 * force-on. ⚠️ The flag alone used to gate this blit and NOTHING ever set it: the
+		 * machinery was pre-allocated but dead, and every grab-pass material sampled an
+		 * unfilled slot (measured on CarConcept: uniform sky-blue glass, no interior). */
+		if ( ( m_grabPassEnabled || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated() )
 		{
 			const auto * srcDepth = m_grabPass->hasDepth() ? m_swapChain->currentDepthStencilImage().get() : nullptr;
 
@@ -1995,8 +2000,10 @@ namespace EmEn::Graphics
 		}
 
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
-		 * The internal target's color image is in COLOR_ATTACHMENT_OPTIMAL (matching GrabPass expectations). */
-		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
+		 * The internal target's color image is in COLOR_ATTACHMENT_OPTIMAL (matching GrabPass expectations).
+		 * NEED-DRIVEN (see the swap-chain path): armed by the frame's TranslucentGB content,
+		 * `enableGrabPass(true)` remains a manual force-on. */
+		if ( ( m_grabPassEnabled || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated() )
 		{
 			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "GrabPass"};
 

@@ -261,6 +261,26 @@ texel. Each loader owns the translation from its format's semantics:
 | **FBX** | separate grayscale maps (Red) | the texture with the **neutral factor** (default) — in FBX a connected texture **REPLACES** the scalar; passing the authored scalar would wrongly scale the map (metalness scalar 0 = FBX default = map erased) |
 | **USD** | separate maps (Red) | the texture alone (neutral default factor) |
 
+### KHR_texture_transform + transmission-through-the-scene (added Aug 2026)
+
+- **`KHR_texture_transform`** (per-texture-info UV scale/offset) is read by `GLTFLoader` and
+  lands on the material through `setComponentUVWTransform(componentType, scale, offset)` —
+  one glTF metallic-roughness texture info feeds BOTH the Roughness and Metalness components.
+  The transform travels as a **material UBO vec4 (scale.xy, offset.zw)**, identity neutral,
+  applied UNCONDITIONALLY at the sampling sites (shader program cache contract — values through
+  the UBO, never GLSL literals). ⚠️ Ignoring the extension does not fail: the texture renders
+  STRETCHED over the whole UV range (measured on CarConcept: tire treads, brake discs, paint
+  flake maps with scales up to [200,400]). ⚠️ NOT supported, logged and ignored: the extension's
+  `rotation` and its `texCoord` override (multi-UV gap). ⚠️ RT hit shading does NOT apply the
+  transforms yet (raster-only) — known parity gap.
+- **`KHR_materials_transmission` goes through the GRAB PASS** (`setTransmissionComponentFromGrabPass`):
+  the extension's semantics is seeing THROUGH the surface — a car window shows the interior.
+  The cubemap variant refracts the sky only (measured on CarConcept: the glass hid the cabin).
+  The codegen falls back to the cubemap when the grab pass is unavailable (low quality/no
+  bindless). ⚠️ A sun-facing pane still reads WHITE under a bright sky: the Fresnel reflection
+  of a several-thousand-nit sky dominates a tens-of-nits interior — photometry, not a bug
+  (the Khronos viewer's neutral studio is dim, hence its always-visible interiors).
+
 > [!WARNING]
 > **The failure mode is silent flattening, not an error.** Before the fix all loaders let the
 > component read the default RED channel of the packed glTF texture — empty on most assets
