@@ -113,6 +113,7 @@ layout(set = 0, binding = 3) readonly buffer LightData
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
 layout(set = 1, binding = 2) uniform samplerCube envCubemap;
+layout(set = 1, binding = 3) uniform sampler2D albedoTex;
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cube array
  * (reserved slots: 1 = scene irradiance E/pi, 2 = GGX-prefiltered environment). */
@@ -141,6 +142,12 @@ const uint HasEmissionTexture = 1u << 4;
 const uint IsEmissive		 = 1u << 6;
 const uint HasOpacityTexture  = 1u << 7;
 const uint IsAlphaTest		= 1u << 8;
+const uint RoughnessTexInverted = 1u << 9;
+/* Texel source channel of the roughness/metalness textures, packed as 2-bit indices
+ * (0:R, 1:G, 2:B, 3:A) — matches GPURTMaterialData::RoughnessChannelShift/MetalnessChannelShift. */
+const uint RoughnessChannelShift = 16u;
+const uint MetalnessChannelShift = 18u;
+const uint ChannelMask = 3u;
 
 const float PI = 3.14159265359;
 /* Prefiltered environment mip count - 1 (IBLTexture::PrefilteredMipLevels). */
@@ -458,12 +465,20 @@ void main()
 	vec3 viewDir = normalize(worldPos - cameraPos);
 	vec3 reflDir = reflect(viewDir, worldNormal);
 
-	/* Fresnel (Schlick): stronger reflections at grazing angles.
-	 * F0 floor at 0.15 so dielectrics viewed head-on still show visible reflections.
+	/* Fresnel (Schlick), PRIMARY surface, F0 as a COLOR: a metal tints its reflection by
+	 * its albedo (gold reflects gold, not a colorless mirror), a dielectric reflects the
+	 * physical 4% head-on — the former scalar mix(0.15, 0.9, metalness) made every metal
+	 * a WHITE mirror and boosted dielectrics 4x (measured: a dark-teal metal dome rendered
+	 * at ~70% of the sky's luminance with the sky's own chromaticity).
+	 * The scalar lobe weight keeps feeding the premultiplied confidence pipeline; the
+	 * NORMALIZED tint rides on the traced color instead.
 	 * Computed before the trace: it applies to both hit and environment-miss paths. */
-	float F0 = mix(0.15, 0.9, originMetalness);
+	vec3 originAlbedo = texelFetch(albedoTex, fullResCoord, 0).rgb;
+	vec3 F0 = mix(vec3(0.04), originAlbedo, originMetalness);
 	float NdotV = max(dot(worldNormal, -viewDir), 0.0);
-	float fresnel = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
+	vec3 fresnelColor = fresnelSchlick(NdotV, F0);
+	float fresnel = max(fresnelColor.r, max(fresnelColor.g, fresnelColor.b));
+	vec3 fresnelTint = fresnelColor / max(fresnel, 0.001);
 
 	/* Offset ray origin along normal to prevent self-intersection. */
 	vec3 rayOrigin = worldPos + worldNormal * 0.01;
@@ -620,7 +635,10 @@ void main()
 			}
 		}
 
-		/* Roughness / metalness: scalar, overridden by their textures when present. */
+		/* Roughness / metalness: the scalar is the value when no texture drives the
+		 * property, and the MULTIPLYING factor otherwise (glTF 'factor * texel' contract,
+		 * same as the raster components). The texel source channel is carried in the
+		 * flags (glTF packed metallic-roughness: roughness = G, metalness = B). */
 		float hitRoughness = materialSSBO.materials[matBase + 1u].x;
 		float hitMetalness = materialSSBO.materials[matBase + 1u].y;
 
@@ -630,7 +648,10 @@ void main()
 
 			if (texIndex >= 0)
 			{
-				hitRoughness = texture(textures2D[nonuniformEXT(texIndex)], hitUV).r;
+				float roughnessTexel = texture(textures2D[nonuniformEXT(texIndex)], hitUV)[(flags >> RoughnessChannelShift) & ChannelMask];
+
+				/* Smoothness/gloss source: invert before the factor applies (raster parity). */
+				hitRoughness *= ((flags & RoughnessTexInverted) != 0u) ? (1.0 - roughnessTexel) : roughnessTexel;
 			}
 		}
 
@@ -640,7 +661,7 @@ void main()
 
 			if (texIndex >= 0)
 			{
-				hitMetalness = texture(textures2D[nonuniformEXT(texIndex)], hitUV).r;
+				hitMetalness *= texture(textures2D[nonuniformEXT(texIndex)], hitUV)[(flags >> MetalnessChannelShift) & ChannelMask];
 			}
 		}
 
@@ -690,7 +711,7 @@ void main()
 
 		float confidence = distFade * fresnel * roughnessFade;
 
-		outReflection = vec4(litColor * confidence, confidence);
+		outReflection = vec4(litColor * fresnelTint * confidence, confidence);
 	}
 	else
 	{
@@ -702,7 +723,7 @@ void main()
 		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], vec3(reflDir.x, -reflDir.y, reflDir.z), clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
 		float confidence = fresnel * roughnessFade;
 
-		outReflection = vec4(envColor * confidence, confidence);
+		outReflection = vec4(envColor * fresnelTint * confidence, confidence);
 	}
 }
 )GLSL";
@@ -815,8 +836,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (set 1): depth + normals + environment cubemap — 3 combined image samplers. */
-		auto traceInputLayout = this->getInputLayout(3);
+		/* Trace input (set 1): depth + normals + environment cubemap + albedo — 4 combined image samplers. */
+		auto traceInputLayout = this->getInputLayout(4);
 
 		if ( traceInputLayout == nullptr )
 		{
@@ -1192,6 +1213,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputNormals != nullptr )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
+		}
+
+		/* Primary-surface albedo: requiresAlbedo() guarantees the attachment exists and the
+		 * PostProcessor skips the effect while the pointer is null. */
+		if ( context.albedo != nullptr )
+		{
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, *context.albedo));
 		}
 
 		/* Upgrade from the default cubemap once the scene environment finishes

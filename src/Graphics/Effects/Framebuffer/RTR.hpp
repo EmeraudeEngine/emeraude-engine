@@ -188,6 +188,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresAlbedo()
+			 * @note The trace pass tints the PRIMARY surface's reflection by its Fresnel
+			 * COLOR — F0 = mix(vec3(0.04), albedo, metalness) — so metals reflect in their
+			 * own color (gold reflects gold) instead of a colorless mirror. */
+			[[nodiscard]]
+			bool
+			requiresAlbedo () const noexcept override
+			{
+				return true;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
 			[[nodiscard]]
 			bool

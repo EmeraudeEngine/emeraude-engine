@@ -762,6 +762,46 @@ untinted, and the factor's **alpha went with it**. They now set the tint through
 > the component's filling type — the uniform block is a fixed layout mirroring the whole
 > `m_materialProperties` array. That is precisely why the textured path may reference them.
 
+### Scalar components — source CHANNEL + multiplying FACTOR (Aug 2026)
+
+A texture-driven scalar component (roughness, metalness) reads **one color channel** of the
+sampled texel, selected per component via `Component::Texture::setSourceChannel()`
+(`EmEn::Base::PixelFactory::Channel`, **default Red** — the grayscale/single-channel convention).
+Packed textures select theirs: glTF metallic-roughness packs **roughness in GREEN** and
+**metalness in BLUE** (glTF 2.0 § material.pbrMetallicRoughness; reference implementation:
+Khronos glTF-Sample-Renderer `material_info.glsl`, `getMetallicRoughnessInfo()`). JSON materials
+may set the optional `"SourceChannel"` key (numeric, 0:R 1:G 2:B 3:A) on a texture component.
+
+> [!WARNING]
+> **Reading the wrong channel does not fail — it flattens.** The RED channel of a packed glTF
+> metallic-roughness texture is typically EMPTY (measured mean 0.9/255 on DamagedHelmet, while
+> G and B carried stdev 73 and 108): both properties silently collapse to ~0 over the whole
+> surface — mirror-perfect dielectric everywhere, zero surface disparity, no error anywhere.
+> That is a *material-identity* bug that reads like a lighting bug.
+
+The generated definition folds **channel, inversion and factor** — every consumer (direct-light
+BRDF, IBL prefiltered LOD, transmission LOD, material-properties G-buffer) reads this single
+final variable and must NEVER re-apply any of them:
+
+```glsl
+const float SurfaceRoughness = texture(RoughnessSampler, uv).g * MaterialUB(Roughness);  /* factor contract */
+const float SurfaceMetalness = texture(MetalnessSampler, uv).b * MaterialUB(Metalness);
+/* smoothness/gloss source (m_invertRoughness): (1.0 - texel) BEFORE the factor applies */
+```
+
+- The UBO scalar is the **VALUE** when no texture drives the component, and the **MULTIPLYING
+  FACTOR** when one does — the glTF `roughnessFactor * texel.g` / `metallicFactor * texel.b`
+  contract. `DefaultTextureFactor{1.0F}` is the neutral default of the texture overloads —
+  **same precedent as the White `DefaultAlbedoColor`** (a 0.5 default would halve every map;
+  the old `DefaultMetalness` 0.0 would ZERO metalness maps out).
+- **Format translation is the loader's job**: glTF factors multiply (pass them through); in
+  **FBX a connected texture REPLACES the scalar** — the loader passes the neutral factor,
+  never the authored scalar (a metalness scalar of 0, the FBX default, would erase the map).
+- **RT parity**: `RTTextureSlot` carries the channel; `SceneMetaData` packs it into the RT
+  material `flags` as 2-bit indices (`RoughnessChannelShift`/`MetalnessChannelShift`), plus
+  `RoughnessTexInverted` for gloss sources. The RTR hit shading applies channel, inversion and
+  factor exactly like the raster (see `Effects/Framebuffer/RTR.cpp`) — keep both sides in sync.
+
 ### FillingType Enum
 
 Material components use `FillingType` to determine how data is sourced:
@@ -1358,8 +1398,30 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 **Descriptor sets** (trace pass):
 - Set 0: RT data from `Renderer::rtDescriptorSet()` — TLAS (binding 0), mesh metadata SSBO (binding 1),
   material data SSBO (binding 2), light array SSBO (binding 3)
-- Set 1: Input textures — depth (binding 0), normals (binding 1)
+- Set 1: Input textures — depth (binding 0), normals (binding 1), environment cubemap (binding 2),
+  scene albedo (binding 3 — the effect declares `requiresAlbedo()`)
 - Set 2: Bindless textures from `BindlessTextureManager` — sampler2D[] (binding 1)
+
+**Primary-surface Fresnel is a COLOR (fixed Aug 2026):**
+`F0 = mix(vec3(0.04), originAlbedo, originMetalness)` — a metal tints its reflection by its
+albedo (gold reflects gold, a teal dome reflects teal), a dielectric reflects the physical 4%
+head-on. The scalar lobe weight (max component) keeps feeding the premultiplied confidence
+pipeline; the NORMALIZED tint multiplies the traced color, on both the hit and the
+environment-miss paths.
+> [!WARNING]
+> The former model — `float F0 = mix(0.15, 0.9, metalness)`, "floor at 0.15 so dielectrics show
+> visible reflections" — made every metal a WHITE mirror and boosted dielectrics 4×. Measured on
+> DamagedHelmet: the dark-teal dome rendered at ~70 % of the SKY's luminance with the sky's own
+> chromaticity, erasing the raster's correctly F0-tinted split-sum IBL through the composite mix.
+> A "flashy" reflection is an energy bug, never a look to preserve.
+
+> [!WARNING]
+> **The MRT normal-alpha packing (`alpha = roughness + round(metalness) × 2`) quantizes the
+> metalness to {0,1} at WRITE time — that quantization is load-bearing.** The decode
+> (`metalness = alpha >= 2`) assumes it: a raw fractional metalness (real data since the packed
+> metallic-roughness source channels are honored) corrupts BOTH decoded values (0.93 metal /
+> 0.4 rough packed raw decodes as 1.0 / 0.26). Write site:
+> `Saphir/Generator/SceneRendering.cpp` (MRT normal output).
 
 **Mesh data access via buffer references:**
 - `BDA` (buffer device addresses) in mesh metadata SSBO point to vertex/index buffers

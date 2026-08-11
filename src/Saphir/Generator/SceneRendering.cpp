@@ -531,8 +531,12 @@ namespace EmEn::Saphir::Generator
 			{
 				/* Write view-space normal to MRT attachment 1 for post-process effects (SSAO, SSR, RTR, RTAO).
 				 * Uses the final normal (perturbed by normal mapping when active) instead of the geometric normal.
-				 * Alpha packs roughness + metalness: alpha = roughness + metalness * 2.0.
+				 * Alpha packs roughness + metalness: alpha = roughness + round(metalness) * 2.0.
 				 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0;
+				 * ⚠️ The metalness MUST be quantized to {0,1} at WRITE time: the decode's >= 2
+				 * threshold assumes it. A fractional metalness (real since the packed
+				 * metallic-roughness source channels are honored) would otherwise corrupt BOTH
+				 * decoded values — 0.93 metal / 0.4 rough packed raw decodes as 1.0 / 0.26.
 				 * Only the ambient/simple pass writes the actual normal. Light passes use additive
 				 * blending, so they must output zero to preserve the existing normal value. */
 				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
@@ -540,7 +544,7 @@ namespace EmEn::Saphir::Generator
 					const auto normalExpr = m_lightGenerator.finalNormalViewSpaceExpression();
 					const auto roughnessExpr = m_lightGenerator.roughnessShaderExpression();
 					const auto metalnessExpr = m_lightGenerator.metalnessShaderExpression();
-					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(" << normalExpr << ", " << roughnessExpr << " + " << metalnessExpr << " * 2.0);";
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(" << normalExpr << ", clamp(" << roughnessExpr << ", 0.0, 1.0) + round(clamp(" << metalnessExpr << ", 0.0, 1.0)) * 2.0);";
 				}
 				else
 				{
