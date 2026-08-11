@@ -37,6 +37,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
+#include "PixelFactory/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -323,11 +324,12 @@ namespace EmEn::Graphics::Material
 			 * @brief Sets the roughness component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
-			 * @param value The default roughness value. Default 0.5.
-			 * @param invert If true, the texture is treated as a smoothness/gloss map and inverted (1.0 - value). Default false.
+			 * @param value The roughness factor MULTIPLYING the sampled texel (glTF 'roughnessFactor' contract). Default 1.0 (neutral).
+			 * @param invert If true, the texture is treated as a smoothness/gloss map and inverted (1.0 - texel) before the factor applies. Default false.
+			 * @param sourceChannel The texel color channel holding the roughness (glTF packed metallic-roughness uses Green). Default Red.
 			 * @return bool
 			 */
-			bool setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultRoughness, bool invert = false) noexcept;
+			bool setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultTextureFactor, bool invert = false, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Sets the metalness component as a value (0.0 = dielectric, 1.0 = metal).
@@ -341,10 +343,11 @@ namespace EmEn::Graphics::Material
 			 * @brief Sets the metalness component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
-			 * @param value The default metalness value. Default 0.0.
+			 * @param value The metalness factor MULTIPLYING the sampled texel (glTF 'metallicFactor' contract). Default 1.0 (neutral).
+			 * @param sourceChannel The texel color channel holding the metalness (glTF packed metallic-roughness uses Blue). Default Red.
 			 * @return bool
 			 */
-			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultMetalness) noexcept;
+			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultTextureFactor, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Sets the normal component as a texture.
@@ -1282,6 +1285,11 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultAlbedoColor{Base::PixelFactory::White};
 			static constexpr auto DefaultRoughness{0.5F};
 			static constexpr auto DefaultMetalness{0.0F};
+			/* 1.0, NOT DefaultRoughness/DefaultMetalness: when a texture drives the component,
+			 * the scalar becomes the FACTOR multiplying the sampled texel (glTF contract:
+			 * 'roughnessFactor * texel.g', 'metallicFactor * texel.b'), so its neutral value
+			 * has to be the multiplicative identity — same precedent as DefaultAlbedoColor. */
+			static constexpr auto DefaultTextureFactor{1.0F};
 			static constexpr auto DefaultNormalScale{1.0F};
 			static constexpr auto DefaultSpecularFactor{1.0F}; /* KHR_materials_specular: scales dielectric F0 (1.0 = unchanged). */
 			static constexpr auto DefaultIOR{1.5F}; /* Standard IOR for glass. */

@@ -470,7 +470,7 @@ namespace EmEn::Scenes
 
 				auto & rtMat = materialEntries[matIndex];
 
-				for ( const auto & [role, texture] : slots )
+				for ( const auto & [role, channel, texture] : slots )
 				{
 					if ( texture == nullptr )
 					{
@@ -515,11 +515,15 @@ namespace EmEn::Scenes
 						case Material::RTTextureRole::Roughness :
 							rtMat.roughnessTextureIndex = static_cast< int32_t >(bindlessIndex);
 							rtMat.flags |= Material::GPURTMaterialData::HasRoughnessTexture;
+							/* Pack the texel source channel (2 bits) — the RTR shader reads it back. */
+							rtMat.flags |= (static_cast< uint32_t >(channel) & Material::GPURTMaterialData::ChannelMask) << Material::GPURTMaterialData::RoughnessChannelShift;
 							break;
 
 						case Material::RTTextureRole::Metalness :
 							rtMat.metalnessTextureIndex = static_cast< int32_t >(bindlessIndex);
 							rtMat.flags |= Material::GPURTMaterialData::HasMetalnessTexture;
+							/* Pack the texel source channel (2 bits) — the RTR shader reads it back. */
+							rtMat.flags |= (static_cast< uint32_t >(channel) & Material::GPURTMaterialData::ChannelMask) << Material::GPURTMaterialData::MetalnessChannelShift;
 							break;
 
 						case Material::RTTextureRole::Emission :

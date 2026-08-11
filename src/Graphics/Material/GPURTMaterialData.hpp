@@ -34,6 +34,9 @@
 #include <memory>
 #include <array>
 
+/* Local inclusions for usages. */
+#include "PixelFactory/Types.hpp"
+
 namespace EmEn::Vulkan
 {
 	class TextureInterface;
@@ -59,6 +62,9 @@ namespace EmEn::Graphics::Material
 	struct EMEN_API RTTextureSlot
 	{
 		RTTextureRole role;
+		/** @brief Texel color channel a scalar role (roughness/metalness) reads — mirrors
+		 * the raster component's source channel (glTF packed metallic-roughness: G/B). */
+		Base::PixelFactory::Channel channel{Base::PixelFactory::Channel::Red};
 		std::shared_ptr< Vulkan::TextureInterface > texture;
 	};
 	/**
@@ -120,6 +126,19 @@ namespace EmEn::Graphics::Material
 		static constexpr uint32_t IsEmissive			  = 1U << 6;
 		static constexpr uint32_t HasOpacityTexture	   = 1U << 7;
 		static constexpr uint32_t IsAlphaTest			 = 1U << 8;
+		/** @brief The roughness texture is a smoothness/gloss map: the sampled texel is
+		 * inverted (1 - texel) before the factor applies — raster parity (m_invertRoughness). */
+		static constexpr uint32_t RoughnessTexInverted	= 1U << 9;
+
+		/* Source color channel of the roughness/metalness texel, packed in the 'flags'
+		 * field as 2-bit indices (0:R, 1:G, 2:B, 3:A) — mirrors the raster components'
+		 * source channels so RT reflections shade a hit exactly like the raster does
+		 * (glTF packed metallic-roughness: roughness = G, metalness = B).
+		 * ⚠️ The GLSL side of this contract lives in the RTR effect shader — keep the
+		 * shifts in sync (see Graphics/Effects/Framebuffer/RTR.cpp). */
+		static constexpr uint32_t RoughnessChannelShift  = 16U;
+		static constexpr uint32_t MetalnessChannelShift  = 18U;
+		static constexpr uint32_t ChannelMask			 = 0x3U;
 	};
 
 	/* Verify struct size is a multiple of 16 bytes for std430 alignment. */

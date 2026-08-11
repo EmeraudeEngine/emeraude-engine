@@ -684,9 +684,14 @@ namespace EmEn::Scenes::Loaders
 					materialResource.setAlbedoComponent(albedoColor);
 				}
 
+				/* FBX semantics: a connected texture REPLACES the scalar (unlike glTF where the
+				 * factor MULTIPLIES the texel). The engine contract is multiplicative, so the
+				 * translation is: texture present ⇒ neutral factor (the setter default, 1.0);
+				 * passing the authored scalar here would wrongly scale the map (a metalness
+				 * scalar of 0 — the FBX default — would ZERO the metalness map out). */
 				if ( roughnessTex != nullptr )
 				{
-					materialResource.setRoughnessComponent(roughnessTex, roughnessFactor);
+					materialResource.setRoughnessComponent(roughnessTex);
 				}
 				else
 				{
@@ -695,7 +700,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( metalnessTex != nullptr )
 				{
-					materialResource.setMetalnessComponent(metalnessTex, metalnessFactor);
+					materialResource.setMetalnessComponent(metalnessTex);
 				}
 				else
 				{

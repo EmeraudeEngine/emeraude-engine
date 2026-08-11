@@ -1169,7 +1169,7 @@ namespace EmEn::Graphics::Material
 
 				if ( tex != nullptr )
 				{
-					outSlots.push_back({role, tex});
+					outSlots.push_back({role, Base::PixelFactory::Channel::Red, tex});
 				}
 			}
 		}
@@ -2216,7 +2216,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value, bool invert) noexcept
+	StandardResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value, bool invert, Base::PixelFactory::Channel /*sourceChannel*/) noexcept
 	{
 		m_pbrRoughness = std::clamp(invert ? (1.0F - value) : value, 0.0F, 1.0F);
 
@@ -2236,7 +2236,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value) noexcept
+	StandardResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value, Base::PixelFactory::Channel /*sourceChannel*/) noexcept
 	{
 		m_pbrMetalness = std::clamp(value, 0.0F, 1.0F);
 

@@ -37,6 +37,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
+#include "PixelFactory/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -326,9 +327,10 @@ namespace EmEn::Graphics::Material
 			 * @param texture Ignored (kept for API parity with PBRResource).
 			 * @param value Roughness in [0, 1]. Default DefaultPBRRoughness.
 			 * @param invert If true, the value is inverted before use (glossiness → roughness).
+			 * @param sourceChannel Ignored (kept for API parity with PBRResource).
 			 * @return bool
 			 */
-			bool setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultPBRRoughness, bool invert = false) noexcept;
+			bool setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultPBRRoughness, bool invert = false, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Sets the metalness factor (PBR convention) — converted to specular tint.
@@ -346,9 +348,10 @@ namespace EmEn::Graphics::Material
 			 * @note Standard material has no metalness map; only @a value is honored.
 			 * @param texture Ignored (kept for API parity with PBRResource).
 			 * @param value Metalness in [0, 1]. Default DefaultPBRMetalness.
+			 * @param sourceChannel Ignored (kept for API parity with PBRResource).
 			 * @return bool
 			 */
-			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultPBRMetalness) noexcept;
+			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultPBRMetalness, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief No-op alias for API parity with PBRResource — Standard has no AO channel.

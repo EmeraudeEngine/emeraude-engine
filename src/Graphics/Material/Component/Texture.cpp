@@ -134,6 +134,21 @@ namespace EmEn::Graphics::Material::Component
 			}
 		}
 
+		/* Check the optional source color channel (scalar components reading a packed texture). */
+		if ( data.isMember(JKSourceChannel) )
+		{
+			if ( const auto & jsonNode = data[JKSourceChannel]; jsonNode.isNumeric() && jsonNode.asUInt() <= 3 )
+			{
+				m_sourceChannel = static_cast< Base::PixelFactory::Channel >(jsonNode.asUInt());
+			}
+			else
+			{
+				TraceWarning{ClassId} <<
+					"The '" << JKSourceChannel << "' key in Json structure is not numeric (0:R, 1:G, 2:B, 3:A) ! "
+					"Leaving source channel to Red ...";
+			}
+		}
+
 		/* Check the optional UVW scale. */
 		if ( data.isMember(JKUVWScale) )
 		{

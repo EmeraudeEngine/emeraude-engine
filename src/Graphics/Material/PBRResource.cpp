@@ -187,7 +187,8 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
-				this->setRoughness(FastJSON::getValue< float >(data[RoughnessString], JKValue).value_or(DefaultRoughness));
+				/* NOTE: With a texture component the scalar is the MULTIPLYING factor — neutral 1.0. */
+				this->setRoughness(FastJSON::getValue< float >(data[RoughnessString], JKValue).value_or(DefaultTextureFactor));
 			}
 				return true;
 
@@ -233,7 +234,8 @@ namespace EmEn::Graphics::Material
 						/* Auto-invert since we're using a specular/gloss map as roughness source. */
 						m_invertRoughness = true;
 
-						this->setRoughness(FastJSON::getValue< float >(data[SpecularString], JKValue).value_or(DefaultRoughness));
+						/* NOTE: With a texture component the scalar is the MULTIPLYING factor — neutral 1.0. */
+						this->setRoughness(FastJSON::getValue< float >(data[SpecularString], JKValue).value_or(DefaultTextureFactor));
 					}
 						return true;
 
@@ -339,7 +341,9 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
-				this->setMetalness(FastJSON::getValue< float >(data[MetalnessString], JKValue).value_or(DefaultMetalness));
+				/* NOTE: With a texture component the scalar is the MULTIPLYING factor — neutral 1.0
+				 * (DefaultMetalness would ZERO the texture out). */
+				this->setMetalness(FastJSON::getValue< float >(data[MetalnessString], JKValue).value_or(DefaultTextureFactor));
 			}
 				return true;
 
@@ -1611,6 +1615,13 @@ namespace EmEn::Graphics::Material
 		/* Core PBR scalars. */
 		outData.roughness = m_materialProperties[RoughnessOffset];
 		outData.metalness = m_materialProperties[MetalnessOffset];
+
+		/* Smoothness/gloss source: the RT hit shading must invert the sampled texel
+		 * exactly like the raster roughness component codegen does. */
+		if ( m_invertRoughness )
+		{
+			outData.flags |= GPURTMaterialData::RoughnessTexInverted;
+		}
 		outData.ior = m_materialProperties[IOROffset];
 		outData.specularFactor = m_materialProperties[SpecularFactorOffset];
 
@@ -1679,7 +1690,11 @@ namespace EmEn::Graphics::Material
 
 				if ( tex != nullptr )
 				{
-					outSlots.push_back({role, tex});
+					/* Carry the raster component's source channel so the RT hit shading
+					 * reads the same texel channel (glTF packed metallic-roughness: G/B). */
+					const auto sourceChannel = static_cast< const Texture * >(it->second.get())->sourceChannel();
+
+					outSlots.push_back({role, sourceChannel, tex});
 				}
 			}
 		}
@@ -1733,15 +1748,10 @@ namespace EmEn::Graphics::Material
 
 			if ( componentIt != m_components.cend() )
 			{
-				/* If invert is enabled, treat texture as smoothness/gloss map and invert it. */
-				if ( m_invertRoughness )
-				{
-					lightGenerator.declareSurfaceRoughness("(1.0 - " + componentIt->second->variableName() + ")");
-				}
-				else
-				{
-					lightGenerator.declareSurfaceRoughness(componentIt->second->variableName());
-				}
+				/* NOTE: The variable already carries the FINAL roughness — the component codegen
+				 * folds the source channel, the smoothness/gloss inversion and the material
+				 * factor into its definition. Never re-apply any of them here. */
+				lightGenerator.declareSurfaceRoughness(componentIt->second->variableName());
 			}
 			else
 			{
@@ -2328,18 +2338,13 @@ namespace EmEn::Graphics::Material
 
 		/* Roughness expression driving the prefiltered LOD — same source of truth as
 		 * setupLightGenerator(): the roughness texture component when present (declared at
-		 * Location::Top by the component generation, same precedent as SurfaceNormalVector
-		 * below), the material UBO value otherwise. */
+		 * Location::Top by the component generation, which already folds the source channel,
+		 * inversion and factor into the variable), the material UBO value otherwise. */
 		const auto roughnessExpression = [this] () -> std::string {
 			const auto componentIt = m_components.find(ComponentType::Roughness);
 
 			if ( componentIt != m_components.cend() )
 			{
-				if ( m_invertRoughness )
-				{
-					return "(1.0 - " + componentIt->second->variableName() + ")";
-				}
-
 				return componentIt->second->variableName();
 			}
 
@@ -2520,10 +2525,17 @@ namespace EmEn::Graphics::Material
 			/* Sample the REAL prefiltered cubemap (reserved slot 2) — the frosted-glass LOD
 			 * used to read the raw environment whose mips did not even exist.
 			 * NOTE: Transmission goes through the surface (not reflected), so we use the view direction
-			 * but with Y flipped for cubemap convention. */
+			 * but with Y flipped for cubemap convention.
+			 * The LOD reads the per-pixel roughness variable when a texture component drives it
+			 * (the UBO scalar is only the FACTOR in that case), the UBO value otherwise. */
+			const auto componentIt = m_components.find(ComponentType::Roughness);
+			const auto transmissionRoughness = componentIt != m_components.cend()
+				? componentIt->second->variableName()
+				: std::string{MaterialUB(UniformBlock::Component::Roughness)};
+
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 transmissionDir = vec3(reflectionI.x, -reflectionI.y, reflectionI.z);" << Line::End <<
-				"const float transmissionLod = " << MaterialUB(UniformBlock::Component::Roughness) << " * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0;" << Line::End <<
+				"const float transmissionLod = clamp(" << transmissionRoughness << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0;" << Line::End <<
 				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, transmissionLod).rgb;";
 		}
 		else
@@ -2754,11 +2766,16 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* Roughness component. */
+		/* Roughness component.
+		 * The source channel is a component property (glTF packed metallic-roughness: Green;
+		 * grayscale maps: Red). The material scalar MULTIPLIES the texel — the glTF
+		 * 'roughnessFactor * texel' contract; the neutral factor is 1.0 (DefaultTextureFactor).
+		 * Inversion (smoothness/gloss source) applies to the texel BEFORE the factor, so every
+		 * consumer (BRDF, IBL LOD, G-buffer) reads the final value from this single variable. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Roughness, [this] (FragmentShader & shader, const Texture * component) {
-			/* NOTE: Roughness is typically stored in the green channel of a combined texture,
-			 * but we support single-channel textures too. */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			const std::string texel = "texture(" + std::string{component->samplerName()} + ", " + textCoords(component) + ")." + component->sourceChannelSwizzle();
+
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << ( m_invertRoughness ? "(1.0 - " + texel + ")" : texel ) << " * " << MaterialUB(UniformBlock::Component::Roughness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -2768,11 +2785,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* Metalness component. */
+		/* Metalness component.
+		 * Same contracts as roughness: source channel from the component (glTF packed
+		 * metallic-roughness: Blue), material scalar as multiplying factor ('metallicFactor * texel'). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Metalness, [this] (FragmentShader & shader, const Texture * component) {
-			/* NOTE: Metalness is typically stored in the blue channel of a combined texture,
-			 * but we support single-channel textures too. */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Metalness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -2820,9 +2837,11 @@ namespace EmEn::Graphics::Material
 				 * plain mirror fetch: the explicit texture mode is ARTISTIC by contract. */
 				if ( component->textureResource() == nullptr && component->texture() != nullptr && component->texture()->isCubemapTexture() )
 				{
+					/* NOTE: The component variable already carries the final roughness
+					 * (channel + inversion + factor folded in by the component codegen). */
 					const auto componentIt = m_components.find(ComponentType::Roughness);
 					const auto roughnessExpression = componentIt != m_components.cend()
-						? (m_invertRoughness ? "(1.0 - " + componentIt->second->variableName() + ")" : componentIt->second->variableName())
+						? componentIt->second->variableName()
 						: std::string{MaterialUB(UniformBlock::Component::Roughness)};
 
 					Code(shader, Location::Top) <<
@@ -3179,7 +3198,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	PBRResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value, bool invert) noexcept
+	PBRResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value, bool invert, Base::PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -3190,7 +3209,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Roughness, std::make_unique< Texture >(Uniform::RoughnessSampler, SurfaceRoughness, texture));
+		auto component = std::make_unique< Texture >(Uniform::RoughnessSampler, SurfaceRoughness, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::Roughness, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -3241,7 +3263,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	PBRResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value) noexcept
+	PBRResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value, Base::PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -3252,7 +3274,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Metalness, std::make_unique< Texture >(Uniform::MetalnessSampler, SurfaceMetalness, texture));
+		auto component = std::make_unique< Texture >(Uniform::MetalnessSampler, SurfaceMetalness, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::Metalness, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{

@@ -94,6 +94,7 @@ class Interface {
 - `skipSkinning` — skip bone weights, skins, and animations
 - `swapX` / `swapY` / `swapZ` — `bool`, default `false`. **Negate** that axis of the asset at import, in the geometry itself. See *Axis flip* below — do not use them without reading it, the winding depends on their parity.
 - `forceDoubleSided` — `bool`, default `false`. Forces **every** material part of the loaded model to `RasterizationOptions{ CullingMode::None }`, OR-ed with the per-material asset flag (see *Double-sided materials* below). Symmetric across `FBXLoader` (applied per material part, default-material parts included) and `GLTFLoader` (per primitive). Use it when the asset's format/exporter cannot carry a double-sided flag the loader can read — the canonical case is **Mixamo FBX rigs**, which ship plain `FbxSurfacePhong` materials: ufbx only surfaces `double_sided` for glTF-style materials, so these models always import single-sided and thin shells (inner armour, cloth) render with see-through holes. Blunt instrument (whole model); for per-mesh selectivity use the `onMeshLoaded` hook instead. Two-sided lighting (back-face normal flip) is already engine-side, so forced back-faces are correctly lit. Validated on the Paladin (`src/Actor/Paladin.cpp`).
+- `environmentReflectionIntensity` — `float`, **default `0.0F` — OFF, opt-in per asset (owner decision, Aug 2026)**. When > 0, every material the loader produces gets `setReflectionComponentFromEnvironmentCubemap(intensity)` — IBL specular from the scene's environment cubemap AND the promoted reflectivity in the material-properties G-buffer (SSR/RTR input). ⚠️ The environment cubemap is **UNOCCLUDED** and scaled to the sky's **absolute luminance**: enabling this on an INTERIOR makes every smooth dielectric and metal mirror the outdoor sky at full photometric brightness even in shade (measured on Sponza: glass roughness 0 and metal doors metalness 0.88 glowing green in a dark corridor). Enable it only where materials genuinely see the environment (object showcases: DamagedHelmet passes `1.0F`); occluding reflections (local probes / specular occlusion) is a separate pending work item.
 - `uniformScale` — `float`, default `1.0F`. Uniform scale applied at load time, **coherently across the full skinned-mesh pipeline**: vertex positions (in `loadMeshes`), joint local TRS translations + inverse bind matrix translation columns (in `loadSkins`), and animation translation keyframes (in `sampleAnimStack`, covers both `load()` embedded clips AND `loadAnimationClipsOnly()` external clips). Rotations and scales of joint TRS plus per-vertex influence weights are never touched. Linear (rotation + uniform 1×1 scale) parts of the inverse bind matrix are unaffected by uniform scaling around origin, so only the translation column needs scaling there. **Critical**: the same factor must be passed to BOTH the rig load (`load()`) AND every subsequent `loadAnimationClipsOnly()` against that rig — otherwise animation translation keyframes describe positions in a different unit than the scaled bind pose, joints snap to wrong positions on every keyframe, and the rig visually collapses on the first animated frame. Also propagates to the renderable's bounding box, so collision shapes derived from the bbox reflect the scaled size automatically. Use cases: enlarging a Mixamo humanoid that ships at 1.7 m to 1.9 m for a knight silhouette (validated end-to-end on the Paladin); shrinking oversized Maya/Blender assets without re-export.
 
   > [!WARNING]
@@ -237,9 +238,9 @@ To keep the loaders' material-configuration lambda generic (one code path that w
 | `setAlbedoComponent(Color)` | `setDiffuseComponent(Color)` + tracks `m_pbrAlbedoColor` |
 | `setAlbedoComponent(texture)` | `setDiffuseComponent(texture)` (color tracked stays at previous value) |
 | `setRoughnessComponent(value)` | tracks `m_pbrRoughness`, recomputes specular |
-| `setRoughnessComponent(texture, value, invert)` | texture **ignored**, only the factor is honored |
+| `setRoughnessComponent(texture, value, invert, sourceChannel)` | texture **and channel ignored**, only the factor is honored |
 | `setMetalnessComponent(value)` | tracks `m_pbrMetalness`, recomputes specular |
-| `setMetalnessComponent(texture, value)` | texture **ignored**, only the factor is honored |
+| `setMetalnessComponent(texture, value, sourceChannel)` | texture **and channel ignored**, only the factor is honored |
 | `setAmbientOcclusionComponent`, `setClearCoatComponent`, `setSheenComponent`, `setTransmissionComponent`, `setIridescenceComponent` | no-op stubs (no Phong/Blinn equivalent) |
 
 `recomputeSpecularFromPBR()` derives `(specularColor, shininess)` from the tracked triple at every call:
@@ -247,6 +248,27 @@ To keep the loaders' material-configuration lambda generic (one code path that w
 - `specularColor = mix(vec3(DielectricF0), albedo, metalness)` with `DielectricF0 = 0.04`
 
 It bails early if no `ComponentType::Diffuse` has been registered yet — emitting Specular alone would produce a shader sampling an undeclared `SurfaceDiffuseColor`. Diffuse is always created by `setAlbedoComponent` before any roughness/metalness setter in normal usage, so the early-out is a safety net.
+
+### Roughness/metalness — source CHANNEL and factor SEMANTICS per format (fixed Aug 2026)
+
+The material scalar-component contract (see `Graphics/AGENTS.md` § Scalar components): the
+texture component reads ONE color channel (default **Red**), and the scalar **MULTIPLIES** the
+texel. Each loader owns the translation from its format's semantics:
+
+| Format | Packing | What the loader passes |
+|--------|---------|------------------------|
+| **glTF** | ONE packed texture — roughness = **G**, metalness = **B** | the texture twice, with `Channel::Green` / `Channel::Blue`, and the glTF factors (spec: `factor × texel`) |
+| **FBX** | separate grayscale maps (Red) | the texture with the **neutral factor** (default) — in FBX a connected texture **REPLACES** the scalar; passing the authored scalar would wrongly scale the map (metalness scalar 0 = FBX default = map erased) |
+| **USD** | separate maps (Red) | the texture alone (neutral default factor) |
+
+> [!WARNING]
+> **The failure mode is silent flattening, not an error.** Before the fix all loaders let the
+> component read the default RED channel of the packed glTF texture — empty on most assets
+> (measured ~0 everywhere on DamagedHelmet while G/B carried the actual maps): roughness 0 +
+> metalness 0 uniform over every surface, i.e. a mirror-perfect dielectric with ZERO surface
+> disparity. It reads like a lighting/IBL bug; it is a material-identity bug. Validate a
+> loader's PBR path by looking for **per-surface disparity** (scratches in reflections, matte
+> vs glossy zones), not just "textures are on".
 
 `loadAnimationClipsOnly()` covers the **split-animation workflow** (Mixamo per-action exports, Maya/Blender per-action FBX). The asset file is opened, every `anim_stack` is sampled against the bones of `targetSkeleton` resolved **by joint name**, and the produced clips are appended to `output`. Joints with no matching node are silently dropped (kept at bind pose). See FBXLoader section for the concrete implementation.
 

@@ -647,7 +647,7 @@ namespace EmEn::Graphics::Material
 
 			if ( tex != nullptr )
 			{
-				outSlots.push_back({RTTextureRole::Albedo, tex});
+				outSlots.push_back({RTTextureRole::Albedo, Base::PixelFactory::Channel::Red, tex});
 			}
 		}
 	}

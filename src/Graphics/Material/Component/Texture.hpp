@@ -41,6 +41,7 @@
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/Types.hpp"
 #include "Math/Vector.hpp"
+#include "PixelFactory/Types.hpp"
 #include "Saphir/Keys.hpp"
 
 namespace EmEn::Resources
@@ -290,6 +291,55 @@ namespace EmEn::Graphics::Material::Component
 			}
 
 			/**
+			 * @brief Sets the color channel a scalar component reads from the sampled texel.
+			 * @note Default is Red (grayscale/single-channel maps). Packed textures select
+			 * their channel here, e.g. glTF metallic-roughness: roughness = Green, metallic = Blue.
+			 * @param channel The source color channel.
+			 * @return void
+			 */
+			void
+			setSourceChannel (Base::PixelFactory::Channel channel) noexcept
+			{
+				m_sourceChannel = channel;
+			}
+
+			/**
+			 * @brief Returns the color channel a scalar component reads from the sampled texel.
+			 * @return EmEn::Base::PixelFactory::Channel
+			 */
+			[[nodiscard]]
+			Base::PixelFactory::Channel
+			sourceChannel () const noexcept
+			{
+				return m_sourceChannel;
+			}
+
+			/**
+			 * @brief Returns the GLSL swizzle selector matching the source channel.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char *
+			sourceChannelSwizzle () const noexcept
+			{
+				switch ( m_sourceChannel )
+				{
+					case Base::PixelFactory::Channel::Green :
+						return "g";
+
+					case Base::PixelFactory::Channel::Blue :
+						return "b";
+
+					case Base::PixelFactory::Channel::Alpha :
+						return "a";
+
+					case Base::PixelFactory::Channel::Red :
+					default :
+						return "r";
+				}
+			}
+
+			/**
 			 * @brief Returns the binding point for the texture.
 			 * @return uint32_t
 			 */
@@ -324,6 +374,7 @@ namespace EmEn::Graphics::Material::Component
 			/* JSON key. */
 			static constexpr auto JKResourceName{"Name"};
 			static constexpr auto JKChannel{"Channel"};
+			static constexpr auto JKSourceChannel{"SourceChannel"};
 			static constexpr auto JKUVWScale{"UVW"};
 			static constexpr auto JKEnableAlpha{"EnableAlpha"};
 
@@ -334,6 +385,7 @@ namespace EmEn::Graphics::Material::Component
 			Base::Math::Vector< 3, float > m_UVWScale{1.0F, 1.0F, 1.0F};
 			uint32_t m_UVWChannel{0};
 			uint32_t m_binding{0};
+			Base::PixelFactory::Channel m_sourceChannel{Base::PixelFactory::Channel::Red};
 			bool m_alphaEnabled{false};
 	};
 

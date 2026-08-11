@@ -1045,6 +1045,7 @@ namespace EmEn::Scenes::Loaders
 					sheenColor, sheenRoughness,
 					transmissionFactor,
 					iridescenceFactor,
+					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend
 				] (auto & materialResource) {
 					/* Albedo. */
@@ -1062,16 +1063,35 @@ namespace EmEn::Scenes::Loaders
 						materialResource.setAlbedoComponent(albedoColor);
 					}
 
-					/* Roughness / Metalness. */
+					/* Roughness / Metalness.
+					 * glTF packs both in ONE texture: roughness in the GREEN channel, metalness in
+					 * the BLUE channel, each multiplied by its factor (glTF 2.0 § material.pbrMetallicRoughness;
+					 * reference: Khronos glTF-Sample-Renderer, material_info.glsl, getMetallicRoughnessInfo()).
+					 * ⚠️ Omitting the source channel reads RED — empty in most assets (measured ~0 on
+					 * DamagedHelmet) — which flattens both properties to 0 over the whole surface. */
 					if ( metallicRoughnessTex != nullptr )
 					{
-						materialResource.setRoughnessComponent(metallicRoughnessTex, roughnessFactor);
-						materialResource.setMetalnessComponent(metallicRoughnessTex, metallicFactor);
+						materialResource.setRoughnessComponent(metallicRoughnessTex, roughnessFactor, false, Base::PixelFactory::Channel::Green);
+						materialResource.setMetalnessComponent(metallicRoughnessTex, metallicFactor, Base::PixelFactory::Channel::Blue);
 					}
 					else
 					{
 						materialResource.setRoughnessComponent(roughnessFactor);
 						materialResource.setMetalnessComponent(metallicFactor);
+					}
+
+					/* Environment (image-based) specular reflection.
+					 *
+					 * ⚠️ Without this call a metallic-roughness material has NOTHING to reflect and
+					 * renders matte — the loader used to declare no reflection at all. It also
+					 * decides what SSR/RTR receive: declaring it promotes the reflectivity published
+					 * to the material-properties G-buffer from `metalness * (1 - roughness)` — which
+					 * collapses to ~0 on a rough surface — to `max(iblIntensity * (1 - roughness),
+					 * metalness)`, so rough metal stays reflective. See
+					 * `LightGenerator::materialPropertiesExpression()`. */
+					if ( environmentReflectionIntensity > 0.0F )
+					{
+						materialResource.setReflectionComponentFromEnvironmentCubemap(environmentReflectionIntensity);
 					}
 
 					/* Normal map. */
