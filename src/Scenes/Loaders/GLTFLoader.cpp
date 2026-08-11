@@ -952,7 +952,23 @@ namespace EmEn::Scenes::Loaders
 			auto emissiveTex = glTFMaterial.emissiveTexture.has_value()
 				? resolveTexture(glTFMaterial.emissiveTexture->textureIndex, true) : nullptr;
 
-			const auto emissiveStrength = static_cast< float >(glTFMaterial.emissiveStrength);
+			/* ⚠️⚠️ EXPERIMENT (Aug 2026) — PHOTOMETRIC ANCHOR FOR THE EMISSIVE.
+			 *
+			 * glTF emissive is UNITLESS: `emissiveFactor * emissiveTexture` in [0,1], with
+			 * KHR_materials_emissive_strength as the optional HDR multiplier. The engine's colour
+			 * buffer holds ABSOLUTE LUMINANCE, and the shader adds the emissive straight into it —
+			 * so an asset without the extension contributes ~1 nit. Against a daylight sky metered
+			 * in the thousands of nits, that is 3 to 4 stops below anything visible: the HUD of
+			 * DamagedHelmet was measured invisible for exactly this reason.
+			 *
+			 * A reference luminance is therefore REQUIRED to bridge the unitless asset to the
+			 * photometric renderer. 2000 nits matches the anchor already used by the WAD
+			 * materializer. ⚠️ The VALUE and the PLACE (loader vs material vs shader) are an
+			 * engine-wide decision pending owner arbitration — this constant is the experiment that
+			 * demonstrates the mechanism, not a settled convention. */
+			constexpr auto EmissiveLuminanceAnchor{2000.0F};
+
+			const auto emissiveStrength = static_cast< float >(glTFMaterial.emissiveStrength) * EmissiveLuminanceAnchor;
 
 			Color< float > emissiveColor{
 				static_cast< float >(glTFMaterial.emissiveFactor[0]),
