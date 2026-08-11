@@ -750,8 +750,11 @@ holding 353 entries, 38 USD layers and 285 images. Demo: `projet-alpha --load-de
 > | Frame clipped at 1.0 | — | **18.8 %** (was 41.5 % before the triad was re-derived) |
 >
 > The exposure was re-derived from the MEASURED room illuminance and now reads
-> **`f/4 · 1/50 s · ISO 160`** — § 11.6. What remains open is the **floor albedo**, still assumed at
-> 0.7 and never sampled.
+> **`f/4 · 1/50 s · ISO 160`** — § 11.6. A night sky is installed as **scenery only**, with the
+> diffuse-IBL separation verified by measurement.
+>
+> **The live open point is now § 11.5 item 1: half the frame sits at or above 0.9 sRGB with the
+> floor correct**, which points at baked lighting being counted twice rather than at the exposure.
 
 ### 11.1 The archive is MAPPED, never extracted
 
@@ -880,18 +883,34 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
 
 ### 11.5 Still open on this asset
 
-1. **THE FLOOR ALBEDO HAS NEVER BEEN MEASURED** — 0.7 is an assumption, and it is now the last
-   unpinned term in the photometric chain (§ 11.6). Closing it means sampling the floor's baked
+1. **⚠️⚠️ SUSPECTED DOUBLE-COUNTED BAKED LIGHTING — half the frame sits at or above 0.9 sRGB.**
+   Measured at EV100 8.97 (clipping ceiling 600 cd/m²): the floor reads 194 cd/m² and is correct,
+   but the right-hand wall reads **≥ 570** and the far end **≥ 555** — about **3× the floor**. Downward
+   spots cannot do that to a VERTICAL surface: a wall under a downlight gets grazing light and must
+   be DIMMER than the floor, not three times brighter. 49.8 % of the frame is above 0.9 sRGB and
+   18.8 % clips outright.
+
+   The hypothesis, untested: a Kit export commonly bakes lighting into the base colour, and
+   re-lighting such a surface counts the term twice — the documented rule is that content carrying
+   its own baked lighting must be declared **EMITTING, never lit**. The symptom matches exactly:
+   bright surfaces take off while the floor stays correct. **The check needs no run** — sample those
+   materials' base-colour textures and see whether they carry shading gradients rather than a flat
+   material colour.
+
+   ⚠️ This is NOT an exposure problem. The floor is right, so the triad must not move; what would
+   collapse if the hypothesis holds is the clipping figure, which is the scene's real health metric.
+2. **THE FLOOR ALBEDO HAS NEVER BEEN MEASURED** — 0.7 is an assumption, and it is one of the two
+   unpinned terms in the photometric chain (§ 11.6). Closing it means sampling the floor's baked
    base-colour texture; 0.86 would account for the whole `+0.30 EV` residual on its own.
-2. **85 × `Unsafe asset path: ../../Materials/Bake/…`** — the patch fixed the **composition** path
+3. **85 × `Unsafe asset path: ../../Materials/Bake/…`** — the patch fixed the **composition** path
    (`ValidateAndNormalizeRelativeAssetPath`) but **not Tydra's image loader**, which still calls the
    strict validator. Identical count across every run to date.
-3. **28 meshes have no `st` UV set** (`ConvertMesh: Failed to get texture coordinate`).
-4. **The DomeLight carries no image** (`intensity 1000, image '<none>'`), so there is nothing to
+4. **28 meshes have no `st` UV set** (`ConvertMesh: Failed to get texture coordinate`).
+5. **The DomeLight carries no image** (`intensity 1000, image '<none>'`), so there is nothing to
    install as an environment.
-5. **USD cameras are not translated at all** — `SceneData` carries no camera. The demo's viewpoint
+6. **USD cameras are not translated at all** — `SceneData` carries no camera. The demo's viewpoint
    is placed by hand.
-6. **`PBRResource` has no alpha-test path** (`enableAlphaTest()` exists on `BasicResource` only), so
+7. **`PBRResource` has no alpha-test path** (`enableAlphaTest()` exists on `BasicResource` only), so
    a cutout currently falls back to blending: visually close, but it pays sorting, loses depth write
    and does not alpha-test at ray-hit time.
 
