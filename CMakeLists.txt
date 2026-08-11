@@ -404,6 +404,10 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupBC7EncRDO) # BC7 texture compression
 
+	include(SetupKTX) # KTX2 container + Basis transcoder (KHR_texture_basisu)
+
+	include(SetupMeshOptimizer) # Vertex/index codec (EXT_meshopt_compression)
+
 	include(SetupOpenAL)
 
 	if ( EMERAUDE_ENABLE_IMGUI )
