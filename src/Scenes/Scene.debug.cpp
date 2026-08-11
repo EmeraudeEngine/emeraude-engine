@@ -29,9 +29,14 @@
 /* Local inclusions. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Resources/Manager.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
 
 namespace EmEn::Scenes
 {
@@ -52,39 +57,8 @@ namespace EmEn::Scenes
 		};
 	}
 
-	/** @brief Debug entity name prefix for compass display. */
-	constexpr std::array< debugAxis , AxisCount > Landmarks{{
-		{
-			.label = "+Compass0",
-			.position = Vector< 3, float >::positiveX(),
-			.color = Red
-		},
-		{
-			.label = "+Compass1",
-			.position = Vector< 3, float >::positiveY(),
-			.color = Green
-		},
-		{
-			.label = "+Compass2",
-			.position = Vector< 3, float >::positiveZ(),
-			.color = Blue
-		},
-		{
-			.label = "+Compass3",
-			.position = Vector< 3, float >::negativeX(),
-			.color = Cyan
-		},
-		{
-			.label = "+Compass4",
-			.position = Vector< 3, float >::negativeY(),
-			.color = Magenta
-		},
-		{
-			.label = "+Compass5",
-			.position = Vector< 3, float >::negativeZ(),
-			.color = Yellow
-		}
-	}};
+	/* NOTE: The compass landmark table now lives in Debug::Compass — the compass is no longer
+	 * built out of scene entities. Only the boundary planes still use this local table. */
 
 	/** @brief Debug entity name prefix for ground zero plane. */
 	constexpr auto GroundZeroPlaneDisplay{"+GroundZeroPlane"};
@@ -131,49 +105,57 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		for ( const auto & landmark : Landmarks )
+		/* ⚠️ The compass is NOT built as a scene entity any more. As scene content it was drawn in
+		 * the HDR pass, where `ToneMapping` multiplies everything by the camera exposure — an
+		 * exposure calibrated for thousands of nits turned the spheres black even though they were
+		 * already unlit. A reference whose colors depend on the camera settings measures nothing.
+		 * It is now a standalone visual recorded after the post-process chain: see Debug::Compass
+		 * and Scene::renderDebugOverlay(). */
+		auto & renderer = resources.graphicsRenderer();
+
+		if ( !m_compass.create(renderer, resources, renderer.mainRenderTarget()) )
 		{
-			const auto specificMesh = resources.container< Renderable::MeshResource >()
-				->getOrCreateResource(landmark.label, [&resources, &landmark] (auto & meshResource) {
-					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-					generator.parameters().setGlobalVertexColor(landmark.color);
-
-					const auto geometry = generator.sphere(8.0F, 16, 8, landmark.label);
-
-					const auto material = resources.container< Material::BasicResource >()
-						->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
-							materialResource.enableVertexColor();
-
-							return materialResource.setManualLoadSuccess(true);
-						});
-
-					return meshResource.load(geometry, material);
-				});
-
-			const auto meshInstance = this->createStaticEntity(landmark.label, landmark.position * 100.0F)
-				->componentBuilder< Component::Visual >(landmark.label)
-				.setup([] (auto & component) {
-					const auto renderableInstance = component.getRenderableInstance();
-					renderableInstance->setUseInfinityView(true);
-					renderableInstance->disableDepthTest(true);
-				})
-				.build(specificMesh);
+			Tracer::error(ClassId, "Unable to create the debug compass !");
 		}
 	}
 
 	void
 	Scene::disableCompassDisplay () noexcept
 	{
-		for ( const auto & landmark : Landmarks )
-		{
-			this->removeStaticEntity(landmark.label);
-		}
+		m_compass.destroy();
 	}
 
 	bool
 	Scene::compassDisplayEnabled () const noexcept
 	{
-		return m_staticEntities.contains(Landmarks[0].label);
+		return m_compass.isCreated();
+	}
+
+	void
+	Scene::renderDebugOverlay (const Vulkan::CommandBuffer & commandBuffer) const noexcept
+	{
+		if ( !m_compass.isCreated() )
+		{
+			return;
+		}
+
+		/* NOTE: The view matrices of the main camera, resolved the same way the scene editor
+		 * resolves them for its gizmos: the first render-to-view target. */
+		const Graphics::ViewMatricesInterface * viewMatrices = nullptr;
+
+		this->forEachRenderToView([&viewMatrices] (const auto & renderTarget) {
+			if ( viewMatrices == nullptr )
+			{
+				viewMatrices = &renderTarget->viewMatrices();
+			}
+		});
+
+		if ( viewMatrices == nullptr )
+		{
+			return;
+		}
+
+		m_compass.render(commandBuffer, *viewMatrices);
 	}
 
 	bool

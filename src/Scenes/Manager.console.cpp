@@ -581,6 +581,31 @@ namespace EmEn::Scenes
 			return true;
 		}, "Returns the name of the currently active scene.");
 
+		/* NOTE: The compass is a Core-level debug display, bound to F9 on the keyboard. The console
+		 * needs its OWN entry point: Input::Manager::injectKeyEvent() walks the keyboard listener
+		 * list and does NOT reach the Core key handlers, so keyPress(298, 0) executes without
+		 * toggling anything — silently. Every debug display an AI session must drive has to be
+		 * reachable from here, not only from a key binding. */
+		this->bindCommand("toggleCompass", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			if ( m_activeScene->toggleCompassDisplay(m_resourceManager) )
+			{
+				outputs.emplace_back(Severity::Success, "World compass displayed.");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Success, "World compass hidden.");
+			}
+
+			return true;
+		}, "Toggles the world orientation compass (same as the F9 key). Bright spheres: R=X+, G=Y+, B=Z+; complementary: Cyan=X-, Magenta=Y-, Yellow=Z-.");
+
 		this->bindCommand("targetActiveScene", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 
 			if ( m_activeScene == nullptr )

@@ -59,6 +59,7 @@
 #include "GroundLevelInterface.hpp"
 #include "Randomizer.hpp"
 #include "BindlessTextureSet.hpp"
+#include "Debug/Compass.hpp"
 #include "LightSet.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
@@ -1959,13 +1960,15 @@ namespace EmEn::Scenes
 			 * ============================================================ */
 
 			/**
-			 * @brief Displays an orientation compass at scene origin.
-			 * Creates a visual compass helper showing XYZ axes.
-			 * Useful for debugging coordinate systems.
-			 * @param resources Resource manager for loading compass mesh.
+			 * @brief Displays the orientation compass: six colored spheres marking the world axes.
 			 * @note This is a debug utility.
+			 * @warning The compass is NOT scene content: it is drawn after the post-process chain
+			 * so the camera exposure cannot alter its colors (see Debug::Compass). It therefore
+			 * needs renderDebugOverlay() to be called by the renderer to appear at all.
+			 * @param resources A reference to the resource manager.
 			 * @see disableCompassDisplay() To remove.
 			 * @see compassDisplayEnabled() To check state.
+			 * @see renderDebugOverlay() For the draw call.
 			 */
 			void enableCompassDisplay (Resources::Manager & resources) noexcept;
 
@@ -1991,6 +1994,18 @@ namespace EmEn::Scenes
 			 * @note This is a debug utility.
 			 */
 			bool toggleCompassDisplay (Resources::Manager & resources) noexcept;
+
+			/**
+			 * @brief Records the draw calls of the debug helpers that must escape the post-process chain.
+			 * @warning ⚠️ MUST be called by the renderer AFTER the post-process effects have been
+			 * executed, inside the render pass owning the overlay framebuffer. Called any earlier,
+			 * the helpers land back in the absolute-luminance buffer and the camera exposure
+			 * crushes them — which is the very defect this path exists to fix.
+			 * @note Does nothing when no debug helper is enabled.
+			 * @param commandBuffer A reference to the command buffer.
+			 * @return void
+			 */
+			void renderDebugOverlay (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Displays a ground zero reference plane at Y=0.
@@ -2583,6 +2598,9 @@ namespace EmEn::Scenes
 			static constexpr size_t SeaLevelVisualIndex{2};
 
 			std::array< std::unique_ptr< Component::Visual >, 3 > m_sceneVisualComponents{nullptr, nullptr, nullptr};
+			/** @brief The orientation compass. Deliberately NOT a scene entity: it is drawn after
+			 * the post-process chain so the camera exposure cannot touch its colors. */
+			Debug::Compass m_compass;
 			/** @brief Weak references to shadow map render targets. */
 			RenderTargetAccessList m_renderToShadowMaps;
 			/** @brief Weak references to texture render targets. */

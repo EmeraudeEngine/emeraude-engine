@@ -1407,6 +1407,12 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Render the scene debug helpers (compass) over the 3D-rendered scene. */
+		if ( scene != nullptr )
+		{
+			scene->renderDebugOverlay(*commandBuffer);
+		}
+
 		/* Render the editor gizmos over the 3D-rendered scene. */
 		if ( editorManager != nullptr )
 		{
@@ -1885,6 +1891,12 @@ namespace EmEn::Graphics
 			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
 		}
 
+		/* Render the scene debug helpers (compass) over the scene. */
+		if ( scenePtr != nullptr )
+		{
+			scenePtr->renderDebugOverlay(*commandBuffer);
+		}
+
 		/* Render the editor gizmos over the scene. */
 		if ( editorManager != nullptr )
 		{
@@ -2086,6 +2098,14 @@ namespace EmEn::Graphics
 		lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
 
 		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
+
+		/* Render the scene debug helpers (compass) over the post-processed scene.
+		 * ⚠️ This MUST stay after executeDirectPostProcessEffects(): recorded before it, the
+		 * compass would be multiplied by the camera exposure like scene content and go black. */
+		if ( scenePtr != nullptr )
+		{
+			scenePtr->renderDebugOverlay(*commandBuffer);
+		}
 
 		/* Render the editor gizmos over the post-processed scene. */
 		if ( editorManager != nullptr )

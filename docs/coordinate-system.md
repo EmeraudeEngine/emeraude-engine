@@ -36,6 +36,46 @@ This design decision was made to:
 
 While counter-intuitive (humans naturally think "up = positive"), this convention must be respected in ALL code. **Never introduce Y-axis conversions or assumptions based on traditional math coordinates (Y-up).**
 
+## ⚠️⚠️ OPEN DEFECT — this convention renders a MIRROR image (measured Aug 2026)
+
+**The convention above combines Vulkan's Y-down with OpenGL's -Z-forward, and that pair is
+orientation-reversing.** A frame is non-mirrored if and only if
+`(screen-right) × (screen-up) = (toward the viewer)`. Here: screen-right `= +X`, screen-up `= -Y`
+(Y is down), toward-the-viewer `= +Z` (Z+ is BACK). `X × (-Y) = -Z ≠ +Z` — the visual frame is
+left-handed, so the rendered image is mirrored.
+
+`Matrix::perspectiveProjection()` (emeraude-base) confirms it in code: `[1][1] = +a` (**no** Y flip,
+Vulkan-style NDC) together with `[2][3] = -1` (`w = -z_eye`, OpenGL-style -Z eye space). The
+eye→NDC linear map is `diag(+, +, −)`: negative determinant.
+
+**Measured, with the debug compass as the only instrument (no asset involved):** looking along
+`(+X, 0, +Z)/√2`, red X+ lands on the LEFT and blue Z+ on the RIGHT (centroids symmetric to 1 px);
+pitched toward -Y, magenta Y- lands at the TOP and red X+ at the BOTTOM. The console `lookAt` never
+rolls, so screen-up is exactly `-Y` for an unpitched camera; `R × U` then equals `+F` (the look
+direction) where a correct frame requires `-F`.
+
+**Consequences already visible in the codebase** — each was worked around locally instead of being
+recognised as one root cause:
+
+| Symptom | Site |
+|---|---|
+| Sponza inscriptions read backwards | any chiral asset content |
+| All four loaders must swap triangle winding (indices 1↔2) | `GLTFLoader.cpp`, `FBXLoader.cpp`, `USDLoader.cpp`, `WADLoader.cpp` |
+| Gizmo arrows authored on NEGATIVE axes to match the compass | `src/Scenes/Editor/AGENTS.md` |
+| Cubemap sampling negates Y | `docs/reflection-pipeline.md` |
+
+⚠️ **The winding swap is justified by a false statement** in those loaders: "the 180° X rotation
+inverts the winding". A rotation has determinant +1 and NEVER inverts winding. The swap is in fact
+compensating this mirror.
+
+**Two coherent fixes exist; neither is applied yet** (the choice is an engine-wide decision):
+1. Keep Y-down and make **+Z the FORWARD axis** (the real Vulkan idiom) → `diag(+,+,+)`.
+2. Keep -Z forward and **flip Y in the projection** (`[1][1] = -a`), which also means removing the
+   180° X rotation from the loaders → `diag(+,−,−)`.
+
+Either way, the four loader winding swaps and the cubemap Y negation must be re-evaluated together:
+they are compensations for this defect, not independent decisions.
+
 ## Movement Examples (Player/Object perspective)
 
 - **Moving upward**: `velocity.y < 0` (toward -Y)

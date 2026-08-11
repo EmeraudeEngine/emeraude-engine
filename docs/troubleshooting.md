@@ -12,6 +12,8 @@ Solutions for common engine-level issues in Emeraude Engine development.
   - [Uniform grey/white framebuffer after un-ticking an effect](#uniform-greywhite-framebuffer-after-un-ticking-a-photographic-effect-fixed-aug-2026)
   - [Blocky corruption on macOS — the two known classes](#blocky-corruption-on-macos--the-two-known-classes)
   - [Tone mapping blows out to white / auto-ISO shows nothing](#tone-mapping-blows-out-to-white-and-never-recovers--auto-iso-shows-nothing-mitigated-aug-2026)
+- [Debug Display Issues](#debug-display-issues)
+  - [A debug helper is dark, washed out, or invisible — the exposure ate it](#a-debug-helper-is-dark-washed-out-or-invisible--the-exposure-ate-it-fixed-aug-2026)
 
 ---
 
@@ -413,6 +415,39 @@ the tool: emit the suspect condition as the resolved colour and `return` early �
 draws its own silhouette. See
 [`docs/temporal-stability-measurement.md`](../../../docs/temporal-stability-measurement.md) §4 in
 projet-alpha.
+
+---
+
+## Debug Display Issues
+
+### A debug helper is dark, washed out, or invisible — the exposure ate it (fixed Aug 2026)
+
+**Symptoms:** the orientation compass spheres are no longer bright red/green/blue but nearly black,
+and their brightness changes when the camera aperture, shutter speed or ISO changes. Turning
+lighting off does not help. The geometry is there — a screenshot with the exposure widened shows it.
+
+**Cause:** the helper was drawn in the **scene pass**, whose colour buffer holds **absolute
+luminance**. `ToneMapping` multiplies everything in it by the camera exposure
+(`hdrColor *= exposure`, plus the auto-exposure factor). An exposure calibrated for a few thousand
+nits crushes an LDR `1.0` vertex colour to black. This is **not** a lighting problem: an unlit
+instance (`EnableLighting` off, which is the default) is affected exactly the same, because the
+exposure multiply happens downstream of every lighting decision.
+
+**Fix:** a helper that must be read as authored is **not scene content**. Draw it after the
+post-process chain, like the editor gizmos and `Scenes::Debug::Compass`:
+
+- compile its pipeline against `Renderer::overlayFramebuffer()`, not the scene render target;
+- record it after `PostProcessor::executeDirectPostProcessEffects()` (the three gizmo sites in
+  `Graphics/Renderer.cpp`);
+- disable depth test/write and culling.
+
+Full contract: [`src/Scenes/AGENTS.md`](../src/Scenes/AGENTS.md) § "Debug Helpers and the Exposure Trap".
+
+**The trap in reverse:** if a helper must be *occluded* by the scene (a ground grid, a boundary
+plane), it cannot move to that pass — it needs the depth buffer. Such a helper has to stay in the
+scene pass and be anchored in absolute luminance instead, and it will still be touched by bloom and
+TAA. `Scene::enableGroundZeroDisplay()` and the boundary planes are in that category and are
+**still affected** — they were deliberately left in the scene pass.
 
 ---
 
