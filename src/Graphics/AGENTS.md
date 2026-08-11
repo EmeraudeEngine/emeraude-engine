@@ -1359,7 +1359,24 @@ Key design:
 - Inverse view matrix (3×3 rotation) passed via push constants (3 × vec4 = 48 bytes)
 - `envFallbackIntensity` parameter controls fallback strength (0.0 = disabled, 0.3 = default)
 - Cubemap set via `setEnvironmentCubemap()` before `create()`; falls back to `Renderer::getDefaultTextureCubemap()` if none set
-- Resolve descriptor set: 5 bindings (color, trace, depth, normals, envCubemap)
+- Resolve descriptor set: 6 bindings (color, trace, depth, normals, pyramid, albedo — the effect
+  declares `requiresAlbedo()`)
+
+**Primary-surface Fresnel is a COLOR (same model as RTR, Aug 2026):** the resolve pass tints the
+reflection (hit AND cubemap-fallback paths) by `F = F0 + (1-F0)·(1-NdotV)⁵` with
+`F0 = mix(vec3(0.04), albedo, metalness)` — a metal reflects in its own color, a dielectric at
+the physical 4 % head-on.
+> [!WARNING]
+> **The Fresnel rides on the COLOR, never on the confidence.** The combine computes
+> `mix(scene, ssrData.rgb / confidence, confidence × intensity × reflectivity)` — any per-pixel
+> weight folded into the confidence is CANCELLED by that division. Only the color survives.
+
+**Reflectivity mask (material-properties G-buffer, R high nibble) is PARTICIPATION, not energy
+(Aug 2026):** materials without an explicit reflection component publish
+`max(metalness, 1 - roughness)` (`LightGenerator::materialPropertiesExpression()`, priority 3) —
+`max`, not the former product `metalness × (1-roughness)`, which zeroed out every smooth
+DIELECTRIC (glass: metalness 0 → mask 0 → no traced reflection at all). The physical attenuation
+belongs to the effects' per-pixel Fresnel + roughness fade, never to the mask.
 
 **Code references:**
 - `Effects/Framebuffer/SSR.hpp` — Parameters, ResolvePushConstants, setEnvironmentCubemap()

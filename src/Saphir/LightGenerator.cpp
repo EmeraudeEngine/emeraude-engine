@@ -154,8 +154,13 @@ namespace EmEn::Saphir
 		}
 		else if ( m_usePBRMode && !m_surfaceMetalness.empty() && !m_surfaceRoughness.empty() )
 		{
-			/* PBR without explicit reflection: derive from metalness and smoothness. */
-			reflectivity = "clamp(" + m_surfaceMetalness + " * (1.0 - " + m_surfaceRoughness + "), 0.0, 1.0)";
+			/* PBR without explicit reflection: PARTICIPATION mask for the traced reflections
+			 * (SSR/RTR), not an energy weight — both effects apply the physical Fresnel
+			 * (F0 = mix(0.04, albedo, metalness)) and their roughness fade per pixel.
+			 * `max` and not `metalness * smoothness`: a smooth DIELECTRIC (glass: metalness 0,
+			 * roughness 0) must participate — the old product zeroed it out and glass lost
+			 * every traced reflection; its Fresnel keeps the head-on contribution at 4%. */
+			reflectivity = "clamp(max(" + m_surfaceMetalness + ", 1.0 - " + m_surfaceRoughness + "), 0.0, 1.0)";
 		}
 		else if ( m_useReflection && !m_surfaceReflectionAmount.empty() )
 		{

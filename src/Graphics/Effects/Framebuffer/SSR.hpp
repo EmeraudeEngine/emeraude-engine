@@ -219,6 +219,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresAlbedo()
+			 * @note The resolve pass tints the reflection by the primary surface's Fresnel
+			 * COLOR — F0 = mix(vec3(0.04), albedo, metalness) — same model as RTR. */
+			[[nodiscard]]
+			bool
+			requiresAlbedo () const noexcept override
+			{
+				return true;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
 			[[nodiscard]]
 			bool

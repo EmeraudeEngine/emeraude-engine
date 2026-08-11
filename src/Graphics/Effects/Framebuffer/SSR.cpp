@@ -449,6 +449,8 @@ layout(set = 0, binding = 2) uniform sampler2D depthTex;
 layout(set = 0, binding = 3) uniform sampler2D normalTex;
 /* Pre-convolved color pyramid (half-res base): the cone lookup source. */
 layout(set = 0, binding = 4) uniform sampler2D pyramidTex;
+/* Scene albedo: the primary-surface Fresnel COLOR tints the resolved reflection. */
+layout(set = 0, binding = 5) uniform sampler2D albedoTex;
 
 /* Bindless textures (set 1): the reserved cube slot 2 holds the ACTIVE SCENE's
  * GGX-prefiltered environment, re-baked at every background switch (the old dedicated
@@ -490,7 +492,8 @@ void main()
 		 * the pre-convolved pyramid is read at the matching LOD. Mirror-sharp rays
 		 * (cone < 1 trace texel) keep the full-res color fetch — zero regression. */
 		float packedRM = texture(normalTex, vUV).a;
-		float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
+		float originMetalness = packedRM >= 2.0 ? 1.0 : 0.0;
+		float roughness = packedRM - originMetalness * 2.0;
 		float coneTan = roughness * roughness;
 		vec2 deltaTexels = (traceData.xy - vUV) / vec2(texelSizeX, texelSizeY);
 		float coneWidthTexels = 2.0 * coneTan * length(deltaTexels);
@@ -511,7 +514,23 @@ void main()
 			reflColor = mix(sharpColor, coneColor, clamp(coneWidthTexels - 1.0, 0.0, 1.0));
 		}
 
-		outResolve = vec4(reflColor, confidence);
+		/* Primary-surface Fresnel as a COLOR (same model as RTR): a metal tints its
+		 * reflection by its albedo, a dielectric reflects the physical 4% head-on and
+		 * more at grazing angles. ⚠️ It rides on the COLOR, never on the confidence —
+		 * the combine divides by the (blurred) confidence, which cancels any per-pixel
+		 * weight folded into it. */
+		float hitDepth = texture(depthTex, vUV).r;
+		float hitLinearZ = linearizeDepth(hitDepth);
+		vec2 hitNdc = vUV * 2.0 - 1.0;
+		float hitT = abs(tanHalfFovY);
+		vec3 hitViewPos = vec3(hitNdc.x * hitT * aspectRatio * hitLinearZ, hitNdc.y * hitT * hitLinearZ, -hitLinearZ);
+		vec3 hitNormal = normalize(texture(normalTex, vUV).rgb);
+		float hitNdotV = max(dot(hitNormal, -normalize(hitViewPos)), 0.0);
+		vec3 hitAlbedo = texture(albedoTex, vUV).rgb;
+		vec3 hitF0 = mix(vec3(0.04), hitAlbedo, originMetalness);
+		vec3 hitFresnel = hitF0 + (1.0 - hitF0) * pow(1.0 - hitNdotV, 5.0);
+
+		outResolve = vec4(reflColor * hitFresnel, confidence);
 	}
 	else if (envFallbackIntensity > 0.0)
 	{
@@ -527,7 +546,8 @@ void main()
 		/* Read packed roughness+metalness to modulate cubemap fallback.
 		 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0; */
 		float packedRM = texture(normalTex, vUV).a;
-		float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
+		float originMetalness = packedRM >= 2.0 ? 1.0 : 0.0;
+		float roughness = packedRM - originMetalness * 2.0;
 
 		/* Reconstruct view-space position (standard: Z negative = into screen). */
 		float linearZ = linearizeDepth(depth);
@@ -557,7 +577,14 @@ void main()
 		 * The prefiltered chain handles the roughness (the old smoothstep attenuation
 		 * compensated a mirror-only sample); mip 0 is an exact environment copy. */
 		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], vec3(worldReflDir.x, -worldReflDir.y, worldReflDir.z), clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
-		outResolve = vec4(envColor, envFallbackIntensity);
+
+		/* Same primary-surface Fresnel COLOR as the hit path (see the comment there). */
+		float missNdotV = max(dot(normal, -normalize(viewPos)), 0.0);
+		vec3 missAlbedo = texture(albedoTex, vUV).rgb;
+		vec3 missF0 = mix(vec3(0.04), missAlbedo, originMetalness);
+		vec3 missFresnel = missF0 + (1.0 - missF0) * pow(1.0 - missNdotV, 5.0);
+
+		outResolve = vec4(envColor * missFresnel, envFallbackIntensity);
 	}
 	else
 	{
@@ -629,7 +656,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* Trace input (normals + Hi-Z pyramid): 2 combined image samplers at bindings 0,1. */
 		auto traceInputLayout = this->getInputLayout(2);
 
-		/* Resolve input (color + trace + depth + normals + env cubemap): 5 bindings, custom. */
+		/* Resolve input (color + trace + depth + normals + pyramid + albedo): 6 bindings, custom. */
 		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInput");
 
 		if ( resolveInputLayout == nullptr )
@@ -642,6 +669,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			resolveInputLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT);
 			/* Binding 4: the pre-convolved color pyramid (cone-traced glossy lookup). */
 			resolveInputLayout->declareCombinedImageSampler(4, VK_SHADER_STAGE_FRAGMENT_BIT);
+			/* Binding 5: the scene albedo — the primary-surface Fresnel COLOR (same model as
+			 * RTR: F0 = mix(0.04, albedo, metalness)) tints the resolved reflection. */
+			resolveInputLayout->declareCombinedImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT);
 			/* NOTE: The environment fallback reads the bindless prefiltered slot (set 1). */
 
 			if ( !layoutManager.createDescriptorSetLayout(resolveInputLayout) )
@@ -1458,6 +1488,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			if ( inputNormals != nullptr )
 			{
 				static_cast< void >(m_resolvePerFrame[frameIndex]->writeCombinedImageSampler(3, *inputNormals));
+			}
+
+			/* Primary-surface albedo for the Fresnel tint: requiresAlbedo() guarantees the
+			 * attachment exists and the PostProcessor skips the effect while it is null. */
+			if ( context.albedo != nullptr )
+			{
+				static_cast< void >(m_resolvePerFrame[frameIndex]->writeCombinedImageSampler(5, *context.albedo));
 			}
 
 			/* Compute inverse view matrix for cubemap fallback.
