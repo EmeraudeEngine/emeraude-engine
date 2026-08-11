@@ -37,6 +37,7 @@
 #include "Audio/PlaylistResource.hpp"
 #include "Audio/SoundfontResource.hpp"
 #include "Audio/SoundResource.hpp"
+#include "Graphics/CompressedImageResource.hpp"
 #include "Graphics/CubemapMovieResource.hpp"
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/FontResource.hpp"
@@ -533,6 +534,7 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Audio::SoundfontResource), std::make_unique< Soundfonts >("Soundfont manager", m_primaryServices, *this, this->getLocalStore("SoundBanks")));
 			m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >("Font manager", m_primaryServices, *this, this->getLocalStore("Fonts")));
 			m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >("Image manager", m_primaryServices, *this, this->getLocalStore("Images")));
+			m_containers.emplace(typeid(Graphics::CompressedImageResource), std::make_unique< CompressedImages >("Compressed image manager", m_primaryServices, *this, this->getLocalStore("Images")));
 			m_containers.emplace(typeid(Graphics::CubemapResource), std::make_unique< Cubemaps >("Cubemap manager", m_primaryServices, *this, this->getLocalStore("Cubemaps")));
 			m_containers.emplace(typeid(Graphics::MovieResource), std::make_unique< Movies >("Movie manager", m_primaryServices, *this, this->getLocalStore("Movies")));
 			m_containers.emplace(typeid(Graphics::TextureResource::Texture1D), std::make_unique< Texture1Ds >("Texture 1D manager", m_primaryServices, *this, this->getLocalStore("Images")));

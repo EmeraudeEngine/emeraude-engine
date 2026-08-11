@@ -237,8 +237,17 @@ The engine provides specialized image resources for different dimensions:
 | Resource Type | Data Storage | Dimensions | Used By |
 |--------------|--------------|------------|---------|
 | `ImageResource` | `Pixmap<uint8_t>` | 2D (width × height) | Texture1D, Texture2D, TextureCubemap |
+| `CompressedImageResource` | BC7 mip chain + `VkFormat` | 2D, full mip chain | Texture2D |
 | `VolumetricImageResource` | `std::vector<uint8_t>` | 3D (width × height × depth) | Texture3D |
 | `CubemapImageResource` | 6 × `Pixmap<uint8_t>` | 6 faces | TextureCubemap |
+
+**CompressedImageResource** (`Graphics/CompressedImageResource.hpp`, container `CompressedImages`,
+store `Images`) holds a **block-compressed** payload decoded from a KTX2 container
+(`KHR_texture_basisu`) and hands it to `Texture2D` for a verbatim upload — no CPU compression pass,
+no `TextureCache`, and no uncompressed copy ever materialised. It is an **opaque GPU payload**: it
+exposes no per-pixel access, no `averageColor()` and no `isGrayScale()`, because answering those
+means decoding the blocks. Full contract: [`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) →
+*Compressed image path*.
 
 **VolumetricImageResource** (`Graphics/VolumetricImageResource.hpp`):
 ```cpp

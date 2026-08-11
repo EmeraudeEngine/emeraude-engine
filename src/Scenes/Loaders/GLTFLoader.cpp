@@ -29,6 +29,8 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <span>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -36,14 +38,18 @@
 #include "fastgltf/core.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
+#include <meshoptimizer.h>
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
 #include "SceneData.hpp"
+#include "Graphics/CompressedImageResource.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Graphics/KTX2Decoder.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
@@ -63,7 +69,12 @@
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/StreamIO.hpp"
 #include "VertexFactory/Shape.hpp"
+#include "IO/IO.hpp"
+#include "PrimaryServices.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 
 namespace EmEn::Scenes::Loaders
 {
@@ -73,6 +84,239 @@ namespace EmEn::Scenes::Loaders
 	using namespace Base::Math;
 	using namespace Base::VertexFactory;
 	using namespace Base::PixelFactory;
+
+	/* The byte span type fastgltf hands to accessor readers. */
+	using ByteSpan = decltype(fastgltf::DefaultBufferDataAdapter{}(std::declval< const fastgltf::Asset & >(), std::size_t{}));
+
+	/* Returns the whole payload of a glTF buffer. Mirrors what DefaultBufferDataAdapter does for
+	 * a buffer *view*, except EXT_meshopt_compression addresses its compressed source directly in
+	 * the buffer, outside of any view. */
+	static
+	ByteSpan
+	bufferBytes (const fastgltf::Asset & asset, size_t bufferIndex) noexcept
+	{
+		if ( bufferIndex >= asset.buffers.size() )
+		{
+			return {};
+		}
+
+		return std::visit(fastgltf::visitor{
+			[] (const auto &) -> ByteSpan {
+				return {};
+			},
+			[] (const fastgltf::sources::Array & array) -> ByteSpan {
+				return ByteSpan{array.bytes.data(), array.bytes.size_bytes()};
+			},
+			[] (const fastgltf::sources::Vector & vector) -> ByteSpan {
+				return ByteSpan{vector.bytes.data(), vector.bytes.size()};
+			},
+			[] (const fastgltf::sources::ByteView & byteView) -> ByteSpan {
+				return byteView.bytes;
+			}
+		}, asset.buffers[bufferIndex].data);
+	}
+
+	/**
+	 * @brief Decodes EXT_meshopt_compression buffer views on demand and keeps the result.
+	 *
+	 * The extension replaces a buffer view's payload with a meshopt-encoded block that has to be
+	 * run through the meshoptimizer codec before any accessor can be read. fastgltf parses the
+	 * extension metadata but deliberately does not decode it, so the work lands here.
+	 *
+	 * Decoding is **lazy and cached**: a view is decoded the first time an accessor reaches into
+	 * it, and the result is kept until the load ends. Caching is not an optimisation detail — a
+	 * compressed glTF interleaves several attributes in a single view, so a dozen accessors read
+	 * the same block, and decoding per accessor would repeat the same work over and over.
+	 *
+	 * The cache is the load's peak memory cost (~300 MiB on a compressed Sponza, against ~99 MiB
+	 * of encoded source). GLTFLoader::load() releases it as soon as the geometry is built.
+	 *
+	 * @note Not thread-safe : a loader instance drives a single load, on a single thread.
+	 * @see https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/EXT_meshopt_compression
+	 */
+	class MeshoptBufferCache final
+	{
+		public:
+
+			MeshoptBufferCache () noexcept = default;
+
+			/**
+			 * @brief Returns the bytes of a buffer view, decoding it first when it is compressed.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param bufferViewIndex The index of the buffer view to read.
+			 * @return A span over the view bytes, empty on failure.
+			 */
+			[[nodiscard]]
+			ByteSpan
+			view (const fastgltf::Asset & asset, size_t bufferViewIndex) noexcept
+			{
+				if ( bufferViewIndex >= asset.bufferViews.size() )
+				{
+					return {};
+				}
+
+				const auto & bufferView = asset.bufferViews[bufferViewIndex];
+
+				if ( bufferView.meshoptCompression == nullptr )
+				{
+					return fastgltf::DefaultBufferDataAdapter{}(asset, bufferViewIndex);
+				}
+
+				const auto decodedIt = m_decoded.find(bufferViewIndex);
+
+				if ( decodedIt != m_decoded.cend() )
+				{
+					return ByteSpan{decodedIt->second.data(), decodedIt->second.size()};
+				}
+
+				auto & decoded = m_decoded[bufferViewIndex];
+
+				if ( !MeshoptBufferCache::decode(asset, bufferView, decoded) )
+				{
+					TraceError{GLTFLoader::ClassId} << "Unable to decode the meshopt-compressed buffer view " << bufferViewIndex << " !";
+
+					decoded.clear();
+				}
+
+				return ByteSpan{decoded.data(), decoded.size()};
+			}
+
+			/**
+			 * @brief Returns the total number of bytes currently held decoded.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			decodedBytes () const noexcept
+			{
+				size_t bytes = 0;
+
+				for ( const auto & [index, buffer] : m_decoded )
+				{
+					bytes += buffer.size();
+				}
+
+				return bytes;
+			}
+
+			/**
+			 * @brief Returns the number of buffer views decoded so far.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			viewCount () const noexcept
+			{
+				return m_decoded.size();
+			}
+
+		private:
+
+			/**
+			 * @brief Runs one buffer view through the meshoptimizer codec.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param bufferView A reference to the compressed buffer view.
+			 * @param output A reference to the vector receiving the decoded bytes.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static
+			bool
+			decode (const fastgltf::Asset & asset, const fastgltf::BufferView & bufferView, std::vector< std::byte > & output) noexcept
+			{
+				const auto & compression = *bufferView.meshoptCompression;
+
+				const auto source = bufferBytes(asset, compression.bufferIndex);
+
+				if ( source.empty() || compression.byteOffset + compression.byteLength > source.size() )
+				{
+					Tracer::error(GLTFLoader::ClassId, "A meshopt-compressed buffer view points outside of its buffer !");
+
+					return false;
+				}
+
+				const auto decodedSize = compression.count * compression.byteStride;
+
+				/* NOTE: The extension mandates count * byteStride == byteLength. A mismatch means a
+				 * broken exporter, and trusting the view length would overrun the decoder output. */
+				if ( decodedSize != bufferView.byteLength )
+				{
+					TraceError{GLTFLoader::ClassId} <<
+						"A meshopt-compressed buffer view declares " << bufferView.byteLength <<
+						" bytes but its element count implies " << decodedSize << " !";
+
+					return false;
+				}
+
+				output.resize(decodedSize);
+
+				const auto * encoded = reinterpret_cast< const unsigned char * >(source.data() + compression.byteOffset);
+
+				int error = 0;
+
+				switch ( compression.mode )
+				{
+					case fastgltf::MeshoptCompressionMode::Attributes :
+						error = meshopt_decodeVertexBuffer(output.data(), compression.count, compression.byteStride, encoded, compression.byteLength);
+						break;
+
+					case fastgltf::MeshoptCompressionMode::Triangles :
+						error = meshopt_decodeIndexBuffer(output.data(), compression.count, compression.byteStride, encoded, compression.byteLength);
+						break;
+
+					case fastgltf::MeshoptCompressionMode::Indices :
+						error = meshopt_decodeIndexSequence(output.data(), compression.count, compression.byteStride, encoded, compression.byteLength);
+						break;
+				}
+
+				if ( error != 0 )
+				{
+					TraceError{GLTFLoader::ClassId} << "The meshopt codec rejected a buffer view (error " << error << ") !";
+
+					return false;
+				}
+
+				/* Filters run in place on the decoded buffer : they undo the lossy packing the
+				 * encoder applied to normals, tangents (octahedral) and quantised floats. */
+				switch ( compression.filter )
+				{
+					case fastgltf::MeshoptCompressionFilter::None :
+						break;
+
+					case fastgltf::MeshoptCompressionFilter::Octahedral :
+						meshopt_decodeFilterOct(output.data(), compression.count, compression.byteStride);
+						break;
+
+					case fastgltf::MeshoptCompressionFilter::Quaternion :
+						meshopt_decodeFilterQuat(output.data(), compression.count, compression.byteStride);
+						break;
+
+					case fastgltf::MeshoptCompressionFilter::Exponential :
+						meshopt_decodeFilterExp(output.data(), compression.count, compression.byteStride);
+						break;
+				}
+
+				return true;
+			}
+
+			std::unordered_map< size_t, std::vector< std::byte > > m_decoded;
+	};
+
+	/**
+	 * @brief The fastgltf buffer data adapter backed by the meshopt cache.
+	 * @note fastgltf takes the adapter by const reference and calls it as a const functor, hence
+	 * the pointer : the cache it points to is mutated (it fills on demand), the adapter is not.
+	 */
+	struct MeshoptBufferAdapter final
+	{
+		MeshoptBufferCache * cache;
+
+		ByteSpan
+		operator() (const fastgltf::Asset & asset, size_t bufferViewIndex) const noexcept
+		{
+			return cache->view(asset, bufferViewIndex);
+		}
+	};
 
 	/* Detect image format from MIME type. */
 	static
@@ -166,6 +410,14 @@ namespace EmEn::Scenes::Loaders
 		return name;
 	}
 
+	GLTFLoader::GLTFLoader (Resources::Manager & resources) noexcept
+		: m_resources{resources}
+	{
+
+	}
+
+	GLTFLoader::~GLTFLoader () = default;
+
 	bool
 	GLTFLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
@@ -203,7 +455,19 @@ namespace EmEn::Scenes::Loaders
 			fastgltf::Extensions::KHR_materials_transmission |
 			fastgltf::Extensions::KHR_materials_anisotropy |
 			fastgltf::Extensions::KHR_materials_volume |
-			fastgltf::Extensions::KHR_lights_punctual
+			fastgltf::Extensions::KHR_lights_punctual |
+			/* NOTE: The three extensions a "compressed glTF" (glTF-Transform, gltfpack) leans on.
+			 * They come as a package : such an asset lists all three in `extensionsRequired`, and
+			 * fastgltf refuses the whole file with Error::MissingExtensions if a single one is not
+			 * declared here — there is no partial support to fall back on.
+			 *  - KHR_texture_basisu    : images are KTX2 containers, see loadImages().
+			 *  - EXT_meshopt_compression : buffer views are meshopt-encoded, see MeshoptBufferCache.
+			 *  - KHR_mesh_quantization : attributes are normalised integers. Nothing to do — fastgltf
+			 *    dequantises them on read, and the compensating scale is carried by the node
+			 *    transforms extractFrameFromNode() already reads. */
+			fastgltf::Extensions::KHR_texture_basisu |
+			fastgltf::Extensions::EXT_meshopt_compression |
+			fastgltf::Extensions::KHR_mesh_quantization
 		);
 
 		constexpr auto options =
@@ -224,6 +488,10 @@ namespace EmEn::Scenes::Loaders
 
 		const auto & asset = result.get();
 
+		/* EXT_meshopt_compression working set. Every accessor read below goes through it, and it
+		 * is released at the end of this function. */
+		m_bufferCache = std::make_unique< MeshoptBufferCache >();
+
 		/* Load pipeline: Images → Materials → Meshes → Skins → Animations → Node descriptors. */
 		if ( !this->loadImages(asset, parentPath) )
 		{
@@ -238,6 +506,8 @@ namespace EmEn::Scenes::Loaders
 		if ( !this->loadMeshes(asset, output) )
 		{
 			Tracer::error(ClassId, "Failed to load meshes !");
+
+			m_bufferCache.reset();
 
 			return false;
 		}
@@ -287,6 +557,17 @@ namespace EmEn::Scenes::Loaders
 			}
 		}
 
+		/* Everything that reads an accessor is done : drop the decoded meshopt views, which are
+		 * the biggest thing this loader ever holds. */
+		if ( m_bufferCache->viewCount() > 0 )
+		{
+			TraceInfo{ClassId} <<
+				"Released " << (m_bufferCache->decodedBytes() / 1048576) << " MiB of decoded data from " <<
+				m_bufferCache->viewCount() << " meshopt-compressed buffer view(s).";
+		}
+
+		m_bufferCache.reset();
+
 		/* Lights and cameras MUST be collected before the node descriptors, which index into
 		 * these tables and bound-check against their size. */
 		GLTFLoader::loadLights(asset, output);
@@ -319,7 +600,18 @@ namespace EmEn::Scenes::Loaders
 	GLTFLoader::loadImages (const fastgltf::Asset & asset, const std::filesystem::path & basePath) noexcept
 	{
 		m_images.resize(asset.images.size());
+		m_compressedImages.resize(asset.images.size());
 
+		/* A KTX2 payload can only stay block-compressed if the device samples block-compressed
+		 * formats. Ask once, the answer holds for the whole asset. */
+		const auto blockCompressionSupported =
+			m_resources.graphicsRenderer().device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
+
+		const Graphics::KTX2Decoder::Options KTXOptions{
+			.maxDimension = CompressedImageResource::maxDimension(m_resources.primaryServices().settings())
+		};
+
+		size_t compressedCount = 0;
 		bool allSuccess = true;
 
 		for ( size_t imageIndex = 0; imageIndex < asset.images.size(); ++imageIndex )
@@ -339,13 +631,111 @@ namespace EmEn::Scenes::Loaders
 				name.append(glTFImage.name.data(), glTFImage.name.size());
 			}
 
-			auto image = std::visit(fastgltf::visitor{
+			/* Builds the right kind of resource from an encoded blob : a KTX2 container
+			 * (KHR_texture_basisu) goes to a CompressedImageResource and stays block-compressed all
+			 * the way to the GPU, anything else is decoded to pixels as before.
+			 *
+			 * NOTE: The blob is copied into a shared_ptr because the creation function is enqueued
+			 * on the thread pool and outlives this scope. That also means the KTX2 transcode of the
+			 * whole asset runs in parallel across the workers. */
+			const auto buildFromBytes = [&] (const std::byte * data, size_t size, fastgltf::MimeType mime) -> bool {
+				auto blob = std::make_shared< std::vector< std::byte > >(data, data + size);
+
+				if ( Graphics::KTX2Decoder::isKTX2(*blob) )
+				{
+					if ( blockCompressionSupported )
+					{
+						auto compressed = m_resources.container< CompressedImageResource >()
+							->getOrCreateResource(name, [blob] (auto & resource) {
+								return resource.load(*blob);
+							});
+
+						if ( compressed == nullptr )
+						{
+							return false;
+						}
+
+						m_compressedImages[imageIndex] = std::move(compressed);
+						++compressedCount;
+
+						return true;
+					}
+
+					/* No block compression on this device : transcode to plain pixels so the asset
+					 * still renders. Correct, but it throws away the entire point of the KTX2. */
+					auto image = m_resources.container< ImageResource >()
+						->getOrCreateResource(name, [blob, KTXOptions, name] (auto & resource) {
+							Pixmap< uint8_t > pixmap;
+
+							if ( !Graphics::KTX2Decoder::decodeToPixmap(*blob, KTXOptions, name, pixmap) )
+							{
+								return false;
+							}
+
+							return resource.load(std::move(pixmap));
+						});
+
+					if ( image == nullptr )
+					{
+						return false;
+					}
+
+					m_images[imageIndex] = std::move(image);
+
+					return true;
+				}
+
+				/* Ordinary encoded image (PNG, JPEG). */
+				auto image = m_resources.container< ImageResource >()
+					->getOrCreateResource(name, [blob, format = mimeToPixmapFormat(mime)] (auto & resource) {
+						Pixmap< uint8_t > pixmap;
+
+						constexpr ReadOptions options{
+							.targetChannelMode = TargetChannelMode::RGBA
+						};
+
+						if ( !StreamIO::read(*blob, format, pixmap, options) )
+						{
+							return false;
+						}
+
+						return resource.load(std::move(pixmap));
+					});
+
+				if ( image == nullptr )
+				{
+					return false;
+				}
+
+				m_images[imageIndex] = std::move(image);
+
+				return true;
+			};
+
+			const auto loaded = std::visit(fastgltf::visitor{
 				/* File-based image (external .gltf). */
-				[&] (const fastgltf::sources::URI & uri) -> std::shared_ptr< ImageResource > {
+				[&] (const fastgltf::sources::URI & uri) -> bool {
 					/* Copy path immediately to avoid string_view lifetime issues. */
 					const std::filesystem::path fullPath = basePath / std::filesystem::path{std::string{uri.uri.path()}};
 
-					return m_resources.container< ImageResource >()
+					/* A sidecar .ktx2 is read whole and handed to the KTX2 path ; every other
+					 * format keeps going through PixelFactory, which picks its decoder from the
+					 * file extension. */
+					if ( fullPath.extension() == ".ktx2" )
+					{
+						std::vector< std::byte > content;
+
+						if ( !Base::IO::fileGetContents(fullPath, content) )
+						{
+							TraceError{ClassId} << "Unable to read the KTX2 file '" << fullPath << "' !";
+
+							return false;
+						}
+
+						return buildFromBytes(content.data(), content.size(), fastgltf::MimeType::KTX2);
+					}
+
+					auto image = m_resources.container< ImageResource >()
 						->getOrCreateResource(name, [fullPath] (auto & imageResource) {
 							Pixmap< uint8_t > pixmap;
 
@@ -360,84 +750,57 @@ namespace EmEn::Scenes::Loaders
 
 							return imageResource.load(std::move(pixmap));
 						});
+
+					if ( image == nullptr )
+					{
+						return false;
+					}
+
+					m_images[imageIndex] = std::move(image);
+
+					return true;
 				},
 
 				/* Embedded image (in .glb buffer view). */
-				[&] (const fastgltf::sources::BufferView & bufferView) -> std::shared_ptr< ImageResource > {
-					const auto & view = asset.bufferViews[bufferView.bufferViewIndex];
-					const auto & buffer = asset.buffers[view.bufferIndex];
+				[&] (const fastgltf::sources::BufferView & bufferView) -> bool {
+					/* NOTE: Through the meshopt cache, not the raw buffer : an image view is
+					 * normally uncompressed, but nothing in the spec forbids compressing it, and
+					 * the cache is transparent for the uncompressed case. */
+					const auto bytes = m_bufferCache->view(asset, bufferView.bufferViewIndex);
 
-					return std::visit(fastgltf::visitor{
-						[&] (const fastgltf::sources::Array & array) -> std::shared_ptr< ImageResource > {
-							const auto * dataPtr = array.bytes.data() + view.byteOffset;
-							const auto dataSize = view.byteLength;
+					if ( bytes.empty() )
+					{
+						return false;
+					}
 
-							auto bytes = std::make_shared< std::vector< std::byte > >(dataPtr, dataPtr + dataSize);
-
-							const auto format = mimeToPixmapFormat(bufferView.mimeType);
-
-							return m_resources.container< ImageResource >()
-								->getOrCreateResource(name, [bytes, format] (auto & imageResource) {
-									Pixmap< uint8_t > pixmap;
-
-									constexpr ReadOptions options{
-										.targetChannelMode = TargetChannelMode::RGBA
-									};
-
-									if ( !StreamIO::read(*bytes, format, pixmap, options) )
-									{
-										return false;
-									}
-
-									return imageResource.load(std::move(pixmap));
-								});
-						},
-
-						[&] (const auto &) -> std::shared_ptr< ImageResource > {
-							return m_resources.container< ImageResource >()->getDefaultResource();
-						}
-					}, buffer.data);
+					return buildFromBytes(bytes.data(), bytes.size(), bufferView.mimeType);
 				},
 
 				/* Inline base64 data (Array source). */
-				[&] (const fastgltf::sources::Array & array) -> std::shared_ptr< ImageResource > {
-					auto bytes = std::make_shared< std::vector< std::byte > >(array.bytes.begin(), array.bytes.end());
-					const auto format = mimeToPixmapFormat(array.mimeType);
-
-					return m_resources.container< ImageResource >()
-						->getOrCreateResource(name, [bytes, format] (auto & imageResource) {
-							Pixmap< uint8_t > pixmap;
-
-							constexpr ReadOptions options{
-								.targetChannelMode = TargetChannelMode::RGBA
-							};
-
-							if ( !StreamIO::read(*bytes, format, pixmap, options) )
-							{
-								return false;
-							}
-
-							return imageResource.load(std::move(pixmap));
-						});
+				[&] (const fastgltf::sources::Array & array) -> bool {
+					return buildFromBytes(array.bytes.data(), array.bytes.size_bytes(), array.mimeType);
 				},
 
 				/* Fallback for unhandled source types. */
-				[&] (const auto &) -> std::shared_ptr< ImageResource > {
-					return m_resources.container< ImageResource >()->getDefaultResource();
+				[&] (const auto &) -> bool {
+					return false;
 				}
 			}, glTFImage.data);
 
-			if ( image == nullptr )
+			if ( !loaded )
 			{
 				TraceWarning{ClassId} << "Image " << imageIndex << " ('" << name << "') failed to load, using default.";
 
 				m_images[imageIndex] = m_resources.container< ImageResource >()->getDefaultResource();
 				allSuccess = false;
 			}
-			else
-			{
-				m_images[imageIndex] = std::move(image);
-			}
+		}
+
+		if ( compressedCount > 0 )
+		{
+			TraceInfo{ClassId} <<
+				compressedCount << " of " << asset.images.size() <<
+				" image(s) kept block-compressed from the KTX2 payload (no decode, no CPU compression pass).";
 		}
 
 		return allSuccess;
@@ -483,14 +846,27 @@ namespace EmEn::Scenes::Loaders
 
 				const auto & glTFTexture = asset.textures[textureIndex];
 
-				if ( !glTFTexture.imageIndex.has_value() )
+				/* NOTE: KHR_texture_basisu hangs the image off its own index, and a texture that
+				 * uses it has NO plain imageIndex at all. Reading only imageIndex does not degrade
+				 * gracefully on such an asset : every single material comes out untextured. */
+				const auto sourceIndex = glTFTexture.imageIndex.has_value() ? glTFTexture.imageIndex : glTFTexture.basisuImageIndex;
+
+				if ( !sourceIndex.has_value() )
 				{
 					return nullptr;
 				}
 
-				const auto imageIndex = glTFTexture.imageIndex.value();
+				const auto imageIndex = sourceIndex.value();
 
-				if ( imageIndex >= m_images.size() || m_images[imageIndex] == nullptr )
+				if ( imageIndex >= m_images.size() )
+				{
+					return nullptr;
+				}
+
+				const auto image = m_images[imageIndex];
+				const auto compressedImage = m_compressedImages[imageIndex];
+
+				if ( image == nullptr && compressedImage == nullptr )
 				{
 					return nullptr;
 				}
@@ -510,10 +886,16 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResource(texName, [image = m_images[imageIndex], sRGB] (auto & textureResource) {
+					->getOrCreateResource(texName, [image, compressedImage, sRGB] (auto & textureResource) {
 						/* Set sRGB BEFORE load() so the flag is in place when
-						 * onDependenciesLoaded() fires and creates the VkImage. */
+						 * onDependenciesLoaded() fires and creates the VkImage. The colour space is
+						 * decided here, from the usage, for both kinds of source alike. */
 						textureResource.enableSRGB(sRGB);
+
+						if ( compressedImage != nullptr )
+						{
+							return textureResource.load(compressedImage);
+						}
 
 						return textureResource.load(image);
 					});
@@ -761,6 +1143,11 @@ namespace EmEn::Scenes::Loaders
 		m_meshes.resize(asset.meshes.size());
 		m_shapes.resize(asset.meshes.size());
 
+		/* Every accessor read below goes through the meshopt cache : with EXT_meshopt_compression
+		 * the buffer views hold encoded blocks, and reading them raw yields silent garbage
+		 * geometry rather than an error. */
+		const MeshoptBufferAdapter adapter{m_bufferCache.get()};
+
 		bool allSuccess = true;
 
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
@@ -898,7 +1285,7 @@ namespace EmEn::Scenes::Loaders
 								v.z() * m_options.uniformScale
 							});
 							index++;
-						});
+						}, adapter);
 					}
 
 					/* Read normals directly into vertex array. */
@@ -912,7 +1299,7 @@ namespace EmEn::Scenes::Loaders
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, normAccessor, [&] (const fastgltf::math::fvec3 & v) {
 							vertices[globalVertexOffset + index].setNormal(Vector< 3, float >{v.x(), v.y(), v.z()});
 							index++;
-						});
+						}, adapter);
 					}
 
 					/* Read texture coordinates directly into vertex array. */
@@ -926,7 +1313,7 @@ namespace EmEn::Scenes::Loaders
 						fastgltf::iterateAccessor< fastgltf::math::fvec2 >(asset, uvAccessor, [&] (const fastgltf::math::fvec2 & v) {
 							vertices[globalVertexOffset + index].setTextureCoordinates(Vector< 3, float >{v.x(), v.y(), 0.0F});
 							index++;
-						});
+						}, adapter);
 					}
 
 					if ( !m_options.skipSkinning )
@@ -948,7 +1335,7 @@ namespace EmEn::Scenes::Loaders
 								);
 
 								index++;
-							});
+							}, adapter);
 						}
 
 						/* Read bone weights (WEIGHTS_0) for skeletal animation. */
@@ -962,7 +1349,7 @@ namespace EmEn::Scenes::Loaders
 							fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, weightsAccessor, [&] (const fastgltf::math::fvec4 & v) {
 								vertices[globalVertexOffset + index].setWeights(v.x(), v.y(), v.z(), v.w());
 								index++;
-							});
+							}, adapter);
 						}
 					}
 
@@ -988,7 +1375,7 @@ namespace EmEn::Scenes::Loaders
 
 								triangleSlot = 0;
 							}
-						});
+						}, adapter);
 
 						/* Track triangles per group. */
 						if ( !groups.empty() )
@@ -1161,6 +1548,8 @@ namespace EmEn::Scenes::Loaders
 			return;
 		}
 
+		const MeshoptBufferAdapter adapter{m_bufferCache.get()};
+
 		/* Build a node-index → parent-node-index lookup from the node tree. */
 		std::vector< int32_t > nodeParents(asset.nodes.size(), Base::Animation::NoParent);
 
@@ -1222,7 +1611,7 @@ namespace EmEn::Scenes::Loaders
 
 					inverseBindMatrices[index] = ibm;
 					index++;
-				});
+				}, adapter);
 			}
 			else
 			{
@@ -1317,6 +1706,8 @@ namespace EmEn::Scenes::Loaders
 			return;
 		}
 
+		const MeshoptBufferAdapter adapter{m_bufferCache.get()};
+
 		/* For mapping node indices to joint indices, we need the skin context. */
 		std::unordered_map< size_t, int32_t > nodeToJointIndex;
 
@@ -1369,7 +1760,7 @@ namespace EmEn::Scenes::Loaders
 
 				fastgltf::iterateAccessor< float >(asset, inputAccessor, [&] (float t) {
 					timestamps.push_back(t);
-				});
+				}, adapter);
 
 				/* Map interpolation type. */
 				ChannelInterpolation interp = ChannelInterpolation::Linear;
@@ -1419,7 +1810,7 @@ namespace EmEn::Scenes::Loaders
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
 							values.push_back(Vector< 3, float >{v.x() * valueScale, v.y() * valueScale, v.z() * valueScale});
-						});
+						}, adapter);
 
 						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
 
@@ -1455,7 +1846,7 @@ namespace EmEn::Scenes::Loaders
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, outputAccessor, [&] (const fastgltf::math::fvec4 & v) {
 							values.push_back(Quaternion< float >{v.x(), v.y(), v.z(), v.w()});
-						});
+						}, adapter);
 
 						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
 

@@ -30,6 +30,7 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/CompressedImageResource.hpp"
 #include "Graphics/ImageResource.hpp"
 
 /* Forward declarations. */
@@ -332,17 +333,70 @@ namespace EmEn::Graphics::TextureResource
 			bool load (const std::shared_ptr< ImageResource > & imageResource) noexcept;
 
 			/**
+			 * @brief Loads texture from an already block-compressed image.
+			 *
+			 * Establishes a dependency on the provided CompressedImageResource. The mip chain it
+			 * carries is uploaded verbatim : no CPU compression pass, no disk cache round-trip,
+			 * and no uncompressed copy is ever materialised.
+			 *
+			 * @param compressedImageResource Shared pointer to a CompressedImageResource. Must not be null.
+			 * @return True if the resource was successfully set as a dependency, false otherwise.
+			 * @note A texture loaded this way cannot answer isGrayScale() nor averageColor(), and
+			 * setFlipNormalMapY() has no effect on it — reading or rewriting individual texels would
+			 * mean decoding the blocks. Use the ImageResource overload when the pixels must be inspected.
+			 * @version 0.8.36
+			 */
+			bool load (const std::shared_ptr< CompressedImageResource > & compressedImageResource) noexcept;
+
+			/**
 			 * @brief Returns the dependent ImageResource containing pixel data.
 			 *
-			 * @return Shared pointer to the ImageResource, or nullptr if not loaded.
+			 * @return Shared pointer to the ImageResource, or nullptr if not loaded or if the
+			 * texture was loaded from a CompressedImageResource.
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< ImageResource > localData () noexcept;
 
+			/**
+			 * @brief Returns the dependent CompressedImageResource, when the texture uses one.
+			 *
+			 * @return Shared pointer to the CompressedImageResource, or nullptr when the texture
+			 * was loaded from a plain ImageResource.
+			 * @version 0.8.36
+			 */
+			[[nodiscard]]
+			std::shared_ptr< CompressedImageResource > compressedData () noexcept;
+
 		private:
 
-			std::shared_ptr< ImageResource > m_localData;	 ///< Dependent ImageResource providing pixel data.
+			/**
+			 * @brief Creates the Vulkan image from the block-compressed dependency.
+			 *
+			 * Uploads the mip chain verbatim : no CPU compression pass, no disk cache lookup.
+			 *
+			 * @param renderer A reference to the renderer.
+			 * @return bool
+			 * @version 0.8.36
+			 */
+			[[nodiscard]]
+			bool createFromCompressedData (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Creates the Vulkan image from the uncompressed pixel dependency.
+			 *
+			 * Compresses the pixmap to BC7 when the device supports it (with a disk cache to
+			 * amortise the cost), and falls back to a plain uncompressed upload otherwise.
+			 *
+			 * @param renderer A reference to the renderer.
+			 * @return bool
+			 * @version 0.8.36
+			 */
+			[[nodiscard]]
+			bool createFromPixelData (Renderer & renderer) noexcept;
+
+			std::shared_ptr< ImageResource > m_localData;	 ///< Dependent ImageResource providing pixel data. Null when m_compressedData is used.
+			std::shared_ptr< CompressedImageResource > m_compressedData; ///< Dependent block-compressed image. Null when m_localData is used.
 			std::shared_ptr< Vulkan::Image > m_image;		 ///< Vulkan Image object (VK_IMAGE_TYPE_2D) on GPU.
 			std::shared_ptr< Vulkan::ImageView > m_imageView; ///< Vulkan ImageView (VK_IMAGE_VIEW_TYPE_2D) for shader access.
 			std::shared_ptr< Vulkan::Sampler > m_sampler;	 ///< Vulkan Sampler with filtering and anisotropy settings.

@@ -270,7 +270,7 @@ Loads glTF 2.0 / GLB files. Uses `fastgltf` library (vendored, static).
 
 | Phase | Method | Output |
 |-------|--------|--------|
-| 1 | `loadImages()` | `ImageResource` |
+| 1 | `loadImages()` | `ImageResource` **or** `CompressedImageResource` (KTX2) |
 | 2 | `loadMaterials()` | `Material::PBRResource` + `Texture2D` on-demand |
 | 3 | `loadMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
 | 4 | `loadSkins()` | `SkeletonResource` + `Skin` |
@@ -307,6 +307,60 @@ lerp/slerp. It now has a `CubicSpline` branch in **both** `sampleVectorChannel()
 > normalized before it reaches the joint matrix. Skipping that normalization scales the joint's
 > whole subtree — a rig that stretches on the segments between keyframes and snaps back on them.
 
+#### Compressed glTF — the three extensions come as ONE package (Aug 2026)
+
+A "compressed glTF" produced by **glTF-Transform** or **gltfpack** does not use one extension,
+it uses three, and it lists all three in `extensionsRequired`:
+
+| Extension | What it changes | Where it is handled |
+|---|---|---|
+| `KHR_texture_basisu` | images become **KTX2** containers (Basis UASTC or ETC1S) | `loadImages()` → `Graphics::KTX2Decoder` → `CompressedImageResource` |
+| `EXT_meshopt_compression` | buffer views hold **meshopt-encoded blocks** | `MeshoptBufferCache` (in `GLTFLoader.cpp`), via a fastgltf `BufferDataAdapter` |
+| `KHR_mesh_quantization` | attributes become **normalised integers** | nothing to do — see below |
+
+> [!CAUTION]
+> **There is no partial support to fall back on.** fastgltf validates `extensionsRequired`
+> against the mask given to its `Parser`, and rejects the **whole file** with
+> `Error::MissingExtensions` if a single one is missing. Before Aug 2026 none of the three were
+> declared, so `Sponza.ktx2.glb` did not load *at all* — not "loaded untextured", not "loaded with
+> broken geometry": zero nodes, one error line. If you add a compressed asset and the loader
+> refuses it, check the extension mask in `load()` first.
+
+**`KHR_mesh_quantization` needs no code.** fastgltf dequantises normalised integers on read
+(`getAccessorComponentAt` honours `accessor.normalized`), and the compensating scale is carried by
+the **node transforms** that `extractFrameFromNode()` already reads — glTF-Transform emits a
+per-node uniform scale (8.133 on Sponza's `arch_stones_01`) that turns the `[-1,1]` quantised box
+back into world units. The extension is declared on the parser purely so the file is accepted.
+
+**`EXT_meshopt_compression` — fastgltf parses it but deliberately does not decode it.**
+`BufferView::meshoptCompression` carries the metadata; running the meshoptimizer codec is the
+loader's job. `MeshoptBufferCache` does it **lazily, and caches**: a compressed asset interleaves
+several attributes into one view, so a dozen accessors read the same block and decoding per
+accessor would redo the same work over and over. All ten `iterateAccessor` call sites take the
+`MeshoptBufferAdapter` as their fourth argument.
+
+> [!WARNING]
+> **A missed call site does not error — it reads the encoded bytes as if they were vertices.**
+> The default adapter is silently substituted when the argument is omitted, and the result is
+> garbage geometry, not a diagnostic. If you add an accessor read to this loader, pass the adapter.
+
+> [!NOTE]
+> The cache is the load's memory high-water mark (~300 MiB decoded on Sponza, from ~99 MiB
+> encoded). `load()` releases it right after the geometry is built and logs how much it dropped.
+
+**KTX2 stays block-compressed from disk to VkImage.** `KTX2Decoder` transcodes UASTC/ETC1S to
+**BC7** and the mip chain is uploaded verbatim — no decode to pixels, no `TextureCompressor` pass,
+no `TextureCache` round-trip. The transcode runs on the **thread pool** (the container creation
+function is enqueued), so the asset's images transcode in parallel. On a device without
+`textureCompressionBC` the loader transcodes to RGBA8 into a plain `ImageResource` instead: correct,
+but it forfeits the entire benefit — this is a safety net, not a supported target.
+
+> [!CAUTION]
+> **`KHR_texture_basisu` hangs the image off `Texture::basisuImageIndex`, and such a texture has
+> NO plain `imageIndex` at all.** A loader reading only `imageIndex` does not degrade gracefully on
+> a KTX2 asset: *every* material comes out untextured, with no error. `resolveTexture()` falls back
+> from one to the other.
+
 #### Known gaps (glTF 2.0)
 
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
@@ -320,6 +374,11 @@ index are ignored; `KHR_texture_transform` is absent; **`KHR_materials_specular`
 supportive of them; animation channels targeting a node that is not a joint of `skins[0]` are
 dropped, so rigid-node animation (doors, platforms, props) is impossible; `instanceSets` is never
 populated (`EXT_mesh_gpu_instancing` not enabled).
+
+> [!NOTE]
+> Two of those gaps are **live on the compressed Sponza**, which is now the reference asset:
+> `Sponza.ktx2.glb` declares `TEXCOORD_1` on 371 of its 448 primitives and `COLOR_0` on 67. Both
+> are read past in silence. "The second UV set is missing" is a known gap, not a KTX2 regression.
 
 ### USDLoader (OpenUSD via tinyusdz — geometry, materials, sky, INSTANCING, Aug 2026)
 
@@ -917,7 +976,12 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
 
 - `Scenes/Loaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, SceneData)
 - `Scenes/Loaders/Interface.hpp` — Loader interface + LoaderOptions
-- `Scenes/Loaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation
+- `Scenes/Loaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation. Also hosts `MeshoptBufferCache` +
+  `MeshoptBufferAdapter` (`EXT_meshopt_compression`), defined in the **.cpp** because their interface
+  speaks fastgltf types, which must never leak into a public engine header — hence the forward
+  declaration in the .hpp and the out-of-line constructor **and** destructor.
+- `Graphics/KTX2Decoder.hpp/.cpp` — KTX2 container + Basis transcoder (`KHR_texture_basisu`)
+- `Graphics/CompressedImageResource.hpp/.cpp` — the block-compressed counterpart of `ImageResource`
 - `Scenes/Loaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)
 - `Scenes/Loaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)
 - `Scenes/SceneDataConsumer.hpp/.cpp` — Scene-side consumer (Node/StaticEntity builder, honors `lightingEnabled`)

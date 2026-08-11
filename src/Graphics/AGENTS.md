@@ -2701,3 +2701,60 @@ and roughness-driven `textureLod()` (PBR transmission) needs real mip content. M
 +33% on a handful of cubemaps. The upload blit chain (`ImageTransferOperation::finalizeForGPU`,
 per-layer × per-mip `vkCmdBlitImage`) is exercised for cubemaps since this change — LDR and
 HDR (RGBA16F) validated visually (water-world BlueSky reference frame).
+
+## Compressed image path (KTX2 / `KHR_texture_basisu`, Aug 2026)
+
+### Two ways to reach BC7 — the source decides, not a setting
+
+| | Source | CPU work at load | Disk cache | Uncompressed copy in RAM |
+|---|---|---|---|---|
+| **(a) Pixel path** | `ImageResource` (PNG, JPEG, procedural) | full BC7 encode (`TextureCompressor`, bc7enc) | yes (`TextureCache`) | **yes** — RGBA8 level 0 |
+| **(b) Compressed path** | `CompressedImageResource` (KTX2) | a block→block transcode | no, and none needed | **never** |
+
+`Texture2D::createTexture()` is now a dispatcher: `createFromCompressedData()` or
+`createFromPixelData()`, then the shared image-view + sampler tail. Exactly one of `m_localData`
+/ `m_compressedData` is non-null.
+
+**The memory argument, in numbers.** A 4096×4096 texture costs ~22 MiB as BC7 *with its full mip
+chain*, against ~89 MiB for the RGBA8 level 0 **alone** that path (a) must materialise before it
+can compress anything. On the compressed Sponza (84 images, all 4096², all UASTC+zstd) that is the
+difference between a KTX2 payload of 1092 MiB read straight through, and 84 successive 89 MiB
+decodes each followed by a bc7enc pass.
+
+### Classes
+
+- **`Graphics::KTX2Decoder`** — stateless. `isKTX2()` (magic-number probe), `decodeCompressed()`
+  → `{mips, VkFormat}`, `decodeToPixmap()` (the no-BC-support fallback), `sRGBFormat()`.
+  Transcode target is **BC7**, because that is the one block format the engine supports. A KTX2
+  that already carries a real `vkFormat` (nothing to transcode) is passed through untouched.
+- **`Graphics::CompressedImageResource`** — an **opaque GPU payload**, deliberately. No
+  `averageColor()`, no `isGrayScale()`, no per-pixel access, no `flipNormalMapY()`: answering any
+  of them means decoding the blocks, which is exactly what the type exists to avoid. Code that
+  needs to *inspect* pixels wants `ImageResource`.
+
+> [!CAUTION]
+> **The stored format is always the LINEAR variant, and that is load-bearing.** libktx derives the
+> transcoded `vkFormat` from the container's transfer function, so an sRGB-tagged asset comes back
+> as `*_SRGB_BLOCK`. The decoder normalises it back to linear, because the colour space is the
+> **texture's** call — it knows the usage (albedo and emissive are sRGB, normal and ORM maps are
+> not), the container does not. The blocks are bit-identical either way. Taking the container's
+> word for it double-applies the sRGB curve on every ORM and normal map of the asset.
+
+> [!WARNING]
+> `isGrayScale()` and `averageColor()` **must** null-check `m_localData`, not just `isLoaded()` —
+> a texture on the compressed path is fully loaded *and* has no pixmap.
+
+### `Core/Graphics/Texture/MaxDimension` (default 4096)
+
+Largest accepted mip dimension; 0 disables clamping. **Only honored by sources that ship a
+ready-made mip chain** (i.e. KTX2), where clamping is free: the top levels are simply not kept,
+nothing is resampled. Every halving divides the VRAM footprint by four — Sponza's 84 textures cost
+~1.88 GiB at 4096, ~470 MiB at 2048, ~118 MiB at 1024. The default changes no behaviour; the knob
+exists for the 8 GiB machine.
+
+### Block formats and `Image::pixelBytes()` / `colorCount()`
+
+Block formats are **absent** from both tables, which return 0 for them. That is not a latent bug
+on this path: `Image::createFromCompressed()` never consults them — it is handed explicit per-level
+byte counts. Do not "fix" the tables by giving a block format a per-pixel size; the honest answer
+for BC7 is 1 byte per pixel *amortised over a 4×4 block*, which is not what those accessors mean.

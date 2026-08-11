@@ -56,6 +56,7 @@ namespace EmEn::Animations
 
 namespace EmEn::Graphics
 {
+	class CompressedImageResource;
 	class ImageResource;
 
 	namespace TextureResource
@@ -76,6 +77,10 @@ namespace EmEn::Graphics
 
 namespace EmEn::Scenes::Loaders
 {
+	/* Decoder for EXT_meshopt_compression buffer views. Defined in GLTFLoader.cpp : its interface
+	 * speaks fastgltf types, which must not leak into a public engine header. */
+	class MeshoptBufferCache;
+
 	/**
 	 * @brief Loads glTF/glb composite assets into engine resource containers.
 	 * @note Produces an SceneData with format-agnostic node descriptors.
@@ -91,12 +96,15 @@ namespace EmEn::Scenes::Loaders
 			 * @brief Constructs the loader with access to the resource manager.
 			 * @param resources A reference to the engine resource manager.
 			 */
-			explicit
-			GLTFLoader (Resources::Manager & resources) noexcept
-				: m_resources{resources}
-			{
+			explicit GLTFLoader (Resources::Manager & resources) noexcept;
 
-			}
+			/**
+			 * @brief Destructs the loader.
+			 * @note Both the constructor and the destructor are defined out of line : m_bufferCache
+			 * points at an incomplete type here, and an inlined constructor would already need the
+			 * deleter to be complete.
+			 */
+			~GLTFLoader () override;
 
 			/** @copydoc EmEn::Scenes::Loaders::Interface::load() */
 			[[nodiscard]]
@@ -153,7 +161,14 @@ namespace EmEn::Scenes::Loaders
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;
+			/* EXT_meshopt_compression working set. Built at the start of a load, released as soon
+			 * as the geometry is out : on a compressed scene it is the load's memory high-water mark. */
+			std::unique_ptr< MeshoptBufferCache > m_bufferCache;
+			/* Images, indexed by glTF image index. An image lands in exactly one of the two tables :
+			 * m_compressedImages for a KTX2 payload (KHR_texture_basisu) kept block-compressed all the
+			 * way to the GPU, m_images for anything the engine has to decode to pixels. */
 			std::vector< std::shared_ptr< Graphics::ImageResource > > m_images;
+			std::vector< std::shared_ptr< Graphics::CompressedImageResource > > m_compressedImages;
 			std::vector< std::shared_ptr< Graphics::TextureResource::Texture2D > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;

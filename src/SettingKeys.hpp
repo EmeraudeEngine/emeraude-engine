@@ -344,6 +344,11 @@ namespace EmEn
 			/* Number of mipmap levels to generate. */
 			constexpr auto GraphicsTextureMipMappingLevelsKey{"Core/Graphics/Texture/MipMappingLevels"};
 			constexpr auto DefaultGraphicsTextureMipMappingLevels{1};
+			/* Largest accepted texture dimension, in pixels (0 = no clamping).
+			 * NOTE: Only honored by sources that ship a ready-made mip chain (KTX2), where dropping the
+			 * top levels is free. It divides the VRAM footprint by four every time it is halved. */
+			constexpr auto GraphicsTextureMaxDimensionKey{"Core/Graphics/Texture/MaxDimension"};
+			constexpr auto DefaultGraphicsTextureMaxDimension{4096};
 			/* Anisotropic filtering level (0 = off). */
 			constexpr auto GraphicsTextureAnisotropyLevelsKey{"Core/Graphics/Texture/AnisotropyLevels"};
 			constexpr auto DefaultGraphicsTextureAnisotropy{0};

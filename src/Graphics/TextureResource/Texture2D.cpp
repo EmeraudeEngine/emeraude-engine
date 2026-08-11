@@ -65,6 +65,143 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::createTexture (Renderer & renderer) noexcept
 	{
+		if ( m_compressedData != nullptr )
+		{
+			if ( !this->createFromCompressedData(renderer) )
+			{
+				return false;
+			}
+		}
+		else if ( !this->createFromPixelData(renderer) )
+		{
+			return false;
+		}
+
+		/* Create a Vulkan image view. */
+		m_imageView = std::make_shared< ImageView >(
+			m_image,
+			VK_IMAGE_VIEW_TYPE_2D,
+			VkImageSubresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = m_image->createInfo().mipLevels,
+				.baseArrayLayer = 0,
+				.layerCount = m_image->createInfo().arrayLayers
+			}
+		);
+		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
+
+		if ( !m_imageView->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create an image view !");
+
+			return false;
+		}
+
+		/* Get a Vulkan sampler. */
+		m_sampler = renderer.getSampler("Texture2D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+			const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
+
+			//createInfo.flags = 0;
+			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.mipLodBias = 0.0F;
+			createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
+			createInfo.maxAnisotropy = anisotropyLevels;
+			//createInfo.compareEnable = VK_FALSE;
+			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			//createInfo.minLod = 0.0F;
+			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			//createInfo.unnormalizedCoordinates = VK_FALSE;
+		});
+
+		if ( m_sampler == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to get a sampler !");
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Texture2D::createFromCompressedData (Renderer & renderer) noexcept
+	{
+		const auto & mips = m_compressedData->mips();
+
+		if ( mips.empty() )
+		{
+			TraceError{ClassId} << "The compressed image '" << m_compressedData->name() << "' holds no mip level !";
+
+			return false;
+		}
+
+		/* NOTE: Unlike the pixel path, there is nothing to compress here : the mip chain comes
+		 * off the disk already in its final GPU layout. No bc7enc pass, no TextureCache round-trip,
+		 * and no uncompressed copy is ever materialised. */
+		if ( renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC != VK_TRUE )
+		{
+			TraceError{ClassId} << "The device has no block-compression support, the texture '" << this->name() << "' cannot be created ! The image source should have been decoded to pixels instead.";
+
+			return false;
+		}
+
+		/* NOTE: A block cannot be rewritten without decoding it, so a normal map needing its green
+		 * channel flipped must be fixed at authoring time. Say so rather than letting the caller
+		 * believe the flag was honored. */
+		if ( this->isFlipNormalMapYEnabled() )
+		{
+			TraceWarning{ClassId} << "The texture '" << this->name() << "' requests a normal map Y flip, which a block-compressed image cannot honor. Flip it in the asset instead.";
+		}
+
+		/* NOTE: The compressed image stores the linear format ; the colour space is the texture's
+		 * call, not the container's, and the blocks are identical either way. */
+		const auto format = this->isSRGB() ? KTX2Decoder::sRGBFormat(m_compressedData->format()) : m_compressedData->format();
+
+		m_image = std::make_shared< Vulkan::Image >(
+			renderer.device(),
+			VK_IMAGE_TYPE_2D,
+			format,
+			VkExtent3D{m_compressedData->width(), m_compressedData->height(), 1U},
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			0,
+			m_compressedData->levelCount()
+		);
+		m_image->setIdentifier(ClassId, this->name(), "Image");
+
+		std::vector< Vulkan::Image::CompressedMip > mipDescs;
+		mipDescs.reserve(mips.size());
+
+		for ( const auto & mip : mips )
+		{
+			mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
+		}
+
+		if ( !m_image->createFromCompressed(renderer.transferManager(), mipDescs) )
+		{
+			TraceError{ClassId} << "Unable to upload the compressed texture '" << this->name() << "' !";
+
+			m_image.reset();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Texture2D::createFromPixelData (Renderer & renderer) noexcept
+	{
 		/* Apply normal map Y flip if requested (id Tech â engine convention). */
 		if ( this->isFlipNormalMapYEnabled() )
 		{
@@ -182,63 +319,9 @@ namespace EmEn::Graphics::TextureResource
 				return false;
 			}
 		}
-
-		/* Create a Vulkan image view. */
-		m_imageView = std::make_shared< ImageView >(
-			m_image,
-			VK_IMAGE_VIEW_TYPE_2D,
-			VkImageSubresourceRange{
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = m_image->createInfo().mipLevels,
-				.baseArrayLayer = 0,
-				.layerCount = m_image->createInfo().arrayLayers
-			}
-		);
-		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
-
-		if ( !m_imageView->createOnHardware() )
-		{
-			Tracer::error(ClassId, "Unable to create an image view !");
-
-			return false;
-		}
-
-		/* Get a Vulkan sampler. */
-		m_sampler = renderer.getSampler("Texture2D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
-			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
-			const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
-
-			//createInfo.flags = 0;
-			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-			createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-			createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-			//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			//createInfo.mipLodBias = 0.0F;
-			createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
-			createInfo.maxAnisotropy = anisotropyLevels;
-			//createInfo.compareEnable = VK_FALSE;
-			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-			//createInfo.minLod = 0.0F;
-			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
-			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-			//createInfo.unnormalizedCoordinates = VK_FALSE;
-		});
-
-		if ( m_sampler == nullptr )
-		{
-			Tracer::error(ClassId, "Unable to get a sampler !");
-
-			return false;
-		}
-
 		return true;
 	}
+
 
 	bool
 	Texture2D::destroyTexture () noexcept
@@ -267,7 +350,10 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::isGrayScale () const noexcept
 	{
-		if ( !this->isLoaded() )
+		/* NOTE: A block-compressed source cannot answer this without decoding, which is exactly
+		 * what it exists to avoid. Answering "not grayscale" is the conservative reply : it costs
+		 * a full-colour path where a grayscale one might have done, never the reverse. */
+		if ( !this->isLoaded() || m_localData == nullptr )
 		{
 			return false;
 		}
@@ -278,7 +364,8 @@ namespace EmEn::Graphics::TextureResource
 	PixelFactory::Color< float >
 	Texture2D::averageColor () const noexcept
 	{
-		if ( !this->isLoaded() )
+		/* NOTE: Same reasoning as isGrayScale(). */
+		if ( !this->isLoaded() || m_localData == nullptr )
 		{
 			return PixelFactory::Black;
 		}
@@ -350,9 +437,42 @@ namespace EmEn::Graphics::TextureResource
 		return this->setLoadSuccess(true);
 	}
 
+	bool
+	Texture2D::load (const std::shared_ptr< CompressedImageResource > & compressedImageResource) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( compressedImageResource == nullptr )
+		{
+			Tracer::error(ClassId, "The compressed image resource is an empty smart pointer !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		m_compressedData = compressedImageResource;
+
+		if ( !this->addDependency(m_compressedData) )
+		{
+			TraceError{ClassId} << "Unable to add the compressed image '" << compressedImageResource->name() << "' as dependency !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
 	std::shared_ptr< ImageResource >
 	Texture2D::localData () noexcept
 	{
 		return m_localData;
+	}
+
+	std::shared_ptr< CompressedImageResource >
+	Texture2D::compressedData () noexcept
+	{
+		return m_compressedData;
 	}
 }
