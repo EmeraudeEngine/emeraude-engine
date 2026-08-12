@@ -167,14 +167,14 @@ Consequences to respect when editing this class:
 
 ## Quality Setting Architecture
 
-The `EnableHighQualityKey` setting controls shader quality (per-fragment vs per-vertex lighting, normal mapping, etc.).
+**There is no shader-quality SETTING any more** (Aug 2026). The engine has ONE lighting model — Cook-Torrance, shaded per fragment — and the quality tier is a RENDERING decision carried by `Saphir::Generator::Abstract`'s `HighQualityEnabled` flag. It is meant to be driven by rendering DISTANCE (a distant surface takes the cheap branches: simpler transmission, no Fresnel-gated reflection, no parallax). ⚠️ Nothing drives it down yet — every program is generated at full quality; the flag is the hook, and since it is part of the program cache key a future distance switch produces its own variants for free.
 
 ### Single Read Pattern
 The setting is read **once** in `SceneRendering` constructor and passed to `LightGenerator`:
 
 ```cpp
 // SceneRendering.hpp:68 - Single read point
-m_lightGenerator{settings, renderPassType, settings.getOrSetDefault<bool>(EnableHighQualityKey, DefaultEnableHighQuality)}
+m_lightGenerator{settings, renderPassType}   // quality is decided by the renderer, not by a setting
 
 // SceneRendering.hpp:71 - Reuses value from LightGenerator
 if ( m_lightGenerator.highQualityEnabled() ) {
@@ -188,7 +188,7 @@ if ( m_lightGenerator.highQualityEnabled() ) {
 - `Generator::Abstract::highQualityEnabled()` is used elsewhere in shader generation code
 
 ### High Quality Effects
-When enabled (`EnableHighQualityKey = true`):
+When the renderer asks for the high tier:
 - Per-fragment lighting (Phong-Blinn or PBR Cook-Torrance)
 - Normal mapping support (if geometry provides tangent space)
 - Per-fragment reflection/refraction with Fresnel
@@ -301,7 +301,9 @@ When a material has BOTH reflection AND refraction components, Saphir generates 
   material IOR drives the refraction vector (`eta = 1.0 / IOR`), not this Fresnel term
 - The `amount` parameters are artistic weights on each leg (neutral `1.0` = fully
   Fresnel-controlled), not a blend against the base colour
-- ⚠️ `LightGenerator::generateFinalFragmentOutput()` still carries `!m_usePBRMode`
+- ~~`LightGenerator::generateFinalFragmentOutput()`~~ — DELETED (Aug 2026) along with the whole Blinn-Phong machinery: it had no caller left once the Gouraud and Phong generators were removed.
+
+- ⚠️ (historical) `generateFinalFragmentOutput()` used to carry `!m_usePBRMode`
   reflection/refraction branches that CONSUME a `fresnelFactor` declared by the material. Since
   the material merge, the only material declaring reflection/refraction is `StandardResource`,
   which always calls `enablePBRMode()` — those branches are **unreachable legacy**. Do not

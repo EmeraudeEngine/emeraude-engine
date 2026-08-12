@@ -2004,8 +2004,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Enable PBR mode in the light generator. */
-		lightGenerator.enablePBRMode();
-
+		
 		/* Albedo component.
 		 * ⚠️ Always go through albedoExpression(): with vertex colours it names the FOLDED
 		 * variable, so the BRDF shades the modulated albedo. The light generator concatenates
@@ -2461,11 +2460,6 @@ namespace EmEn::Graphics::Material
 		}
 
 		const auto * geometry = generator.getGeometryInterface();
-
-		if ( !generator.highQualityEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
-		{
-			return false;
-		}
 
 		/* Check texture coordinate attributes. */
 		if ( this->usingTexture() )

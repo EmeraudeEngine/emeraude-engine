@@ -47,9 +47,10 @@ namespace EmEn::Saphir
 		 * ANIMATED mesh depth (the shadow pass skins), so sampling it at the bind-pose vertex
 		 * position made every animated pose self-occlude — the whole body flickered down to the
 		 * ambient term on fast animation frames (measured on the reflexion-debug dragon). */
-		const std::string localPosition = vertexShader.isSkinningEnabled()
-			? "vec4(skinnedPosition, 1.0)"
-			: "vec4(" + std::string{Attribute::Position} + ", 1.0)";
+		const std::string localPosition =
+			vertexShader.isSkinningEnabled() ?
+			"vec4(skinnedPosition, 1.0)" :
+			"vec4(" + std::string{Attribute::Position} + ", 1.0)";
 
 		/* NOTE: For point light. */
 		if ( shadowCubemap )
@@ -195,7 +196,7 @@ namespace EmEn::Saphir
 			{
 				/* Vogel disk sampling with per-fragment rotation to break up patterns.
 				 * The golden angle (2.399963 rad) ensures optimal sample distribution. */
-				const auto sampleCount = (2 * m_PCFSample + 1) * (2 * m_PCFSample + 1);
+				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
 
 				code <<
 					"/* Vogel disk PCF with per-fragment rotation. */" "\n"
@@ -350,7 +351,7 @@ namespace EmEn::Saphir
 			case PCFMethod::Grid :
 			{
 				/* Grid sampling in 3D around the lookup direction. */
-				const auto sampleCount = (2 * m_PCFSample + 1) * (2 * m_PCFSample + 1) * (2 * m_PCFSample + 1);
+				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
 
 				code <<
 					"/* 3D Grid PCF sampling. */" "\n"
@@ -375,7 +376,7 @@ namespace EmEn::Saphir
 			{
 				/* Vogel sphere sampling (Fibonacci sphere distribution).
 				 * Uses the golden ratio for optimal 3D sample distribution. */
-				const auto sampleCount = (2 * m_PCFSample + 1) * (2 * m_PCFSample + 1);
+				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
 
 				code <<
 					"/* Vogel sphere PCF (Fibonacci sphere distribution). */" "\n"

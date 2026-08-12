@@ -215,18 +215,22 @@ Generator::check(material, geometry):
 **Purpose:** Generate shaders for 3D objects in the scene with full lighting, materials, and effects.
 
 **Unknowns:**
-- Material: Textures, blending, transparency, material model (PBR, Phong)
+- Material: Textures, blending, transparency, declared feature blocks
 - Geometry: Vertex format (normals, tangents, UVs, colors)
 - Scene Context: Number/types of lights, shadows enabled, ambient lighting
 
-**Quality Setting:** `EnableHighQualityKey` (`Core/Graphics/Shader/EnableHighQuality`)
-- **High quality (true):** Per-fragment lighting, normal mapping, per-fragment Fresnel
-- **Low quality (false):** Per-vertex lighting (Gouraud), no normal mapping
+**Quality tier:** a RENDERING decision, no longer a setting (Aug 2026). The engine has ONE
+lighting model — Cook-Torrance, shaded per fragment — and `Generator::Abstract`'s
+`HighQualityEnabled` flag selects the expensive branches (Fresnel-gated reflection, thin-surface
+transmission with Fresnel, parallax occlusion mapping). It is meant to be driven by rendering
+DISTANCE. ⚠️ Nothing drives it down yet: every program is generated at full quality. Since the
+flag is part of the program cache key, a future distance switch produces its own variants for
+free.
 
 **Features:**
 - Full lighting calculations (directional, point, spot lights)
-- Normal mapping support (if tangent space available AND high quality enabled)
-- PBR or Phong shading models
+- Normal mapping support (if tangent space available)
+- Cook-Torrance metallic-roughness, the single shading model
 - Shadow receiving (if shadows enabled in scene)
 - Texture sampling (diffuse, normal, roughness, metallic, emissive)
 - Vertex colors support
@@ -594,10 +598,7 @@ When modifying matrix access in shader generation, these files need updates:
 | `VertexShader.cpp` | `prepareModelViewMatrix()` | ModelView computation |
 | `VertexShader.cpp` | `prepareModelViewProjectionMatrix()` | MVP computation |
 | `VertexShader.cpp` | `prepareSpriteModelMatrix()` | Billboard matrix |
-| `LightGenerator.PerFragment.cpp` | `generatePhongBlinnVertexShader()` | Light transforms |
-| `LightGenerator.PerFragment.NormalMap.cpp` | `generatePhongBlinnWithNormalMapVertexShader()` | Normal map lighting |
-| `LightGenerator.PerVertex.cpp` | `generateGouraudVertexShader()` | Per-vertex lighting |
-| `LightGenerator.PBR.cpp` | `generatePBRVertexShader()` | PBR lighting |
+| `LightGenerator.PBR.cpp` | `generatePBRVertexShader()` | The lighting vertex stage (light direction/distance varyings) |
 
 #### Common Error
 

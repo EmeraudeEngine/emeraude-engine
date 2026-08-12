@@ -40,11 +40,17 @@
   Consequence to respect: prefer the classic constructor; `lighten-marbles` and `basic-scenery`
   still use CSM but at 0.5 lx moonlight, where the loss is invisible. Full defect table in
   `docs/shadow-mapping.md` (CSM status section).
-- LIGHTING AND SHADOWING: the **PBR low-quality specular approximation** (`lqSpecPower` in
-  `LightGenerator.cpp`) is still unnormalised and still multiplies the raw illuminance, reusing the
-  raw `N.L` `finaleDiffuseFactor` inside its own `pow()`. Same treatment as the legacy specular
-  (done, see `docs/caution-points.md` § "the legacy specular was not energy-normalised"), smaller
-  blast radius — LQ path only, `Core/Graphics/Shader/EnableHighQuality` false.
+- RENDERING SYSTEM: **the quality tier needs a DISTANCE driver.** `EnableHighQuality` is gone as
+  a user setting (Aug 2026); the tier is now a rendering decision carried by
+  `Saphir::Generator::Abstract`'s `HighQualityEnabled` flag, and `SceneRendering` enables it
+  unconditionally — every program is generated at FULL quality today. What it gates:
+  Fresnel-gated reflection, thin-surface transmission with Fresnel, and parallax occlusion
+  mapping. Owner's intent: drive it from rendering DISTANCE (a distant surface takes the cheap
+  branches). The flag is already part of the program cache key, so a distance switch produces
+  its own program variants for free.
+  (The former "PBR low-quality specular approximation" item is void: `lqSpecPower` lived in
+  `generateFinalFragmentOutput()`, which was written for the Gouraud path and was deleted with
+  it — it had no caller left.)
 - GRAPHICS MATERIAL: **`Reflection: { "Type": "Automatic" }` does not create the component** (Jul 2026,
   observed, STILL PRESENT Aug 2026). `setReflectionComponentFromEnvironmentCubemap()` raises
   `m_isUsingEnvironmentCubemap` and then calls `setReflectionAmount()`, which warns

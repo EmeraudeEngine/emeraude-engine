@@ -86,9 +86,11 @@ This creates a "contact hardening" effect where shadows are sharper near contact
 > [!WARNING]
 > **GLSL shader inputs are READ-ONLY!**
 
-In per-vertex (Gouraud) lighting mode, `diffuseFactor` and `specularFactor` are computed in the vertex shader and passed to the fragment shader as interface block members. These are shader inputs and cannot be modified.
-
-When shadow mapping is enabled in low quality mode, the fragment shader creates local copies:
+This trap belonged to the per-vertex (Gouraud) lighting mode, DELETED in Aug 2026 along with the
+whole Blinn-Phong machinery: `diffuseFactor` and `specularFactor` were computed in the vertex
+shader and arrived as read-only interface-block members. The rule is kept because it applies to
+ANY value a generator receives as a shader input — the fragment shader must copy before it
+modifies:
 
 ```glsl
 // Create local copies of read-only shader inputs
@@ -100,7 +102,7 @@ diffuseFactor *= shadowFactor;
 specularFactor *= shadowFactor;
 ```
 
-**Code reference:** `Saphir/LightGenerator.PerVertex.cpp:generateGouraudFragmentShader()`
+**Historical code reference** (file deleted): `Saphir/LightGenerator.PerVertex.cpp:generateGouraudFragmentShader()`
 
 ### PCF Code Generation
 

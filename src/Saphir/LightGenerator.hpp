@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -119,15 +119,13 @@ namespace EmEn::Saphir
 			 * @brief Construct the light model generator.
 			 * @param settings A reference to the settings.
 			 * @param renderPassType The render pass type to know which kind of render is implied.
-			 * @param highQualityEnabled Whether high quality rendering is enabled.
 			 * @param fragmentColor The fragment color name produced at the end of the light application. Default "fragmentColor".
 			 */
-			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, bool highQualityEnabled, const char * fragmentColor = FragmentColor) noexcept
+			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, const char * fragmentColor = FragmentColor) noexcept
 				: m_renderPassType{renderPassType},
 				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSamplesKey, DefaultGraphicsShadowMappingPCFSamples)},
 				m_PCFMethod{stringToPCFMethod(settings.getOrSetDefault< std::string >(GraphicsShadowMappingPCFMethodKey, DefaultGraphicsShadowMappingPCFMethod))},
 				m_fragmentColor{fragmentColor},
-				m_highQualityEnabled{highQualityEnabled},
 				m_PCFEnabled{settings.getOrSetDefault< bool >(GraphicsShadowMappingEnablePCFKey, DefaultGraphicsShadowMappingEnablePCF)}
 			{
 
@@ -395,43 +393,6 @@ namespace EmEn::Saphir
 				}
 
 				m_useRefraction = true;
-			}
-
-			/* ==================== PBR Mode ==================== */
-
-			/**
-			 * @brief Enables PBR (Physically Based Rendering) mode.
-			 * @note When PBR mode is enabled, the light generator uses Cook-Torrance BRDF
-			 *	   instead of Phong-Blinn shading.
-			 * @return void
-			 */
-			void
-			enablePBRMode () noexcept
-			{
-				m_usePBRMode = true;
-			}
-
-			/**
-			 * @brief Returns whether PBR mode is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isPBRMode () const noexcept
-			{
-				return m_usePBRMode;
-			}
-
-			/**
-			 * @brief Returns whether high-quality reflection is enabled.
-			 * @note When enabled, reflectionNormal and reflectionI are computed per-fragment.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			highQualityEnabled () const noexcept
-			{
-				return m_highQualityEnabled;
 			}
 
 			/**
@@ -798,76 +759,11 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			bool generateFinalFragmentOutput (FragmentShader & fragmentShader, const std::string & diffuseFactor, const std::string & specularFactor) const noexcept;
 
-			/**
-			 * @brief Generates the vertex shader for a light using the Gouraud shading technic.
-			 * @param generator A reference to the shader generator.
-			 * @param vertexShader A reference to the vertex shader.
-			 * @param lightType The light type.
-			 * @param enableShadowMap Enables the shadow mapping code generation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generateGouraudVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
-			/**
-			 * @brief Generates the fragment shader for a light using the Gouraud shading technic.
-			 * @param generator A reference to the shader generator.
-			 * @param fragmentShader A reference to the fragment shader.
-			 * @param lightType The light type.
-			 * @param enableShadowMap Enables the shadow mapping code generation.
-			 * @param enableColorProjection Enables the color projection code generation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generateGouraudFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
-			/**
-			 * @brief Generates the vertex shader for a light using the Phong-Blinn shading technic.
-			 * @param generator A reference to the shader generator.
-			 * @param vertexShader A reference to the vertex shader.
-			 * @param lightType The light type.
-			 * @param enableShadowMap Enables the shadow mapping code generation.
-			 * @param enableColorProjection Enables the color projection code generation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generatePhongBlinnVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
-			/**
-			 * @brief Generates the fragment shader for a light using the Phong-Blinn shading technic.
-			 * @param generator A reference to the shader generator.
-			 * @param fragmentShader A reference to the fragment shader.
-			 * @param lightType The light type.
-			 * @param enableShadowMap Enables the shadow mapping code generation.
-			 * @param enableColorProjection Enables the color projection code generation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generatePhongBlinnFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
-			/**
-			 * @brief Generates the vertex shader for a directional light using the Phong-Blinn shading technic and normal mapping.
-			 * @param generator A reference to the shader generator.
-			 * @param vertexShader A reference to the vertex shader.
-			 * @param lightType The light type.
-			 * @param enableShadowMap Enables the shadow mapping code generation.
-			 * @param enableColorProjection Enables the color projection code generation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generatePhongBlinnWithNormalMapVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
-			/**
-			 * @brief Generates the fragment shader for a directional light using the Phong-Blinn shading technic and normal mapping.
-			 * @param generator A reference to the shader generator.
-			 * @param fragmentShader A reference to the fragment shader.
-			 * @param lightType The light type.
-			 * @param enableShadowMap Enables the shadow mapping code generation.
-			 * @param enableColorProjection Enables the color projection code generation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generatePhongBlinnWithNormalMapFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the vertex shader for a light using PBR Cook-Torrance BRDF.
@@ -942,7 +838,7 @@ namespace EmEn::Saphir
 			 * @brief Generates the Cascaded Shadow Map sampling code for directional lights.
 			 * @param shadowMapArray The name of the sampler2DArrayShadow uniform.
 			 * @param fragmentPositionWorldSpace The fragment position in world space.
-			 * @param viewMatrix The view matrix uniform to compute view-space depth.
+			 * @param fragmentPositionViewSpace The view matrix uniform to compute view-space depth.
 			 * @param cascadeMatrices The array of cascade view-projection matrices.
 			 * @param splitDistances The cascade split distances (view-space depths).
 			 * @param cascadeCount The number of cascades.
@@ -1110,7 +1006,6 @@ namespace EmEn::Saphir
 			bool m_refractionSourceAbsolute{false};
 			bool m_useRefraction{false};
 			bool m_enableAmbientNoise{false};
-			bool m_usePBRMode{false};
 			bool m_useAutoIllumination{false};
 			bool m_useAmbientOcclusion{false};
 			bool m_useClearCoat{false};
@@ -1124,7 +1019,6 @@ namespace EmEn::Saphir
 			bool m_useKHRSpecular{false};
 			bool m_useMaterialIOR{false};
 			bool m_useReflectivityMap{false};
-			bool m_highQualityEnabled{false};
 			bool m_PCFEnabled{false};
 			/**
 			 * @brief Returns the IBL weight expression, scaled by the environment luminance.
@@ -1183,6 +1077,5 @@ namespace EmEn::Saphir
 
 				return this->scaledIBLIntensity();
 			}
-
 	};
 }

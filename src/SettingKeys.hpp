@@ -743,9 +743,6 @@ namespace EmEn
 			/* Cache compiled SPIR-V binaries on disk. */
 			constexpr auto BinaryCacheEnabledKey{"Core/Graphics/Shader/EnableBinaryCache"};
 			constexpr auto DefaultBinaryCacheEnabled{false};
-			/* Generate higher-quality (more expensive) shader variants. */
-			constexpr auto EnableHighQualityKey{"Core/Graphics/Shader/EnableHighQuality"};
-			constexpr auto DefaultEnableHighQuality{false};
 
 		/* RushMaker (in-engine screencast / video recorder) */
 		/* Enable video / audio capture in RushMaker (shared default). */

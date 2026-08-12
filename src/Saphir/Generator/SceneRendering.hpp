@@ -68,13 +68,17 @@ namespace EmEn::Saphir::Generator
 			SceneRendering (const std::string & shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex, const Scenes::Scene & scene, Graphics::RenderPassType renderPassType, Settings & settings) noexcept
 				: Abstract{shaderProgramName, renderTarget, renderableInstance, layerIndex},
 				m_renderPassType{renderPassType},
-				m_lightGenerator{settings, renderPassType, settings.getOrSetDefault< bool >(EnableHighQualityKey, DefaultEnableHighQuality)},
+				m_lightGenerator{settings, renderPassType},
 				m_scene{&scene}
 			{
-				if ( m_lightGenerator.highQualityEnabled() )
-				{
-					this->enableFlag(HighQualityEnabled);
-				}
+				/* Quality tier — a RENDERING decision, not a user setting (the
+				 * "Core/Graphics/Shader/EnableHighQuality" setting is gone). It is meant to be
+				 * driven by rendering DISTANCE: a distant surface can take the cheap branches
+				 * (simpler transmission, no Fresnel-gated reflection, no parallax).
+				 * ⚠️ TODO: nothing drives it down yet — every program is generated at full
+				 * quality. The flag is part of the program cache key, so a future distance
+				 * switch produces its own program variants for free. */
+				this->enableFlag(HighQualityEnabled);
 
 				this->setPOMIterations(this->highQualityEnabled() ? settings.getOrSetDefault< int >(GraphicsTexturePOMIterationsKey, DefaultGraphicsTexturePOMIterations) : 0);
 

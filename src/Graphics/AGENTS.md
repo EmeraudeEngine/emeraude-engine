@@ -530,7 +530,7 @@ POM ray-marches through a height map in the fragment shader to create depth/reli
 
 **Activation conditions** (all must be true):
 1. Material has a Height component (`m_useParallaxOcclusionMapping`)
-2. High quality enabled (`EnableHighQualityKey = true`)
+2. The renderer asks for the high quality tier (`Generator::Abstract::HighQualityEnabled`)
 3. POM iterations > 0 (`POMIterationsKey > 0`)
 
 When active, a displaced UV (`pomTexCoords`) is computed at the start of the fragment shader and ALL subsequent texture samples use it automatically via `textCoords()`.
