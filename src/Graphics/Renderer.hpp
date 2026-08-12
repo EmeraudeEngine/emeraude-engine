@@ -1404,7 +1404,7 @@ namespace EmEn::Graphics
 			 * load marker guards against a blob that killed the previous run.
 			 * @return void
 			 */
-			void loadPipelineCache () noexcept;
+			void loadPipelineCache () const noexcept;
 
 			/**
 			 * @brief Writes the driver pipeline cache to disk.

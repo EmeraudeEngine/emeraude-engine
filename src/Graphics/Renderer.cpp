@@ -30,8 +30,8 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cstring>
+#include <algorithm>
 #include <filesystem>
 #include <ranges>
 #include <thread>
@@ -147,11 +147,6 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 	using namespace Saphir;
 
-	/* NOTE: Out-of-line so the std::unique_ptr< AccelerationStructureBuilder > deleter sees the
-	 * complete type (included above). Cannot be '= default' in the EMEN_API-exported header —
-	 * see the destructor declaration in Renderer.hpp. */
-	Renderer::~Renderer () = default;
-
 	Renderer::Renderer (PrimaryServices & primaryServices, Resources::Manager & resourcesManager, Instance & instance, Window & window) noexcept
 		: ServiceInterface{ClassId},
 		ControllableTrait{ClassId},
@@ -172,6 +167,8 @@ namespace EmEn::Graphics
 
 		this->observe(&m_window);
 	}
+
+	Renderer::~Renderer () = default;
 
 	bool
 	Renderer::initializeSubServices () noexcept
@@ -1024,13 +1021,15 @@ namespace EmEn::Graphics
 		const auto colorFormat = source->createInfo().format;
 		const auto width = source->width();
 		const auto height = source->height();
-		const auto depthFormat = m_sceneTarget != nullptr && m_sceneTarget->depthStencilImage() != nullptr
-			? m_sceneTarget->depthStencilImage()->createInfo().format
-			: m_swapChain->depthStencilFormat();
+		const auto depthFormat =
+			m_sceneTarget != nullptr && m_sceneTarget->depthStencilImage() != nullptr ?
+			m_sceneTarget->depthStencilImage()->createInfo().format :
+			m_swapChain->depthStencilFormat();
 
-		const auto succeeded = m_grabPass->isCreated()
-			? m_grabPass->recreate(*this, width, height, colorFormat, depthFormat)
-			: m_grabPass->create(*this, width, height, colorFormat, depthFormat);
+		const auto succeeded =
+			m_grabPass->isCreated() ?
+			m_grabPass->recreate(*this, width, height, colorFormat, depthFormat) :
+			m_grabPass->create(*this, width, height, colorFormat, depthFormat);
 
 		if ( !succeeded )
 		{
@@ -1063,7 +1062,7 @@ namespace EmEn::Graphics
 			 * its view-matrices descriptor set (and its UBO) and its attachments —
 			 * destroying them in place was a GPU use-after-free (segfault at scene
 			 * setup when the target is recreated with the HDR format). */
-			m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
+			m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 				target->destroyRenderTarget();
 			});
 
@@ -1234,7 +1233,7 @@ namespace EmEn::Graphics
 		 * pipelines across programs with different descriptor set layouts. */
 		if ( const auto & pipelineLayout = program.pipelineLayout(); pipelineLayout != nullptr )
 		{
-			hash ^= reinterpret_cast< uintptr_t >(pipelineLayout->handle()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+			hash ^= reinterpret_cast< uintptr_t >(pipelineLayout->handle()) + 0x9e3779b9 + (hash << 6U) + (hash >> 2U);
 		}
 
 		if ( const auto pipelineIt = m_graphicsPipelines.find(hash); pipelineIt != m_graphicsPipelines.cend() )
@@ -1497,14 +1496,14 @@ namespace EmEn::Graphics
 		 * sub-pixel offsets for temporal anti-aliasing (even coverage of the pixel footprint
 		 * over 8 frames). Expressed in pixels, converted to NDC against the target extent. */
 		static constexpr std::array< std::array< float, 2 >, 8 > HaltonJitterSequence{{
-			{1.0F / 2.0F - 0.5F, 1.0F / 3.0F - 0.5F},
-			{1.0F / 4.0F - 0.5F, 2.0F / 3.0F - 0.5F},
-			{3.0F / 4.0F - 0.5F, 1.0F / 9.0F - 0.5F},
-			{1.0F / 8.0F - 0.5F, 4.0F / 9.0F - 0.5F},
-			{5.0F / 8.0F - 0.5F, 7.0F / 9.0F - 0.5F},
-			{3.0F / 8.0F - 0.5F, 2.0F / 9.0F - 0.5F},
-			{7.0F / 8.0F - 0.5F, 5.0F / 9.0F - 0.5F},
-			{1.0F / 16.0F - 0.5F, 8.0F / 9.0F - 0.5F}
+			{(1.0F / 2.0F) - 0.5F, (1.0F / 3.0F) - 0.5F},
+			{(1.0F / 4.0F) - 0.5F, (2.0F / 3.0F) - 0.5F},
+			{(3.0F / 4.0F) - 0.5F, (1.0F / 9.0F) - 0.5F},
+			{(1.0F / 8.0F) - 0.5F, (4.0F / 9.0F) - 0.5F},
+			{(5.0F / 8.0F) - 0.5F, (7.0F / 9.0F) - 0.5F},
+			{(3.0F / 8.0F) - 0.5F, (2.0F / 9.0F) - 0.5F},
+			{(7.0F / 8.0F) - 0.5F, (5.0F / 9.0F) - 0.5F},
+			{(1.0F / 16.0F) - 0.5F, (8.0F / 9.0F) - 0.5F}
 		}};
 
 		const auto & pixelOffset = HaltonJitterSequence[m_temporalJitterIndex % HaltonJitterSequence.size()];
@@ -1670,7 +1669,7 @@ namespace EmEn::Graphics
 
 			if ( stack != nullptr && scene->postProcessStack()->syncCameraEffects(camera.get(), *this) && m_sceneTarget != nullptr )
 			{
-				m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
+				m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 					target->destroyRenderTarget();
 				});
 			}
@@ -1721,7 +1720,7 @@ namespace EmEn::Graphics
 			/* Defer destruction: retire the scene target so that in-flight command
 			 * buffers finish referencing its resources (framebuffer, render pass,
 			 * images) before they are destroyed. */
-			m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] () {
+			m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 				target->destroyRenderTarget();
 			});
 		}
@@ -1779,7 +1778,7 @@ namespace EmEn::Graphics
 
 			/* The present semaphore belongs to the ACQUIRED IMAGE, not to the frame slot: only the
 			 * re-acquisition of that image proves the previous present released it. */
-			auto presentSemaphoreHandle = m_presentSemaphores[imageIndex]->handle();
+			VkSemaphore presentSemaphoreHandle = m_presentSemaphores[imageIndex]->handle();
 
 			if ( !m_graphicsQueue->submit(*commandBuffer, SynchInfo{}
 					.waits(currentFrameScope.secondarySemaphores(), waitStages)
@@ -1901,11 +1900,16 @@ namespace EmEn::Graphics
 			 * The snapshot is RETAINED in this frame's slot: it only drops when the slot is
 			 * reused (fence passed), so effects removed meanwhile survive until the GPU is
 			 * done with them. */
-			const auto camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
+			const auto camera = scenePtr != nullptr ? scenePtr->activeCamera() : nullptr;
+
 			auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
 			lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
 
-			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
+			if ( !m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects) )
+			{
+				/* TODO: What we need to really do here, when it occurs? */
+				Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+			}
 		}
 
 		/* Render the scene debug helpers (compass) over the scene. */
@@ -2116,7 +2120,11 @@ namespace EmEn::Graphics
 		auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
 		lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
 
-		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects);
+		if ( !m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects) )
+		{
+			/* TODO: What we need to really do here, when it occurs? */
+			Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+		}
 
 		/* Render the scene debug helpers (compass) over the post-processed scene.
 		 * ⚠️ This MUST stay after executeDirectPostProcessEffects(): recorded before it, the
@@ -2176,7 +2184,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			const auto semaphoreHandle = shadowMap->semaphore()->handle();
+			VkSemaphore semaphoreHandle = shadowMap->semaphore()->handle();
 
 			const auto submitted = queue->submit(
 				*commandBuffer,
@@ -2266,7 +2274,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			const auto signalSemaphoreHandle = renderToTexture->semaphore()->handle();
+			VkSemaphore signalSemaphoreHandle = renderToTexture->semaphore()->handle();
 
 			bool submitted = false;
 
@@ -2690,7 +2698,7 @@ namespace EmEn::Graphics
 			uint32_t deviceID;
 			uint32_t driverVersion;
 			uint32_t pointerABI;
-			uint8_t cacheUUID[VK_UUID_SIZE];
+			std::array< uint8_t, VK_UUID_SIZE > cacheUUID;
 		};
 
 		constexpr uint32_t PipelineCacheMagic{0x454D504CU}; /* "EMPL" */
@@ -2717,11 +2725,9 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::loadPipelineCache () noexcept
+	Renderer::loadPipelineCache () const noexcept
 	{
-		auto & settings = m_primaryServices.settings();
-
-		if ( !settings.getOrSetDefault< bool >(PipelineCacheEnabledKey, DefaultPipelineCacheEnabled) )
+		if ( !m_primaryServices.settings().getOrSetDefault< bool >(PipelineCacheEnabledKey, DefaultPipelineCacheEnabled) )
 		{
 			return;
 		}
@@ -2804,7 +2810,7 @@ namespace EmEn::Graphics
 		PipelineCacheFileHeader header{};
 		std::memcpy(&header, fileContent.data(), sizeof(header));
 
-		std::vector< uint8_t > blob{fileContent.cbegin() + sizeof(header), fileContent.cend()};
+		const std::vector< uint8_t > blob{fileContent.cbegin() + sizeof(header), fileContent.cend()};
 
 		const auto & properties = m_device->physicalDevice()->propertiesVK10();
 
@@ -2816,7 +2822,7 @@ namespace EmEn::Graphics
 			header.deviceID != properties.deviceID ||
 			header.driverVersion != properties.driverVersion ||
 			header.pointerABI != static_cast< uint32_t >(sizeof(void *)) ||
-			std::memcmp(header.cacheUUID, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0 ||
+			std::memcmp(header.cacheUUID.data(), static_cast< const void * >(properties.pipelineCacheUUID), VK_UUID_SIZE) != 0 ||
 			header.dataHash != hashBlob(blob);
 
 		if ( rejected )
@@ -2864,7 +2870,7 @@ namespace EmEn::Graphics
 		header.deviceID = properties.deviceID;
 		header.driverVersion = properties.driverVersion;
 		header.pointerABI = static_cast< uint32_t >(sizeof(void *));
-		std::memcpy(header.cacheUUID, properties.pipelineCacheUUID, VK_UUID_SIZE);
+		std::memcpy(header.cacheUUID.data(), static_cast< const void * >(properties.pipelineCacheUUID), VK_UUID_SIZE);
 
 		std::vector< uint8_t > fileContent(sizeof(header) + blob.size());
 		std::memcpy(fileContent.data(), &header, sizeof(header));
