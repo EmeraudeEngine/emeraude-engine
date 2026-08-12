@@ -129,6 +129,14 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			size_t computeProgramCacheKey () const noexcept override;
 
+			/** @copydoc EmEn::Saphir::Generator::Abstract::generatorClassId() */
+			[[nodiscard]]
+			const char *
+			generatorClassId () const noexcept override
+			{
+				return ClassId;
+			}
+
 		private:
 
 			/**

@@ -177,7 +177,7 @@ namespace EmEn::Saphir
 			 * usable, shader not generated, compilation failed, or Vulkan module creation failed).
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::ShaderModule > getShaderModuleFromGeneratedShader (const std::shared_ptr< Vulkan::Device > & device, const AbstractShader & shader) noexcept;
+			std::shared_ptr< Vulkan::ShaderModule > getShaderModuleFromGeneratedShader (const std::shared_ptr< Vulkan::Device > & device, const AbstractShader & shader, const char * generatorClassId = nullptr) noexcept;
 
 			/**
 			 * @brief Builds a Vulkan shader module from source code.
@@ -200,11 +200,14 @@ namespace EmEn::Saphir
 			 * features toggled at pipeline level, e.g. shadow mapping).
 			 * @param device A reference to a device smart pointer.
 			 * @param program A reference to a program smart pointer.
+			 * @param generatorClassId The class identifier of the generator that produced the
+			 * program. Only used to sort the generated-source dump into one directory per
+			 * generator; pass nullptr to dump at the root.
 			 * @return Base::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 >, empty if
 			 * any of the program's shaders failed to produce a module.
 			 */
 			[[nodiscard]]
-			Base::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program) noexcept;
+			Base::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program, const char * generatorClassId = nullptr) noexcept;
 
 		private:
 
@@ -240,7 +243,7 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool cacheShaderSourceCode (const AbstractShader & shader) const noexcept;
+			bool cacheShaderSourceCode (const AbstractShader & shader, const char * generatorClassId) const noexcept;
 
 			/**
 			 * @brief Writes a shader binary on disk cache.
@@ -269,7 +272,7 @@ namespace EmEn::Saphir
 			 * @return std::filesystem::path
 			 */
 			[[nodiscard]]
-			std::filesystem::path generateShaderSourceCacheFilepath (const AbstractShader & shader) const noexcept;
+			std::filesystem::path generateShaderSourceCacheFilepath (const AbstractShader & shader, const char * generatorClassId) const noexcept;
 
 			/**
 			 * @brief Generates a unique cache filepath for the shader binary.

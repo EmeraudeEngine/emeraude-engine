@@ -572,6 +572,16 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			virtual size_t computeProgramCacheKey () const noexcept = 0;
 
+			/**
+			 * @brief Returns the concrete generator's class identifier.
+			 * @note Used to sort the generated GLSL dump into one directory per generator, so a
+			 * human can inspect what each generator actually produced. Every concrete generator
+			 * already declares a ClassId; this exposes it polymorphically.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			virtual const char * generatorClassId () const noexcept = 0;
+
 		protected:
 
 			/**

@@ -144,24 +144,34 @@ namespace EmEn::Saphir
 			m_binaryCacheEnabled = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);
 		}
 
-		/* Shader source cache directory. */
-		m_shadersSourcesDirectory = m_primaryServices.fileSystem().cacheDirectory(ShaderSourcesDirectoryName);
-
-		if ( !IO::createDirectory(m_shadersSourcesDirectory) )
+		/* Shader source DUMP directory (see the class documentation: this is an inspection dump,
+		 * not a cache). Only created when the feature is on — a disabled debug facility must
+		 * never be able to bring the renderer down, which is what a hard failure here used to do. */
+		if ( m_sourceCodeCacheEnabled )
 		{
-			TraceError{ClassId} << "Unable to create '" << m_shadersSourcesDirectory << "' directory !";
+			m_shadersSourcesDirectory = m_primaryServices.fileSystem().cacheDirectory(ShaderSourcesDirectoryName);
 
-			return false;
+			if ( !IO::createDirectory(m_shadersSourcesDirectory) )
+			{
+				TraceWarning{ClassId} << "Unable to create '" << m_shadersSourcesDirectory << "' directory ! The generated source dump is disabled.";
+
+				m_shadersSourcesDirectory.clear();
+				m_sourceCodeCacheEnabled = false;
+			}
 		}
 
 		/* Shader binaries cache directory. */
-		m_shadersBinariesDirectory = m_primaryServices.fileSystem().cacheDirectory(ShaderBinariesDirectoryName);
-
-		if ( !IO::createDirectory(m_shadersBinariesDirectory) )
+		if ( m_binaryCacheEnabled )
 		{
-			TraceError{ClassId} << "Unable to create '" << m_shadersBinariesDirectory << "' directory !";
+			m_shadersBinariesDirectory = m_primaryServices.fileSystem().cacheDirectory(ShaderBinariesDirectoryName);
 
-			return false;
+			if ( !IO::createDirectory(m_shadersBinariesDirectory) )
+			{
+				TraceWarning{ClassId} << "Unable to create '" << m_shadersBinariesDirectory << "' directory ! The binary cache is disabled.";
+
+				m_shadersBinariesDirectory.clear();
+				m_binaryCacheEnabled = false;
+			}
 		}
 
 		/* Checks shader cache. */
@@ -169,8 +179,10 @@ namespace EmEn::Saphir
 		{
 			this->clearCache();
 		}
-		else
+		else if ( m_binaryCacheEnabled )
 		{
+			/* NOTE: Only the BINARY cache is ever read back; the source dump index was scanned
+			 * for nothing (nothing ever reads a dumped source — see cacheShaderSourceCode()). */
 			this->readCache();
 		}
 
@@ -298,14 +310,14 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	ShaderManager::cacheShaderSourceCode (const AbstractShader & shader) const noexcept
+	ShaderManager::cacheShaderSourceCode (const AbstractShader & shader, const char * generatorClassId) const noexcept
 	{
 		if ( !m_sourceCodeCacheEnabled )
 		{
 			return true;
 		}
 
-		const auto cacheFilepath = this->generateShaderSourceCacheFilepath(shader);
+		const auto cacheFilepath = this->generateShaderSourceCacheFilepath(shader, generatorClassId);
 
 		if ( cacheFilepath.empty() )
 		{
@@ -384,7 +396,7 @@ namespace EmEn::Saphir
 	}
 
 	std::shared_ptr< ShaderModule >
-	ShaderManager::getShaderModuleFromGeneratedShader (const std::shared_ptr< Device > & device, const AbstractShader & shader) noexcept
+	ShaderManager::getShaderModuleFromGeneratedShader (const std::shared_ptr< Device > & device, const AbstractShader & shader, const char * generatorClassId) noexcept
 	{
 		if ( !this->usable() )
 		{
@@ -412,6 +424,14 @@ namespace EmEn::Saphir
 			return shaderIt->second;
 		}
 
+		/* Dump the generated source for inspection. ⚠️ Done BEFORE the binary-cache check on
+		 * purpose: this is not a cache, it is the window onto what the generators produced, and
+		 * hanging it off the compile path meant a binary cache hit silently stopped producing it. */
+		if ( !this->cacheShaderSourceCode(shader, generatorClassId) )
+		{
+			TraceWarning{ClassId} << "Unable to dump the generated source of shader '" << shader.name() << "' !";
+		}
+
 		std::vector< uint32_t > binaryCode;
 
 		/* Checks in cached binaries to prevent a compilation. */
@@ -424,12 +444,6 @@ namespace EmEn::Saphir
 		/* If not, we compile it. */
 		else
 		{
-			/* Write the source code to the cache. */
-			if ( !this->cacheShaderSourceCode(shader) )
-			{
-				TraceWarning{ClassId} << "Unable to write the source code of shader '" << shader.name() << "' to the cache !";
-			}
-
 			if ( !this->compile(shader, binaryCode) )
 			{
 				TraceError{ClassId} << "Unable to compile shader '" << shader.name() << "' !";
@@ -494,13 +508,13 @@ namespace EmEn::Saphir
 	}
 
 	StaticVector< std::shared_ptr< ShaderModule >, 5 >
-	ShaderManager::getShaderModules (const std::shared_ptr< Device > & device, const std::shared_ptr< Program > & program) noexcept
+	ShaderManager::getShaderModules (const std::shared_ptr< Device > & device, const std::shared_ptr< Program > & program, const char * generatorClassId) noexcept
 	{
 		StaticVector< std::shared_ptr< ShaderModule >, 5 > shaderModules;
 
 		for ( const auto * shader : program->getShaderList() )
 		{
-			const auto shaderModule = this->getShaderModuleFromGeneratedShader(device, *shader);
+			const auto shaderModule = this->getShaderModuleFromGeneratedShader(device, *shader, generatorClassId);
 
 			if ( shaderModule == nullptr )
 			{
@@ -633,7 +647,7 @@ namespace EmEn::Saphir
 	}
 
 	std::filesystem::path
-	ShaderManager::generateShaderSourceCacheFilepath (const AbstractShader & shader) const noexcept
+	ShaderManager::generateShaderSourceCacheFilepath (const AbstractShader & shader, const char * generatorClassId) const noexcept
 	{
 		const auto & name = shader.name();
 		const auto hashStr = std::to_string(shader.hash());
@@ -648,6 +662,21 @@ namespace EmEn::Saphir
 		filename += extension;
 
 		auto filepath = m_shadersSourcesDirectory;
+
+		/* One sub-directory per generator, so the dump can be inspected by category instead of
+		 * being one flat pile. Created lazily: a generator that never runs leaves no directory. */
+		if ( generatorClassId != nullptr )
+		{
+			filepath.append(generatorClassId);
+
+			if ( !IO::createDirectory(filepath) )
+			{
+				TraceWarning{ClassId} << "Unable to create the generator sub-directory '" << filepath << "' ! Dumping at the dump root instead.";
+
+				filepath = m_shadersSourcesDirectory;
+			}
+		}
+
 		filepath.append(filename);
 
 		return filepath;
@@ -696,7 +725,21 @@ namespace EmEn::Saphir
 			return 0;
 		}
 
-		return std::stoull(filename.substr(underscorePos + 1, dotPos - underscorePos - 1));
+		/* ⚠️ NOT std::stoull: the cascade builds with -fno-exceptions (EMERAUDE_DISABLE_EXCEPTIONS,
+		 * default ON), so a stray file in this user-writable directory — anything shaped like
+		 * "name_notanumber.vert" — would throw and terminate the process AT STARTUP. from_chars
+		 * reports the failure instead, and an unparsable entry is simply ignored. */
+		const auto * first = filename.data() + underscorePos + 1;
+		const auto * last = filename.data() + dotPos;
+
+		size_t hash = 0;
+
+		if ( const auto [ptr, error] = std::from_chars(first, last, hash); error != std::errc{} || ptr != last )
+		{
+			return 0;
+		}
+
+		return hash;
 	}
 
 	VkShaderStageFlagBits

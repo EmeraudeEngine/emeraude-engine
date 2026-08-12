@@ -183,7 +183,7 @@ namespace EmEn::Saphir::Generator
 		graphicsPipeline->setIdentifier(TracerTag, this->name(), "GraphicsPipeline");
 
 		{
-			auto shaderModules = renderer.shaderManager().getShaderModules(renderer.device(), m_shaderProgram);
+			auto shaderModules = renderer.shaderManager().getShaderModules(renderer.device(), m_shaderProgram, this->generatorClassId());
 
 			if ( shaderModules.empty() || !graphicsPipeline->configureShaderStages(shaderModules) )
 			{

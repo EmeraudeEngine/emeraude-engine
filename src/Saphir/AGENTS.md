@@ -1092,3 +1092,43 @@ instead of being silently resolved against an empty search stack.
 ⚠️ **The day hand-written GLSL sources become a thing** (see `TODO.md`, "Prepare a way to use
 manual GLSL sources"), a real includer plugs in exactly there — written against an actual
 specification (which directories, which search policy, what caching), not copied from a sample.
+
+## The two shader caches — what they really are (audited Aug 2026)
+
+### The "source code cache" is a DUMP, not a cache
+
+`Core/Graphics/Shader/EnableSourceCodeCache` writes every generated GLSL to
+`~/.cache/<app>/shader-sources/`. **Nothing ever reads it back**:
+`AbstractShader::loadSourceCode()` — the only function able to re-inject a file into a shader —
+has zero callers in the whole cascade. It structurally cannot be a cache either: its key is
+`std::hash` of the source it stores, so you must have generated the source already to know which
+file to read.
+
+It exists to let a human inspect what the generators produced, and it is now shaped for that:
+
+- **one sub-directory per generator** (`SceneRendering/`, `ShadowCasting/`, `PostProcessing/`,
+  `OverlayRendering/`, `GizmoRendering/`, `TBNSpaceRendering/`), created lazily. The generator
+  identity is carried by `Generator::Abstract::generatorClassId()` and threaded through
+  `ShaderManager::getShaderModules()`;
+- the dump now happens **before** the binary-cache check. It used to hang off the compile path,
+  so a binary cache hit silently stopped producing it.
+
+⚠️ Measured on one `material-debug` load: **336 distinct sources for SceneRendering alone**
+(265 fragment, 71 vertex), against 3 for OverlayRendering, 2 for PostProcessing and 1 for
+ShadowCasting. That number is the program-variant count, and it is the real load-time driver —
+worth understanding before optimising any cache.
+
+### The binary (SPIR-V) cache works, but its key is unsafe
+
+`Core/Graphics/Shader/EnableBinaryCache` round-trips properly — write AND read — and a hit really
+does skip glslang. But the key is `<name>_<hash of the GLSL source>.bin` and **nothing else**: no
+glslang version, no target environment, no SPIR-V options, no engine build stamp. After a glslang
+upgrade or a compile-option change, a stale blob is loaded and handed to `vkCreateShaderModule`
+**without any validation**. It is off by default, and it should stay off until the key is fixed.
+
+### There is NO VkPipelineCache
+
+Every `vkCreate*Pipelines` call passes `VK_NULL_HANDLE`. The engine already reads the device's
+`pipelineCacheUUID` (`Vulkan/PhysicalDevice.hpp:408`) — to print it. That is the layer that
+usually matters most (it skips the driver's SPIR-V→ISA compilation) and the one every production
+engine serialises to disk, keyed by that very UUID. See `TODO.md`.

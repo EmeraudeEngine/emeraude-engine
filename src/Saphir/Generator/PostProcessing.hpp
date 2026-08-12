@@ -60,6 +60,14 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			size_t computeProgramCacheKey () const noexcept override;
 
+			/** @copydoc EmEn::Saphir::Generator::Abstract::generatorClassId() */
+			[[nodiscard]]
+			const char *
+			generatorClassId () const noexcept override
+			{
+				return ClassId;
+			}
+
 			/**
 			 * @brief Sets the list of framebuffer effects for shader generation.
 			 * @param effectsList The list of effects.
