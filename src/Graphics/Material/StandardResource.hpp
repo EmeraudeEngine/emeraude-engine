@@ -119,6 +119,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
 			static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
 			static constexpr auto SurfaceOpacityAmount{"SurfaceOpacityAmount"};
+			/** @brief The albedo AFTER the vertex-colour modulation; the single name every consumer reads. */
+			static constexpr auto SurfaceAlbedoFinal{"SurfaceAlbedoFinal"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
@@ -228,6 +230,10 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::collectRTTextures() */
 			void collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::emissionMultiplier() */
+			[[nodiscard]]
+			std::string emissionMultiplier () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::requiresAlphaTestedShadows() */
 			[[nodiscard]]
 			bool requiresAlphaTestedShadows () const noexcept override;
@@ -324,6 +330,17 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+
+			/**
+			 * @brief Enables the per-vertex colour attribute, which MODULATES the albedo.
+			 * @note glTF COLOR_0 semantics: the vertex colour MULTIPLIES the base colour. There is
+			 * no second "vertex colours AS the albedo" mode — that is this same path with the
+			 * neutral White albedo factor and no texture, i.e. the default state.
+			 * @warning The geometry MUST carry the colour attribute (Geometry::EnableVertexColor);
+			 * shader generation fails hard otherwise. This function is available before creation time.
+			 * @return void
+			 */
+			void enableVertexColor () noexcept;
 
 			/**
 			 * @brief Sets the roughness component as a value (0.0 = mirror, 1.0 = fully rough).
@@ -1326,6 +1343,19 @@ namespace EmEn::Graphics::Material
 			 */
 			[[nodiscard]]
 			const Component::Texture * alphaSourceTextureComponent () const noexcept;
+
+			/**
+			 * @brief Returns the GLSL name/expression carrying the FINAL albedo.
+			 * @note With vertex colours enabled this is the folded variable (SurfaceAlbedoFinal),
+			 * declared once at the top of the fragment shader; otherwise it is the albedo texture
+			 * component's variable or the material UBO colour. Every consumer (light generator,
+			 * fragment colour, alpha test) must go through this so they all read the same value.
+			 * @warning Decidable from the FLAG alone: setupLightGenerator() runs before the
+			 * fragment stage is generated.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string albedoExpression () const noexcept;
 
 			/**
 			 * @brief Copies each texture component's UV transform into its material UBO slot.

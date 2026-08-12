@@ -232,158 +232,49 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
   Console — `Console/AGENTS.md:204` finally becomes exact), material JSON schema docs,
   projet-alpha `.claude/rules/` mirror, `generate_materials.py` header (optional: regenerate the
   3,918 dual-schema JSONs to single-schema — nothing requires the dual layout after the merge).
-- [ ] **Lot 7 — Remove BasicResource (one concrete material class)**. Runs AFTER the merge
-  stabilises (Lots 0-5 validated) — it has its own parity prerequisites in the merged Standard:
-  - **Parity first**: vertex colors — **owner-decided contract (2026-08-12): they MODULATE the
-    albedo** (multiply, glTF `COLOR_0` semantics); "vertex colors AS albedo" is the SAME path
-    with a White (neutral) albedo factor and no texture, i.e. a factory preset, not a second
-    mode. Today Standard only *checks* `usingVertexColors()` and never enables the flag; Basic
-    renders them — port the actual codegen (sprites and debug helpers need it); alpha-test comes
-    from Lot 1; **verify the
-    unlit/emissive story** — SkyBox, sprites, debug helpers and baked-lighting content ride
-    Basic's SimplePass/`emissionMultiplier()` path today; check whether an emissive-only Standard
-    configuration reproduces it or whether an explicit unlit flag (glTF `KHR_materials_unlit`
-    model) must be added; `isComplex()` becomes **feature-derived** instead of hard-coded per
-    class (it drives the SimplePass fast path, SceneRendering.cpp:185); factory presets replace
-    the "quick color material" ergonomics (Toolkit color materials, debug helpers, default
-    resources of MeshResource/MultiLayerMesh/Ground/Sea/SkyBox/Sprite).
-  - **Migration**: 27 engine code sites (+10 includes) — WADLoader.cpp:1775 (Basic-only today),
-    SpriteResource, SkyBoxResource, BasicGround/BasicSea, MeshResource/MultiLayerMeshResource
-    defaults, Toolkit, DefinitionResource fallback (:247/252), console "default"
-    (Manager.console.cpp:101/397), all debug helpers; app side in projet-alpha TODO.md;
-    15 mesh JSONs carry `"MaterialBasicResource"`. WAD demo must be re-validated visually
-    (its lit look shifts from Phong to Cook-Torrance; photometric calibration is one package).
-  - **Then the whole legacy lighting machinery dies for good**: the LightGenerator dual mode
-    (`m_usePBRMode`, 14 branches), the (n+2)/(8π) Blinn-Phong normalisation, the Gouraud legacy
-    branches, and the temporarily relocated `specularExponentFromGlossiness` — PBR becomes the
-    only lighting path in Saphir. (The open "PBR low-quality specular approximation" TODO above
-    stays relevant: the LQ tier survives as PBR-LQ.)
-
-**Validation, every lot**: full-cascade compile, `EmeraudeBaseUnitTests` (Release), measured
-screenshots (pixel stats, never eyeballed) vs the Lot 0 baseline.
-
-**What the audit CLEARED (do not re-investigate):** the RT path needs no work
-(`GPURTMaterialData` has no type field, `SceneMetaData` is interface-only — removal deletes ONE
-export function); the 3,918 material JSONs need no regeneration (dual-schema, the requesting
-container is the discriminator); WAD (Basic-only) and MDx (zero direct refs) are unaffected;
-Saphir couples through `setupLightGenerator`/`enablePBRMode()`, not class names.
-Measured duplication being removed: ~4,300 lines (StandardResource 3,227+1,069), the 8 latest
-commits touched both materials identically, ~37% of Standard's fragment codegen is verbatim in
-PBR, three helpers byte-identical.
-
-## Post-Processing Pipeline (Effects/Framebuffer + Effects/Lens)
-
-- [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).
-- [ ] **Re-light the demos that never migrated to the physical camera** (last phase of the
-  photometric project — the units, the attenuation, the APEX exposure and the effect
-  recalibration are all done; see `src/Graphics/AGENTS.md` § "Light Attenuation — Physical, Not
-  Artistic", § "Physical Camera" and § "Background photometric contract").
-  `Liminal` and `Citadel` add `ToneMapping` BY HAND with fixed parameters, so they have NO
-  metering to absorb photometric values and read blown out (`liminal` measured 200.4 mean, 5.8%
-  blown at f/4 1/60; `Citadel` reads ~0 nits). Their lamps and their optics have to be tuned
-  against each other. This is AUTHORING, not a defect.
-  ⚠️ Method: keep the auto-exposure ON while migrating a scene — absolute values span ~1 to
-  ~100000 and without metering every intermediate step renders pure white or pure black.
-- [ ] **Velocity on the translucent pass** (motion-vector defect 3) — the B1-B4 chain is done and
-  pushed (per-instance transforms SSBO, previous-model history, RG16F velocity attachment, double
-  skinning; see `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path" and `src/Scenes/AGENTS.md`
-  § "Instance Transforms"). The translucent pass still writes a wrong velocity — same family as
-  the two static-camera bugs already closed.
-  ⚠️ **Keep a static-camera zero-velocity check in any future motion-vector work.** The original
-  B1-B4 validation only ever exercised MOVING geometry, where a constant offset is invisible next
-  to real motion, and RTGI's own history validation masked the error for a day.
-- [ ] **Push constant min-spec violation — observed at 144 B (owner, 2026-07-30), still open.**
-  `Saphir/Generator/Abstract.cpp::declareMatrixPushConstantBlock()` still emits a
-  `V(64) + M(64) + frameIndex(4)` = 132 B fallback for the advanced path when a scene has no
-  instance transforms, and `generatePushConstantRanges()` lays blocks END TO END — so a second
-  declared block ADDS to that offset, which is how the engine's own startup validation now reports
-  144 B against the 128 B Vulkan minimum guarantee (part of the AMD/Intel fleet exposes exactly
-  128). The validation itself is DONE (`Vulkan::PipelineLayout::createOnHardware()`: hard error
-  above the device limit, warning above 128 B) — read the warning to identify which program and
-  which second block push it over, then eliminate the fallback.
-  See `docs/caution-points.md` § "Push Constants: the 128-Byte Minimum Guarantee".
-- [ ] **Physical camera follow-ups** — (a) console commands for the camera optics
-  (`prévoir les possibilités`: the setters exist, the bindings don't); (b) focal length
-  → FOV coupling as an opt-in physical mode (sensorWidth); (c) bokeh aperture blades
-  (polygonal sample distribution in the DoF gather); (d) more presets (the LensPresets
-  catalog — GoldenHour, Analog80s... — can each become a full camera preset).
-
-### GI/AO follow-ups
-
-- [ ] **World-space GI cache** — the multi-bounce feedback is SCREEN-SPACE only: no propagation
-  around corners that are never co-visible. The full fix is a world-space cache (probes /
-  surface cache), budget-gated. See `src/Graphics/AGENTS.md` § "RTGI — Temporal + Multi-Bounce".
-
-## Rendering
-
-### Post-device-loss robustness (observed 2026-08-04, macOS)
-
-After a `VK_ERROR_DEVICE_LOST` (probe self-sampling GPU fault on Apple M2, since fixed at the
-trigger — see `docs/caution-points.md` § "Probe self-sampling"), the engine kept limping: every
-later fence reset was rejected ("the fence must be destroyed" per the validation layer), every
-IRT/effect/grab-pass creation failed in cascade, and the process eventually segfaulted instead
-of failing stopped. A lost device invalidates fences, command buffers and every downstream
-object; the services keep using them. Options to evaluate: a device-lost flag checked by the
-service layer (fail-stop with diagnostics dump), or full device recreation. Low urgency — the
-known triggers are fixed — but any future GPU fault will end in the same undignified crash.
-
-## Current State (v0.9.52)
-
-The renderer has a solid foundation:
-- **State sorting** via 64-bit composite key (pipeline > material > geometry > distance)
-- **Multi-Draw Indirect (MDI)** with Buffer Device Address (BDA) for per-draw data
-- **Dual render strategy**: direct swap-chain path and HDR internal target (float16) path
-- **Triple buffering** with double-buffered SSBO/indirect buffers per frame-in-flight
-- **TLAS deferred recording** for ray-tracing acceleration structure builds
-- **Post-processing pipeline** with indirect (multi-pass) and direct (in-RP) effect execution
-- **Per-instance transforms SSBO** (`Scenes::SceneInstanceTransforms`) with motion history
-- **Bindless texture table** (`BindlessTextureManager` + per-scene `BindlessTextureSet`)
-
-### Roadmap toward UE5-class runtime
-
-#### 1. GPU-Driven Rendering (highest impact)
-
-Move culling and draw submission from CPU to GPU.
-
-- Replace CPU frustum cull + `vkCmdDrawIndexedIndirect()` with:
-    - GPU compute shader performing frustum culling
-    - `vkCmdDrawIndexedIndirectCount()` where GPU decides draw count
-- CPU uploads entire scene to persistent SSBOs, no longer rebuilds render list per-frame
-- Foundation for Nanite-class geometry handling
-
-#### 2. Bindless Textures — FOUNDATION DONE, the PAYOFF is not taken yet
-
-The global table exists and is multi-scene safe (`BindlessTextureManager`, per-scene
-`BindlessTextureSet`; see `src/Graphics/AGENTS.md`). What remains is USING it to stop treating
-material as a batch-breaking criterion:
-
-- Per-draw material index stored in the transforms SSBO alongside the model matrix
-- Batch key reduced from `(pipeline, material, geometry)` to `(pipeline, geometry)`
-- Dramatically larger MDI batches
-
-#### 3. GPU Occlusion Culling (Hi-Z)
-
-Reject invisible geometry before draw submission. A Hi-Z depth pyramid already exists for SSR
-ray marching (`Effects/Framebuffer/SSR`), but nothing culls with it.
-
-- Downsample previous frame depth into Hi-Z mipmap pyramid
-- GPU compute tests each bounding box against Hi-Z
-- Integrates into the GPU culling compute shader from step 1
-- Critical for dense urban/interior scenes
-
-#### 4. Render Graph
-
-Automate resource management and barrier placement.
-
-- Automatic render target lifetime management (transient allocations)
-- Automatic `vkCmdPipelineBarrier` placement between passes
-- Pass reordering and merging opportunities
-- Scales cleanly as passes multiply (SSAO, SSR, bloom, volumetrics, motion blur...)
-
-#### 5. Order-Independent Transparency (OIT)
-
-Replace sorted per-object translucency with a robust algorithm.
-
-- Weighted Blended OIT or Moment-Based OIT
-- Eliminates sorting artifacts for overlapping transparents
-- Better handling of particles and vegetation
+- [ ] **Lot 7 — Remove BasicResource — INVESTIGATED (2026-08-12), 2 prerequisites BUILT, the
+  rest is a CHANTIER, not a cleanup.** The four-way investigation found the plan's estimate far
+  too optimistic. Facts:
+  - **DONE — vertex colours on StandardResource.** Only the vertex-shader half existed
+    (`:2451-2464`) and was unreachable (nothing ever set `UseVertexColors` on a Standard
+    material). Added `enableVertexColor()` and, per the owner's contract, a SINGLE folded albedo
+    variable `SurfaceAlbedoFinal = albedo * svPrimaryVertexColor` declared once at the top of the
+    fragment shader, with `albedoExpression()` routing the light generator, `fragmentColor()` and
+    the alpha test through it. ⚠️ `BasicResource`'s `DynamicColorEnabled` gate is deliberately
+    NOT ported: it existed only because Basic's default diffuse is Grey; Standard's default
+    albedo is White, so multiplying unconditionally IS the contract. ⚠️ The light generator
+    concatenates swizzles onto the name (`+ ".rgb"`, `+ ".a"`), so it must receive a NAME, never
+    a compound expression — an unparenthesised one still compiles and silently swizzles the wrong
+    operand.
+  - **DONE — `emissionMultiplier()` on StandardResource.** It was implemented ONLY by
+    BasicResource: deleting Basic would have deleted the engine's entire unlit-emission
+    mechanism, and the skybox would render its raw [0,1] texel — near-black under photometric
+    exposure, with ZERO logs. Ported, keyed on the AutoIllumination component.
+  - **ALREADY MET — `isComplex()`** is feature-derived on StandardResource (`:1628-1631`), and a
+    colour-only Standard already binds zero samplers (the owner's original reason for Basic is
+    satisfied). Remaining nit: fold the ad-hoc normal-mapping term at `SceneRendering.cpp:212-219`
+    into the predicate.
+  - **OPEN — the owner decision that gates the rest: an explicit UNLIT flag.** Basic expresses
+    "the emitter is NOT the albedo" (skybox cubemap, WAD texel × vertex colour). Standard's
+    `fragmentColor()` returns the albedo, and AutoIllumination is consumed only inside
+    `LightGenerator::generateAmbientFragmentShader()`, which never runs on the unlit path — so an
+    emissive-only Standard with a black albedo renders BLACK. Either add a `KHR_materials_unlit`
+    -style flag switching `fragmentColor()` to the emissive chain, or keep a second material.
+  - **OPEN — missing API**: no raw `Vulkan::TextureInterface` albedo setter (render-target-as-albedo,
+    `src/Builtin/OffscreenRendering.cpp:120-123` depends on it), and `setAlbedoComponent(texture)`
+    does not propagate `PrimaryTextureCoordinatesUses3D` (cubemap albedo).
+  - **BLAST RADIUS**: 103 engine + 39 app code sites, 15 mesh JSONs carrying
+    `"MaterialBasicResource"`. Then the legacy lighting machinery dies: `m_usePBRMode` and its 14
+    branches, the (n+2)/(8π) normalisation, the Gouraud per-vertex path, ~898 lines of
+    `LightGenerator.PerFragment*.cpp`, plus ~48 doc lines.
+  - ⚠️⚠️ **SILENT FAILURES to guard against** (the dangerous part): a surface migrated off Basic
+    without `enableVertexColor()` loses its colours with NO log (`VertexBufferFormatManager`
+    emits `declareJump(VertexColor)` and discards the attribute); `FastJSON::getValidatedStringValue`
+    returns nullopt with no trace, so the 15 mesh JSONs would silently fall back to another
+    material class; and **`Shininess` means two different things** — Basic reads it as a RAW
+    Blinn-Phong exponent, Standard as a glossiness [0,1], so migrating the 3,918 material files
+    visibly changes them. Sprite alpha also differs (Basic gives the texture alpha priority over
+    the uniform opacity; Standard replaces the whole alpha).
+  - ⚠️ MDI eligibility and bindless enablement are gated on `isLightingEnabled()` /
+    `useEnvironmentCubemap()`: swapping the cheap material changes which draws take the MDI path
+    and which sampler-binding model they use. Verify both before and after.

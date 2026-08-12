@@ -1826,6 +1826,41 @@ namespace EmEn::Graphics::Material
 		}
 	}
 
+	std::string
+	StandardResource::albedoExpression () const noexcept
+	{
+		/* Vertex colours are folded into a single variable at the top of the fragment shader,
+		 * so every consumer reads the SAME post-modulation value (glTF COLOR_0 contract). */
+		if ( this->usingVertexColors() )
+		{
+			return SurfaceAlbedoFinal;
+		}
+
+		const auto componentIt = m_components.find(ComponentType::Albedo);
+
+		if ( componentIt != m_components.cend() )
+		{
+			return std::string{componentIt->second->variableName()};
+		}
+
+		return MaterialUB(UniformBlock::Component::AlbedoColor);
+	}
+
+	void
+	StandardResource::enableVertexColor () noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to enable the vertex colour.";
+
+			return;
+		}
+
+		this->enableFlag(UseVertexColors);
+	}
+
 	const Texture *
 	StandardResource::alphaSourceTextureComponent () const noexcept
 	{
@@ -1840,6 +1875,21 @@ namespace EmEn::Graphics::Material
 		}
 
 		return nullptr;
+	}
+
+	std::string
+	StandardResource::emissionMultiplier () const noexcept
+	{
+		/* The UNLIT path writes the surface colour verbatim — no light pass ever runs, so nothing
+		 * else would apply the material's luminance. A skybox is the canonical case: without this
+		 * multiplier its cubemap texel stays in [0,1] and reads near-black once the photometric
+		 * exposure is applied. Only a self-illuminating material emits. */
+		if ( !this->isComponentPresent(ComponentType::AutoIllumination) )
+		{
+			return {};
+		}
+
+		return (std::stringstream{} << '(' << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << " * " << MaterialUB(UniformBlock::Component::EmissiveStrength) << ')').str();
 	}
 
 	bool
@@ -1941,30 +1991,20 @@ namespace EmEn::Graphics::Material
 		/* Enable PBR mode in the light generator. */
 		lightGenerator.enablePBRMode();
 
-		/* Albedo component */
+		/* Albedo component.
+		 * ⚠️ Always go through albedoExpression(): with vertex colours it names the FOLDED
+		 * variable, so the BRDF shades the modulated albedo. The light generator concatenates
+		 * swizzles onto this string (".rgb", ".a"), which is why it must be a NAME — never a
+		 * compound expression, or the swizzle would land on the last operand and still compile. */
 		{
-			const auto componentIt = m_components.find(ComponentType::Albedo);
+			const auto albedo = this->albedoExpression();
 
-			if ( componentIt != m_components.cend() )
+			lightGenerator.declareSurfaceAlbedo(albedo);
+
+			/* Opacity: use the albedo alpha when blending is enabled (glTF alphaMode: BLEND). */
+			if ( this->isFlagEnabled(BlendingEnabled) )
 			{
-				lightGenerator.declareSurfaceAlbedo(componentIt->second->variableName());
-
-				/* Opacity: use albedo texture alpha when blending is enabled (glTF alphaMode: BLEND). */
-				if ( this->isFlagEnabled(BlendingEnabled) )
-				{
-					lightGenerator.declareSurfaceOpacity(componentIt->second->variableName() + ".a");
-				}
-			}
-			else
-			{
-				/* Use uniform color value. */
-				lightGenerator.declareSurfaceAlbedo(MaterialUB(UniformBlock::Component::AlbedoColor));
-
-				/* Opacity: use uniform albedo alpha when blending is enabled. */
-				if ( this->isFlagEnabled(BlendingEnabled) )
-				{
-					lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::AlbedoColor) + ".a");
-				}
+				lightGenerator.declareSurfaceOpacity(albedo + ".a");
 			}
 		}
 
@@ -2285,9 +2325,7 @@ namespace EmEn::Graphics::Material
 	{
 		/* For PBR, the fragment color is the albedo (base color).
 		 * The actual shading is computed by the BRDF in the light generator. */
-		const std::string base = this->isComponentPresent(ComponentType::Albedo)
-			? std::string{m_components.at(ComponentType::Albedo)->variableName()}
-			: MaterialUB(UniformBlock::Component::AlbedoColor);
+		const auto base = this->albedoExpression();
 
 		/* Blending modes of the opacity contract (rules 1 and 3): the alpha channel carries
 		 * the opacity. Cutout mode (rule 2) keeps the base alpha — surviving texels are opaque. */
@@ -3093,13 +3131,26 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Vertex colours MODULATE the albedo (glTF COLOR_0 contract, owner decision). Folded ONCE
+		 * into a single variable, declared before every consumer: the BRDF, the fragment colour
+		 * and the alpha test must all see the SAME post-modulation value — testing coverage on
+		 * the raw albedo while shading the modulated one is exactly how the two diverge. */
+		if ( this->usingVertexColors() )
+		{
+			const auto rawAlbedo = this->isComponentPresent(ComponentType::Albedo)
+				? std::string{m_components.at(ComponentType::Albedo)->variableName()}
+				: MaterialUB(UniformBlock::Component::AlbedoColor);
+
+			Code{fragmentShader, Location::Top} << "const vec4 " << SurfaceAlbedoFinal << " = " << rawAlbedo << " * " << ShaderVariable::PrimaryVertexColor << ";";
+		}
+
 		/* Cutout on the albedo alpha channel (glTF alphaMode MASK without a dedicated opacity
 		 * map): the albedo sample carries the coverage. The threshold is a UBO VALUE, never a
 		 * shader literal (program-cache contract). A dedicated opacity component, when present,
 		 * owns the test instead (see the opacity component block below). */
-		if ( this->isFlagEnabled(AlphaTestEnabled) && !this->isComponentPresent(ComponentType::Opacity) && this->isComponentPresent(ComponentType::Albedo) )
+		if ( this->isFlagEnabled(AlphaTestEnabled) && !this->isComponentPresent(ComponentType::Opacity) && ( this->isComponentPresent(ComponentType::Albedo) || this->usingVertexColors() ) )
 		{
-			Code{fragmentShader, Location::Top} << "if ( " << m_components.at(ComponentType::Albedo)->variableName() << ".a < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+			Code{fragmentShader, Location::Top} << "if ( " << this->albedoExpression() << ".a < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
 		}
 
 		/* Roughness component.
