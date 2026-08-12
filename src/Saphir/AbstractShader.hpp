@@ -96,14 +96,17 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Sets a GLSL extension behavior.
-			 * @param extension The target extension.
-			 * @param behavior The behavior.
+			 * @note Emits a "#extension <extension> : <behavior>" preprocessor line, added to the shader header on the next generateSourceCode() call.
+			 * @param extension The target extension name (e.g. "GL_EXT_buffer_reference").
+			 * @param behavior The behavior keyword ("enable", "require", "warn" or "disable", see Keys::GLSL::Extension).
+			 * @warning The default value of `behavior` is a trap: it is appended unconditionally to the generated line, and a null pointer passed to std::string::operator+= is undefined behavior. Every call site must supply `behavior` explicitly.
 			 * @return void
 			 */
 			void setExtensionBehavior (const char * extension, const char * behavior = nullptr) noexcept;
 
 			/**
 			 * @brief Declare a specialization constant to be used in the shader.
+			 * @note If a declaration with the same name already exists, it is silently kept as-is (a warning is traced) and this still returns true; the return value only distinguishes an invalid declaration (false) from an accepted-or-already-present one (true).
 			 * @param declaration A reference to a SpecializationConstant.
 			 * @return bool
 			 */
@@ -111,6 +114,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a function to be used in the shader.
+			 * @note Deduplicated by function name: a second declaration with the same name is silently kept as-is (a warning is traced) and this still returns true.
 			 * @param declaration A reference to a ShaderFunction.
 			 * @return bool
 			 */
@@ -118,6 +122,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declare a structure to be used in the shader.
+			 * @note Deduplicated by structure name: a second declaration with the same name is silently kept as-is (a warning is traced) and this still returns true.
 			 * @param declaration A reference to a ShaderStructure.
 			 * @return bool
 			 */
@@ -125,6 +130,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a uniform block to be used in the shader.
+			 * @note Deduplicated by instance name (not block name): a second declaration with the same instance name is silently kept as-is (a warning is traced) and this still returns true.
 			 * @param declaration A reference to a ShaderUniformBlock.
 			 * @return bool
 			 */
@@ -132,6 +138,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a shader storage block to be used in the shader.
+			 * @note Deduplicated by instance name (not block name): a second declaration with the same instance name is silently kept as-is (a warning is traced) and this still returns true.
 			 * @param declaration A reference to a shader storage block.
 			 * @return bool
 			 */
@@ -139,6 +146,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a sampler to be used in the shader.
+			 * @note Deduplicated by name. For an unbounded (bindless) sampler array, a re-declaration is expected to be byte-identical (a fixed name always maps to the same set/binding/type) and is silently ignored with no warning, since several independent generators legitimately declare the same bindless array. A named, non-unbounded sampler re-declared under the same name still traces a warning, since that combination is more likely a genuine binding conflict. Either way this returns true.
 			 * @param declaration A reference to a Sampler.
 			 * @return bool
 			 */
@@ -146,6 +154,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a texel buffer to be used in the shader (Vulkan only).
+			 * @note Deduplicated by name: a second declaration with the same name is silently kept as-is (a warning is traced) and this still returns true.
 			 * @param declaration A reference to a texel buffer.
 			 * @return bool
 			 */
@@ -153,6 +162,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a push constant block to be used in the shader (Vulkan only).
+			 * @note Deduplicated by name: a second declaration with the same name is silently kept as-is (a warning is traced) and this still returns true.
+			 * @warning FIXME (see m_pushConstantBlocks): only a single push constant block is actually authorized per shader, but this method does not enforce that limit — it only rejects an invalid declaration or a name collision. Declaring more than one distinct push constant block currently succeeds silently, even though the storage backing it (Base::StaticVector<..., 4>) and the rest of the pipeline assume at most one.
 			 * @param declaration A reference to a push constant block.
 			 * @return bool
 			 */
@@ -237,6 +248,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the list of push constant block declarations.
+			 * @warning FIXME: the backing storage allows up to 4 entries, but only a single push constant block is actually authorized per shader (see declare(const Declaration::PushConstantBlock &)); this accessor does not re-check that invariant, it only reflects whatever was declared.
 			 * @return const Base::StaticVector< Declaration::PushConstantBlock, 4 > &
 			 */
 			[[nodiscard]]
@@ -248,14 +260,16 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Generates and returns the shader source code in GLSL.
-			 * @param generator A reference to the shader generator.
-			 * @return bool
+			 * @note Expects every declare() call and, for stages that need it, the specific setup (stage inputs/outputs, extensions) to have already been done. Internally writes the "#version"/extension header, delegates the stage-specific body to the pure virtual onSourceCodeGeneration() hook, appends the common declarations (specialization constants, functions, structures, uniform/storage blocks, samplers, texel buffers, push constant block), then assembles main() from the instructions collected through CodeGeneratorInterface. On success this replaces any previously generated or loaded source code and refreshes hash().
+			 * @param generator A reference to the shader generator driving this generation pass.
+			 * @return bool false if the stage-specific onSourceCodeGeneration() hook fails; the shader keeps whatever source code (if any) it had before the call.
 			 */
 			[[nodiscard]]
 			bool generateSourceCode (Generator::Abstract & generator) noexcept;
 
 			/**
 			 * @brief Sets the source code for this shader.
+			 * @note Alternative to generateSourceCode(): assigns raw GLSL directly (e.g. hand-written or externally produced), bypassing the declaration/generator pipeline entirely, and refreshes hash().
 			 * @param sourceCode The source code.
 			 * @return void
 			 */
@@ -269,8 +283,9 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Loads source code from a file.
+			 * @note The file extension must match this shader's stage (see getShaderFileExtension(type())), otherwise this fails without reading the file. On success refreshes hash().
 			 * @param filepath A reference to a filesystem path.
-			 * @return bool
+			 * @return bool false if the extension does not match or the file could not be read.
 			 */
 			bool loadSourceCode (const std::filesystem::path & filepath) noexcept;
 
@@ -295,6 +310,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the hash of the source code.
+			 * @note Kept in sync with sourceCode() by generateSourceCode(), setSourceCode() and loadSourceCode(); reads as 0 when no source code has been generated or loaded yet.
 			 * @return size_t
 			 */
 			[[nodiscard]]
@@ -316,14 +332,15 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Returns the number of declarations type in a string.
-			 * @return std:string;
+			 * @brief Builds a human-readable, multi-line summary of how many declarations of each kind (specialization constants, functions, structures, uniform/storage blocks, samplers, texel buffers, push constant block) this shader holds, followed by the stage-specific counts appended by onGetDeclarationStats().
+			 * @return std::string
 			 */
 			[[nodiscard]]
 			std::string getDeclarationStats () const noexcept;
 
 			/**
 			 * @brief Display with the tracer a successful shader generation.
+			 * @note Does not check isGenerated(): calling this before generateSourceCode()/setSourceCode()/loadSourceCode() traces an empty GLSL body. Dumps the full generated GLSL source (via SourceCodeParser) followed by getDeclarationStats(), at Info level; intended to be called right after a successful generateSourceCode().
 			 * @return void
 			 */
 			void traceSuccessfulGeneration () const noexcept;
@@ -353,6 +370,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Generates the shader file header.
+			 * @note Called once by generateSourceCode(), before onSourceCodeGeneration(); writes the "#version"/profile line (which must stay the very first line of the GLSL source), then one preprocessor line per extension registered via setExtensionBehavior(), then a comment naming the shader type and name. Not meant to be invoked directly by subclasses.
 			 * @param code A reference to a stream.
 			 * @return void
 			 */
@@ -421,19 +439,21 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Called from the child class for generating the source code.
-			 * @param generator A reference to the generator.
-			 * @param code A reference to string.
-			 * @param topInstructions A reference to a string for the main top instructions.
-			 * @param outputInstructions A reference to a string for the main output instructions.
-			 * @return bool
+			 * @brief Hook implemented by each concrete shader stage to generate its stage-specific part of the source code.
+			 * @note Invoked once by generateSourceCode(), after the "#version"/extension header and before the common declarations (specialization constants, functions, structures, blocks, samplers, ...) are appended. The override must write its own stage-specific declarations (e.g. stage inputs/outputs) directly to `code`, typically via the generateDeclarations() helper. `topInstructions` and `outputInstructions` are out-parameters: whatever the override assigns to them is passed as the "prepend" arguments to CodeGeneratorInterface::getCode(), i.e. prepended to the main() body before/after the instructions collected via addTopInstruction()/addInstruction()/addOutputInstruction(). Returning false aborts the whole generateSourceCode() call.
+			 * @param generator A reference to the generator driving this generation pass.
+			 * @param code A reference to the stream the stage-specific declarations must be written to.
+			 * @param topInstructions A reference to a string of GLSL prepended before the main() top instructions.
+			 * @param outputInstructions A reference to a string of GLSL prepended before the main() output instructions.
+			 * @return bool false to abort code generation for this shader.
 			 */
 			[[nodiscard]]
 			virtual bool onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept = 0;
 
 			/**
-			 * @brief Called from the child class for generating declaration stats.
-			 * @param output A reference to a string stream.
+			 * @brief Hook implemented by each concrete shader stage to append its stage-specific declaration counts.
+			 * @note Invoked once by getDeclarationStats(), after the common declaration counts have already been written to `output`; the override only needs to append its own stage-specific counts (e.g. stage inputs/outputs) to the same stream.
+			 * @param output A reference to the string stream the stage-specific stats must be appended to.
 			 * @return void
 			 */
 			virtual void onGetDeclarationStats (std::stringstream & output) const noexcept = 0;

@@ -97,6 +97,16 @@ namespace EmEn::Saphir
 
 	/**
 	 * @brief The light model generator is responsible for generating GLSL lighting code independently of a light processor.
+	 * @note Usage contract: the render pass type (ambient, or one directional/point/spot variant,
+	 * possibly with shadow map / color projection / CSM) is fixed at construction and drives every
+	 * subsequent call. Between construction and generateVertexShaderCode()/generateFragmentShaderCode(),
+	 * the material must call the relevant declareSurfaceXxx() setters to advertise which GLSL
+	 * variables carry each surface property; a property never declared falls back to a neutral
+	 * default baked into the corresponding *ShaderExpression()/materialPropertiesExpression() helper.
+	 * There is a single lighting model (Cook-Torrance, evaluated per fragment); the former
+	 * Blinn-Phong/Gouraud machinery and the shader-quality setting are gone — the only remaining
+	 * quality switch is Generator::Abstract::highQualityEnabled(), a per-program rendering-distance
+	 * decision, not a user setting.
 	 */
 	class LightGenerator final
 	{
@@ -105,6 +115,7 @@ namespace EmEn::Saphir
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"LightGenerator"};
 
+			/** @brief Default GLSL variable name for the fragment color produced by this generator. */
 			static constexpr auto FragmentColor{"fragmentColor"};
 
 			/**
@@ -166,6 +177,10 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface specular color and option.
+			 * @warning colorVariableName is stored but currently read by no generator: the Blinn-Phong
+			 * specular codegen that used to consume it was deleted with the rest of that machinery. Only
+			 * shininessAmountVariableName still has an effect, through roughnessShaderExpression()'s
+			 * Beckmann-style shininess-to-roughness fallback for a material that never declares roughness.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the surface specular color.
 			 * @param shininessAmountVariableName A reference to a string for GLSL variable holding the surface shininess factor. Default, 200.0.
 			 * @return void
@@ -199,7 +214,11 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Declares the variable used by the fragment shader to get the surface auto-illumination (Phong mode).
+			 * @brief Declares the surface auto-illumination as a single scalar amount, tinted by the
+			 * surface diffuse/albedo color rather than by its own color.
+			 * @note Unlike the two-argument overload below, this does not set m_useAutoIllumination, so
+			 * materialPropertiesExpression() will not publish an emissive mask for it. No current caller
+			 * uses this overload (StandardResource always goes through the two-argument, PBR-tinted one).
 			 * @param amountVariableName A reference to a string for GLSL variable holding the surface auto-illumination amount.
 			 * @return void
 			 */
@@ -712,6 +731,10 @@ namespace EmEn::Saphir
 			 * @param useShadowMap States the use of a shadow map.
 			 * @param useColorProjection States the use of a color projection texture.
 			 * @return Declaration::UniformBlock
+			 * @todo The switch on lightType has no case for a light type outside
+			 * {Directional, Point, Spot}; the default branch silently returns an invalid,
+			 * zero-initialized block (set 0, binding 0, no type/usage) instead of asserting
+			 * or reporting an error ("TODO: Fix this!" in the implementation).
 			 */
 			[[nodiscard]]
 			static Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, Graphics::LightType lightType, bool useShadowMap, bool useColorProjection) noexcept;
@@ -755,6 +778,12 @@ namespace EmEn::Saphir
 			 * @param diffuseFactor A reference to a string.
 			 * @param specularFactor A reference to a string.
 			 * @return bool
+			 * @warning Vestigial declaration: this method has no implementation left in any
+			 * LightGenerator*.cpp file and no caller anywhere in the codebase. It carried the
+			 * Blinn-Phong (!m_usePBRMode) diffuse/specular assembly path, deleted along with the
+			 * Gouraud/Phong generators (see src/Saphir/AGENTS.md). Kept here only because
+			 * documentation may not remove declarations; do not implement it expecting the old
+			 * Blinn-Phong contract to still apply — that decision belongs to the project owner.
 			 */
 			[[nodiscard]]
 			bool generateFinalFragmentOutput (FragmentShader & fragmentShader, const std::string & diffuseFactor, const std::string & specularFactor) const noexcept;
@@ -797,52 +826,72 @@ namespace EmEn::Saphir
 			void generatePBRBRDFFunctions (FragmentShader & fragmentShader) const noexcept;
 
 			/**
-			 * @brief
-			 * @param shadowMap
-			 * @param fragmentPosition
-			 * @return std::string
+			 * @brief Generates the single-sample (no PCF) shadow test for a 2D shadow map (directional or spot light).
+			 * @note Skips the test (shadowFactor = 1.0, fully lit) when the projected fragment position
+			 * falls outside the shadow map's clip-space depth range [0, w]. When m_discardUnlitFragment
+			 * is set, a fully-shadowed fragment (shadowFactor <= 0.0) is discarded rather than shaded black.
+			 * @param shadowMap The GLSL expression naming the sampler2DShadow uniform.
+			 * @param fragmentPosition The GLSL expression for the fragment position in light clip space (vec4), sampled with textureProj().
+			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
 			std::string generate2DShadowMapCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept;
 
 			/**
-			 * @brief
-			 * @param shadowMap
-			 * @param fragmentPosition
-			 * @return std::string
+			 * @brief Generates the Percentage-Closer Filtered shadow test for a 2D shadow map (directional or spot light).
+			 * @note Same clip-space depth-range skip and m_discardUnlitFragment behavior as
+			 * generate2DShadowMapCode(). The sampling pattern depends on m_PCFMethod (Grid/VogelDisk/
+			 * PoissonDisk/OptimizedGather) and the sample count/radius on m_PCFSample and the light's
+			 * PCFRadius uniform.
+			 * @param shadowMap The GLSL expression naming the sampler2DShadow uniform.
+			 * @param fragmentPosition The GLSL expression for the fragment position in light clip space (vec4).
+			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
 			std::string generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept;
 
 			/**
-			 * @brief
-			 * @param shadowMap
-			 * @param directionWorldSpace
-			 * @param nearFar
-			 * @return std::string
+			 * @brief Generates the single-sample (no PCF) shadow test for a 3D (cubemap) shadow map, used by point lights.
+			 * @note Skips filtering: compares the cubemap-sampled linear depth (scaled by nearFar.y, the
+			 * light's far plane) against the fragment's distance from the light, with a minimum bias of
+			 * 0.005. When m_discardUnlitFragment is set, a fully-shadowed fragment is discarded.
+			 * @param shadowMap The GLSL expression naming the samplerCubeShadow (depth) cubemap uniform.
+			 * @param directionWorldSpace The GLSL expression for the world-space vector from the fragment to the light.
+			 * @param nearFar The GLSL expression for a vec2(near, far) of the shadow-casting light's projection.
+			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
 			std::string generate3DShadowMapCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept;
 
 			/**
-			 * @brief
-			 * @param shadowMap
-			 * @param directionWorldSpace
-			 * @param nearFar
-			 * @return std::string
+			 * @brief Generates the Percentage-Closer Filtered shadow test for a 3D (cubemap) shadow map, used by point lights.
+			 * @note Same shadowFactor/m_discardUnlitFragment behavior as generate3DShadowMapCode(). The
+			 * sampling pattern depends on m_PCFMethod: Grid and VogelDisk build a genuine 3D sample set
+			 * around the lookup direction; PoissonDisk uses a fixed 20-point sphere; OptimizedGather has
+			 * no cubemap equivalent of textureGather and falls back to the PoissonDisk sphere. The filter
+			 * radius is the light-to-fragment distance scaled by the light's PCFRadius uniform.
+			 * @param shadowMap The GLSL expression naming the samplerCubeShadow (depth) cubemap uniform.
+			 * @param directionWorldSpace The GLSL expression for the world-space vector from the fragment to the light.
+			 * @param nearFar The GLSL expression for a vec2(near, far) of the shadow-casting light's projection.
+			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
 			std::string generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept;
 
 			/**
 			 * @brief Generates the Cascaded Shadow Map sampling code for directional lights.
-			 * @param shadowMapArray The name of the sampler2DArrayShadow uniform.
-			 * @param fragmentPositionWorldSpace The fragment position in world space.
-			 * @param fragmentPositionViewSpace The view matrix uniform to compute view-space depth.
-			 * @param cascadeMatrices The array of cascade view-projection matrices.
-			 * @param splitDistances The cascade split distances (view-space depths).
-			 * @param cascadeCount The number of cascades.
-			 * @return std::string
+			 * @note Cascade selection walks the cascades in order and picks the first whose split
+			 * distance exceeds the fragment's view-space depth, falling through to the last cascade
+			 * otherwise. PCF (m_PCFSample × m_PCFSample grid) is used only when m_PCFEnabled is set;
+			 * otherwise a single sampler2DArrayShadow tap is taken. As with the other shadow-map
+			 * generators, a fully-shadowed fragment is discarded when m_discardUnlitFragment is set.
+			 * @param shadowMapArray The GLSL expression naming the sampler2DArrayShadow uniform.
+			 * @param fragmentPositionWorldSpace The GLSL expression for the fragment position in world space (vec3).
+			 * @param fragmentPositionViewSpace The GLSL expression for the fragment position in view space (vec3 or vec4), used to derive the depth for cascade selection. This is the interpolated fragment position, not a matrix — re-deriving it from world space would require the view matrix, unavailable to the main render target's fragment shader.
+			 * @param cascadeMatrices The GLSL expression naming the array of cascade view-projection matrices.
+			 * @param splitDistances The GLSL expression naming the array of cascade split distances (view-space depths).
+			 * @param cascadeCount The GLSL expression for the number of active cascades.
+			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
 			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept;
@@ -924,14 +973,34 @@ namespace EmEn::Saphir
 			static std::string variable (const char * componentName) noexcept;
 
 			/* Light shader block-specific keys. */
+			/** @brief Name of the per-light vertex-to-fragment interstage output block (see variable()). */
 			static constexpr auto LightBlock{"LightBlock"};
+			/** @brief GLSL variable name for the combined light visibility factor (radius falloff × spot cone × shadow), applied before the BRDF. */
 			static constexpr auto LightFactor{"lightFactor"};
+			/**
+			 * @warning Unused: no LightGenerator*.cpp file references this constant. It named the
+			 * Lambertian diffuse weight in the removed Blinn-Phong path (see AGENTS.md,
+			 * generateFinalFragmentOutput()) and has no role in the current Cook-Torrance model.
+			 */
 			static constexpr auto DiffuseFactor{"diffuseFactor"};
+			/**
+			 * @warning Unused: no LightGenerator*.cpp file references this constant. It named the
+			 * specular weight in the removed Blinn-Phong path (see AGENTS.md,
+			 * generateFinalFragmentOutput()) and has no role in the current Cook-Torrance model.
+			 */
 			static constexpr auto SpecularFactor{"specularFactor"};
+			/** @brief GLSL variable name for the light position transformed to view space (point/spot lights). */
 			static constexpr auto LightPositionViewSpace{"lightPositionViewSpace"};
+			/** @brief Interstage member name for the spotlight cone axis direction, in view space. */
 			static constexpr auto SpotLightDirectionViewSpace{"spotLightDirectionViewSpace"};
+			/** @brief GLSL variable/interstage member name for the normalized view-space direction from the fragment to the light. */
 			static constexpr auto RayDirectionViewSpace{"rayDirectionViewSpace"};
+			/**
+			 * @warning Unused: no LightGenerator*.cpp file references this constant. Dead alongside
+			 * DiffuseFactor/SpecularFactor.
+			 */
 			static constexpr auto RayDirectionTextureSpace{"rayDirectionTextureSpace"};
+			/** @brief Interstage member name for the un-normalized view-space vector from the fragment to the light (its length is the light distance). */
 			static constexpr auto Distance{"distance"};
 
 			Graphics::RenderPassType m_renderPassType;
@@ -994,6 +1063,12 @@ namespace EmEn::Saphir
 			std::string m_surfaceEmissiveStrength;
 			/* Reflectivity map variable (per-pixel reflectivity for G-buffer). */
 			std::string m_surfaceReflectivityMap;
+			/**
+			 * @note No declareXxx() setter currently exposes this flag: it is always its default
+			 * (true) for every LightGenerator instance. Kept as a member (rather than a hard-coded
+			 * constant) because all five shadow-map code generators branch on it to decide whether a
+			 * fully-shadowed fragment is discarded, but nothing in the public API can turn it off yet.
+			 */
 			bool m_discardUnlitFragment{true};
 			bool m_useNormalMapping{false};
 			bool m_useOpacity{false};
@@ -1005,6 +1080,11 @@ namespace EmEn::Saphir
 			/** @brief Refraction source is a render target: absolute luminance, no environment luminance scale. */
 			bool m_refractionSourceAbsolute{false};
 			bool m_useRefraction{false};
+			/**
+			 * @note No declareXxx() setter currently exposes this flag: it is always its default
+			 * (false) for every LightGenerator instance. When true, it would multiply the ambient
+			 * light intensity by a screen-space hash (per-pixel dithering) in generateAmbientFragmentShader().
+			 */
 			bool m_enableAmbientNoise{false};
 			bool m_useAutoIllumination{false};
 			bool m_useAmbientOcclusion{false};

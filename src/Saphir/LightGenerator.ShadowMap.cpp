@@ -47,10 +47,19 @@ namespace EmEn::Saphir
 		 * ANIMATED mesh depth (the shadow pass skins), so sampling it at the bind-pose vertex
 		 * position made every animated pose self-occlude — the whole body flickered down to the
 		 * ambient term on fast animation frames (measured on the reflexion-debug dragon). */
-		const std::string localPosition =
-			vertexShader.isSkinningEnabled() ?
-			"vec4(skinnedPosition, 1.0)" :
-			"vec4(" + std::string{Attribute::Position} + ", 1.0)";
+		std::string localPosition;
+
+		if ( vertexShader.isSkinningEnabled() )
+		{
+			localPosition = "vec4(skinnedPosition, 1.0)";
+		}
+		else
+		{
+			localPosition.reserve(32);
+			localPosition = "vec4(";
+			localPosition += Attribute::Position;
+			localPosition += ", 1.0)";
+		}
 
 		/* NOTE: For point light. */
 		if ( shadowCubemap )
@@ -127,65 +136,102 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::generate2DShadowMapCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept
 	{
-		std::stringstream code{};
+		std::string code;
+		code.reserve(256 + shadowMap.size() + (fragmentPosition.size() * 3));
 
 		/* NOTE: Skip shadow calculation if outside the shadow map's valid depth range.
 		 * In clip space, z is in [0, w] range (Vulkan depth [0,1]).
 		 * z < 0 means before the near plane, z > w means beyond the far plane.
 		 * In both cases, the fragment is not covered by the shadow map, so no shadow. */
 
-		code <<
+		code +=
 			"/* Shadow map 2D resolution. */" "\n\n"
 
 			"float shadowFactor = 1.0;" "\n\n"
 
-			"if ( " << fragmentPosition << ".z >= 0.0 && " << fragmentPosition << ".z <= " << fragmentPosition << ".w )" "\n"
+			"if ( ";
+		code += fragmentPosition;
+		code += ".z >= 0.0 && ";
+		code += fragmentPosition;
+		code += ".z <= ";
+		code += fragmentPosition;
+		code +=
+			".w )" "\n"
 			"{" "\n"
-			"shadowFactor = textureProj(" << shadowMap << ", " << fragmentPosition << ");" "\n\n"
+			"shadowFactor = textureProj(";
+		code += shadowMap;
+		code += ", ";
+		code += fragmentPosition;
+		code +=
+			");" "\n\n"
 			"}" "\n\n";
 
 		if ( m_discardUnlitFragment )
 		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
+			code += "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
 
-		return code.str();
+		return code;
 	}
 
 	std::string
 	LightGenerator::generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept
 	{
-		std::stringstream code{};
+		std::string code;
+		code.reserve(1536 + (shadowMap.size() * 2) + (fragmentPosition.size() * 4));
 
-		code << "/* Shadow map 2D resolution (PCF). */" "\n\n";
+		code += "/* Shadow map 2D resolution (PCF). */" "\n\n";
 
-		code << "float shadowFactor = 1.0;" "\n\n";
+		code += "float shadowFactor = 1.0;" "\n\n";
 
 		/* NOTE: Skip shadow calculation if outside the shadow map's valid depth range.
 		 * In clip space, z is in [0, w] range (Vulkan depth [0,1]).
 		 * z < 0 means before the near plane, z > w means beyond the far plane.
 		 * In both cases, the fragment is not covered by the shadow map, so no shadow. */
-		code <<
-			"if ( " << fragmentPosition << ".z >= 0.0 && " << fragmentPosition << ".z <= " << fragmentPosition << ".w )" "\n"
+		code += "if ( ";
+		code += fragmentPosition;
+		code += ".z >= 0.0 && ";
+		code += fragmentPosition;
+		code += ".z <= ";
+		code += fragmentPosition;
+		code +=
+			".w )" "\n"
 			"{" "\n"
-			"	const vec2 texelSize = 1.0 / vec2(textureSize(" << shadowMap << ", 0));" "\n"
-			"	const float filterRadius = " << LightUB(UniformBlock::Component::PCFRadius) << ";" "\n\n";
+			"	const vec2 texelSize = 1.0 / vec2(textureSize(";
+		code += shadowMap;
+		code += ", 0));" "\n"
+			"	const float filterRadius = ";
+		code += LightUB(UniformBlock::Component::PCFRadius);
+		code += ";" "\n\n";
 
 		switch ( m_PCFMethod )
 		{
 			/* ==================== Grid Method (Legacy) ==================== */
 			case PCFMethod::Grid :
 			{
-				code << 
-					GLSL::ConstInteger << " offset = " << m_PCFSample << ";" "\n\n"
+				code += GLSL::ConstInteger;
+				code += " offset = ";
+				code += std::to_string(m_PCFSample);
+				code +=
+					";" "\n\n"
 
 					"shadowFactor = 0.0;" "\n"
-					"for ( " << GLSL::Integer << " idy = -offset; idy <= offset; idy++ )" "\n"
-					"	for ( " << GLSL::Integer << " idx = -offset; idx <= offset; idx++ )" "\n"
+					"for ( ";
+				code += GLSL::Integer;
+				code += " idy = -offset; idy <= offset; idy++ )" "\n"
+					"	for ( ";
+				code += GLSL::Integer;
+				code += " idx = -offset; idx <= offset; idx++ )" "\n"
 					"	{" "\n"
-					"		vec4 offsetCoords = " << fragmentPosition << ";" "\n"
+					"		vec4 offsetCoords = ";
+				code += fragmentPosition;
+				code +=
+					";" "\n"
 					"		offsetCoords.xy += vec2(float(idx), float(idy)) * texelSize * filterRadius * offsetCoords.w;" "\n"
-					"		shadowFactor += textureProj(" << shadowMap << ", offsetCoords);" "\n"
+					"		shadowFactor += textureProj(";
+				code += shadowMap;
+				code +=
+					", offsetCoords);" "\n"
 					"	}" "\n\n"
 					"shadowFactor /= pow(float(offset) * 2.0 + 1.0, 2);" "\n";
 			}
@@ -198,13 +244,16 @@ namespace EmEn::Saphir
 				 * The golden angle (2.399963 rad) ensures optimal sample distribution. */
 				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
 
-				code <<
+				code +=
 					"/* Vogel disk PCF with per-fragment rotation. */" "\n"
 					"const float goldenAngle = 2.399963;" "\n"
 					"const float rotationAngle = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.283185;" "\n"
 					"const float cosRot = cos(rotationAngle);" "\n"
 					"const float sinRot = sin(rotationAngle);" "\n"
-					"const int sampleCount = " << sampleCount << ";" "\n\n"
+					"const int sampleCount = ";
+				code += std::to_string(sampleCount);
+				code +=
+					";" "\n\n"
 
 					"shadowFactor = 0.0;" "\n"
 					"for ( int i = 0; i < sampleCount; i++ )" "\n"
@@ -212,9 +261,15 @@ namespace EmEn::Saphir
 					"	float r = sqrt((float(i) + 0.5) / float(sampleCount));" "\n"
 					"	float theta = float(i) * goldenAngle + rotationAngle;" "\n"
 					"	vec2 offset = vec2(cos(theta), sin(theta)) * r * filterRadius;" "\n"
-					"	vec4 offsetCoords = " << fragmentPosition << ";" "\n"
+					"	vec4 offsetCoords = ";
+				code += fragmentPosition;
+				code +=
+					";" "\n"
 					"	offsetCoords.xy += offset * texelSize * offsetCoords.w;" "\n"
-					"	shadowFactor += textureProj(" << shadowMap << ", offsetCoords);" "\n"
+					"	shadowFactor += textureProj(";
+				code += shadowMap;
+				code +=
+					", offsetCoords);" "\n"
 					"}" "\n"
 					"shadowFactor /= float(sampleCount);" "\n\n";
 			}
@@ -225,7 +280,7 @@ namespace EmEn::Saphir
 			{
 				/* Pre-computed 16-sample Poisson disk for high-quality soft shadows.
 				 * These samples are carefully distributed to minimize clustering. */
-				code <<
+				code +=
 					"/* Poisson disk PCF with 16 pre-computed samples. */" "\n"
 					"const vec2 poissonDisk[16] = vec2[](" "\n"
 					"	vec2(-0.94201624, -0.39906216), vec2(0.94558609, -0.76890725)," "\n"
@@ -248,9 +303,15 @@ namespace EmEn::Saphir
 					"		poissonDisk[i].x * cosRot - poissonDisk[i].y * sinRot," "\n"
 					"		poissonDisk[i].x * sinRot + poissonDisk[i].y * cosRot" "\n"
 					"	) * filterRadius;" "\n"
-					"	vec4 offsetCoords = " << fragmentPosition << ";" "\n"
+					"	vec4 offsetCoords = ";
+				code += fragmentPosition;
+				code +=
+					";" "\n"
 					"	offsetCoords.xy += rotatedOffset * texelSize * offsetCoords.w;" "\n"
-					"	shadowFactor += textureProj(" << shadowMap << ", offsetCoords);" "\n"
+					"	shadowFactor += textureProj(";
+				code += shadowMap;
+				code +=
+					", offsetCoords);" "\n"
 					"}" "\n"
 					"shadowFactor /= 16.0;" "\n\n";
 			}
@@ -266,10 +327,17 @@ namespace EmEn::Saphir
 				 * without multiplying by texelSize. The 2.0 factor accounts for the 2x2 texel block. */
 				const auto gatherCount = m_PCFSample + 1; /* Number of gather calls per axis */
 
-				code <<
+				code +=
 					"/* Optimized PCF using textureGather (4 samples per fetch). */" "\n"
-					"const vec3 projCoords = " << fragmentPosition << ".xyz / " << fragmentPosition << ".w;" "\n"
-					"const int gatherOffset = " << gatherCount << ";" "\n\n"
+					"const vec3 projCoords = ";
+				code += fragmentPosition;
+				code += ".xyz / ";
+				code += fragmentPosition;
+				code += ".w;" "\n"
+					"const int gatherOffset = ";
+				code += std::to_string(gatherCount);
+				code +=
+					";" "\n\n"
 
 					"shadowFactor = 0.0;" "\n"
 					"float totalWeight = 0.0;" "\n"
@@ -278,7 +346,10 @@ namespace EmEn::Saphir
 					"	for ( int gx = -gatherOffset; gx <= gatherOffset; gx++ )" "\n"
 					"	{" "\n"
 					"		vec2 offsetUV = projCoords.xy + vec2(float(gx), float(gy)) * 2.0 * filterRadius;" "\n"
-					"		vec4 gather = textureGather(" << shadowMap << ", offsetUV, projCoords.z);" "\n"
+					"		vec4 gather = textureGather(";
+				code += shadowMap;
+				code +=
+					", offsetUV, projCoords.z);" "\n"
 					"		shadowFactor += gather.x + gather.y + gather.z + gather.w;" "\n"
 					"		totalWeight += 4.0;" "\n"
 					"	}" "\n"
@@ -289,31 +360,46 @@ namespace EmEn::Saphir
 		}
 
 		/* Close the depth range check block. */
-		code << "}" "\n\n";
+		code += "}" "\n\n";
 
 		if ( m_discardUnlitFragment )
 		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
+			code += "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
 
-		return code.str();
+		return code;
 	}
 
 	std::string
 	LightGenerator::generate3DShadowMapCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept
 	{
-		std::stringstream code{};
+		std::string code;
+		code.reserve(384 + shadowMap.size() + (directionWorldSpace.size() * 3) + nearFar.size());
 
 		/* Use max(bias, 0.005) to ensure minimum bias even if UBO value is 0. */
-		code <<
+		code +=
 			"/* Shadow map 3D (cubemap) resolution. */" "\n\n"
 
 			"float shadowFactor = 1.0;" "\n\n"
 
-			"const vec3 lookupVector = vec3(-" << directionWorldSpace << ".x, " << directionWorldSpace << ".y, " << directionWorldSpace << ".z);" "\n"
-			"const float smallestDepth = texture(" << shadowMap << ", lookupVector).r * " << nearFar << ".y;" "\n"
+			"const vec3 lookupVector = vec3(-";
+		code += directionWorldSpace;
+		code += ".x, ";
+		code += directionWorldSpace;
+		code += ".y, ";
+		code += directionWorldSpace;
+		code += ".z);" "\n"
+			"const float smallestDepth = texture(";
+		code += shadowMap;
+		code += ", lookupVector).r * ";
+		code += nearFar;
+		code +=
+			".y;" "\n"
 			"const float depth = length(lookupVector);" "\n"
-			"const float bias = max(" << LightUB(UniformBlock::Component::ShadowBias) << ", 0.005);" "\n\n"
+			"const float bias = max(";
+		code += LightUB(UniformBlock::Component::ShadowBias);
+		code +=
+			", 0.005);" "\n\n"
 
 			"if ( smallestDepth + bias < depth )" "\n"
 			"{" "\n"
@@ -322,28 +408,41 @@ namespace EmEn::Saphir
 
 		if ( m_discardUnlitFragment )
 		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
+			code += "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
 
-		return code.str();
+		return code;
 	}
 
 	std::string
 	LightGenerator::generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept
 	{
-		std::stringstream code{};
+		std::string code;
+		code.reserve(2048 + (shadowMap.size() * 4) + (directionWorldSpace.size() * 3) + (nearFar.size() * 4));
 
-		code <<
+		code +=
 			"/* Shadow map 3D (cubemap) resolution (PCF). */" "\n\n"
 
 			"float shadowFactor = 1.0;" "\n\n"
 
-			"const vec3 lookupVector = vec3(-" << directionWorldSpace << ".x, " << directionWorldSpace << ".y, " << directionWorldSpace << ".z);" "\n"
+			"const vec3 lookupVector = vec3(-";
+		code += directionWorldSpace;
+		code += ".x, ";
+		code += directionWorldSpace;
+		code += ".y, ";
+		code += directionWorldSpace;
+		code +=
+			".z);" "\n"
 			"const float depth = length(lookupVector);" "\n"
 			"const vec3 lookupDir = normalize(lookupVector);" "\n"
-			"const float bias = " << LightUB(UniformBlock::Component::ShadowBias) << ";" "\n"
+			"const float bias = ";
+		code += LightUB(UniformBlock::Component::ShadowBias);
+		code +=
+			";" "\n"
 			"/* For cubemaps, use PCFRadius scaled by depth for world-space sampling radius. */" "\n"
-			"const float filterRadius = depth * " << LightUB(UniformBlock::Component::PCFRadius) << ";" "\n\n";
+			"const float filterRadius = depth * ";
+		code += LightUB(UniformBlock::Component::PCFRadius);
+		code += ";" "\n\n";
 
 		switch ( m_PCFMethod )
 		{
@@ -353,9 +452,12 @@ namespace EmEn::Saphir
 				/* Grid sampling in 3D around the lookup direction. */
 				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
 
-				code <<
+				code +=
 					"/* 3D Grid PCF sampling. */" "\n"
-					"const int offset = " << m_PCFSample << ";" "\n"
+					"const int offset = ";
+				code += std::to_string(m_PCFSample);
+				code +=
+					";" "\n"
 					"const float step = filterRadius / float(offset);" "\n\n"
 
 					"shadowFactor = 0.0;" "\n"
@@ -364,10 +466,17 @@ namespace EmEn::Saphir
 					"for ( int x = -offset; x <= offset; x++ )" "\n"
 					"{" "\n"
 					"	vec3 sampleDir = lookupVector + vec3(float(x), float(y), float(z)) * step;" "\n"
-					"	float sampledDepth = texture(" << shadowMap << ", sampleDir).r * " << nearFar << ".y;" "\n"
+					"	float sampledDepth = texture(";
+				code += shadowMap;
+				code += ", sampleDir).r * ";
+				code += nearFar;
+				code +=
+					".y;" "\n"
 					"	if ( sampledDepth + bias >= depth ) { shadowFactor += 1.0; }" "\n"
 					"}" "\n"
-					"shadowFactor /= " << sampleCount << ".0;" "\n\n";
+					"shadowFactor /= ";
+				code += std::to_string(sampleCount);
+				code += ".0;" "\n\n";
 			}
 				break;
 
@@ -378,11 +487,14 @@ namespace EmEn::Saphir
 				 * Uses the golden ratio for optimal 3D sample distribution. */
 				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
 
-				code <<
+				code +=
 					"/* Vogel sphere PCF (Fibonacci sphere distribution). */" "\n"
 					"const float goldenRatio = 1.618033988749895;" "\n"
 					"const float pi = 3.14159265359;" "\n"
-					"const int sampleCount = " << sampleCount << ";" "\n\n"
+					"const int sampleCount = ";
+				code += std::to_string(sampleCount);
+				code +=
+					";" "\n\n"
 
 					"/* Per-fragment rotation to break up patterns. */" "\n"
 					"float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);" "\n\n"
@@ -397,7 +509,12 @@ namespace EmEn::Saphir
 					"	vec3 offset = vec3(cos(theta) * radiusAtY, y, sin(theta) * radiusAtY);" "\n\n"
 
 					"	vec3 sampleDir = lookupVector + offset * filterRadius;" "\n"
-					"	float sampledDepth = texture(" << shadowMap << ", sampleDir).r * " << nearFar << ".y;" "\n"
+					"	float sampledDepth = texture(";
+				code += shadowMap;
+				code += ", sampleDir).r * ";
+				code += nearFar;
+				code +=
+					".y;" "\n"
 					"	if ( sampledDepth + bias >= depth ) { shadowFactor += 1.0; }" "\n"
 					"}" "\n"
 					"shadowFactor /= float(sampleCount);" "\n\n";
@@ -409,7 +526,7 @@ namespace EmEn::Saphir
 			{
 				/* Pre-computed 20-point Poisson sphere distribution.
 				 * These points are uniformly distributed on a unit sphere. */
-				code <<
+				code +=
 					"/* Poisson sphere PCF with 20 pre-computed samples. */" "\n"
 					"const vec3 poissonSphere[20] = vec3[](" "\n"
 					"	vec3( 0.5381, 0.1856,-0.4319), vec3( 0.1379, 0.2486, 0.4430)," "\n"
@@ -439,7 +556,12 @@ namespace EmEn::Saphir
 					"{" "\n"
 					"	vec3 offset = rotation * poissonSphere[i];" "\n"
 					"	vec3 sampleDir = lookupVector + offset * filterRadius;" "\n"
-					"	float sampledDepth = texture(" << shadowMap << ", sampleDir).r * " << nearFar << ".y;" "\n"
+					"	float sampledDepth = texture(";
+				code += shadowMap;
+				code += ", sampleDir).r * ";
+				code += nearFar;
+				code +=
+					".y;" "\n"
 					"	if ( sampledDepth + bias >= depth ) { shadowFactor += 1.0; }" "\n"
 					"}" "\n"
 					"shadowFactor /= 20.0;" "\n\n";
@@ -451,7 +573,7 @@ namespace EmEn::Saphir
 			{
 				/* textureGather doesn't work with cubemaps in the same way,
 				 * so we fall back to Poisson sphere sampling. */
-				code <<
+				code +=
 					"/* OptimizedGather not available for cubemaps, using Poisson sphere. */" "\n"
 					"const vec3 poissonSphere[20] = vec3[](" "\n"
 					"	vec3( 0.5381, 0.1856,-0.4319), vec3( 0.1379, 0.2486, 0.4430)," "\n"
@@ -476,7 +598,12 @@ namespace EmEn::Saphir
 					"{" "\n"
 					"	vec3 offset = rotation * poissonSphere[i];" "\n"
 					"	vec3 sampleDir = lookupVector + offset * filterRadius;" "\n"
-					"	float sampledDepth = texture(" << shadowMap << ", sampleDir).r * " << nearFar << ".y;" "\n"
+					"	float sampledDepth = texture(";
+				code += shadowMap;
+				code += ", sampleDir).r * ";
+				code += nearFar;
+				code +=
+					".y;" "\n"
 					"	if ( sampledDepth + bias >= depth ) { shadowFactor += 1.0; }" "\n"
 					"}" "\n"
 					"shadowFactor /= 20.0;" "\n\n";
@@ -486,37 +613,45 @@ namespace EmEn::Saphir
 
 		if ( m_discardUnlitFragment )
 		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
+			code += "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
 
-		return code.str();
+		return code;
 	}
 
 	std::string
 	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept
 	{
-		std::stringstream code{};
+		std::string code;
+		code.reserve(1280 + (shadowMapArray.size() * 3) + fragmentPositionWorldSpace.size() + fragmentPositionViewSpace.size() + cascadeMatrices.size() + splitDistances.size() + cascadeCount.size());
 
-		code << "/* Cascaded Shadow Map resolution. */" "\n\n";
+		code += "/* Cascaded Shadow Map resolution. */" "\n\n";
 
-		code << "float shadowFactor = 1.0;" "\n\n";
+		code += "float shadowFactor = 1.0;" "\n\n";
 
 		/* Compute view-space depth for cascade selection.
 		 * NOTE: read straight off the interpolated view-space position. Re-deriving it from
 		 * the world-space position would need the view matrix, which no fragment shader on
 		 * the main render target can reach. */
-		code <<
-			"/* Compute view-space depth for cascade selection. */" "\n"
-			"const float viewDepth = abs(" << fragmentPositionViewSpace << ".z);" "\n\n";
+		code += "/* Compute view-space depth for cascade selection. */" "\n"
+			"const float viewDepth = abs(";
+		code += fragmentPositionViewSpace;
+		code += ".z);" "\n\n";
 
 		/* Determine which cascade to use based on view-space depth. */
-		code <<
+		code +=
 			"/* Select the appropriate cascade based on depth. */" "\n"
 			"int cascadeIndex = 0;" "\n"
-			"const int numCascades = int(" << cascadeCount << ");" "\n"
+			"const int numCascades = int(";
+		code += cascadeCount;
+		code +=
+			");" "\n"
 			"for ( int i = 0; i < numCascades; i++ )" "\n"
 			"{" "\n"
-			"	if ( viewDepth < " << splitDistances << "[i] )" "\n"
+			"	if ( viewDepth < ";
+		code += splitDistances;
+		code +=
+			"[i] )" "\n"
 			"	{" "\n"
 			"		cascadeIndex = i;" "\n"
 			"		break;" "\n"
@@ -525,36 +660,54 @@ namespace EmEn::Saphir
 			"}" "\n\n";
 
 		/* Transform fragment position to light space using the selected cascade matrix. */
-		code <<
+		code +=
 			"/* Transform to the selected cascade's light space. */" "\n"
-			"vec4 posLightSpace = " << cascadeMatrices << "[cascadeIndex] * vec4(" << fragmentPositionWorldSpace << ", 1.0);" "\n"
+			"vec4 posLightSpace = ";
+		code += cascadeMatrices;
+		code += "[cascadeIndex] * vec4(";
+		code += fragmentPositionWorldSpace;
+		code +=
+			", 1.0);" "\n"
 			"vec3 projCoords = posLightSpace.xyz / posLightSpace.w;" "\n"
 			"/* NOTE: Only X and Y need [-1,1] to [0,1] conversion for UV coordinates. */" "\n"
 			"/* Z is already in [0,1] range from Vulkan orthographic projection. */" "\n"
 			"projCoords.xy = projCoords.xy * 0.5 + 0.5;" "\n\n";
 
 		/* Skip shadow calculation if outside the shadow map's valid depth range. */
-		code <<
+		code +=
 			"if ( projCoords.z >= 0.0 && projCoords.z <= 1.0 )" "\n"
 			"{" "\n";
 
 		if ( m_PCFEnabled )
 		{
-			code << "	" << GLSL::ConstInteger << " offset = " << m_PCFSample << ";" "\n\n";
+			code += "	";
+			code += GLSL::ConstInteger;
+			code += " offset = ";
+			code += std::to_string(m_PCFSample);
+			code += ";" "\n\n";
 
 			/* NOTE: Reset shadowFactor to 0.0 before accumulating PCF samples.
 			 * The initial value of 1.0 is only for the non-shadow case (outside depth range). */
-			code << "	shadowFactor = 0.0;" "\n\n";
+			code += "	shadowFactor = 0.0;" "\n\n";
 
 			/* PCF sampling with sampler2DArrayShadow. */
-			code <<
-				"	for ( " << GLSL::Integer << " idy = -offset; idy <= offset; idy++ )" "\n"
+			code += "	for ( ";
+			code += GLSL::Integer;
+			code += " idy = -offset; idy <= offset; idy++ )" "\n"
 				"	{" "\n"
-				"		for ( " << GLSL::Integer << " idx = -offset; idx <= offset; idx++ )" "\n"
+				"		for ( ";
+			code += GLSL::Integer;
+			code += " idx = -offset; idx <= offset; idx++ )" "\n"
 				"		{" "\n"
-				"			vec2 texelSize = 1.0 / vec2(textureSize(" << shadowMapArray << ", 0).xy);" "\n"
+				"			vec2 texelSize = 1.0 / vec2(textureSize(";
+			code += shadowMapArray;
+			code +=
+				", 0).xy);" "\n"
 				"			vec2 offsetUV = projCoords.xy + vec2(float(idx), float(idy)) * texelSize;" "\n"
-				"			shadowFactor += texture(" << shadowMapArray << ", vec4(offsetUV, float(cascadeIndex), projCoords.z));" "\n"
+				"			shadowFactor += texture(";
+			code += shadowMapArray;
+			code +=
+				", vec4(offsetUV, float(cascadeIndex), projCoords.z));" "\n"
 				"		}" "\n"
 				"	}" "\n\n"
 
@@ -564,17 +717,18 @@ namespace EmEn::Saphir
 		{
 			/* Single sample with sampler2DArrayShadow.
 			 * The fourth component is the reference depth for comparison. */
-			code <<
-				"	shadowFactor = texture(" << shadowMapArray << ", vec4(projCoords.xy, float(cascadeIndex), projCoords.z));" "\n";
+			code += "	shadowFactor = texture(";
+			code += shadowMapArray;
+			code += ", vec4(projCoords.xy, float(cascadeIndex), projCoords.z));" "\n";
 		}
 
-		code << "}" "\n\n";
+		code += "}" "\n\n";
 
 		if ( m_discardUnlitFragment )
 		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
+			code += "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
 
-		return code.str();
+		return code;
 	}
 }

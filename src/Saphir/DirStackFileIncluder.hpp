@@ -51,6 +51,32 @@ namespace EmEn::Saphir
 			DirStackFileIncluder () noexcept = default;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			DirStackFileIncluder (const DirStackFileIncluder & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			DirStackFileIncluder (DirStackFileIncluder && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return DirStackFileIncluder &
+			 */
+			DirStackFileIncluder & operator= (const DirStackFileIncluder & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return DirStackFileIncluder &
+			 */
+			DirStackFileIncluder & operator= (DirStackFileIncluder && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the includer.
 			 */
 			~DirStackFileIncluder () override = default;
@@ -99,7 +125,7 @@ namespace EmEn::Saphir
 
 		private:
 
-			typedef char tUserDataElement;
+			using tUserDataElement = char;
 
 			/**
 			 * @brief Do actual reading of the file, filling in a new include result.

@@ -410,10 +410,12 @@ namespace EmEn::Saphir
 		{
 			fragmentShader.addComment("Compute the radius influence over the light factor [Point+Spot].");
 
+			const auto lightRadiusVar = this->lightRadius();
+
 			Code{fragmentShader} <<
-				"if ( " << this->lightRadius() << " > 0.0 ) " << Line::End <<
+				"if ( " << lightRadiusVar << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
-				"	const vec3 DR = abs(" << LightGenerator::variable(Distance) << ") / " << this->lightRadius() << ';' << Line::Blank <<
+				"	const vec3 DR = abs(" << LightGenerator::variable(Distance) << ") / " << lightRadiusVar << ';' << Line::Blank <<
 
 				"	" << LightFactor << " *= max(1.0 - dot(DR, DR), 0.0);" << Line::End <<
 				'}' << Line::End;
@@ -885,15 +887,14 @@ namespace EmEn::Saphir
 		 * Beer's law provides wavelength-dependent absorption for colored glass. */
 		if ( m_useTransmission )
 		{
-			const auto albedoB = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
-
-			/* NOTE: NdotLBack may already be declared by SSS. Use a different name to avoid redeclaration. */
+			/* NOTE: 'albedo' was already computed above (same m_surfaceAlbedo, unchanged since).
+			 * NOTE: NdotLBack may already be declared by SSS. Use a different name to avoid redeclaration. */
 			Code{fragmentShader} <<
 				Line::Blank <<
 				"/* Transmission back-lit - light passing through the surface. */" << Line::End <<
 				"const float transNdotLBack = max(dot(-N, L), 0.0);" << Line::End <<
 				"const vec3 transBackAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" << Line::End <<
-				"const vec3 transmitted = " << albedoB << " * transBackAbsorption * transNdotLBack * " << m_surfaceTransmissionFactor << ";" << Line::End <<
+				"const vec3 transmitted = " << albedo << " * transBackAbsorption * transNdotLBack * " << m_surfaceTransmissionFactor << ";" << Line::End <<
 				m_fragmentColor << ".rgb += transmitted * radiance;";
 		}
 

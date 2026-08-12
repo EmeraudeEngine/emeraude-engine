@@ -37,6 +37,13 @@ namespace EmEn::Saphir
 {
 	/**
 	 * @brief The code generator interface class.
+	 * @note Accumulates the GLSL statements that make up a shader stage's `main()` body (or a
+	 * user-defined function body, see Declaration::Function) as three ordered sections: top
+	 * (preparation), main and output. getCode() concatenates them in that fixed order, regardless
+	 * of the order in which the add*() methods were called across sections. AbstractShader and
+	 * Declaration::Function inherit from this interface to gain that accumulation behavior; the
+	 * Code helper (see Code.hpp) is the usual way callers append to a section without holding a
+	 * reference to the underlying vectors, which stay private.
 	 */
 	class EMEN_API CodeGeneratorInterface
 	{
@@ -111,6 +118,9 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Appends a line of comment in the flow of th main code.
+			 * @note The comment is always inserted into the main-instructions section, interleaved
+			 * with addInstruction() calls in call order. There is no equivalent for the top or
+			 * output sections.
 			 * @param comment A reference to a string.
 			 * @param depth A number for indentation level. default 1.
 			 * @return void
@@ -126,6 +136,15 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the code into a string.
+			 * @note Assembles, in fixed order, the top section (prependTopInstructions followed by
+			 * every line accumulated through addTopInstruction()), then the main section (lines
+			 * accumulated through addInstruction()/addComment()), then the output section
+			 * (prependOutputInstructions followed by every line accumulated through
+			 * addOutputInstruction()). A section whose prepend string is empty AND whose
+			 * accumulated vector is empty is omitted entirely, including its header comment.
+			 * Callers (e.g. AbstractShader::generateSourceCode()) use the prepend arguments to
+			 * inject code ahead of what was accumulated via the add*Instruction() methods, without
+			 * having to go through them.
 		 	 * @param prependTopInstructions A reference to a string. Default none.
 		 	 * @param prependOutputInstructions A reference to a string. Default none.
 			 * @return std::string

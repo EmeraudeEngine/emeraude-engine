@@ -45,7 +45,10 @@
 
 namespace EmEn::Saphir
 {
-	/** @brief Defines the scope of a synthesized variable. */
+	/**
+	 * @brief Defines the scope of a synthesized variable.
+	 * @version 0.9.54
+	 */
 	enum class VariableScope : uint8_t
 	{
 		/** @brief The variable is only used in the current shader. */
@@ -59,6 +62,10 @@ namespace EmEn::Saphir
 	/**
 	 * @brief The vertex shader class.
 	 * @extends EmEn::Saphir::AbstractShader The base class of every shader type.
+	 * @note Generates GLSL for the single, per-fragment Cook-Torrance lighting model; there is
+	 * no shader-quality tier here — the render-distance-driven "high quality" decision lives in
+	 * Generator::Abstract (HighQualityEnabled) and only affects the fragment shader.
+	 * @version 0.9.54
 	 */
 	class VertexShader final : public AbstractShader
 	{
@@ -104,6 +111,10 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a stage output variable to be used in the shader.
+			 * @note Unlike declare(const Declaration::InputAttribute &), re-declaring a stage
+			 * output with an already-used name is NOT a silent no-op: it logs a warning and
+			 * keeps the first declaration, since two different names can legitimately collide
+			 * only through a caller mistake.
 			 * @param declaration A reference to a ShaderStageOutput.
 			 * @return bool
 			 */
@@ -111,6 +122,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares an output block to be used in the shader.
+			 * @note A re-declaration sharing the same instance name is NOT a silent no-op: it
+			 * logs a warning and keeps the first declaration.
 			 * @param declaration A reference to an OutputBlock.
 			 * @return bool
 			 */
@@ -432,6 +445,9 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns whether a variable preparation has already been asked.
+			 * @todo Check whether the pointer-identity comparison used here (looping and
+			 * comparing with std::strcmp) could safely be replaced by the commented-out
+			 * std::ranges::any_of version left in the implementation.
 			 * @param preparation The name of the variable.
 			 * @return bool
 			 */
@@ -440,11 +456,20 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Creates a local variable for sprite model matrix with VBO.
+			 * @todo Find a way to get the camera world position directly instead of inverting
+			 * the view matrix (the View UBO is not constantly updated for now).
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool prepareSpriteModelMatrix () noexcept;
 
+			/**
+			 * @brief Creates a local variable for the model matrix read from the per-draw
+			 * BDA SSBO (PerDrawDataRef), indexed by gl_DrawID.
+			 * @note MDI-only path; the caller must have enabled MDI (enableMDI()) so the
+			 * buffer_reference GLSL extensions and the PerDrawDataRef struct are emitted.
+			 * @return bool
+			 */
 			[[nodiscard]]
 			bool prepareMDIModelMatrix () noexcept;
 
@@ -530,6 +555,8 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Synthesizes the vertex position in texture space in the vertex shader.
 			 * @note gl_Position = gl_modelViewProjectionMatrix * gl_Vertex;
+			 * @warning FIXME: The implementation duplicates the "local scope" and "next stage /
+			 * top scope" code paths instead of sharing them; rework to avoid this duplication.
 			 * @param generator A reference to the shader generator.
 			 * @param topInstructions Every instruction that should be on the top of the main() function.
 			 * @param outputInstructions Every instruction that should be at the end of the main() function.
@@ -580,7 +607,11 @@ namespace EmEn::Saphir
 			bool synthesizeVertexVectorInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, Graphics::VertexAttributeType vectorType, VariableScope scope) noexcept;
 
 			/**
-			 * @brief synthesizeWorldTBNMatrix
+			 * @brief Synthesizes the tangent/binormal/normal matrix in world space, as a mat3
+			 * stage output for use by the fragment shader.
+			 * @note Declares the Tangent, Binormal and Normal input attributes and builds each
+			 * world-space basis vector by transforming the (possibly skinned) attribute with the
+			 * model matrix, then packs them column-wise into the output matrix.
 			 * @param generator A reference to the shader generator.
 			 * @param topInstructions Every instruction that should be on the top of the main() function.
 			 * @param outputInstructions Every instruction that should be at the end of the main() function.
@@ -590,7 +621,11 @@ namespace EmEn::Saphir
 			bool synthesizeWorldTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept;
 
 			/**
-			 * @brief synthesizeViewTBNMatrix
+			 * @brief Synthesizes the tangent/binormal/normal matrix in view space, as a mat3
+			 * stage output for use by the fragment shader.
+			 * @note Declares the Tangent, Binormal and Normal input attributes and builds each
+			 * view-space basis vector with the normal matrix (see prepareNormalMatrix()), then
+			 * packs them row-wise (transposed) into the output matrix.
 			 * @param generator A reference to the shader generator.
 			 * @param topInstructions Every instruction that should be on the top of the main() function.
 			 * @param outputInstructions Every instruction that should be at the end of the main() function.
@@ -636,13 +671,33 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static bool isSyntheticVariableAllowed (const char * variableName) noexcept;
 
+			/**
+			 * @brief Builds the "computeYAxis" GLSL helper function that derives an upward
+			 * (Y axis) vector orthonormal to a given backward vector, handling the degenerate
+			 * cases where backward is aligned with the world Y axis.
+			 * @note Pure code-text builder; declared as a Declaration::Function to be added via
+			 * declare(). Used exclusively by prepareSpriteModelMatrix() to orient billboards.
+			 * @return Declaration::Function
+			 */
 			[[nodiscard]]
 			static Declaration::Function generateComputeUpwardVectorFunction () noexcept;
 
+			/**
+			 * @brief Builds the "getBillBoardModelMatrix" GLSL helper function that assembles a
+			 * camera-facing model matrix from a camera position, a model position and a model
+			 * scaling, using computeYAxis() for the up vector.
+			 * @note Pure code-text builder; declared as a Declaration::Function to be added via
+			 * declare(). Used exclusively by prepareSpriteModelMatrix().
+			 * @todo Try to make the generated scaling matrix work with uniform scaling
+			 * (1.0 / UScale) instead of the current per-axis scaling.
+			 * @return Declaration::Function
+			 */
 			[[nodiscard]]
 			static Declaration::Function generateGetBillBoardModelMatrixFunction () noexcept;
 
-			std::vector< std::pair< const char *, std::string > > m_uniquePreparations; // ie normalMatrix for VBO
+			/** @brief Deduplicated {variable name, generated GLSL declaration line} pairs, e.g. the normal matrix for VBO; emitted once at the top of main() regardless of how many synthesis paths needed them. */
+			std::vector< std::pair< const char *, std::string > > m_uniquePreparations;
+			/** @brief Pending {variable name, scope} synthesis requests queued by requestSynthesizeInstruction(), consumed by synthesizeRequestInstructions(). */
 			std::vector< std::pair< const char *, VariableScope > > m_requests;
 			std::vector< Declaration::InputAttribute > m_inputAttributes;
 			std::vector< Declaration::StageOutput > m_stageOutputs;

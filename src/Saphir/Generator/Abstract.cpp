@@ -296,10 +296,13 @@ namespace EmEn::Saphir::Generator
 			bool isCompatible = true;
 
 			/* Safety Check: Ensure the cached program's layout for Set 1 (Material) matches the current material.
-			 * This prevents collisions if the cache key hashing is insufficient or collides. */
-			if ( this->materialEnabled() )
+			 * This prevents collisions if the cache key hashing is insufficient or collides.
+			 * NOTE: materialEnabled() + getMaterialInterface() would each independently re-walk
+			 * isRenderableInstanceAvailable() -> renderable() -> material(m_layerIndex); a single
+			 * call is enough since materialEnabled() is exactly "getMaterialInterface() != nullptr". */
+			if ( const auto * materialInterface = this->getMaterialInterface(); materialInterface != nullptr )
 			{
-				const auto * materialLayout = this->getMaterialInterface()->descriptorSetLayout().get();
+				const auto * materialLayout = materialInterface->descriptorSetLayout().get();
 				const auto * cachedPipelineLayout = cachedProgram->pipelineLayout().get();
 
 				/* Note: Set 1 is the material set. */

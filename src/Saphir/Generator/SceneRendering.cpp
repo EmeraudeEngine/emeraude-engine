@@ -529,8 +529,13 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* NOTE: Queried twice below (light generation, then fragment output); the
+		 * underlying check chases scene/material state through several virtual calls,
+		 * and neither call site can change what it would return, so compute it once. */
+		const bool lightingRequested = this->isLightingRequested();
+
 		/* If the light is enabled, generate the shader code (optional). */
-		if ( this->isLightingRequested() )
+		if ( lightingRequested )
 		{
 			/* Declare the view uniform block. */
 			if ( !this->declareViewUniformBlock(*fragmentShader) )
@@ -547,7 +552,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Generates the fragment output. */
-		if ( this->isLightingRequested() )
+		if ( lightingRequested )
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << m_lightGenerator.fragmentColor() << ';';
 
@@ -637,13 +642,20 @@ namespace EmEn::Saphir::Generator
 			 * (the lit path adds it instead — see LightGenerator). Without this, a skybox with a
 			 * luminance of 8000 nits still rendered as its raw [0,1] cubemap, i.e. black once the
 			 * scene went photometric: the simple pass wrote the surface colour verbatim. */
-			if ( const auto emission = this->getMaterialInterface()->emissionMultiplier(); emission.empty() )
+			const auto * material = this->getMaterialInterface();
+
+			/* NOTE: fragmentColor() rebuilds its GLSL expression (component lookup + string
+			 * concatenation) on every call; it is used up to four times below for the exact
+			 * same material and layer, so compute it once. */
+			const auto fragmentColorExpr = material->fragmentColor();
+
+			if ( const auto emission = material->emissionMultiplier(); emission.empty() )
 			{
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << this->getMaterialInterface()->fragmentColor() << ';';
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << fragmentColorExpr << ';';
 			}
 			else
 			{
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4((" << this->getMaterialInterface()->fragmentColor() << ").rgb * " << emission << ", (" << this->getMaterialInterface()->fragmentColor() << ").a);";
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4((" << fragmentColorExpr << ").rgb * " << emission << ", (" << fragmentColorExpr << ").a);";
 			}
 
 			if ( m_hasNormalsAttachment )
@@ -659,7 +671,7 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasAlbedoAttachment )
 			{
 				/* Unlit material: its displayed color IS its albedo. */
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << this->getMaterialInterface()->fragmentColor() << ").rgb, 1.0);";
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << fragmentColorExpr << ").rgb, 1.0);";
 			}
 
 			if ( m_hasVelocityAttachment )

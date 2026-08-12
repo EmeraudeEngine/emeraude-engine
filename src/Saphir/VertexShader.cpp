@@ -171,7 +171,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_stageOutputs, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_stageOutputs, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{ClassId} << "A stage output declaration named '" << declaration.name() << "' already exists !";
 
@@ -193,7 +193,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_outputBlocks, [declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
+		if ( std::ranges::any_of(m_outputBlocks, [&declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
 		{
 			TraceWarning{ClassId} << "An output block declaration named '" << declaration.name() << "' already exists !";
 
@@ -887,7 +887,11 @@ namespace EmEn::Saphir
 
 		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
 
-		outputInstructions.append((std::stringstream{} << "\t" "gl_Position = "  << MVPMatrix << " * vec4(" << posExpr << ", 1.0);" "\n").str());
+		outputInstructions += "\t" "gl_Position = ";
+		outputInstructions += MVPMatrix;
+		outputInstructions += " * vec4(";
+		outputInstructions += posExpr;
+		outputInstructions += ", 1.0);" "\n";
 
 		/* TAA sub-pixel jitter: applied HERE and nowhere else. Offsetting the clip position by
 		 * jitter * W is exactly an NDC translation after the perspective division. Keeping it
@@ -897,7 +901,9 @@ namespace EmEn::Saphir
 		 * main view sets a jitter, shadow maps / RTT / cubemaps push zero). */
 		if ( this->isProjectionJitterPushed() )
 		{
-			outputInstructions.append((std::stringstream{} << "\t" "gl_Position.xy += " << MatrixPC(PushConstant::Component::ProjectionJitter) << " * gl_Position.w;" "\n").str());
+			outputInstructions += "\t" "gl_Position.xy += ";
+			outputInstructions += MatrixPC(PushConstant::Component::ProjectionJitter);
+			outputInstructions += " * gl_Position.w;" "\n";
 		}
 
 		return true;
@@ -952,9 +958,11 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		outputInstructions.append((std::stringstream{} <<
-			'\t' << ShaderVariable::PrimaryVertexColor << " = " << Attribute::Color << ';' << '\n'
-		).str());
+		outputInstructions += '\t';
+		outputInstructions += ShaderVariable::PrimaryVertexColor;
+		outputInstructions += " = ";
+		outputInstructions += Attribute::Color;
+		outputInstructions += ";\n";
 
 		return true;
 	}

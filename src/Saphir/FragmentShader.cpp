@@ -53,7 +53,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_stageInputs, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_stageInputs, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{ClassId} << "A stage input declaration named '" << declaration.name() << "' already exists !";
 
@@ -75,7 +75,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_inputBlocks, [declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
+		if ( std::ranges::any_of(m_inputBlocks, [&declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
 		{
 			TraceWarning{ClassId} << "An input block declaration named '" << declaration.name() << "' already exists !";
 
@@ -97,7 +97,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_outputFragments, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_outputFragments, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{ClassId} << "An output fragment declaration named '" << declaration.name() << "' already exists !";
 
@@ -228,19 +228,17 @@ namespace EmEn::Saphir
 	Function
 	FragmentShader::generateToSRGBColorFunction () noexcept
 	{
-		std::stringstream functionCode;
+		Function function{"toSRGBColor", GLSL::FloatVector4};
+		function.addInParameter(GLSL::FloatVector4, "linearRGB", true);
 
 		/* NOTE: Only convert RGB components, alpha channel is always linear. */
-		functionCode <<
+		function.addInstruction(
 			"\t" "bvec3 cutoff = lessThan(linearRGB.rgb, vec3(0.0031308));" "\n"
 			"\t" "vec3 higher = vec3(1.055) * pow(linearRGB.rgb, vec3(1.0 / 2.4)) - vec3(0.055);" "\n"
 			"\t" "vec3 lower = linearRGB.rgb * vec3(12.92);" "\n\n"
 
-			"\t" "return vec4(mix(higher, lower, cutoff), linearRGB.a);" "\n";
-
-		Function function{"toSRGBColor", GLSL::FloatVector4};
-		function.addInParameter(GLSL::FloatVector4, "linearRGB", true);
-		function.addInstruction(functionCode.str());
+			"\t" "return vec4(mix(higher, lower, cutoff), linearRGB.a);" "\n"
+		);
 
 		return function;
 	}
@@ -248,19 +246,17 @@ namespace EmEn::Saphir
 	Function
 	FragmentShader::generateToLinearColorFunction () noexcept
 	{
-		std::stringstream functionCode;
+		Function function{"toLinearColor", GLSL::FloatVector4};
+		function.addInParameter(GLSL::FloatVector4, "sRGB", true);
 
 		/* NOTE: Only convert RGB components, alpha channel is always linear. */
-		functionCode <<
+		function.addInstruction(
 			"\t" "bvec3 cutoff = lessThan(sRGB.rgb, vec3(0.04045));" "\n"
 			"\t" "vec3 higher = pow((sRGB.rgb + vec3(0.055)) / vec3(1.055), vec3(2.4));" "\n"
 			"\t" "vec3 lower = sRGB.rgb / vec3(12.92);" "\n\n"
 
-			"\t" "return vec4(mix(higher, lower, cutoff), sRGB.a);" "\n";
-
-		Function function{"toLinearColor", GLSL::FloatVector4};
-		function.addInParameter(GLSL::FloatVector4, "sRGB", true);
-		function.addInstruction(functionCode.str());
+			"\t" "return vec4(mix(higher, lower, cutoff), sRGB.a);" "\n"
+		);
 
 		return function;
 	}

@@ -1058,3 +1058,27 @@ Related systems:
 - @src/Overlay/AGENTS.md - 2D pipeline via OverlayGenerator
 - @src/Resources/AGENTS.md - Generation during onDependenciesLoaded()
 - @src/Vulkan/AGENTS.md - SPIR-V compilation and pipelines
+
+## clang-tidy — the six warnings that are LEFT ON PURPOSE
+
+Saphir is scanned with the project `.clang-tidy` (`run-clang-tidy -p .claude-build-release
+"dependencies/emeraude-engine/src/Saphir/.*\.cpp"`). It went from 12 warnings to 6 in Aug 2026;
+the remaining six are deliberate, so **do not "fix" them**:
+
+- **`Declaration/Types.cpp` × 2 — `bugprone-branch-clone`.** The std140 alignment switch returns
+  the same number for several type families, but each family carries its own comment stating the
+  rule that justifies it (`vec2` → 8, `dvec2` → 16, `vec3`/`vec4` → 16…). Merging the branches
+  would delete the explanation, which is the only reason the table is readable. The duplication
+  is didactic.
+- **`DirStackFileIncluder.cpp` × 4 — `cppcoreguidelines-owning-memory`.** The class implements
+  `glslang::TShader::Includer`, whose contract is raw-pointer based: `includeLocal()` must return
+  a `IncludeResult *` that **glslang** frees later through `releaseInclude()`. Wrapping those in
+  a smart pointer would break the interface. The ownership lives on the other side of a
+  third-party API.
+
+⚠️ Everything else is fixed, never silenced — no NOLINT, no check disabled.
+
+⚠️ **Provenance to settle**: `DirStackFileIncluder` implements a glslang interface, and its class
+name plus its class comment are verbatim from glslang's own `StandAlone/DirStackFileIncluder.h`
+sample. The file carries only the Emeraude copyright header. The project rule is to cite author,
+licence and URL at the point of use — this one is missing and needs the owner's decision.

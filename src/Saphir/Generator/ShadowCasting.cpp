@@ -47,11 +47,9 @@ namespace EmEn::Saphir::Generator
 	bool
 	ShadowCasting::needsAlphaTestedShadows () const noexcept
 	{
-		if ( !this->materialEnabled() )
-		{
-			return false;
-		}
-
+		/* NOTE: getMaterialInterface() already returns nullptr when no renderable instance
+		 * is available, so this single call subsumes materialEnabled() and avoids walking
+		 * the same renderable/layer lookup twice. */
 		const auto * material = this->getMaterialInterface();
 
 		return material != nullptr && material->requiresAlphaTestedShadows();
@@ -62,10 +60,21 @@ namespace EmEn::Saphir::Generator
 	{
 		/* NOTE: Enable PerView set for instancing OR multiview rendering (cubemap or CSM).
 		 * Cubemap shadow maps require the UBO with 6 view matrices indexed by gl_ViewIndex.
-		 * CSM shadow maps require the UBO with N (up to 4) cascade view matrices indexed by gl_ViewIndex. */
-		if ( this->isFlagEnabled(IsInstancingEnabled) || this->renderTarget()->isCubemap() || this->renderTarget()->isCascadedShadowMap() )
+		 * CSM shadow maps require the UBO with N (up to 4) cascade view matrices indexed by gl_ViewIndex.
+		 * The render target is fetched once: renderTarget() returns a shared_ptr by value,
+		 * so each call pays for an atomic refcount increment/decrement. */
+		if ( this->isFlagEnabled(IsInstancingEnabled) )
 		{
 			setIndexes.enableSet(SetType::PerView);
+		}
+		else
+		{
+			const auto renderTarget = this->renderTarget();
+
+			if ( renderTarget->isCubemap() || renderTarget->isCascadedShadowMap() )
+			{
+				setIndexes.enableSet(SetType::PerView);
+			}
 		}
 
 		/* Enable the bone matrix SSBO set for skeletal meshes. */
@@ -216,8 +225,11 @@ namespace EmEn::Saphir::Generator
 	bool
 	ShadowCasting::generateVertexShader (Program & program, bool needsAlphaTest) noexcept
 	{
-		const bool isCubemap = this->renderTarget()->isCubemap();
-		const bool isCSM = this->renderTarget()->isCascadedShadowMap();
+		/* NOTE: Fetched once — renderTarget() returns a shared_ptr by value, so each call
+		 * pays for an atomic refcount increment/decrement on top of the virtual dispatch. */
+		const auto renderTarget = this->renderTarget();
+		const bool isCubemap = renderTarget->isCubemap();
+		const bool isCSM = renderTarget->isCascadedShadowMap();
 		const bool useMultiview = isCubemap || isCSM;
 
 		/* NOTE: For cubemap/CSM shadow maps, enable multiview mode which uses gl_ViewIndex.
@@ -401,15 +413,19 @@ namespace EmEn::Saphir::Generator
 
 		size_t hash = Hash::FNV1a(ClassId);
 
+		/* NOTE: Fetched once — renderTarget() returns a shared_ptr by value, so each call
+		 * pays for an atomic refcount increment/decrement on top of the virtual dispatch. */
+		const auto renderTarget = this->renderTarget();
+
 		/* 1. Render pass handle (critical for pipeline compatibility). */
-		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
+		if ( const auto * framebuffer = renderTarget->framebuffer(); framebuffer != nullptr )
 		{
 			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
 		}
 
 		/* 2. Render target type (cubemap vs single layer vs CSM). */
-		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
-		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCascadedShadowMap()));
+		hashCombine(hash, static_cast< size_t >(renderTarget->isCubemap()));
+		hashCombine(hash, static_cast< size_t >(renderTarget->isCascadedShadowMap()));
 
 		/* 3. Renderable identity (geometry combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )
@@ -428,20 +444,23 @@ namespace EmEn::Saphir::Generator
 		/* 5. Generator flags (instancing, facing camera). */
 		hashCombine(hash, static_cast< size_t >(this->flags()));
 
-		/* 6. Alpha-tested shadows state and material layout. */
-		if ( this->needsAlphaTestedShadows() )
+		/* 6. Alpha-tested shadows state and material layout.
+		 * NOTE: The material interface is fetched once and reused below (descriptor set
+		 * layout, flags) instead of calling needsAlphaTestedShadows() + getMaterialInterface()
+		 * repeatedly, which would each re-walk the same renderable/layer lookup. */
+		if ( const auto * material = this->getMaterialInterface(); material != nullptr && material->requiresAlphaTestedShadows() )
 		{
 			hashCombine(hash, 1ULL);
 
 			/* Include material layout signature for alpha-tested shadows. */
-			if ( const auto & layout = this->getMaterialInterface()->descriptorSetLayout(); layout != nullptr )
+			if ( const auto & layout = material->descriptorSetLayout(); layout != nullptr )
 			{
 				hashCombine(hash, layout->getHash());
 			}
 
 			/* Material codegen flag bits: same layout, structurally different shadow GLSL
 			 * (e.g. which alpha source feeds the discard) must not share a cached program. */
-			hashCombine(hash, static_cast< size_t >(this->getMaterialInterface()->flags()));
+			hashCombine(hash, static_cast< size_t >(material->flags()));
 		}
 
 		return hash;

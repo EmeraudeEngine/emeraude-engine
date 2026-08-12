@@ -49,10 +49,13 @@ namespace EmEn::Saphir
 	void
 	AbstractShader::setExtensionBehavior (const char * extension, const char * behavior) noexcept
 	{
-		std::stringstream headers;
-		headers << Keys::GLSL::Define::Extension << ' ' << extension << " : " << behavior;
+		std::string header{Keys::GLSL::Define::Extension};
+		header += ' ';
+		header += extension;
+		header += " : ";
+		header += behavior;
 
-		m_headers.emplace_back(headers.str());
+		m_headers.emplace_back(std::move(header));
 	}
 
 	bool
@@ -65,7 +68,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_specializationConstants, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_specializationConstants, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{TracerTag} << "A specialization constant declaration named '" << declaration.name() << "' already exists !";
 
@@ -87,7 +90,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_functions, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_functions, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{TracerTag} << "A function declaration named '" << declaration.name() << "' already exists !";
 
@@ -109,7 +112,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_structures, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_structures, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{TracerTag} << "A structure declaration named '" << declaration.name() << "' already exists !";
 
@@ -131,7 +134,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_uniformBlocks, [declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
+		if ( std::ranges::any_of(m_uniformBlocks, [&declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
 		{
 			TraceWarning{TracerTag} << "An uniform block declaration named '" << declaration.name() << "' already exists !";
 
@@ -153,7 +156,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_shaderStorageBlocks, [declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
+		if ( std::ranges::any_of(m_shaderStorageBlocks, [&declaration] (const auto & existing) {return existing.instanceName() == declaration.instanceName();}) )
 		{
 			TraceWarning{TracerTag} << "A shader storage block declaration named '" << declaration.name() << "' already exists !";
 
@@ -207,7 +210,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_texelBuffers, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_texelBuffers, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{TracerTag} << "A texel buffer declaration named '" << declaration.name() << "' already exists !";
 
@@ -229,7 +232,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_pushConstantBlocks, [declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( std::ranges::any_of(m_pushConstantBlocks, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
 		{
 			TraceWarning{TracerTag} << "A push constant declaration named '" << declaration.name() << "' already exists !";
 

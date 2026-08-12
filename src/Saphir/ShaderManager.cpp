@@ -630,11 +630,20 @@ namespace EmEn::Saphir
 	std::filesystem::path
 	ShaderManager::generateShaderSourceCacheFilepath (const AbstractShader & shader) const noexcept
 	{
-		std::stringstream filename;
-		filename << shader.name() << '_' << shader.hash() << '.' << getShaderFileExtension(shader.type());
+		const auto & name = shader.name();
+		const auto hashStr = std::to_string(shader.hash());
+		const auto * extension = getShaderFileExtension(shader.type());
+
+		std::string filename;
+		filename.reserve(name.size() + hashStr.size() + 16);
+		filename += name;
+		filename += '_';
+		filename += hashStr;
+		filename += '.';
+		filename += extension;
 
 		auto filepath = m_shadersSourcesDirectory;
-		filepath.append(filename.str());
+		filepath.append(filename);
 
 		return filepath;
 	}
@@ -642,11 +651,18 @@ namespace EmEn::Saphir
 	std::filesystem::path
 	ShaderManager::generateShaderBinaryCacheFilepath (const AbstractShader & shader) const noexcept
 	{
-		std::stringstream filename;
-		filename << shader.name() << '_' << shader.hash() << ".bin";
+		const auto & name = shader.name();
+		const auto hashStr = std::to_string(shader.hash());
+
+		std::string filename;
+		filename.reserve(name.size() + hashStr.size() + 6);
+		filename += name;
+		filename += '_';
+		filename += hashStr;
+		filename += ".bin";
 
 		auto filepath = m_shadersBinariesDirectory;
-		filepath.append(filename.str());
+		filepath.append(filename);
 
 		return filepath;
 	}
@@ -654,21 +670,28 @@ namespace EmEn::Saphir
 	size_t
 	ShaderManager::extractHashFromFilepath (const std::filesystem::path & filepath) noexcept
 	{
-		const auto tmpA = String::explode(filepath.filename().string(), '_');
+		/* NOTE: Equivalent to String::explode(filename, '_').size() == 2, i.e. the filename
+		 * must contain exactly one '_' (separating the shader name from "<hash>.<ext>"),
+		 * done here without allocating the intermediate std::vector< std::string >. */
+		const auto filename = filepath.filename().string();
 
-		if ( tmpA.size() != 2 )
+		const auto underscorePos = filename.find('_');
+
+		if ( underscorePos == std::string::npos || underscorePos != filename.rfind('_') )
 		{
 			return 0;
 		}
 
-		const auto tmpB = String::explode(tmpA[1], '.');
+		/* NOTE: Equivalent to String::explode(tmpA[1], '.').size() == 2, i.e. exactly one '.'
+		 * after the underscore (separating "<hash>" from "<ext>"). */
+		const auto dotPos = filename.find('.', underscorePos + 1);
 
-		if ( tmpB.size() != 2 )
+		if ( dotPos == std::string::npos || dotPos != filename.rfind('.') )
 		{
 			return 0;
 		}
 
-		return std::stoull(tmpB[0]);
+		return std::stoull(filename.substr(underscorePos + 1, dotPos - underscorePos - 1));
 	}
 
 	VkShaderStageFlagBits
@@ -724,14 +747,10 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		std::string shaderIdentifier;
-
-		{
-			std::stringstream identifier;
-			identifier << TokenFormatter::toUpperSpaced(to_cstring(type)) << " (" << shaderName << ")";
-
-			shaderIdentifier = identifier.str();
-		}
+		auto shaderIdentifier = TokenFormatter::toUpperSpaced(to_cstring(type));
+		shaderIdentifier += " (";
+		shaderIdentifier += shaderName;
+		shaderIdentifier += ')';
 
 		/* NOTE: Convert shader shaderType to GLSLang shaderType. */
 		const auto shaderType = toGLSLangShaderType(type);

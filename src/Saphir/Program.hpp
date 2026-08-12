@@ -76,7 +76,10 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Returns whether the program has shader source codes.
+			 * @brief Returns whether the program has all the shader source codes it needs, generated and consistent.
+			 * @note The vertex shader is mandatory. The tesselation control and evaluation shaders are optional,
+			 * but if a control shader is present, the evaluation shader must be present too (and vice versa is not checked).
+			 * The geometry and fragment shaders are optional.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -84,6 +87,9 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns whether the program shaders are compiled.
+			 * @note This reflects whether setGraphicsPipeline() has been called with a valid pipeline, not that
+			 * this class performed the compilation itself; the actual GLSL-to-SPIR-V compilation and graphics
+			 * pipeline creation happen elsewhere (Generator::Abstract::createGraphicsPipeline()).
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -95,6 +101,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns whether the program uses tesselation technics.
+			 * @note Requires both the control AND the evaluation shader to be present; a control shader alone
+			 * (evaluation missing) is treated as a mismatched setup and returns false.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -102,7 +110,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns whether the program needed instancing.
-			 * @return
+			 * @return bool
 			 */
 			[[nodiscard]]
 			bool wasInstancingEnabled () const noexcept;
@@ -123,6 +131,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns whether MDI (Multi-Draw Indirect) was enabled for this program.
+			 * @note Unlike wasInstancingEnabled(), wasAdvancedMatricesEnabled() and wasBillBoardingEnabled(), this
+			 * returns false silently (no error trace) if the vertex shader has not been initialized yet.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -130,6 +140,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns whether the vertex shader reads its model matrix from the InstanceTransforms SSBO.
+			 * @note Returns false silently (no error trace) if the vertex shader has not been initialized yet.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -137,6 +148,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Initializes the vertex shader and returns it.
+			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
+			 * nullptr; the vertex shader, once initialized, cannot be re-initialized or replaced.
 			 * @param name A reference to a string.
 			 * @param enableInstancing Enable instancing for the vertex shader.
 			 * @param enableAdvancedMatrices Enable the advanced matrices for the vertex shader.
@@ -150,6 +163,9 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Initializes the tesselation control shader and returns it.
+			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
+			 * nullptr. If used, the tesselation evaluation shader must also be initialized for the program to
+			 * be considered complete (see isComplete()).
 			 * @param name A reference to a string.
 			 * @return TesselationControlShader *
 			 */
@@ -158,6 +174,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Initializes the tesselation evaluation shader and returns it.
+			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
+			 * nullptr.
 			 * @param name A reference to a string.
 			 * @return TesselationEvaluationShader *
 			 */
@@ -166,6 +184,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Initializes the geometry shader and returns it.
+			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
+			 * nullptr.
 			 * @param name A reference to a string.
 			 * @param inputPrimitive A reference to an input primitive declaration.
 			 * @param outputPrimitive A reference to an output primitive declaration.
@@ -176,6 +196,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Initializes the fragment shader.
+			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
+			 * nullptr. The fragment shader is optional (e.g. depth-only passes have none).
 			 * @param name A reference to a string.
 			 * @return FragmentShader *
 			 */
@@ -183,7 +205,9 @@ namespace EmEn::Saphir
 			FragmentShader * initFragmentShader (const std::string & name) noexcept;
 
 			/**
-			 * @brief Returns the last shader generated type.
+			 * @brief Returns the type of the last (most downstream) shader stage that has been generated.
+			 * @note Checks stages in pipeline order from fragment down to vertex and returns the first one found
+			 * generated; returns ShaderType::Undefined if no stage has been generated yet.
 			 * @return ShaderType
 			 */
 			[[nodiscard]]
@@ -280,6 +304,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the vertex shader.
+			 * @note Logs a warning and returns nullptr if hasVertexShader() is false (not initialized yet).
 			 * @return const VertexShader *
 			 */
 			[[nodiscard]]
@@ -287,6 +312,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the vertex shader.
+			 * @note Logs a warning and returns nullptr if hasVertexShader() is false (not initialized yet).
 			 * @return VertexShader *
 			 */
 			[[nodiscard]]
@@ -294,6 +320,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the tesselation control shader.
+			 * @note Logs a warning and returns nullptr if hasTesselationControlShader() is false (not initialized yet).
 			 * @return const TesselationControlShader *
 			 */
 			[[nodiscard]]
@@ -301,6 +328,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the tesselation control shader.
+			 * @note Logs a warning and returns nullptr if hasTesselationControlShader() is false (not initialized yet).
 			 * @return TesselationControlShader *
 			 */
 			[[nodiscard]]
@@ -308,6 +336,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the tesselation evaluation shader.
+			 * @note Logs a warning and returns nullptr if hasTesselationEvaluationShader() is false (not initialized yet).
 			 * @return const TesselationEvaluationShader *
 			 */
 			[[nodiscard]]
@@ -315,6 +344,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the tesselation evaluation shader.
+			 * @note Logs a warning and returns nullptr if hasTesselationEvaluationShader() is false (not initialized yet).
 			 * @return TesselationEvaluationShader *
 			 */
 			[[nodiscard]]
@@ -322,6 +352,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the geometry shader.
+			 * @note Logs a warning and returns nullptr if hasGeometryShader() is false (not initialized yet).
 			 * @return const GeometryShader *
 			 */
 			[[nodiscard]]
@@ -329,6 +360,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the geometry shader.
+			 * @note Logs a warning and returns nullptr if hasGeometryShader() is false (not initialized yet).
 			 * @return GeometryShader *
 			 */
 			[[nodiscard]]
@@ -336,6 +368,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the fragment shader.
+			 * @note Logs a warning and returns nullptr if hasFragmentShader() is false (not initialized yet).
 			 * @return const FragmentShader *
 			 */
 			[[nodiscard]]
@@ -343,43 +376,51 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the fragment shader.
+			 * @note Logs a warning and returns nullptr if hasFragmentShader() is false (not initialized yet).
 			 * @return FragmentShader *
 			 */
 			[[nodiscard]]
 			FragmentShader * fragmentShader () noexcept;
 
 			/**
-			 * @brief Returns the list of all shader pointers.
+			 * @brief Returns the list of the shader pointers currently held by this program.
+			 * @note Only the stages that have been initialized are included (no nullptr entries), in pipeline
+			 * stage order: vertex, tesselation control, tesselation evaluation, geometry, fragment.
 			 * @return std::vector< AbstractShader * >
 			 */
 			[[nodiscard]]
 			std::vector< AbstractShader * > getShaderList () const noexcept;
 
 			/**
-			 * @brief Creates a vertex buffer format.
+			 * @brief Creates the vertex buffer format matching this program's vertex shader and a given geometry.
+			 * @note Requires the vertex shader to be initialized first (hasVertexShader()). On success, the
+			 * result is stored and retrievable through vertexBufferFormat().
 			 * @param vertexBufferFormatManager A reference to the vertex buffer format manager.
 			 * @param geometry A pointer to a geometry interface.
-			 * @return void
+			 * @return bool True if the format was created (or retrieved from cache), false otherwise.
 			 */
 			[[nodiscard]]
 			bool createVertexBufferFormat (Graphics::VertexBufferFormatManager & vertexBufferFormatManager, const Graphics::Geometry::Interface * geometry) noexcept;
 
 			/**
-			 * @brief Creates a vertex buffer format.
+			 * @brief Creates the vertex buffer format matching this program's vertex shader for a raw topology, without a geometry instance.
+			 * @note Requires the vertex shader to be initialized first (hasVertexShader()). On success, the
+			 * result is stored and retrievable through vertexBufferFormat().
 			 * @param vertexBufferFormatManager A reference to the vertex buffer format manager.
 			 * @param topology The geometry topology.
 			 * @param geometryFlagBits The geometry flags.
-			 * @return void
+			 * @return bool True if the format was created (or retrieved from cache), false otherwise.
 			 */
 			[[nodiscard]]
 			bool createVertexBufferFormat (Graphics::VertexBufferFormatManager & vertexBufferFormatManager, Graphics::Topology topology, uint32_t geometryFlagBits) noexcept;
 
 			/**
 			 * @brief Returns the vertex buffer format.
-			 * @return std::shared_ptr< Graphics::VertexBufferFormat >
+			 * @note Null until createVertexBufferFormat() has been called successfully.
+			 * @return const std::shared_ptr< Graphics::VertexBufferFormat > &
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::VertexBufferFormat >
+			const std::shared_ptr< Graphics::VertexBufferFormat > &
 			vertexBufferFormat () const noexcept
 			{
 				return m_vertexBufferFormat;
@@ -398,10 +439,11 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the pipeline layout corresponding to this program.
-			 * @return std::shared_ptr< Vulkan::PipelineLayout >
+			 * @note Null until setPipelineLayout() has been called.
+			 * @return const std::shared_ptr< Vulkan::PipelineLayout > &
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::PipelineLayout >
+			const std::shared_ptr< Vulkan::PipelineLayout > &
 			pipelineLayout () const noexcept
 			{
 				return m_pipelineLayout;
@@ -409,6 +451,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Sets the graphics pipeline.
+			 * @note Assigning a non-null pipeline here is what makes isCompiled() return true.
 			 * @param graphicsPipeline A reference to a graphics pipeline smart pointer.
 			 * @return void
 			 */
@@ -420,10 +463,11 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the graphics pipeline corresponding to this program.
-			 * @return std::shared_ptr< Vulkan::GraphicsPipeline >
+			 * @note Null until setGraphicsPipeline() has been called (see isCompiled()).
+			 * @return const std::shared_ptr< Vulkan::GraphicsPipeline > &
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::GraphicsPipeline >
+			const std::shared_ptr< Vulkan::GraphicsPipeline > &
 			graphicsPipeline () const noexcept
 			{
 				return m_graphicsPipeline;

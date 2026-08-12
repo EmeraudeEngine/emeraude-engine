@@ -105,12 +105,7 @@ namespace EmEn::Saphir::Declaration
 			bool
 			isValid () const noexcept override
 			{
-				if ( m_type == nullptr || m_name == nullptr )
-				{
-					return false;
-				}
-
-				return true;
+				return m_type != nullptr && m_name != nullptr;
 			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */

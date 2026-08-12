@@ -80,22 +80,28 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares a stage input variable to be used in the shader.
+			 * @note If a stage input with the same name is already declared, this is not an error: the call is
+			 * a no-op and still returns true.
 			 * @param declaration A reference to a ShaderStageInput.
-			 * @return bool
+			 * @return bool False only if the declaration itself is invalid.
 			 */
 			bool declare (const Declaration::StageInput & declaration) noexcept;
 
 			/**
 			 * @brief Declares an input block to be used in the shader.
+			 * @note If an input block with the same instance name is already declared, this is not an error: the
+			 * call is a no-op and still returns true.
 			 * @param declaration A reference to a InputBlock.
-			 * @return bool
+			 * @return bool False only if the declaration itself is invalid.
 			 */
 			bool declare (const Declaration::InputBlock & declaration) noexcept;
 
 			/**
 			 * @brief Declares a fragment output to be used in a fragment shader.
+			 * @note If an output fragment with the same name is already declared, this is not an error: the call
+			 * is a no-op and still returns true.
 			 * @param declaration A reference to a OutputBlock.
-			 * @return bool
+			 * @return bool False only if the declaration itself is invalid.
 			 */
 			bool declare (const Declaration::OutputFragment & declaration) noexcept;
 
@@ -166,31 +172,55 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Copies output from a vertex shader to this fragment shader.
+			 * @warning The vertex shader must already have its source code generated (@c isGenerated() must be
+			 * true), otherwise this fails. A vertex shader with no stage output and no output block (i.e. it only
+			 * writes @c gl_Position) is a valid, non-error case and this method simply returns true without
+			 * declaring anything.
 			 * @param vertexShader A reference to a vertex shader.
-			 * @return bool
+			 * @return bool False if the vertex shader is not generated yet.
 			 */
 			[[nodiscard]]
 			bool connectFromPreviousShader (const VertexShader & vertexShader) noexcept;
 
 			/**
 			 * @brief Copies output from a tesselation evaluation shader to this fragment shader.
+			 * @warning The tesselation evaluation shader must already have its source code generated
+			 * (@c isGenerated() must be true), otherwise this fails. Unlike the vertex shader overload, a
+			 * tesselation evaluation shader with no stage output and no output block is treated as an error here.
 			 * @param tesselationEvaluationShader A reference to a tesselation evaluation shader.
-			 * @return bool
+			 * @return bool False if the shader is not generated yet, or has no output declaration at all.
 			 */
 			[[nodiscard]]
 			bool connectFromPreviousShader (const TesselationEvaluationShader & tesselationEvaluationShader) noexcept;
 
 			/**
 			 * @brief Copies output from a geometry shader to this fragment shader.
+			 * @warning The geometry shader must already have its source code generated (@c isGenerated() must be
+			 * true), otherwise this fails. Unlike the vertex shader overload, a geometry shader with no stage
+			 * output and no output block is treated as an error here.
 			 * @param geometryShader A reference to a geometry shader.
-			 * @return bool
+			 * @return bool False if the shader is not generated yet, or has no output declaration at all.
 			 */
 			[[nodiscard]]
 			bool connectFromPreviousShader (const GeometryShader & geometryShader) noexcept;
 
+			/**
+			 * @brief Generates the GLSL function declaration converting a linear RGB color to sRGB.
+			 * @note Only the RGB components are converted; the alpha channel is passed through unchanged, as it
+			 * is never gamma-encoded.
+			 * @return Declaration::Function The generated function, named "toSRGBColor", taking a vec4 and
+			 * returning a vec4.
+			 */
 			[[nodiscard]]
 			static Declaration::Function generateToSRGBColorFunction () noexcept;
 
+			/**
+			 * @brief Generates the GLSL function declaration converting an sRGB color to linear RGB.
+			 * @note Only the RGB components are converted; the alpha channel is passed through unchanged, as it
+			 * is never gamma-encoded.
+			 * @return Declaration::Function The generated function, named "toLinearColor", taking a vec4 and
+			 * returning a vec4.
+			 */
 			[[nodiscard]]
 			static Declaration::Function generateToLinearColorFunction () noexcept;
 

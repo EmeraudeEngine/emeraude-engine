@@ -64,16 +64,34 @@ namespace EmEn
 
 namespace EmEn::Saphir::Generator
 {
-	/** @brief Generator flag bits. */
+	/**
+	 * @enum GeneratorFlagBits
+	 * @brief Generator flag bits.
+	 * @note Every bit is part of the shader program cache key (folded in through
+	 * Base::FlagTrait::flags() by each subclass's computeProgramCacheKey()): two generators
+	 * that differ by a single flag get distinct generated programs, never a stale reuse.
+	 * @version 0.9.54
+	 */
 	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	enum GeneratorFlagBits : uint32_t
 	{
+		/** @brief No flag set. */
 		None = 0U,
+		/** @brief Enables shader generation logging/stats (see Abstract::enableDebugging()). */
 		Debug = 1U << 0,
+		/** @brief Selects the expensive lighting branches (Fresnel-gated reflection, refraction,
+		 * parallax occlusion mapping) over their cheap fallbacks in the single Cook-Torrance
+		 * per-fragment lighting model. Meant to be driven by rendering distance; nothing lowers
+		 * it yet, so every program is currently generated at full quality. */
 		HighQualityEnabled = 1U << 1,
+		/** @brief The renderable instance uses a per-instance model-matrix VBO (see Abstract::isInstancingEnabled()). */
 		IsInstancingEnabled = 1U << 2,
+		/** @brief The renderable always faces the camera (sprites), affecting TBN reconstruction. */
 		IsRenderableFacingCamera = 1U << 3,
+		/** @brief The renderable instance participates in lighting, so the light pass code path must be generated. */
 		IsLightingEnabled = 1U << 4,
+		/** @brief Materials with automatic reflection sample the global bindless texture arrays
+		 * instead of getting a per-material descriptor set. */
 		BindlessTexturesEnabled = 1U << 5,
 		/** @brief Multi-Draw Indirect enabled: model matrix from SSBO via BDA + gl_DrawID instead of push constants. */
 		IsMultiDrawIndirectEnabled = 1U << 6,
@@ -90,12 +108,17 @@ namespace EmEn::Saphir::Generator
 	 * @brief The base class for every shader program generator.
 	 * @extends EmEn::Base::NameableTrait This will hold the name of the program generated.
 	 * @extends EmEn::Base::FlagTrait Enables flag ability for parameters.
+	 * @note Runs at shader-program creation time (scene load, or a program-cache miss), never
+	 * per frame: its cost is a load-time stall, not a runtime one.
+	 * @version 0.9.54
 	 */
 	class Abstract : public Base::NameableTrait, public Base::FlagTrait< uint32_t >
 	{
 		public:
 
+			/** @brief Default GLSL version string passed to generateShaderProgram(). */
 			static constexpr auto DefaultGLSLVersion{"460"};
+			/** @brief Default GLSL profile string passed to generateShaderProgram(). */
 			static constexpr auto DefaultGLSLProfile{"core"};
 
 			/**
@@ -159,7 +182,11 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
-			 * @brief Returns whether the light shader generation is high quality (most operation is performed per-fragment).
+			 * @brief Returns whether the expensive lighting branches are selected (see GeneratorFlagBits::HighQualityEnabled).
+			 * @note Lighting always uses the single Cook-Torrance per-fragment model; this flag only
+			 * gates its costlier branches (Fresnel-gated reflection, refraction, POM) and is meant to
+			 * follow rendering distance. Nothing drives it down yet, so it is currently always true
+			 * for generated scene-rendering programs.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -312,11 +339,14 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns the render target pointer.
-			 * @return std::shared_ptr< const Graphics::RenderTarget::Abstract >
+			 * @note Returns a reference to the internal shared_ptr (no atomic refcount bump) since
+			 * this is called repeatedly by generator subclasses (SceneRendering, ShadowCasting, ...)
+			 * during a single shader generation pass. Safe: no subclass overrides this accessor.
+			 * @return const std::shared_ptr< const Graphics::RenderTarget::Abstract > &
 			 */
 			[[nodiscard]]
 			virtual
-			std::shared_ptr< const Graphics::RenderTarget::Abstract >
+			const std::shared_ptr< const Graphics::RenderTarget::Abstract > &
 			renderTarget () const noexcept
 			{
 				return m_renderTarget;
@@ -335,7 +365,8 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns the renderable instance pointer.
-			 * @return const Graphics::Renderable::Interface *
+			 * @note Can be nullptr, check with isRenderableInstanceAvailable() first.
+			 * @return const Graphics::RenderableInstance::Abstract *
 			 */
 			[[nodiscard]]
 			const Graphics::RenderableInstance::Abstract *
@@ -346,7 +377,7 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns the renderable interface pointer.
-			 * @return const Graphics::Renderable::Interface *
+			 * @return const Graphics::Renderable::Abstract * A null pointer if no renderable instance is available.
 			 */
 			[[nodiscard]]
 			const Graphics::Renderable::Abstract *
@@ -396,7 +427,7 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns the renderable instance layer index being in use.
-			 * @return
+			 * @return uint32_t The layer index passed to the constructor (0 when no renderable instance is available).
 			 */
 			[[nodiscard]]
 			uint32_t
@@ -424,10 +455,13 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns the shader program.
-			 * @return std::shared_ptr< Program >
+			 * @note Returns a reference to the internal shared_ptr (no atomic refcount bump): this
+			 * is chained (e.g. `this->shaderProgram()->vertexShader()->...`) many times per shader
+			 * generation pass across LightGenerator, StandardResource and the generator subclasses.
+			 * @return const std::shared_ptr< Program > &
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Program >
+			const std::shared_ptr< Program > &
 			shaderProgram () const noexcept
 			{
 				return m_shaderProgram;
@@ -443,6 +477,11 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Declares the view uniform block according to input information.
+			 * @note The block layout depends on the render target kind (regular / cubemap / cascaded
+			 * shadow map). Reads m_shaderProgram->setIndex() and the render target: call only from
+			 * onGenerateShadersCode() or later, after generateShaderProgram() has constructed the
+			 * program and run prepareUniformSets() — calling it any earlier dereferences a null
+			 * m_shaderProgram.
 			 * @param shader A reference to a shader where to declare the uniform block.
 			 * @param binding The binding point number. Default 0.
 			 * @return bool
@@ -451,7 +490,9 @@ namespace EmEn::Saphir::Generator
 			bool declareViewUniformBlock (AbstractShader & shader, uint32_t binding = 0) const noexcept;
 
 			/**
-			 * @brief Declares the view uniform block according to input information.
+			 * @brief Declares the material uniform block according to input information.
+			 * @note Same call-timing contract as declareViewUniformBlock(): m_shaderProgram must
+			 * already exist and have its set indexes prepared.
 			 * @param material A reference to a material.
 			 * @param shader A reference to a shader where to declare the uniform block.
 			 * @param binding The binding point number. Default 0.
@@ -461,7 +502,12 @@ namespace EmEn::Saphir::Generator
 			bool declareMaterialUniformBlock (const Graphics::Material::Interface & material, AbstractShader & shader, uint32_t binding = 0) const noexcept;
 
 			/**
-			 * @brief Declares the push constant block according to input information.
+			 * @brief Declares the push constant block carrying the transform matrices, according to
+			 * the render target kind and the shader program's instancing/MDI/advanced-matrices state.
+			 * @note Same call-timing contract as declareViewUniformBlock(): m_shaderProgram must
+			 * already exist. The exact set of members pushed (M, V, VP, or an MDI buffer-device
+			 * address) varies by configuration to stay within the 128-byte Vulkan minimum guarantee
+			 * for maxPushConstantsSize; see the implementation for the decision table.
 			 * @param shader A reference to a shader where to declare the uniform block.
 			 * @return bool
 			 */
@@ -470,6 +516,11 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Generates the shader program.
+			 * @note Looks up computeProgramCacheKey() in the renderer's program cache first. On a hit,
+			 * the cached program's Set 1 (material) descriptor layout hash is checked against the
+			 * current material as a safety net against key collisions; on a mismatch the mismatch is
+			 * logged and the program is regenerated instead of reused. On success this sets
+			 * shaderProgram() and, on an actual (re)generation, registers it in the cache.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param GLSLVersion The GLSL version in use. Default "460".
 			 * @param GLSLProfile The GLSL profile in use. Default "core".
@@ -512,6 +563,10 @@ namespace EmEn::Saphir::Generator
 			/**
 			 * @brief Computes a unique cache key for the shader program configuration.
 			 * @note This allows early lookup before shader generation to avoid redundant work.
+			 * @warning Implementations must fold in flags() (see GeneratorFlagBits) along with every
+			 * other input that changes the generated GLSL (render pass, material layout/flags,
+			 * layer index, ...); an input left out of the hash lets two structurally different
+			 * programs collide on the same key and one silently reuses the other's pipeline.
 			 * @return size_t The unique hash identifying this program configuration.
 			 */
 			[[nodiscard]]
@@ -520,7 +575,9 @@ namespace EmEn::Saphir::Generator
 		protected:
 
 			/**
-			 * @brief Constructs an abstract shader program generator.
+			 * @brief Constructs an abstract shader program generator without a renderable instance.
+			 * @note No renderable-instance-derived flag (instancing, lighting, skeletal animation, ...)
+			 * is set by this overload; isRenderableInstanceAvailable() will return false.
 			 * @param shaderProgramName A string for the program being generated [std::move].
 			 * @param renderTarget A reference to a renderTarget smart pointer.
 			 */
@@ -533,9 +590,16 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Constructs an abstract shader program generator with a specified renderable instance.
+			 * @note Derives several GeneratorFlagBits straight from \p renderableInstance and its
+			 * renderable: IsInstancingEnabled (+ IsInstanceMotionHistoryEnabled) from its per-instance
+			 * VBO usage, IsRenderableFacingCamera from Renderable::Abstract::isSprite(),
+			 * IsUsingInfinityView from its infinity-view state, IsLightingEnabled from its lighting
+			 * state, and IsSkeletalAnimationEnabled when the renderable exposes skeletal data
+			 * (SkeletalDataTrait). \p renderableInstance is dereferenced unconditionally: passing a
+			 * null pointer is undefined behaviour.
 			 * @param shaderProgramName A string for the program being generated [std::move].
 			 * @param renderTarget A reference to a renderTarget smart pointer.
-			 * @param renderableInstance A reference to a renderTarget smart pointer.
+			 * @param renderableInstance A reference to a renderable instance smart pointer.
 			 * @param layerIndex The renderable instance layer targeted.
 			 */
 			Abstract (std::string shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept
@@ -586,10 +650,15 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Constructs an abstract shader program generator with a generic geometry specification.
+			 * @note For generators that draw immediate/ad-hoc geometry with no persistent
+			 * RenderableInstance (gizmo, overlay, post-process full-screen quad): \p topology and
+			 * \p geometryFlags are forwarded as-is to Program::createVertexBufferFormat() in
+			 * generateShaderProgram() to build the vertex buffer format, since there is no
+			 * Geometry::Interface to query it from. No renderable-instance-derived flag is set.
 			 * @param shaderProgramName A string for the program being generated [std::move].
 			 * @param renderTarget A reference to a renderTarget smart pointer.
-			 * @param topology A reference to a renderTarget smart pointer.
-			 * @param geometryFlags The renderable instance layer targeted.
+			 * @param topology The primitive topology of the geometry to build the vertex buffer format for.
+			 * @param geometryFlags Bitmask of geometry attribute flags (see Graphics::Geometry) describing that geometry.
 			 */
 			Abstract (std::string shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, Graphics::Topology topology, uint32_t geometryFlags) noexcept
 				: NameableTrait{std::move(shaderProgramName)},
@@ -601,7 +670,12 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
-			 * @brief Generates the fall-back vertex shader stage of the graphics pipeline.
+			 * @brief Generates a minimal placeholder vertex shader stage, available to subclasses
+			 * when the regular shader generation path cannot be used.
+			 * @note Only outputs clip-space position (from the view uniform block when the PerView
+			 * set is enabled, otherwise the raw vertex position); carries no other varying.
+			 * @todo When the PerView set is disabled, the position is passed through as clip-space
+			 * with no transform at all; try to use at least a model-view matrix if one is available.
 			 * @param program A reference to the program being constructed.
 			 * @return bool
 			 */
@@ -609,7 +683,9 @@ namespace EmEn::Saphir::Generator
 			bool generateFallBackVertexShader (Program & program) noexcept;
 
 			/**
-			 * @brief Generates the fall-back fragment shader stage of the graphics pipeline.
+			 * @brief Generates a minimal placeholder fragment shader stage, available to subclasses
+			 * when the regular shader generation path cannot be used.
+			 * @note Always outputs solid magenta (1, 0, 1, 1), the conventional "missing shader" color.
 			 * @param program A reference to the program being constructed.
 			 * @return bool
 			 */
@@ -618,6 +694,9 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Prepares the uniform sets according to incoming rendering information.
+			 * @note First step of generateShaderProgram(), called right after m_shaderProgram is
+			 * constructed and before onGenerateShadersCode(): declareViewUniformBlock() and
+			 * declareMaterialUniformBlock() rely on the set indexes this call fills in.
 			 * @param setIndexes A reference to the set indexes structure.
 			 * @return void
 			 */
@@ -625,6 +704,8 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Main method to generate program shaders.
+			 * @note Called by generateShaderProgram() right after prepareUniformSets(); this is
+			 * where subclasses build the vertex/fragment (and any other) shader stages of \p program.
 			 * @param program A reference to the program being constructed.
 			 * @return bool
 			 */
@@ -633,7 +714,9 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Methods to override for generating specific program layout.
-			 * @note The render target descriptor set layout is already present.
+			 * @note The render target descriptor set layout is already present. Called by
+			 * createDataLayout() after onGenerateShadersCode() has produced the shader stages, so the
+			 * generated code and the declared data layouts are guaranteed to agree.
 			 * @param renderer A reference to the renderer.
 			 * @param setIndexes A reference to a set indexes structure.
 			 * @param descriptorSetLayouts A reference to as a list of descriptor set layouts to complete.
@@ -645,6 +728,9 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Configures the graphics pipeline from child shader generators.
+			 * @note Called by createGraphicsPipeline() after the pipeline's shader stages, vertex
+			 * input, input assembly, tessellation and multisample states are already configured;
+			 * this is where subclasses add whatever remains (rasterization, depth/stencil, blending, ...).
 			 * @param program A reference to the constructed program.
 			 * @param graphicsPipeline A reference to the graphics pipeline to set up.
 			 * @return bool
@@ -657,7 +743,7 @@ namespace EmEn::Saphir::Generator
 			 * @todo: Check for a better way to use push constant from the right shader declaration to the right stage in vulkan, maybe store push constant at program level instead of shader.
 			 * @param pushConstantBlocks A reference to a vector of push constant blocks.
 			 * @param pushConstantRanges A reference to a vector of push constant ranges.
-			 * @param stageFlags
+			 * @param stageFlags The Vulkan shader stage(s) the produced ranges apply to.
 			 * @return void
 			 */
 			static void generatePushConstantRanges (const Base::StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept;
@@ -674,6 +760,9 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Creates the final Vulkan graphics pipeline.
+			 * @warning FIXME: The viewport state is configured from the render target's extent
+			 * (width/height) purely to obtain those two values; this could become a dynamic
+			 * pipeline state instead.
 			 * @param renderer A reference to the renderer.
 			 * @return bool
 			 */

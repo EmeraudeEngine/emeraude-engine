@@ -37,33 +37,37 @@
 
 namespace EmEn::Saphir
 {
-	/** @brief Code location type. */
+	/** @brief Code location type, i.e. which instruction buffer of the generator a Code instance flushes into. */
 	enum class Location : std::uint8_t
 	{
-		Top,
-		Main,
-		Output
+		Top,	///< Flushed via CodeGeneratorInterface::addTopInstruction(), before the other main() instructions.
+		Main,	///< Flushed via CodeGeneratorInterface::addInstruction(), in the ordinary main() body.
+		Output	///< Flushed via CodeGeneratorInterface::addOutputInstruction(), at the bottom of main() (e.g. the final output/return statement).
 	};
 
 	/** @brief Line ending enumeration. */
 	enum class Line : std::uint8_t
 	{
-		End,
-		Blank
+		End,	///< Ends the current line and starts a new one, re-indented to the Code instance's depth.
+		Blank	///< Ends the current line, inserts one blank line, then starts a new one re-indented to the Code instance's depth.
 	};
 
 	/**
 	 * @brief The code instruction class.
 	 * @note A '\n' character is automatically put at the end of each generated code.
-	 * Use Line::end when writing multiple line of code to automatically follow the indentation.
+	 * Use Line::End when writing multiple line of code to automatically follow the indentation.
+	 * @warning This type is designed to be used as an unnamed temporary, built and streamed into on a single
+	 * full expression (e.g. `Code{generator, Location::Output} << "..." << Line::End << "...";`). The
+	 * accumulated text is only handed to the generator when the temporary is destructed at the end of that
+	 * expression; keeping an instance alive across statements delays the emission of its content accordingly.
 	 */
 	class Code final
 	{
 		public:
 
-			/** 
+			/**
 			 * @brief Constructs a code.
-			 * @param generator A reference to the shader generator.
+			 * @param generator A reference to the shader generator that will receive the accumulated instruction once this instance is destructed.
 			 * @param type The code location type. Default main instruction.
 			 * @param depth The indentation depth. Default 1.
 			 */
@@ -78,25 +82,29 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
+			 * @note Deleted: a copy would flush the same accumulated instruction twice (once per destructed instance).
+			 * @param copy A reference to the instance that would have been copied.
 			 */
 			Code (const Code & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
+			 * @note Deleted: this type is only meant to be used as a single unnamed temporary (see class note); moving it out is not a supported use case.
+			 * @param copy A reference to the instance that would have been moved.
 			 */
 			Code (Code && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
+			 * @note Deleted: a copy would flush the same accumulated instruction twice (once per destructed instance).
+			 * @param copy A reference to the instance that would have been copied.
 			 */
 			Code & operator= (const Code & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
+			 * @note Deleted: this type is only meant to be used as a single unnamed temporary (see class note); moving it out is not a supported use case.
+			 * @param copy A reference to the instance that would have been moved.
 			 */
 			Code & operator= (Code && copy) noexcept = delete;
 
@@ -149,9 +157,9 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Adds a vector 2 to the code content.
-			 * @param value A reference to a vector.
-			 * @return std::string
+			 * @brief Adds a vector 2 to the code content as a GLSL `vec2(...)` constructor literal.
+			 * @param value A reference to the vector.
+			 * @return Code &
 			 */
 			Code &
 			operator<< (const Base::Math::Vector< 2, float > & value) noexcept
@@ -162,9 +170,9 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Adds a vector 3 to the code content.
-			 * @param value A reference to a vector.
-			 * @return std::string
+			 * @brief Adds a vector 3 to the code content as a GLSL `vec3(...)` constructor literal.
+			 * @param value A reference to the vector.
+			 * @return Code &
 			 */
 			Code &
 			operator<< (const Base::Math::Vector< 3, float > & value) noexcept
@@ -175,9 +183,9 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Adds a vector 4 to the code content.
-			 * @param value A reference to a vector.
-			 * @return std::string
+			 * @brief Adds a vector 4 to the code content as a GLSL `vec4(...)` constructor literal.
+			 * @param value A reference to the vector.
+			 * @return Code &
 			 */
 			Code &
 			operator<< (const Base::Math::Vector< 4, float > & value) noexcept
@@ -188,9 +196,9 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Adds a vector 4 to the code content.
-			 * @param value A reference to a vector.
-			 * @return std::string
+			 * @brief Adds a color to the code content as a GLSL `vec4(r, g, b, a)` constructor literal.
+			 * @param value A reference to the color.
+			 * @return Code &
 			 */
 			Code &
 			operator<< (const Base::PixelFactory::Color< float > & value) noexcept

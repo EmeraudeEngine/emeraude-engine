@@ -42,13 +42,15 @@ namespace EmEn::Saphir
 		m_directoryStack.resize(inclusionDepth + m_externalLocalDirectoryCount);
 
 		if ( inclusionDepth == 1 )
+		{
 			m_directoryStack.back() = EmEn::Saphir::DirStackFileIncluder::getDirectory(includerName);
+		}
 
 		// Find a directory that works, using a reverse search of the include stack.
 		for ( auto it = m_directoryStack.rbegin(); it != m_directoryStack.rend(); ++it )
 		{
 			std::string path = *it + '/' + headerName;
-			std::replace(path.begin(), path.end(), '\\', '/');
+			std::ranges::replace(path, '\\', '/');
 			std::ifstream file(path, std::ios_base::binary | std::ios_base::ate);
 
 			if ( file )
@@ -64,7 +66,7 @@ namespace EmEn::Saphir
 	}
 
 	TShader::Includer::IncludeResult *
-	DirStackFileIncluder::includeSystem (const char *, const char *, size_t)
+	DirStackFileIncluder::includeSystem (const char * /*headerName*/, const char * /*includerName*/, size_t /*inclusionDepth*/)
 	{
 		// Search for a valid <system> path.
 		// Not implemented yet; returning nullptr signals failure to find.
