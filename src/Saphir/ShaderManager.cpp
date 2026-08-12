@@ -36,12 +36,12 @@
 #include <string>
 
 /* Third-party inclusions. */
+#include <glslang/Public/ShaderLang.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 
 /* Local inclusions. */
 #include "AbstractShader.hpp"
 #include "Arguments.hpp"
-#include "DirStackFileIncluder.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "Program.hpp"
@@ -64,7 +64,14 @@ namespace EmEn::Saphir
 	struct ShaderManager::GLSLangContext
 	{
 		TBuiltInResource builtInResource{};
-		DirStackFileIncluder includer;
+		/* Saphir GENERATES its GLSL: no source it hands to glslang ever carries an #include
+		 * directive, and no include directory is ever registered. glslang still requires an
+		 * Includer for preprocess()/parse(), so its own no-op one is the right answer — and it
+		 * FAILS an include instead of silently resolving it against an empty search stack,
+		 * which is what we want if a directive ever appears by accident.
+		 * ⚠️ The day hand-written GLSL sources become a thing (see TODO.md), this is where a
+		 * real includer plugs in — written against an actual specification, not copied. */
+		glslang::TShader::ForbidIncluder includer;
 		EProfile profile{ECoreProfile}; // ENoProfile
 		int defaultVersion{100};
 		EShMessages messageFilter{static_cast< EShMessages >(EShMsgDefault | EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo)};
@@ -274,8 +281,6 @@ namespace EmEn::Saphir
 		builtInResource.limits.generalSamplerIndexing = true;
 		builtInResource.limits.generalVariableIndexing = true;
 		builtInResource.limits.generalConstantMatrixVectorIndexing = true;
-
-		//m_glslang->includer.pushExternalLocalDirectory("");
 
 		return true;
 	}

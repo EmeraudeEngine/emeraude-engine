@@ -332,7 +332,7 @@ namespace EmEn::Saphir
 			 * includer, GLSL profile, target version and message filter.
 			 * @note Held by pointer so that <glslang/Public/ShaderLang.h> stays OUT of this
 			 * header. Every one of these fields is a glslang type (TBuiltInResource,
-			 * DirStackFileIncluder, EProfile, EShMessages), so keeping them by value leaked
+			 * TShader::ForbidIncluder, EProfile, EShMessages), so keeping them by value leaked
 			 * the whole glslang public header into each of the 21 translation units
 			 * including ShaderManager.hpp — and, through Graphics/Renderer.hpp, into 81 more.
 			 * Defined in ShaderManager.cpp; never null after a successful onInitialize().

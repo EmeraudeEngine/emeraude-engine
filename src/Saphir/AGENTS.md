@@ -1070,15 +1070,25 @@ the remaining six are deliberate, so **do not "fix" them**:
   rule that justifies it (`vec2` → 8, `dvec2` → 16, `vec3`/`vec4` → 16…). Merging the branches
   would delete the explanation, which is the only reason the table is readable. The duplication
   is didactic.
-- **`DirStackFileIncluder.cpp` × 4 — `cppcoreguidelines-owning-memory`.** The class implements
-  `glslang::TShader::Includer`, whose contract is raw-pointer based: `includeLocal()` must return
-  a `IncludeResult *` that **glslang** frees later through `releaseInclude()`. Wrapping those in
-  a smart pointer would break the interface. The ownership lives on the other side of a
-  third-party API.
-
 ⚠️ Everything else is fixed, never silenced — no NOLINT, no check disabled.
 
-⚠️ **Provenance to settle**: `DirStackFileIncluder` implements a glslang interface, and its class
-name plus its class comment are verbatim from glslang's own `StandAlone/DirStackFileIncluder.h`
-sample. The file carries only the Emeraude copyright header. The project rule is to cite author,
-licence and URL at the point of use — this one is missing and needs the owner's decision.
+### The shader includer: there is none, on purpose
+
+Saphir **generates** its GLSL: no source handed to glslang ever carries an `#include`, and no
+include directory was ever registered (the single `pushExternalLocalDirectory()` call had been
+commented out for as long as it existed). glslang nevertheless requires an `Includer` argument
+for `preprocess()` and `parse()`, so `ShaderManager` passes glslang's own no-op
+`glslang::TShader::ForbidIncluder`.
+
+That replaced a copied `DirStackFileIncluder` (deleted Aug 2026) whose class name and comment
+came verbatim from glslang's `StandAlone/` sample while the file carried only the Emeraude
+header — a licensing loose end, four unfixable `cppcoreguidelines-owning-memory` warnings (the
+Includer contract is raw-pointer based: glslang frees the `IncludeResult *` itself), and code
+that was never once executed.
+
+`ForbidIncluder` is also the safer behaviour: an `#include` appearing by accident now FAILS
+instead of being silently resolved against an empty search stack.
+
+⚠️ **The day hand-written GLSL sources become a thing** (see `TODO.md`, "Prepare a way to use
+manual GLSL sources"), a real includer plugs in exactly there — written against an actual
+specification (which directories, which search policy, what caching), not copied from a sample.
