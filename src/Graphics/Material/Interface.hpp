@@ -121,7 +121,17 @@ namespace EmEn::Graphics::Material
 		 * destination, so its transparency is strictly binary). Setting BlendingEnabled
 		 * instead would push the layer out of the opaque list and buy sorting nobody needs.
 		 */
-		AlphaTestEnabled = 1U << 16
+		AlphaTestEnabled = 1U << 16,
+		/**
+		 * @brief The material declares it must NOT be lit — its colour IS its emitted radiance
+		 * (glTF KHR_materials_unlit semantics).
+		 * @note Skyboxes, sprites, debug helpers and content carrying its own BAKED lighting all
+		 * need this: running a light pass over them double-counts light that is already in the
+		 * texel. On the unlit path the fragment output is `fragmentColor().rgb *
+		 * emissionMultiplier()`, so the material's luminance still applies — without it a
+		 * skybox writes its raw [0,1] texel and reads black under photometric exposure.
+		 */
+		UnlitEnabled = 1U << 17
 	};
 
 	/**
@@ -173,6 +183,20 @@ namespace EmEn::Graphics::Material
 			isAnimated () const noexcept
 			{
 				return this->isFlagEnabled(IsAnimated);
+			}
+
+			/**
+			 * @brief Returns whether the material must be shaded WITHOUT any light pass.
+			 * @note The material-level counterpart of the instance's lighting switch: content
+			 * that carries its own radiance (skybox, sprite, baked lighting) says so here, and
+			 * the generator honours it whatever the scene's light set is doing.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUnlit () const noexcept
+			{
+				return this->isFlagEnabled(UnlitEnabled);
 			}
 
 			/**

@@ -1861,6 +1861,21 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(UseVertexColors);
 	}
 
+	void
+	StandardResource::enableUnlit () noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to declare the material unlit.";
+
+			return;
+		}
+
+		this->enableFlag(UnlitEnabled);
+	}
+
 	const Texture *
 	StandardResource::alphaSourceTextureComponent () const noexcept
 	{

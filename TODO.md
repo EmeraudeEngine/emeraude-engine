@@ -254,12 +254,17 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
     colour-only Standard already binds zero samplers (the owner's original reason for Basic is
     satisfied). Remaining nit: fold the ad-hoc normal-mapping term at `SceneRendering.cpp:212-219`
     into the predicate.
-  - **OPEN — the owner decision that gates the rest: an explicit UNLIT flag.** Basic expresses
-    "the emitter is NOT the albedo" (skybox cubemap, WAD texel × vertex colour). Standard's
-    `fragmentColor()` returns the albedo, and AutoIllumination is consumed only inside
-    `LightGenerator::generateAmbientFragmentShader()`, which never runs on the unlit path — so an
-    emissive-only Standard with a black albedo renders BLACK. Either add a `KHR_materials_unlit`
-    -style flag switching `fragmentColor()` to the emissive chain, or keep a second material.
+  - **DONE — the UNLIT flag (owner-approved).** `MaterialFlagBits::UnlitEnabled = 1U << 17` +
+    `Interface::isUnlit()` + `StandardResource::enableUnlit()`. The decision point moved into
+    `SceneRendering::isLightingRequested()`, which now gathers the three necessary conditions —
+    scene light set enabled, instance asked for lighting, and **the material does not veto it**.
+    Four call sites plus the light-generator setup route through it. glTF
+    `KHR_materials_unlit` semantics: content carrying its own radiance is never re-lit, whatever
+    the instance asked for. ⚠️ The unlit path writes `fragmentColor().rgb * emissionMultiplier()`,
+    so an unlit material MUST carry an AutoIllumination component or it writes its raw [0,1]
+    colour and reads black under photometric exposure. ⚠️ Deliberately NOT touched:
+    `prepareUniformSets()` still keys the PerLight descriptor set on the raw flag — it seals the
+    pipeline layout, and a declared-but-unused set is harmless whereas a missing one crashes.
   - **OPEN — missing API**: no raw `Vulkan::TextureInterface` albedo setter (render-target-as-albedo,
     `src/Builtin/OffscreenRendering.cpp:120-123` depends on it), and `setAlbedoComponent(texture)`
     does not propagate `PrimaryTextureCoordinatesUses3D` (cubemap albedo).

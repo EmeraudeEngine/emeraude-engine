@@ -343,6 +343,19 @@ namespace EmEn::Graphics::Material
 			void enableVertexColor () noexcept;
 
 			/**
+			 * @brief Declares the material UNLIT: no light pass runs over it, and its colour IS
+			 * its emitted radiance (glTF KHR_materials_unlit semantics).
+			 * @note For skyboxes, sprites, debug helpers and any content carrying its own BAKED
+			 * lighting — re-lighting them double-counts light already present in the texel. The
+			 * unlit path writes `fragmentColor().rgb * emissionMultiplier()`, so pair this with
+			 * an AutoIllumination component to carry the luminance (without one the surface
+			 * writes its raw [0,1] colour and reads black under photometric exposure).
+			 * @warning This function is available before creation time.
+			 * @return void
+			 */
+			void enableUnlit () noexcept;
+
+			/**
 			 * @brief Sets the roughness component as a value (0.0 = mirror, 1.0 = fully rough).
 			 * @warning This function is available before creation time.
 			 * @param value The roughness value between 0.0 and 1.0. Default 0.5.

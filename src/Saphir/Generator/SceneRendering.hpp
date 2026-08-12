@@ -136,6 +136,18 @@ namespace EmEn::Saphir::Generator
 			 * @brief Returns whether the rendering is advanced and needs more specific matrices.
 			 * @return bool
 			 */
+			/**
+			 * @brief Returns whether a LIGHT PASS must be generated for this program.
+			 * @note Three conditions, all necessary: the scene's light set is enabled, the
+			 * instance asked for lighting, and the MATERIAL does not declare itself unlit.
+			 * The last one is the material-level veto (MaterialFlagBits::UnlitEnabled, glTF
+			 * KHR_materials_unlit semantics): content carrying its own radiance — skybox,
+			 * sprite, baked lighting — must never be re-lit, whatever the instance asked for.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isLightingRequested () const noexcept;
+
 			[[nodiscard]]
 			bool isAdvancedRendering () const noexcept;
 

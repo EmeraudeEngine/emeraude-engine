@@ -108,7 +108,7 @@ namespace EmEn::Saphir::Generator
 	SceneRendering::onGenerateShadersCode (Program & program) noexcept
 	{
 		/* Configure the light generator with the material for all shaders. */
-		if ( this->isFlagEnabled(IsLightingEnabled) )
+		if ( this->isLightingRequested() )
 		{
 			if ( m_scene == nullptr )
 			{
@@ -180,6 +180,30 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
+	SceneRendering::isLightingRequested () const noexcept
+	{
+		if ( m_scene == nullptr || !m_scene->lightSet().isEnabled() )
+		{
+			return false;
+		}
+
+		if ( !this->isFlagEnabled(IsLightingEnabled) )
+		{
+			return false;
+		}
+
+		/* The material-level veto: a material declaring itself UNLIT is never lit, whatever the
+		 * instance asked for. Re-lighting content that already carries its own radiance
+		 * double-counts it — the exact defect the unlit path exists to prevent. */
+		if ( this->materialEnabled() && this->getMaterialInterface()->isUnlit() )
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
 	SceneRendering::isAdvancedRendering () const noexcept
 	{
 		if ( this->getMaterialInterface()->isComplex() )
@@ -213,7 +237,7 @@ namespace EmEn::Saphir::Generator
 				 * 1. MRT normal output requires view-space normals (normals attachment), OR
 				 * 2. Normal mapping is active (light generator produces TBN code needing V*M).
 				 * Both cases require separate V and M matrices to compute the normal matrix. */
-				if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
+				if ( this->isLightingRequested() )
 				{
 					return m_hasNormalsAttachment || m_lightGenerator.usesNormalMapping();
 				}
@@ -433,7 +457,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Generate the lighting shader code. */
-		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
+		if ( this->isLightingRequested() )
 		{
 			if ( !m_lightGenerator.generateVertexShaderCode(*this, *vertexShader) )
 			{
@@ -506,7 +530,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* If the light is enabled, generate the shader code (optional). */
-		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
+		if ( this->isLightingRequested() )
 		{
 			/* Declare the view uniform block. */
 			if ( !this->declareViewUniformBlock(*fragmentShader) )
@@ -523,7 +547,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Generates the fragment output. */
-		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
+		if ( this->isLightingRequested() )
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << m_lightGenerator.fragmentColor() << ';';
 
