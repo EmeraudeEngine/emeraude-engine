@@ -76,7 +76,7 @@ namespace EmEn::Graphics::Material
 			 * @param name The name of the resource [std::move].
 			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			BasicResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+			BasicResource (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t resourceFlags = 0) noexcept
 				: Interface{serviceProvider, name, resourceFlags}
 			{
 

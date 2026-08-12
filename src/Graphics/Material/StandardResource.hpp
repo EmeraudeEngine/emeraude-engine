@@ -131,7 +131,7 @@ namespace EmEn::Graphics::Material
 			 * @param name The name of the resource [std::move].
 			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			StandardResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
+			StandardResource (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t resourceFlags = 0) noexcept
 				: Interface{serviceProvider, name, resourceFlags}
 			{
 
@@ -325,11 +325,28 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Sets the albedo (base color) component as a texture.
+			 * @note A texture requesting 3D coordinates (a cubemap) propagates
+			 * PrimaryTextureCoordinatesUses3D, so the generated shader samples it with the right
+			 * coordinate type instead of compiling against 2D ones.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
+			 * @param enableAlpha Sample the texture's alpha channel (blending, cutout). Default false.
 			 * @return bool
 			 */
-			bool setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+			bool setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha = false) noexcept;
+
+			/**
+			 * @brief Sets the albedo (base color) component from a raw GPU texture (render target).
+			 * @note For images the resource system does not own — a render target used as a
+			 * surface (a screen showing a camera feed, a mirror-as-albedo). There is no resource
+			 * dependency to register: the caller owns the lifetime and MUST keep the texture
+			 * alive for as long as the material is used.
+			 * @warning This function is available before creation time.
+			 * @param texture A reference to a GPU texture smart pointer.
+			 * @param enableAlpha Sample the texture's alpha channel. Default false.
+			 * @return bool
+			 */
+			bool setAlbedoComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & texture, bool enableAlpha = false) noexcept;
 
 			/**
 			 * @brief Enables the per-vertex colour attribute, which MODULATES the albedo.

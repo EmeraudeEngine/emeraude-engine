@@ -3565,7 +3565,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	StandardResource::setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -3585,13 +3585,56 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for albedo component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for albedo component !";
 
 			return false;
 		}
 
+		static_cast< Texture * >(result.first->second.get())->enableAlpha(enableAlpha);
+
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		/* A cubemap albedo needs 3D coordinates; without this the shader compiles against 2D
+		 * ones and samples the wrong thing. */
+		if ( texture->request3DTextureCoordinates() )
+		{
+			this->enableFlag(PrimaryTextureCoordinatesUses3D);
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::setAlbedoComponentFromRenderTarget (const std::shared_ptr< TextureInterface > & texture, bool enableAlpha) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the albedo component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Albedo, std::make_unique< Texture >(Uniform::AlbedoSampler, SurfaceAlbedoColor, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		/* NOTE: No resource dependency here — a raw GPU texture is not a managed resource. The
+		 * caller owns its lifetime and must outlive the material. */
+		static_cast< Texture * >(result.first->second.get())->enableAlpha(enableAlpha);
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		if ( texture->request3DTextureCoordinates() )
+		{
+			this->enableFlag(PrimaryTextureCoordinatesUses3D);
+		}
 
 		return true;
 	}

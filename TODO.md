@@ -265,9 +265,17 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
     colour and reads black under photometric exposure. ⚠️ Deliberately NOT touched:
     `prepareUniformSets()` still keys the PerLight descriptor set on the raw flag — it seals the
     pipeline layout, and a declared-but-unused set is harmless whereas a missing one crashes.
-  - **OPEN — missing API**: no raw `Vulkan::TextureInterface` albedo setter (render-target-as-albedo,
-    `src/Builtin/OffscreenRendering.cpp:120-123` depends on it), and `setAlbedoComponent(texture)`
-    does not propagate `PrimaryTextureCoordinatesUses3D` (cubemap albedo).
+  - **DONE — the two API gaps.** `setAlbedoComponentFromRenderTarget(TextureInterface, enableAlpha)`
+    puts a raw GPU texture in the albedo slot (no resource dependency — the CALLER owns the
+    lifetime and must outlive the material). ⚠️ It could NOT be an overload of
+    `setAlbedoComponent`: `TextureResource::Texture2D` derives from BOTH
+    `TextureResource::Abstract` and `Vulkan::TextureInterface`, so every existing call became
+    ambiguous — hence the distinct name, matching `setReflectionComponentFromRenderTarget()`.
+    `setAlbedoComponent(texture)` now also takes an `enableAlpha` flag (default false, behaviour
+    unchanged) and propagates `PrimaryTextureCoordinatesUses3D` for cubemap albedos.
+    Validated on screen: `offscreen-rendering`'s CCTV screen displays its render target.
+    ⚠️ That block sat inside `if ( false )` and was DEAD — re-enabled, since it is the only
+    consumer of this path and a disabled consumer lets the path rot unnoticed.
   - **BLAST RADIUS**: 103 engine + 39 app code sites, 15 mesh JSONs carrying
     `"MaterialBasicResource"`. Then the legacy lighting machinery dies: `m_usePBRMode` and its 14
     branches, the (n+2)/(8π) normalisation, the Gouraud per-vertex path, ~898 lines of
