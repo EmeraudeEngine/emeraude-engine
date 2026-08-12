@@ -167,9 +167,20 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
   scene exists yet — conformance bench material). ⚠️ Legacy Standard JSONs conflate
   blending+discard@0.1 on opacity textures — map them to rule 3 at conversion (Lot 3),
   validate visually.
-- [ ] **Lot 2 — Decouple hard dependencies**: port TerrainResource, BasicGroundResource (:262),
-  MultiLayerMeshResource 3-way ClassId dispatch, DefinitionResource, remote console,
-  Resources/Manager containers. Visual check per port (terrain, water-world).
+- [x] **Lot 2 — Decouple hard dependencies — DONE (2026-08-12).** Transitional strategy: the
+  declared ClassId selects the container (Standard for legacy data, PBR for converted data) —
+  zero visual change now, the Standard branches delete trivially at Lot 4. TerrainResource
+  accepts both ClassIds (+ drive-by fix: `materialType.value()` was dereferenced on an empty
+  optional in the error path); BasicGroundResource dispatches on both; DefinitionResource's
+  matType `"PBR"` finally reaches the PBR container (was silently routed to Standard); the
+  remote console resolves named materials Standard-first-then-PBR (both sites; documented in
+  `Console/AGENTS.md`). MultiLayerMeshResource already dispatched on all three ClassIds;
+  Toolkit's Basic default is Lot 7 scope; Resources/Manager containers and the loaders'
+  MaterialMode dual paths die at Lot 4. Validated: clean build, terrain demo renders, console
+  `setGround` named-material path exercised live. ⚠️ Pre-existing, unrelated, worth a look:
+  the terrain adaptive grid spams `generateTriangleListIndicesForRT() returned empty indices`
+  ~18k times/min with RT enabled (TriangleStrip geometry has no RT triangle-list path — dates
+  from `44cb3a85`, 2026-03-10).
 - [ ] **Lot 3 — Canonical conversion** (D4) at the parse boundary; the 17 Diffuse-only material
   JSONs (Doom3/Quake2, Woods/Wood012) go through these fallbacks.
 - [ ] **Lot 4 — Removal**: delete the `MaterialMode` dual paths in GLTF/FBX/USD loaders, delete

@@ -35,6 +35,7 @@
 #include "Component/Microphone.hpp"
 #include "Component/Visual.hpp"
 #include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -102,7 +103,14 @@ namespace EmEn::Scenes
 				}
 				else
 				{
+					/* Material merge, Lot 2 (transitional): the console has no type argument —
+					 * resolve from the Standard container first (legacy behaviour), then PBR. */
 					materialResource = m_resourceManager.container< Graphics::Material::StandardResource >()->getResource(matName);
+
+					if ( materialResource == nullptr )
+					{
+						materialResource = m_resourceManager.container< Graphics::Material::PBRResource >()->getResource(matName);
+					}
 				}
 
 				if ( materialResource == nullptr )
@@ -398,7 +406,14 @@ namespace EmEn::Scenes
 			}
 			else
 			{
+				/* Material merge, Lot 2 (transitional): the console has no type argument —
+				 * resolve from the Standard container first (legacy behaviour), then PBR. */
 				materialResource = m_resourceManager.container< Graphics::Material::StandardResource >()->getResource(matName);
+
+				if ( materialResource == nullptr )
+				{
+					materialResource = m_resourceManager.container< Graphics::Material::PBRResource >()->getResource(matName);
+				}
 			}
 
 			if ( materialResource == nullptr )

@@ -201,7 +201,7 @@ createScene(name, boundary, cameraNodeName, camX, camY, camZ [, backgroundName [
 | `cameraNodeName` | Name of the camera node (e.g., "Observer") |
 | `camX, camY, camZ` | Camera position. **Y=-2 to see ground from below** |
 | `backgroundName` | Optional. SkyBox resource (e.g., "Miramar", "DNCity") |
-| `groundMaterial` | Optional. "default" for basic grey, or a PBR material name |
+| `groundMaterial` | Optional. "default" for basic grey, or a material name — resolved from the Standard container first, then PBR (material merge Lot 2, transitional until the legacy material is removed) |
 
 ### Critical rules for scene creation
 

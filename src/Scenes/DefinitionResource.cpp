@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -239,8 +240,9 @@ namespace EmEn::Scenes
 			}
 			else if ( matType == "PBR" && !matResource.empty() )
 			{
-				/* NOTE: PBR materials use the same container interface. */
-				materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(matResource);
+				/* Material merge, Lot 2: "PBR" now reaches the PBR container — it used to be
+				 * silently routed to the StandardResource container. */
+				materialResource = this->serviceProvider().container< Material::PBRResource >()->getResource(matResource);
 			}
 			else
 			{

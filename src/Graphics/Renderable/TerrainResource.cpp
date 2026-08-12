@@ -35,6 +35,7 @@
 /* Local inclusions. */
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "Types.hpp"
@@ -192,9 +193,9 @@ namespace EmEn::Graphics::Renderable
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
 
-		if ( !materialType || materialType != Material::StandardResource::ClassId )
+		if ( !materialType || (materialType != Material::StandardResource::ClassId && materialType != Material::PBRResource::ClassId) )
 		{
-			TraceError{ClassId} << "Material resource type '" << materialType.value() << "' for terrain '" << this->name() << "' is not handled !";
+			TraceError{ClassId} << "Material resource type '" << materialType.value_or("<missing>") << "' for terrain '" << this->name() << "' is not handled !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -210,29 +211,31 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* The material. */
-		std::shared_ptr< Material::Interface > materialResource{};
-
-		auto * materials = this->serviceProvider().container< Material::StandardResource >();
-
 		const auto materialName = FastJSON::getValue< std::string >(data, JKMaterialName);
 
-		if ( !materialName )
-		{
-			TraceWarning{ClassId} << "The key '" << JKMaterialName << "' is not present or not a string !";
-
-			materialResource = materials->getDefaultResource();
-		}
-		else
-		{
-			materialResource = materials->getResource(materialName.value());
-
-			if ( materialResource == nullptr )
+		const auto resolveMaterial = [&] (auto * materials) -> std::shared_ptr< Material::Interface > {
+			if ( !materialName )
 			{
-				TraceError{ClassId} << "Material '" << materialName.value() << "' is not available in data stores, using default one !";
+				TraceWarning{ClassId} << "The key '" << JKMaterialName << "' is not present or not a string !";
 
-				materialResource = materials->getDefaultResource();
+				return materials->getDefaultResource();
 			}
-		}
+
+			if ( auto resource = materials->getResource(materialName.value()); resource != nullptr )
+			{
+				return resource;
+			}
+
+			TraceError{ClassId} << "Material '" << materialName.value() << "' is not available in data stores, using default one !";
+
+			return materials->getDefaultResource();
+		};
+
+		/* Transitional (material merge, Lot 2): the declared ClassId selects the container —
+		 * Standard for legacy data, PBR for converted data. The Standard branch dies at Lot 4. */
+		const auto materialResource = materialType == Material::PBRResource::ClassId
+			? resolveMaterial(this->serviceProvider().container< Material::PBRResource >())
+			: resolveMaterial(this->serviceProvider().container< Material::StandardResource >());
 
 		if ( !this->setMaterial(materialResource) )
 		{
