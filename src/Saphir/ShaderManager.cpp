@@ -32,6 +32,8 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <charconv>
+#include <cstring>
+#include <filesystem>
 #include <ranges>
 #include <string>
 
@@ -336,6 +338,74 @@ namespace EmEn::Saphir
 		return true;
 	}
 
+	namespace
+	{
+		/* Application wrapper around the SPIR-V blob. The filename says WHICH shader
+		 * (name + source hash); this header says whether the blob is still VALID — i.e. whether
+		 * the toolchain that produced it is the one running now. Without it a stale blob survives
+		 * a glslang upgrade or a target-environment change and is handed to vkCreateShaderModule
+		 * unchecked. Same discipline as the pipeline cache (see src/Vulkan/AGENTS.md). */
+		struct ShaderBinaryFileHeader
+		{
+			uint32_t magic;
+			uint32_t formatVersion;
+			uint64_t sourceHash;
+			uint64_t dataSize;
+			uint64_t dataHash;
+			uint64_t toolchainHash;
+			uint32_t shaderType;
+			uint32_t reserved;
+		};
+
+		constexpr uint32_t ShaderBinaryMagic{0x45534243U}; /* "ESBC" */
+		constexpr uint32_t ShaderBinaryFormatVersion{1};
+		constexpr uint32_t SpirVMagicWord{0x07230203U};
+
+		[[nodiscard]]
+		uint64_t
+		hashBytes (const void * data, size_t size) noexcept
+		{
+			const auto * bytes = static_cast< const uint8_t * >(data);
+
+			uint64_t hash = 14695981039346656037ULL;
+
+			for ( size_t index = 0; index < size; ++index )
+			{
+				hash ^= static_cast< uint64_t >(bytes[index]);
+				hash *= 1099511628211ULL;
+			}
+
+			return hash;
+		}
+
+		/* Everything that changes the bytes glslang produces for identical GLSL: the compiler
+		 * itself, the client/target environment pair, and the engine version (a change in how the
+		 * source is assembled invalidates nothing here, but a change in the compile SETUP does). */
+		[[nodiscard]]
+		uint64_t
+		toolchainIdentity () noexcept
+		{
+			std::string identity{glslang::GetGlslVersionString()};
+			identity += '|';
+			identity += std::to_string(glslang::GetSpirvGeneratorVersion());
+			identity += '|';
+
+			if constexpr ( IsMacOS )
+			{
+				identity += "vk1.2-spv1.5";
+			}
+			else
+			{
+				identity += "vk1.3-spv1.6";
+			}
+
+			identity += '|';
+			identity += VersionString;
+
+			return hashBytes(identity.data(), identity.size());
+		}
+	}
+
 	bool
 	ShaderManager::cacheShaderBinary (const AbstractShader & shader, const std::vector< uint32_t > & binaryCode) const noexcept
 	{
@@ -353,9 +423,42 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( !IO::filePutContents(cacheFilepath, binaryCode) )
+		const auto blobSize = binaryCode.size() * sizeof(uint32_t);
+
+		ShaderBinaryFileHeader header{};
+		header.magic = ShaderBinaryMagic;
+		header.formatVersion = ShaderBinaryFormatVersion;
+		header.sourceHash = shader.hash();
+		header.dataSize = blobSize;
+		header.dataHash = hashBytes(binaryCode.data(), blobSize);
+		header.toolchainHash = toolchainIdentity();
+		header.shaderType = static_cast< uint32_t >(shader.type());
+		header.reserved = 0;
+
+		std::vector< uint8_t > fileContent(sizeof(header) + blobSize);
+		std::memcpy(fileContent.data(), &header, sizeof(header));
+		std::memcpy(fileContent.data() + sizeof(header), binaryCode.data(), blobSize);
+
+		/* ⚠️ Written aside then renamed: a SIGKILL — the documented shutdown fallback — must not
+		 * be able to leave a truncated blob behind for the next launch to load. */
+		auto temporaryPath = cacheFilepath;
+		temporaryPath += ".tmp";
+
+		if ( !IO::filePutContents(temporaryPath, fileContent) )
 		{
-			TraceError{ClassId} << "Unable to write the shader binary code to file '" << cacheFilepath << "' for shader '" << shader.name() << "' !";
+			TraceError{ClassId} << "Unable to write the shader binary code to file '" << temporaryPath << "' for shader '" << shader.name() << "' !";
+
+			return false;
+		}
+
+		std::error_code error;
+		std::filesystem::rename(temporaryPath, cacheFilepath, error);
+
+		if ( error )
+		{
+			TraceError{ClassId} << "Unable to commit the shader binary cache file '" << cacheFilepath << "' : " << error.message() << " !";
+
+			IO::eraseFile(temporaryPath);
 
 			return false;
 		}
@@ -378,16 +481,64 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( !IO::fileGetContents(binaryIt->second, binaryCode) )
+		std::vector< uint8_t > fileContent;
+
+		if ( !IO::fileGetContents(binaryIt->second, fileContent) )
 		{
 			TraceError{ClassId} << "Unable to read the shader binary code from file '" << binaryIt->second << "' !";
 
 			return false;
 		}
 
-		if ( binaryCode.empty() )
+		if ( fileContent.size() <= sizeof(ShaderBinaryFileHeader) )
 		{
-			TraceError{ClassId} << "The shader binary code from file '" << binaryIt->second << "' is empty !";
+			TraceWarning{ClassId} << "The shader binary file '" << binaryIt->second << "' is truncated ! Discarding it.";
+
+			IO::eraseFile(binaryIt->second);
+
+			return false;
+		}
+
+		ShaderBinaryFileHeader header{};
+		std::memcpy(&header, fileContent.data(), sizeof(header));
+
+		const auto blobSize = fileContent.size() - sizeof(header);
+		const auto * blob = fileContent.data() + sizeof(header);
+
+		/* ⚠️ EVERY field is checked before a single byte can reach vkCreateShaderModule. A SPIR-V
+		 * blob is only valid for the exact source AND the exact toolchain that produced it; the
+		 * toolchain hash is what makes a glslang upgrade invalidate the file instead of silently
+		 * feeding the driver stale bytes. */
+		const auto rejected =
+			header.magic != ShaderBinaryMagic ||
+			header.formatVersion != ShaderBinaryFormatVersion ||
+			header.sourceHash != shader.hash() ||
+			header.shaderType != static_cast< uint32_t >(shader.type()) ||
+			header.dataSize != blobSize ||
+			header.toolchainHash != toolchainIdentity() ||
+			blobSize < sizeof(uint32_t) ||
+			blobSize % sizeof(uint32_t) != 0 ||
+			header.dataHash != hashBytes(blob, blobSize);
+
+		if ( rejected )
+		{
+			TraceInfo{ClassId} << "The cached binary of shader '" << shader.name() << "' is stale or corrupt ! Recompiling.";
+
+			IO::eraseFile(binaryIt->second);
+
+			return false;
+		}
+
+		binaryCode.resize(blobSize / sizeof(uint32_t));
+		std::memcpy(binaryCode.data(), blob, blobSize);
+
+		/* Last sanity check, on the SPIR-V itself: a valid module always starts with its magic. */
+		if ( binaryCode.front() != SpirVMagicWord )
+		{
+			TraceWarning{ClassId} << "The cached binary of shader '" << shader.name() << "' is not SPIR-V ! Discarding it.";
+
+			IO::eraseFile(binaryIt->second);
+			binaryCode.clear();
 
 			return false;
 		}

@@ -1118,13 +1118,29 @@ It exists to let a human inspect what the generators produced, and it is now sha
 ShadowCasting. That number is the program-variant count, and it is the real load-time driver —
 worth understanding before optimising any cache.
 
-### The binary (SPIR-V) cache works, but its key is unsafe
+### The binary (SPIR-V) cache — hardened Aug 2026
 
-`Core/Graphics/Shader/EnableBinaryCache` round-trips properly — write AND read — and a hit really
-does skip glslang. But the key is `<name>_<hash of the GLSL source>.bin` and **nothing else**: no
-glslang version, no target environment, no SPIR-V options, no engine build stamp. After a glslang
-upgrade or a compile-option change, a stale blob is loaded and handed to `vkCreateShaderModule`
-**without any validation**. It is off by default, and it should stay off until the key is fixed.
+`Core/Graphics/Shader/EnableBinaryCache` skips glslang on a hit. Measured on `material-debug`:
+**625 ms of glslang compilation for 356 shaders**, so that is the ceiling of what this cache buys
+— an order of magnitude below the `VkPipelineCache` (5.7 s), but a real half-second.
+
+The filename says WHICH shader (`<name>_<source hash>.bin`); an application header now says
+whether the blob is still VALID, and **every field is checked before a byte reaches
+`vkCreateShaderModule`**: magic, format version, source hash, shader stage, blob size, FNV-1a
+content hash, and a **toolchain identity hash** — glslang's version string, its SPIR-V generator
+version, the client/target environment pair (⚠️ macOS targets Vulkan 1.2 / SPIR-V 1.5, everything
+else 1.3 / 1.6) and the engine version. A rejected file is deleted and the shader recompiled.
+
+⚠️ That toolchain hash is the whole point: without it a glslang upgrade left stale SPIR-V on disk
+and it was fed to the driver unchecked. Plus two structural checks the blob must pass anyway —
+size a multiple of 4, and the SPIR-V magic word `0x07230203` as its first word.
+
+Writes go to a `.tmp` file and are renamed, so a `SIGKILL` cannot leave a truncated blob for the
+next launch.
+
+Verified live: 342 blobs written on the first run and all 342 reloaded on the second, with no
+stray `.tmp`; a blob corrupted in its data and another with a falsified toolchain hash were both
+rejected and recompiled — 2 rejected, 340 reused, no crash.
 
 ### There is NO VkPipelineCache
 

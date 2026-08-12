@@ -70,10 +70,12 @@
   user-writable cache directory terminated the process AT STARTUP); the cache directories are no
   longer created when their feature is off, and a creation failure no longer kills the renderer.
   REMAINING:
-  1. **The binary cache key is unsafe** — `<name>_<hash of GLSL source>.bin`, with no glslang
-     version, target environment, SPIR-V options or engine build stamp, and no validation of the
-     loaded blob before `vkCreateShaderModule`. A stale blob survives a glslang upgrade. It is off
-     by default; keep it off until the key carries the full compilation identity.
+  1. ~~The binary cache key is unsafe~~ — **DONE (Aug 2026)**: an application header now carries
+     the source hash, shader stage, blob size, content hash and a TOOLCHAIN IDENTITY hash
+     (glslang version + SPIR-V generator version + client/target environment + engine version),
+     all validated before `vkCreateShaderModule`, plus atomic write-then-rename. Measured ceiling
+     of what it buys: 625 ms of glslang for 356 shaders. See `src/Saphir/AGENTS.md`.
+     ⚠️ Still OFF by default — it is now safe, but the owner decides whether to enable it.
   2. ~~There is no VkPipelineCache~~ — **DONE (Aug 2026)**, see `src/Vulkan/AGENTS.md`
      § "VkPipelineCache". Measured on material-debug: 5 702 ms → 31 ms of pipeline compilation
      with the driver's own disk cache disabled (182×).
