@@ -74,11 +74,9 @@
      version, target environment, SPIR-V options or engine build stamp, and no validation of the
      loaded blob before `vkCreateShaderModule`. A stale blob survives a glslang upgrade. It is off
      by default; keep it off until the key carries the full compilation identity.
-  2. **There is no `VkPipelineCache` at all** — every `vkCreate*Pipelines` passes `VK_NULL_HANDLE`.
-     This is the layer that skips the driver's SPIR-V→ISA compilation and the one production
-     engines serialise to disk, guarded by `VkPhysicalDeviceProperties::pipelineCacheUUID` — which
-     this engine already reads, only to print it (`Vulkan/PhysicalDevice.hpp:408`). Highest-value
-     remaining work on load time.
+  2. ~~There is no VkPipelineCache~~ — **DONE (Aug 2026)**, see `src/Vulkan/AGENTS.md`
+     § "VkPipelineCache". Measured on material-debug: 5 702 ms → 31 ms of pipeline compilation
+     with the driver's own disk cache disabled (182×).
   3. Consider renaming `EnableSourceCodeCache` to say what it is (a debug dump), and add pruning:
      nothing cleans either directory except the undocumented `--clear-shader-cache` switch.
 - SHADERS CODE GENERATION: Prepare a way to use manual GLSL sources.

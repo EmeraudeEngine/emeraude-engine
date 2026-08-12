@@ -31,6 +31,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 /* Third-party forward declarations (the VMA implementation header is only
  * needed by the few .cpp files that call vma* functions — VmaAllocator is
@@ -141,6 +142,44 @@ namespace EmEn::Vulkan
 			{
 				return m_physicalDevice;
 			}
+
+			/**
+			 * @brief Returns the pipeline cache the driver may reuse across pipeline creations.
+			 * @note VK_NULL_HANDLE when the feature is disabled or the cache failed to be created,
+			 * which every vkCreate*Pipelines call accepts as "no cache".
+			 * @warning The returned object is INTERNALLY synchronized by the specification: it may
+			 * be handed to concurrent vkCreate*Pipelines calls without external locking.
+			 * @return VkPipelineCache
+			 */
+			[[nodiscard]]
+			VkPipelineCache
+			pipelineCache () const noexcept
+			{
+				return m_pipelineCache;
+			}
+
+			/**
+			 * @brief Creates the pipeline cache, optionally primed with a previously saved blob.
+			 * @warning The caller MUST have validated the blob first (see Graphics::Renderer): the
+			 * specification's "incompatible data is ignored" promise is gated by valid-usage rules
+			 * that make corrupt, truncated or foreign bytes UNDEFINED BEHAVIOUR — real drivers
+			 * crash inside vkCreatePipelineCache on such input.
+			 * @param initialData A pointer to a validated blob, or nullptr for an empty cache.
+			 * @param initialSize The blob size in bytes.
+			 * @return bool
+			 */
+			bool createPipelineCache (const void * initialData, size_t initialSize) noexcept;
+
+			/**
+			 * @brief Retrieves the driver-side pipeline cache content, ready to be persisted.
+			 * @note Uses the two-call idiom and zeroes the destination first: drivers are known to
+			 * leave the padding uninitialized, which both breaks hash stability and leaks process
+			 * memory into the file.
+			 * @param data A reference to the destination byte vector.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool getPipelineCacheData (std::vector< uint8_t > & data) const noexcept;
 
 			/**
 			 * @brief Returns the device handle.
@@ -699,6 +738,7 @@ namespace EmEn::Vulkan
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
 			VkDevice m_deviceHandle{VK_NULL_HANDLE};
 			VmaAllocator m_memoryAllocatorHandle{VK_NULL_HANDLE};
+			VkPipelineCache m_pipelineCache{VK_NULL_HANDLE};
 			PFN_vkGetDeviceFaultInfoEXT m_fpGetDeviceFaultInfo{nullptr};
 			PFN_vkGetQueueCheckpointDataNV m_fpGetQueueCheckpointData{nullptr};
 			PFN_vkCmdSetCheckpointNV m_fpCmdSetCheckpoint{nullptr};

@@ -1392,6 +1392,28 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
 
+			/**
+			 * @brief Loads the driver pipeline cache from disk into the device.
+			 * @note The blob is wrapped in an application header (magic, format version, size,
+			 * content hash, vendor ID, device ID, driver version, pointer ABI and the device's
+			 * pipelineCacheUUID) and every field is checked before a single byte reaches
+			 * vkCreatePipelineCache. ⚠️ The specification's "incompatible data is ignored" promise
+			 * is gated by valid-usage rules that make corrupt or foreign bytes UNDEFINED
+			 * BEHAVIOUR; drivers are known to crash inside vkCreatePipelineCache on such input,
+			 * and one such corruption originated INSIDE vkGetPipelineCacheData, which is why a
+			 * load marker guards against a blob that killed the previous run.
+			 * @return void
+			 */
+			void loadPipelineCache () noexcept;
+
+			/**
+			 * @brief Writes the driver pipeline cache to disk.
+			 * @note Written to a temporary file then renamed, so a hard kill cannot leave a
+			 * truncated blob behind to poison the next launch.
+			 * @return void
+			 */
+			void savePipelineCache () const noexcept;
+
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 

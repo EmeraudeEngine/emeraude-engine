@@ -660,3 +660,60 @@ Related systems:
 - @src/Graphics/AGENTS.md - Uses Vulkan abstractions (Buffer, Image, Pipeline)
 - @src/Saphir/AGENTS.md - Generates SPIR-V for Vulkan pipelines
 - @src/Resources/AGENTS.md - GPU upload via TransferManager
+
+## VkPipelineCache — the driver cache the engine now owns (Aug 2026)
+
+`Vulkan::Device` owns one `VkPipelineCache`, handed to both `vkCreateGraphicsPipelines`
+(`GraphicsPipeline.cpp`) and `vkCreateComputePipelines` (`ComputePipeline.cpp`) — every pipeline
+in the engine goes through one of those two. `Graphics::Renderer` does the disk I/O:
+`loadPipelineCache()` right after the device is acquired (it must exist BEFORE any pipeline is
+created) and `savePipelineCache()` in `onTerminate()` after `waitIdle()`. Setting:
+`Core/Graphics/Shader/EnablePipelineCache`, default **true**.
+
+### Measured, on `material-debug` (294 graphics pipelines, RTX 3070 Ti)
+
+| driver disk cache | engine pipeline cache | time in vkCreateGraphicsPipelines |
+|---|---|---|
+| on | — | 33 ms |
+| **off** | — | **5 702 ms** |
+| **off** | **restored from disk** | **31 ms** |
+
+A 182× difference, and the third row is the point: the engine's own cache does the whole job
+without the driver's. Blob size: 7.4 MB. ⚠️ Before this existed the engine passed
+`VK_NULL_HANDLE` everywhere and was entirely at the mercy of the driver's cache — which is
+per-machine, size-capped with eviction, invalidated by every driver update, and absent on some
+drivers. That is a 5.7 s synchronous stall on a cold machine, in an engine that already has a
+documented "blocking load gets the Wayland surface killed by the compositor" failure.
+
+### ⚠️ Why the blob is wrapped, and why that is NOT optional
+
+The specification says incompatible cache data is "ignored", but that promise is gated by
+valid-usage rules (`VUID-VkPipelineCacheCreateInfo-initialDataSize-00768/-00769`): corrupt,
+truncated or foreign bytes are **undefined behaviour**, and drivers do crash inside
+`vkCreatePipelineCache`. DXVK abandoned driver-blob caching for exactly that reason.
+
+So nothing reaches the driver before an application header matches in full: magic, format
+version, blob size, FNV-1a content hash, `vendorID`, `deviceID`, `driverVersion`, pointer ABI
+(`sizeof(void*)`) and the raw 16-byte `pipelineCacheUUID`. The last three are not redundant —
+some drivers never bump their UUID on a breaking update, and a 32-bit and a 64-bit driver can
+share one.
+
+Three more defences, each answering a real failure mode:
+
+- **A load marker.** One documented corruption originated *inside* `vkGetPipelineCacheData`, so
+  the hash written at save time validated garbage. A `pipeline.cache.loading` file is dropped
+  before `vkCreatePipelineCache` and removed after; finding it at startup means the previous run
+  died in the driver's parser, and the blob is discarded.
+- **Write-then-rename.** A `SIGKILL` — the documented fallback when `Core.shutdown()` is not used
+  — must not leave a truncated blob for the next launch.
+- **Zero-initialised destination** before `vkGetPipelineCacheData`: drivers leave the padding
+  uninitialised, which makes the hash unstable and writes process memory into a file.
+
+`--clear-shader-cache` wipes it along with the other shader caches.
+
+### Thread safety
+
+`VkPipelineCache` is **internally synchronized by the specification** when passed to
+`vkCreate*Pipelines`, so no external locking is needed for the current design. That guarantee is
+lost if `VK_PIPELINE_CACHE_CREATE_EXTERNALLY_SYNCHRONIZED_BIT` is ever set, and
+`vkMergePipelineCaches` always requires external synchronization of its destination.

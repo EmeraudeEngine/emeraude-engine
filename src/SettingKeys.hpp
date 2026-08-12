@@ -741,6 +741,11 @@ namespace EmEn
 			constexpr auto SourceCodeCacheEnabledKey{"Core/Graphics/Shader/EnableSourceCodeCache"};
 			constexpr auto DefaultSourceCodeCacheEnabled{false};
 			/* Cache compiled SPIR-V binaries on disk. */
+			/* Persist the DRIVER's pipeline cache across runs. This is the one that matters:
+			 * measured on material-debug, the driver-side pipeline compilation costs 5.4 s with a
+			 * cold driver cache against 33 ms with a warm one, for 294 pipelines. */
+			constexpr auto PipelineCacheEnabledKey{"Core/Graphics/Shader/EnablePipelineCache"};
+			constexpr auto DefaultPipelineCacheEnabled{true};
 			constexpr auto BinaryCacheEnabledKey{"Core/Graphics/Shader/EnableBinaryCache"};
 			constexpr auto DefaultBinaryCacheEnabled{false};
 

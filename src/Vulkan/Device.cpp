@@ -394,6 +394,13 @@ namespace EmEn::Vulkan
 			m_memoryAllocatorHandle = VK_NULL_HANDLE;
 		}
 
+		if ( m_pipelineCache != VK_NULL_HANDLE )
+		{
+			vkDestroyPipelineCache(m_deviceHandle, m_pipelineCache, nullptr);
+
+			m_pipelineCache = VK_NULL_HANDLE;
+		}
+
 		if ( m_deviceHandle != VK_NULL_HANDLE )
 		{
 			/* [VULKAN-CPU-SYNC] vkDestroyDevice() through waidIdle() */
@@ -1000,5 +1007,78 @@ namespace EmEn::Vulkan
 			default :
 				return VK_SAMPLE_COUNT_1_BIT;
 		}
+	}
+
+	bool
+	Device::createPipelineCache (const void * initialData, size_t initialSize) noexcept
+	{
+		if ( m_pipelineCache != VK_NULL_HANDLE )
+		{
+			Tracer::warning(ClassId, "The pipeline cache already exists !");
+
+			return true;
+		}
+
+		VkPipelineCacheCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		createInfo.pNext = nullptr;
+		createInfo.flags = 0;
+		createInfo.initialDataSize = initialData != nullptr ? initialSize : 0;
+		createInfo.pInitialData = initialData;
+
+		if ( const auto result = vkCreatePipelineCache(m_deviceHandle, &createInfo, nullptr, &m_pipelineCache); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create the pipeline cache : " << vkResultToCString(result) << " !";
+
+			m_pipelineCache = VK_NULL_HANDLE;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Device::getPipelineCacheData (std::vector< uint8_t > & data) const noexcept
+	{
+		data.clear();
+
+		if ( m_pipelineCache == VK_NULL_HANDLE )
+		{
+			return false;
+		}
+
+		size_t size = 0;
+
+		if ( const auto result = vkGetPipelineCacheData(m_deviceHandle, m_pipelineCache, &size, nullptr); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to query the pipeline cache size : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		if ( size == 0 )
+		{
+			return false;
+		}
+
+		/* ⚠️ Zero-initialised on purpose: drivers are known to leave the blob padding
+		 * uninitialised, which makes the content hash unstable from one call to the next AND
+		 * writes uninitialised process memory into a file on disk. */
+		data.assign(size, 0);
+
+		if ( const auto result = vkGetPipelineCacheData(m_deviceHandle, m_pipelineCache, &size, data.data()); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to read the pipeline cache data : " << vkResultToCString(result) << " !";
+
+			data.clear();
+
+			return false;
+		}
+
+		/* NOTE: The second call can report a smaller size than the first one. */
+		data.resize(size);
+
+		return true;
 	}
 }

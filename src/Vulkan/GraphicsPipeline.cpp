@@ -1031,7 +1031,7 @@ namespace EmEn::Vulkan
 	bool
 	GraphicsPipeline::createOnHardware () noexcept
 	{
-		if ( const auto result = vkCreateGraphicsPipelines(this->device()->handle(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
+		if ( const auto result = vkCreateGraphicsPipelines(this->device()->handle(), this->device()->pipelineCache(), 1, &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a graphics pipeline : " << vkResultToCString(result) << " !";
 

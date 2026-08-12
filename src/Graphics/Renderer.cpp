@@ -31,6 +31,8 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cstring>
+#include <filesystem>
 #include <ranges>
 #include <thread>
 
@@ -48,6 +50,9 @@
 #include "Overlay/Manager.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimaryServices.hpp"
+#include "FileSystem.hpp"
+#include "IO/IO.hpp"
+#include "SettingKeys.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
@@ -468,6 +473,9 @@ namespace EmEn::Graphics
 
 				return false;
 			}
+
+			/* The driver pipeline cache must exist BEFORE any pipeline is created. */
+			this->loadPipelineCache();
 		}
 		else
 		{
@@ -772,6 +780,10 @@ namespace EmEn::Graphics
 
 		/* NOTE: Final device idle to ensure all GPU work is complete. */
 		m_device->waitIdle("Renderer::onTerminate()");
+
+		/* NOTE: The Vulkan instance owns the device and outlives this service, so the cache is
+		 * still alive here — and every pipeline this run compiled is now in it. */
+		this->savePipelineCache();
 
 		/* NOTE: The device is idle, pending retirements can be destroyed now. */
 		m_deferredDestructor.flush();
@@ -2658,5 +2670,213 @@ namespace EmEn::Graphics
 		}
 
 		m_RTLightCount = lightSet.RTLightCount();
+	}
+
+	namespace
+	{
+		/* Application-level wrapper around the driver blob. The Vulkan header only carries
+		 * vendorID/deviceID/pipelineCacheUUID, and the specification's promise that incompatible
+		 * data is "ignored" is gated by valid-usage rules that make corrupt, truncated or foreign
+		 * bytes UNDEFINED BEHAVIOUR. Drivers do crash on such input, so nothing reaches
+		 * vkCreatePipelineCache before every field below matches.
+		 * Fields follow the shape the Vulkan Guide recommends and Godot ships: some drivers never
+		 * bump their UUID on a breaking update, and a 32-bit and a 64-bit driver can share one. */
+		struct PipelineCacheFileHeader
+		{
+			uint32_t magic;
+			uint32_t formatVersion;
+			uint64_t dataSize;
+			uint64_t dataHash;
+			uint32_t vendorID;
+			uint32_t deviceID;
+			uint32_t driverVersion;
+			uint32_t pointerABI;
+			uint8_t cacheUUID[VK_UUID_SIZE];
+		};
+
+		constexpr uint32_t PipelineCacheMagic{0x454D504CU}; /* "EMPL" */
+		constexpr uint32_t PipelineCacheFormatVersion{1};
+		constexpr auto PipelineCacheFileName{"pipeline.cache"};
+		constexpr auto PipelineCacheLoadMarkerName{"pipeline.cache.loading"};
+
+		/* FNV-1a, 64-bit: an integrity check against truncation and bit rot, not a security
+		 * measure — a hostile blob is out of scope for a local user-writable cache. */
+		[[nodiscard]]
+		uint64_t
+		hashBlob (const std::vector< uint8_t > & data) noexcept
+		{
+			uint64_t hash = 14695981039346656037ULL;
+
+			for ( const auto byte : data )
+			{
+				hash ^= static_cast< uint64_t >(byte);
+				hash *= 1099511628211ULL;
+			}
+
+			return hash;
+		}
+	}
+
+	void
+	Renderer::loadPipelineCache () noexcept
+	{
+		auto & settings = m_primaryServices.settings();
+
+		if ( !settings.getOrSetDefault< bool >(PipelineCacheEnabledKey, DefaultPipelineCacheEnabled) )
+		{
+			return;
+		}
+
+		const auto directory = m_primaryServices.fileSystem().cacheDirectory("pipeline-cache");
+
+		if ( !IO::createDirectory(directory) )
+		{
+			TraceWarning{ClassId} << "Unable to create '" << directory << "' ! The pipeline cache will not persist.";
+
+			m_device->createPipelineCache(nullptr, 0);
+
+			return;
+		}
+
+		auto filepath = directory;
+		filepath.append(PipelineCacheFileName);
+
+		auto markerPath = directory;
+		markerPath.append(PipelineCacheLoadMarkerName);
+
+		/* Same switch as the shader caches: one command clears every shader-related cache. */
+		if ( m_primaryServices.arguments().isSwitchPresent("--clear-shader-cache") )
+		{
+			IO::eraseFile(filepath);
+			IO::eraseFile(markerPath);
+
+			m_device->createPipelineCache(nullptr, 0);
+
+			return;
+		}
+
+		/* ⚠️ A marker left behind means the PREVIOUS run died while the driver was parsing this
+		 * blob. One documented corruption originated inside vkGetPipelineCacheData itself, so the
+		 * content hash written at save time validated garbage — only this marker catches that. */
+		if ( std::filesystem::exists(markerPath) )
+		{
+			TraceWarning{ClassId} << "The previous run crashed while loading the pipeline cache ! Discarding it.";
+
+			IO::eraseFile(filepath);
+			IO::eraseFile(markerPath);
+
+			m_device->createPipelineCache(nullptr, 0);
+
+			return;
+		}
+
+		std::vector< uint8_t > fileContent;
+
+		if ( !IO::fileGetContents(filepath, fileContent) || fileContent.size() <= sizeof(PipelineCacheFileHeader) )
+		{
+			m_device->createPipelineCache(nullptr, 0);
+
+			return;
+		}
+
+		PipelineCacheFileHeader header{};
+		std::memcpy(&header, fileContent.data(), sizeof(header));
+
+		std::vector< uint8_t > blob{fileContent.cbegin() + sizeof(header), fileContent.cend()};
+
+		const auto & properties = m_device->physicalDevice()->propertiesVK10();
+
+		const auto rejected =
+			header.magic != PipelineCacheMagic ||
+			header.formatVersion != PipelineCacheFormatVersion ||
+			header.dataSize != blob.size() ||
+			header.vendorID != properties.vendorID ||
+			header.deviceID != properties.deviceID ||
+			header.driverVersion != properties.driverVersion ||
+			header.pointerABI != static_cast< uint32_t >(sizeof(void *)) ||
+			std::memcmp(header.cacheUUID, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0 ||
+			header.dataHash != hashBlob(blob);
+
+		if ( rejected )
+		{
+			TraceInfo{ClassId} << "The stored pipeline cache does not match this device or driver, starting empty.";
+
+			m_device->createPipelineCache(nullptr, 0);
+
+			return;
+		}
+
+		/* Drop the marker, hand the blob over, remove the marker on the other side. */
+		IO::filePutContents(markerPath, std::string{"1"});
+
+		m_device->createPipelineCache(blob.data(), blob.size());
+
+		IO::eraseFile(markerPath);
+
+		TraceSuccess{ClassId} << "Pipeline cache restored (" << blob.size() << " bytes).";
+	}
+
+	void
+	Renderer::savePipelineCache () const noexcept
+	{
+		if ( !m_primaryServices.settings().get< bool >(PipelineCacheEnabledKey, DefaultPipelineCacheEnabled) )
+		{
+			return;
+		}
+
+		std::vector< uint8_t > blob;
+
+		if ( !m_device->getPipelineCacheData(blob) || blob.empty() )
+		{
+			return;
+		}
+
+		const auto & properties = m_device->physicalDevice()->propertiesVK10();
+
+		PipelineCacheFileHeader header{};
+		header.magic = PipelineCacheMagic;
+		header.formatVersion = PipelineCacheFormatVersion;
+		header.dataSize = blob.size();
+		header.dataHash = hashBlob(blob);
+		header.vendorID = properties.vendorID;
+		header.deviceID = properties.deviceID;
+		header.driverVersion = properties.driverVersion;
+		header.pointerABI = static_cast< uint32_t >(sizeof(void *));
+		std::memcpy(header.cacheUUID, properties.pipelineCacheUUID, VK_UUID_SIZE);
+
+		std::vector< uint8_t > fileContent(sizeof(header) + blob.size());
+		std::memcpy(fileContent.data(), &header, sizeof(header));
+		std::memcpy(fileContent.data() + sizeof(header), blob.data(), blob.size());
+
+		const auto directory = m_primaryServices.fileSystem().cacheDirectory("pipeline-cache");
+
+		auto filepath = directory;
+		filepath.append(PipelineCacheFileName);
+
+		/* ⚠️ Written aside then renamed: a SIGKILL — the documented fallback when Core.shutdown()
+		 * is not used — must not be able to leave a truncated blob for the next launch. */
+		auto temporaryPath = filepath;
+		temporaryPath += ".tmp";
+
+		if ( !IO::filePutContents(temporaryPath, fileContent) )
+		{
+			TraceWarning{ClassId} << "Unable to write the pipeline cache to '" << temporaryPath << "' !";
+
+			return;
+		}
+
+		std::error_code error;
+		std::filesystem::rename(temporaryPath, filepath, error);
+
+		if ( error )
+		{
+			TraceWarning{ClassId} << "Unable to commit the pipeline cache file : " << error.message() << " !";
+
+			IO::eraseFile(temporaryPath);
+
+			return;
+		}
+
+		TraceSuccess{ClassId} << "Pipeline cache saved (" << blob.size() << " bytes).";
 	}
 }
