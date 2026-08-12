@@ -225,7 +225,6 @@ this->setPOMIterations(this->highQualityEnabled()
 - `Generator/Abstract.hpp:setPOMIterations()` — Clamps to [4, 64] or 0 (special disable value)
 - `Generator/SceneRendering.hpp` constructor — Quality cascade logic
 - `StandardResource.cpp:m_pomGenerationActive` — Fragment shader conditional
-- `StandardResource.cpp:m_pomGenerationActive` — Fragment shader conditional
 
 ### Per-Vertex Lighting Shader Input Constraint
 
@@ -280,33 +279,35 @@ When a material has BOTH reflection AND refraction components, Saphir generates 
 
 ### Generation Flow
 
-1. **`StandardResource::generateFragmentShaderCode()`** detects both components present
-2. Generates `fresnelFactor` variable using Schlick approximation:
+1. **`StandardResource::generateFragmentShaderCode()`** declares the reflection frame
+   (`reflectionNormal`, `reflectionI`, at `Location::Top`, reused between the reflection and
+   refraction blocks) and samples the reflection/refraction colours — **high quality only**.
+2. **`LightGenerator::generateAmbientFragmentShader()`** detects both components
+   (`m_usePBRMode && m_useReflection && m_useRefraction && highQualityEnabled()`) and generates
+   the `fresnelFactor` itself, with the Schlick approximation:
    ```glsl
-   const float F0 = pow((1.0 - ubMaterial.refractionIOR) / (1.0 + ubMaterial.refractionIOR), 2.0);
-   const float cosTheta = max(dot(-refractionI, refractionNormal), 0.0);
-   const float fresnelFactor = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+   const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);
+   const float fresnelFactor = 0.04 + (1.0 - 0.04) * pow(1.0 - NdotV, 5.0);
    ```
-3. **`LightGenerator::generateAmbientFragmentShader()`** uses fresnelFactor for ambient pass
-4. **`LightGenerator::generateFinalFragmentOutput()`** uses fresnelFactor for light passes
-
-### Lighting Code Pattern
-
-```cpp
-// In LightGenerator.cpp - when m_useReflection && m_useRefraction
-const auto code = (std::stringstream{} <<
-    "const vec3 reflected = mix(" << m_surfaceDiffuseColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb;" "\n"
-    "const vec3 refracted = mix(" << m_surfaceDiffuseColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb;" "\n\n" <<
-    m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * lighting;").str();
-```
+3. The blend `mix(refractedColor, reflectedColor, fresnelFactor)` is added in that **same
+   ambient pass** — IBL is the whole contribution of glass. The light passes do NOT re-mix
+   reflection and refraction.
 
 ### Important Notes
 
-- `fresnelFactor` is **only generated when BOTH** reflection AND refraction are present
-- Using `fresnelFactor` without both components causes "undefined variable" shader error
-- The `amount` parameters control the blend between base color and cubemap sample
-- Fresnel determines the blend between reflected and refracted result
-- Files: `StandardResource.cpp:1449-1472`, `LightGenerator.cpp:601-672`
+- `fresnelFactor` is **only generated when BOTH** reflection AND refraction are present, in
+  high quality; using it anywhere else causes an "undefined variable" shader error
+- **F0 is the fixed 0.04 dielectric value**, NOT derived from `ubMaterial.refractionIOR` — the
+  material IOR drives the refraction vector (`eta = 1.0 / IOR`), not this Fresnel term
+- The `amount` parameters are artistic weights on each leg (neutral `1.0` = fully
+  Fresnel-controlled), not a blend against the base colour
+- ⚠️ `LightGenerator::generateFinalFragmentOutput()` still carries `!m_usePBRMode`
+  reflection/refraction branches that CONSUME a `fresnelFactor` declared by the material. Since
+  the material merge, the only material declaring reflection/refraction is `StandardResource`,
+  which always calls `enablePBRMode()` — those branches are **unreachable legacy**. Do not
+  revive them expecting a material to publish `fresnelFactor`.
+- Files: `Graphics/Material/StandardResource.cpp:generateFragmentShaderCode()`,
+  `LightGenerator.cpp:generateAmbientFragmentShader()`
 
 ## IBL Ambient Pass (Jul 2026, IBL lot 3)
 
@@ -337,13 +338,17 @@ split-sum BRDF LUT.
 - **Baked AO** now modulates ONLY the diffuse ambient terms (`aoFactor` at each addition
   site) — the old global multiply darkened the emissive and the specular IBL.
 - The reflection sample itself (`SurfaceReflectionColor`) is roughness-driven since lot 3:
-  `textureLod(prefiltered, R, roughness × (mips-1))` in PBR/Standard bindless generators
-  (Standard maps `roughness = sqrt(2/(shininess+2))`), mip 0 being an exact environment
-  copy for mirrors. The PBR transmission reads the prefiltered slot too.
+  `textureLod(prefiltered, R, roughness × (mips-1))` in the `StandardResource` bindless
+  generator, mip 0 being an exact environment copy for mirrors. The transmission reads the
+  prefiltered slot too. (`LightGenerator::roughnessShaderExpression()` still falls back to
+  `sqrt(2/(shininess+2))` for a material that only declared a shininess — `BasicResource`,
+  which carries no reflection, so that branch never drives a prefiltered fetch.)
 
 ## Legacy (Blinn-Phong) Specular — Energy Normalisation (Jul 2026)
 
 The non-PBR specular is a **normalised BRDF times an irradiance**, exactly like its diffuse sibling.
+It is now the `BasicResource` tier alone: since the material merge, `declareSurfaceSpecular()` has a
+single caller, and the legacy `StandardResource` this was written for no longer exists.
 Emitted at three sites, all computing the same expression in their own space:
 
 | Generator | Space | Normal used |
@@ -366,16 +371,24 @@ Three things to keep straight:
 2. **The `N.L` arrives via `DiffuseFactor`, not `LightFactor`.** `DiffuseFactor` is already
    `N.L * LightFactor`, so the shadow/attenuation factor is applied exactly once. Multiplying by both
    would square it.
-3. **`max(..., 1.0)` on the exponent** is insurance for values set through the C++ API, not for
-   manifest data — a manifest value is converted by `specularExponentFromGlossiness()` and cannot come
-   out below 2. Without a floor, an exponent under 1 gives a lobe that never decays.
+3. **`max(..., 1.0)` on the exponent** is a real floor, C++ API and manifest alike:
+   `BasicResource` takes the manifest `Shininess` RAW as a Blinn-Phong exponent (default 200),
+   with nothing keeping an authored value above 1. Without the floor, an exponent under 1 gives a
+   lobe that never decays.
 
 Why it matters photometrically: unnormalised, the term was `specularColor * illuminance * pow(...)`,
 a raw multiple of the illuminance with no cosine — a 0.5 grey specular under a 50000 lx sun returned
 22350 nits, five times the luminance of the sky above it. Now the diffuse and the specular of one
 material are on the same scale, and both are commensurable with lights authored in lux/candela.
-Full diagnosis, measurements and the `Shininess`-as-glossiness contract:
-`docs/caution-points.md`, "The legacy specular was not energy-normalised".
+Full diagnosis and measurements: `docs/caution-points.md`, "The legacy specular was not
+energy-normalised".
+
+> [!WARNING]
+> **The manifest key `Shininess` means two different things depending on the container.**
+> `BasicResource` reads it as the raw exponent above; the merged `StandardResource` reads it as an
+> authored **glossiness** `[0,1]` and converts it as `roughness = 1 - glossiness`. The old
+> `StandardResource::specularExponentFromGlossiness()` bridge died with the legacy material — do
+> not look for it, and never apply a conversion twice.
 
 > [!NOTE]
 > The **PBR low-quality** specular approximation in `LightGenerator.cpp` (`lqSpecPower`) is still
@@ -599,8 +612,8 @@ of the same name is byte-identical, returns `true`, and emits **no warning**:
 - **Unbounded bindless arrays** (`AbstractShader::declare(const Declaration::Sampler &)`
   when `declaration.isUnbounded()`). A fixed name maps to a fixed set/binding/type
   (e.g. `uBindlessTexturesCube` → cube binding on the `PerBindless` set). They are
-  declared **independently** by materials (`StandardResource`, `StandardResource`) **and**
-  the `LightGenerator` variants (cube shadows, color projection) into one fragment
+  declared **independently** by the material (`StandardResource`, at each of its feature
+  sites) **and** the `LightGenerator` variants (cube shadows, color projection) into one fragment
   shader — there is **no single coordinator** across those subsystems, so a localized
   "declare once" cannot cover it. Silent de-dup is the mechanism.
 
@@ -610,8 +623,8 @@ signal. **Bounded / named samplers still warn** on duplicates: there a
 same-name / different-binding clash is a real bug worth catching.
 
 > [!NOTE]
-> Every subsystem declares the bindless arrays **on use** (each PBR/Standard material
-> feature, each `LightGenerator` variant), unconditionally — no up-front "declare once"
+> Every subsystem declares the bindless arrays **on use** (each `StandardResource` feature
+> site, each `LightGenerator` variant), unconditionally — no up-front "declare once"
 > coordinator and no guards. There is no shared owner across material ↔ LightGenerator,
 > so the silent de-dup above is what keeps a single declaration in the shader and the log
 > clean. Do not add a localized once-guard back; it cannot cover the cross-subsystem case

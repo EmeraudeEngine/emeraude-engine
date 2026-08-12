@@ -247,7 +247,7 @@ per-pixel post-process control is obeyed.
 
 ---
 
-## 3. Post-process paths (5-6)
+## 3. Post-process paths (4-5)
 
 Both are `IndirectPostProcessEffect`s. Both declare
 `requiresDepth / requiresNormals / requiresMaterialProperties / requiresHDR`; RTR additionally
@@ -640,7 +640,7 @@ Stated explicitly so nobody looks for it:
 |------|------|
 | Reflectivity nibble + IBL GLSL | `src/Saphir/LightGenerator.cpp` |
 | Normals/matProps MRT writes | `src/Saphir/Generator/SceneRendering.cpp` |
-| Material reflection components | `src/Graphics/Material/{Standard,PBR}Resource.cpp` |
+| Material reflection components | `src/Graphics/Material/StandardResource.cpp` |
 | IBL baked textures | `src/Graphics/IBLTexture.{hpp,cpp}`, `src/Graphics/Compute/IBLBaker.*` |
 | SSR / RTR | `src/Graphics/Effects/Framebuffer/{SSR,RTR}.cpp` |
 | Dynamic probe | `src/Scenes/Scene.rendering.cpp`, `src/Scenes/Toolkit.hpp` |

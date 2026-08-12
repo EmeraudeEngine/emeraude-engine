@@ -490,27 +490,11 @@ Add depth/relief illusion to flat surfaces using a height map:
 auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("BrickWall", [](auto & mat)
 {
-    mat.setAmbientComponent(Color<float>{0.1F, 0.1F, 0.1F, 1.0F});
-    mat.setDiffuseComponent("Walls/Bricks001-color");
-    mat.setSpecularComponent(White, 32.0F);
-    mat.setNormalComponent("Walls/Bricks001-normal");
-    // POM: height map + scale (max depth of white pixels)
-    mat.setHeightComponent("Walls/Bricks001-height", 0.02F);
-    return mat.setManualLoadSuccess(true);
-});
-```
-
-### Parallax Occlusion Mapping (PBR Material)
-
-```cpp
-auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
-    ->getOrCreateResourceWithCallback("BrickWallPBR", [](auto & mat)
-{
     mat.setAlbedoComponent("Walls/Bricks001-color");
     mat.setRoughnessComponent(0.8F);
     mat.setMetalnessComponent(0.0F);
     mat.setNormalComponent("Walls/Bricks001-normal");
-    // POM: height map + scale
+    // POM: height map + scale (max depth of white pixels)
     mat.setHeightComponent("Walls/Bricks001-height", 0.02F);
     mat.setReflectionComponentFromEnvironmentCubemap();
     return mat.setManualLoadSuccess(true);

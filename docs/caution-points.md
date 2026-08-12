@@ -98,21 +98,33 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ### Material Property Array Layout (std140)
 
-The `StandardResource` material uses a float array with specific offsets (std140 aligned):
+Since the material merge, `StandardResource` **IS** the PBR (metallic-roughness) material, and its
+float array is **80 floats / 320 bytes** (std140 aligned). The authoritative layout is the comment
+sitting above the `*Offset` constants in `Graphics/Material/StandardResource.hpp`; the offsets most
+often traced:
 
 | Offset | Property | Range | Notes |
 |--------|----------|-------|-------|
-| 0-3 | ambientColor | vec4 | RGBA |
-| 4-7 | diffuseColor | vec4 | RGBA |
-| 8-11 | specularColor | vec4 | RGBA |
+| 0-3 | albedoColor | vec4 | RGBA, also the TINT factor over the albedo texture |
+| 4 | roughness | float | 0-1 |
+| 5 | metalness | float | 0-1 |
+| 6 | normalScale | float | 0-1 |
+| 8 | ior | float | 1.0-3.0 (clamped by `setIOR()`) |
+| 9 | iblIntensity | float | 0-1 |
+| 10 | autoIlluminationAmount | float | 0-1 (emissive MASK, not a brightness) |
 | 12-15 | autoIlluminationColor | vec4 | RGBA |
-| 16 | shininess | float | 0-128+ |
-| 17 | opacity | float | 0-1 |
-| 18 | autoIlluminationAmount | float | 0-1 |
-| 19 | normalScale | float | 0-1 |
-| **20** | **reflectionAmount** | float | 0-1 |
-| **21** | **refractionAmount** | float | 0-1 |
-| **22** | **refractionIOR** | float | 1.0-3.0 |
+| 48 | emissiveStrength | float | nits — the actual emissive brightness |
+| 50 | opacity | float | 0-1 |
+| 51 | alphaThreshold | float | 0-1, glTF `alphaCutoff` |
+| **52** | **reflectionAmount** | float | 0-1, artistic mix (texture/probe modes) |
+| **53** | **refractionAmount** | float | 0-1, artistic mix (texture mode) |
+| 56-79 | per-component UVW transforms | 6 × vec4 | `KHR_texture_transform`, neutral `(1,1,0,0)` |
+
+> [!CAUTION]
+> **There is no `ambientColor` / `diffuseColor` / `specularColor` / `shininess` float any more** —
+> that layout died with the legacy Blinn-Phong material. `BasicResource` keeps its own, much smaller
+> block (`DiffuseColorOffset`, `SpecularColorOffset`, `ShininessOffset`); never read one material's
+> offsets against the other.
 
 **Debugging tip:** If reflection/refraction amounts seem wrong, trace:
 1. C++ side: Are values written to correct offsets?
@@ -161,10 +173,11 @@ The `StandardResource` material uses a float array with specific offsets (std140
 
 When both reflection AND refraction components are present:
 
-1. **`fresnelFactor` is auto-generated** by `StandardResource.cpp` during shader generation
-2. It's computed using the Schlick approximation with IOR
+1. **`fresnelFactor` is auto-generated** by `LightGenerator.cpp` (the PBR glass IBL block) during
+   shader generation — the legacy material used to emit it itself, and no longer exists
+2. It's computed with the Schlick approximation from the dielectric F0 (0.04)
 3. The lighting code in `LightGenerator.cpp` uses it to blend between reflected and refracted colors
-4. **`refractionIOR` is clamped** to [1.0, 3.0] - values below 1.0 (like 0.33) become 1.0
+4. **`ior`** (offset 8) **is clamped** to [1.0, 3.0] - values below 1.0 (like 0.33) become 1.0
 
 ### Material Types Registration
 
@@ -174,10 +187,14 @@ When both reflection AND refraction components are present:
 > The `Material::Types` array in `Materials.hpp` is used by `FastJSON::getValidatedStringValue()`
 > to validate material type strings from JSON. If a type is missing, it falls back to `BasicResource`.
 >
-> **Bug pattern (fixed Jan 2026):**
-> - `StandardResource::ClassId` was missing from `Material::Types`
-> - Mesh JSON with `"MaterialType": "MaterialStandardResource"` silently fell back to Basic
-> - Result: PBR materials loaded as Basic materials
+> **Bug pattern (fixed Jan 2026):** the lit material's `ClassId` was missing from `Material::Types`,
+> so a mesh JSON declaring it silently fell back to Basic — a lit material loaded as a cheap one.
+>
+> ⚠️ **Live trap since the material merge:** the array holds exactly TWO entries,
+> `MaterialBasicResource` and `MaterialStandardResource` — the ClassId `"MaterialPBRResource"` no
+> longer exists. Any manifest still carrying it fails validation and falls back to **Basic**, in
+> silence. (The scene-definition JSON is a separate path: there the `"Type"` strings `"Standard"`
+> and `"PBR"` are accepted as synonyms — `Scenes/DefinitionResource.cpp`.)
 >
 > **Files involved:**
 > - `Graphics/Material/Materials.hpp` - Types array definition
@@ -542,8 +559,8 @@ if ( materialType == StandardResource::ClassId )
 >
 > **Fix:** a fourth MRT attachment on the scene render target — **albedo,
 > `VK_FORMAT_R8G8B8A8_SRGB`** (written linear, encoded on store, decoded on sample), written by
-> the ambient/simple pass from `LightGenerator::albedoShaderExpression()` (PBR albedo /
-> Standard-Basic diffuse / white fallback), and consumed by SSGI's apply pass
+> the ambient/simple pass from `LightGenerator::albedoShaderExpression()` (Standard albedo /
+> Basic diffuse / white fallback), and consumed by SSGI's apply pass
 > (`gi *= texture(albedoTex, vUV).rgb`).
 >
 > **Contract points (MUST stay consistent when touching any of this):**
@@ -848,11 +865,12 @@ if ( materialType == StandardResource::ClassId )
 > - `Saphir/Generator/SceneRendering.cpp:561` — `svOutputNormal` write (AmbientPass || SimplePass)
 > - See `src/Saphir/AGENTS.md` → "MRT normal output — the `N` declaration contract".
 >
-> **Verification:** WaterWorld covers all four combinations in one scene — Standard floor
-> (`WaterWorldSceneFloor`) + PBR sea (`WaterWorldSea`) × high/low quality. Toggle
+> **Verification:** the check needs the two shading families in one scene × high/low quality. Since
+> the material merge, `StandardResource` IS the PBR material, so the non-PBR half must be a
+> **`BasicResource`** material (WaterWorld's floor and sea are both Standard now). Toggle
 > `EnableHighQuality` and confirm zero shader errors in both.
 
-### Fixed: Direct diffuse was missing the Lambertian 1/pi — Standard vs PBR disagreed by a factor of pi (Jul 2026)
+### Fixed: Direct diffuse was missing the Lambertian 1/pi — legacy Blinn-Phong vs PBR disagreed by a factor of pi (Jul 2026)
 
 **Symptom.** Sunlit ground rendered markedly brighter than the sky that lit it, and brighter than a
 PBR surface beside it under the same light. Owner's words: "flashy as hell". On `water-world`, sand
@@ -861,8 +879,9 @@ under a 100000 lx sun reached ~28000 nits against an 8000-nit sky dome.
 **Root cause.** Light intensities are ILLUMINANCE in lux, so a Lambertian surface emits
 `albedo * E * cos(theta) / pi`. That `1/pi` existed in exactly ONE place in the whole Saphir
 generator — the ambient pass (`LightGenerator.cpp`, `albedo * 0.3183098862`). The PBR generator had
-its own (`LightGenerator.PBR.cpp`: `kD * albedo / 3.14159265`). The **legacy/Standard direct diffuse
-had none**, so the two material models differed by pi (~3.14x) on direct lighting.
+its own (`LightGenerator.PBR.cpp`: `kD * albedo / 3.14159265`). The **legacy Blinn-Phong direct
+diffuse had none** — that path serves `BasicResource` since the material merge — so the two material
+models differed by pi (~3.14x) on direct lighting.
 
 **Fix.** `LightGenerator::generateFinalFragmentOutput()` now builds a `diffuseIlluminance`
 expression (`lightIntensity * 0.3183098862`) and uses it at all four diffuse emission sites (plain,
@@ -941,7 +960,7 @@ evaluates it — the two axes combine freely, and this engine offers all four co
   on a flat surface — the sun's glitter path on water.
 - `N·H` makes the term a microfacet **normal distribution over H**, the same family as the PBR path's
   GGX, so `shininess` and `roughness` can be related. Parameterised around `R`, they cannot be — which
-  is structurally why a `StandardResource` and a `StandardResource` could never agree under one light.
+  is structurally why a `BasicResource` and a `StandardResource` could never agree under one light.
 
 **Changed sites:** `LightGenerator.PerFragment.cpp` (view space, reuses `twoSidedN` / `twoSidedV`),
 `LightGenerator.PerFragment.NormalMap.cpp` (**tangent** space — N, V and H all in tangent space),
@@ -992,7 +1011,7 @@ invisible next to anything real. The brightness belongs in `EmissiveStrength`, i
 
 ⚠️ **Sprites could not express this at all until Aug 2026**: `SpriteResource::load()` parsed
 `AutoIllumination` but no strength key, so a flame sprite was structurally stuck at 1 nit. It now
-reads `EmissiveStrength`, the same key and contract as `StandardResource` / `StandardResource` and
+reads `EmissiveStrength`, the same key and contract as `StandardResource` and
 `KHR_materials_emissive_strength`.
 
 ⚠️ **Reference luminances, because the intuition is wrong here**: a candle flame is ~**10 000**
@@ -1068,8 +1087,10 @@ hunting an exposure bug.
 
 ### Fixed: the legacy specular was not energy-normalised, and `Shininess` was authored as a glossiness (Jul 2026)
 
-**Two independent defects that compounded into one symptom** — every sunlit Standard surface read as
-a uniform bright sheet, and the sky it stood under looked washed out by comparison. Diagnosed on
+**Two independent defects that compounded into one symptom** — every sunlit legacy Blinn-Phong
+surface read as a uniform bright sheet, and the sky it stood under looked washed out by comparison.
+The material that carried them was the legacy `StandardResource`, deleted by the material merge; the
+shading path survives for `BasicResource`, and so does the trap. Diagnosed on
 `basic-scenery` under `Clouds` (6000 nits dome, 50000 lx sun at 5000 K).
 
 **Defect 1 — the term was a raw multiple of the ILLUMINANCE.** The legacy specular was emitted as
@@ -1107,20 +1128,25 @@ substance. That is the whole "flashy ground / flat sky" signature.
 | Half | Site | Note |
 |---|---|---|
 | Energy normalisation + `N.L` | `LightGenerator.PerVertex.cpp`, `.PerFragment.cpp`, `.PerFragment.NormalMap.cpp` | `pow(N.H, n) * ((n + 2) / (8*pi)) * DiffuseFactor` — `DiffuseFactor` already carries `N.L * LightFactor`, so the attenuation is applied exactly once. `TODO.md` proposed scaling next to `finaleSpecularFactor` in `generateFinalFragmentOutput()` instead; the factor sites were chosen because the exponent AND `N.L` are both in scope there. |
-| Glossiness -> exponent | `StandardResource::specularExponentFromGlossiness()`, called ONLY from the two JSON parse sites | `exp2(1 + 10 * gloss)` (UE3 convention): `0.0 -> 2`, `0.1 -> 4`, `0.2 -> 8`, `0.4 -> 32`, `0.5 -> 45`, `0.9 -> 1024`. |
+| Glossiness -> exponent | `specularExponentFromGlossiness()` on the legacy material, called ONLY from the two JSON parse sites | `exp2(1 + 10 * gloss)` (UE3 convention): `0.0 -> 2`, `0.1 -> 4`, `0.2 -> 8`, `0.4 -> 32`, `0.5 -> 45`, `0.9 -> 1024`. **Gone with the legacy material** — see the caution below for what consumes the key today. |
 
 > [!CAUTION]
-> **The remap belongs to the JSON boundary and NOWHERE else.** The C++ API carries real exponents:
-> `DefaultShininess` is `32`, `MaxPBRShininess` is `128`, and `setRoughness()` feeds `setShininess()`
-> through `pow(1 - roughness, 2) * 128` (roughness 0.5 -> 32). Remapping inside `setShininess()` would
-> turn that 32 into `exp2(321)`. For the same reason the absent-key fallback had to become
-> `DefaultGlossiness{0.4F}`, which maps BACK to 32 — using `DefaultShininess` there would have been
-> the same bug with a different trigger.
+> **The conversion belongs to the JSON boundary and NOWHERE else — and it is a ROUGHNESS conversion
+> now.** `specularExponentFromGlossiness()` died with the legacy material. The merged
+> `StandardResource` is PBR and reads `"Shininess"` as the glossiness it is, storing
+> `roughness = 1 - glossiness` (`parseRoughnessComponent()`). Nothing downstream re-interprets it: a
+> value held by a `StandardResource` is a roughness in `[0,1]`, full stop.
 >
-> **Do not remap twice.** A value read from a manifest is a glossiness; a value held by a
-> `StandardResource` or reaching the shader uniform is an exponent. The 13 files that legitimately
-> carried exponents were converted to glossiness in the data store (`gloss = (log2(n) - 1) / 10`), so
-> the key now has exactly ONE meaning everywhere.
+> ⚠️ **`BasicResource` did NOT follow, and that is the live trap.** It still consumes `"Shininess"`
+> (or `"Value"`) as a RAW Blinn-Phong exponent — `BasicResource::DefaultShininess` is `200`, there is
+> no remap anywhere — while the data store holds glossiness values (`0.1` in 3834 of 3917 files). A
+> legacy manifest loaded as a Basic material therefore lands on an exponent of `0.1`, which the three
+> legacy generators clamp to `max(shininess, 1.0)`: the widest possible lobe, i.e. exactly the
+> uniform-sheet look Defect 2 describes. Convert at the call site when authoring a Basic material
+> from that data.
+>
+> The 13 files that legitimately carried exponents were converted to glossiness in the data store
+> (`gloss = (log2(n) - 1) / 10`), so the manifest key has exactly ONE meaning: a glossiness in `[0,1]`.
 
 **Verified.** `basic-scenery`, ground + sky only, controlled camera. The rendered ground/sky mean
 luminance ratio landed at **1.64**, against **1.65** computed independently from the manifest
@@ -1930,7 +1956,7 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 >
 > Reference sites (visually validated — celestial servoing reproduces star directions
 > within 1°): the skybox (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and
-> the material reflections (`StandardResource`/`StandardResource` bindless reflection GLSL).
+> the material reflections (`StandardResource` bindless reflection GLSL).
 >
 > **Symptom of the raw-direction bug:** the sky is read upside-down — GI bounces tinted
 > by the ground where the sky should be, ray-miss reflections showing the wrong hemisphere.
@@ -2782,8 +2808,8 @@ meter a black scene and pin the exposure to the ISO ceiling.
 >
 > **Fix (engine, two layers):**
 > - `Material::Interface::samplesTexture(const Vulkan::TextureInterface *)` — a material can now
->   be asked whether any of its components samples a given texture (overridden by Basic, Standard
->   and PBR resources).
+>   be asked whether any of its components samples a given texture (overridden by the Basic and
+>   Standard resources).
 > - `Scene::checkRenderableInstanceForRendering()` consults it and **auto-excludes** the instance
 >   from Texture/Cubemap render targets its own material samples — no registration needed, the
 >   manual `excludeFromRendering()` list remains for other cases. Cost is confined to probe
@@ -2794,7 +2820,7 @@ meter a black scene and pin the exposure to the ISO ceiling.
 > scene content in the first place.
 >
 > **Files:** `Scenes/Scene.rendering.cpp`, `Graphics/Material/Interface.hpp`,
-> `Graphics/Material/{Basic,Standard,PBR}Resource.{hpp,cpp}`. See also
+> `Graphics/Material/{Basic,Standard}Resource.{hpp,cpp}`. See also
 > `docs/reflection-pipeline.md` § 2.3 fix 4.
 
 ---

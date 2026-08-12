@@ -374,8 +374,8 @@ in an 80-float array (320 bytes, std140):
 | 49 | clearCoatNormalScale | float | 0.0+ (1.0) — CC normal map intensity |
 | 50 | opacity | float | 0.0-1.0 (1.0) — global transparency |
 | 51 | alphaThreshold | float | 0.0-1.0 (0.5) — cutout cutoff |
-| 52 | reflectionAmount | float | 0.0-1.0 (0.0) |
-| 53 | refractionAmount | float | 0.0-1.0 (0.0) |
+| 52 | reflectionAmount | float | 0.0-1.0 (**1.0**) — artistic override; the neutral 1.0 leaves the mix BRDF-controlled |
+| 53 | refractionAmount | float | 0.0-1.0 (**1.0**) — artistic override; the neutral 1.0 leaves the blend Fresnel-controlled |
 | 54-55 | padding | float | std140 alignment |
 | 56-79 | UVW transforms | 6 × vec4 | Albedo/Roughness/Metalness/Normal/AmbientOcclusion/AutoIllumination, `(scale.xy, offset.zw)`, neutral (1,1,0,0) |
 
@@ -424,8 +424,8 @@ ways, parsed from the JSON `Opacity` component and mirrored by `setOpacityCompon
    `alphaCutoff`).
 3. **Map without `AlphaThreshold`** → grayscale per-pixel alpha SCALE: `texel.r × amount`, blending.
 
-Loader wiring: glTF `alphaMode MASK` → `enableAlphaTest(alphaCutoff)` (no-op parity stub on
-StandardResource); USD `opacityThreshold > 0` → cutout, translucent USD/FBX materials get
+Loader wiring: glTF `alphaMode MASK` → `enableAlphaTest(alphaCutoff)`; USD
+`opacityThreshold > 0` → cutout, translucent USD/FBX materials get
 `setOpacityComponent()` so the alpha VALUE finally reaches the blend (both used to raise the blending
 flag with no alpha wired).
 
@@ -484,8 +484,8 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 > [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md).
 >
 > 0.5 is the right value for a mask authored as coverage, and Basic's **three paths agree at 0.5**: the
-> colour discard, the shadow discard, and `GPURTMaterialData::alphaCutoff`. PBR's three paths agree on
-> its UBO threshold the same way.
+> colour discard, the shadow discard, and `GPURTMaterialData::alphaCutoff`. Standard's three paths agree
+> on its UBO threshold the same way.
 
 **Which mode for which authoring intent:**
 
@@ -505,13 +505,13 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 - `Material/StandardResource.cpp:parseOpacityComponent()` — the 3-rule JSON contract
 - `Material/StandardResource.cpp:alphaSourceTextureComponent()` — opacity component, else albedo alpha
 - `Material/StandardResource.cpp:generateShadowAlphaTestCode()` — shadow discard against the UBO threshold
-- `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side (Basic 0.5, PBR = UBO threshold)
+- `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side (Basic 0.5, Standard = UBO threshold)
 - `Graphics/Renderable/ProgramCacheKey.hpp:materialFlags` — codegen flags in the program cache key
 - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` — the `isOpaque()` branch
 
 ### Normal Map Scale
 
-The `normalScale` parameter (offset 19 for Standard, offset 6 for PBR) controls normal map intensity by scaling the tangent-space XY components before re-normalizing:
+The `normalScale` parameter (offset 6) controls normal map intensity by scaling the tangent-space XY components before re-normalizing:
 
 ```glsl
 vec3 raw = texture(normalSampler, uv).rgb * 2.0 - 1.0;
@@ -522,7 +522,7 @@ vec3 normal = normalize(vec3(raw.xy * ubMaterial.normalScale, raw.z));
 - `0.5` = half intensity (smoother bumps)
 - `0.0` = flat surface (normal map ignored)
 
-**Code references:** `StandardResource.cpp:generateFragmentShaderCode()`, `StandardResource.cpp:generateFragmentShaderCode()`
+**Code references:** `StandardResource.cpp:generateFragmentShaderCode()`
 
 ### Parallax Occlusion Mapping (POM)
 
@@ -555,9 +555,7 @@ When active, a displaced UV (`pomTexCoords`) is computed at the start of the fra
 - `CameraWorldPosition` — camera position (reuses Reflection/Refraction output if present)
 
 **Code references:**
-- `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation
 - `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation (+ distance fade)
-- `StandardResource.cpp:textCoords()` — UV variable selection
 - `StandardResource.cpp:textCoords()` — UV variable selection
 - `Saphir/Keys.hpp:ParallaxTextureCoordinates` — `"pomTexCoords"`
 - `Saphir/Keys.hpp:HeightSampler` — `"uHeightSampler"`
@@ -762,26 +760,26 @@ Optional software frame rate limiter for precise FPS control.
 
 ### Base colour — the texture is TINTED by the colour (Aug 2026)
 
-When the albedo/diffuse component is a **Texture**, the generated fragment code multiplies the
+When the albedo component is a **Texture**, the generated fragment code multiplies the
 sampled texel by the material's base colour:
 
 ```glsl
 const vec4 SurfaceAlbedoColor = texture(AlbedoSampler, uv) * MaterialUB(AlbedoColor);   /* StandardResource */
-const vec4 SurfaceDiffuseColor = texture(DiffuseSampler, uv) * MaterialUB(DiffuseColor); /* StandardResource */
 ```
 
 This is what every source format means: glTF `baseColorFactor` and FBX `base_color` both specify
 the **PRODUCT** of factor and texture. Both loaders used to call `setAlbedoComponent(texture)` and
 **drop the factor entirely** — a material tinted by factor over a neutral texture imported
 untinted, and the factor's **alpha went with it**. They now set the tint through
-`setAlbedoColor()` / `setDiffuseColor()` alongside the texture component.
+`setAlbedoColor()` alongside the texture component.
 
 > [!IMPORTANT]
-> **`DefaultAlbedoColor` and `DefaultDiffuseColor` are `White`, and that is load-bearing — they
-> were `Grey`.** The colour is now a multiplicative factor on the textured path, so its neutral
-> value MUST be the multiplicative identity. Leaving them grey would have darkened **every**
-> textured material in the engine by half. Only a material that configures no colour at all sees
-> any change, and white is the correct neutral there too.
+> **`DefaultAlbedoColor` is `White`, and that is load-bearing — it was `Grey`.** The colour is now
+> a multiplicative factor on the textured path, so its neutral value MUST be the multiplicative
+> identity. Leaving it grey would have darkened **every** textured material in the engine by half.
+> Only a material that configures no colour at all sees any change, and white is the correct
+> neutral there too. ⚠️ `BasicResource` tints the same way but kept `DefaultDiffuseColor{Grey}` —
+> the cheap tier is not covered by this reasoning.
 
 > [!WARNING]
 > **The multiplication is UNCONDITIONAL, and must stay that way.** The shader program cache keys
@@ -791,7 +789,7 @@ untinted, and the factor's **alpha went with it**. They now set the tint through
 > [Alpha Test](#alpha-test--the-binary-cutout-contract-aug-2026).
 
 > [!NOTE]
-> `AlbedoColor` / `DiffuseColor` are declared **unconditionally** in `getUniformBlock()`, whatever
+> `AlbedoColor` is declared **unconditionally** in `getUniformBlock()`, whatever
 > the component's filling type — the uniform block is a fixed layout mirroring the whole
 > `m_materialProperties` array. That is precisely why the textured path may reference them.
 
@@ -839,11 +837,11 @@ const float SurfaceMetalness = texture(MetalnessSampler, uv).b * MaterialUB(Meta
 
 Texture components carry a UV transform (`uv * scale + offset`) stored ON the component
 (`Component::Texture::setUVWScale/setUVWOffset`, JSON keys `"UVW"` / `"UVWOffset"`) and synced
-at creation into per-component material UBO vec4 slots — PBR: Albedo/Roughness/Metalness/
-Normal/AmbientOcclusion/AutoIllumination; Standard: Diffuse/Normal/Opacity/AutoIllumination.
+at creation into per-component material UBO vec4 slots (offsets 56-79) — Albedo/Roughness/
+Metalness/Normal/AmbientOcclusion/AutoIllumination.
 Applied UNCONDITIONALLY with the identity neutral (1,1,0,0) — same precedent as the White
-albedo. Public API: `setComponentUVWTransform()` (Standard maps Albedo→Diffuse; components
-without a slot return false). Source: glTF `KHR_texture_transform` via the loader.
+albedo. Public API: `StandardResource::setComponentUVWTransform()` (components without a slot
+return false). Source: glTF `KHR_texture_transform` via the loader.
 ⚠️ The `m_UVWScale` member existed for years but NO codegen consumed it — a transform that
 is stored but never applied fails SILENTLY (stretched textures, zero log).
 ⚠️ RT hit shading does not apply these transforms yet — known parity gap.
@@ -893,30 +891,30 @@ All material components follow the same parsing pattern via `parseComponentBase(
 ```
 
 > [!CRITICAL]
-> **`"Shininess"` in a manifest is a GLOSSINESS in [0,1] — the C++ API takes an EXPONENT.**
+> **`"Shininess"` in a manifest is a GLOSSINESS in [0,1], and the lit material stores a ROUGHNESS.**
 > The whole data store was authored as a perceptual glossiness (3834 material files of 3917 hold
-> `0.1`), while the shader uniform and every setter carry a real Blinn-Phong exponent. The conversion
-> happens at the parse boundary ONLY, in the two specular parse sites of
-> `StandardResource::parseSpecularComponent()`:
+> `0.1`). Since the material merge there is no Blinn-Phong exponent left on the lit path: the
+> conversion happens at the parse boundary ONLY, in `StandardResource::parseSpecularComponent()`,
+> and it is the canonical complement
 >
 > ```
-> exponent = StandardResource::specularExponentFromGlossiness(gloss)   // exp2(1 + 10 * gloss)
-> // 0.0 -> 2 | 0.1 -> 4 | 0.2 -> 8 | 0.4 -> 32 | 0.5 -> 45 | 0.9 -> 1024 | 1.0 -> 2048
+> roughness = 1 - clampToUnit(glossiness)   // 0.1 -> 0.9 | 0.4 -> 0.6 | 1.0 -> 0.0
 > ```
 >
-> **Never apply it anywhere else.** `DefaultShininess` is `32`, `MaxPBRShininess` is `128`, and
-> `setRoughness()` reaches `setShininess()` through `pow(1 - roughness, 2) * 128` — all exponents.
-> Remapping one of those would produce `exp2(321)`. The absent-key fallback is `DefaultGlossiness{0.4F}`
-> for the same reason: it maps back to the historical 32.
+> (Khronos archived spec-gloss extension). The absent-key fallback is `DefaultRoughness{0.5F}`.
+> ⚠️ The Khronos "F0 = specular colour" half is DELIBERATELY NOT applied: legacy Phong specular
+> colours are highlight intensities (bright greys), not a dielectric F0 (~0.04) — mapped raw they
+> read near-mirror. F0 stays the 0.04 dielectric default; the low roughness carries the highlight.
+> ⚠️ `BasicResource` reads the SAME key as a raw Blinn-Phong exponent (`DefaultShininess{200}`,
+> no conversion) — the cheap tier still shades Blinn-Phong. Do not port either rule to the other.
 >
-> A value coming out of JSON is a glossiness; a value held by the resource or reaching the shader is an
-> exponent. See `docs/caution-points.md`, "The legacy specular was not energy-normalised, and
-> `Shininess` was authored as a glossiness".
+> See `docs/caution-points.md`, "The legacy specular was not energy-normalised, and `Shininess` was
+> authored as a glossiness".
 
 **Code references:**
 - `Graphics/Material/Helpers.cpp:parseComponentBase()` - Base parsing
 - `Graphics/Material/StandardResource.cpp:parseReflectionComponent()` - Automatic handling
-- `Graphics/Material/StandardResource.cpp:parseReflectionComponent()` - PBR variant
+- `Graphics/Material/StandardResource.cpp:parseSpecularComponent()` - Glossiness → roughness
 
 ### Material Types Array
 
@@ -925,14 +923,19 @@ All material components follow the same parsing pattern via `parseComponentBase(
 >
 > `Materials.hpp` defines the valid material types for JSON validation:
 > ```cpp
-> constexpr auto Types = std::array< std::string_view, 3 >{
+> constexpr auto Types = std::array< std::string_view, 2 >{
 >     BasicResource::ClassId,      // "MaterialBasicResource"
->     StandardResource::ClassId,   // "MaterialStandardResource"
->     StandardResource::ClassId         // "MaterialStandardResource"
+>     StandardResource::ClassId    // "MaterialStandardResource"
 > };
 > ```
 >
 > Missing types cause silent fallback to `BasicResource` during mesh loading.
+>
+> ⚠️ There is ONE lit material since the merge: `StandardResource` IS the Cook-Torrance
+> metallic-roughness material (it kept the `"MaterialStandardResource"` ClassId). The name
+> `PBRResource` and the ClassId `"MaterialPBRResource"` no longer exist. In a JSON **scene**
+> definition the `"Type"` strings `"Standard"` and `"PBR"` are both accepted, as synonyms
+> (`Scenes/DefinitionResource.cpp`).
 
 ## 9. Shadow Mapping & Color Projection Global Control
 
@@ -2046,7 +2049,7 @@ real luminance or it contributes nothing. The manifest carries both halves:
 
 - `AutoIllumination` — the emissive **MASK**, clamped to [0,1]. It cannot carry a brightness.
 - `EmissiveStrength` — the **LUMINANCE in cd/m² (nits)**. Same key and same contract as
-  `StandardResource` / `StandardResource` and the glTF extension `KHR_materials_emissive_strength`;
+  `BasicResource` / `StandardResource` and the glTF extension `KHR_materials_emissive_strength`;
   the emitted quantity is `autoIlluminationColor * autoIlluminationAmount * emissiveStrength`.
 
 ⚠️ **The key was added in Aug 2026 and its absence was a hard limit, not an oversight to work
@@ -2628,7 +2631,7 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 
 **Setting**: `Core/Graphics/MDI/Enabled` (default: false)
 
-**Known limitation**: StandardResource materials without lighting enabled may not render correctly in the Opaque (non-lighted) list. This is a material/demo configuration issue, not an MDI bug.
+**Known limitation (UNVERIFIED since the material merge)**: materials without lighting enabled may not render correctly in the Opaque (non-lighted) list. This is a material/demo configuration issue, not an MDI bug. ⚠️ This note predates the merge, where it meant the DELETED legacy Blinn-Phong material; whether the limitation survived into the single lit material was never checked. Re-verify before trusting it either way.
 
 **Code references:**
 - `MDI/PerDrawData.hpp` — GPU-side struct (mat4 + uint frameIndex + padding = 80 bytes)
@@ -2810,7 +2813,7 @@ exposes it for effects binding it through their own descriptor sets.
 > any environment cubemap at **`vec3(D.x, -D.y, D.z)`** — the engine world is Y-down
 > (UP = -Y) while cubemaps are stored Y-up. Reference sites: the skybox
 > (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and the material reflections
-> (`StandardResource`/`StandardResource`), both validated visually (celestial servoing within 1°).
+> (`StandardResource`), both validated visually (celestial servoing within 1°).
 > RTGI/RTR/SSR sampled the RAW direction (sky upside-down in GI bounces and ray-miss
 > reflections) — fixed in lot 1. **The IBL generation (lot 2) MUST produce and consume
 > cubemaps under this same convention.**
