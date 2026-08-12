@@ -32,14 +32,12 @@
 
 /* Local inclusions for usages. */
 #include "BasicResource.hpp"
-#include "PBRResource.hpp"
 #include "StandardResource.hpp"
 
 namespace EmEn::Graphics::Material
 {
-	constexpr auto Types = std::array< std::string_view, 3 >{
+	constexpr auto Types = std::array< std::string_view, 2 >{
 		BasicResource::ClassId,
-		StandardResource::ClassId,
-		PBRResource::ClassId
+		StandardResource::ClassId
 	};
 }

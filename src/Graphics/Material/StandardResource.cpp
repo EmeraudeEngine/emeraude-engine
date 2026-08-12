@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cmath>
 #include <cstdlib>
 #include <ranges>
 #include <sstream>
@@ -80,23 +79,33 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->setAmbientComponent(DefaultAmbientColor);
-		this->setDiffuseComponent(DefaultDiffuseColor);
-		this->setSpecularComponent(DefaultSpecularColor, DefaultShininess);
+		/* Default PBR material: gray dielectric with medium roughness. */
+		this->setAlbedoComponent(DefaultAlbedoColor);
+		this->setRoughnessComponent(DefaultRoughness);
+		this->setMetalnessComponent(DefaultMetalness);
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	StandardResource::parseAmbientComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	StandardResource::parseAlbedoComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
-
 		Json::Value componentData{};
 
-		if ( !parseComponentBase(data, AmbientString, fillingType, componentData, true) )
+		/* Try "Albedo" first, fallback to "Diffuse" for Standard material compatibility. */
+		if ( !parseComponentBase(data, AlbedoString, fillingType, componentData, true) )
 		{
 			return false;
+		}
+
+		if ( fillingType == FillingType::None )
+		{
+			/* Fallback: try "Diffuse" key from Standard material format. */
+			if ( !parseComponentBase(data, DiffuseString, fillingType, componentData, true) )
+			{
+				return false;
+			}
 		}
 
 		switch ( fillingType )
@@ -105,7 +114,7 @@ namespace EmEn::Graphics::Material
 			{
 				const auto color = parseColorComponent(componentData);
 
-				if ( !this->setAmbientComponent(color) )
+				if ( !this->setAlbedoComponent(color) )
 				{
 					return false;
 				}
@@ -118,7 +127,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Ambient, std::make_unique< Texture >(Uniform::AmbientSampler, SurfaceAmbientColor, componentData, fillingType, serviceProvider));
+				const auto result = m_components.emplace(ComponentType::Albedo, std::make_unique< Texture >(Uniform::AlbedoSampler, SurfaceAlbedoColor, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -126,152 +135,28 @@ namespace EmEn::Graphics::Material
 				}
 
 				this->enableFlag(TextureEnabled);
-				// FIXME: Check UVW channel number
-				this->enableFlag(UsePrimaryTextureCoordinates);
-			}
-				return true;
-
-			case FillingType::None :
-				return true;
-
-			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource ambient component !";
-
-				return false;
-		}
-	}
-
-	bool
-	StandardResource::parseDiffuseComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
-	{
-		FillingType fillingType{};
-
-		Json::Value componentData{};
-
-		if ( !parseComponentBase(data, DiffuseString, fillingType, componentData, false) )
-		{
-			return false;
-		}
-
-		switch ( fillingType )
-		{
-			case FillingType::Color :
-			{
-				const auto color = parseColorComponent(componentData);
-
-				if ( !this->setDiffuseComponent(color) )
-				{
-					return false;
-				}
-			}
-				return true;
-
-			case FillingType::Gradient :
-			case FillingType::Texture :
-			case FillingType::VolumeTexture :
-			case FillingType::Cubemap :
-			case FillingType::AnimatedTexture :
-			{
-				const auto result = m_components.emplace(ComponentType::Diffuse, std::make_unique< Texture >(Uniform::DiffuseSampler, SurfaceDiffuseColor, componentData, fillingType, serviceProvider));
-
-				if ( !result.second || result.first->second == nullptr )
-				{
-					return false;
-				}
-
-				this->enableFlag(TextureEnabled);
-				// FIXME: Check UVW channel number
 				this->enableFlag(UsePrimaryTextureCoordinates);
 			}
 				return true;
 
 			case FillingType::None :
 			default:
-				TraceError{ClassId} << "The diffuse component (mandatory) is not present or invalid in material '" << this->name() << "' resource JSON file !";
+				TraceError{ClassId} << "The albedo component (mandatory) is not present or invalid in PBR material '" << this->name() << "' resource JSON file ! Tried both 'Albedo' and 'Diffuse' keys.";
 
 				return false;
 		}
 	}
 
 	bool
-	StandardResource::parseSpecularComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	StandardResource::parseRoughnessComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
-
 		Json::Value componentData{};
 
-		if ( !parseComponentBase(data, SpecularString, fillingType, componentData, true) )
+		if ( !parseComponentBase(data, RoughnessString, fillingType, componentData, true) )
 		{
 			return false;
 		}
-
-		switch ( fillingType )
-		{
-			case FillingType::Color :
-			{
-				const auto color = parseColorComponent(componentData);
-				/* ⚠️ The manifest key is an authored GLOSSINESS in [0,1], not an exponent — see
-				 * specularExponentFromGlossiness(). The whole data store was written this way (98% of
-				 * the material files declare 0.1), while the shader consumed the value directly as a
-				 * Blinn-Phong exponent: a lobe that never decayed. */
-				const auto shininess = StandardResource::specularExponentFromGlossiness(
-					FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultGlossiness)
-				);
-
-				if ( !this->setSpecularComponent(color, shininess) )
-				{
-					return false;
-				}
-			}
-				return true;
-
-			case FillingType::Gradient :
-			case FillingType::Texture :
-			case FillingType::VolumeTexture :
-			case FillingType::Cubemap :
-			case FillingType::AnimatedTexture :
-			{
-				const auto result = m_components.emplace(ComponentType::Specular, std::make_unique< Texture >(Uniform::SpecularSampler, SurfaceSpecularColor, componentData, fillingType, serviceProvider));
-
-				if ( !result.second || result.first->second == nullptr )
-				{
-					return false;
-				}
-
-				this->enableFlag(TextureEnabled);
-				// FIXME: Check UVW channel number
-				this->enableFlag(UsePrimaryTextureCoordinates);
-
-				/* ⚠️ Authored GLOSSINESS in [0,1] — see specularExponentFromGlossiness(). */
-				this->setShininess(StandardResource::specularExponentFromGlossiness(
-					FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultGlossiness)
-				));
-			}
-				return true;
-
-			case FillingType::None :
-				return true;
-
-			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource specular component !";
-
-				return false;
-		}
-	}
-
-	bool
-	StandardResource::parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
-	{
-		FillingType fillingType{};
-
-		Json::Value componentData{};
-
-		if ( !parseComponentBase(data, OpacityString, fillingType, componentData, true) )
-		{
-			return false;
-		}
-
-		m_alphaThresholdToDiscard = FastJSON::getValue< float >(data[OpacityString], JKAlphaThreshold).value_or(0.1F);
 
 		switch ( fillingType )
 		{
@@ -279,7 +164,7 @@ namespace EmEn::Graphics::Material
 			{
 				const auto value = parseValueComponent(componentData);
 
-				if ( !this->setOpacityComponent(value) )
+				if ( !this->setRoughnessComponent(value) )
 				{
 					return false;
 				}
@@ -292,52 +177,128 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, componentData, fillingType, serviceProvider));
+				const auto result = m_components.emplace(ComponentType::Roughness, std::make_unique< Texture >(Uniform::RoughnessSampler, SurfaceRoughness, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
 					return false;
 				}
 
-				this->enableFlag(BlendingEnabled);
 				this->enableFlag(TextureEnabled);
-				// FIXME: Check UVW channel number
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
-				this->setOpacity(FastJSON::getValue< float >(data[OpacityString], JKAmount).value_or(DefaultOpacity));
+				/* NOTE: With a texture component the scalar is the MULTIPLYING factor — neutral 1.0. */
+				this->setRoughness(FastJSON::getValue< float >(data[RoughnessString], JKValue).value_or(DefaultTextureFactor));
 			}
 				return true;
 
 			case FillingType::None :
-				return true;
+			{
+				/* Fallback: try "Specular" key from Standard material format (inverted). */
+				if ( !parseComponentBase(data, SpecularString, fillingType, componentData, true) )
+				{
+					return false;
+				}
+
+				switch ( fillingType )
+				{
+					case FillingType::Value :
+					{
+						/* Specular value → Roughness (inverted): high specular = low roughness. */
+						const auto specularValue = parseValueComponent(componentData);
+
+						if ( !this->setRoughnessComponent(1.0F - specularValue) )
+						{
+							return false;
+						}
+					}
+						return true;
+
+					case FillingType::Gradient :
+					case FillingType::Texture :
+					case FillingType::VolumeTexture :
+					case FillingType::Cubemap :
+					case FillingType::AnimatedTexture :
+					{
+						/* Specular texture → Roughness texture (inverted automatically). */
+						const auto result = m_components.emplace(ComponentType::Roughness, std::make_unique< Texture >(Uniform::RoughnessSampler, SurfaceRoughness, componentData, fillingType, serviceProvider));
+
+						if ( !result.second || result.first->second == nullptr )
+						{
+							return false;
+						}
+
+						this->enableFlag(TextureEnabled);
+						this->enableFlag(UsePrimaryTextureCoordinates);
+
+						/* Auto-invert since we're using a specular/gloss map as roughness source. */
+						m_invertRoughness = true;
+
+						/* NOTE: With a texture component the scalar is the MULTIPLYING factor — neutral 1.0. */
+						this->setRoughness(FastJSON::getValue< float >(data[SpecularString], JKValue).value_or(DefaultTextureFactor));
+					}
+						return true;
+
+					case FillingType::Color :
+					{
+						/* Legacy Phong specular COLOR (material merge, Lot 3). The canonical
+						 * conversion is roughness = 1 - glossiness (Khronos archived spec-gloss
+						 * extension; the manifest "Shininess" IS an authored GLOSSINESS [0,1] —
+						 * the 813ea2ea contract, see StandardResource::specularExponentFromGlossiness()).
+						 * ⚠️ The Khronos "F0 = specular color" half is DELIBERATELY not applied:
+						 * it presumes spec-gloss-authored data where specular is a dielectric F0
+						 * (~0.04). Legacy Phong colors are HIGHLIGHT intensities (bright greys) —
+						 * mapped raw to F0 they read near-mirror. For a dielectric, the perceptual
+						 * equivalent of a bright Phong highlight is the LOW ROUGHNESS the
+						 * glossiness already provides; F0 stays the 0.04 dielectric default. */
+						const auto shininessOpt = FastJSON::getValue< float >(data[SpecularString], JKShininess);
+
+						this->setRoughnessComponent(shininessOpt.has_value() ? 1.0F - clampToUnit(shininessOpt.value()) : DefaultRoughness);
+					}
+						return true;
+
+					case FillingType::None :
+					{
+						/* Last fallback: a bare Shininess value on the Specular component —
+						 * an authored GLOSSINESS [0,1], complement = linear roughness (Lot 3). */
+						const auto shininessOpt = FastJSON::getValue< float >(data[SpecularString], JKShininess);
+
+						this->setRoughnessComponent(shininessOpt.has_value() ? 1.0F - clampToUnit(shininessOpt.value()) : DefaultRoughness);
+					}
+						return true;
+
+					default:
+						TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource roughness component (from Specular fallback) !";
+
+						return false;
+				}
+			}
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource opacity component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource roughness component !";
 
 				return false;
 		}
 	}
 
 	bool
-	StandardResource::parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	StandardResource::parseMetalnessComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
-
 		Json::Value componentData{};
 
-		if ( !parseComponentBase(data, AutoIlluminationString, fillingType, componentData, true) )
+		if ( !parseComponentBase(data, MetalnessString, fillingType, componentData, true) )
 		{
 			return false;
 		}
 
 		switch ( fillingType )
 		{
-			case FillingType::Color :
+			case FillingType::Value :
 			{
-				const auto color = parseColorComponent(componentData);
-				const auto amount = FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount);
+				const auto value = parseValueComponent(componentData);
 
-				if ( !this->setAutoIlluminationComponent(color, amount) )
+				if ( !this->setMetalnessComponent(value) )
 				{
 					return false;
 				}
@@ -350,7 +311,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::AutoIllumination, std::make_unique< Texture >(Uniform::AutoIlluminationSampler, SurfaceAutoIlluminationColor, componentData, fillingType, serviceProvider));
+				const auto result = m_components.emplace(ComponentType::Metalness, std::make_unique< Texture >(Uniform::MetalnessSampler, SurfaceMetalness, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -358,18 +319,21 @@ namespace EmEn::Graphics::Material
 				}
 
 				this->enableFlag(TextureEnabled);
-				// FIXME: Check UVW channel number
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
-				this->setAutoIlluminationAmount(FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount));
+				/* NOTE: With a texture component the scalar is the MULTIPLYING factor — neutral 1.0
+				 * (DefaultMetalness would ZERO the texture out). */
+				this->setMetalness(FastJSON::getValue< float >(data[MetalnessString], JKValue).value_or(DefaultTextureFactor));
 			}
 				return true;
 
 			case FillingType::None :
+				/* Metalness is optional, use default (dielectric). */
+				this->setMetalnessComponent(DefaultMetalness);
 				return true;
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource auto-illumination component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource metalness component !";
 
 				return false;
 		}
@@ -379,7 +343,6 @@ namespace EmEn::Graphics::Material
 	StandardResource::parseNormalComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
-
 		Json::Value componentData{};
 
 		if ( !parseComponentBase(data, NormalString, fillingType, componentData, true) )
@@ -403,7 +366,6 @@ namespace EmEn::Graphics::Material
 				}
 
 				this->enableFlag(TextureEnabled);
-				// FIXME: Check UVW channel number
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setNormalScale(FastJSON::getValue< float >(data[NormalString], JKScale).value_or(DefaultNormalScale));
@@ -414,7 +376,7 @@ namespace EmEn::Graphics::Material
 				return true;
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource normal component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource normal component !";
 
 				return false;
 		}
@@ -459,7 +421,7 @@ namespace EmEn::Graphics::Material
 				return true;
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource height component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource height component !";
 
 				return false;
 		}
@@ -481,13 +443,14 @@ namespace EmEn::Graphics::Material
 			case FillingType::Automatic :
 			{
 				/* Use scene environment cubemap at render time. */
-				this->setReflectionComponentFromEnvironmentCubemap(FastJSON::getValue< float >(componentData, JKAmount).value_or(DefaultReflectionAmount));
+				this->setReflectionComponentFromEnvironmentCubemap(FastJSON::getValue< float >(componentData, JKIBLIntensity).value_or(DefaultIBLIntensity));
 			}
 				return true;
 
 			case FillingType::Value :
 			{
-				/* Post-process only reflection: no cubemap, just SSR/RTR via G-buffer reflectivity. */
+				/* Post-process only reflection: no cubemap IBL, just SSR/RTR via G-buffer reflectivity.
+				 * The Amount is stored as a constant reflectivity value for the material properties output. */
 				m_postProcessReflectivityAmount = FastJSON::getValue< float >(componentData, JKAmount).value_or(0.5F);
 			}
 				return true;
@@ -511,6 +474,8 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
+				/* D2 artistic override: the optional Amount scales the mix; the neutral 1.0
+				 * default leaves it BRDF-controlled. */
 				this->setReflectionAmount(FastJSON::getValue< float >(data[ReflectionString], JKAmount).value_or(DefaultReflectionAmount));
 			}
 				return true;
@@ -519,7 +484,7 @@ namespace EmEn::Graphics::Material
 				return true;
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource reflection component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource reflection component !";
 
 				return false;
 		}
@@ -541,7 +506,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Automatic :
 			{
 				/* Use scene environment cubemap at render time. */
-				this->setRefractionComponentFromEnvironmentCubemap(FastJSON::getValue< float >(componentData, JKIOR).value_or(DefaultRefractionIOR));
+				this->setRefractionComponentFromEnvironmentCubemap(FastJSON::getValue< float >(componentData, JKIOR).value_or(DefaultIOR));
 			}
 				return true;
 
@@ -561,8 +526,11 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
+				this->setIOR(FastJSON::getValue< float >(data[RefractionString], JKIOR).value_or(DefaultIOR));
+
+				/* D2 artistic override: the optional Amount scales the mix; the neutral 1.0
+				 * default leaves the blend Fresnel-controlled. */
 				this->setRefractionAmount(FastJSON::getValue< float >(data[RefractionString], JKAmount).value_or(DefaultRefractionAmount));
-				this->setRefractionIOR(FastJSON::getValue< float >(data[RefractionString], JKIOR).value_or(DefaultRefractionIOR));
 			}
 				return true;
 
@@ -570,7 +538,176 @@ namespace EmEn::Graphics::Material
 				return true;
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource refraction component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource refraction component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, AutoIlluminationString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Color :
+			{
+				const auto color = parseColorComponent(componentData);
+				const auto amount = FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount);
+
+				if ( !this->setAutoIlluminationComponent(color, amount) )
+				{
+					return false;
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::AutoIllumination, std::make_unique< Texture >(Uniform::AutoIlluminationSampler, SurfaceAutoIlluminationColor, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				this->setAutoIlluminationAmount(FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount));
+			}
+				return true;
+
+			case FillingType::None :
+				/* AutoIllumination is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource auto-illumination component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, OpacityString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				/* Rule 1: a global value is a uniform transparency (blending). */
+				const auto value = parseValueComponent(componentData);
+
+				if ( !this->setOpacityComponent(value) )
+				{
+					return false;
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+				this->enableFlag(OpacityEnabled);
+
+				this->setOpacity(FastJSON::getValue< float >(data[OpacityString], JKAmount).value_or(DefaultOpacity));
+
+				/* Owner's 3-rule contract: an explicit AlphaThreshold key selects the binary
+				 * CUTOUT mode (rule 2) — alpha test, the material STAYS OPAQUE. Without it the
+				 * map is a grayscale per-pixel alpha scale (rule 3) — blending. */
+				if ( const auto threshold = FastJSON::getValue< float >(data[OpacityString], JKAlphaThreshold) )
+				{
+					this->enableAlphaTest(threshold.value());
+				}
+				else
+				{
+					this->enableBlending(BlendingMode::Normal);
+				}
+			}
+				return true;
+
+			case FillingType::None :
+				/* Opacity is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource opacity component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseAmbientOcclusionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, AmbientOcclusionString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::AmbientOcclusion, std::make_unique< Texture >(Uniform::AmbientOcclusionSampler, SurfaceAmbientOcclusion, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				this->setAOIntensity(FastJSON::getValue< float >(data[AmbientOcclusionString], JKAmount).value_or(DefaultAOIntensity));
+			}
+				return true;
+
+			case FillingType::None :
+				/* AmbientOcclusion is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource ambient occlusion component !";
 
 				return false;
 		}
@@ -612,7 +749,367 @@ namespace EmEn::Graphics::Material
 				return true;
 
 			default:
-				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource reflectivity map component !";
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource reflectivity map component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseClearCoatComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, ClearCoatString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				const auto factor = parseValueComponent(componentData);
+				const auto roughness = FastJSON::getValue< float >(data[ClearCoatString], JKRoughness).value_or(DefaultClearCoatRoughness);
+
+				if ( !this->setClearCoatComponent(factor, roughness) )
+				{
+					return false;
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::ClearCoat, std::make_unique< Texture >(Uniform::ClearCoatSampler, SurfaceClearCoatFactor, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				this->setClearCoatFactor(FastJSON::getValue< float >(data[ClearCoatString], JKValue).value_or(1.0F));
+				this->setClearCoatRoughness(FastJSON::getValue< float >(data[ClearCoatString], JKRoughness).value_or(DefaultClearCoatRoughness));
+
+				/* Check for separate ClearCoatRoughness texture. */
+				FillingType ccRoughnessFillingType{};
+				Json::Value ccRoughnessData{};
+
+				if ( parseComponentBase(data, ClearCoatRoughnessString, ccRoughnessFillingType, ccRoughnessData, true) && ccRoughnessFillingType != FillingType::None )
+				{
+					const auto roughnessResult = m_components.emplace(ComponentType::ClearCoatRoughness, std::make_unique< Texture >(Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness, ccRoughnessData, ccRoughnessFillingType, serviceProvider));
+
+					if ( !roughnessResult.second || roughnessResult.first->second == nullptr )
+					{
+						return false;
+					}
+				}
+			}
+				return true;
+
+			case FillingType::None :
+				/* ClearCoat is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource clear coat component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseSubsurfaceComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, SubsurfaceString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				const auto intensity = parseValueComponent(componentData);
+				const auto radius = FastJSON::getValue< float >(data[SubsurfaceString], JKRadius).value_or(DefaultSubsurfaceRadius);
+				const auto & colorData = data[SubsurfaceString][JKColor];
+				const auto color = colorData.isArray() ? parseColorComponent(colorData) : DefaultSubsurfaceColor;
+
+				if ( !this->setSubsurfaceComponent(intensity, radius, color) )
+				{
+					return false;
+				}
+
+				/* Check for separate SubsurfaceThickness texture. */
+				FillingType thicknessFillingType{};
+				Json::Value thicknessData{};
+
+				if ( parseComponentBase(data, SubsurfaceThicknessString, thicknessFillingType, thicknessData, true) && thicknessFillingType != FillingType::None )
+				{
+					const auto thicknessResult = m_components.emplace(ComponentType::SubsurfaceThickness, std::make_unique< Texture >(Uniform::SubsurfaceThicknessSampler, SurfaceSubsurfaceThickness, thicknessData, thicknessFillingType, serviceProvider));
+
+					if ( !thicknessResult.second || thicknessResult.first->second == nullptr )
+					{
+						return false;
+					}
+
+					this->enableFlag(TextureEnabled);
+					this->enableFlag(UsePrimaryTextureCoordinates);
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Subsurface, std::make_unique< Texture >(Uniform::SubsurfaceSampler, SurfaceSubsurfaceIntensity, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				this->setSubsurfaceIntensity(FastJSON::getValue< float >(data[SubsurfaceString], JKValue).value_or(1.0F));
+				this->setSubsurfaceRadius(FastJSON::getValue< float >(data[SubsurfaceString], JKRadius).value_or(DefaultSubsurfaceRadius));
+
+				{
+					const auto & colorData = data[SubsurfaceString][JKColor];
+					const auto color = colorData.isArray() ? parseColorComponent(colorData) : DefaultSubsurfaceColor;
+					this->setSubsurfaceColor(color);
+				}
+
+				/* Check for separate SubsurfaceThickness texture. */
+				FillingType thicknessFillingType{};
+				Json::Value thicknessData{};
+
+				if ( parseComponentBase(data, SubsurfaceThicknessString, thicknessFillingType, thicknessData, true) && thicknessFillingType != FillingType::None )
+				{
+					const auto thicknessResult = m_components.emplace(ComponentType::SubsurfaceThickness, std::make_unique< Texture >(Uniform::SubsurfaceThicknessSampler, SurfaceSubsurfaceThickness, thicknessData, thicknessFillingType, serviceProvider));
+
+					if ( !thicknessResult.second || thicknessResult.first->second == nullptr )
+					{
+						return false;
+					}
+				}
+			}
+				return true;
+
+			case FillingType::None :
+				/* Subsurface is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource subsurface component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseSheenComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, SheenString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Color :
+			{
+				const auto color = parseColorComponent(componentData);
+				const auto roughness = FastJSON::getValue< float >(data[SheenString], JKRoughness).value_or(DefaultSheenRoughness);
+
+				if ( !this->setSheenComponent(color, roughness) )
+				{
+					return false;
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Sheen, std::make_unique< Texture >(Uniform::SheenSampler, SurfaceSheenColor, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				{
+					const auto & colorData = data[SheenString][JKColor];
+					const auto color = colorData.isArray() ? parseColorComponent(colorData) : DefaultSheenColor;
+					this->setSheenColor(color);
+				}
+
+				this->setSheenRoughness(FastJSON::getValue< float >(data[SheenString], JKRoughness).value_or(DefaultSheenRoughness));
+			}
+				return true;
+
+			case FillingType::None :
+				/* Sheen is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource sheen component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseAnisotropyComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, AnisotropyString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				const auto anisotropy = parseValueComponent(componentData);
+				const auto rotation = FastJSON::getValue< float >(data[AnisotropyString], JKRotation).value_or(DefaultAnisotropyRotation);
+
+				if ( !this->setAnisotropyComponent(anisotropy, rotation) )
+				{
+					return false;
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Anisotropy, std::make_unique< Texture >(Uniform::AnisotropySampler, SurfaceAnisotropy, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				this->setAnisotropy(FastJSON::getValue< float >(data[AnisotropyString], JKValue).value_or(0.5F));
+				this->setAnisotropyRotation(FastJSON::getValue< float >(data[AnisotropyString], JKRotation).value_or(DefaultAnisotropyRotation));
+			}
+				return true;
+
+			case FillingType::None :
+				/* Anisotropy is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource anisotropy component !";
+
+				return false;
+		}
+	}
+
+	bool
+	StandardResource::parseTransmissionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, TransmissionString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				const auto factor = parseValueComponent(componentData);
+				const auto & attenuationColorData = data[TransmissionString][JKAttenuationColor];
+				const auto attenuationColor = attenuationColorData.isArray() ? parseColorComponent(attenuationColorData) : DefaultAttenuationColor;
+				const auto attenuationDistance = FastJSON::getValue< float >(data[TransmissionString], JKAttenuationDistance).value_or(DefaultAttenuationDistance);
+				const auto thickness = FastJSON::getValue< float >(data[TransmissionString], JKThickness).value_or(DefaultThicknessFactor);
+
+				if ( FastJSON::getValue< bool >(data[TransmissionString], JKScreenSpace).value_or(false) )
+				{
+					if ( !this->setTransmissionComponentFromGrabPass(factor, attenuationColor, attenuationDistance, thickness) )
+					{
+						return false;
+					}
+				}
+				else
+				{
+					if ( !this->setTransmissionComponent(factor, attenuationColor, attenuationDistance, thickness) )
+					{
+						return false;
+					}
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Transmission, std::make_unique< Texture >(Uniform::TransmissionSampler, SurfaceTransmissionFactor, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				const auto & attenuationColorData = data[TransmissionString][JKAttenuationColor];
+				const auto attenuationColor = attenuationColorData.isArray() ? parseColorComponent(attenuationColorData) : DefaultAttenuationColor;
+				this->setAttenuationColor(attenuationColor);
+				this->setAttenuationDistance(FastJSON::getValue< float >(data[TransmissionString], JKAttenuationDistance).value_or(DefaultAttenuationDistance));
+				this->setThicknessFactor(FastJSON::getValue< float >(data[TransmissionString], JKThickness).value_or(DefaultThicknessFactor));
+				this->setTransmissionFactor(FastJSON::getValue< float >(data[TransmissionString], JKValue).value_or(1.0F));
+			}
+				return true;
+
+			case FillingType::None :
+				/* Transmission is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource transmission component !";
 
 				return false;
 		}
@@ -628,30 +1125,135 @@ namespace EmEn::Graphics::Material
 
 		auto & serviceProvider = this->serviceProvider();
 
-		if ( !this->parseAmbientComponent(data, serviceProvider) )
+		if ( !this->parseAlbedoComponent(data, serviceProvider) )
 		{
-			TraceError{ClassId} << "Error while parsing the ambient component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+			TraceError{ClassId} << "Error while parsing the albedo component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseDiffuseComponent(data, serviceProvider) )
+		if ( !this->parseRoughnessComponent(data, serviceProvider) )
 		{
-			TraceError{ClassId} << "Error while parsing the diffuse component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+			TraceError{ClassId} << "Error while parsing the roughness component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseSpecularComponent(data, serviceProvider) )
+		if ( !this->parseMetalnessComponent(data, serviceProvider) )
 		{
-			TraceError{ClassId} << "Error while parsing the specular component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+			TraceError{ClassId} << "Error while parsing the metalness component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseNormalComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the normal component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseHeightComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the height component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseReflectionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the reflection component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseRefractionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the refraction component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
 		if ( !this->parseAutoIlluminationComponent(data, serviceProvider) )
 		{
-			TraceError{ClassId} << "Error while parsing the auto-illumination component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+			TraceError{ClassId} << "Error while parsing the auto-illumination component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseOpacityComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the opacity component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseAmbientOcclusionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the ambient occlusion component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseReflectivityMapComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the reflectivity map component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseClearCoatComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the clear coat component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseSubsurfaceComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the subsurface component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseSheenComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the sheen component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseAnisotropyComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the anisotropy component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseTransmissionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the transmission component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseIridescenceComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the iridescence component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Parse optional dispersion value (simple float, not a full component). */
+		if ( data.isMember(DispersionString) )
+		{
+			this->setDispersionComponent(FastJSON::getValue< float >(data, DispersionString).value_or(DefaultDispersion));
+		}
+
+		/* Parse optional specular component (KHR_materials_specular). */
+		if ( !this->parseSpecularComponent(data) )
+		{
+			TraceError{ClassId} << "Error while parsing the specular component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
@@ -662,51 +1264,9 @@ namespace EmEn::Graphics::Material
 			m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(DefaultEmissiveStrength));
 		}
 
-		if ( !this->parseOpacityComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the opacity component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseNormalComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the normal component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseHeightComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the height component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseReflectionComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the reflection component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseRefractionComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the refraction component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseReflectivityMapComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the reflectivity map component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
 		if ( m_components.empty() )
 		{
-			TraceError{ClassId} << "No component could be read from material '" << this->name() << "' resource JSON file !";
+			TraceError{ClassId} << "No component could be read from PBR material '" << this->name() << "' resource JSON file !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -718,11 +1278,9 @@ namespace EmEn::Graphics::Material
 				continue;
 			}
 
-			const auto textureResource = component->textureResource();
-
-			if ( !this->addDependency(textureResource) )
+			if ( const auto textureResource = component->textureResource(); !this->addDependency(textureResource) )
 			{
-				TraceError{ClassId} << "Unable to link the texture '" << textureResource->name() << "' dependency to material '" << this->name() << "' for ambient component !";
+				TraceError{ClassId} << "Unable to link the texture '" << textureResource->name() << "' dependency to PBR material '" << this->name() << "' !";
 
 				return this->setLoadSuccess(false);
 			}
@@ -736,7 +1294,7 @@ namespace EmEn::Graphics::Material
 	{
 		if ( m_components.empty() )
 		{
-			TraceError{ClassId} << "The material resource '" << this->name() << "' has no component !";
+			TraceError{ClassId} << "The PBR material resource '" << this->name() << "' has no component !";
 
 			return false;
 		}
@@ -744,7 +1302,7 @@ namespace EmEn::Graphics::Material
 		/* Component creation (optional). */
 		if ( this->usingTexture() )
 		{
-			/* NOTE: Starts to 1 because there is the UBO in the first place. */
+			/* NOTE: Starts at 1 because there is the UBO in the first place. */
 			uint32_t binding = 1;
 
 			for ( const auto & [componentType, component] : m_components )
@@ -756,7 +1314,7 @@ namespace EmEn::Graphics::Material
 
 				if ( !component->create(renderer, binding))
 				{
-					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of material resource '" << this->name() << "' !";
+					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
 
 					return false;
 				}
@@ -773,21 +1331,21 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->createElementInSharedBuffer(renderer, identifier) )
 		{
-			TraceError{ClassId} << "Unable to create the data inside the shared uniform buffer '" << identifier << "' for material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to create the data inside the shared uniform buffer '" << identifier << "' for PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
 		if ( !this->createDescriptorSetLayout(renderer.layoutManager(), identifier) )
 		{
-			TraceError{ClassId} << "Unable to create the descriptor set layout for material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to create the descriptor set layout for PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
 		if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
 		{
-			TraceError{ClassId} << "Unable to create the descriptor set for material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to create the descriptor set for PBR material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -811,9 +1369,11 @@ namespace EmEn::Graphics::Material
 	StandardResource::syncComponentUVWTransforms () noexcept
 	{
 		static constexpr std::pair< ComponentType, size_t > slots[] = {
-			{ComponentType::Diffuse, DiffuseUVWTransformOffset},
+			{ComponentType::Albedo, AlbedoUVWTransformOffset},
+			{ComponentType::Roughness, RoughnessUVWTransformOffset},
+			{ComponentType::Metalness, MetalnessUVWTransformOffset},
 			{ComponentType::Normal, NormalUVWTransformOffset},
-			{ComponentType::Opacity, OpacityUVWTransformOffset},
+			{ComponentType::AmbientOcclusion, AmbientOcclusionUVWTransformOffset},
 			{ComponentType::AutoIllumination, AutoIlluminationUVWTransformOffset}
 		};
 
@@ -845,12 +1405,6 @@ namespace EmEn::Graphics::Material
 				"Unable to change a component UV transform.";
 
 			return false;
-		}
-
-		/* Cross-material alias: the loaders talk PBR (Albedo), Standard stores Diffuse. */
-		if ( componentType == ComponentType::Albedo )
-		{
-			componentType = ComponentType::Diffuse;
 		}
 
 		const auto componentIt = m_components.find(componentType);
@@ -910,7 +1464,7 @@ namespace EmEn::Graphics::Material
 
 		if ( !m_sharedUniformBuffer->addElement(this, m_sharedUBOIndex) )
 		{
-			Tracer::error(ClassId, "Unable to add the material to the shared uniform buffer !");
+			Tracer::error(ClassId, "Unable to add the PBR material to the shared uniform buffer !");
 
 			return false;
 		}
@@ -968,21 +1522,18 @@ namespace EmEn::Graphics::Material
 
 		if ( !m_descriptorSet->create() )
 		{
-			TraceError{ClassId} << "Unable to create the descriptor set for material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to create the descriptor set for PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
 		uint32_t bindingPoint = 0;
 
-		/* NOTE: Use the SharedUniformBuffer's getDescriptorInfoForElement() method to get
-		 * a properly configured VkDescriptorBufferInfo with the correct byte offset.
-		 * This ensures the descriptor points to this material's data, not offset 0. */
 		const auto descriptorInfo = m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex);
 
 		if ( !m_descriptorSet->writeUniformBuffer(bindingPoint++, descriptorInfo) )
 		{
-			TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set of material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -996,7 +1547,7 @@ namespace EmEn::Graphics::Material
 
 			if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *component->texture()) )
 			{
-				TraceError{ClassId} << "Unable to write the texture to the descriptor set of material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to write the texture to the descriptor set of PBR material '" << this->name() << "' !";
 
 				return false;
 			}
@@ -1026,7 +1577,10 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::destroy () noexcept
 	{
-		m_sharedUniformBuffer->removeElement(this);
+		if ( m_sharedUniformBuffer != nullptr )
+		{
+			m_sharedUniformBuffer->removeElement(this);
+		}
 
 		/* Reset to defaults. */
 		this->resetFlags();
@@ -1036,21 +1590,34 @@ namespace EmEn::Graphics::Material
 		m_components.clear();
 		m_blendingMode = BlendingMode::None;
 		m_materialProperties = {
-			/* Ambient color (4), */
-			DefaultAmbientColor.red(), DefaultAmbientColor.green(), DefaultAmbientColor.blue(), DefaultDiffuseColor.alpha(),
-			/* Diffuse color (4), */
-			DefaultDiffuseColor.red(), DefaultDiffuseColor.green(), DefaultDiffuseColor.blue(), DefaultDiffuseColor.alpha(),
-			/* Specular color (4), */
-			DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
-			/* Auto-illumination color (4), */
+			/* Albedo color (4) */
+			DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
+			/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
+			DefaultRoughness, DefaultMetalness, DefaultNormalScale, DefaultSpecularFactor,
+			/* IOR (1), IBLIntensity (1), AutoIlluminationAmount (1), AOIntensity (1) */
+			DefaultIOR, DefaultIBLIntensity, DefaultAutoIlluminationAmount, DefaultAOIntensity,
+			/* AutoIlluminationColor (4) */
 			DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
-			/* Shininess (1), Opacity (1), AutoIlluminationColor (1), NormalScale (1). */
-			DefaultShininess, DefaultOpacity, DefaultAutoIlluminationAmount, DefaultNormalScale,
-			/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), HeightScale (1). */
-			DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, DefaultHeightScale,
-			/* EmissiveStrength (1) + padding (3) for STD140 alignment */
-			DefaultEmissiveStrength, 0.0F, 0.0F, 0.0F
+			/* ClearCoatFactor (1), ClearCoatRoughness (1), SubsurfaceIntensity (1), SubsurfaceRadius (1) */
+			DefaultClearCoatFactor, DefaultClearCoatRoughness, DefaultSubsurfaceIntensity, DefaultSubsurfaceRadius,
+			/* SubsurfaceColor (4) */
+			DefaultSubsurfaceColor.red(), DefaultSubsurfaceColor.green(), DefaultSubsurfaceColor.blue(), DefaultSubsurfaceColor.alpha(),
+			/* SheenColor (4) */
+			DefaultSheenColor.red(), DefaultSheenColor.green(), DefaultSheenColor.blue(), DefaultSheenColor.alpha(),
+			/* SheenRoughness (1), Anisotropy (1), AnisotropyRotation (1), TransmissionFactor (1) */
+			DefaultSheenRoughness, DefaultAnisotropy, DefaultAnisotropyRotation, DefaultTransmissionFactor,
+			/* AttenuationColor (4) */
+			DefaultAttenuationColor.red(), DefaultAttenuationColor.green(), DefaultAttenuationColor.blue(), DefaultAttenuationColor.alpha(),
+			/* AttenuationDistance (1), ThicknessFactor (1), HeightScale (1), IridescenceFactor (1) */
+			DefaultAttenuationDistance, DefaultThicknessFactor, DefaultHeightScale, DefaultIridescenceFactor,
+			/* IridescenceIOR (1), IridescenceThicknessMin (1), IridescenceThicknessMax (1), Dispersion (1) */
+			DefaultIridescenceIOR, DefaultIridescenceThicknessMin, DefaultIridescenceThicknessMax, DefaultDispersion,
+			/* SpecularColorFactor (4) */
+			DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
+			/* EmissiveStrength (1), ClearCoatNormalScale (1) + padding (2) for STD140 alignment */
+			DefaultEmissiveStrength, DefaultClearCoatNormalScale, 0.0F, 0.0F
 		};
+		m_useParallaxOcclusionMapping = false;
 		m_descriptorSetLayout.reset();
 		m_descriptorSet.reset();
 		m_sharedUniformBuffer.reset();
@@ -1060,7 +1627,7 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::isComplex () const noexcept
 	{
-		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction || m_useParallaxOcclusionMapping;
+		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction || m_isUsingEnvironmentCubemapForTransmission || m_isUsingGrabPassForTransmission || m_useParallaxOcclusionMapping;
 	}
 
 	const Physics::SurfacePhysicalProperties &
@@ -1137,7 +1704,7 @@ namespace EmEn::Graphics::Material
 	{
 		if ( this->isCreated() )
 		{
-			TraceWarning{ClassId} << "The resource '" << this->name() << "' is already created ! Unable to enabled a blending mode.";
+			TraceWarning{ClassId} << "The resource '" << this->name() << "' is already created ! Unable to enable a blending mode.";
 
 			return;
 		}
@@ -1163,29 +1730,32 @@ namespace EmEn::Graphics::Material
 	{
 		outData = GPURTMaterialData{};
 
-		/* Map diffuse color → albedo. */
-		outData.albedo[0] = m_materialProperties[DiffuseColorOffset];
-		outData.albedo[1] = m_materialProperties[DiffuseColorOffset + 1];
-		outData.albedo[2] = m_materialProperties[DiffuseColorOffset + 2];
-		outData.albedo[3] = m_materialProperties[DiffuseColorOffset + 3];
+		/* Albedo. */
+		outData.albedo[0] = m_materialProperties[AlbedoColorOffset];
+		outData.albedo[1] = m_materialProperties[AlbedoColorOffset + 1];
+		outData.albedo[2] = m_materialProperties[AlbedoColorOffset + 2];
+		outData.albedo[3] = m_materialProperties[AlbedoColorOffset + 3];
 
-		/* Convert Blinn-Phong shininess to PBR roughness. */
-		const auto shininess = m_materialProperties[ShininessOffset];
-		outData.roughness = 1.0F - std::min(shininess / 1000.0F, 1.0F);
+		/* Core PBR scalars. */
+		outData.roughness = m_materialProperties[RoughnessOffset];
+		outData.metalness = m_materialProperties[MetalnessOffset];
 
-		/* Standard materials are dielectric. */
-		outData.metalness = 0.0F;
+		/* Smoothness/gloss source: the RT hit shading must invert the sampled texel
+		 * exactly like the raster roughness component codegen does. */
+		if ( m_invertRoughness )
+		{
+			outData.flags |= GPURTMaterialData::RoughnessTexInverted;
+		}
+		outData.ior = m_materialProperties[IOROffset];
+		outData.specularFactor = m_materialProperties[SpecularFactorOffset];
 
-		/* IOR from refraction component if present. */
-		outData.ior = m_materialProperties[RefractionIOROffset];
-
-		/* Map specular color to specularColor tint. */
+		/* Specular color (KHR_materials_specular). */
 		outData.specularColor[0] = m_materialProperties[SpecularColorOffset];
 		outData.specularColor[1] = m_materialProperties[SpecularColorOffset + 1];
 		outData.specularColor[2] = m_materialProperties[SpecularColorOffset + 2];
 		outData.specularColor[3] = m_materialProperties[SpecularColorOffset + 3];
 
-		/* Auto-illumination → emission. */
+		/* Emission. */
 		const auto autoIllumAmount = m_materialProperties[AutoIlluminationAmountOffset];
 
 		if ( autoIllumAmount > 0.0F )
@@ -1198,28 +1768,41 @@ namespace EmEn::Graphics::Material
 			outData.flags |= GPURTMaterialData::IsEmissive;
 		}
 
-		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time
-		 * and skip hits below the cutoff. Cutout materials (foliage, sprites) need
-		 * this so rays pass through transparent texels. */
+		/* Clear coat. */
+		const auto clearCoat = m_materialProperties[ClearCoatFactorOffset];
+
+		if ( clearCoat > 0.0F )
+		{
+			outData.clearCoatFactor = clearCoat;
+			outData.clearCoatRoughness = m_materialProperties[ClearCoatRoughnessOffset];
+			outData.flags |= GPURTMaterialData::HasClearCoat;
+		}
+
+		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time. The
+		 * cutoff mirrors the raster threshold (UBO slot); blending materials keep the 0.5
+		 * default of the mirror, unchanged behaviour. */
 		if ( this->isAlphaTest() )
 		{
 			outData.flags |= GPURTMaterialData::IsAlphaTest;
-			outData.alphaCutoff = 0.5F;
+			outData.alphaCutoff = m_materialProperties[AlphaThresholdOffset];
 		}
 
 		/* Normal map intensity for the RT hit shading (same value the raster uses). */
 		outData.normalScale = m_materialProperties[NormalScaleOffset];
 
 		/* NOTE: Texture bindless indices are set by SceneMetaData during material collection.
-		 * The textures are accessible via m_components[ComponentType::Diffuse], etc. */
+		 * The textures are accessible via m_components[ComponentType::Albedo], etc. */
 	}
 
 	void
 	StandardResource::collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept
 	{
 		static constexpr std::pair< ComponentType, RTTextureRole > mappings[] = {
-			{ComponentType::Diffuse, RTTextureRole::Albedo},
+			{ComponentType::Albedo, RTTextureRole::Albedo},
 			{ComponentType::Normal, RTTextureRole::Normal},
+			{ComponentType::Roughness, RTTextureRole::Roughness},
+			{ComponentType::Metalness, RTTextureRole::Metalness},
+			{ComponentType::AutoIllumination, RTTextureRole::Emission},
 			{ComponentType::Opacity, RTTextureRole::Opacity}
 		};
 
@@ -1233,10 +1816,114 @@ namespace EmEn::Graphics::Material
 
 				if ( tex != nullptr )
 				{
-					outSlots.push_back({role, Base::PixelFactory::Channel::Red, tex});
+					/* Carry the raster component's source channel so the RT hit shading
+					 * reads the same texel channel (glTF packed metallic-roughness: G/B). */
+					const auto sourceChannel = static_cast< const Texture * >(it->second.get())->sourceChannel();
+
+					outSlots.push_back({role, sourceChannel, tex});
 				}
 			}
 		}
+	}
+
+	const Texture *
+	StandardResource::alphaSourceTextureComponent () const noexcept
+	{
+		for ( const auto componentType : {ComponentType::Opacity, ComponentType::Albedo} )
+		{
+			const auto componentIt = m_components.find(componentType);
+
+			if ( componentIt != m_components.cend() && componentIt->second != nullptr && componentIt->second->type() == Type::Texture )
+			{
+				return static_cast< const Texture * >(componentIt->second.get());
+			}
+		}
+
+		return nullptr;
+	}
+
+	bool
+	StandardResource::requiresAlphaTestedShadows () const noexcept
+	{
+		if ( !this->isFlagEnabled(AlphaTestEnabled) )
+		{
+			return false;
+		}
+
+		/* A binary CUTOUT must cast a CUTOUT shadow — a grate that shadows as a solid
+		 * rectangle is worse than no shadow at all (same contract as BasicResource). The
+		 * shadow discard reads the SAME UBO threshold as the colour pass, so the two agree
+		 * by construction. */
+		return this->alphaSourceTextureComponent() != nullptr;
+	}
+
+	bool
+	StandardResource::generateShadowVertexCode (const Saphir::Generator::Abstract & /*generator*/, Saphir::VertexShader & vertexShader) const noexcept
+	{
+		const auto * component = this->alphaSourceTextureComponent();
+
+		if ( component == nullptr )
+		{
+			return true;
+		}
+
+		/* Request texture coordinates output to the fragment shader. */
+		const auto * textureCoordVar = component->isVolumetricTexture()
+			? ShaderVariable::Primary3DTextureCoordinates
+			: ShaderVariable::Primary2DTextureCoordinates;
+
+		if ( !vertexShader.requestSynthesizeInstruction(textureCoordVar) )
+		{
+			TraceError{ClassId} << "Unable to synthesize texture coordinates for the shadow vertex shader of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::generateShadowAlphaTestCode (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept
+	{
+		const auto * component = this->alphaSourceTextureComponent();
+
+		if ( component == nullptr )
+		{
+			return true;
+		}
+
+		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
+
+		/* The threshold is a material UBO VALUE (program-cache contract: never a shader
+		 * literal), so the block must be declared in the shadow fragment shader too. */
+		if ( !fragmentShader.declare(this->getUniformBlock(materialSet, 0)) )
+		{
+			TraceError{ClassId} << "Unable to declare the material uniform block for the shadow alpha test of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !fragmentShader.declare(Declaration::Sampler{materialSet, component->binding(), component->textureType(), component->samplerName()}) )
+		{
+			TraceError{ClassId} << "Unable to declare the texture sampler for the shadow alpha test of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		const auto * texCoordVariable = component->isVolumetricTexture()
+			? ShaderVariable::Primary3DTextureCoordinates
+			: ShaderVariable::Primary2DTextureCoordinates;
+
+		/* Sample the alpha source: the opacity component reads its red channel, the albedo
+		 * fallback reads its alpha channel — the same sources the colour pass tests. */
+		const char * channel = this->isComponentPresent(ComponentType::Opacity) ? "r" : "a";
+
+		Code{fragmentShader, Location::Top} << "const float " << SurfaceOpacityAmount << " = texture(" << component->samplerName() << ", " << texCoordVariable << ")." << channel << ";";
+
+		/* Discard fragments below the material threshold. */
+		Code{fragmentShader, Location::Output} << "if ( " << SurfaceOpacityAmount << " < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+
+		return true;
 	}
 
 	bool
@@ -1245,78 +1932,78 @@ namespace EmEn::Graphics::Material
 		if ( !this->isCreated() )
 		{
 			TraceError{ClassId} <<
-				"The standard material '" << this->name() << "' is not created !"
+				"The PBR material '" << this->name() << "' is not created !"
 				"It can't configure the light generator.";
 
 			return false;
 		}
 
-		/* Ambient component */
+		/* Enable PBR mode in the light generator. */
+		lightGenerator.enablePBRMode();
+
+		/* Albedo component */
 		{
-			const auto componentIt = m_components.find(ComponentType::Ambient);
+			const auto componentIt = m_components.find(ComponentType::Albedo);
 
 			if ( componentIt != m_components.cend() )
 			{
-				lightGenerator.declareSurfaceAmbient(componentIt->second->variableName());
-			}
-		}
+				lightGenerator.declareSurfaceAlbedo(componentIt->second->variableName());
 
-		/* Diffuse component */
-		{
-			const auto componentIt = m_components.find(ComponentType::Diffuse);
-
-			if ( componentIt != m_components.cend() )
-			{
-				lightGenerator.declareSurfaceDiffuse(componentIt->second->variableName());
-			}
-		}
-
-		/* Specular component */
-		{
-			const auto componentIt = m_components.find(ComponentType::Specular);
-
-			if ( componentIt != m_components.cend() )
-			{
-				lightGenerator.declareSurfaceSpecular(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::Shininess));
-			}
-		}
-
-		/* Opacity component */
-		{
-			const auto componentIt = m_components.find(ComponentType::Opacity);
-
-			if ( componentIt != m_components.cend() )
-			{
-				lightGenerator.declareSurfaceOpacity(componentIt->second->variableName());
-			}
-		}
-
-		/* Auto-illumination component */
-		{
-			const auto componentIt = m_components.find(ComponentType::AutoIllumination);
-
-			if ( componentIt != m_components.cend() )
-			{
-				/* For uniform-based auto-illumination (Color/Value), use both color and amount uniforms.
-				 * For texture-based, the texture provides the color and amount modulates it. */
-				if ( componentIt->second->type() == Component::Type::Texture )
+				/* Opacity: use albedo texture alpha when blending is enabled (glTF alphaMode: BLEND). */
+				if ( this->isFlagEnabled(BlendingEnabled) )
 				{
-					/* Texture-based: texture provides the emissive color, modulated by amount uniform. */
-					lightGenerator.declareSurfaceAutoIllumination(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::AutoIlluminationAmount));
+					lightGenerator.declareSurfaceOpacity(componentIt->second->variableName() + ".a");
 				}
-				else
+			}
+			else
+			{
+				/* Use uniform color value. */
+				lightGenerator.declareSurfaceAlbedo(MaterialUB(UniformBlock::Component::AlbedoColor));
+
+				/* Opacity: use uniform albedo alpha when blending is enabled. */
+				if ( this->isFlagEnabled(BlendingEnabled) )
 				{
-					/* Uniform-based: use color and amount uniforms. */
-					lightGenerator.declareSurfaceAutoIllumination(MaterialUB(UniformBlock::Component::AutoIlluminationColor), MaterialUB(UniformBlock::Component::AutoIlluminationAmount));
+					lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::AlbedoColor) + ".a");
 				}
 			}
 		}
 
-		/* Emissive Strength (KHR_materials_emissive_strength). */
-		lightGenerator.declareSurfaceEmissiveStrength(MaterialUB(UniformBlock::Component::EmissiveStrength));
+		/* Roughness component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Roughness);
 
-		/* Normal component */
-		if ( !lightGenerator.isAmbientPass() )
+			if ( componentIt != m_components.cend() )
+			{
+				/* NOTE: The variable already carries the FINAL roughness — the component codegen
+				 * folds the source channel, the smoothness/gloss inversion and the material
+				 * factor into its definition. Never re-apply any of them here. */
+				lightGenerator.declareSurfaceRoughness(componentIt->second->variableName());
+			}
+			else
+			{
+				/* Use uniform value. */
+				lightGenerator.declareSurfaceRoughness(MaterialUB(UniformBlock::Component::Roughness));
+			}
+		}
+
+		/* Metalness component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Metalness);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceMetalness(componentIt->second->variableName());
+			}
+			else
+			{
+				/* Use uniform value. */
+				lightGenerator.declareSurfaceMetalness(MaterialUB(UniformBlock::Component::Metalness));
+			}
+		}
+
+		/* Normal component.
+		 * Always declare even in ambient pass: the MRT normals attachment
+		 * needs the perturbed normal for post-process effects (RTR, SSR, SSAO, RTAO). */
 		{
 			const auto componentIt = m_components.find(ComponentType::Normal);
 
@@ -1326,12 +2013,14 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
-		/* Reflection component */
+		/* Reflection/IBL component */
 		{
 			const auto componentIt = m_components.find(ComponentType::Reflection);
 
 			if ( componentIt != m_components.cend() )
 			{
+				/* NOTE: The amount is the D2 artistic override, a UBO VALUE (program-cache
+				 * contract) whose neutral 1.0 default leaves the mix BRDF-controlled. */
 				lightGenerator.declareSurfaceReflection(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::ReflectionAmount));
 
 				if ( m_reflectionIsArtistic )
@@ -1347,16 +2036,18 @@ namespace EmEn::Graphics::Material
 			else if ( m_isUsingEnvironmentCubemap )
 			{
 				/* NOTE: When using automatic reflection with bindless textures, the variable is named SurfaceReflectionColor. */
-				lightGenerator.declareSurfaceReflection(SurfaceReflectionColor, MaterialUB(UniformBlock::Component::ReflectionAmount));
+				lightGenerator.declareSurfaceReflection(SurfaceReflectionColor, "1.0");
 			}
 		}
 
-		/* Refraction component */
+		/* Refraction component (for glass-like materials) */
 		{
 			const auto componentIt = m_components.find(ComponentType::Refraction);
 
 			if ( componentIt != m_components.cend() )
 			{
+				/* NOTE: The amount is the D2 artistic override, a UBO VALUE (program-cache
+				 * contract) whose neutral 1.0 default leaves the blend Fresnel-controlled. */
 				lightGenerator.declareSurfaceRefraction(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::RefractionAmount), MaterialUB(UniformBlock::Component::RefractionIOR));
 
 				if ( m_refractionSourceIsAbsolute )
@@ -1367,11 +2058,68 @@ namespace EmEn::Graphics::Material
 			else if ( m_isUsingEnvironmentCubemapForRefraction )
 			{
 				/* NOTE: When using automatic refraction with bindless textures, the variable is named SurfaceRefractionColor. */
-				lightGenerator.declareSurfaceRefraction(SurfaceRefractionColor, MaterialUB(UniformBlock::Component::RefractionAmount), MaterialUB(UniformBlock::Component::RefractionIOR));
+				lightGenerator.declareSurfaceRefraction(SurfaceRefractionColor, "1.0", MaterialUB(UniformBlock::Component::RefractionIOR));
 			}
 		}
 
-		/* Reflectivity Map component (texture-based or post-process Value fallback) */
+		/* Material IOR - affects dielectric F0 computation: F0 = ((ior-1)/(ior+1))^2 (KHR_materials_ior). */
+		lightGenerator.declareSurfaceMaterialIOR(MaterialUB(UniformBlock::Component::RefractionIOR));
+
+		/* KHR_materials_specular - scales and tints dielectric F0. */
+		lightGenerator.declareSurfaceKHRSpecular(
+			MaterialUB(UniformBlock::Component::SpecularFactor),
+			MaterialUB(UniformBlock::Component::SpecularColorFactor)
+		);
+
+		/* IBL Intensity - controls the contribution of environment cubemaps (reflection/refraction). */
+		lightGenerator.declareSurfaceIBLIntensity(MaterialUB(UniformBlock::Component::IBLIntensity));
+
+		/* Auto-Illumination (emissive) component */
+		{
+			const auto componentIt = m_components.find(ComponentType::AutoIllumination);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceAutoIllumination(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::AutoIlluminationAmount));
+			}
+			else
+			{
+				/* Use uniform color value with amount. */
+				lightGenerator.declareSurfaceAutoIllumination(MaterialUB(UniformBlock::Component::AutoIlluminationColor), MaterialUB(UniformBlock::Component::AutoIlluminationAmount));
+			}
+		}
+
+		/* Emissive Strength (KHR_materials_emissive_strength). */
+		lightGenerator.declareSurfaceEmissiveStrength(MaterialUB(UniformBlock::Component::EmissiveStrength));
+
+		/* Ambient Occlusion component (texture-based only) */
+		{
+			const auto componentIt = m_components.find(ComponentType::AmbientOcclusion);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceAmbientOcclusion(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::AOIntensity));
+			}
+		}
+
+		/* Opacity component: light passes must respect the surface translucency (rules 1 and
+		 * 3 of the opacity contract). Cutout mode (rule 2) needs no declaration — surviving
+		 * texels are opaque. */
+		if ( this->isFlagEnabled(OpacityEnabled) && !this->isFlagEnabled(AlphaTestEnabled) )
+		{
+			const auto componentIt = m_components.find(ComponentType::Opacity);
+
+			if ( componentIt != m_components.cend() && componentIt->second->type() == Type::Texture )
+			{
+				lightGenerator.declareSurfaceOpacity(componentIt->second->variableName());
+			}
+			else
+			{
+				lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::Opacity));
+			}
+		}
+
+		/* Reflectivity Map component (texture-based only) */
 		{
 			const auto componentIt = m_components.find(ComponentType::ReflectivityMap);
 
@@ -1386,67 +2134,184 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* Clear Coat component */
+		{
+			const auto componentIt = m_components.find(ComponentType::ClearCoat);
+
+			if ( componentIt != m_components.cend() )
+			{
+				const auto ccRoughnessIt = m_components.find(ComponentType::ClearCoatRoughness);
+
+				lightGenerator.declareSurfaceClearCoat(
+					componentIt->second->variableName(),
+					ccRoughnessIt != m_components.cend() ? ccRoughnessIt->second->variableName() : MaterialUB(UniformBlock::Component::ClearCoatRoughness)
+				);
+			}
+			else if ( m_materialProperties[ClearCoatFactorOffset] > 0.0F )
+			{
+				lightGenerator.declareSurfaceClearCoat(
+					MaterialUB(UniformBlock::Component::ClearCoatFactor),
+					MaterialUB(UniformBlock::Component::ClearCoatRoughness)
+				);
+			}
+		}
+
+		/* Clear Coat Normal component */
+		{
+			const auto componentIt = m_components.find(ComponentType::ClearCoatNormal);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceClearCoatNormal(componentIt->second->variableName());
+			}
+		}
+
+		/* Subsurface Scattering component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Subsurface);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceSubsurface(
+					componentIt->second->variableName(),
+					MaterialUB(UniformBlock::Component::SubsurfaceColor),
+					MaterialUB(UniformBlock::Component::SubsurfaceRadius)
+				);
+
+				const auto thicknessIt = m_components.find(ComponentType::SubsurfaceThickness);
+
+				if ( thicknessIt != m_components.cend() )
+				{
+					lightGenerator.declareSurfaceSubsurfaceThickness(thicknessIt->second->variableName());
+				}
+			}
+			else if ( m_materialProperties[SubsurfaceIntensityOffset] > 0.0F )
+			{
+				lightGenerator.declareSurfaceSubsurface(
+					MaterialUB(UniformBlock::Component::SubsurfaceIntensity),
+					MaterialUB(UniformBlock::Component::SubsurfaceColor),
+					MaterialUB(UniformBlock::Component::SubsurfaceRadius)
+				);
+			}
+		}
+
+		/* Sheen component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Sheen);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceSheen(
+					componentIt->second->variableName(),
+					MaterialUB(UniformBlock::Component::SheenRoughness)
+				);
+			}
+			else if ( m_materialProperties[SheenColorOffset] > 0.0F || m_materialProperties[SheenColorOffset+1] > 0.0F || m_materialProperties[SheenColorOffset+2] > 0.0F )
+			{
+				lightGenerator.declareSurfaceSheen(
+					MaterialUB(UniformBlock::Component::SheenColor),
+					MaterialUB(UniformBlock::Component::SheenRoughness)
+				);
+			}
+		}
+
+		/* Anisotropy component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Anisotropy);
+
+			if ( componentIt != m_components.cend() )
+			{
+				lightGenerator.declareSurfaceAnisotropy(
+					componentIt->second->variableName(),
+					MaterialUB(UniformBlock::Component::AnisotropyRotation)
+				);
+
+				if ( componentIt->second->type() == Component::Type::Texture )
+				{
+					lightGenerator.declareSurfaceAnisotropyDirection(
+						componentIt->second->variableName() + "_dir"
+					);
+				}
+			}
+			else if ( m_materialProperties[AnisotropyOffset] != 0.0F )
+			{
+				lightGenerator.declareSurfaceAnisotropy(
+					MaterialUB(UniformBlock::Component::Anisotropy),
+					MaterialUB(UniformBlock::Component::AnisotropyRotation)
+				);
+			}
+		}
+
+		/* Transmission component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Transmission);
+
+			if ( componentIt != m_components.cend() || m_materialProperties[TransmissionFactorOffset] > 0.0F )
+			{
+				lightGenerator.declareSurfaceTransmission(
+					componentIt != m_components.cend() ? componentIt->second->variableName() : MaterialUB(UniformBlock::Component::TransmissionFactor),
+					std::string{SurfaceTransmissionColor},
+					MaterialUB(UniformBlock::Component::AttenuationColor),
+					MaterialUB(UniformBlock::Component::AttenuationDistance),
+					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : MaterialUB(UniformBlock::Component::ThicknessFactor),
+					/* The grab pass hands over the rendered scene in nits; the environment cubemap
+					 * hands over a normalized [0,1] texel. Only the latter needs to be scaled by
+					 * the sky luminance downstream. */
+					m_isUsingGrabPassForTransmission
+				);
+			}
+		}
+
+		/* Iridescence component */
+		{
+			const auto componentIt = m_components.find(ComponentType::Iridescence);
+
+			if ( componentIt != m_components.cend() || m_materialProperties[IridescenceFactorOffset] > 0.0F )
+			{
+				lightGenerator.declareSurfaceIridescence(
+					componentIt != m_components.cend() ? componentIt->second->variableName() : MaterialUB(UniformBlock::Component::IridescenceFactor),
+					MaterialUB(UniformBlock::Component::IridescenceIOR),
+					MaterialUB(UniformBlock::Component::IridescenceThicknessMin),
+					MaterialUB(UniformBlock::Component::IridescenceThicknessMax)
+				);
+			}
+		}
+
 		return true;
 	}
 
 	std::string
 	StandardResource::fragmentColor () const noexcept
 	{
-		std::string base;
+		/* For PBR, the fragment color is the albedo (base color).
+		 * The actual shading is computed by the BRDF in the light generator. */
+		const std::string base = this->isComponentPresent(ComponentType::Albedo)
+			? std::string{m_components.at(ComponentType::Albedo)->variableName()}
+			: MaterialUB(UniformBlock::Component::AlbedoColor);
 
-		if ( this->isComponentPresent(ComponentType::Diffuse) )
+		/* Blending modes of the opacity contract (rules 1 and 3): the alpha channel carries
+		 * the opacity. Cutout mode (rule 2) keeps the base alpha — surviving texels are opaque. */
+		if ( this->isFlagEnabled(OpacityEnabled) && !this->isFlagEnabled(AlphaTestEnabled) )
 		{
-			base = m_components.at(ComponentType::Diffuse)->variableName();
-		}
-		else if ( this->isComponentPresent(ComponentType::Ambient) )
-		{
-			base = m_components.at(ComponentType::Ambient)->variableName();
-		}
-		else
-		{
-			base = "vec4(0.5, 0.5, 0.5, 1.0)";
-		}
+			const auto componentIt = m_components.find(ComponentType::Opacity);
 
-		if ( this->isComponentPresent(ComponentType::Reflection) && this->isComponentPresent(ComponentType::Refraction) )
-		{
-			/* NOTE: When both reflection and refraction are present, use Fresnel blending.
-			 * Fresnel effect: more reflection at grazing angles, more refraction when looking straight at surface.
-			 * The Schlick approximation: F = F0 + (1 - F0) * pow(1 - cosTheta, 5)
-			 * We use the view direction dot normal for the Fresnel factor. */
-			std::stringstream subCode;
-			subCode << "mix(" << m_components.at(ComponentType::Refraction)->variableName() << ", "
-					<< m_components.at(ComponentType::Reflection)->variableName() << ", "
-					<< "fresnelFactor)";
+			std::stringstream code;
 
-			base = "mix(" + base + ", " + subCode.str() + ", " + MaterialUB(UniformBlock::Component::RefractionAmount) + ")";
-		}
-		else if ( this->isComponentPresent(ComponentType::Reflection) )
-		{
-			std::stringstream subCode;
-			subCode << "mix(" << base << ", " << m_components.at(ComponentType::Reflection)->variableName() << ", " << MaterialUB(UniformBlock::Component::ReflectionAmount) << ")";
+			if ( componentIt != m_components.cend() && componentIt->second->type() == Type::Texture )
+			{
+				/* Rule 3: the opacity variable is the amount-scaled texel (see the fragment codegen). */
+				code << "vec4((" << base << ").rgb, " << componentIt->second->variableName() << ")";
+			}
+			else
+			{
+				/* Rule 1: global opacity from the material UBO. */
+				code << "vec4((" << base << ").rgb, " << MaterialUB(UniformBlock::Component::Opacity) << ")";
+			}
 
-			base = subCode.str();
-		}
-		else if ( this->isComponentPresent(ComponentType::Refraction) )
-		{
-			std::stringstream subCode;
-			subCode << "mix(" << base << ", " << m_components.at(ComponentType::Refraction)->variableName() << ", " << MaterialUB(UniformBlock::Component::RefractionAmount) << ")";
-
-			base = subCode.str();
+			return code.str();
 		}
 
-		std::stringstream code;
-
-		if ( this->isComponentPresent(ComponentType::Opacity) )
-		{
-			code << "vec4((" << base << ").xyz, " << m_components.at(ComponentType::Opacity)->variableName() << ")";
-		}
-		else
-		{
-			code << '(' << base << ')';
-		}
-
-		return code.str();
+		return base;
 	}
 
 	std::shared_ptr< DescriptorSetLayout >
@@ -1476,32 +2341,55 @@ namespace EmEn::Graphics::Material
 	const DescriptorSet *
 	StandardResource::descriptorSet () const noexcept
 	{
-		/* NOTE: This is no more a dynamic. */
-		//return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
 		return m_descriptorSet.get();
 	}
 
 	Declaration::UniformBlock
 	StandardResource::getUniformBlock (uint32_t set, uint32_t binding) const noexcept
 	{
-		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::StandardMaterial, UniformBlock::Material};
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientColor);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DiffuseColor);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SpecularColor);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationColor);
-		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Shininess);
-		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Opacity);
-		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AutoIlluminationAmount);
+		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::PBRMaterial, UniformBlock::Material};
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoColor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Roughness);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Metalness);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::NormalScale);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::SpecularFactor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionIOR);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLIntensity);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AutoIlluminationAmount);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AOIntensity);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationColor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ClearCoatFactor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ClearCoatRoughness);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::SubsurfaceIntensity);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::SubsurfaceRadius);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SubsurfaceColor);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SheenColor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::SheenRoughness);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Anisotropy);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AnisotropyRotation);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::TransmissionFactor);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AttenuationColor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AttenuationDistance);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ThicknessFactor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::HeightScale);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::IridescenceFactor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::IridescenceIOR);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::IridescenceThicknessMin);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::IridescenceThicknessMax);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Dispersion);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SpecularColorFactor);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ClearCoatNormalScale);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Opacity);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AlphaThreshold);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ReflectionAmount);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionAmount);
-		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionIOR);
-		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::HeightScale);
-		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
 		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DiffuseUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::MetalnessUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::OpacityUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientOcclusionUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWTransform);
 
 		return block;
@@ -1513,8 +2401,8 @@ namespace EmEn::Graphics::Material
 		if ( !this->isCreated() )
 		{
 			TraceError{ClassId} <<
-				"The standard material '" << this->name() << "' is not created !"
-				"It can't generates a vertex shader source code.";
+				"The PBR material '" << this->name() << "' is not created !"
+				"It can't generate a vertex shader source code.";
 
 			return false;
 		}
@@ -1543,7 +2431,7 @@ namespace EmEn::Graphics::Material
 			 * and the geometry only has 2D UVs, add the 3D coordinate fallback. */
 			if ( !this->primaryTextureCoordinatesUses3D() )
 			{
-				for ( const auto & [type, component] : m_components )
+				for (const auto & component : m_components | std::views::values)
 				{
 					const auto * texture = dynamic_cast< const Component::Texture * >(component.get());
 
@@ -1567,7 +2455,7 @@ namespace EmEn::Graphics::Material
 			{
 				TraceError{ClassId} <<
 					"The geometry " << geometry->name() << " has no vertex color "
-					"for standard material '" << this->name() << "' !";
+					"for PBR material '" << this->name() << "' !";
 
 				return false;
 			}
@@ -1575,9 +2463,12 @@ namespace EmEn::Graphics::Material
 			vertexShader.requestSynthesizeInstruction(ShaderVariable::PrimaryVertexColor);
 		}
 
-		/* Reflection component setup.
-		 * NOTE: Also setup for automatic reflection using bindless textures. */
-		if ( this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap )
+		/* Reflection/IBL component setup.
+		 * NOTE: Also setup for automatic reflection using bindless textures.
+		 * GrabPass transmission also needs varyings (PositionWorldSpace, NormalWorldSpace, CameraWorldPosition). */
+		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction)
+			|| m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction
+			|| m_isUsingEnvironmentCubemapForTransmission || m_isUsingGrabPassForTransmission )
 		{
 			[[maybe_unused]] const auto isCubemap = generator.renderTarget()->isCubemap();
 
@@ -1605,72 +2496,38 @@ namespace EmEn::Graphics::Material
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::Local);
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace, VariableScope::Local);
 
-				vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::ReflectionTextureCoordinates, GLSL::Smooth});
-
-				/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
-				 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
-				 * so we always use 'false' for isCubemap parameter. */
-				Code(vertexShader) <<
-					"vec3 reflectDir = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-					ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);";
-			}
-		}
-
-		/* Refraction component (vertex shader path - low quality). */
-		if ( this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction )
-		{
-			[[maybe_unused]] const auto isCubemap = generator.renderTarget()->isCubemap();
-
-			if ( generator.highQualityEnabled() )
-			{
-				/* NOTE: High quality refraction is computed in the fragment shader.
-				 * The same setup as reflection is reused (PositionWorldSpace, normal, CameraWorldPosition).
-				 * If reflection is not present, we need to set it up here. */
-				if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap )
+				if ( this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap )
 				{
-					vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace);
+					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::ReflectionTextureCoordinates, GLSL::Smooth});
 
-					if ( this->isComponentPresent(ComponentType::Normal) )
-					{
-						vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
-					}
-					else
-					{
-						vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace);
-					}
-
-					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, "CameraWorldPosition", GLSL::Flat});
-
+					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+					 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
+					 * so we always use 'false' for isCubemap parameter. */
 					Code(vertexShader) <<
-						"const mat4 InverseViewMatrix = inverse(" << MatrixPC(PushConstant::Component::ViewMatrix) << ");" << Line::End <<
-						"CameraWorldPosition = InverseViewMatrix[3].xyz;";
+						"vec3 reflectDir = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
+						ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);";
 				}
-			}
-			else
-			{
-				/* NOTE: Low quality refraction is precomputed in the vertex shader. */
-				if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap )
+
+				if ( this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction )
 				{
-					vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::Local);
-					vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace, VariableScope::Local);
+					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::RefractionTextureCoordinates, GLSL::Smooth});
+
+					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+					 * For refraction, we use IOR ratio: eta = 1.0 / IOR (air to material).
+					 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
+					 * so we always use 'false' for isCubemap parameter. */
+					Code(vertexShader) <<
+						"float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+						"vec3 refractDir = refract(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ", eta);" << Line::End <<
+						ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);";
 				}
-
-				vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::RefractionTextureCoordinates, GLSL::Smooth});
-
-				/* NOTE: eta = 1.0 / IOR for air-to-material refraction.
-				 * Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
-				 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
-				 * so we always use 'false' for isCubemap parameter. */
-				Code(vertexShader) <<
-					"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
-					"vec3 refractDir = refract(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ", eta);" << Line::End <<
-					ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);";
 			}
 		}
 
 		/* Parallax Occlusion Mapping vertex requirements.
 		 * NOTE: POM needs TangentToWorldMatrix, PositionWorldSpace, and CameraWorldPosition in the fragment shader.
-		 * If Reflection/Refraction already requested them, this is a no-op for the synthesize calls. */
+		 * If Reflection/Refraction already requested them, this is a no-op for the synthesize calls.
+		 * When POM iterations is 0, POM is completely disabled - no extra vertex outputs needed. */
 		if ( m_useParallaxOcclusionMapping && generator.pomIterations() > 0 )
 		{
 			vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace);
@@ -1730,9 +2587,11 @@ namespace EmEn::Graphics::Material
 	std::string
 	StandardResource::transformedTexCoords (ComponentType componentType, const Texture * component) const noexcept
 	{
-		/* Same contract as PBRResource: the per-component UV transform is a material UBO
-		 * vec4 (scale.xy, offset.zw), identity neutral, applied UNCONDITIONALLY — values
-		 * through the UBO, never GLSL literals (shader program cache contract). */
+		/* The per-component UV transform (KHR_texture_transform / JSON "UVW" keys) is a
+		 * material UBO vec4 (scale.xy, offset.zw) applied UNCONDITIONALLY — the neutral
+		 * value is the identity, and going through the UBO (values, never GLSL literals)
+		 * respects the shader program cache contract. 2D coordinates only: volumetric
+		 * textures keep the plain lookup. */
 		if ( component->isVolumetricTexture() )
 		{
 			return textCoords(component);
@@ -1742,16 +2601,24 @@ namespace EmEn::Graphics::Material
 
 		switch ( componentType )
 		{
-			case ComponentType::Diffuse :
-				transformKey = UniformBlock::Component::DiffuseUVWTransform;
+			case ComponentType::Albedo :
+				transformKey = UniformBlock::Component::AlbedoUVWTransform;
+				break;
+
+			case ComponentType::Roughness :
+				transformKey = UniformBlock::Component::RoughnessUVWTransform;
+				break;
+
+			case ComponentType::Metalness :
+				transformKey = UniformBlock::Component::MetalnessUVWTransform;
 				break;
 
 			case ComponentType::Normal :
 				transformKey = UniformBlock::Component::NormalUVWTransform;
 				break;
 
-			case ComponentType::Opacity :
-				transformKey = UniformBlock::Component::OpacityUVWTransform;
+			case ComponentType::AmbientOcclusion :
+				transformKey = UniformBlock::Component::AmbientOcclusionUVWTransform;
 				break;
 
 			case ComponentType::AutoIllumination :
@@ -1759,8 +2626,7 @@ namespace EmEn::Graphics::Material
 				break;
 
 			default :
-				/* No transform slot for this component (Ambient, Specular, ReflectivityMap...):
-				 * plain coordinates. */
+				/* No transform slot for this component: plain coordinates. */
 				return textCoords(component);
 		}
 
@@ -1771,13 +2637,363 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::generateBindlessReflectionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: For automatic reflection with bindless textures, we use the scene's environment
+		 * cubemap from the bindless array. No per-material reflection component is needed. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the global bindless cubemap array (unbounded). Several features and
+		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
+		 * silent no-op (see the Saphir declare de-duplication contract). */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::TextureCubeBinding,
+			GLSL::SamplerCube,
+			Bindless::TexturesCube,
+			Declaration::Sampler::UnboundedArray}) )
+		{
+			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array !";
+
+			return false;
+		}
+
+		/* Roughness expression driving the prefiltered LOD — same source of truth as
+		 * setupLightGenerator(): the roughness texture component when present (declared at
+		 * Location::Top by the component generation, which already folds the source channel,
+		 * inversion and factor into the variable), the material UBO value otherwise. */
+		const auto roughnessExpression = [this] () -> std::string {
+			const auto componentIt = m_components.find(ComponentType::Roughness);
+
+			if ( componentIt != m_components.cend() )
+			{
+				return componentIt->second->variableName();
+			}
+
+			return MaterialUB(UniformBlock::Component::Roughness);
+		}();
+
+		/* The prefiltered chain maps roughness 0..1 onto its mip levels (mip 0 is an exact
+		 * copy of the environment: perfect mirrors keep their sharpness). */
+		const auto reflectionLOD = "clamp(" + roughnessExpression + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
+
+		/* Generate the reflection sampling code using bindless textures. */
+		if ( generator.highQualityEnabled() )
+		{
+			if ( this->isComponentPresent(ComponentType::Normal) )
+			{
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+			}
+			else
+			{
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+			}
+
+			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+			Code(fragmentShader, Location::Top) <<
+				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
+				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
+				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
+		}
+		else
+		{
+			/* Low quality: use pre-computed reflection coordinates from vertex shader.
+			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates. */
+			Code(fragmentShader, Location::Top) <<
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::generateBindlessRefractionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: For automatic refraction with bindless textures, we use the scene's environment
+		 * cubemap from the bindless array. No per-material refraction component is needed. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the global bindless cubemap array (unbounded). Several features and
+		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
+		 * silent no-op (see the Saphir declare de-duplication contract). */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::TextureCubeBinding,
+			GLSL::SamplerCube,
+			Bindless::TexturesCube,
+			Declaration::Sampler::UnboundedArray}) )
+		{
+			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for refraction !";
+
+			return false;
+		}
+
+		/* Generate the refraction sampling code using bindless textures. */
+		if ( generator.highQualityEnabled() )
+		{
+			/* High quality: compute refraction direction in fragment shader.
+			 * NOTE: Reuse reflectionNormal and reflectionI if already declared by reflection (explicit component or bindless).
+			 * When m_isUsingEnvironmentCubemap is true, bindless reflection is always generated before refraction. */
+			const bool reflectionAlreadyDeclared = this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap;
+
+			if ( !reflectionAlreadyDeclared )
+			{
+				if ( this->isComponentPresent(ComponentType::Normal) )
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+				}
+				else
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+				}
+
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
+			}
+
+			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+			 * For refraction, eta = 1.0 / IOR (air to material).
+			 * When chromatic dispersion is enabled, sample R/G/B with separate IORs (Cauchy dispersion). */
+			if ( m_materialProperties[DispersionOffset] > 0.0F )
+			{
+				/* Chromatic dispersion: 3 refraction rays with different IORs per channel. */
+				Code(fragmentShader, Location::Top) <<
+					"const float baseIOR = " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"const float dispersionSpread = (baseIOR - 1.0) * " << MaterialUB(UniformBlock::Component::Dispersion) << " / 20.0;" << Line::End <<
+					"const float etaR = 1.0 / (baseIOR - dispersionSpread * 0.5);" << Line::End <<
+					"const float etaG = 1.0 / baseIOR;" << Line::End <<
+					"const float etaB = 1.0 / (baseIOR + dispersionSpread * 0.5);" << Line::End <<
+					"const vec3 refractDirR = refract(reflectionI, reflectionNormal, etaR);" << Line::End <<
+					"const vec3 refractDirG = refract(reflectionI, reflectionNormal, etaG);" << Line::End <<
+					"const vec3 refractDirB = refract(reflectionI, reflectionNormal, etaB);" << Line::End <<
+					"float convergR = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", vec3(refractDirR.x, -refractDirR.y, refractDirR.z)).r;" << Line::End <<
+					"float convergG = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", vec3(refractDirG.x, -refractDirG.y, refractDirG.z)).g;" << Line::End <<
+					"float convergB = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", vec3(refractDirB.x, -refractDirB.y, refractDirB.z)).b;" << Line::End <<
+					"const vec4 " << SurfaceRefractionColor << " = vec4(convergR, convergG, convergB, 1.0);";
+			}
+			else
+			{
+				Code(fragmentShader, Location::Top) <<
+					"const float refractionEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"const vec3 refractDir = refract(reflectionI, reflectionNormal, refractionEta);" << Line::End <<
+					"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
+					"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+			}
+		}
+		else
+		{
+			/* Low quality: use pre-computed refraction coordinates from vertex shader.
+			 * NOTE: Refraction direction was already computed in vertex shader and passed via RefractionTextureCoordinates. */
+			Code(fragmentShader, Location::Top) <<
+				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::generateBindlessTransmissionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: For automatic transmission with bindless textures, we sample the scene's prefiltered
+		 * environment cubemap with LOD based on roughness for frosted glass effects. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the global bindless cubemap array (unbounded). Several features and
+		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
+		 * silent no-op (see the Saphir declare de-duplication contract). */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::TextureCubeBinding,
+			GLSL::SamplerCube,
+			Bindless::TexturesCube,
+			Declaration::Sampler::UnboundedArray}) )
+		{
+			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for transmission !";
+
+			return false;
+		}
+
+		/* Generate the transmission sampling code using bindless prefiltered cubemap. */
+		if ( generator.highQualityEnabled() )
+		{
+			/* Ensure reflectionI and reflectionNormal are available.
+			 * If reflection or refraction already declared them, reuse; otherwise declare them. */
+			const bool reflectionAlreadyDeclared = this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction;
+
+			if ( !reflectionAlreadyDeclared )
+			{
+				if ( this->isComponentPresent(ComponentType::Normal) )
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+				}
+				else
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+				}
+
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
+			}
+
+			/* Sample the REAL prefiltered cubemap (reserved slot 2) — the frosted-glass LOD
+			 * used to read the raw environment whose mips did not even exist.
+			 * NOTE: Transmission goes through the surface (not reflected), so we use the view direction
+			 * but with Y flipped for cubemap convention.
+			 * The LOD reads the per-pixel roughness variable when a texture component drives it
+			 * (the UBO scalar is only the FACTOR in that case), the UBO value otherwise. */
+			const auto componentIt = m_components.find(ComponentType::Roughness);
+			const auto transmissionRoughness = componentIt != m_components.cend()
+				? componentIt->second->variableName()
+				: std::string{MaterialUB(UniformBlock::Component::Roughness)};
+
+			Code(fragmentShader, Location::Top) <<
+				"const vec3 transmissionDir = vec3(reflectionI.x, -reflectionI.y, reflectionI.z);" << Line::End <<
+				"const float transmissionLod = clamp(" << transmissionRoughness << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0;" << Line::End <<
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, transmissionLod).rgb;";
+		}
+		else
+		{
+			/* Low quality: sample at a fixed LOD using the reflection coordinates (view direction approximation). */
+			Code(fragmentShader, Location::Top) <<
+				"const vec3 transmissionDir = vec3(" << ShaderVariable::ReflectionTextureCoordinates << ".x, -" << ShaderVariable::ReflectionTextureCoordinates << ".y, " << ShaderVariable::ReflectionTextureCoordinates << ".z);" << Line::End <<
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, 3.0).rgb;";
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::generateGrabPassTransmissionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: Screen-space transmission using the GrabPass texture (bindless 2D slot 4).
+		 * Samples the captured framebuffer with UV distortion based on IOR and surface normal
+		 * to simulate real refraction of the actual scene background. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the bindless 2D texture array if not already declared.
+		 * NOTE: Check if any other path already declared this binding. */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::Texture2DBinding,
+			GLSL::Sampler2D,
+			Bindless::Textures2D,
+			Declaration::Sampler::UnboundedArray}) )
+		{
+			/* Declaration may fail if already declared — this is acceptable. */
+		}
+
+		if ( generator.highQualityEnabled() )
+		{
+			/* High quality: use reflectionNormal and reflectionI for accurate per-pixel refraction. */
+			const bool reflectionAlreadyDeclared = this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap
+				|| this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction;
+
+			if ( !reflectionAlreadyDeclared )
+			{
+				if ( this->isComponentPresent(ComponentType::Normal) )
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+				}
+				else
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+				}
+
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
+			}
+
+			if ( m_materialProperties[DispersionOffset] > 0.0F )
+			{
+				/* Chromatic dispersion: 3 GrabPass samples with different IOR offsets per channel. */
+				Code(fragmentShader, Location::Top) <<
+					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+					"float baseIOR = " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"float gpSpread = (baseIOR - 1.0) * " << MaterialUB(UniformBlock::Component::Dispersion) << " / 20.0;" << Line::End <<
+					"float gpEtaR = 1.0 / (baseIOR - gpSpread * 0.5);" << Line::End <<
+					"float gpEtaG = 1.0 / baseIOR;" << Line::End <<
+					"float gpEtaB = 1.0 / (baseIOR + gpSpread * 0.5);" << Line::End <<
+					"vec3 gpRefractDirR = refract(reflectionI, reflectionNormal, gpEtaR);" << Line::End <<
+					"vec3 gpRefractDirG = refract(reflectionI, reflectionNormal, gpEtaG);" << Line::End <<
+					"vec3 gpRefractDirB = refract(reflectionI, reflectionNormal, gpEtaB);" << Line::End <<
+					"float gpThickness = " << MaterialUB(UniformBlock::Component::ThicknessFactor) << ";" << Line::End <<
+					"vec2 gpOffsetR = gpRefractDirR.xy * gpThickness * 0.05;" << Line::End <<
+					"vec2 gpOffsetG = gpRefractDirG.xy * gpThickness * 0.05;" << Line::End <<
+					"vec2 gpOffsetB = gpRefractDirB.xy * gpThickness * 0.05;" << Line::End <<
+					"float convergR = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetR, vec2(0.001), vec2(0.999))).r;" << Line::End <<
+					"float convergG = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetG, vec2(0.001), vec2(0.999))).g;" << Line::End <<
+					"float convergB = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetB, vec2(0.001), vec2(0.999))).b;" << Line::End <<
+					"const vec3 " << SurfaceTransmissionColor << " = vec3(convergR, convergG, convergB);";
+			}
+			else
+			{
+				/* Standard GrabPass refraction without dispersion. */
+				Code(fragmentShader, Location::Top) <<
+					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+					"vec3 gpViewDir = reflectionI;" << Line::End <<
+					"float gpEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"vec3 gpRefractDir = refract(gpViewDir, reflectionNormal, gpEta);" << Line::End <<
+					"vec2 gpOffset = gpRefractDir.xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.05;" << Line::End <<
+					"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
+					"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
+			}
+		}
+		else
+		{
+			/* Low quality: use a simple offset based on the normal world space and gl_FragCoord. */
+			Code(fragmentShader, Location::Top) <<
+				"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+				"vec2 gpOffset = " << ShaderVariable::NormalWorldSpace << ".xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.03;" << Line::End <<
+				"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
+				"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
+		}
+
+		/* Depth-based opacity: sample the grab pass depth buffer to compute water column thickness. */
+		if ( m_isUsingDepthBasedOpacity )
+		{
+			/* Ensure the view UBO is declared in the fragment shader (needed for near/far planes). */
+			static_cast< void >(generator.declareViewUniformBlock(fragmentShader));
+
+			Code(fragmentShader, Location::Top) <<
+				Line::End <<
+				"/* Depth-based water opacity */" << Line::End <<
+				"float gpSceneDepth = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassDepthSlot << ")]" << ", gpScreenUV).r;" << Line::End <<
+				"float gpNear = " << UniformBlock::View << "." << UniformBlock::Component::ViewProperties << ".z;" << Line::End <<
+				"float gpFar = " << UniformBlock::View << "." << UniformBlock::Component::ViewProperties << ".w;" << Line::End <<
+				"float gpLinearSceneDepth = gpNear * gpFar / (gpFar - gpSceneDepth * (gpFar - gpNear));" << Line::End <<
+				"float gpLinearWaterDepth = gpNear * gpFar / (gpFar - gl_FragCoord.z * (gpFar - gpNear));" << Line::End <<
+				"float gpWaterColumnThickness = max(gpLinearSceneDepth - gpLinearWaterDepth, 0.0);";
+		}
+
+		return true;
+	}
+
+	bool
 	StandardResource::generateFragmentShaderCode (Generator::Abstract & generator, LightGenerator & lightGenerator, FragmentShader & fragmentShader) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
 			TraceError{ClassId} <<
-				"The standard material '" << this->name() << "' is not created !"
-				"It can't generates a fragment shader source code.";
+				"The PBR material '" << this->name() << "' is not created !"
+				"It can't generate a fragment shader source code.";
 
 			return false;
 		}
@@ -1806,12 +3022,17 @@ namespace EmEn::Graphics::Material
 				 * sampler declarations in the generated GLSL, causing 'undeclared identifier' errors. */
 				Code{shader, Location::Top} <<
 					"vec3 pomViewDir = normalize(transpose(" << ShaderVariable::TangentToWorldMatrix << ") * (CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz));" << Line::End <<
+					"/* Distance-based POM fade: full effect within 8 units, disabled beyond 18. */" << Line::End <<
+					"float pomFade = 1.0 - smoothstep(8.0, 18.0, length(CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz));" << Line::End <<
 					"vec2 " << ShaderVariable::ParallaxTextureCoordinates << ";" << Line::End <<
-					"{" << Line::End <<
-					"  int numLayers = clamp(int(mix(" << std::to_string(maxPOMIterations) << ".0, " << std::to_string(minPOMIterations) << ".0, max(dot(vec3(0.0, 0.0, 1.0), pomViewDir), 0.0))), " << std::to_string(minPOMIterations) << ", " << std::to_string(maxPOMIterations) << ");" << Line::End <<
+					"if (pomFade < 0.001) {" << Line::End <<
+					"  " << ShaderVariable::ParallaxTextureCoordinates << " = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
+					"} else {" << Line::End <<
+					"  int angleLayers = clamp(int(mix(" << std::to_string(maxPOMIterations) << ".0, " << std::to_string(minPOMIterations) << ".0, max(dot(vec3(0.0, 0.0, 1.0), pomViewDir), 0.0))), " << std::to_string(minPOMIterations) << ", " << std::to_string(maxPOMIterations) << ");" << Line::End <<
+					"  int numLayers = max(int(float(angleLayers) * pomFade), " << std::to_string(minPOMIterations) << ");" << Line::End <<
 					"  float layerDepth = 1.0 / float(numLayers);" << Line::End <<
 					"  float currentLayerDepth = 0.0;" << Line::End <<
-					"  vec2 deltaTexCoords = pomViewDir.xy * " << MaterialUB(UniformBlock::Component::HeightScale) << " / float(numLayers);" << Line::End <<
+					"  vec2 deltaTexCoords = pomViewDir.xy * (" << MaterialUB(UniformBlock::Component::HeightScale) << " * pomFade) / float(numLayers);" << Line::End <<
 					"  vec2 currentTexCoords = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
 					"  float currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
 					"  for (int i = 0; i < " << std::to_string(maxPOMIterations) << "; i++) {" << Line::End <<
@@ -1831,124 +3052,97 @@ namespace EmEn::Graphics::Material
 				return true;
 			}, fragmentShader, materialSet) )
 			{
-				TraceError{ClassId} << "Unable to generate fragment code for the height/POM component of material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to generate fragment code for the height/POM component of PBR material '" << this->name() << "' !";
 
 				return false;
 			}
 		}
 
 		/* Normal component.
-		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
-		if ( this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap || !lightGenerator.isAmbientPass() )
-		{
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
-				Code{shader, Location::Top} <<
-					"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
-					"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
-
-				return true;
-			}, fragmentShader, materialSet) )
-			{
-				TraceError{ClassId} << "Unable to generate fragment code for the normal component of material '" << this->name() << "' !";
-
-				return false;
-			}
-		}
-
-		/* Ambient, Diffuse and Specular components. */
-		{
-			auto simpleGenerator = [this] (FragmentShader & shader, const Texture * component) {
-				Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ");";
-
-				return true;
-			};
-
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Ambient, simpleGenerator, fragmentShader, materialSet) )
-			{
-				TraceError{ClassId} << "Unable to generate fragment code for the ambient component of material '" << this->name() << "' !";
-
-				return false;
-			}
-
-			/* The Diffuse texture sample is always emitted when the component is a Texture.
-			 * Even the Ambient pass needs it: when no explicit Ambient component is set on
-			 * the material, the LightGenerator derives the surface ambient color as
-			 * `SurfaceDiffuseColor * 0.05`, which would otherwise reference an undeclared
-			 * identifier (regression observed via FBXLoader → MaterialMode::Standard with
-			 * a textured albedo on the Paladin asset). */
-			/* The diffuse texel is multiplied by the diffuse colour, which acts as a TINT factor:
-			 * glTF baseColorFactor and FBX base_color both specify the PRODUCT when a texture is
-			 * also present. Unconditional on purpose — the shader program cache keys on the
-			 * descriptor layout, not on values. DefaultDiffuseColor is White so this is an
-			 * identity until a caller sets a tint. */
-			auto tintedDiffuseGenerator = [this] (FragmentShader & shader, const Texture * component) {
-				Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Diffuse, component) << ") * " << MaterialUB(UniformBlock::Component::DiffuseColor) << ";";
-
-				return true;
-			};
-
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Diffuse, tintedDiffuseGenerator, fragmentShader, materialSet) )
-			{
-				TraceError{ClassId} << "Unable to generate fragment code for the diffuse component of material '" << this->name() << "' !";
-
-				return false;
-			}
-
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Specular, simpleGenerator, fragmentShader, materialSet) )
-			{
-				TraceError{ClassId} << "Unable to generate fragment code for the specular component of material '" << this->name() << "' !";
-
-				return false;
-			}
-		}
-
-		/* Opacity component. */
-		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
+		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1].
+		 * Always generated (including ambient pass) because the MRT needs the perturbed normal
+		 * for post-process effects (RTR, SSR, SSAO, RTAO). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
 			Code{shader, Location::Top} <<
-				"const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Opacity, component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";" << Line::End <<
-				"if ( " << component->variableName() << " <= " << m_alphaThresholdToDiscard << " ) { discard; }" << Line::End;
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
 
 			return true;
 		}, fragmentShader, materialSet) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment code for the opacity component of material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to generate fragment code for the normal component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		/* Auto-illumination component. */
-		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AutoIllumination, component) << ") * " << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << ';';
+		/* Albedo component.
+		 * The sampled texel is multiplied by the albedo colour, which acts as a TINT factor —
+		 * this is what glTF baseColorFactor and FBX base_color mean when a texture is also
+		 * present, and both specify the PRODUCT. The multiplication is unconditional on
+		 * purpose: the shader program cache keys on the descriptor layout, never on values,
+		 * so a value-dependent variant could serve one material's program to another.
+		 * DefaultAlbedoColor is White precisely so this stays an identity when untouched. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Albedo, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Albedo, component) << ") * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment code for the auto-illumination component of material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to generate fragment code for the albedo component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		/* Reflectivity Map component (texture-based). */
-		if ( !this->generateTextureComponentFragmentShader(ComponentType::ReflectivityMap, [this] (FragmentShader & shader, const Texture * component) {
-			/* NOTE: Reflectivity is typically stored in a grayscale texture (red channel). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+		/* Cutout on the albedo alpha channel (glTF alphaMode MASK without a dedicated opacity
+		 * map): the albedo sample carries the coverage. The threshold is a UBO VALUE, never a
+		 * shader literal (program-cache contract). A dedicated opacity component, when present,
+		 * owns the test instead (see the opacity component block below). */
+		if ( this->isFlagEnabled(AlphaTestEnabled) && !this->isComponentPresent(ComponentType::Opacity) && this->isComponentPresent(ComponentType::Albedo) )
+		{
+			Code{fragmentShader, Location::Top} << "if ( " << m_components.at(ComponentType::Albedo)->variableName() << ".a < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+		}
+
+		/* Roughness component.
+		 * The source channel is a component property (glTF packed metallic-roughness: Green;
+		 * grayscale maps: Red). The material scalar MULTIPLIES the texel — the glTF
+		 * 'roughnessFactor * texel' contract; the neutral factor is 1.0 (DefaultTextureFactor).
+		 * Inversion (smoothness/gloss source) applies to the texel BEFORE the factor, so every
+		 * consumer (BRDF, IBL LOD, G-buffer) reads the final value from this single variable. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Roughness, [this] (FragmentShader & shader, const Texture * component) {
+			const std::string texel = "texture(" + std::string{component->samplerName()} + ", " + transformedTexCoords(ComponentType::Roughness, component) + ")." + component->sourceChannelSwizzle();
+
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << ( m_invertRoughness ? "(1.0 - " + texel + ")" : texel ) << " * " << MaterialUB(UniformBlock::Component::Roughness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment code for the reflectivity map component of material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to generate fragment code for the roughness component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		/* Reflection component.
+		/* Metalness component.
+		 * Same contracts as roughness: source channel from the component (glTF packed
+		 * metallic-roughness: Blue), material scalar as multiplying factor ('metallicFactor * texel'). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Metalness, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Metalness, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Metalness) << ";";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the metalness component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Reflection/IBL component.
 		 * NOTE: When automatic reflection is enabled AND bindless textures are supported,
 		 * use the bindless texture array instead of per-material sampler. */
 		if ( m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled() )
 		{
 			if ( !this->generateBindlessReflectionFragmentShader(generator, fragmentShader) )
 			{
-				TraceError{ClassId} << "Unable to generate bindless fragment code for the reflection component of material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to generate bindless fragment code for the reflection component of PBR material '" << this->name() << "' !";
 
 				return false;
 			}
@@ -1974,15 +3168,20 @@ namespace EmEn::Graphics::Material
 				/* A render-target cubemap (dynamic probe) carries a GGX-prefiltered mip
 				 * chain (mip 0 = mirror, upper mips convolved per render — see
 				 * Compute::ProbeConvolver): drive the LOD by the material roughness, the
-				 * exact sampling contract of the automatic environment path. The LOD
-				 * clamps to the image's actual chain, so a target without mips (older or
-				 * non-probe) simply stays mirror-sharp. Static texture cubemaps keep the
+				 * exact sampling contract of the bindless environment path above. The LOD
+				 * clamps to the image's actual chain. Static texture cubemaps keep the
 				 * plain mirror fetch: the explicit texture mode is ARTISTIC by contract. */
 				if ( component->textureResource() == nullptr && component->texture() != nullptr && component->texture()->isCubemapTexture() )
 				{
+					/* NOTE: The component variable already carries the final roughness
+					 * (channel + inversion + factor folded in by the component codegen). */
+					const auto componentIt = m_components.find(ComponentType::Roughness);
+					const auto roughnessExpression = componentIt != m_components.cend()
+						? componentIt->second->variableName()
+						: std::string{MaterialUB(UniformBlock::Component::Roughness)};
+
 					Code(shader, Location::Top) <<
-						"const float reflectionRoughness = clamp(sqrt(2.0 / (" << MaterialUB(UniformBlock::Component::Shininess) << " + 2.0)), 0.0, 1.0);" << Line::End <<
-						"const vec4 " << component->variableName() << " = textureLod(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ", reflectionRoughness * " << (Graphics::IBLTexture::PrefilteredMipLevels - 1) << ".0);";
+						"const vec4 " << component->variableName() << " = textureLod(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ", clamp(" << roughnessExpression << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0);";
 				}
 				else
 				{
@@ -1997,309 +3196,304 @@ namespace EmEn::Graphics::Material
 			return true;
 		}, fragmentShader, materialSet) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment code for the reflection component of material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to generate fragment code for the reflection component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		/* Refraction component.
+		/* Refraction component (for glass-like materials).
 		 * NOTE: When automatic refraction is enabled AND bindless textures are supported,
 		 * use the bindless texture array instead of per-material sampler. */
 		if ( m_isUsingEnvironmentCubemapForRefraction && generator.bindlessTexturesEnabled() && !this->isComponentPresent(ComponentType::Refraction) )
 		{
 			if ( !this->generateBindlessRefractionFragmentShader(generator, fragmentShader) )
 			{
-				TraceError{ClassId} << "Unable to generate bindless fragment code for the refraction component of material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to generate bindless fragment code for the refraction component of PBR material '" << this->name() << "' !";
 
 				return false;
 			}
 		}
-		else if ( !this->generateTextureComponentFragmentShader(ComponentType::Refraction, [&] (FragmentShader & shader, const Texture * component) {
-			if ( generator.highQualityEnabled() )
-			{
-				/* NOTE: Reuse the normal computed for reflection if available. */
-				if ( !this->isComponentPresent(ComponentType::Reflection) )
+		else
+		{
+			const bool reflectionVariablesDeclared = this->isComponentPresent(ComponentType::Reflection) || (m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled());
+
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Refraction, [&] (FragmentShader & shader, const Texture * component) {
+				if ( generator.highQualityEnabled() )
 				{
 					if ( this->isComponentPresent(ComponentType::Normal) )
 					{
-						Code(shader, Location::Top) << "const vec3 refractionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+						/* Reuse reflectionNormal if already declared by reflection (explicit or bindless), otherwise declare it. */
+						if ( !reflectionVariablesDeclared )
+						{
+							Code(shader, Location::Top) <<
+								"const vec3 reflGeomN = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
+								"const vec3 reflRawT = " << ShaderVariable::TangentToWorldMatrix << "[0];" << Line::End <<
+								"const vec3 reflGeomT = normalize(reflRawT - reflGeomN * dot(reflGeomN, reflRawT));" << Line::End <<
+								"const vec3 reflGeomB = cross(reflGeomN, reflGeomT) * sign(dot(cross(reflGeomN, reflGeomT), " << ShaderVariable::TangentToWorldMatrix << "[1]));" << Line::End <<
+								"const vec3 reflectionNormal = normalize(reflGeomT * " << SurfaceNormalVector << ".x + reflGeomB * " << SurfaceNormalVector << ".y + reflGeomN * " << SurfaceNormalVector << ".z);";
+						}
 					}
-					else
+					else if ( !reflectionVariablesDeclared )
 					{
-						Code(shader, Location::Top) << "const vec3 refractionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+						Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
 					}
 
-					Code(shader, Location::Top) << "const vec3 refractionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
+					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+					Code(shader, Location::Top) <<
+						"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End;
+
+					/* Reuse reflectionI if already declared by reflection (explicit or bindless), otherwise declare it. */
+					if ( !reflectionVariablesDeclared )
+					{
+						Code(shader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End;
+					}
+
+					Code(shader, Location::Top) <<
+						"const vec3 refractDir = refract(reflectionI, reflectionNormal, eta);" << Line::End <<
+						"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
+						"const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 				}
 				else
 				{
-					/* NOTE: Reuse variables from reflection computation. */
-					Code(shader, Location::Top) <<
-						"const vec3 refractionNormal = reflectionNormal;" << Line::End <<
-						"const vec3 refractionI = reflectionI;";
+					Code(shader, Location::Top) << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 				}
 
-				/* NOTE: eta = 1.0 / IOR for air-to-material refraction.
-				 * Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
-				Code(shader, Location::Top) <<
-					"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
-					"const vec3 refractDir = refract(refractionI, refractionNormal, eta);" << Line::End <<
-					"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
-					"const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
-
-				/* NOTE: Fresnel effect for blending reflection and refraction.
-				 * Schlick approximation: F = F0 + (1 - F0) * pow(1 - cosTheta, 5)
-				 * F0 for glass is approximately 0.04, for water ~0.02, for diamond ~0.17.
-				 * We compute F0 from IOR: F0 = ((n1-n2)/(n1+n2))^2 where n1=1 (air). */
-				if ( this->isComponentPresent(ComponentType::Reflection) )
-				{
-					Code(shader, Location::Top) <<
-						"const float F0 = pow((1.0 - " << MaterialUB(UniformBlock::Component::RefractionIOR) << ") / (1.0 + " << MaterialUB(UniformBlock::Component::RefractionIOR) << "), 2.0);" << Line::End <<
-						"const float cosTheta = max(dot(-refractionI, refractionNormal), 0.0);" << Line::End <<
-						"const float fresnelFactor = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);";
-				}
-			}
-			else
+				return true;
+			}, fragmentShader, materialSet) )
 			{
-				Code(shader, Location::Top) << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+				TraceError{ClassId} << "Unable to generate fragment code for the refraction component of PBR material '" << this->name() << "' !";
 
-				/* NOTE: Fresnel effect for low quality mode (simpler approximation). */
-				if ( this->isComponentPresent(ComponentType::Reflection) )
-				{
-					Code(shader, Location::Top) <<
-						"const float F0 = pow((1.0 - " << MaterialUB(UniformBlock::Component::RefractionIOR) << ") / (1.0 + " << MaterialUB(UniformBlock::Component::RefractionIOR) << "), 2.0);" << Line::End <<
-						"const float cosTheta = max(dot(normalize(-" << ShaderVariable::RefractionTextureCoordinates << "), normalize(" << ShaderVariable::NormalWorldSpace << ")), 0.0);" << Line::End <<
-						"const float fresnelFactor = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);";
-				}
+				return false;
+			}
+		}
+
+		/* Auto-Illumination (emissive) component. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AutoIllumination, component) << ");";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the auto-illumination component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Opacity component (owner's 3-rule contract). The variable is the amount-scaled texel;
+		 * rule 2 (cutout) adds a discard against the UBO threshold — a VALUE, never a shader
+		 * literal (program-cache contract); rule 3 (grayscale) emits no test and the alpha
+		 * lands in fragmentColor() for blending. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
+
+			if ( this->isFlagEnabled(AlphaTestEnabled) )
+			{
+				Code{shader, Location::Top} << "if ( " << component->variableName() << " < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
 			}
 
 			return true;
 		}, fragmentShader, materialSet) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment code for the refraction component of material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to generate fragment code for the opacity component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		return true;
-	}
+		/* Ambient Occlusion component (baked texture). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::AmbientOcclusion, [this] (FragmentShader & shader, const Texture * component) {
+			/* NOTE: AO is typically stored in a grayscale texture (red channel). */
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AmbientOcclusion, component) << ").r;";
 
-	bool
-	StandardResource::generateBindlessReflectionFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
-	{
-		/* NOTE: For automatic reflection with bindless textures, we use the scene's environment
-		 * cubemap from the bindless array. No per-material reflection component is needed. */
-
-		/* Get the bindless set index from the program. */
-		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
-
-		/* Enable the nonuniform qualifier extension. */
-		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
-
-		/* Declare the bindless cubemap array (unbounded). */
-		if ( !fragmentShader.declare(Declaration::Sampler{
-			bindlessSetIndex,
-			BindlessTextureManager::TextureCubeBinding,
-			GLSL::SamplerCube,
-			Bindless::TexturesCube,
-			Declaration::Sampler::UnboundedArray}) )
+			return true;
+		}, fragmentShader, materialSet) )
 		{
-			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array !";
+			TraceError{ClassId} << "Unable to generate fragment code for the ambient occlusion component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		/* Generate the reflection sampling code using bindless textures. */
-		if ( generator.highQualityEnabled() )
-		{
-			if ( this->isComponentPresent(ComponentType::Normal) )
-			{
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-			}
-			else
-			{
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-			}
+		/* Reflectivity Map component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::ReflectivityMap, [this] (FragmentShader & shader, const Texture * component) {
+			/* NOTE: Reflectivity is typically stored in a grayscale texture (red channel). */
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
 
-			/* Blinn-Phong shininess mapped onto the prefiltered chain (Beckmann relation):
-			 * roughness = sqrt(2 / (shininess + 2)) — a mirror-sharp material reads mip 0,
-			 * an exact copy of the environment. */
-			Code(fragmentShader, Location::Top) <<
-				"const float reflectionRoughness = clamp(sqrt(2.0 / (" << MaterialUB(UniformBlock::Component::Shininess) << " + 2.0)), 0.0, 1.0);";
-
-			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
-			Code(fragmentShader, Location::Top) <<
-				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
-				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
-				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
-				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", reflectionRoughness * " << (Graphics::IBLTexture::PrefilteredMipLevels - 1) << ".0);";
-		}
-		else
+			return true;
+		}, fragmentShader, materialSet) )
 		{
-			/* Low quality: use pre-computed reflection coordinates from vertex shader.
-			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates. */
-			Code(fragmentShader, Location::Top) <<
-				"const float reflectionRoughness = clamp(sqrt(2.0 / (" << MaterialUB(UniformBlock::Component::Shininess) << " + 2.0)), 0.0, 1.0);" << Line::End <<
-				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", reflectionRoughness * " << (Graphics::IBLTexture::PrefilteredMipLevels - 1) << ".0);";
+			TraceError{ClassId} << "Unable to generate fragment code for the reflectivity map component of PBR material '" << this->name() << "' !";
+
+			return false;
 		}
 
-		return true;
-	}
+		/* Clear Coat factor component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoat, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
 
-	bool
-	StandardResource::generateBindlessRefractionFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
-	{
-		/* NOTE: For automatic refraction with bindless textures, we use the scene's environment
-		 * cubemap from the bindless array. No per-material refraction component is needed. */
-
-		/* NOTE: The bindless cubemap array declaration is shared with reflection.
-		 * If reflection was already generated, the array is already declared. */
-
-		/* Get the bindless set index from the program. */
-		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
-
-		/* Enable the nonuniform qualifier extension. */
-		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
-
-		/* Declare the bindless cubemap array (unbounded) if not already declared by reflection. */
-		if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap )
+			return true;
+		}, fragmentShader, materialSet) )
 		{
-			if ( !fragmentShader.declare(Declaration::Sampler{
-				bindlessSetIndex,
-				BindlessTextureManager::TextureCubeBinding,
-				GLSL::SamplerCube,
-				Bindless::TexturesCube,
-				Declaration::Sampler::UnboundedArray}) )
+			TraceError{ClassId} << "Unable to generate fragment code for the clear coat component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Clear Coat roughness component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoatRoughness, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the clear coat roughness component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Clear Coat normal component (texture-based, KHR_materials_clearcoat). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoatNormal, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} <<
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::ClearCoatNormalScale) << ", " << component->variableName() << "_raw.z));";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the clear coat normal component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Subsurface intensity component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Subsurface, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the subsurface component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Subsurface thickness component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::SubsurfaceThickness, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the subsurface thickness component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Sheen color component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Sheen, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ");";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the sheen component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Anisotropy component (texture-based, KHR_materials_anisotropy format: RG = direction, B = strength). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Anisotropy, [this] (FragmentShader & shader, const Texture * component) {
+			/* NOTE: KHR_materials_anisotropy texture format:
+			 * R, G = tangent-space direction vector (encoded [0,1] -> [-1,1])
+			 * B = strength factor [0,1], multiplied by UBO anisotropy value. */
+			Code{shader, Location::Top} <<
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb;" << Line::End <<
+				"const vec2 " << component->variableName() << "_dir = " << component->variableName() << "_raw.rg * 2.0 - 1.0;" << Line::End <<
+				"const float " << component->variableName() << " = " << MaterialUB(UniformBlock::Component::Anisotropy) << " * " << component->variableName() << "_raw.b;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the anisotropy component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Transmission component.
+		 * GrabPass screen-space transmission takes priority over cubemap-based transmission.
+		 * Both require bindless textures and high quality to be enabled (the low-quality
+		 * path lacks the required fragment varyings for screen-space refraction). */
+		if ( m_isUsingGrabPassForTransmission && generator.bindlessTexturesEnabled() && generator.highQualityEnabled() )
+		{
+			if ( !this->generateGrabPassTransmissionFragmentShader(generator, fragmentShader) )
 			{
-				TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for refraction !";
+				TraceError{ClassId} << "Unable to generate GrabPass fragment code for transmission of PBR material '" << this->name() << "' !";
+
+				return false;
+			}
+		}
+		/* NOTE: A grab-pass transmission material FALLS BACK to the cubemap here when the
+		 * grab pass is unavailable (low quality / no bindless) — without this, such a
+		 * material would render with NO transmission at all in the fallback tier. */
+		else if ( ( m_isUsingEnvironmentCubemapForTransmission || m_isUsingGrabPassForTransmission ) && generator.bindlessTexturesEnabled() )
+		{
+			if ( !this->generateBindlessTransmissionFragmentShader(generator, fragmentShader) )
+			{
+				TraceError{ClassId} << "Unable to generate bindless fragment code for the transmission component of PBR material '" << this->name() << "' !";
 
 				return false;
 			}
 		}
 
-		/* Generate the refraction sampling code using bindless textures. */
-		if ( generator.highQualityEnabled() )
+		/* Transmission factor component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Transmission, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+
+			return true;
+		}, fragmentShader, materialSet) )
 		{
-			/* High quality: compute refraction direction in fragment shader.
-			 * NOTE: Reuse reflectionNormal and reflectionI if already declared by reflection (explicit component or bindless).
-			 * When m_isUsingEnvironmentCubemap is true, bindless reflection is always generated before refraction. */
-			const bool reflectionAlreadyDeclared = this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap;
+			TraceError{ClassId} << "Unable to generate fragment code for the transmission component of PBR material '" << this->name() << "' !";
 
-			if ( !reflectionAlreadyDeclared )
-			{
-				if ( this->isComponentPresent(ComponentType::Normal) )
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-				}
-				else
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-				}
-
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
-			}
-
-			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
-			 * For refraction, eta = 1.0 / IOR (air to material). */
-			Code(fragmentShader, Location::Top) <<
-				"const float refractionEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
-				"const vec3 refractDir = refract(reflectionI, reflectionNormal, refractionEta);" << Line::End <<
-				"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
-				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
-
-			/* NOTE: Fresnel effect for blending reflection and refraction (Schlick approximation).
-			 * When using bindless, both reflection and refraction use the environment cubemap. */
-			Code(fragmentShader, Location::Top) <<
-				"const float F0 = pow((1.0 - " << MaterialUB(UniformBlock::Component::RefractionIOR) << ") / (1.0 + " << MaterialUB(UniformBlock::Component::RefractionIOR) << "), 2.0);" << Line::End <<
-				"const float cosTheta = max(dot(-reflectionI, reflectionNormal), 0.0);" << Line::End <<
-				"const float fresnelFactor = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);";
+			return false;
 		}
-		else
-		{
-			/* Low quality: use pre-computed refraction coordinates from vertex shader.
-			 * NOTE: Refraction direction was already computed in vertex shader and passed via RefractionTextureCoordinates. */
-			Code(fragmentShader, Location::Top) <<
-				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 
-			/* NOTE: Fresnel effect for low quality mode (simpler approximation). */
-			Code(fragmentShader, Location::Top) <<
-				"const float F0 = pow((1.0 - " << MaterialUB(UniformBlock::Component::RefractionIOR) << ") / (1.0 + " << MaterialUB(UniformBlock::Component::RefractionIOR) << "), 2.0);" << Line::End <<
-				"const float cosTheta = max(dot(normalize(-" << ShaderVariable::RefractionTextureCoordinates << "), normalize(" << ShaderVariable::NormalWorldSpace << ")), 0.0);" << Line::End <<
-				"const float fresnelFactor = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);";
+		/* Iridescence factor component (texture-based). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Iridescence, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the iridescence component of PBR material '" << this->name() << "' !";
+
+			return false;
 		}
 
 		return true;
 	}
 
-	bool
-	StandardResource::setAmbientComponent (const PixelFactory::Color< float > & color) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the ambient component.";
-
-			return false;
-		}
-
-		const auto uniform = MaterialUB(UniformBlock::Component::AmbientColor);
-
-		const auto result = m_components.emplace(ComponentType::Ambient, std::make_unique< Color >(uniform, color));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		this->setAmbientColor(color);
-
-		return true;
-	}
-
-	bool
-	StandardResource::setAmbientComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the ambient component.";
-
-			return false;
-		}
-
-		const auto result = m_components.emplace(ComponentType::Ambient, std::make_unique< Texture >(Uniform::AmbientSampler, SurfaceAmbientColor, texture));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		if ( !this->addDependency(texture) )
-		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for ambient component !";
-
-			return false;
-		}
-
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		return true;
-	}
+	/* ==================== Component Setters ==================== */
 
 	bool
 	StandardResource::setAlbedoComponent (const PixelFactory::Color< float > & color) noexcept
 	{
-		m_pbrAlbedoColor = color;
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the albedo component.";
 
-		if ( !this->setDiffuseComponent(color) )
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::AlbedoColor);
+
+		const auto result = m_components.emplace(ComponentType::Albedo, std::make_unique< Color >(uniform, color));
+
+		if ( !result.second || result.first->second == nullptr )
 		{
 			return false;
 		}
 
-		this->recomputeSpecularFromPBR();
+		this->setAlbedoColor(color);
 
 		return true;
 	}
@@ -2307,12 +3501,31 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
 	{
-		if ( !this->setDiffuseComponent(texture) )
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the albedo component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Albedo, std::make_unique< Texture >(Uniform::AlbedoSampler, SurfaceAlbedoColor, texture));
+
+		if ( !result.second || result.first->second == nullptr )
 		{
 			return false;
 		}
 
-		this->recomputeSpecularFromPBR();
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for albedo component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
 	}
@@ -2320,19 +3533,64 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::setRoughnessComponent (float value) noexcept
 	{
-		m_pbrRoughness = std::clamp(value, 0.0F, 1.0F);
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the roughness component.";
 
-		this->recomputeSpecularFromPBR();
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::Roughness);
+
+		const auto result = m_components.emplace(ComponentType::Roughness, std::make_unique< Value >(uniform));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		this->setRoughness(value);
 
 		return true;
 	}
 
 	bool
-	StandardResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value, bool invert, Base::PixelFactory::Channel /*sourceChannel*/) noexcept
+	StandardResource::setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value, bool invert, Base::PixelFactory::Channel sourceChannel) noexcept
 	{
-		m_pbrRoughness = std::clamp(invert ? (1.0F - value) : value, 0.0F, 1.0F);
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the roughness component.";
 
-		this->recomputeSpecularFromPBR();
+			return false;
+		}
+
+		auto component = std::make_unique< Texture >(Uniform::RoughnessSampler, SurfaceRoughness, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::Roughness, std::move(component));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for roughness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setRoughness(value);
+
+		m_invertRoughness = invert;
 
 		return true;
 	}
@@ -2340,98 +3598,157 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::setMetalnessComponent (float value) noexcept
 	{
-		m_pbrMetalness = std::clamp(value, 0.0F, 1.0F);
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the metalness component.";
 
-		this->recomputeSpecularFromPBR();
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::Metalness);
+
+		const auto result = m_components.emplace(ComponentType::Metalness, std::make_unique< Value >(uniform));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		this->setMetalness(value);
 
 		return true;
 	}
 
 	bool
-	StandardResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & /*texture*/, float value, Base::PixelFactory::Channel /*sourceChannel*/) noexcept
+	StandardResource::setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value, Base::PixelFactory::Channel sourceChannel) noexcept
 	{
-		m_pbrMetalness = std::clamp(value, 0.0F, 1.0F);
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the metalness component.";
 
-		this->recomputeSpecularFromPBR();
+			return false;
+		}
+
+		auto component = std::make_unique< Texture >(Uniform::MetalnessSampler, SurfaceMetalness, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::Metalness, std::move(component));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for metalness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setMetalness(value);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setNormalComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the normal component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for normal component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setNormalScale(scale);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the height component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Displacement, std::make_unique< Texture >(Uniform::HeightSampler, SurfaceHeightValue, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for height component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		m_useParallaxOcclusionMapping = true;
+
+		this->setHeightScale(scale);
 
 		return true;
 	}
 
 	void
-	StandardResource::recomputeSpecularFromPBR () noexcept
+	StandardResource::setHeightScale (float value) noexcept
 	{
-		/* Skip if no Diffuse has been registered yet. The Standard shader generator
-		 * declares SurfaceDiffuseColor only when ComponentType::Diffuse is in the
-		 * material's component map ; emitting a Specular alone would yield a shader
-		 * that samples an undeclared variable. Diffuse is always created by
-		 * setAlbedoComponent before any roughness/metalness setter in normal usage. */
-		if ( m_components.find(ComponentType::Diffuse) == m_components.end() )
-		{
-			return;
-		}
+		m_materialProperties[HeightScaleOffset] = value;
 
-		const auto shininess = std::pow(1.0F - m_pbrRoughness, 2.0F) * MaxPBRShininess;
-
-		const PixelFactory::Color< float > specColor{
-			std::lerp(DielectricF0, m_pbrAlbedoColor.red(),   m_pbrMetalness),
-			std::lerp(DielectricF0, m_pbrAlbedoColor.green(), m_pbrMetalness),
-			std::lerp(DielectricF0, m_pbrAlbedoColor.blue(),  m_pbrMetalness),
-			1.0F
-		};
-
-		/* The specular component map only allows one insertion ; if it does not exist
-		 * yet, create it with setSpecularComponent (which also wires up the uniform).
-		 * Subsequent recomputes update the values directly. */
-		if ( m_components.find(ComponentType::Specular) == m_components.end() )
-		{
-			this->setSpecularComponent(specColor, shininess);
-		}
-		else
-		{
-			this->setSpecularColor(specColor);
-			this->setShininess(shininess);
-		}
+		m_videoMemoryUpdated = true;
 	}
 
 	bool
-	StandardResource::setDiffuseComponent (const PixelFactory::Color< float > & color) noexcept
+	StandardResource::setReflectionComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
 	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the diffuse component.";
+				"Unable to create or change the reflection component.";
 
 			return false;
 		}
 
-		const auto uniform = MaterialUB(UniformBlock::Component::DiffuseColor);
-
-		const auto result = m_components.emplace(ComponentType::Diffuse, std::make_unique< Color >(uniform, color));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		this->setDiffuseColor(color);
-
-		return true;
-	}
-
-	bool
-	StandardResource::setDiffuseComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the diffuse component.";
-
-			return false;
-		}
-
-		const auto result = m_components.emplace(ComponentType::Diffuse, std::make_unique< Texture >(Uniform::DiffuseSampler, SurfaceDiffuseColor, texture));
+		const auto result = m_components.emplace(ComponentType::Reflection, std::make_unique< Texture >(Uniform::ReflectionSampler, SurfaceReflectionColor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -2440,10 +3757,14 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for diffuse component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for reflection component !";
 
 			return false;
 		}
+
+		/* Explicitly authored cubemap: artistic intent, never replaced by SSR/RTR. The
+		 * render-target variant below stays overridable — a probe is scene-coherent. */
+		m_reflectionIsArtistic = true;
 
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
@@ -2452,45 +3773,128 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setSpecularComponent (const PixelFactory::Color< float > & color, float shininess) noexcept
+	StandardResource::setReflectionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget) noexcept
 	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the specular component.";
+				"Unable to create or change the reflection component.";
 
 			return false;
 		}
 
-		const auto uniform = MaterialUB(UniformBlock::Component::SpecularColor);
-
-		const auto result = m_components.emplace(ComponentType::Specular, std::make_unique< Color >(uniform, color));
+		/* NOTE: Using TextureInterface constructor - no resource dependency tracking. */
+		const auto result = m_components.emplace(ComponentType::Reflection, std::make_unique< Texture >(Uniform::ReflectionSampler, SurfaceReflectionColor, renderTarget));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
 			return false;
 		}
 
-		this->setSpecularColor(color);
-		this->setShininess(shininess);
+		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
+
+		/* A render target is the RENDERED SCENE: an absolute luminance — the shader must not
+		 * re-apply the environment luminance to it (see LightGenerator::reflectionIntensity()). */
+		m_reflectionSourceIsAbsolute = true;
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
 	}
 
 	bool
-	StandardResource::setSpecularComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float shininess) noexcept
+	StandardResource::samplesTexture (const Vulkan::TextureInterface * texture) const noexcept
+	{
+		if ( texture == nullptr )
+		{
+			return false;
+		}
+
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component != nullptr && component->texture().get() == texture )
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool
+	StandardResource::setReflectionComponentFromEnvironmentCubemap (float IBLIntensity) noexcept
 	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the specular component.";
+				"Unable to create or change the reflection component.";
 
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Specular, std::make_unique< Texture >(Uniform::SpecularSampler, SurfaceSpecularColor, texture));
+		m_isUsingEnvironmentCubemap = true;
+
+		m_materialProperties[IBLIntensityOffset] = std::clamp(IBLIntensity, 0.0F, 1.0F);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setPostProcessReflectivity (float amount) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the reflection component.";
+
+			return false;
+		}
+
+		/* NOTE: No cubemap, no sampler, no Reflection component: the value only reaches
+		 * LightGenerator::declareSurfaceReflectivityMap() as a GLSL literal, which puts it in the
+		 * material-properties G-buffer for SSR/RTR to read. Mirror of the "Value" filling type
+		 * handled in parseReflectionComponent(). */
+		m_postProcessReflectivityAmount = std::clamp(amount, 0.0F, 1.0F);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setRefractionComponentFromEnvironmentCubemap (float ior) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the refraction component.";
+
+			return false;
+		}
+
+		m_isUsingEnvironmentCubemapForRefraction = true;
+
+		this->setIOR(ior);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setRefractionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the refraction component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Refraction, std::make_unique< Texture >(Uniform::RefractionSampler, SurfaceRefractionColor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -2499,7 +3903,7 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for specular component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for refraction component !";
 
 			return false;
 		}
@@ -2507,72 +3911,40 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
-		this->setShininess(shininess);
+		this->setIOR(ior);
 
 		return true;
 	}
 
 	bool
-	StandardResource::setOpacityComponent (float amount) noexcept
+	StandardResource::setRefractionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float ior) noexcept
 	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the opacity component.";
+				"Unable to create or change the refraction component.";
 
 			return false;
 		}
 
-		const auto uniform = MaterialUB(UniformBlock::Component::Opacity);
-
-		const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Value >(uniform));
+		/* NOTE: Using TextureInterface constructor - no resource dependency tracking. */
+		const auto result = m_components.emplace(ComponentType::Refraction, std::make_unique< Texture >(Uniform::RefractionSampler, SurfaceRefractionColor, renderTarget));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
 			return false;
 		}
 
-		this->enableFlag(BlendingEnabled);
-		this->enableFlag(OpacityEnabled);
+		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
 
-		this->setOpacity(amount);
 
-		return true;
-	}
-
-	bool
-	StandardResource::setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the opacity component.";
-
-			return false;
-		}
-
-		const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, texture));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		if ( !this->addDependency(texture) )
-		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for opacity component !";
-
-			return false;
-		}
-
-		this->enableFlag(BlendingEnabled);
-		this->enableFlag(OpacityEnabled);
+		/* Absolute luminance source — see the reflection variant above. */
+		m_refractionSourceIsAbsolute = true;
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
-		this->setOpacity(amount);
+		this->setIOR(ior);
 
 		return true;
 	}
@@ -2593,6 +3965,9 @@ namespace EmEn::Graphics::Material
 
 		m_components[ComponentType::AutoIllumination] = std::make_unique< Value >(uniform);
 
+		/* Value-only semantic: a WHITE emissive driven by the amount alone (PBR's default
+		 * emissive color is black — behavioural parity with StandardResource, default white). */
+		this->setAutoIlluminationColor(PixelFactory::White);
 		this->setAutoIlluminationAmount(amount);
 
 		return true;
@@ -2646,7 +4021,7 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for auto-illumination component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for auto-illumination component !";
 
 			return false;
 		}
@@ -2660,18 +4035,39 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setNormalComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	StandardResource::setOpacityComponent (float amount) noexcept
 	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the normal component.";
+				"Unable to create or change the opacity component.";
 
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, texture));
+		/* Rule 1: a global opacity value makes the whole surface uniformly translucent. */
+		this->enableFlag(OpacityEnabled);
+		this->enableBlending(BlendingMode::Normal);
+
+		this->setOpacity(amount);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the opacity component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, texture));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -2680,32 +4076,48 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for normal component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for opacity component !";
 
 			return false;
 		}
 
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
+		this->enableFlag(OpacityEnabled);
 
-		this->setNormalScale(scale);
+		/* Rule 3 (grayscale per-pixel alpha scale) by default: the material blends. Calling
+		 * enableAlphaTest() afterwards switches to rule 2 (binary cutout, stays opaque). */
+		this->enableBlending(BlendingMode::Normal);
+
+		this->setOpacity(amount);
 
 		return true;
 	}
 
+	void
+	StandardResource::enableAlphaTest (float threshold) noexcept
+	{
+		/* Rule 2: binary CUTOUT — the fragment discards below the threshold and the material
+		 * STAYS OPAQUE (opaque render list, depth write kept, no back-to-front sorting). */
+		this->enableFlag(AlphaTestEnabled);
+		this->disableFlag(BlendingEnabled);
+
+		this->setAlphaThresholdToDiscard(threshold);
+	}
+
 	bool
-	StandardResource::setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	StandardResource::setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity) noexcept
 	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the height component.";
+				"Unable to create or change the ambient occlusion component.";
 
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Displacement, std::make_unique< Texture >(Uniform::HeightSampler, SurfaceHeightValue, texture));
+		const auto result = m_components.emplace(ComponentType::AmbientOcclusion, std::make_unique< Texture >(Uniform::AmbientOcclusionSampler, SurfaceAmbientOcclusion, texture));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -2714,7 +4126,7 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for height component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for ambient occlusion component !";
 
 			return false;
 		}
@@ -2722,413 +4134,7 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
-		m_useParallaxOcclusionMapping = true;
-
-		this->setHeightScale(scale);
-
-		return true;
-	}
-
-	void
-	StandardResource::setHeightScale (float value) noexcept
-	{
-		m_materialProperties[HeightScaleOffset] = value;
-
-		m_videoMemoryUpdated = true;
-	}
-
-	bool
-	StandardResource::setReflectionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the reflection component.";
-
-			return false;
-		}
-
-		const auto result = m_components.emplace(ComponentType::Reflection, std::make_unique< Texture >(Uniform::ReflectionSampler, SurfaceReflectionColor, texture));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		if ( !this->addDependency(texture) )
-		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for reflection component !";
-
-			return false;
-		}
-
-		/* Explicitly authored cubemap: artistic intent, never replaced by SSR/RTR. The
-		 * render-target variant below stays overridable — a probe is scene-coherent. */
-		m_reflectionIsArtistic = true;
-
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		this->setReflectionAmount(amount);
-
-		return true;
-	}
-
-	bool
-	StandardResource::setReflectionComponentFromRenderTarget (const std::shared_ptr< TextureInterface > & renderTarget, float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the reflection component.";
-
-			return false;
-		}
-
-		/* NOTE: Using TextureInterface constructor - no resource dependency tracking. */
-		const auto result = m_components.emplace(ComponentType::Reflection, std::make_unique< Texture >(Uniform::ReflectionSampler, SurfaceReflectionColor, renderTarget));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
-
-
-		/* A render target is the RENDERED SCENE: an absolute luminance — the shader must not
-		 * re-apply the environment luminance to it (see LightGenerator::reflectionIntensity()). */
-		m_reflectionSourceIsAbsolute = true;
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		this->setReflectionAmount(amount);
-
-		return true;
-	}
-
-	bool
-	StandardResource::samplesTexture (const Vulkan::TextureInterface * texture) const noexcept
-	{
-		if ( texture == nullptr )
-		{
-			return false;
-		}
-
-		for ( const auto & [componentType, component] : m_components )
-		{
-			if ( component != nullptr && component->texture().get() == texture )
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	bool
-	StandardResource::setReflectionComponentFromEnvironmentCubemap (float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the reflection component.";
-
-			return false;
-		}
-
-		m_isUsingEnvironmentCubemap = true;
-
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		this->setReflectionAmount(amount);
-
-		return true;
-	}
-
-	bool
-	StandardResource::setPostProcessReflectivity (float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the reflection component.";
-
-			return false;
-		}
-
-		/* NOTE: No cubemap, no sampler, no Reflection component: the value only reaches
-		 * LightGenerator::declareSurfaceReflectivityMap() as a GLSL literal, which puts it in the
-		 * material-properties G-buffer for SSR/RTR to read. Mirror of the "Value" filling type
-		 * handled in parseReflectionComponent(). */
-		m_postProcessReflectivityAmount = std::clamp(amount, 0.0F, 1.0F);
-
-		return true;
-	}
-
-	bool
-	StandardResource::setRefractionComponentFromEnvironmentCubemap (float ior, float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the refraction component.";
-
-			return false;
-		}
-
-		m_isUsingEnvironmentCubemapForRefraction = true;
-
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		this->setRefractionIOR(ior);
-		this->setRefractionAmount(amount);
-
-		return true;
-	}
-
-	bool
-	StandardResource::isComponentPresent (ComponentType componentType) const noexcept
-	{
-		return m_components.contains(componentType);
-	}
-
-	void
-	StandardResource::setAmbientColor (const PixelFactory::Color< float > & color) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Ambient) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no ambient component !";
-
-			return;
-		}
-
-		m_materialProperties[AmbientColorOffset] = color.red();
-		m_materialProperties[AmbientColorOffset+1] = color.green();
-		m_materialProperties[AmbientColorOffset+2] = color.blue();
-		m_materialProperties[AmbientColorOffset+3] = color.alpha();
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	void
-	StandardResource::setDiffuseColor (const PixelFactory::Color< float > & color) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Diffuse) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no diffuse component !";
-
-			return;
-		}
-
-		m_materialProperties[DiffuseColorOffset] = color.red();
-		m_materialProperties[DiffuseColorOffset+1] = color.green();
-		m_materialProperties[DiffuseColorOffset+2] = color.blue();
-		m_materialProperties[DiffuseColorOffset+3] = color.alpha();
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	void
-	StandardResource::setSpecularColor (const PixelFactory::Color< float > & color) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Specular) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no specular component !";
-
-			return;
-		}
-
-		m_materialProperties[SpecularColorOffset] = color.red();
-		m_materialProperties[SpecularColorOffset+1] = color.green();
-		m_materialProperties[SpecularColorOffset+2] = color.blue();
-		m_materialProperties[SpecularColorOffset+3] = color.alpha();
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	void
-	StandardResource::setAutoIlluminationColor (const PixelFactory::Color< float > & color) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::AutoIllumination) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no auto-illumination component !";
-
-			return;
-		}
-
-		m_materialProperties[AutoIlluminationColorOffset] = color.red();
-		m_materialProperties[AutoIlluminationColorOffset+1] = color.green();
-		m_materialProperties[AutoIlluminationColorOffset+2] = color.blue();
-		m_materialProperties[AutoIlluminationColorOffset+3] = color.alpha();
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	float
-	StandardResource::specularExponentFromGlossiness (float glossiness) noexcept
-	{
-		/* Exponential mapping (UE3 convention): the perceptual step stays regular over the whole
-		 * [0,1] range, and the low end still DECAYS — a glossiness of 0.1 gives an exponent of 4,
-		 * so pow(0.8, 4) = 0.41 instead of the pow(0.8, 0.1) = 0.978 a raw 0.1 exponent produced
-		 * (a lobe covering the entire hemisphere: every surface behaved as a uniform mirror sheet). */
-		return std::exp2(1.0F + (10.0F * std::clamp(glossiness, 0.0F, 1.0F)));
-	}
-
-	void
-	StandardResource::setShininess (float value) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Specular) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no specular component !";
-
-			return;
-		}
-
-		m_materialProperties[ShininessOffset] = std::abs(value);
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	void
-	StandardResource::setOpacity (float value) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Opacity) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no opacity component !";
-
-			return;
-		}
-
-		m_materialProperties[OpacityOffset] = clampToUnit(value);
-
-		m_videoMemoryUpdated = true;
-	}
-
-	void
-	StandardResource::setAlphaThresholdToDiscard (float value) noexcept
-	{
-		m_alphaThresholdToDiscard = clampToUnit(value);
-	}
-	
-	void
-	StandardResource::setAutoIlluminationAmount (float value) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::AutoIllumination) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no auto-illumination component !";
-
-			return;
-		}
-
-		m_materialProperties[AutoIlluminationAmountOffset] = std::abs(value);
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	void
-	StandardResource::setNormalScale (float value) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Normal) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no normal component !";
-
-			return;
-		}
-
-		m_materialProperties[NormalScaleOffset] = value;
-
-		m_videoMemoryUpdated = true;
-	}
-	
-	void
-	StandardResource::setReflectionAmount (float value) noexcept
-	{
-		if ( !this->isComponentPresent(ComponentType::Reflection) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no reflection component !";
-
-			return;
-		}
-
-		const auto clampedValue = clampToUnit(value);
-		m_materialProperties[ReflectionAmountOffset] = clampedValue;
-
-		m_videoMemoryUpdated = true;
-	}
-
-	bool
-	StandardResource::setRefractionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior, float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the refraction component.";
-
-			return false;
-		}
-
-		const auto result = m_components.emplace(ComponentType::Refraction, std::make_unique< Texture >(Uniform::RefractionSampler, SurfaceRefractionColor, texture));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		if ( !this->addDependency(texture) )
-		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for refraction component !";
-
-			return false;
-		}
-
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		this->setRefractionIOR(ior);
-		this->setRefractionAmount(amount);
-
-		return true;
-	}
-
-	bool
-	StandardResource::setRefractionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float ior, float amount) noexcept
-	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} <<
-				"The resource '" << this->name() << "' is created ! "
-				"Unable to create or change the refraction component.";
-
-			return false;
-		}
-
-		/* NOTE: Using TextureInterface constructor - no resource dependency tracking. */
-		const auto result = m_components.emplace(ComponentType::Refraction, std::make_unique< Texture >(Uniform::RefractionSampler, SurfaceRefractionColor, renderTarget));
-
-		if ( !result.second || result.first->second == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
-
-
-		/* Absolute luminance source — see the reflection variant above. */
-		m_refractionSourceIsAbsolute = true;
-		this->enableFlag(TextureEnabled);
-		this->enableFlag(UsePrimaryTextureCoordinates);
-
-		this->setRefractionIOR(ior);
-		this->setRefractionAmount(amount);
+		this->setAOIntensity(intensity);
 
 		return true;
 	}
@@ -3154,7 +4160,7 @@ namespace EmEn::Graphics::Material
 
 		if ( !this->addDependency(texture) )
 		{
-			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for reflectivity map component !";
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for reflectivity map component !";
 
 			return false;
 		}
@@ -3165,37 +4171,906 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
-	void
-	StandardResource::setRefractionAmount (float value) noexcept
+	bool
+	StandardResource::setClearCoatComponent (float factor, float roughness) noexcept
 	{
-		if ( !this->isComponentPresent(ComponentType::Refraction) )
+		if ( this->isCreated() )
 		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no refraction component !";
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the clear coat component.";
 
-			return;
+			return false;
 		}
 
-		const auto clampedValue = clampToUnit(value);
-		m_materialProperties[RefractionAmountOffset] = clampedValue;
+		const auto uniform = MaterialUB(UniformBlock::Component::ClearCoatFactor);
+
+		const auto result = m_components.emplace(ComponentType::ClearCoat, std::make_unique< Value >(uniform));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		this->setClearCoatFactor(factor);
+		this->setClearCoatRoughness(roughness);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setClearCoatComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the clear coat component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::ClearCoat, std::make_unique< Texture >(Uniform::ClearCoatSampler, SurfaceClearCoatFactor, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for clear coat component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setClearCoatFactor(1.0F);
+		this->setClearCoatRoughness(roughness);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setClearCoatRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the clear coat roughness component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::ClearCoatRoughness, std::make_unique< Texture >(Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for clear coat roughness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setClearCoatFactor(factor);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setClearCoatNormalComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the clear coat normal component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::ClearCoatNormal, std::make_unique< Texture >(Uniform::ClearCoatNormalSampler, SurfaceClearCoatNormal, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for clear coat normal component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setClearCoatNormalScale(scale);
+
+		return true;
+	}
+
+	void
+	StandardResource::setClearCoatNormalScale (float value) noexcept
+	{
+		m_materialProperties[ClearCoatNormalScaleOffset] = value;
+
+		m_videoMemoryUpdated = true;
+	}
+
+	bool
+	StandardResource::setSubsurfaceComponent (float intensity, float radius, const PixelFactory::Color< float > & color) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the subsurface component.";
+
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::SubsurfaceIntensity);
+
+		const auto result = m_components.emplace(ComponentType::Subsurface, std::make_unique< Value >(uniform));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		this->setSubsurfaceIntensity(intensity);
+		this->setSubsurfaceRadius(radius);
+		this->setSubsurfaceColor(color);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setSubsurfaceThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the subsurface thickness component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::SubsurfaceThickness, std::make_unique< Texture >(Uniform::SubsurfaceThicknessSampler, SurfaceSubsurfaceThickness, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for subsurface thickness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setSheenComponent (const PixelFactory::Color< float > & color, float roughness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the sheen component.";
+
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::SheenColor);
+
+		const auto result = m_components.emplace(ComponentType::Sheen, std::make_unique< Color >(uniform, color));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		this->setSheenColor(color);
+		this->setSheenRoughness(roughness);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setSheenComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the sheen component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Sheen, std::make_unique< Texture >(Uniform::SheenSampler, SurfaceSheenColor, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for sheen component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setSheenRoughness(roughness);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setAnisotropyComponent (float anisotropy, float rotation) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the anisotropy component.";
+
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::Anisotropy);
+
+		const auto result = m_components.emplace(ComponentType::Anisotropy, std::make_unique< Value >(uniform));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		this->setAnisotropy(anisotropy);
+		this->setAnisotropyRotation(rotation);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setAnisotropyComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float anisotropy, float rotation) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the anisotropy component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Anisotropy, std::make_unique< Texture >(Uniform::AnisotropySampler, SurfaceAnisotropy, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for anisotropy component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setAnisotropy(anisotropy);
+		this->setAnisotropyRotation(rotation);
+
+		return true;
+	}
+
+	bool
+	StandardResource::isComponentPresent (ComponentType componentType) const noexcept
+	{
+		return m_components.contains(componentType);
+	}
+
+	/* ==================== Dynamic Property Setters ==================== */
+
+	void
+	StandardResource::setAlbedoColor (const PixelFactory::Color< float > & color) noexcept
+	{
+		m_materialProperties[AlbedoColorOffset] = color.red();
+		m_materialProperties[AlbedoColorOffset+1] = color.green();
+		m_materialProperties[AlbedoColorOffset+2] = color.blue();
+		m_materialProperties[AlbedoColorOffset+3] = color.alpha();
 
 		m_videoMemoryUpdated = true;
 	}
 
 	void
-	StandardResource::setRefractionIOR (float value) noexcept
+	StandardResource::setRoughness (float value) noexcept
 	{
-		if ( !this->isComponentPresent(ComponentType::Refraction) )
-		{
-			TraceWarning{ClassId} << "The material '" << this->name() << "' has no refraction component !";
-
-			return;
-		}
-
-		/* NOTE: IOR typically ranges from 1.0 (vacuum) to ~2.5 (diamond).
-		 * Common values: air=1.0003, water=1.33, glass=1.5, diamond=2.42 */
-		m_materialProperties[RefractionIOROffset] = std::clamp(value, 1.0F, 3.0F);
+		m_materialProperties[RoughnessOffset] = clampToUnit(value);
 
 		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setMetalness (float value) noexcept
+	{
+		m_materialProperties[MetalnessOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setNormalScale (float value) noexcept
+	{
+		m_materialProperties[NormalScaleOffset] = value;
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setIOR (float value) noexcept
+	{
+		m_materialProperties[IOROffset] = std::clamp(value, 1.0F, 3.0F);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setIBLIntensity (float value) noexcept
+	{
+		m_materialProperties[IBLIntensityOffset] = std::clamp(value, 0.0F, 1.0F);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAutoIlluminationColor (const PixelFactory::Color< float > & color) noexcept
+	{
+		m_materialProperties[AutoIlluminationColorOffset] = color.red();
+		m_materialProperties[AutoIlluminationColorOffset+1] = color.green();
+		m_materialProperties[AutoIlluminationColorOffset+2] = color.blue();
+		m_materialProperties[AutoIlluminationColorOffset+3] = color.alpha();
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAutoIlluminationAmount (float value) noexcept
+	{
+		m_materialProperties[AutoIlluminationAmountOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setOpacity (float value) noexcept
+	{
+		m_materialProperties[OpacityOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAlphaThresholdToDiscard (float threshold) noexcept
+	{
+		m_materialProperties[AlphaThresholdOffset] = clampToUnit(threshold);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setReflectionAmount (float value) noexcept
+	{
+		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setRefractionAmount (float value) noexcept
+	{
+		m_materialProperties[RefractionAmountOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAOIntensity (float value) noexcept
+	{
+		m_materialProperties[AOIntensityOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setClearCoatFactor (float value) noexcept
+	{
+		m_materialProperties[ClearCoatFactorOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setClearCoatRoughness (float value) noexcept
+	{
+		m_materialProperties[ClearCoatRoughnessOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setSubsurfaceIntensity (float value) noexcept
+	{
+		m_materialProperties[SubsurfaceIntensityOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setSubsurfaceRadius (float value) noexcept
+	{
+		m_materialProperties[SubsurfaceRadiusOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setSubsurfaceColor (const PixelFactory::Color< float > & color) noexcept
+	{
+		m_materialProperties[SubsurfaceColorOffset] = color.red();
+		m_materialProperties[SubsurfaceColorOffset+1] = color.green();
+		m_materialProperties[SubsurfaceColorOffset+2] = color.blue();
+		m_materialProperties[SubsurfaceColorOffset+3] = color.alpha();
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setSheenColor (const PixelFactory::Color< float > & color) noexcept
+	{
+		m_materialProperties[SheenColorOffset] = color.red();
+		m_materialProperties[SheenColorOffset+1] = color.green();
+		m_materialProperties[SheenColorOffset+2] = color.blue();
+		m_materialProperties[SheenColorOffset+3] = color.alpha();
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setSheenRoughness (float value) noexcept
+	{
+		m_materialProperties[SheenRoughnessOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAnisotropy (float value) noexcept
+	{
+		m_materialProperties[AnisotropyOffset] = std::clamp(value, -1.0F, 1.0F);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAnisotropyRotation (float value) noexcept
+	{
+		m_materialProperties[AnisotropyRotationOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	/* ==================== Transmission Component Setters ==================== */
+
+	bool
+	StandardResource::setTransmissionComponent (float factor, const PixelFactory::Color< float > & attenuationColor, float attenuationDistance, float thickness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the transmission component.";
+
+			return false;
+		}
+
+		this->setTransmissionFactor(factor);
+		this->setAttenuationColor(attenuationColor);
+		this->setAttenuationDistance(attenuationDistance);
+		this->setThicknessFactor(thickness);
+
+		/* Enable environment cubemap for transmission (prefiltered cubemap sampling). */
+		m_isUsingEnvironmentCubemapForTransmission = true;
+
+		return true;
+	}
+
+	bool
+	StandardResource::setTransmissionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const PixelFactory::Color< float > & attenuationColor, float attenuationDistance, float thickness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the transmission component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Transmission, std::make_unique< Texture >(Uniform::TransmissionSampler, SurfaceTransmissionFactor, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for transmission component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setTransmissionFactor(1.0F);
+		this->setAttenuationColor(attenuationColor);
+		this->setAttenuationDistance(attenuationDistance);
+		this->setThicknessFactor(thickness);
+
+		/* Enable environment cubemap for transmission (prefiltered cubemap sampling). */
+		m_isUsingEnvironmentCubemapForTransmission = true;
+
+		return true;
+	}
+
+	bool
+	StandardResource::setTransmissionComponentFromGrabPass (float factor, const PixelFactory::Color< float > & attenuationColor, float attenuationDistance, float thickness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the transmission component.";
+
+			return false;
+		}
+
+		this->setTransmissionFactor(factor);
+		this->setAttenuationColor(attenuationColor);
+		this->setAttenuationDistance(attenuationDistance);
+		this->setThicknessFactor(thickness);
+
+		/* Enable GrabPass screen-space transmission (mutually exclusive with cubemap). */
+		m_isUsingGrabPassForTransmission = true;
+		m_isUsingEnvironmentCubemapForTransmission = false;
+
+		return true;
+	}
+
+	void
+	StandardResource::enableDepthBasedOpacity (bool state) noexcept
+	{
+		m_isUsingDepthBasedOpacity = state;
+	}
+
+	/* ==================== Transmission Dynamic Property Setters ==================== */
+
+	void
+	StandardResource::setTransmissionFactor (float value) noexcept
+	{
+		m_materialProperties[TransmissionFactorOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAttenuationColor (const PixelFactory::Color< float > & color) noexcept
+	{
+		m_materialProperties[AttenuationColorOffset] = color.red();
+		m_materialProperties[AttenuationColorOffset+1] = color.green();
+		m_materialProperties[AttenuationColorOffset+2] = color.blue();
+		m_materialProperties[AttenuationColorOffset+3] = color.alpha();
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setAttenuationDistance (float value) noexcept
+	{
+		m_materialProperties[AttenuationDistanceOffset] = std::max(0.0001F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setThicknessFactor (float value) noexcept
+	{
+		m_materialProperties[ThicknessFactorOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	/* ==================== Iridescence Component Setters ==================== */
+
+	bool
+	StandardResource::setIridescenceComponent (float factor, float ior, float thicknessMin, float thicknessMax) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the iridescence component.";
+
+			return false;
+		}
+
+		this->setIridescenceFactor(factor);
+		this->setIridescenceIOR(ior);
+		this->setIridescenceThicknessMin(thicknessMin);
+		this->setIridescenceThicknessMax(thicknessMax);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setIridescenceComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior, float thicknessMin, float thicknessMax) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the iridescence component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Iridescence, std::make_unique< Texture >(Uniform::IridescenceSampler, SurfaceIridescenceFactor, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for iridescence component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setIridescenceFactor(1.0F);
+		this->setIridescenceIOR(ior);
+		this->setIridescenceThicknessMin(thicknessMin);
+		this->setIridescenceThicknessMax(thicknessMax);
+
+		return true;
+	}
+
+	/* ==================== Iridescence Dynamic Property Setters ==================== */
+
+	void
+	StandardResource::setIridescenceFactor (float value) noexcept
+	{
+		m_materialProperties[IridescenceFactorOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setIridescenceIOR (float value) noexcept
+	{
+		m_materialProperties[IridescenceIOROffset] = std::clamp(value, 1.0F, 2.333F);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setIridescenceThicknessMin (float value) noexcept
+	{
+		m_materialProperties[IridescenceThicknessMinOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setIridescenceThicknessMax (float value) noexcept
+	{
+		m_materialProperties[IridescenceThicknessMaxOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	/* ==================== Dispersion Component Setters ==================== */
+
+	bool
+	StandardResource::setDispersionComponent (float dispersion) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the dispersion component.";
+
+			return false;
+		}
+
+		m_materialProperties[DispersionOffset] = std::max(dispersion, 0.0F);
+
+		return true;
+	}
+
+	/* ==================== Dispersion Dynamic Property Setters ==================== */
+
+	void
+	StandardResource::setDispersion (float value) noexcept
+	{
+		m_materialProperties[DispersionOffset] = std::max(value, 0.0F);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	/* ==================== Specular Component Setters (KHR_materials_specular) ==================== */
+
+	bool
+	StandardResource::setSpecularComponent (float factor, const Base::PixelFactory::Color< float > & color) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the specular component.";
+
+			return false;
+		}
+
+		this->setSpecularFactor(factor);
+		this->setSpecularColor(color);
+
+		return true;
+	}
+
+	/* ==================== Specular Dynamic Property Setters ==================== */
+
+	void
+	StandardResource::setSpecularFactor (float value) noexcept
+	{
+		m_materialProperties[SpecularFactorOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept
+	{
+		m_materialProperties[SpecularColorOffset] = color.red();
+		m_materialProperties[SpecularColorOffset + 1] = color.green();
+		m_materialProperties[SpecularColorOffset + 2] = color.blue();
+		m_materialProperties[SpecularColorOffset + 3] = color.alpha();
+
+		m_videoMemoryUpdated = true;
+	}
+
+	/* ==================== Specular JSON Parsing ==================== */
+
+	bool
+	StandardResource::parseSpecularComponent (const Json::Value & data) noexcept
+	{
+		if ( !data.isMember(SpecularKHRString) )
+		{
+			/* Specular is optional - not present means defaults (factor=1.0, color=white). */
+			return true;
+		}
+
+		const auto & specularData = data[SpecularKHRString];
+
+		const auto factor = FastJSON::getValue< float >(specularData, "Factor").value_or(DefaultSpecularFactor);
+		this->setSpecularFactor(factor);
+
+		if ( specularData.isMember(JKColor) )
+		{
+			const auto & colorData = specularData[JKColor];
+			const auto color = colorData.isArray() ? parseColorComponent(colorData) : DefaultSpecularColor;
+
+			this->setSpecularColor(color);
+		}
+
+		return true;
+	}
+
+	/* ==================== Iridescence JSON Parsing ==================== */
+
+	bool
+	StandardResource::parseIridescenceComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, IridescenceString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				const auto factor = parseValueComponent(componentData);
+				const auto ior = FastJSON::getValue< float >(data[IridescenceString], "IOR").value_or(DefaultIridescenceIOR);
+				const auto thicknessMin = FastJSON::getValue< float >(data[IridescenceString], "ThicknessMin").value_or(DefaultIridescenceThicknessMin);
+				const auto thicknessMax = FastJSON::getValue< float >(data[IridescenceString], "ThicknessMax").value_or(DefaultIridescenceThicknessMax);
+
+				return this->setIridescenceComponent(factor, ior, thicknessMin, thicknessMax);
+			}
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Iridescence, std::make_unique< Texture >(Uniform::IridescenceSampler, SurfaceIridescenceFactor, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				const auto ior = FastJSON::getValue< float >(data[IridescenceString], "IOR").value_or(DefaultIridescenceIOR);
+				const auto thicknessMin = FastJSON::getValue< float >(data[IridescenceString], "ThicknessMin").value_or(DefaultIridescenceThicknessMin);
+				const auto thicknessMax = FastJSON::getValue< float >(data[IridescenceString], "ThicknessMax").value_or(DefaultIridescenceThicknessMax);
+
+				this->setIridescenceFactor(FastJSON::getValue< float >(data[IridescenceString], JKValue).value_or(1.0F));
+				this->setIridescenceIOR(ior);
+				this->setIridescenceThicknessMin(thicknessMin);
+				this->setIridescenceThicknessMax(thicknessMax);
+			}
+				return true;
+
+			case FillingType::None :
+				/* Iridescence is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource iridescence component !";
+
+				return false;
+		}
 	}
 
 	/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */

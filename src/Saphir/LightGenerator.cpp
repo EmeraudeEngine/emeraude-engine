@@ -1252,7 +1252,7 @@ namespace EmEn::Saphir
 			{
 				/* High-quality: use reflectionNormal and reflectionI for proper Fresnel gating.
 				 * NOTE: transmissionDir, transmissionLod, and SurfaceTransmissionColor are already
-				 * declared by generateBindlessTransmissionFragmentShader() in PBRResource. */
+				 * declared by generateBindlessTransmissionFragmentShader() in StandardResource. */
 				const auto code = (std::stringstream{} <<
 					"/* Thin-surface transmission - Beer's law + Fresnel gate. */" "\n"
 					"vec3 transmittedLight = " << m_surfaceTransmissionColor << ";" "\n"
@@ -1268,7 +1268,7 @@ namespace EmEn::Saphir
 			else
 			{
 				/* Low-quality: no Fresnel gating, simpler approximation.
-				 * NOTE: SurfaceTransmissionColor is already declared by PBRResource. */
+				 * NOTE: SurfaceTransmissionColor is already declared by StandardResource. */
 				const auto code = (std::stringstream{} <<
 					"/* Thin-surface transmission (LQ) - Beer's law absorption. */" "\n"
 					"vec3 transmittedLight = " << m_surfaceTransmissionColor << ";" "\n"

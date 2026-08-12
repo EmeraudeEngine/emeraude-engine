@@ -52,7 +52,7 @@ Pass 2: Render glass objects → Final target, sampling from Pass 1 texture
 ### GrabPass Infrastructure (New)
 The rendering pipeline now supports a 3-category sort for transparent objects:
 
-1. **`requiresGrabPass()` propagation**: `Material::Interface` declares a virtual `requiresGrabPass()` method (default `false`), overridden by `PBRResource`. This is propagated through `Renderable::Abstract::requiresGrabPass(uint32_t layerIndex)` to all concrete renderables (`MeshResource`, `SimpleMeshResource`, `SpriteResource`, `BasicSeaResource`, `BasicGroundResource`, `TerrainResource`). Background/sky renderables always return `false`.
+1. **`requiresGrabPass()` propagation**: `Material::Interface` declares a virtual `requiresGrabPass()` method (default `false`), overridden by `StandardResource` (the lit Cook-Torrance material). This is propagated through `Renderable::Abstract::requiresGrabPass(uint32_t layerIndex)` to all concrete renderables (`MeshResource`, `SimpleMeshResource`, `SpriteResource`, `BasicSeaResource`, `BasicGroundResource`, `TerrainResource`). Background/sky renderables always return `false`.
 
 2. **`isOpaque()` integration**: `Material::Interface::isOpaque()` now returns `false` when `requiresGrabPass()` is `true`, because a material requiring a grab pass is inherently non-opaque. This ensures automatic correct sorting without additional scene-side logic.
 
@@ -66,7 +66,7 @@ The rendering pipeline now supports a 3-category sort for transparent objects:
 **Code references:**
 - `Graphics/Material/Interface.hpp:isOpaque()` — returns false if `requiresGrabPass()` is true
 - `Graphics/Material/Interface.hpp:requiresGrabPass()` — virtual, default false
-- `Graphics/Material/PBRResource.hpp:requiresGrabPass()` — override
+- `Graphics/Material/StandardResource.hpp:requiresGrabPass()` — override
 - `Graphics/Renderable/Abstract.hpp:requiresGrabPass()` — pure virtual
 - `Graphics/Renderable/MeshResource.cpp:requiresGrabPass()` — layer dispatch
 - `Scenes/Scene.hpp` — `TranslucentGB{5UL}`, `TranslucentGBLighted{6UL}` constants, 7-element render list array

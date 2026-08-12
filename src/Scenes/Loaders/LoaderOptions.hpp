@@ -44,17 +44,6 @@ namespace EmEn::Scenes::Loaders
 namespace EmEn::Scenes::Loaders
 {
 	/**
-	 * @brief Material container selected for the resources produced by a loader.
-	 * @note Standard maps the FBX/glTF PBR factors (albedo, roughness, metalness)
-	 * onto a Phong/Blinn surface via the cross-material setters of StandardResource.
-	 */
-	enum class EMEN_API MaterialMode : uint8_t
-	{
-		PBR,
-		Standard
-	};
-
-	/**
 	 * @brief Options that affect resource loading (shared by all loaders).
 	 * @note flattenHierarchy is NOT here — it only affects scene building,
 	 * not resource loading, and belongs in Scenes::SceneDataConsumer.
@@ -69,7 +58,6 @@ namespace EmEn::Scenes::Loaders
 		 * Called once per loaded mesh, in load order, before nodes are wired.
 		 */
 		std::function< void (MeshDescriptor &) > onMeshLoaded;
-		MaterialMode materialMode{MaterialMode::PBR};
 		/**
 		 * @brief Resolves references, payloads, inherits and variants in addition to sublayers.
 		 *

@@ -225,7 +225,7 @@ this->setPOMIterations(this->highQualityEnabled()
 - `Generator/Abstract.hpp:setPOMIterations()` — Clamps to [4, 64] or 0 (special disable value)
 - `Generator/SceneRendering.hpp` constructor — Quality cascade logic
 - `StandardResource.cpp:m_pomGenerationActive` — Fragment shader conditional
-- `PBRResource.cpp:m_pomGenerationActive` — Fragment shader conditional
+- `StandardResource.cpp:m_pomGenerationActive` — Fragment shader conditional
 
 ### Per-Vertex Lighting Shader Input Constraint
 
@@ -399,7 +399,7 @@ Adds a second specular lobe on top of the base material (car paint, varnished wo
 - Energy conservation: base specular is scaled by `(1 - clearCoatFactor)`
 - **Clear coat normal map** (KHR_materials_clearcoat): Optional dedicated normal map for the clear coat layer, simulating micro-imperfections (orange peel, swirl marks) independent of the base surface. When no clear coat normal is provided, the coat uses the base surface normal (`Ncc = N`).
 - **Fragment-local TBN**: The clear coat normal is transformed using a tangent frame derived from the fragment normal N (`cross(N, up)`), NOT from the vertex TBN matrix. This avoids dependency on base normal mapping being active.
-- **Files**: `LightGenerator.PBR.cpp` (per-light), `LightGenerator.cpp` (ambient IBL), `PBRResource.cpp` (texture sampling + UBO)
+- **Files**: `LightGenerator.PBR.cpp` (per-light), `LightGenerator.cpp` (ambient IBL), `StandardResource.cpp` (texture sampling + UBO)
 
 ### Subsurface Scattering (SSS)
 
@@ -599,7 +599,7 @@ of the same name is byte-identical, returns `true`, and emits **no warning**:
 - **Unbounded bindless arrays** (`AbstractShader::declare(const Declaration::Sampler &)`
   when `declaration.isUnbounded()`). A fixed name maps to a fixed set/binding/type
   (e.g. `uBindlessTexturesCube` → cube binding on the `PerBindless` set). They are
-  declared **independently** by materials (`PBRResource`, `StandardResource`) **and**
+  declared **independently** by materials (`StandardResource`, `StandardResource`) **and**
   the `LightGenerator` variants (cube shadows, color projection) into one fragment
   shader — there is **no single coordinator** across those subsystems, so a localized
   "declare once" cannot cover it. Silent de-dup is the mechanism.

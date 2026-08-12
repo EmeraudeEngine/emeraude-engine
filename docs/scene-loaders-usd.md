@@ -910,9 +910,6 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
    install as an environment.
 6. **USD cameras are not translated at all** — `SceneData` carries no camera. The demo's viewpoint
    is placed by hand.
-7. **`PBRResource` has no alpha-test path** (`enableAlphaTest()` exists on `BasicResource` only), so
-   a cutout currently falls back to blending: visually close, but it pays sorting, loses depth write
-   and does not alpha-test at ray-hit time.
 
 ### 11.6 The measured floor — and why the DISAGREEMENT points at the prediction, not the anchor
 

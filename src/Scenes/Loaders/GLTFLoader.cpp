@@ -50,7 +50,6 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/KTX2Decoder.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -1079,7 +1078,7 @@ namespace EmEn::Scenes::Loaders
 
 			/* Async material creation — lambda is fully self-contained, no this/reference captures.
 			 * The lambda is generic so the same configuration code path applies whether the
-			 * loader produces a PBRResource or a StandardResource (cross-material aliases
+			 * loader produces a StandardResource or a StandardResource (cross-material aliases
 			 * convert PBR factors to Phong/Blinn parameters when targeting Standard). */
 			auto configure = [
 					albedoTex = std::move(albedoTex), albedoColor,
@@ -1237,26 +1236,15 @@ namespace EmEn::Scenes::Loaders
 					return materialResource.setManualLoadSuccess(true);
 				};
 
-			std::shared_ptr< Material::Interface > material;
-
-			if ( m_options.materialMode == MaterialMode::Standard )
-			{
-				material = m_resources.container< Material::StandardResource >()
-					->getOrCreateResource(name, configure);
-			}
-			else
-			{
-				material = m_resources.container< Material::PBRResource >()
-					->getOrCreateResource(name, configure);
-			}
+			auto material = std::static_pointer_cast< Material::Interface >(
+				m_resources.container< Material::StandardResource >()->getOrCreateResource(name, configure)
+			);
 
 			if ( material == nullptr )
 			{
 				TraceWarning{ClassId} << "Material " << materialIndex << " ('" << name << "') failed to create, using default.";
 
-				m_materials[materialIndex] = (m_options.materialMode == MaterialMode::Standard)
-					? std::static_pointer_cast< Material::Interface >(m_resources.container< Material::StandardResource >()->getDefaultResource())
-					: std::static_pointer_cast< Material::Interface >(m_resources.container< Material::PBRResource >()->getDefaultResource());
+				m_materials[materialIndex] = m_resources.container< Material::StandardResource >()->getDefaultResource();
 
 				allSuccess = false;
 			}
@@ -1283,12 +1271,7 @@ namespace EmEn::Scenes::Loaders
 		bool allSuccess = true;
 
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
-			if ( m_options.materialMode == MaterialMode::Standard )
-			{
-				return m_resources.container< Material::StandardResource >()->getDefaultResource();
-			}
-
-			return m_resources.container< Material::PBRResource >()->getDefaultResource();
+			return m_resources.container< Material::StandardResource >()->getDefaultResource();
 		};
 
 		/* ⚠️ Geometry and mesh resources are cached BY NAME and their content depends on the axis
@@ -1681,7 +1664,7 @@ namespace EmEn::Scenes::Loaders
 			descriptor.renderable = mesh;
 			descriptor.geometry = std::static_pointer_cast< Geometry::Interface >(geometry);
 			descriptor.materials = materialList.empty()
-				? std::vector< std::shared_ptr< Material::Interface > >{m_resources.container< Material::PBRResource >()->getDefaultResource()}
+				? std::vector< std::shared_ptr< Material::Interface > >{m_resources.container< Material::StandardResource >()->getDefaultResource()}
 				: std::move(materialList);
 
 			/* Ensure output.meshes is indexed by glTF mesh index. */

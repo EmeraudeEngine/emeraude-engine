@@ -152,7 +152,7 @@ namespace EmEn::Graphics::Renderable
 				 * cannot carry a brightness: `AutoIllumination: 1.0` alone emits exactly 1 nit,
 				 * which is invisible next to any real light source. A self-illuminating sprite
 				 * (a flame, an explosion, a neon sign) declares its LUMINANCE in cd/m^2 here,
-				 * same key and same contract as StandardResource / PBRResource and as the glTF
+				 * same key and same contract as StandardResource / StandardResource and as the glTF
 				 * extension KHR_materials_emissive_strength. */
 				if ( data.isMember(EmissiveStrengthString) )
 				{

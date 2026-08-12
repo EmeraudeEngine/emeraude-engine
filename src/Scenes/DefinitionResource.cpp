@@ -28,7 +28,6 @@
 
 /* Local inclusions. */
 #include "Graphics/Material/BasicResource.hpp"
-#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -234,15 +233,11 @@ namespace EmEn::Scenes
 			const auto matType = FastJSON::getValue< std::string >(mat, TypeKey).value_or("Basic");
 			const auto matResource = FastJSON::getValue< std::string >(mat, ResourceKey).value_or("");
 
-			if ( matType == "Standard" && !matResource.empty() )
+			/* One lit material: the legacy "Standard" and "PBR" type strings are accepted as
+			 * synonyms of the single StandardResource (material merge, Lot 4). */
+			if ( ( matType == "Standard" || matType == "PBR" ) && !matResource.empty() )
 			{
 				materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(matResource);
-			}
-			else if ( matType == "PBR" && !matResource.empty() )
-			{
-				/* Material merge, Lot 2: "PBR" now reaches the PBR container — it used to be
-				 * silently routed to the StandardResource container. */
-				materialResource = this->serviceProvider().container< Material::PBRResource >()->getResource(matResource);
 			}
 			else
 			{

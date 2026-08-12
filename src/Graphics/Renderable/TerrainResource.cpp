@@ -35,7 +35,6 @@
 /* Local inclusions. */
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
-#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "Types.hpp"
@@ -193,7 +192,7 @@ namespace EmEn::Graphics::Renderable
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
 
-		if ( !materialType || (materialType != Material::StandardResource::ClassId && materialType != Material::PBRResource::ClassId) )
+		if ( !materialType || materialType != Material::StandardResource::ClassId )
 		{
 			TraceError{ClassId} << "Material resource type '" << materialType.value_or("<missing>") << "' for terrain '" << this->name() << "' is not handled !";
 
@@ -231,11 +230,7 @@ namespace EmEn::Graphics::Renderable
 			return materials->getDefaultResource();
 		};
 
-		/* Transitional (material merge, Lot 2): the declared ClassId selects the container —
-		 * Standard for legacy data, PBR for converted data. The Standard branch dies at Lot 4. */
-		const auto materialResource = materialType == Material::PBRResource::ClassId
-			? resolveMaterial(this->serviceProvider().container< Material::PBRResource >())
-			: resolveMaterial(this->serviceProvider().container< Material::StandardResource >());
+		const auto materialResource = resolveMaterial(this->serviceProvider().container< Material::StandardResource >());
 
 		if ( !this->setMaterial(materialResource) )
 		{

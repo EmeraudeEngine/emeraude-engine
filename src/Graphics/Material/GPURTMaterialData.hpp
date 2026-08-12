@@ -71,7 +71,7 @@ namespace EmEn::Graphics::Material
 	 * @brief GPU-side material data for ray tracing shaders (std430 layout).
 	 * @note This is NOT a renderable material. It is a flat data struct used exclusively
 	 *	   as an element in the RT Material SSBO. All material types (BasicResource,
-	 *	   StandardResource, PBRResource) convert to this normalized PBR representation
+	 *	   StandardResource, StandardResource) convert to this normalized PBR representation
 	 *	   via Material::Interface::exportRTMaterialData().
 	 *	   Only properties visible/useful in reflections are included.
 	 */

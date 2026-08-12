@@ -283,7 +283,7 @@ void waitEvents(std::span< const VkEvent > events, ...);
 > [!CRITICAL]
 > **`LayoutManager` is accessed concurrently by the resource loading thread pool.**
 >
-> Materials (Basic, Standard, PBR) share descriptor set layouts via `LayoutManager`.
+> Materials (Basic, Standard) share descriptor set layouts via `LayoutManager`.
 > Multiple materials with the same identifier (e.g., `"MaterialBasicResourceSimple"`) can
 > be loaded in parallel by `Container::getOrCreateResource()` which dispatches to a thread pool.
 >
@@ -312,8 +312,7 @@ void waitEvents(std::span< const VkEvent > events, ...);
 > - `LayoutManager.hpp:m_access` - Mutex protecting both maps
 > - `LayoutManager.cpp:createDescriptorSetLayout()` - Duplicate-tolerant registration
 > - `Material/BasicResource.cpp:createDescriptorSetLayout()` - Re-fetch pattern
-> - `Material/StandardResource.cpp:createDescriptorSetLayout()` - Same pattern
-> - `Material/PBRResource.cpp:createDescriptorSetLayout()` - Same pattern
+> - `Material/StandardResource.cpp:createDescriptorSetLayout()` - Same pattern (the merged PBR lit material)
 
 ## Critical: Descriptor Pool FREE_DESCRIPTOR_SET_BIT
 

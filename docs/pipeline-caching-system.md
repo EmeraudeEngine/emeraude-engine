@@ -230,7 +230,7 @@ When implementing `computeProgramCacheKey()` in generators:
 > `Renderable::ProgramCacheKey`) discriminates the *structural* shape of the generated GLSL. A
 > per-material VALUE (an alpha cutoff, a scale…) must reach the shader through the material UBO —
 > never as a baked literal — or two materials sharing layout and flags could exchange programs.
-> Precedent: `PBRResource`'s `AlphaThreshold` UBO slot; counter-example kept fixed: `BasicResource`'s
+> Precedent: `StandardResource`'s `AlphaThreshold` UBO slot; counter-example kept fixed: `BasicResource`'s
 > 0.5 cutoff (its 12-float block is full).
 
 ### OverlayRendering

@@ -55,12 +55,11 @@
 /* Local inclusions. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
-#include "Graphics/Material/PBRResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/StreamIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
-#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Resources/Manager.hpp"
 #include "SceneData.hpp"
@@ -1502,7 +1501,7 @@ namespace EmEn::Scenes::Loaders
 					" — opacity " << opacityValue << ", threshold " << opacityThreshold << ".";
 			}
 
-			auto material = m_resources.container< Material::PBRResource >()
+			auto material = m_resources.container< Material::StandardResource >()
 				->getOrCreateResource(materialName, [albedoTexture, roughnessTexture, metalnessTexture, normalTexture, albedoValue, roughnessValue, metalnessValue, isTranslucent, isCutout, opacityValue, opacityThreshold] (auto & materialResource) {
 					if ( albedoTexture != nullptr )
 					{
@@ -1615,12 +1614,7 @@ namespace EmEn::Scenes::Loaders
 		const bool swapWinding = axisFlip.mustSwapTriangleWinding();
 
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
-			if ( m_options.materialMode == MaterialMode::Standard )
-			{
-				return m_resources.container< Material::StandardResource >()->getDefaultResource();
-			}
-
-			return m_resources.container< Material::PBRResource >()->getDefaultResource();
+			return m_resources.container< Material::StandardResource >()->getDefaultResource();
 		};
 
 		/* ⚠️ The node hierarchy is where a mesh gets its PLACE and its SIZE. Tydra pre-computes

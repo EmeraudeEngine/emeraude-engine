@@ -34,7 +34,7 @@
 #include "Scenes/Loaders/GLTFLoader.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
-#include "Graphics/Material/PBRResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderer.hpp"
 #include "FastJSON.hpp"
 #include "VertexFactory/ShapeDecimator.hpp"
@@ -275,11 +275,6 @@ namespace EmEn::Graphics::Renderable
 
 			return container->getResource(materialResourceName.value());
 		};
-
-		if ( materialType == PBRResource::ClassId )
-		{
-			return loadMaterial.operator() < PBRResource > ();
-		}
 
 		if ( materialType == StandardResource::ClassId )
 		{

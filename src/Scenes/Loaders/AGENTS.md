@@ -89,8 +89,7 @@ class Interface {
 
 `LoaderOptions` controls resource loading behavior:
 - `excludedNodeNames` — skip specific nodes and their subtrees
-- `onMeshLoaded` — `std::function<void(MeshDescriptor &)>` callback invoked once per mesh, right after the renderable, geometry and materials have been registered in their containers and pushed to `output.meshes` (before nodes are wired). Lets the caller patch the descriptor in place — typical use cases: enable IBL reflection on PBR materials (`pbr->setReflectionComponentFromEnvironmentCubemap`), swap a renderable, override geometry. Symmetric across `FBXLoader` and `GLTFLoader` (5 invocation sites total: 4 in FBXLoader including the fallback paths, 1 in GLTFLoader).
-- `materialMode` — `MaterialMode { PBR, Standard }`, default `PBR`. Selects which material container the loader populates. Both loaders go through the same generic configuration lambda thanks to the cross-material setter aliases on `StandardResource` (see *Cross-material setters* below). Both PBR and Standard paths are validated end-to-end on the Paladin asset.
+- `onMeshLoaded` — `std::function<void(MeshDescriptor &)>` callback invoked once per mesh, right after the renderable, geometry and materials have been registered in their containers and pushed to `output.meshes` (before nodes are wired). Lets the caller patch the descriptor in place — typical use cases: enable IBL reflection on the produced materials (`StandardResource::setReflectionComponentFromEnvironmentCubemap()`), swap a renderable, override geometry. Symmetric across `FBXLoader` and `GLTFLoader` (5 invocation sites total: 4 in FBXLoader including the fallback paths, 1 in GLTFLoader).
 - `skipSkinning` — skip bone weights, skins, and animations
 - `swapX` / `swapY` / `swapZ` — `bool`, default `false`. **Negate** that axis of the asset at import, in the geometry itself. See *Axis flip* below — do not use them without reading it, the winding depends on their parity.
 - `forceDoubleSided` — `bool`, default `false`. Forces **every** material part of the loaded model to `RasterizationOptions{ CullingMode::None }`, OR-ed with the per-material asset flag (see *Double-sided materials* below). Symmetric across `FBXLoader` (applied per material part, default-material parts included) and `GLTFLoader` (per primitive). Use it when the asset's format/exporter cannot carry a double-sided flag the loader can read — the canonical case is **Mixamo FBX rigs**, which ship plain `FbxSurfacePhong` materials: ufbx only surfaces `double_sided` for glTF-style materials, so these models always import single-sided and thin shells (inner armour, cloth) render with see-through holes. Blunt instrument (whole model); for per-mesh selectivity use the `onMeshLoaded` hook instead. Two-sided lighting (back-face normal flip) is already engine-side, so forced back-faces are correctly lit. Validated on the Paladin (`src/Actor/Paladin.cpp`).
@@ -227,27 +226,23 @@ cloth, inner armour shells) rendered front-face-only with see-through holes. The
 > is lit correctly regardless of winding. (This replaced an earlier `gl_FrontFacing` version that
 > broke point-light illumination on the ground.)
 
-**Default behaviour preserved:** if neither `onMeshLoaded` nor `materialMode` is set, the loader behaves exactly like before (PBR container, no callback, every existing call site unaffected). Both fields are gated: `onMeshLoaded` is invoked under `if ( m_options.onMeshLoaded )` (a default-constructed `std::function` evaluates to `false`); `materialMode` defaults to `MaterialMode::PBR`.
+**Default behaviour preserved:** if `onMeshLoaded` is not set, the loader behaves exactly like before (no callback, every existing call site unaffected); it is invoked under `if ( m_options.onMeshLoaded )` (a default-constructed `std::function` evaluates to `false`). The former `materialMode` option is GONE (material merge, Aug 2026): there is a single lit material, so every loader populates the one `StandardResource` container.
 
-### Cross-material setters on StandardResource
+### The lit material — ONE container (material merge, Aug 2026)
 
-To keep the loaders' material-configuration lambda generic (one code path that works for both `PBRResource` and `StandardResource`), `Graphics::Material::StandardResource` exposes PBR-named alias setters that map onto its Phong/Blinn parameters order-independently:
+Every loader populates `Graphics::Material::StandardResource`, which **is** the Cook-Torrance
+metallic-roughness material (the former `PBRResource`, renamed onto the surviving ClassId
+`"MaterialStandardResource"`). The legacy Blinn-Phong `StandardResource` was deleted, and with it
+the cross-material alias setters the loaders' configuration lambda used to rely on: there is no
+second lit material to stay generic against any more, so a loader may call the PBR API directly
+(`setAlbedoComponent`, `setRoughnessComponent`, `setMetalnessComponent`, `setNormalComponent`,
+`setOpacityComponent`, `enableAlphaTest(threshold)`, `setAutoIlluminationComponent`,
+`setReflectionComponentFromEnvironmentCubemap`…).
 
-| Alias setter (Standard) | Forwarded to / mapping |
-|-------------------------|------------------------|
-| `setAlbedoComponent(Color)` | `setDiffuseComponent(Color)` + tracks `m_pbrAlbedoColor` |
-| `setAlbedoComponent(texture)` | `setDiffuseComponent(texture)` (color tracked stays at previous value) |
-| `setRoughnessComponent(value)` | tracks `m_pbrRoughness`, recomputes specular |
-| `setRoughnessComponent(texture, value, invert, sourceChannel)` | texture **and channel ignored**, only the factor is honored |
-| `setMetalnessComponent(value)` | tracks `m_pbrMetalness`, recomputes specular |
-| `setMetalnessComponent(texture, value, sourceChannel)` | texture **and channel ignored**, only the factor is honored |
-| `setAmbientOcclusionComponent`, `setClearCoatComponent`, `setSheenComponent`, `setTransmissionComponent`, `setIridescenceComponent` | no-op stubs (no Phong/Blinn equivalent) |
-
-`recomputeSpecularFromPBR()` derives `(specularColor, shininess)` from the tracked triple at every call:
-- `shininess = (1 - roughness)² × MaxPBRShininess` (default `MaxPBRShininess = 128`)
-- `specularColor = mix(vec3(DielectricF0), albedo, metalness)` with `DielectricF0 = 0.04`
-
-It bails early if no `ComponentType::Diffuse` has been registered yet — emitting Specular alone would produce a shader sampling an undeclared `SurfaceDiffuseColor`. Diffuse is always created by `setAlbedoComponent` before any roughness/metalness setter in normal usage, so the early-out is a safety net.
+> [!WARNING]
+> **There is no Ambient material component any more** — dropped by design, AO + IBL replace it. A
+> loader translating a source format's "ambient colour" has nothing to map it onto; drop it rather
+> than folding it into the albedo, which would double-count the lighting.
 
 ### Roughness/metalness — source CHANNEL and factor SEMANTICS per format (fixed Aug 2026)
 
@@ -391,7 +386,7 @@ Loads glTF 2.0 / GLB files. Uses `fastgltf` library (vendored, static).
 | Phase | Method | Output |
 |-------|--------|--------|
 | 1 | `loadImages()` | `ImageResource` **or** `CompressedImageResource` (KTX2) |
-| 2 | `loadMaterials()` | `Material::PBRResource` + `Texture2D` on-demand |
+| 2 | `loadMaterials()` | `Material::StandardResource` + `Texture2D` on-demand |
 | 3 | `loadMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
 | 4 | `loadSkins()` | `SkeletonResource` + `Skin` |
 | 5 | `loadAnimations()` | `AnimationClipResource` |
@@ -620,7 +615,7 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 | Phase | Method | Status | Output |
 |-------|--------|--------|--------|
 | 1 | `loadImages()` | **implemented** | `ImageResource` |
-| 2 | `loadMaterials()` | **implemented** | `Material::PBRResource` + `Texture2D` on-demand |
+| 2 | `loadMaterials()` | **implemented** | `Material::StandardResource` + `Texture2D` on-demand |
 | 3 | `loadMeshes()` | **implemented** (+ skin influences/weights) | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
 | 4 | `loadSkins()` | **implemented** | `SkeletonResource` + `Skin` |
 | 5 | `loadAnimations()` | **implemented** (⚠ coord-space bug — see note below) | `AnimationClipResource` |
@@ -638,7 +633,7 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 **Image/material loading specifics:**
 
 - `loadImages()` supports both **embedded content** (`ufbx_texture.content`) and **external file references** (tries `texture.filename`, `absolute_filename`, `relative_filename` in order). Format detected from filename extension (PNG/JPEG/Targa).
-- `loadMaterials()` maps `ufbx_material.pbr` (`ufbx_material_pbr_maps`) to `PBRResource` components:
+- `loadMaterials()` maps `ufbx_material.pbr` (`ufbx_material_pbr_maps`) to `StandardResource` components:
   - `base_color` → `setAlbedoComponent` (sRGB)
   - `roughness` → `setRoughnessComponent`
   - `metalness` → `setMetalnessComponent`

@@ -63,7 +63,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 > `SharedUBOManager::getOrCreateSharedUniformBuffer(name, blockSize)`.
 >
 > Material buffer identifiers encode only the material kind and its texture count
-> (`MaterialPBRResource2Textures`), so distinct materials share one identifier **by design** — and
+> (`MaterialStandardResource2Textures`), so distinct materials share one identifier **by design** — and
 > materials are loaded in parallel on the resource thread pool. A separate get-then-create is a
 > check-then-act race.
 >
@@ -75,9 +75,9 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 >
 > **Log signature to recognize it instantly:**
 > ```
-> [Info] There is no shared uniform buffer named 'MaterialPBRResource2Textures' !   <- TWICE in a row
-> [Error] A shared uniform buffer named 'MaterialPBRResource2Textures' already exists !
-> [Error][MaterialPBRResource] Unable to get the shared uniform buffer !
+> [Info] There is no shared uniform buffer named 'MaterialStandardResource2Textures' !   <- TWICE in a row
+> [Error] A shared uniform buffer named 'MaterialStandardResource2Textures' already exists !
+> [Error][MaterialStandardResource] Unable to get the shared uniform buffer !
 > [Error][MaterialInterface] Unable to load the material resource '...' !
 > ```
 > The **doubled info line is the proof of concurrency**: single-threaded, the first miss would have
@@ -175,8 +175,8 @@ When both reflection AND refraction components are present:
 > to validate material type strings from JSON. If a type is missing, it falls back to `BasicResource`.
 >
 > **Bug pattern (fixed Jan 2026):**
-> - `PBRResource::ClassId` was missing from `Material::Types`
-> - Mesh JSON with `"MaterialType": "MaterialPBRResource"` silently fell back to Basic
+> - `StandardResource::ClassId` was missing from `Material::Types`
+> - Mesh JSON with `"MaterialType": "MaterialStandardResource"` silently fell back to Basic
 > - Result: PBR materials loaded as Basic materials
 >
 > **Files involved:**
@@ -199,8 +199,8 @@ auto loadMaterial = [&] < typename ResourceType > () -> std::shared_ptr< Materia
     return container->getResource(materialResourceName.value());
 };
 
-if ( materialType == PBRResource::ClassId )
-    return loadMaterial.operator() < PBRResource > ();
+if ( materialType == StandardResource::ClassId )
+    return loadMaterial.operator() < StandardResource > ();
 ```
 
 **Code reference:** `Graphics/Renderable/MeshResource.cpp:parseLayer()`
@@ -899,7 +899,7 @@ Beer's law absorbs almost nothing so the sunlit sand comes through undimmed.
 
 Fixed by teaching the generator the unit of its source:
 `LightGenerator::declareSurfaceTransmission(..., bool transmissionIsSceneRadiance)`, passed as
-`m_isUsingGrabPassForTransmission` from `PBRResource`. When set, the transmission term skips the
+`m_isUsingGrabPassForTransmission` from `StandardResource`. When set, the transmission term skips the
 luminance scale; the reflection term always keeps it.
 
 > [!IMPORTANT]
@@ -941,7 +941,7 @@ evaluates it — the two axes combine freely, and this engine offers all four co
   on a flat surface — the sun's glitter path on water.
 - `N·H` makes the term a microfacet **normal distribution over H**, the same family as the PBR path's
   GGX, so `shininess` and `roughness` can be related. Parameterised around `R`, they cannot be — which
-  is structurally why a `StandardResource` and a `PBRResource` could never agree under one light.
+  is structurally why a `StandardResource` and a `StandardResource` could never agree under one light.
 
 **Changed sites:** `LightGenerator.PerFragment.cpp` (view space, reuses `twoSidedN` / `twoSidedV`),
 `LightGenerator.PerFragment.NormalMap.cpp` (**tangent** space — N, V and H all in tangent space),
@@ -992,7 +992,7 @@ invisible next to anything real. The brightness belongs in `EmissiveStrength`, i
 
 ⚠️ **Sprites could not express this at all until Aug 2026**: `SpriteResource::load()` parsed
 `AutoIllumination` but no strength key, so a flame sprite was structurally stuck at 1 nit. It now
-reads `EmissiveStrength`, the same key and contract as `StandardResource` / `PBRResource` and
+reads `EmissiveStrength`, the same key and contract as `StandardResource` / `StandardResource` and
 `KHR_materials_emissive_strength`.
 
 ⚠️ **Reference luminances, because the intuition is wrong here**: a candle flame is ~**10 000**
@@ -1930,7 +1930,7 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 >
 > Reference sites (visually validated — celestial servoing reproduces star directions
 > within 1°): the skybox (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and
-> the material reflections (`PBRResource`/`StandardResource` bindless reflection GLSL).
+> the material reflections (`StandardResource`/`StandardResource` bindless reflection GLSL).
 >
 > **Symptom of the raw-direction bug:** the sky is read upside-down — GI bounces tinted
 > by the ground where the sky should be, ray-miss reflections showing the wrong hemisphere.

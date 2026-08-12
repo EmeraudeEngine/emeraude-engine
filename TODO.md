@@ -203,18 +203,31 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
   owner wants strict Khronos. ⚠️ These fallbacks have NO runtime user until Lot 4 flips the
   mesh JSONs to the PBR container (the 17 Diffuse-only files load as Standard today) —
   bench-validate then.
-- [ ] **Lot 4 — Removal**: delete the `MaterialMode` dual paths in GLTF/FBX/USD loaders, delete
-  `StandardResource.{hpp,cpp}`, drop the entry from `Materials.hpp` Types + Resources/Manager.
-  ⚠️ **Relocate `StandardResource::specularExponentFromGlossiness()` into the LightGenerator
-  first** — Saphir references it (LightGenerator.PerFragment.cpp:442) and Basic still needs the
-  legacy path. ⚠️ Do NOT remove the LightGenerator Phong path (`m_usePBRMode=false` default):
-  BasicResource still consumes it until Lot 7. Retire the orphaned `ComponentType` entries
-  (Ambient/Diffuse/Specular). App-side migration tracked in projet-alpha `TODO.md`.
-- [ ] **Lot 5 — Rename (same session as Lot 4, two separate commits)**: `git mv` PBRResource →
-  StandardResource, class + ClassId rename. Fix the 3 data files: `Meshes/Furnitures/MetalBarrel.json`
-  (sole `"MaterialPBRResource"` user), `Scenes/demo.json:17` + `Scenes/terrain_demo.json:36`
-  (invalid generic `"Material"` value — already hitting error paths today). LGPL note: ClassId is a
-  public data-format contract; 0.6.x break, release note required.
+- [x] **Lot 4 + Lot 5 — Removal and rename — DONE (2026-08-12), ONE atomic commit.**
+  ⚠️ Deviation from the approved plan (two commits): splitting them leaves an INCOHERENT repo
+  state — between the two, the 19 mesh JSONs carrying `"MaterialStandardResource"` resolve to
+  nothing and `TerrainResource` refuses to load. The swap (delete legacy + PBR takes the name
+  and the ClassId) is therefore atomic; the diff is bigger, every commit is coherent.
+  What landed: legacy `StandardResource.{hpp,cpp}` deleted; `PBRResource.{hpp,cpp}` `git mv`-ed
+  to `StandardResource.{hpp,cpp}` (file history preserved), class renamed, **ClassId string
+  `"MaterialStandardResource"` reused** so the 19 mesh JSONs stay valid untouched;
+  `MaterialMode` enum + `LoaderOptions::materialMode` removed and the GLTF/FBX/USD dual paths
+  collapsed to one; one lit-material container in `Resources/Manager`; `Material::Types` down to
+  2 entries; redundant branches folded in Terrain / BasicGround / MultiLayerMesh /
+  DefinitionResource / console (JSON `"Standard"` and `"PBR"` now synonyms).
+  App side: HealthPack, Battery, Collision, DebugUtils, GeometryGenerator, MaterialDebug and the
+  FBXLoader demo migrated off the deleted Phong API (Ambient dropped by design; shininess
+  exponent → roughness via a documented perceptual table; white specular over a coloured albedo
+  ⇒ dielectric, named metals ⇒ metalness 1 with the metal colour moved into the albedo).
+  Data: 3 files fixed (`MetalBarrel.json` `"MaterialPBRResource"` → `"MaterialStandardResource"`,
+  `demo.json` + `terrain_demo.json` invalid generic `"Material"` → the real ClassId).
+  Validated: full cascade builds clean (-Werror, zero warning), 1967/1967 base unit tests,
+  `material-debug` renders with no new runtime error. ⚠️ **Legacy content SHIFTS visually** —
+  accepted by the owner ("mode industriel", only the glTF/FBX/USD pipelines are the fidelity
+  target; legacy materials get fixed afterwards).
+  ⚠️ **CMake must be RECONFIGURED after this kind of change**: `GLOB_RECURSE` caches the file
+  list, and Ninja fails with `PBRResource.cpp missing and no known rule to make it` otherwise.
+
 - [ ] **Lot 6 — Documentation (same day, per project rule)**: AGENTS.md network (Graphics, Scenes,
   Console — `Console/AGENTS.md:204` finally becomes exact), material JSON schema docs,
   projet-alpha `.claude/rules/` mirror, `generate_materials.py` header (optional: regenerate the

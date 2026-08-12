@@ -134,25 +134,28 @@ Create a realistic glass material with both reflection and refraction, using Fre
 auto materialResource = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("GlassMaterial", [&cubemapTexture](auto & newMaterial)
 {
-    // Base colors: slight tint, high specular
-    newMaterial.setAmbientComponent(Color< float >{0.02F, 0.02F, 0.02F, 1.0F});
-    newMaterial.setDiffuseComponent(Color< float >{0.1F, 0.1F, 0.12F, 1.0F});
-    newMaterial.setSpecularComponent(White, 128.0F);
+    // Base surface: slight tint, near-mirror dielectric
+    newMaterial.setAlbedoComponent(Color< float >{0.1F, 0.1F, 0.12F, 1.0F});
+    newMaterial.setRoughnessComponent(0.05F);
+    newMaterial.setMetalnessComponent(0.0F);
 
-    // Reflection: cubemap + amount (0-1)
-    // Amount controls blend: 0 = no reflection, 1 = full reflection
-    if ( !newMaterial.setReflectionComponent(cubemapTexture, 0.8F) )
+    // Reflection: cubemap
+    if ( !newMaterial.setReflectionComponent(cubemapTexture) )
     {
         return newMaterial.setManualLoadSuccess(false);
     }
 
-    // Refraction: cubemap + IOR + amount
+    // Refraction: cubemap + IOR
     // IOR: 1.0 = air, 1.33 = water, 1.5 = glass, 2.42 = diamond
-    // Amount controls blend: 0 = no refraction, 1 = full refraction
-    if ( !newMaterial.setRefractionComponent(cubemapTexture, 1.5F, 0.95F) )
+    if ( !newMaterial.setRefractionComponent(cubemapTexture, 1.5F) )
     {
         return newMaterial.setManualLoadSuccess(false);
     }
+
+    // Optional artistic overrides of the physical blend (neutral = 1.0)
+    // 0 = component disabled, 1 = fully BRDF/Fresnel-controlled
+    newMaterial.setReflectionAmount(0.8F);
+    newMaterial.setRefractionAmount(0.95F);
 
     return newMaterial.setManualLoadSuccess(true);
 });
@@ -168,29 +171,31 @@ When BOTH reflection AND refraction are present:
 
 **Important constraints:**
 - IOR is clamped to [1.0, 3.0] - values below 1.0 become 1.0
-- Both components must use a cubemap texture
-- Amount=0 effectively disables the component
+- Both components must use a cubemap texture (explicit, render target, or the scene environment cubemap)
+- Amount=0 effectively disables the component; the neutral default is 1.0 (fully physical blend)
 
 ### Reflection-Only Material (Chrome/Mirror)
 
 ```cpp
-newMaterial.setAmbientComponent(Color< float >{0.02F, 0.02F, 0.02F, 1.0F});
-newMaterial.setDiffuseComponent(Color< float >{0.8F, 0.8F, 0.8F, 1.0F});
-newMaterial.setSpecularComponent(White, 256.0F);
+newMaterial.setAlbedoComponent(Color< float >{0.8F, 0.8F, 0.8F, 1.0F});
+newMaterial.setRoughnessComponent(0.02F);
+newMaterial.setMetalnessComponent(1.0F);
 
-// High reflection amount for mirror effect
-newMaterial.setReflectionComponent(cubemapTexture, 0.95F);
+// Cubemap reflection, slightly damped for a mirror effect
+newMaterial.setReflectionComponent(cubemapTexture);
+newMaterial.setReflectionAmount(0.95F);
 ```
 
 ### Refraction-Only Material (Water surface)
 
 ```cpp
-newMaterial.setAmbientComponent(Color< float >{0.0F, 0.02F, 0.04F, 1.0F});
-newMaterial.setDiffuseComponent(Color< float >{0.1F, 0.3F, 0.4F, 0.9F});  // Slight transparency
-newMaterial.setSpecularComponent(White, 64.0F);
+newMaterial.setAlbedoComponent(Color< float >{0.1F, 0.3F, 0.4F, 0.9F});  // Slight transparency
+newMaterial.setRoughnessComponent(0.1F);
+newMaterial.setMetalnessComponent(0.0F);
 
 // Water IOR (1.33) with moderate refraction
-newMaterial.setRefractionComponent(cubemapTexture, 1.33F, 0.7F);
+newMaterial.setRefractionComponent(cubemapTexture, 1.33F);
+newMaterial.setRefractionAmount(0.7F);
 ```
 
 ### Debugging Material UBO Values
@@ -202,26 +207,26 @@ To debug material property values at runtime:
 TraceInfo{ClassId} <<
     "Material '" << this->name() << "':" "\n"
     "  UBO Index = " << m_sharedUBOIndex << "\n"
-    "  reflectionAmount[20] = " << m_materialProperties[ReflectionAmountOffset] << "\n"
-    "  refractionAmount[21] = " << m_materialProperties[RefractionAmountOffset] << "\n"
-    "  refractionIOR[22] = " << m_materialProperties[RefractionIOROffset];
+    "  reflectionAmount[52] = " << m_materialProperties[ReflectionAmountOffset] << "\n"
+    "  refractionAmount[53] = " << m_materialProperties[RefractionAmountOffset] << "\n"
+    "  ior[8] = " << m_materialProperties[IOROffset];
 ```
 
 ### Material Property Offsets (Quick Reference)
 
 | Offset | Property | Setter Method |
 |--------|----------|---------------|
-| 20 | reflectionAmount | `setReflectionComponent(texture, amount)` |
-| 21 | refractionAmount | `setRefractionComponent(texture, ior, amount)` |
-| 22 | refractionIOR | `setRefractionIOR(ior)` or via `setRefractionComponent` |
-| 23 | heightScale | `setHeightScale(scale)` or via `setHeightComponent` |
+| 8 | ior | `setIOR(ior)` or via `setRefractionComponent` |
+| 38 | heightScale | `setHeightScale(scale)` or via `setHeightComponent` |
+| 52 | reflectionAmount | `setReflectionAmount(amount)` (artistic override, neutral 1.0) |
+| 53 | refractionAmount | `setRefractionAmount(amount)` (artistic override, neutral 1.0) |
 
-### PBR Material (PBRResource)
+### PBR Material (StandardResource)
 
 Create physically-based materials with metallic-roughness workflow:
 
 ```cpp
-auto pbrMaterial = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto pbrMaterial = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("GoldPBR", [&cubemap](auto & mat)
 {
     // Albedo: base color (gold tint)
@@ -290,7 +295,7 @@ Materials can be loaded from JSON files with a unified format supporting Basic, 
 - `Graphics/Types.hpp:FillingType` - Enum definition
 - `Graphics/Material/Helpers.cpp:parseComponentBase()` - JSON parsing logic
 
-**PBR UBO Layout (PBRResource):**
+**PBR UBO Layout (StandardResource):**
 
 | Offset | Property | Range |
 |--------|----------|-------|
@@ -334,14 +339,14 @@ Materials can be loaded from JSON files with a unified format supporting Basic, 
 - F0 for metals: `mix(vec3(0.04), albedo, metalness)`
 
 **Code references:**
-- `PBRResource.hpp:IBLIntensityOffset` - UBO offset constant
-- `PBRResource.cpp:setIBLIntensity()` - Dynamic IBL control
+- `StandardResource.hpp:IBLIntensityOffset` - UBO offset constant
+- `StandardResource.cpp:setIBLIntensity()` - Dynamic IBL control
 - `LightGenerator.cpp:generateAmbientFragmentShader()` - IBL in ambient pass
 
 ### PBR Clear Coat Material (Car Paint, Varnished Wood)
 
 ```cpp
-auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("CarPaint", [](auto & mat)
 {
     mat.setAlbedoComponent(Color<float>{0.8F, 0.1F, 0.1F, 1.0F}); // Red paint
@@ -356,7 +361,7 @@ auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
 ### PBR Clear Coat with Normal Map (Orange Peel, Swirl Marks)
 
 ```cpp
-auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("CarPaintDetailled", [&ccNormalTexture](auto & mat)
 {
     mat.setAlbedoComponent(Color<float>{0.8F, 0.1F, 0.1F, 1.0F}); // Red paint
@@ -383,14 +388,14 @@ auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
 **Important:** The clear coat normal map should use high-frequency patterns (micro-bumps, noise) rather than large-scale features. Base normal mapping is independent and not required for clear coat normal to work.
 
 **Code references:**
-- `PBRResource.hpp:setClearCoatNormalComponent()` — Setter
-- `PBRResource.hpp:ClearCoatNormalScaleOffset` — UBO offset 49
+- `StandardResource.hpp:setClearCoatNormalComponent()` — Setter
+- `StandardResource.hpp:ClearCoatNormalScaleOffset` — UBO offset 49
 - `LightGenerator.PBR.cpp` — Ncc computation using fragment-local TBN
 
 ### PBR Subsurface Scattering Material (Skin, Wax, Marble)
 
 ```cpp
-auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("HumanSkin", [](auto & mat)
 {
     mat.setAlbedoComponent(Color<float>{0.8F, 0.6F, 0.5F, 1.0F}); // Skin tone
@@ -416,7 +421,7 @@ auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
 ### PBR Sheen Material (Fabric, Velvet, Wool)
 
 ```cpp
-auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("VelvetFabric", [](auto & mat)
 {
     mat.setAlbedoComponent(Color<float>{0.15F, 0.02F, 0.02F, 1.0F}); // Deep red velvet
@@ -439,7 +444,7 @@ auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
 ### PBR Anisotropic Material (Brushed Metal, Hair, Vinyl)
 
 ```cpp
-auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("BrushedSteel", [](auto & mat)
 {
     mat.setAlbedoComponent(Color<float>{0.9F, 0.9F, 0.92F, 1.0F}); // Steel
@@ -484,7 +489,7 @@ auto material = resources.container<EmEn::Graphics::Material::StandardResource>(
 ### Parallax Occlusion Mapping (PBR Material)
 
 ```cpp
-auto material = resources.container<EmEn::Graphics::Material::PBRResource>()
+auto material = resources.container<EmEn::Graphics::Material::StandardResource>()
     ->getOrCreateResourceWithCallback("BrickWallPBR", [](auto & mat)
 {
     mat.setAlbedoComponent("Walls/Bricks001-color");

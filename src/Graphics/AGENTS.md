@@ -271,14 +271,14 @@ Materials use a **SharedUniformBuffer** for GPU-side property storage:
 
 Each `StandardResource` has:
 - `m_sharedUBOIndex`: Slot in the shared buffer (0, 1, 2...)
-- `m_materialProperties[]`: Float array with material data (ambientColor, diffuseColor, etc.)
+- `m_materialProperties[]`: Float array with material data (albedoColor, roughness, metalness, etc.)
 
 ### Concurrency Contract (MANDATORY)
 
 > [!CRITICAL]
 > **Materials are loaded concurrently from the resource thread pool, and they SHARE their buffer
 > identifier by design.** `getSharedUniformBufferIdentifier()` encodes only the material kind and its
-> texture count (`MaterialPBRResource2Textures`, `MaterialStandardResource4Textures`, …), so two
+> texture count (`MaterialStandardResource2Textures`, `MaterialStandardResource4Textures`, …), so two
 > unrelated materials routinely request the very same buffer from different threads.
 >
 > **Two invariants follow, both enforced in the engine — do not undo them:**
@@ -352,7 +352,7 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 | 22 | refractionIOR | float |
 | 23 | heightScale | float | 0.0+ (0.02) — POM depth |
 
-**PBRResource** stores properties in a 52-float array (208 bytes, std140):
+**StandardResource** stores properties in an 80-float array (320 bytes, std140):
 
 | Offset | Property | Type | Range/Default |
 |--------|----------|------|---------------|
@@ -397,14 +397,14 @@ The GLSL struct is generated to match this layout exactly.
 `Material::Interface` provides two key query methods used by the rendering pipeline for render list dispatch:
 
 - **`isOpaque()`**: Returns `!BlendingEnabled`, but also returns `false` when `requiresGrabPass()` is `true` (a material requiring grab pass is inherently non-opaque). It deliberately ignores `AlphaTestEnabled` — see [Alpha Test](#alpha-test--the-binary-cutout-contract-aug-2026).
-- **`requiresGrabPass()`**: Virtual method (default `false`). Overridden by `PBRResource` based on material properties (e.g., transmission with screen-space refraction).
+- **`requiresGrabPass()`**: Virtual method (default `false`). Overridden by `StandardResource` based on material properties (e.g., transmission with screen-space refraction).
 
 These are propagated through `Renderable::Abstract::isOpaque(layerIndex)` and `Renderable::Abstract::requiresGrabPass(layerIndex)` to all concrete renderables, enabling the Scene to dispatch into 3 render categories: Opaque, Translucent, and TranslucentGB.
 
 **Code references:**
 - `Material/Interface.hpp:isOpaque()` — non-virtual, checks blending and grab pass
 - `Material/Interface.hpp:requiresGrabPass()` — virtual, default false
-- `Material/PBRResource.hpp:requiresGrabPass()` — override
+- `Material/StandardResource.hpp:requiresGrabPass()` — override
 - `Renderable/Abstract.hpp:requiresGrabPass()` — pure virtual
 
 ### Alpha Test — the Binary Cutout Contract (Aug 2026)
@@ -418,14 +418,14 @@ Two setters raise the flag:
 - **`BasicResource::enableAlphaTest()`** — fixed 0.5 cutoff. It requires a texture whose alpha channel
   is enabled (`setTextureResource(texture, true)`); without one the flag emits no code. Like every other
   material setter it refuses to act once the resource is created (it warns and returns).
-- **`PBRResource::enableAlphaTest(threshold = 0.5)`** (Aug 2026) — **configurable, UBO-backed** cutoff
+- **`StandardResource::enableAlphaTest(threshold = 0.5)`** (Aug 2026) — **configurable, UBO-backed** cutoff
   (`AlphaThreshold`, UBO offset 51): the generated GLSL compares against the uniform, never a literal,
   so the threshold is per-material and runtime-adjustable (`setAlphaThresholdToDiscard()`). The alpha
   source is the **opacity texture component** when present (red channel), the **albedo texture alpha**
   otherwise (glTF `alphaMode: MASK`). It also disables the blending flag — cutout and blending are
   mutually exclusive by construction.
 
-**PBR opacity — the owner's 3-rule contract (Aug 2026).** `PBRResource` expresses opacity exactly three
+**PBR opacity — the owner's 3-rule contract (Aug 2026).** `StandardResource` expresses opacity exactly three
 ways, parsed from the JSON `Opacity` component and mirrored by `setOpacityComponent()`:
 
 1. **Scalar value [0,1]** → GLOBAL transparency: uniform alpha from the UBO (`Opacity`, offset 50),
@@ -473,22 +473,22 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 - **`isAlphaTest()`** returns `true` for `AlphaTestEnabled` (in addition to `OpacityEnabled` and
   `BlendingEnabled`), so the **RT pipeline alpha-tests at hit time** — candidate hits are confirmed
   against the material's cutoff instead of being taken as solid.
-  `PBRResource::exportRTMaterialData()` exports its UBO threshold as `alphaCutoff` (Basic keeps 0.5).
+  `StandardResource::exportRTMaterialData()` exports its UBO threshold as `alphaCutoff` (Basic keeps 0.5).
   See [`docs/reflection-pipeline.md`](../../docs/reflection-pipeline.md).
 - **`requiresAlphaTestedShadows()`**: a cutout must cast a **CUTOUT shadow**, not a solid rectangle.
-  `BasicResource` returns `true` for the flag (or `BlendingMode::Normal`); `PBRResource` returns `true`
+  `BasicResource` returns `true` for the flag (or `BlendingMode::Normal`); `StandardResource` returns `true`
   for the flag when an alpha source exists, and its shadow discard **reads the UBO threshold** (the
   shadow fragment shader declares the material uniform block — the colour pass and the shadow agree by
   construction). See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md).
 
 > [!CAUTION]
-> **BasicResource's cutoff is FIXED at 0.5** (PBRResource's is configurable — see above). The program
+> **BasicResource's cutoff is FIXED at 0.5** (StandardResource's is configurable — see above). The program
 > caches now key on the material FLAG BITS as well as the descriptor layout hash (Aug 2026: both
 > `Renderable::ProgramCacheKey` and the generators' `computeProgramCacheKey()` fold in
 > `material->flags()`), so the *structural* presence of the discard is discriminated. But plain VALUES
 > are still not part of any key: a per-material cutoff **literal** baked into the generated GLSL could
 > still serve one material's program to another sharing layout and flags. The rule is therefore:
-> **a configurable threshold lives in the material UBO** (PBRResource's `AlphaThreshold` slot) — never
+> **a configurable threshold lives in the material UBO** (StandardResource's `AlphaThreshold` slot) — never
 > in the GLSL. Basic cannot follow: its 12-float material block is FULL (diffuseColor 0-3,
 > specularColor 4-7, shininess 8, opacity 9, autoIllumination 10, emissiveStrength 11); growing it is
 > the price of ever making Basic's cutoff configurable. See
@@ -512,10 +512,10 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 - `Material/Interface.hpp:isAlphaTest()` — RT hit-time alpha test
 - `Material/BasicResource.hpp:enableAlphaTest()` — the fixed-0.5 setter
 - `Material/BasicResource.cpp:requiresAlphaTestedShadows()` — flag OR `BlendingMode::Normal`
-- `Material/PBRResource.hpp:enableAlphaTest(threshold)` — the configurable, UBO-backed setter
-- `Material/PBRResource.cpp:parseOpacityComponent()` — the 3-rule JSON contract
-- `Material/PBRResource.cpp:alphaSourceTextureComponent()` — opacity component, else albedo alpha
-- `Material/PBRResource.cpp:generateShadowAlphaTestCode()` — shadow discard against the UBO threshold
+- `Material/StandardResource.hpp:enableAlphaTest(threshold)` — the configurable, UBO-backed setter
+- `Material/StandardResource.cpp:parseOpacityComponent()` — the 3-rule JSON contract
+- `Material/StandardResource.cpp:alphaSourceTextureComponent()` — opacity component, else albedo alpha
+- `Material/StandardResource.cpp:generateShadowAlphaTestCode()` — shadow discard against the UBO threshold
 - `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side (Basic 0.5, PBR = UBO threshold)
 - `Graphics/Renderable/ProgramCacheKey.hpp:materialFlags` — codegen flags in the program cache key
 - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` — the `isOpaque()` branch
@@ -533,7 +533,7 @@ vec3 normal = normalize(vec3(raw.xy * ubMaterial.normalScale, raw.z));
 - `0.5` = half intensity (smoother bumps)
 - `0.0` = flat surface (normal map ignored)
 
-**Code references:** `StandardResource.cpp:generateFragmentShaderCode()`, `PBRResource.cpp:generateFragmentShaderCode()`
+**Code references:** `StandardResource.cpp:generateFragmentShaderCode()`, `StandardResource.cpp:generateFragmentShaderCode()`
 
 ### Parallax Occlusion Mapping (POM)
 
@@ -567,9 +567,9 @@ When active, a displaced UV (`pomTexCoords`) is computed at the start of the fra
 
 **Code references:**
 - `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation
-- `PBRResource.cpp:generateFragmentShaderCode()` — POM GLSL generation (+ distance fade)
+- `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation (+ distance fade)
 - `StandardResource.cpp:textCoords()` — UV variable selection
-- `PBRResource.cpp:textCoords()` — UV variable selection
+- `StandardResource.cpp:textCoords()` — UV variable selection
 - `Saphir/Keys.hpp:ParallaxTextureCoordinates` — `"pomTexCoords"`
 - `Saphir/Keys.hpp:HeightSampler` — `"uHeightSampler"`
 
@@ -777,7 +777,7 @@ When the albedo/diffuse component is a **Texture**, the generated fragment code 
 sampled texel by the material's base colour:
 
 ```glsl
-const vec4 SurfaceAlbedoColor = texture(AlbedoSampler, uv) * MaterialUB(AlbedoColor);   /* PBRResource */
+const vec4 SurfaceAlbedoColor = texture(AlbedoSampler, uv) * MaterialUB(AlbedoColor);   /* StandardResource */
 const vec4 SurfaceDiffuseColor = texture(DiffuseSampler, uv) * MaterialUB(DiffuseColor); /* StandardResource */
 ```
 
@@ -927,7 +927,7 @@ All material components follow the same parsing pattern via `parseComponentBase(
 **Code references:**
 - `Graphics/Material/Helpers.cpp:parseComponentBase()` - Base parsing
 - `Graphics/Material/StandardResource.cpp:parseReflectionComponent()` - Automatic handling
-- `Graphics/Material/PBRResource.cpp:parseReflectionComponent()` - PBR variant
+- `Graphics/Material/StandardResource.cpp:parseReflectionComponent()` - PBR variant
 
 ### Material Types Array
 
@@ -939,7 +939,7 @@ All material components follow the same parsing pattern via `parseComponentBase(
 > constexpr auto Types = std::array< std::string_view, 3 >{
 >     BasicResource::ClassId,      // "MaterialBasicResource"
 >     StandardResource::ClassId,   // "MaterialStandardResource"
->     PBRResource::ClassId         // "MaterialPBRResource"
+>     StandardResource::ClassId         // "MaterialStandardResource"
 > };
 > ```
 >
@@ -2057,7 +2057,7 @@ real luminance or it contributes nothing. The manifest carries both halves:
 
 - `AutoIllumination` — the emissive **MASK**, clamped to [0,1]. It cannot carry a brightness.
 - `EmissiveStrength` — the **LUMINANCE in cd/m² (nits)**. Same key and same contract as
-  `StandardResource` / `PBRResource` and the glTF extension `KHR_materials_emissive_strength`;
+  `StandardResource` / `StandardResource` and the glTF extension `KHR_materials_emissive_strength`;
   the emitted quantity is `autoIlluminationColor * autoIlluminationAmount * emissiveStrength`.
 
 ⚠️ **The key was added in Aug 2026 and its absence was a hard limit, not an oversight to work
@@ -2821,7 +2821,7 @@ exposes it for effects binding it through their own descriptor sets.
 > any environment cubemap at **`vec3(D.x, -D.y, D.z)`** — the engine world is Y-down
 > (UP = -Y) while cubemaps are stored Y-up. Reference sites: the skybox
 > (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and the material reflections
-> (`PBRResource`/`StandardResource`), both validated visually (celestial servoing within 1°).
+> (`StandardResource`/`StandardResource`), both validated visually (celestial servoing within 1°).
 > RTGI/RTR/SSR sampled the RAW direction (sky upside-down in GI bounces and ray-miss
 > reflections) — fixed in lot 1. **The IBL generation (lot 2) MUST produce and consume
 > cubemaps under this same convention.**

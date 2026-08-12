@@ -109,7 +109,7 @@ The variable is generated in `StandardResource.cpp` around line 1459.
 - Linear fade between 8-18 units (both heightScale and numLayers reduced)
 - Complete skip beyond 18 units (early-out, returns original UVs)
 
-**Code reference:** `PBRResource.cpp:generateFragmentShaderCode()` (POM section)
+**Code reference:** `StandardResource.cpp:generateFragmentShaderCode()` (POM section)
 
 ---
 

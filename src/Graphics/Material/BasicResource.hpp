@@ -326,7 +326,7 @@ namespace EmEn::Graphics::Material
 			 * GLSL could serve one material's program to another with the same layout and flags.
 			 * 0.5 is the right value for a mask authored as coverage, which is the only case this
 			 * mode targets. A configurable cutoff needs the value read from the material UBO
-			 * instead of a literal (the road PBRResource takes with its AlphaThreshold slot).
+			 * instead of a literal (the road StandardResource takes with its AlphaThreshold slot).
 			 * @return void
 			 */
 			void enableAlphaTest () noexcept;

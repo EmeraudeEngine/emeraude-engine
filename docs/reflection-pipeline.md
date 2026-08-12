@@ -1,7 +1,7 @@
 # Reflection Pipeline
 
-> Everything the engine can put in a reflection, from the legacy lerp to the hardware ray query,
-> and — more importantly — **how the seven paths arbitrate between themselves**.
+> Everything the engine can put in a reflection, from the static cubemap to the hardware ray query,
+> and — more importantly — **how the six paths arbitrate between themselves**.
 
 > [!CRITICAL]
 > Three contracts in this document are not written anywhere else in the code base, and each of
@@ -31,11 +31,11 @@ Ordered from the crudest simulation to the most exact evaluation.
 |---|------|-------------|------------------|------|
 | 1 | **Legacy lerp** | `StandardResource::setReflectionComponent(texture, amount)` | none — a flat `mix()`, no Fresnel, no roughness | 1 fetch |
 | 2 | **Static cubemap + Fresnel** | same, high-quality shader path | Fresnel-Schlick only, perfect mirror | 1 fetch |
-| 3 | **IBL split-sum** | `PBRResource::setReflectionComponentFromEnvironmentCubemap(iblIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
+| 3 | **IBL split-sum** | `StandardResource::setReflectionComponentFromEnvironmentCubemap(iblIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
 | 4 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | GGX-prefiltered mip chain, roughness-driven LOD | 6 full scene passes / frame + convolution |
 | 5 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
 | 6 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance — over-blurs curved reflectors, § 3.2.1), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
-| 7 | **Grab-pass transmission** | `PBRResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
+| 7 | **Grab-pass transmission** | `StandardResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
 
 Paths 1-4 are **material** features, resolved in the object's ambient pass. Paths 5-6 are
 **post-process** features, resolved on the G-buffer after the scene is lit. They are not
@@ -67,7 +67,7 @@ All four material paths come from one component, `ComponentType::Reflection`, wh
 > `Type: "Value"` is the only way to author a surface whose reflection comes **purely** from
 > the post-process stack. It is the isolation switch when you need to tell a cubemap artefact
 > from an SSR/RTR artefact. The C++ mirror of this filling type is
-> `setPostProcessReflectivity(amount)` on both `StandardResource` and `PBRResource`.
+> `setPostProcessReflectivity(amount)` on both `StandardResource` and `StandardResource`.
 
 ### 2.2 Path 3 — the IBL split-sum, the only energy-correct one
 

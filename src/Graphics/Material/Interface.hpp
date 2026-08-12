@@ -199,9 +199,9 @@ namespace EmEn::Graphics::Material
 			 * @note The engine expresses opacity in three ways depending on the material type:
 			 *  - `AlphaTestEnabled` — a binary cutout that stays in the OPAQUE list; the mode to
 			 *	prefer for a coverage mask. Set through `BasicResource::enableAlphaTest()` (fixed
-			 *	0.5 cutoff) or `PBRResource::enableAlphaTest(threshold)` (configurable, UBO-backed);
+			 *	0.5 cutoff) or `StandardResource::enableAlphaTest(threshold)` (configurable, UBO-backed);
 			 *	there is no generic setter on the interface.
-			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`; PBRResource sets it for
+			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`; StandardResource sets it for
 			 *	its Opacity component (global value or map, blending or cutout).
 			 *  - PBR/Standard blending set `BlendingEnabled` and source opacity from the albedo
 			 *	texture alpha channel (or a dedicated opacity component).
