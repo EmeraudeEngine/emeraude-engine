@@ -335,24 +335,8 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 
 ### Material Property Layout (std140)
 
-**StandardResource** stores properties in a float array with these offsets:
-
-| Offset | Property | Type |
-|--------|----------|------|
-| 0-3 | ambientColor | vec4 |
-| 4-7 | diffuseColor | vec4 |
-| 8-11 | specularColor | vec4 |
-| 12-15 | autoIlluminationColor | vec4 |
-| 16 | shininess | float |
-| 17 | opacity | float |
-| 18 | autoIlluminationAmount | float |
-| 19 | normalScale | float |
-| 20 | reflectionAmount | float |
-| 21 | refractionAmount | float |
-| 22 | refractionIOR | float |
-| 23 | heightScale | float | 0.0+ (0.02) — POM depth |
-
-**StandardResource** stores properties in an 80-float array (320 bytes, std140):
+**StandardResource** — the ONE lit material (Cook-Torrance metallic-roughness) — stores properties
+in an 80-float array (320 bytes, std140):
 
 | Offset | Property | Type | Range/Default |
 |--------|----------|------|---------------|
@@ -388,7 +372,12 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 | 44-47 | specularColorFactor | vec4 | KHR specular color (white) |
 | 48 | emissiveStrength | float | 0.0+ (1.0) — HDR multiplier |
 | 49 | clearCoatNormalScale | float | 0.0+ (1.0) — CC normal map intensity |
-| 50-51 | padding | float | std140 alignment |
+| 50 | opacity | float | 0.0-1.0 (1.0) — global transparency |
+| 51 | alphaThreshold | float | 0.0-1.0 (0.5) — cutout cutoff |
+| 52 | reflectionAmount | float | 0.0-1.0 (0.0) |
+| 53 | refractionAmount | float | 0.0-1.0 (0.0) |
+| 54-55 | padding | float | std140 alignment |
+| 56-79 | UVW transforms | 6 × vec4 | Albedo/Roughness/Metalness/Normal/AmbientOcclusion/AutoIllumination, `(scale.xy, offset.zw)`, neutral (1,1,0,0) |
 
 The GLSL struct is generated to match this layout exactly.
 
@@ -425,7 +414,7 @@ Two setters raise the flag:
   otherwise (glTF `alphaMode: MASK`). It also disables the blending flag — cutout and blending are
   mutually exclusive by construction.
 
-**PBR opacity — the owner's 3-rule contract (Aug 2026).** `StandardResource` expresses opacity exactly three
+**Opacity — the owner's 3-rule contract (Aug 2026).** `StandardResource` expresses opacity exactly three
 ways, parsed from the JSON `Opacity` component and mirrored by `setOpacityComponent()`:
 
 1. **Scalar value [0,1]** → GLOBAL transparency: uniform alpha from the UBO (`Opacity`, offset 50),

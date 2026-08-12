@@ -242,7 +242,7 @@ auto pbrMaterial = resources.container<EmEn::Graphics::Material::StandardResourc
     mat.setNormalComponent(normalTexture);
 
     // IBL (Image-Based Lighting) from cubemap
-    mat.setReflectionComponent(cubemap, 1.0F);
+    mat.setReflectionComponent(cubemap);
 
     // IBL intensity control (0.0-1.0)
     mat.setIBLIntensity(1.0F);
@@ -253,13 +253,10 @@ auto pbrMaterial = resources.container<EmEn::Graphics::Material::StandardResourc
 
 ### Material JSON Format (Unified)
 
-Materials can be loaded from JSON files with a unified format supporting Basic, Standard, and PBR:
+Materials can be loaded from JSON files with a unified format supporting Basic and Standard:
 
 ```json
 {
-    "Ambient": { "Type": "Texture", "Data": { "Name": "Category/TextureName" } },
-    "Diffuse": { "Type": "Texture", "Data": { "Name": "Category/TextureName" } },
-    "Specular": { "Type": "Color", "Data": [0.5, 0.5, 0.5], "Shininess": 0.5 },
     "Albedo": { "Type": "Texture", "Data": { "Name": "Category/TextureName" } },
     "Roughness": { "Type": "Value", "Data": 0.5 },
     "Metalness": { "Type": "Value", "Data": 0.0 },
@@ -271,6 +268,18 @@ Materials can be loaded from JSON files with a unified format supporting Basic, 
     "Height": { "Type": "None" }
 }
 ```
+
+**Legacy keys (still accepted as fallbacks):**
+
+| Legacy key | Mapped to | Note |
+|------------|-----------|------|
+| `"Diffuse"` | `"Albedo"` | Tried only when `"Albedo"` is absent |
+| `"Specular"` | `"Roughness"` | Tried only when `"Roughness"` is absent; a `Value`/`Texture` is INVERTED (high specular = low roughness) |
+| `"Shininess"` (on `"Specular"`) | `roughness = 1 - glossiness` | ⚠️ `"Shininess"` is an authored **GLOSSINESS in [0,1]**, never a Phong exponent |
+
+> **Note:** There is no `"Ambient"` component any more — ambient occlusion (`"AmbientOcclusion"`)
+> plus IBL replace it. The scene manifest material `"Type"` accepts `"Standard"` and `"PBR"`
+> as synonyms for the same, single lit material.
 
 **Height component with Parallax Occlusion Mapping:**
 ```json
@@ -295,7 +304,7 @@ Materials can be loaded from JSON files with a unified format supporting Basic, 
 - `Graphics/Types.hpp:FillingType` - Enum definition
 - `Graphics/Material/Helpers.cpp:parseComponentBase()` - JSON parsing logic
 
-**PBR UBO Layout (StandardResource):**
+**UBO Layout (StandardResource, 80 floats = 320 bytes):**
 
 | Offset | Property | Range |
 |--------|----------|-------|
@@ -303,7 +312,7 @@ Materials can be loaded from JSON files with a unified format supporting Basic, 
 | 4 | roughness | 0-1 |
 | 5 | metalness | 0-1 |
 | 6 | normalScale | 0-1 |
-| 7 | f0 | ~0.04 |
+| 7 | specularFactor | 0-1 (1.0) |
 | 8 | ior | 1.0-3.0 |
 | 9 | iblIntensity | 0-1 |
 | 10 | autoIlluminationAmount | 0+ |
@@ -331,7 +340,12 @@ Materials can be loaded from JSON files with a unified format supporting Basic, 
 | 44-47 | specularColorFactor | vec4 (white) |
 | 48 | emissiveStrength | 0+ (1.0) |
 | 49 | clearCoatNormalScale | 0+ (1.0) |
-| 50-51 | padding | reserved |
+| 50 | opacity | 0-1 (1.0) |
+| 51 | alphaThreshold | 0-1 (alpha-test cutoff) |
+| 52 | reflectionAmount | 0-1 (1.0 = BRDF-controlled) |
+| 53 | refractionAmount | 0-1 (1.0 = Fresnel-controlled) |
+| 54-55 | padding | STD140 padding |
+| 56-79 | per-component UVW transforms | vec4 × 6 (scale.xy, offset.zw), neutral (1,1,0,0) |
 
 **Multi-pass rendering:**
 - IBL contribution is computed in **ambient pass only**

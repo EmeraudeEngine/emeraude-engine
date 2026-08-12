@@ -481,10 +481,8 @@ but it forfeits the entire benefit — this is a safety net, not a supported tar
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
 `TRIANGLES` is the only primitive mode read; authored `TANGENT` is ignored and always recomputed
 (the bitangent `w` is lost); no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
-(4 influences max); no morph targets; `alphaMode: MASK` and `alphaCutoff` are never read (foliage
-and cutouts import as full quads, **while the engine has had `MaterialFlagBits::AlphaTestEnabled`
-since the WADLoader**); glTF samplers (`wrapS/T`, filters) and the per-`TextureInfo` `texCoord`
-index are ignored; `KHR_texture_transform` is absent; **`KHR_materials_specular`, `ior`,
+(4 influences max); no morph targets; glTF samplers (`wrapS/T`, filters) and the per-`TextureInfo`
+`texCoord` index are ignored; **`KHR_materials_specular`, `ior`,
 `anisotropy` and `volume` are enabled on the parser and never read**, which makes the code look
 supportive of them; animation channels targeting a node that is not a joint of `skins[0]` are
 dropped, so rigid-node animation (doors, platforms, props) is impossible; `instanceSets` is never
@@ -628,7 +626,7 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 - Per-corner vertex emission (position/normal/UV via `ufbx_get_vertex_vec3`/`vec2`) — the same vertex is written 3 times per triangle. A deduplication pass via `ufbx_generate_indices` can be added later if the overhead becomes measurable.
 - **UV V-flip on read** — FBX stores UVs with V=0 at the bottom (OpenGL convention) ; the engine and Vulkan use V=0 at the top, matching glTF. The loader stores `(u, 1.0F - v)` in the vertex stream so embedded textures sample the correct region. **Without this flip, FBX models render with shuffled / black-region UVs** (regression marker — see `Paladin` recette below).
 - Winding pre-compensates for the 180° X rotation applied by `SceneDataConsumer` (indices 1 and 2 swapped), identical to GLTFLoader.
-- Materials are resolved per-part via `mesh.materials.data[partIdx]->typed_id` → `m_materials[...]`, falling back to the default PBR resource when the FBX has no material connected.
+- Materials are resolved per-part via `mesh.materials.data[partIdx]->typed_id` → `m_materials[...]`, falling back to the default `StandardResource` when the FBX has no material connected.
 
 **Image/material loading specifics:**
 
@@ -721,7 +719,7 @@ Maya's USD → FBX converter drops all texture connections. The material still e
 **Recette assets** (demo `./projet-alpha --load-demo fbx-loader`):
 - **Option 0 — Mixamo X Bot** (`data/data-stores/FBX/Mixamo/X Bot.fbx`): validates materials color path, skinning pipeline (2 skin deformers + 2 meshes), animation clip construction (2 anim stacks). **Still exhibits the legacy dislocation bug** — kept as a regression marker.
 - **Option 1 — Intel Knight** (`data/data-stores/FBX/Knight/...`): Maya USD Preview Surface quirk (textures stripped). Skinning guard filters it out → renders as clean static T-pose.
-- **Option 2 — Paladin** (`data/data-stores/FBX/Paladin/`): full split-animation workflow. `base_model.fbx` (rig + skin + bind pose) + 48 per-action `.fbx` files in the same folder, loaded via `loadAnimationClipsOnly` and bound to the rig by joint name. `slash_1` is placed at index 0 and auto-loops at lazy-init time. **Animation pipeline validated end-to-end** (no dislocation). **UV bug resolved** (V-flip on read, see *Mesh loading specifics* above). **Dark-render investigation closed**: turned out to be the expected PBR rendering with the default opt-out IBL — PBR materials must explicitly call `setReflectionComponentFromEnvironmentCubemap()` to consume the scene's environment cubemap, otherwise they render markedly darker than `StandardResource` for the same direct lighting. The `projet-alpha` demo wires this via the `onMeshLoaded` hook (see `src/Builtin/FBXLoader.cpp`).
+- **Option 2 — Paladin** (`data/data-stores/FBX/Paladin/`): full split-animation workflow. `base_model.fbx` (rig + skin + bind pose) + 48 per-action `.fbx` files in the same folder, loaded via `loadAnimationClipsOnly` and bound to the rig by joint name. `slash_1` is placed at index 0 and auto-loops at lazy-init time. **Animation pipeline validated end-to-end** (no dislocation). **UV bug resolved** (V-flip on read, see *Mesh loading specifics* above). **Dark-render investigation closed**: turned out to be the expected rendering with the default opt-out IBL — a material must explicitly call `setReflectionComponentFromEnvironmentCubemap()` to consume the scene's environment cubemap, otherwise it renders markedly darker under the same direct lighting. The `projet-alpha` demo wires this via the `onMeshLoaded` hook (see `src/Builtin/FBXLoader.cpp`).
 
 ### WADLoader (level MATERIALIZER — Jul 2026, sky + photometric anchor Aug 2026, masked middle textures Aug 2026)
 

@@ -23,53 +23,61 @@ re-run that scene before and after.
 
 ---
 
-## 1. The seven paths
+## 1. The six paths
 
 Ordered from the crudest simulation to the most exact evaluation.
 
 | # | Path | Entry point | Angular fidelity | Cost |
 |---|------|-------------|------------------|------|
-| 1 | **Legacy lerp** | `StandardResource::setReflectionComponent(texture, amount)` | none — a flat `mix()`, no Fresnel, no roughness | 1 fetch |
-| 2 | **Static cubemap + Fresnel** | same, high-quality shader path | Fresnel-Schlick only, perfect mirror | 1 fetch |
-| 3 | **IBL split-sum** | `StandardResource::setReflectionComponentFromEnvironmentCubemap(iblIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
-| 4 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | GGX-prefiltered mip chain, roughness-driven LOD | 6 full scene passes / frame + convolution |
-| 5 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
-| 6 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance — over-blurs curved reflectors, § 3.2.1), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
-| 7 | **Grab-pass transmission** | `StandardResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
+| 1 | **Static cubemap + Fresnel** | `StandardResource::setReflectionComponent(texture)` (+ `setReflectionAmount`) | Fresnel-Schlick only, perfect mirror (**mip 0**) | 1 fetch |
+| 2 | **IBL split-sum** | `StandardResource::setReflectionComponentFromEnvironmentCubemap(IBLIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
+| 3 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | GGX-prefiltered mip chain, roughness-driven LOD | 6 full scene passes / frame + convolution |
+| 4 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
+| 5 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance — over-blurs curved reflectors, § 3.2.1), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
+| 6 | **Grab-pass transmission** | `StandardResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
 
-Paths 1-4 are **material** features, resolved in the object's ambient pass. Paths 5-6 are
+Paths 1-3 are **material** features, resolved in the object's ambient pass. Paths 4-5 are
 **post-process** features, resolved on the G-buffer after the scene is lit. They are not
 alternatives to each other — they stack, and section 4 explains how.
 
+> [!NOTE]
+> **The flat `mix()` reflection is gone with the legacy material.** `StandardResource` is now
+> the Cook-Torrance material (the former `PBRResource`, same ClassId `MaterialStandardResource`)
+> and always calls `LightGenerator::enablePBRMode()`, so every reflection goes through a BRDF.
+> `LightGenerator` still CONTAINS the non-PBR branches (`mix(surfaceColor, reflectionColor,
+> amount)` in the ambient and light passes) — they are unreachable: the only remaining non-PBR
+> material, `BasicResource`, has no reflection component at all. Do not read those branches as
+> a live path.
+
 ---
 
-## 2. Material-side paths (1-4)
+## 2. Material-side paths (1-3)
 
 ### 2.1 The `Reflection` component and its filling types
 
-All four material paths come from one component, `ComponentType::Reflection`, whose
+All three material paths come from one component, `ComponentType::Reflection`, whose
 `FillingType` selects the behaviour:
 
 ```json
-{ "Reflection": { "Type": "Automatic", "Amount": 0.8 } }   // scene environment cubemap
-{ "Reflection": { "Type": "Cubemap", "Data": { "Name": "Reflections/Chromic" } } }
-{ "Reflection": { "Type": "Value", "Amount": 0.5 } }        // NO cubemap — SSR/RTR only
+{ "Reflection": { "Type": "Automatic", "IBLIntensity": 0.8 } }   // scene environment cubemap
+{ "Reflection": { "Type": "Cubemap", "Data": { "Name": "Reflections/Chromic" }, "Amount": 1.0 } }
+{ "Reflection": { "Type": "Value", "Amount": 0.5 } }             // NO cubemap — SSR/RTR only
 ```
 
-| `Type` | Standard | PBR | Effect |
-|--------|----------|-----|--------|
-| `Automatic` | `m_isUsingEnvironmentCubemap = true`, `Amount` → `reflectionAmount` | idem, `Amount` → `iblIntensity` | samples the scene's **prefiltered** cubemap (bindless reserved cube slot 2) |
-| `Cubemap` / `Texture` | dedicated sampler | dedicated sampler | samples that texture, **mip 0 only** |
-| `Value` | `m_postProcessReflectivityAmount` | idem | **no cubemap at all** — only writes the reflectivity nibble, so the surface reflects exclusively through SSR/RTR |
-| `None` | — | — | no reflection |
+| `Type` | Parsing | Effect |
+|--------|---------|--------|
+| `Automatic` | `m_isUsingEnvironmentCubemap = true`, `IBLIntensity` → `iblIntensity` | samples the scene's **prefiltered** cubemap (bindless reserved cube slot 2) |
+| `Cubemap` / `Texture` | dedicated sampler, `m_reflectionIsArtistic = true`, `Amount` → `reflectionAmount` (neutral 1.0) | samples that texture, **mip 0 only** |
+| `Value` | `m_postProcessReflectivityAmount` | **no cubemap at all** — only writes the reflectivity nibble, so the surface reflects exclusively through SSR/RTR |
+| `None` | — | no reflection |
 
 > [!IMPORTANT]
 > `Type: "Value"` is the only way to author a surface whose reflection comes **purely** from
 > the post-process stack. It is the isolation switch when you need to tell a cubemap artefact
 > from an SSR/RTR artefact. The C++ mirror of this filling type is
-> `setPostProcessReflectivity(amount)` on both `StandardResource` and `StandardResource`.
+> `StandardResource::setPostProcessReflectivity(amount)`.
 
-### 2.2 Path 3 — the IBL split-sum, the only energy-correct one
+### 2.2 Path 2 — the IBL split-sum, the only energy-correct one
 
 Generated in `LightGenerator::generateAmbientFragmentShader()` (`Saphir/LightGenerator.cpp`),
 **ambient pass only** — the light passes write nothing to it.
@@ -108,7 +116,7 @@ The roughness → mip mapping is
 > out of the cubemap — anything re-read from the rendered scene (grab pass, screen-space
 > capture) is already an absolute luminance.
 
-### 2.3 Path 4 — the dynamic cubemap probe
+### 2.3 Path 3 — the dynamic cubemap probe
 
 ```cpp
 const auto probe = toolkit.generateEnvironmentCubemapRenderer("MyProbe", 512, 5000.0F, false);
@@ -139,8 +147,8 @@ scratch cubemap (the prefilter's filtered importance sampling needs a PLAIN mip 
 source; reading the probe's own prefiltered mips would be a hazard AND a bias), then one
 borrowed IBLBaker prefilter dispatch per upper mip (roughness k/(mips−1), the sky IBL chain
 semantics). Materials with a render-target reflection component sample
-`textureLod(probe, R, roughness × (mips−1))` — Standard maps Shininess through Beckmann
-(`√(2/(s+2))`), PBR uses its roughness (component or scalar) directly. The probe uses a
+`textureLod(probe, R, roughness × (mips−1))`, straight from the material's roughness
+(component or scalar). The probe uses a
 dedicated TRILINEAR sampler (`maxLod` unclamped — the shared render-to-texture sampler honors
 the settings mip level, default 1, which would truncate the chain). Static texture cubemaps
 keep the plain mirror fetch: the explicit texture mode is ARTISTIC by contract.
@@ -496,9 +504,9 @@ Priority, first match wins:
 | # | Condition | Expression |
 |---|-----------|------------|
 | 1 | dedicated `ReflectivityMap` component | `clamp(reflectivityMap, 0, 1)` |
-| 2 | PBR + `iblIntensity` + reflection | `clamp(max(iblIntensity·(1-roughness), metalness), 0, 1)` |
-| 3 | PBR, no explicit reflection | `clamp(metalness·(1-roughness), 0, 1)` |
-| 4 | Standard with reflection | `clamp(reflectionAmount, 0, 1)` |
+| 2 | artistic reflection (explicit cubemap texture) | `0.0` — never replaced by SSR/RTR, § 2.4 |
+| 3 | `iblIntensity` + reflection | `clamp(max(iblIntensity·(1-roughness), metalness), 0, 1)` |
+| 4 | no explicit reflection | `clamp(max(metalness, 1-roughness), 0, 1)` — `max`, so a smooth DIELECTRIC still participates |
 | — | otherwise | `0.0` |
 
 Packing: `float(uint(reflectivity * 15.0) << 4u) / 255.0`.

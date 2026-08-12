@@ -34,7 +34,7 @@ Solutions for common engine-level issues in Emeraude Engine development.
        "updateVideoMemory for '" << this->name() << "':" "\n"
        "  UBO Index = " << m_sharedUBOIndex << "\n"
        "  UBO Offset = " << (m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize()) << " bytes\n"
-       "  [20] reflectionAmount = " << m_materialProperties[ReflectionAmountOffset];
+       "  [52] reflectionAmount = " << m_materialProperties[ReflectionAmountOffset];
    ```
 
 2. **Debug shader with visual output:**
@@ -66,21 +66,23 @@ descriptorInfo.offset = static_cast<VkDeviceSize>(offset);  // NOT always 0!
 
 **Symptoms:** Shader compilation fails with "undefined variable: fresnelFactor"
 
-**Cause:** `fresnelFactor` is only generated when BOTH reflection AND refraction components are present in the material.
+**Cause:** `fresnelFactor` is declared by the **glass block of `LightGenerator`**, which requires BOTH a reflection AND a refraction component **and** high-quality mode. Emitting a `mix(refracted, reflected, fresnelFactor)` outside that block means declaring your own Fresnel term.
 
-**Solution:** Ensure material has both components:
+**Solution:** Ensure material has both components (the artistic weights are separate setters):
 ```cpp
-newMaterial.setReflectionComponent(cubemapTexture, 0.5F);
-newMaterial.setRefractionComponent(cubemapTexture, 1.5F, 0.3F);
+newMaterial.setReflectionComponent(cubemapTexture);
+newMaterial.setReflectionAmount(0.5F);
+newMaterial.setRefractionComponent(cubemapTexture, 1.5F);  // 1.5 = IOR
+newMaterial.setRefractionAmount(0.3F);
 ```
 
-The variable is generated in `StandardResource.cpp` around line 1459.
+The variable is generated in `Saphir/LightGenerator.cpp`, `generateAmbientFragmentShader()` (PBR glass block). The consumer branches guarded by `!m_usePBRMode` are legacy leftovers: the merged `StandardResource` always calls `enablePBRMode()`, so no material reaches them anymore.
 
 ### Wrong IOR value (always 1.0)
 
 **Symptoms:** IOR value is always 1.0 even when set to other values like 0.5.
 
-**Cause:** `setRefractionIOR()` clamps values to [1.0, 3.0] range.
+**Cause:** `setIOR()` clamps values to [1.0, 3.0] range. It is the single write site: the `ior` parameter of `setRefractionComponent()`, `setRefractionComponentFromEnvironmentCubemap()` and `setRefractionComponentFromRenderTarget()` all go through it.
 
 **Solution:** IOR must be >= 1.0 (vacuum). Common values:
 - Air: 1.0003
