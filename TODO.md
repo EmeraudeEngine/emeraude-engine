@@ -144,10 +144,20 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
    (Manager.console.cpp:105/401). Reroute atomically; the merge makes both coherent.
 
 **Lots:**
-- [ ] **Lot 0 — Before anything**: git tag (two unattributed crashes are open — USD SIGABRT,
-  shutdown SIGILL — protect the bisection space); glTF conformance bench against the live Phong
-  baseline; measured baseline captures of affected demos; GPU A/B Phong vs Cook-Torrance
-  (informative — the owner decided the taxonomy by design, not by measurement).
+- [x] **Lot 0 — DONE (2026-08-12)**: tags `pre-material-merge-20260812` on both repos; measured
+  baseline series (5 MaterialDebug views + stats,
+  `~/.local/share/LNIsle/projet-alpha/captures/baseline-material-merge-20260812/`).
+- [ ] **Conformance bench (D5 gate for Lot 4) — RAN, owner review PENDING.** Harness: the
+  `loadGLTF` console command + a per-asset clean-instance loop over 19 Khronos
+  glTF-Sample-Assets test models (sparse clone in `~/glTF-Sample-Assets/`, outside the repos).
+  **19/19 loaded without failure**; gallery (ours vs Khronos reference, per feature) delivered:
+  `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-20260812/galerie-banc-gltf.html`.
+  Verified in detail: AlphaBlendModeTest **PASSES** (three distinct MASK cutoffs cut at their
+  authored markers — the Lot 1 UBO threshold + cache-key fix working as designed);
+  MetalRoughSpheres renders with correct axes. ⚠️ The bench IBL is the gltf-loader demo sky —
+  tint differs from Khronos studio references by construction; judge behaviour, not colour.
+  **The owner's gallery verdict is the Lot 4 gate.** Legacy-content visual drift at the flip is
+  explicitly accepted (owner: industrial pipelines glTF/FBX/USD are the fidelity target).
 - [x] **Lot 1 — Parity in PBRResource — DONE (2026-08-12).**
   DONE (documented in `src/Graphics/AGENTS.md` § "Alpha Test" and
   `docs/pipeline-caching-system.md`): the owner's 3-rule Opacity contract (value = global
