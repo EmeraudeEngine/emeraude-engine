@@ -493,6 +493,10 @@ namespace EmEn::Graphics::Material
 
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				/* D2 artistic override: the optional Amount scales the mix; the neutral 1.0
+				 * default leaves it BRDF-controlled. */
+				this->setReflectionAmount(FastJSON::getValue< float >(data[ReflectionString], JKAmount).value_or(DefaultReflectionAmount));
 			}
 				return true;
 
@@ -543,6 +547,10 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setIOR(FastJSON::getValue< float >(data[RefractionString], JKIOR).value_or(DefaultIOR));
+
+				/* D2 artistic override: the optional Amount scales the mix; the neutral 1.0
+				 * default leaves the blend Fresnel-controlled. */
+				this->setRefractionAmount(FastJSON::getValue< float >(data[RefractionString], JKAmount).value_or(DefaultRefractionAmount));
 			}
 				return true;
 
@@ -2031,9 +2039,9 @@ namespace EmEn::Graphics::Material
 
 			if ( componentIt != m_components.cend() )
 			{
-				/* NOTE: For PBR, reflection amount is controlled by roughness/metalness, not a separate uniform.
-				 * We pass "1.0" as the amount since IBL contribution is computed in the BRDF. */
-				lightGenerator.declareSurfaceReflection(componentIt->second->variableName(), "1.0");
+				/* NOTE: The amount is the D2 artistic override, a UBO VALUE (program-cache
+				 * contract) whose neutral 1.0 default leaves the mix BRDF-controlled. */
+				lightGenerator.declareSurfaceReflection(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::ReflectionAmount));
 
 				if ( m_reflectionIsArtistic )
 				{
@@ -2058,9 +2066,9 @@ namespace EmEn::Graphics::Material
 
 			if ( componentIt != m_components.cend() )
 			{
-				/* NOTE: For PBR glass materials, Fresnel will automatically blend between reflection and refraction.
-				 * We pass "1.0" as the amount since the Fresnel equation handles the blend ratio. */
-				lightGenerator.declareSurfaceRefraction(componentIt->second->variableName(), "1.0", MaterialUB(UniformBlock::Component::RefractionIOR));
+				/* NOTE: The amount is the D2 artistic override, a UBO VALUE (program-cache
+				 * contract) whose neutral 1.0 default leaves the blend Fresnel-controlled. */
+				lightGenerator.declareSurfaceRefraction(componentIt->second->variableName(), MaterialUB(UniformBlock::Component::RefractionAmount), MaterialUB(UniformBlock::Component::RefractionIOR));
 
 				if ( m_refractionSourceIsAbsolute )
 				{
@@ -2394,6 +2402,8 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ClearCoatNormalScale);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Opacity);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AlphaThreshold);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ReflectionAmount);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionAmount);
 		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWTransform);
@@ -3960,6 +3970,30 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	PBRResource::setAutoIlluminationComponent (float amount) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the auto-illumination component.";
+
+			return false;
+		}
+
+		const auto uniform = MaterialUB(UniformBlock::Component::AutoIlluminationColor);
+
+		m_components[ComponentType::AutoIllumination] = std::make_unique< Value >(uniform);
+
+		/* Value-only semantic: a WHITE emissive driven by the amount alone (PBR's default
+		 * emissive color is black — behavioural parity with StandardResource, default white). */
+		this->setAutoIlluminationColor(PixelFactory::White);
+		this->setAutoIlluminationAmount(amount);
+
+		return true;
+	}
+
+	bool
 	PBRResource::setAutoIlluminationComponent (const PixelFactory::Color< float > & color, float amount) noexcept
 	{
 		if ( this->isCreated() )
@@ -4568,6 +4602,22 @@ namespace EmEn::Graphics::Material
 	PBRResource::setAlphaThresholdToDiscard (float threshold) noexcept
 	{
 		m_materialProperties[AlphaThresholdOffset] = clampToUnit(threshold);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	PBRResource::setReflectionAmount (float value) noexcept
+	{
+		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	PBRResource::setRefractionAmount (float value) noexcept
+	{
+		m_materialProperties[RefractionAmountOffset] = clampToUnit(value);
 
 		m_videoMemoryUpdated = true;
 	}

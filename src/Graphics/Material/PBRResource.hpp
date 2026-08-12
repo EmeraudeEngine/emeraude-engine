@@ -490,6 +490,17 @@ namespace EmEn::Graphics::Material
 			bool samplesTexture (const Vulkan::TextureInterface * texture) const noexcept override;
 
 			/**
+			 * @brief Sets the auto-illumination (emissive) component as a value only.
+			 * @note The emissive color is set to white so the amount alone drives the emission
+			 * (PBR's default emissive color is black — behavioural parity with StandardResource,
+			 * whose default is white).
+			 * @warning This function is available before creation time.
+			 * @param amount The intensity multiplier. Default 1.0.
+			 * @return bool
+			 */
+			bool setAutoIlluminationComponent (float amount = DefaultAutoIlluminationAmount) noexcept;
+
+			/**
 			 * @brief Sets the auto-illumination (emissive) component as a color.
 			 * @warning This function is available before creation time.
 			 * @param color A reference to the emissive color.
@@ -564,6 +575,24 @@ namespace EmEn::Graphics::Material
 			 * @return void
 			 */
 			void setAlphaThresholdToDiscard (float threshold) noexcept;
+
+			/**
+			 * @brief Sets the artistic reflection mix amount (dynamic property, D2 override).
+			 * @note Applies to the artistic texture/probe reflection modes only; the neutral 1.0
+			 * leaves the mix BRDF-controlled. The environment IBL path keeps IBLIntensity as its knob.
+			 * @param value The mix amount [0,1].
+			 * @return void
+			 */
+			void setReflectionAmount (float value) noexcept;
+
+			/**
+			 * @brief Sets the artistic refraction mix amount (dynamic property, D2 override).
+			 * @note Applies to the artistic texture refraction mode only; the neutral 1.0 leaves
+			 * the blend Fresnel-controlled.
+			 * @param value The mix amount [0,1].
+			 * @return void
+			 */
+			void setRefractionAmount (float value) noexcept;
 
 			/**
 			 * @brief Returns the alpha-test threshold.
@@ -1346,7 +1375,7 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateGrabPassTransmissionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
 
-			/* Uniform buffer object layout (STD140 aligned, 76 floats = 304 bytes):
+			/* Uniform buffer object layout (STD140 aligned, 80 floats = 320 bytes):
 			 * vec4 albedoColor			  (offset 0-3)
 			 * float roughness			   (offset 4)
 			 * float metalness			   (offset 5)
@@ -1381,12 +1410,15 @@ namespace EmEn::Graphics::Material
 			 * float clearCoatNormalScale   (offset 49) - Clear coat normal map scale
 			 * float opacity				 (offset 50) - Global/texture opacity amount (1.0 = opaque)
 			 * float alphaThreshold		   (offset 51) - Alpha-test cutoff (cutout mode, glTF alphaCutoff)
-			 * vec4 albedoUVWTransform	  (offset 52-55) - UV transform (scale.xy, offset.zw), KHR_texture_transform
-			 * vec4 roughnessUVWTransform   (offset 56-59) - UV transform (scale.xy, offset.zw)
-			 * vec4 metalnessUVWTransform   (offset 60-63) - UV transform (scale.xy, offset.zw)
-			 * vec4 normalUVWTransform	  (offset 64-67) - UV transform (scale.xy, offset.zw)
-			 * vec4 aoUVWTransform		  (offset 68-71) - UV transform (scale.xy, offset.zw)
-			 * vec4 emissiveUVWTransform	(offset 72-75) - UV transform (scale.xy, offset.zw)
+			 * float reflectionAmount		 (offset 52) - Artistic reflection mix (texture/probe modes; 1.0 = BRDF-controlled)
+			 * float refractionAmount		 (offset 53) - Artistic refraction mix (texture mode; 1.0 = Fresnel-controlled)
+			 * float padding[2]			 (offset 54-55) - STD140 padding
+			 * vec4 albedoUVWTransform	  (offset 56-59) - UV transform (scale.xy, offset.zw), KHR_texture_transform
+			 * vec4 roughnessUVWTransform   (offset 60-63) - UV transform (scale.xy, offset.zw)
+			 * vec4 metalnessUVWTransform   (offset 64-67) - UV transform (scale.xy, offset.zw)
+			 * vec4 normalUVWTransform	  (offset 68-71) - UV transform (scale.xy, offset.zw)
+			 * vec4 aoUVWTransform		  (offset 72-75) - UV transform (scale.xy, offset.zw)
+			 * vec4 emissiveUVWTransform	(offset 76-79) - UV transform (scale.xy, offset.zw)
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1422,15 +1454,17 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ClearCoatNormalScaleOffset{49UL};
 			static constexpr auto OpacityOffset{50UL};
 			static constexpr auto AlphaThresholdOffset{51UL};
+			static constexpr auto ReflectionAmountOffset{52UL};
+			static constexpr auto RefractionAmountOffset{53UL};
 			/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw).
 			 * Neutral (1,1,0,0) — applied UNCONDITIONALLY at the sampling sites, so the neutral
 			 * value MUST be the identity (same precedent as DefaultAlbedoColor/DefaultTextureFactor). */
-			static constexpr auto AlbedoUVWTransformOffset{52UL};
-			static constexpr auto RoughnessUVWTransformOffset{56UL};
-			static constexpr auto MetalnessUVWTransformOffset{60UL};
-			static constexpr auto NormalUVWTransformOffset{64UL};
-			static constexpr auto AmbientOcclusionUVWTransformOffset{68UL};
-			static constexpr auto AutoIlluminationUVWTransformOffset{72UL};
+			static constexpr auto AlbedoUVWTransformOffset{56UL};
+			static constexpr auto RoughnessUVWTransformOffset{60UL};
+			static constexpr auto MetalnessUVWTransformOffset{64UL};
+			static constexpr auto NormalUVWTransformOffset{68UL};
+			static constexpr auto AmbientOcclusionUVWTransformOffset{72UL};
+			static constexpr auto AutoIlluminationUVWTransformOffset{76UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -1475,11 +1509,13 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultClearCoatNormalScale{1.0F}; /* Clear coat normal map scale (1.0 = full effect). */
 			static constexpr auto DefaultOpacity{1.0F}; /* Fully opaque; also the multiplicative identity when a texture drives the component. */
 			static constexpr auto DefaultAlphaThreshold{0.5F}; /* glTF alphaCutoff default (cutout mode). */
+			static constexpr auto DefaultReflectionAmount{1.0F}; /* Neutral: the BRDF controls the mix (artistic override, D2). */
+			static constexpr auto DefaultRefractionAmount{1.0F}; /* Neutral: Fresnel controls the mix (artistic override, D2). */
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
 			BlendingMode m_blendingMode{BlendingMode::None};
-			std::array< float, 76 > m_materialProperties{
+			std::array< float, 80 > m_materialProperties{
 				/* Albedo color (4) */
 				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
 				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
@@ -1506,6 +1542,8 @@ namespace EmEn::Graphics::Material
 				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
 				/* EmissiveStrength (1), ClearCoatNormalScale (1), Opacity (1), AlphaThreshold (1) */
 				DefaultEmissiveStrength, DefaultClearCoatNormalScale, DefaultOpacity, DefaultAlphaThreshold,
+				/* ReflectionAmount (1), RefractionAmount (1) + padding (2) for STD140 alignment */
+				DefaultReflectionAmount, DefaultRefractionAmount, 0.0F, 0.0F,
 				/* Per-component UV transforms (6 x vec4 = scale.xy, offset.zw), identity neutral:
 				 * Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination. */
 				1.0F, 1.0F, 0.0F, 0.0F,

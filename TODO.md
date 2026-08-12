@@ -148,7 +148,7 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
   shutdown SIGILL — protect the bisection space); glTF conformance bench against the live Phong
   baseline; measured baseline captures of affected demos; GPU A/B Phong vs Cook-Torrance
   (informative — the owner decided the taxonomy by design, not by measurement).
-- [ ] **Lot 1 — Parity in PBRResource — CORE DONE (2026-08-12), remainder below.**
+- [x] **Lot 1 — Parity in PBRResource — DONE (2026-08-12).**
   DONE (documented in `src/Graphics/AGENTS.md` § "Alpha Test" and
   `docs/pipeline-caching-system.md`): the owner's 3-rule Opacity contract (value = global
   blend / map+`AlphaThreshold` = cutout / map = grayscale blend), UBO slots 50-51
@@ -158,11 +158,15 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
   loaders (glTF `alphaMode MASK`, USD cutout + translucent value, FBX opacity rules 1/3),
   `gltf-loader` demo option 7 = IridescentDishWithOlives (MASK validation asset). Validated:
   clean -Werror build, 1967/1967 base unit tests, MaterialDebug bit-exact vs the Lot 0 baseline,
-  goldLeaf cutout rendering confirmed. ⚠️ Shadow/RT cutout behaviour still needs a dedicated
-  visual check (no shadow-casting MASK scene exists yet — conformance bench material).
-  REMAINING: value-only AutoIllumination overload; D2 artistic Reflection/Refraction `Amount`
-  port. ⚠️ Legacy Standard JSONs conflate blending+discard@0.1 on opacity textures — map them
-  to rule 3 at conversion (Lot 3), validate visually.
+  goldLeaf cutout rendering confirmed. Also done (same day): value-only AutoIllumination
+  overload (sets a WHITE emissive — PBR's default color is black, Standard's is white) and the
+  D2 artistic Reflection/Refraction `Amount` override (UBO slots 52-53, block 304→320 B, UVW
+  transforms shifted +4; neutral 1.0 = BRDF/Fresnel-controlled; JSON `Amount` on the
+  texture-mode components; the env-IBL path keeps `IBLIntensity` as its knob).
+  ⚠️ Shadow/RT cutout behaviour still needs a dedicated visual check (no shadow-casting MASK
+  scene exists yet — conformance bench material). ⚠️ Legacy Standard JSONs conflate
+  blending+discard@0.1 on opacity textures — map them to rule 3 at conversion (Lot 3),
+  validate visually.
 - [ ] **Lot 2 — Decouple hard dependencies**: port TerrainResource, BasicGroundResource (:262),
   MultiLayerMeshResource 3-way ClassId dispatch, DefinitionResource, remote console,
   Resources/Manager containers. Visual check per port (terrain, water-world).
