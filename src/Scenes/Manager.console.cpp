@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <filesystem>
 #include <ranges>
 
 /* Local inclusions. */
@@ -40,6 +41,9 @@
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
+#include "Scenes/Loaders/GLTFLoader.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
+#include "Scenes/SceneDataConsumer.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
@@ -438,6 +442,69 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Sets the ground for the active scene. Usage: setGround([materialName])");
+
+		this->bindCommand("loadGLTF", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: loadGLTF(filePath [, swapZ [, createLights]])");
+
+				return false;
+			}
+
+			const std::filesystem::path filepath{arguments[0].asString()};
+
+			if ( !std::filesystem::exists(filepath) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "File '" << filepath.string() << "' does not exist !");
+
+				return false;
+			}
+
+			/* NOTE: swapZ defaults to true — the per-asset chirality workaround every
+			 * glTF demo asset uses (see the coordinate-system documentation). */
+			const auto swapZ = arguments.size() > 1 ? arguments[1].asBoolean() : true;
+			const auto createLights = arguments.size() > 2 && arguments[2].asBoolean();
+
+			Loaders::GLTFLoader loader{m_resourceManager};
+
+			Loaders::LoaderOptions options;
+			options.swapZ = swapZ;
+			options.environmentReflectionIntensity = 1.0F;
+			loader.setOptions(options);
+
+			Loaders::SceneData sceneData;
+
+			/* ⚠️ Synchronous load on purpose: this is an AI/bench harness command for SMALL
+			 * assets. A multi-second load stalls the main loop and risks the compositor
+			 * killing the surface (see the blocking-load caution) — do not feed it scenes. */
+			if ( !loader.load(filepath, sceneData) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to load glTF file '" << filepath.string() << "' !");
+
+				return false;
+			}
+
+			SceneDataConsumer consumer;
+			consumer.setCreateLights(createLights);
+
+			if ( !consumer.build(sceneData, *m_activeScene) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to build the scene from '" << filepath.string() << "' !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "glTF file '" << filepath.string() << "' loaded into scene '" << m_activeScene->name() << "'.");
+
+			return true;
+		}, "Loads a glTF file into the active scene (AI/bench harness, small assets only). Usage: loadGLTF(filePath [, swapZ = true [, createLights = false]])");
 
 		this->bindCommand("addMesh", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.size() < 5 )
