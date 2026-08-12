@@ -305,7 +305,6 @@ namespace EmEn::Saphir
 		glslang::FinalizeProcess();
 
 		m_cachedShaderBinaries.clear();
-		m_cachedShaderSourceCodes.clear();
 		m_shaderModules.clear();
 
 		return true;
@@ -700,35 +699,13 @@ namespace EmEn::Saphir
 	void
 	ShaderManager::readCache () noexcept
 	{
-		for ( const auto & filepath : IO::directoryEntries(m_shadersSourcesDirectory) )
+		/* NOTE: Only the BINARY cache is ever read back. The source directory is an inspection
+		 * DUMP that nothing reloads, so indexing it served no purpose; worse, this function only
+		 * runs when the binary cache is on, and the dump is off by default, which meant scanning
+		 * an EMPTY path and logging an IO error on every single startup. */
+		if ( m_shadersBinariesDirectory.empty() )
 		{
-			const auto extension = IO::getFileExtension(filepath);
-			bool isShaderFile = false;
-
-			for ( const auto & allowedExtension : ShaderFileExtensions )
-			{
-				if ( extension == allowedExtension )
-				{
-					isShaderFile = true;
-					break;
-				}
-			}
-
-			if ( !isShaderFile )
-			{
-				continue;
-			}
-
-			auto hash = ShaderManager::extractHashFromFilepath(filepath);
-
-			if ( hash == 0 )
-			{
-				TraceError{ClassId} << "The hash from shader source file '" << filepath << "' is invalid !";
-
-				continue;
-			}
-
-			m_cachedShaderSourceCodes.emplace(hash, filepath);
+			return;
 		}
 
 		for ( const auto & filepath : IO::directoryEntries(m_shadersBinariesDirectory) )
@@ -754,7 +731,9 @@ namespace EmEn::Saphir
 	void
 	ShaderManager::clearCache () noexcept
 	{
-		for ( const auto & filepath : IO::directoryEntries(m_shadersSourcesDirectory) )
+		/* NOTE: A disabled facility leaves its directory path EMPTY, and --clear-shader-cache runs
+		 * whatever the settings say, so both loops must be guarded. */
+		for ( const auto & filepath : m_shadersSourcesDirectory.empty() ? std::vector< std::filesystem::path >{} : IO::directoryEntries(m_shadersSourcesDirectory) )
 		{
 			const auto extension = IO::getFileExtension(filepath);
 			bool isShaderFile = false;
@@ -779,9 +758,7 @@ namespace EmEn::Saphir
 			}
 		}
 
-		m_cachedShaderSourceCodes.clear();
-
-		for ( const auto & filepath : IO::directoryEntries(m_shadersBinariesDirectory) )
+		for ( const auto & filepath : m_shadersBinariesDirectory.empty() ? std::vector< std::filesystem::path >{} : IO::directoryEntries(m_shadersBinariesDirectory) )
 		{
 			if ( IO::getFileExtension(filepath) != "bin" )
 			{

@@ -20,7 +20,11 @@ Saphir automatically generates GLSL code from material properties, geometry attr
 - **Graceful failure**: If incompatible → resource loading fails → application continues
 - **Aggressive caching**: 3-level cache avoids redundant generation and compilation
 
-### 3-Level Cache System
+### 3-Level Cache System (IN-MEMORY, one process run)
+
+⚠️ These three levels are process-lifetime hash maps. They are **not** the three ON-DISK cache
+stages (source dump / SPIR-V binary cache / `VkPipelineCache`) — see
+"The three shader-cache stages" at the end of this file.
 
 | Level | Object | Location | Cache Key | Benefit |
 |-------|--------|----------|-----------|---------|
@@ -1093,9 +1097,23 @@ instead of being silently resolved against an empty search stack.
 manual GLSL sources"), a real includer plugs in exactly there — written against an actual
 specification (which directories, which search policy, what caching), not copied from a sample.
 
-## The two shader caches — what they really are (audited Aug 2026)
+## The three shader-cache stages — what each one actually caches (audited Aug 2026)
 
-### The "source code cache" is a DUMP, not a cache
+Three DIFFERENT things are persisted to disk, under three separate setting keys. They are not
+tiers of one mechanism, and only two of them are caches at all:
+
+| Stage | Setting key | Default | Stores | Read back? | Measured gain |
+|---|---|---|---|---|---|
+| 1. Source dump | `Core/Graphics/Shader/EnableSourceCodeCache` | `false` | the generated GLSL, one sub-directory per generator | **NEVER** | none — it is an inspection tool |
+| 2. SPIR-V binary cache | `Core/Graphics/Shader/EnableBinaryCache` | **`true`** since Aug 2026 | glslang's SPIR-V output, one blob per shader | yes | 393 ms → 10.3 ms on 232 modules (**38x**) |
+| 3. `VkPipelineCache` | `Core/Graphics/Shader/EnablePipelineCache` | `true` | the driver's SPIR-V→ISA result, one blob | yes | 5702 ms → 31 ms on 294 pipelines (**182x**) |
+
+The defaults live in `SettingKeys.hpp` (`DefaultSourceCodeCacheEnabled`,
+`DefaultBinaryCacheEnabled`, `DefaultPipelineCacheEnabled`).
+
+`--clear-shader-cache` wipes the shader caches, the pipeline cache included.
+
+### Stage 1 — the "source code cache" is a DUMP, not a cache
 
 `Core/Graphics/Shader/EnableSourceCodeCache` writes every generated GLSL to
 `~/.cache/<app>/shader-sources/`. **Nothing ever reads it back**:
@@ -1118,13 +1136,37 @@ It exists to let a human inspect what the generators produced, and it is now sha
 ShadowCasting. That number is the program-variant count, and it is the real load-time driver —
 worth understanding before optimising any cache.
 
-### The binary (SPIR-V) cache — hardened Aug 2026
+⚠️ **`readCache()` no longer touches this directory at all.** It used to index the dumped sources
+into `m_cachedShaderSourceCodes` — a member that was written and never once read, not even by
+`clearCache()`, which walks the directory itself. Since `readCache()` only runs when the *binary*
+cache is on, and the dump is off by default, that loop was scanning an **empty path** and logging
+an `IO::directoryEntries()` error on every startup as soon as the binary cache became the default.
+The member is gone and the function returns early on an empty binaries directory. `clearCache()`
+guards both of its loops for the same reason: a disabled facility leaves its path empty, and
+`--clear-shader-cache` runs whatever the settings say. See
+[`docs/caution-points.md`](../../docs/caution-points.md) § "Flipping a default to ON runs a path
+nobody had ever run".
 
-`Core/Graphics/Shader/EnableBinaryCache` skips glslang on a hit. Measured on `material-debug`:
-**625 ms of glslang compilation for 356 shaders**, so that is the ceiling of what this cache buys
-— an order of magnitude below the `VkPipelineCache` (5.7 s), but a real half-second.
+### Stage 2 — the binary (SPIR-V) cache — hardened, and ON BY DEFAULT since Aug 2026
 
-The filename says WHICH shader (`<name>_<source hash>.bin`); an application header now says
+`Core/Graphics/Shader/EnableBinaryCache` skips glslang on a hit. `DefaultBinaryCacheEnabled`
+flipped from `false` to **`true`**. What paid for the flip, measured 2026-08-13 on
+`material-debug` with all 10 options (RTX 3070 Ti, Release). The instrumented envelope is
+source dump + cache lookup + glslang compile + `vkCreateShaderModule`, placed **after** the
+in-memory ShaderModule hash lookup, so it counts cache MISSES only — **232 shader modules**:
+
+| Run | Total | Per module |
+|---|---|---|
+| cache OFF | 393 ms | 1.69 ms |
+| cache ON, cold (writes the 232 blobs) | 391 ms | 1.68 ms |
+| cache ON, warm (reads) | **10.3 ms** | **0.044 ms** |
+
+**38x faster, 383 ms saved — and writing the cache on a cold run is FREE** (391 vs 393 ms is
+noise). That absence of a first-launch penalty is the whole argument for the default: there is
+nothing to trade away. 0 residual `.tmp` files.
+
+What made it safe enough to enable (engine commit `56fabc9a`): the filename says WHICH shader
+(`<name>_<source hash>.bin`); an application header now says
 whether the blob is still VALID, and **every field is checked before a byte reaches
 `vkCreateShaderModule`**: magic, format version, source hash, shader stage, blob size, FNV-1a
 content hash, and a **toolchain identity hash** — glslang's version string, its SPIR-V generator
@@ -1138,13 +1180,40 @@ size a multiple of 4, and the SPIR-V magic word `0x07230203` as its first word.
 Writes go to a `.tmp` file and are renamed, so a `SIGKILL` cannot leave a truncated blob for the
 next launch.
 
-Verified live: 342 blobs written on the first run and all 342 reloaded on the second, with no
-stray `.tmp`; a blob corrupted in its data and another with a falsified toolchain hash were both
-rejected and recompiled — 2 rejected, 340 reused, no crash.
+Verified live during that hardening pass — a **separate run** from the timings above, hence a
+different blob count: 342 blobs written on the first run and all 342 reloaded on the second, with
+no stray `.tmp`; a blob corrupted in its data and another with a falsified toolchain hash were
+both rejected and recompiled — 2 rejected, 340 reused, no crash.
 
-### There is NO VkPipelineCache
+### Stage 3 — the `VkPipelineCache` — it EXISTS now (engine commit `e583df40`)
 
-Every `vkCreate*Pipelines` call passes `VK_NULL_HANDLE`. The engine already reads the device's
-`pipelineCacheUUID` (`Vulkan/PhysicalDevice.hpp:408`) — to print it. That is the layer that
-usually matters most (it skips the driver's SPIR-V→ISA compilation) and the one every production
-engine serialises to disk, keyed by that very UUID. See `TODO.md`.
+⚠️ This file used to state "There is NO VkPipelineCache". **That is obsolete** — do not act on
+that claim if you find it echoed elsewhere.
+
+`Core/Graphics/Shader/EnablePipelineCache`, default `true` (already `true` before the Aug 2026
+binary-cache pass, unchanged by it). This is the stage that matters most, because it skips the
+DRIVER's SPIR-V→ISA compilation. Measured on the same demo, 294 graphics pipelines:
+
+| Run | Total |
+|---|---|
+| driver cache active | 33 ms |
+| driver cache OFF | 5702 ms |
+| driver cache OFF, engine cache restored from disk | 31 ms |
+
+**182x.** The serialised blob is 7.4 MB.
+
+Ownership split, do not move it: `Vulkan::Device` owns the `VkPipelineCache` object,
+`Graphics::Renderer` does the disk I/O (`loadPipelineCache()` / `savePipelineCache()`).
+
+### glslang's optimizer is COMPILED OUT of this build
+
+`ShaderManager.cpp` sets `SpvOptions::disableOptimizer = true` before `GlslangToSpv()`.
+**That flag is SILENTLY IGNORED.** glslang is built here with `ENABLE_OPT=OFF`: `libSPIRV.a`
+contains ZERO SPIRV-Tools symbols (verified 2026-08-13), so there is no optimizer to disable in
+the first place — and nothing to enable either.
+
+Do not chase that flag for compile time or SPIR-V quality. Turning a real optimizer on would
+mean adding SPIRV-Tools to the dependency cascade for no gain: desktop NVIDIA/AMD drivers fully
+re-optimize whatever SPIR-V they receive. The levers that actually move load time are the two
+caches above and the number of program VARIANTS (336 distinct SceneRendering sources on a single
+`material-debug` load).

@@ -2747,8 +2747,17 @@ namespace EmEn::Graphics
 		/* Same switch as the shader caches: one command clears every shader-related cache. */
 		if ( m_primaryServices.arguments().isSwitchPresent("--clear-shader-cache") )
 		{
-			IO::eraseFile(filepath);
-			IO::eraseFile(markerPath);
+			/* NOTE: Clearing a cache that was never written is a no-op, not a failure: erasing
+			 * unconditionally made IO log an error for each absent file. */
+			if ( std::filesystem::exists(filepath) )
+			{
+				IO::eraseFile(filepath);
+			}
+
+			if ( std::filesystem::exists(markerPath) )
+			{
+				IO::eraseFile(markerPath);
+			}
 
 			m_device->createPipelineCache(nullptr, 0);
 
@@ -2762,9 +2771,23 @@ namespace EmEn::Graphics
 		{
 			TraceWarning{ClassId} << "The previous run crashed while loading the pipeline cache ! Discarding it.";
 
-			IO::eraseFile(filepath);
+			if ( std::filesystem::exists(filepath) )
+			{
+				IO::eraseFile(filepath);
+			}
+
 			IO::eraseFile(markerPath);
 
+			m_device->createPipelineCache(nullptr, 0);
+
+			return;
+		}
+
+		/* NOTE: No cache file yet is the NOMINAL path of a fresh install, not a failure. Since the
+		 * cache is enabled by default, reading the absent file unconditionally made every first
+		 * launch print an IO error. Check first, and start with an empty cache silently. */
+		if ( !std::filesystem::exists(filepath) )
+		{
 			m_device->createPipelineCache(nullptr, 0);
 
 			return;

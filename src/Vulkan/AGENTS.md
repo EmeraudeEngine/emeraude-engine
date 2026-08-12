@@ -268,7 +268,7 @@ void waitEvents(std::span< const VkEvent > events, ...);
 
 ## Important Files
 
-- `Device.cpp/.hpp` - Vulkan logical device abstraction
+- `Device.cpp/.hpp` - Vulkan logical device abstraction; **owns the `VkPipelineCache`** (`pipelineCache()`, `createPipelineCache()`, `getPipelineCacheData()` — see the dedicated section at the end of this file)
 - `Buffer.cpp/.hpp` - Buffer management with VMA
 - `Image.cpp/.hpp` - Texture and image management
 - `GraphicsPipeline.cpp/.hpp` - Render pipelines
@@ -404,6 +404,12 @@ UniformBufferObject::getDescriptorInfo (uint32_t elementOffset) const noexcept
 > and MUST include `renderPass.handle()` as its first hash component.
 >
 > See [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md) for complete caching architecture.
+>
+> ⚠️ **This hash is the engine's IN-MEMORY pipeline-object reuse** (level 3 of the
+> ShaderModule / Program / GraphicsPipeline cascade: "have I already built this
+> `GraphicsPipeline` object during this run?"). It is a different mechanism from the on-disk
+> `VkPipelineCache` documented at the end of this file, which is what spares the DRIVER the
+> compilation work. They are complementary — neither replaces the other.
 
 ### SwapChain render passes (three variants)
 
@@ -668,7 +674,33 @@ Related systems:
 in the engine goes through one of those two. `Graphics::Renderer` does the disk I/O:
 `loadPipelineCache()` right after the device is acquired (it must exist BEFORE any pipeline is
 created) and `savePipelineCache()` in `onTerminate()` after `waitIdle()`. Setting:
-`Core/Graphics/Shader/EnablePipelineCache`, default **true**.
+`Core/Graphics/Shader/EnablePipelineCache`, `DefaultPipelineCacheEnabled` = **`true`**
+(`SettingKeys.hpp`) — this cache is **on by default**, and the Aug 2026 pass that flipped the
+SPIR-V binary cache on left it untouched. On disk: `<cache>/pipeline-cache/pipeline.cache`
+(+ the `pipeline.cache.loading` marker described below), via
+`FileSystem::cacheDirectory("pipeline-cache")`.
+
+`Device::pipelineCache()` returns `VK_NULL_HANDLE` when the setting is off or creation failed,
+and `vkCreate*Pipelines` accepts that as "no cache" — which is why `GraphicsPipeline.cpp` and
+`ComputePipeline.cpp` pass it unconditionally, with no null check and no second code path.
+
+### Do not confuse it with the other shader caches
+
+Four distinct mechanisms are commonly called "the shader cache". Only the `VkPipelineCache` (third
+row) is owned by this layer; the three on-disk ones share the `Core/Graphics/Shader/…` prefix and
+are all wiped by `--clear-shader-cache`.
+
+| What | Setting key | Default | Owner — read there, not here |
+|---|---|---|---|
+| Generated shader SOURCE — a **dump**, nothing ever reads it back | `EnableSourceCodeCache` | `false` | `Saphir::ShaderManager` — [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) |
+| Compiled **SPIR-V binaries** — skips glslang entirely on a hit | `EnableBinaryCache` | **`true`** | `Saphir::ShaderManager` — [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) |
+| **`VkPipelineCache`** — skips the DRIVER's pipeline compilation | `EnablePipelineCache` | **`true`** | `Vulkan::Device` + `Graphics::Renderer` — **this section** |
+| In-memory reuse of ShaderModule / Program / GraphicsPipeline objects **within one run** | *(none — always on)* | — | [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md) |
+
+The two disk caches cut **different** costs and neither substitutes for the other: the SPIR-V
+cache removes GLSL→SPIR-V compilation, the pipeline cache removes SPIR-V→machine-code
+compilation. Their validation headers are also separate — do not assume a fix to one covers the
+other.
 
 ### Measured, on `material-debug` (294 graphics pipelines, RTX 3070 Ti)
 
@@ -717,3 +749,12 @@ Three more defences, each answering a real failure mode:
 `vkCreate*Pipelines`, so no external locking is needed for the current design. That guarantee is
 lost if `VK_PIPELINE_CACHE_CREATE_EXTERNALLY_SYNCHRONIZED_BIT` is ever set, and
 `vkMergePipelineCaches` always requires external synchronization of its destination.
+
+> [!WARNING]
+> `Device::createPipelineCache()` sets `VkPipelineCacheCreateInfo::flags = 0` **on purpose**, and
+> that zero is load-bearing. `EXTERNALLY_SYNCHRONIZED_BIT` is not a free optimisation: it hands
+> the locking duty back to the application, and **neither** `GraphicsPipeline::createOnHardware()`
+> nor `ComputePipeline::createOnHardware()` takes any lock today — they call `vkCreate*Pipelines`
+> straight through with `device()->pipelineCache()`. Setting that flag therefore means adding a
+> mutex around **every** `vkCreate*Pipelines` call site in the same change. Skipping that step
+> produces a data race inside the driver: no validation message, no crash site to blame.

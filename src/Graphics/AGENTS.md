@@ -189,6 +189,44 @@ The `Renderer` maintains global caches for performance optimization:
 > `TextureResource` types and `Overlay::Surface`; see [`docs/caution-points.md`](../../docs/caution-points.md)
 > and [`docs/multi-scene-resource-ownership.md`](../../docs/multi-scene-resource-ownership.md).
 
+### Persistent (on-disk) Caches — the Renderer owns the pipeline-cache I/O
+
+The three caches above live for **one run**. Two caches survive across runs, and the disk I/O of
+one of them is implemented in this directory:
+
+| On-disk cache | Setting (`Core/Graphics/Shader/…`) | Default | Owns the object | Does the disk I/O |
+|---|---|---|---|---|
+| `VkPipelineCache` (driver blob) | `EnablePipelineCache` | **true** | `Vulkan::Device` | **`Graphics::Renderer`** |
+| SPIR-V binary cache | `EnableBinaryCache` | **true** (flipped Aug 2026) | `Saphir::ShaderManager` | `Saphir::ShaderManager` |
+| "Source code cache" | `EnableSourceCodeCache` | `false` | `Saphir::ShaderManager` | a DUMP — nothing ever reads it back |
+
+**The part that lives here.** `Renderer::loadPipelineCache()` runs right after the device is
+acquired — the cache **must exist BEFORE any pipeline is created**, so do not move that call —
+and `Renderer::savePipelineCache()` runs in `onTerminate()` after `waitIdle()`, when every
+pipeline the run compiled is in it. Measured on `material-debug` (294 graphics pipelines,
+RTX 3070 Ti): driver disk cache OFF = **5 702 ms**, driver disk cache OFF but the engine cache
+restored from disk = **31 ms** (182×, 7.4 MB blob); with the driver cache active, 33 ms. The blob
+is never handed to the driver raw — the application header, the load marker and the
+write-then-rename are each answering a real crash mode: full rationale in
+[`src/Vulkan/AGENTS.md`](../Vulkan/AGENTS.md) § "VkPipelineCache".
+
+**The binary cache, for context only** — no Graphics code touches it. Same demo, 232 shader
+modules: **393 ms** with the cache OFF → **10.3 ms** warm (38×, 383 ms saved), and the cold run
+that WRITES the 232 blobs costs 391 ms, i.e. nothing — there is no first-launch penalty, which is
+why it is now on by default. It is safe to leave on because an application header, including a
+**toolchain identity hash** (glslang version + SPIR-V generator version + client/target
+environment pair + engine version), is validated in full before any byte reaches Vulkan. See
+[`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md).
+
+`--clear-shader-cache` clears the shader caches **including the pipeline cache**.
+
+⚠️ **An absent cache file is the nominal first-launch state, not an error.** `loadPipelineCache()`
+checks `std::filesystem::exists()` before reading, and the `--clear-shader-cache` branch guards
+each `IO::eraseFile()`; without that, the one launch where the blob and the `.loading` marker are
+*supposed* to be missing printed an IO error per file — on every fresh install, since the cache is
+enabled by default. See [`docs/caution-points.md`](../../docs/caution-points.md) § "Flipping a
+default to ON runs a path nobody had ever run".
+
 ### Renderable-Level Cache
 
 Each `Renderable::Abstract` maintains a program cache per render target:
@@ -2657,6 +2695,7 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 -   **Main Entry**: `Renderer` (Central coordinator)
 -   **Scene Bridge**: `Components::Visual`
 -   **Shader Cache**: [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) - 3-level cache system
+-   **On-disk Caches**: See [Section 4](#persistent-on-disk-caches--the-renderer-owns-the-pipeline-cache-io) - `Renderer` does the `VkPipelineCache` disk I/O; SPIR-V binary cache ON by default
 -   **Swap-Chain/VSync**: [`src/Vulkan/AGENTS.md`](../Vulkan/AGENTS.md) - Present mode selection
 -   **Pattern Examples**: [`docs/development-patterns.md`](../../docs/development-patterns.md)
 -   **Material JSON format**: See `docs/development-patterns.md#material-json-format-unified`

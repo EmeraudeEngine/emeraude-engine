@@ -344,7 +344,6 @@ namespace EmEn::Saphir
 
 			PrimaryServices & m_primaryServices;
 			std::map< size_t, std::shared_ptr< Vulkan::ShaderModule > > m_shaderModules; ///< Loaded shader modules, keyed by AbstractShader::hash().
-			std::map< size_t, std::filesystem::path > m_cachedShaderSourceCodes; ///< Disk source cache index, keyed by shader hash. Populated by readCache() but only consulted by clearCache(): cacheShaderSourceCode() always (re)writes, it never looks up this index first.
 			std::map< size_t, std::filesystem::path > m_cachedShaderBinaries; ///< Disk binary cache index, keyed by shader hash; looked up by checkBinaryFromCache() to skip a recompilation.
 			std::filesystem::path m_shadersSourcesDirectory;
 			std::filesystem::path m_shadersBinariesDirectory;

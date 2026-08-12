@@ -2011,6 +2011,123 @@ calls `setRadius()` when a loader declared a range (`LightDescriptor::range > 0`
 lights land in exactly that state. Worth knowing before blaming a radius for a dark scene: the
 symptom of a zero radius is an **over**-lit room, never an under-lit one.
 
+### The shader caches are ON by default — and what keeps that safe (Aug 2026)
+
+Three independent caches sit on the shader path. Their defaults live in `SettingKeys.hpp`:
+
+| Setting key | Default | What it actually is |
+|---|---|---|
+| `Core/Graphics/Shader/EnableBinaryCache` | **`true`** — flipped from `false` in Aug 2026 | the SPIR-V blob cache; skips glslang on a hit — **383 ms** on the demo below |
+| `Core/Graphics/Shader/EnablePipelineCache` | `true` (unchanged) | the engine-side `VkPipelineCache` blob; the **bigger** win of the two — 5702 ms → 31 ms |
+| `Core/Graphics/Shader/EnableSourceCodeCache` | `false` | **not a cache — a DUMP** (see below) |
+
+**Measured (2026-08-13, demo `material-debug` with all 10 options, RTX 3070 Ti, Release).** The
+instrumented envelope is *source dump + cache lookup + glslang compile + `vkCreateShaderModule`*,
+placed AFTER the in-memory hash lookup so it counts **cache misses only** — 232 shader modules:
+
+| Binary cache | Total | Per module |
+|---|---|---|
+| OFF | 393 ms | 1.69 ms |
+| ON, cold (writes the 232 blobs) | 391 ms | 1.68 ms |
+| ON, warm (reads) | **10.3 ms** | **0.044 ms** |
+
+**38× faster, 383 ms saved.** Writing the cache on a cold run is **free** (391 vs 393 ms = noise),
+so there is no first-launch penalty to weigh against it. 0 residual `.tmp` files.
+
+> [!CAUTION]
+> **This cache is only safe because of its file HEADER. Do not "simplify" that header away.** A blob
+> is valid only for the exact source AND the exact toolchain that produced it; hand a stale one to
+> `vkCreateShaderModule` and you get a driver-level fault or garbage pixels, with no compile error
+> anywhere to point at. That is why the cache shipped disabled until the header existed.
+>
+> Every field is validated **in full before a single byte reaches Vulkan**
+> (`Saphir/ShaderManager.cpp`, `ShaderBinaryFileHeader` + `toolchainIdentity()`): magic, format
+> version, source hash, shader stage, data size, FNV-1a content hash, and above all a **toolchain
+> identity hash** — glslang version + SPIR-V generator version + client/target environment pair +
+> engine version. Two structural checks follow: size a multiple of 4, and the SPIR-V magic word
+> `0x07230203` in front. A rejected file is **deleted and the shader recompiled** — never repaired,
+> never partially trusted. Writes land on a temporary path and are **renamed** into place, so a
+> SIGKILL cannot leave a half-written blob behind.
+>
+> The toolchain hash is what makes a glslang upgrade *invalidate* the cache instead of silently
+> poisoning it. It also carries the platform target pair: **macOS targets Vulkan 1.2 / SPIR-V 1.5
+> while the other platforms target 1.3 / 1.6**, so a cache directory that travels between platforms
+> rejects itself rather than mixing generations.
+
+**The source code cache is NOT a cache — it is a DUMP.** Nothing ever reads it back:
+`AbstractShader::loadSourceCode()` has **zero callers**. It writes one subdirectory per generator
+(`SceneRendering/`, `ShadowCasting/`, `PostProcessing/`, `OverlayRendering/`, `GizmoRendering/`,
+`TBNSpaceRendering/`) so you can inspect what the generators produced. Enable it to *read* generated
+GLSL, never to speed anything up — it stays OFF by default.
+
+**Pipeline cache context** (`Vulkan::Device` owns the `VkPipelineCache`, `Graphics::Renderer` does
+the disk I/O): 294 graphics pipelines on the same demo — driver cache active **33 ms**, driver cache
+OFF **5702 ms**, driver cache OFF but the engine blob restored from disk **31 ms**. Factor **182×**,
+for a 7.4 MB blob. The engine cache is what protects a cold machine, a driver update or a wiped
+driver cache from a 5.7-second stall.
+
+**What really drives load time is the VARIANT COUNT**, not the per-shader compile speed: a single
+`material-debug` load generates **336 distinct SceneRendering sources** (265 fragment, 71 vertex).
+Attack that number before micro-optimising the compiler path.
+
+`--clear-shader-cache` wipes the shader caches, pipeline cache included.
+
+**Files:** `SettingKeys.hpp` (the three defaults), `Saphir/ShaderManager.cpp` (header struct,
+`toolchainIdentity()`, write-then-rename), `Vulkan/Device.{hpp,cpp}` + `Graphics/Renderer.cpp`
+(pipeline cache). Engine commits `56fabc9a` (binary cache hardening), `e583df40` (pipeline cache).
+Contracts: [`src/Saphir/AGENTS.md`](../src/Saphir/AGENTS.md),
+[`src/Vulkan/AGENTS.md`](../src/Vulkan/AGENTS.md).
+
+### `disableOptimizer` is a SILENT NO-OP — glslang is built with `ENABLE_OPT=OFF` (Aug 2026)
+
+> [!CAUTION]
+> `Saphir/ShaderManager.cpp` sets `glslang::SpvOptions::disableOptimizer = true`, which reads like a
+> deliberate performance decision somebody could flip to gain something. **It does nothing.** glslang
+> in this build is compiled with `ENABLE_OPT=OFF`: `libSPIRV.a` contains **ZERO SPIRV-Tools symbols**
+> (verified 2026-08-13), so the optimizer that flag would disable is not linked in at all. Setting it
+> to `false` changes not one byte of the emitted SPIR-V — and emits no warning saying so.
+>
+> Making the flag meaningful would mean adding **SPIRV-Tools to the dependency cascade**, for no
+> gain: desktop NVIDIA/AMD drivers fully re-optimise the SPIR-V they receive. Do not spend a session
+> chasing a shader-optimisation win through this flag; measure the driver-side result instead.
+
+### Flipping a default to ON runs a path nobody had ever run (Aug 2026)
+
+Turning `EnableBinaryCache` on by default did not break anything — but it made the engine execute,
+on every machine, code that until then only ran for whoever manually set the flag. Four defects
+surfaced in a single fresh-install run, all of the same family: **an absent file or an empty path
+is the NOMINAL first-launch state, and every one of these sites treated it as a failure.**
+
+| Site | What it did on a first launch |
+|---|---|
+| `ShaderManager::readCache()` | Scanned the source-dump directory too. The dump is OFF by default, so its path is empty ⇒ `IO::directoryEntries("")` logged an error at **every** startup. It also indexed into `m_cachedShaderSourceCodes`, a member nothing ever read back — the loop was pure dead work. Both are gone; the function now returns early when the binaries directory is empty. |
+| `ShaderManager::clearCache()` | Same empty-path scan, and `--clear-shader-cache` runs whatever the settings say. Both loops are now guarded. |
+| `Renderer::loadPipelineCache()` | Read `pipeline.cache` unconditionally ⇒ `IO::fileGetContents` logged an error on the one launch where the file is *supposed* to be missing. Now checks existence first and starts empty, silently. |
+| `--clear-shader-cache` | Erased the blob and the `.loading` marker unconditionally ⇒ an `IO::eraseFile` error per absent file. Guarded. |
+
+> [!CAUTION]
+> **A feature that ships disabled has an untested first-run path, and flipping the default is what
+> executes it.** None of these were caught by the build (`-Werror` clean), by the unit suite
+> (1967/1967), or by any warm run — only by deleting the cache directories and watching a genuinely
+> cold start. When you enable something by default, **delete its state and run it cold**, then read
+> the log for errors that are really just "nothing here yet".
+
+Verified after the fixes: a fresh install and a `--clear-shader-cache` run on a completely absent
+cache both log **zero** errors (only the pre-existing, unrelated GLFW Wayland gamma-ramp one).
+
+### `std::stoull` in a `-fno-exceptions` build terminates the process (fixed Aug 2026)
+
+`ShaderManager::extractHashFromFilepath()` parsed the hash out of a cache filename with
+`std::stoull`. The cascade builds with `EMERAUDE_DISABLE_EXCEPTIONS` **On** by default, so the
+`std::invalid_argument` it throws on a malformed name had nowhere to go: a stray file named
+`foo_bar.vert` dropped into the **user-writable** cache directory called `std::terminate` **at
+startup**. Replaced with `std::from_chars`, which reports failure through a return value.
+
+> [!CAUTION]
+> The throwing `std::sto*` family is a **crash primitive** in this cascade, and the danger is
+> proportional to how untrusted the input is — a cache directory the user can write to is about as
+> untrusted as it gets. Prefer `std::from_chars` for every parse of external data.
+
 ---
 
 ## Build / Compiler
