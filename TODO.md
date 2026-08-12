@@ -181,8 +181,18 @@ lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
   the terrain adaptive grid spams `generateTriangleListIndicesForRT() returned empty indices`
   ~18k times/min with RT enabled (TriangleStrip geometry has no RT triangle-list path — dates
   from `44cb3a85`, 2026-03-10).
-- [ ] **Lot 3 — Canonical conversion** (D4) at the parse boundary; the 17 Diffuse-only material
-  JSONs (Doom3/Quake2, Woods/Wood012) go through these fallbacks.
+- [x] **Lot 3 — Canonical conversion (D4) at the parse boundary — DONE (2026-08-12).**
+  PBRResource's legacy fallbacks now read the manifest `Shininess` as the authored GLOSSINESS
+  [0,1] it is (813ea2ea contract): **roughness = 1 − glossiness** (Khronos), replacing the wrong
+  exponent formula `1−sqrt(s/128)` (it clamped every authored glossiness to 1.0 → roughness
+  ~0.91 regardless of the value). The luminance-invert-to-roughness heuristic on specular
+  colors is gone. ⚠️ **Deliberate deviation from the D4 wording**: the Khronos "F0 = specular
+  color" half is NOT applied — it presumes spec-gloss-authored F0 values (~0.04); legacy Phong
+  colors are highlight intensities (bright greys) and would read near-mirror. F0 stays the
+  0.04 dielectric default; the low roughness carries the "shiny" intent. One-line flip if the
+  owner wants strict Khronos. ⚠️ These fallbacks have NO runtime user until Lot 4 flips the
+  mesh JSONs to the PBR container (the 17 Diffuse-only files load as Standard today) —
+  bench-validate then.
 - [ ] **Lot 4 — Removal**: delete the `MaterialMode` dual paths in GLTF/FBX/USD loaders, delete
   `StandardResource.{hpp,cpp}`, drop the entry from `Materials.hpp` Types + Resources/Manager.
   ⚠️ **Relocate `StandardResource::specularExponentFromGlossiness()` into the LightGenerator

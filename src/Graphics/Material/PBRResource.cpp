@@ -241,49 +241,29 @@ namespace EmEn::Graphics::Material
 
 					case FillingType::Color :
 					{
-						/* Specular color: try Shininess value first, then luminance fallback. */
+						/* Legacy Phong specular COLOR (material merge, Lot 3). The canonical
+						 * conversion is roughness = 1 - glossiness (Khronos archived spec-gloss
+						 * extension; the manifest "Shininess" IS an authored GLOSSINESS [0,1] —
+						 * the 813ea2ea contract, see StandardResource::specularExponentFromGlossiness()).
+						 * ⚠️ The Khronos "F0 = specular color" half is DELIBERATELY not applied:
+						 * it presumes spec-gloss-authored data where specular is a dielectric F0
+						 * (~0.04). Legacy Phong colors are HIGHLIGHT intensities (bright greys) —
+						 * mapped raw to F0 they read near-mirror. For a dielectric, the perceptual
+						 * equivalent of a bright Phong highlight is the LOW ROUGHNESS the
+						 * glossiness already provides; F0 stays the 0.04 dielectric default. */
 						const auto shininessOpt = FastJSON::getValue< float >(data[SpecularString], JKShininess);
 
-						if ( shininessOpt.has_value() )
-						{
-							/* Shininess → Roughness conversion: high shininess = low roughness.
-							 * Formula: roughness = 1.0 - sqrt(shininess / 128.0), clamped to [0,1]. */
-							const auto shininess = std::clamp(shininessOpt.value(), 1.0F, 128.0F);
-							const auto roughness = 1.0F - std::sqrt(shininess / 128.0F);
-
-							this->setRoughnessComponent(roughness);
-						}
-						else
-						{
-							/* No Shininess: compute luminance from color and invert.
-							 * High specular color → low roughness (shiny surface). */
-							const auto color = parseColorComponent(componentData);
-							const auto luminance = 0.2126F * color.red() + 0.7152F * color.green() + 0.0722F * color.blue();
-
-							this->setRoughnessComponent(1.0F - luminance);
-						}
+						this->setRoughnessComponent(shininessOpt.has_value() ? 1.0F - clampToUnit(shininessOpt.value()) : DefaultRoughness);
 					}
 						return true;
 
 					case FillingType::None :
 					{
-						/* Last fallback: try Shininess value from Specular component. */
+						/* Last fallback: a bare Shininess value on the Specular component —
+						 * an authored GLOSSINESS [0,1], complement = linear roughness (Lot 3). */
 						const auto shininessOpt = FastJSON::getValue< float >(data[SpecularString], JKShininess);
 
-						if ( shininessOpt.has_value() )
-						{
-							/* Shininess → Roughness conversion: high shininess = low roughness.
-							 * Formula: roughness = 1.0 - sqrt(shininess / 128.0), clamped to [0,1]. */
-							const auto shininess = std::clamp(shininessOpt.value(), 1.0F, 128.0F);
-							const auto roughness = 1.0F - std::sqrt(shininess / 128.0F);
-
-							this->setRoughnessComponent(roughness);
-						}
-						else
-						{
-							/* No roughness, no specular texture, no shininess - use default. */
-							this->setRoughnessComponent(DefaultRoughness);
-						}
+						this->setRoughnessComponent(shininessOpt.has_value() ? 1.0F - clampToUnit(shininessOpt.value()) : DefaultRoughness);
 					}
 						return true;
 
