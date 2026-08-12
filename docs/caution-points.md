@@ -2013,13 +2013,13 @@ symptom of a zero radius is an **over**-lit room, never an under-lit one.
 
 ### The shader caches are ON by default — and what keeps that safe (Aug 2026)
 
-Three independent caches sit on the shader path. Their defaults live in `SettingKeys.hpp`:
+Two caches and one dump sit on the shader path. Their defaults live in `SettingKeys.hpp`:
 
 | Setting key | Default | What it actually is |
 |---|---|---|
 | `Core/Graphics/Shader/EnableBinaryCache` | **`true`** — flipped from `false` in Aug 2026 | the SPIR-V blob cache; skips glslang on a hit — **383 ms** on the demo below |
 | `Core/Graphics/Shader/EnablePipelineCache` | `true` (unchanged) | the engine-side `VkPipelineCache` blob; the **bigger** win of the two — 5702 ms → 31 ms |
-| `Core/Graphics/Shader/EnableSourceCodeCache` | `false` | **not a cache — a DUMP** (see below) |
+| `Core/Graphics/Shader/EnableSourceCodeDump` | `false` | **not a cache — a DUMP** (see below); renamed from `EnableSourceCodeCache` in Aug 2026 |
 
 **Measured (2026-08-13, demo `material-debug` with all 10 options, RTX 3070 Ti, Release).** The
 instrumented envelope is *source dump + cache lookup + glslang compile + `vkCreateShaderModule`*,
@@ -2054,11 +2054,23 @@ so there is no first-launch penalty to weigh against it. 0 residual `.tmp` files
 > while the other platforms target 1.3 / 1.6**, so a cache directory that travels between platforms
 > rejects itself rather than mixing generations.
 
-**The source code cache is NOT a cache — it is a DUMP.** Nothing ever reads it back:
-`AbstractShader::loadSourceCode()` has **zero callers**. It writes one subdirectory per generator
+**The source code dump is NOT a cache — which is why it was renamed in Aug 2026.** Nothing ever
+reads it back: `AbstractShader::loadSourceCode()` has **zero callers**, and the key it stores under
+is a hash of the source itself, so it structurally cannot be one. It writes
+`~/.cache/<app>/generated-shaders/`, one lazily-created subdirectory per generator
 (`SceneRendering/`, `ShadowCasting/`, `PostProcessing/`, `OverlayRendering/`, `GizmoRendering/`,
-`TBNSpaceRendering/`) so you can inspect what the generators produced. Enable it to *read* generated
-GLSL, never to speed anything up — it stays OFF by default.
+`TBNSpaceRendering/`) so you can inspect what the generators produced. It is written BEFORE the
+binary-cache lookup, so a cache hit does not suppress it. Enable it to *read* generated GLSL, never
+to speed anything up — it stays OFF by default.
+
+> [!CAUTION]
+> **The Aug 2026 rename breaks existing settings, silently and by design.**
+> `EnableSourceCodeCache` → `EnableSourceCodeDump`, and the directory `shader-sources/` →
+> `generated-shaders/`. `Settings` has **no key-migration mechanism at all**: an existing
+> `settings.json` keeps the old key as dead JSON, it is ignored without a warning, and anyone who
+> had the dump enabled finds it **OFF** until they set the new key. The owner accepted the break
+> because this is a debug facility defaulting to `false` — a key rename touching anything a user
+> actually relies on would need a migration path first.
 
 **Pipeline cache context** (`Vulkan::Device` owns the `VkPipelineCache`, `Graphics::Renderer` does
 the disk I/O): 294 graphics pipelines on the same demo — driver cache active **33 ms**, driver cache
@@ -2100,7 +2112,7 @@ is the NOMINAL first-launch state, and every one of these sites treated it as a 
 
 | Site | What it did on a first launch |
 |---|---|
-| `ShaderManager::readCache()` | Scanned the source-dump directory too. The dump is OFF by default, so its path is empty ⇒ `IO::directoryEntries("")` logged an error at **every** startup. It also indexed into `m_cachedShaderSourceCodes`, a member nothing ever read back — the loop was pure dead work. Both are gone; the function now returns early when the binaries directory is empty. |
+| `ShaderManager::readBinaryCache()` (then named `readCache()`) | Scanned the source-dump directory too. The dump is OFF by default, so its path is empty ⇒ `IO::directoryEntries("")` logged an error at **every** startup. It also indexed into `m_cachedShaderSourceCodes`, a member nothing ever read back — the loop was pure dead work. Both are gone; the function now returns early when the binaries directory is empty. |
 | `ShaderManager::clearCache()` | Same empty-path scan, and `--clear-shader-cache` runs whatever the settings say. Both loops are now guarded. |
 | `Renderer::loadPipelineCache()` | Read `pipeline.cache` unconditionally ⇒ `IO::fileGetContents` logged an error on the one launch where the file is *supposed* to be missing. Now checks existence first and starts empty, silently. |
 | `--clear-shader-cache` | Erased the blob and the `.loading` marker unconditionally ⇒ an `IO::eraseFile` error per absent file. Guarded. |

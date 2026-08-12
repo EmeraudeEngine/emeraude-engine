@@ -1530,7 +1530,7 @@ namespace EmEn::Graphics
 			 * needs the empty batch to signal it back.
 			 * @return void
 			 */
-			void discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) noexcept;
+			void discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) const noexcept;
 
 			/**
 			 * @brief Creates the RT descriptor set layout and descriptor set.

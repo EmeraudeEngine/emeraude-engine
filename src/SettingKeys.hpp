@@ -737,9 +737,12 @@ namespace EmEn
 			/* Log generated shader source code. */
 			constexpr auto ShowSourceCodeKey{"Core/Graphics/Shader/ShowSourceCode"};
 			constexpr auto DefaultShowSourceCode{false};
-			/* Cache generated shader source on disk. */
-			constexpr auto SourceCodeCacheEnabledKey{"Core/Graphics/Shader/EnableSourceCodeCache"};
-			constexpr auto DefaultSourceCodeCacheEnabled{false};
+			/* Write every GENERATED GLSL source to disk for inspection. This is a DUMP, not a
+			 * cache: nothing ever reads it back, and its key is a hash of the very source it
+			 * stores, so it structurally could not serve as one. Named EnableSourceCodeCache
+			 * until Aug 2026 -- the old key is simply ignored, there is no migration. */
+			constexpr auto SourceCodeDumpEnabledKey{"Core/Graphics/Shader/EnableSourceCodeDump"};
+			constexpr auto DefaultSourceCodeDumpEnabled{false};
 			/* Cache compiled SPIR-V binaries on disk. */
 			/* Persist the DRIVER's pipeline cache across runs. This is the one that matters:
 			 * measured on material-debug, the driver-side pipeline compilation costs 5.4 s with a

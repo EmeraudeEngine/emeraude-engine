@@ -142,23 +142,23 @@ namespace EmEn::Saphir
 				arguments.isSwitchPresent("--show-all-infos") ||
 				arguments.isSwitchPresent("--show-video-infos");
 			m_showSourceCode = settings.getOrSetDefault< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
-			m_sourceCodeCacheEnabled = settings.getOrSetDefault< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
+			m_sourceCodeDumpEnabled = settings.getOrSetDefault< bool >(SourceCodeDumpEnabledKey, DefaultSourceCodeDumpEnabled);
 			m_binaryCacheEnabled = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);
 		}
 
 		/* Shader source DUMP directory (see the class documentation: this is an inspection dump,
 		 * not a cache). Only created when the feature is on — a disabled debug facility must
 		 * never be able to bring the renderer down, which is what a hard failure here used to do. */
-		if ( m_sourceCodeCacheEnabled )
+		if ( m_sourceCodeDumpEnabled )
 		{
-			m_shadersSourcesDirectory = m_primaryServices.fileSystem().cacheDirectory(ShaderSourcesDirectoryName);
+			m_generatedShadersDirectory = m_primaryServices.fileSystem().cacheDirectory(GeneratedShadersDirectoryName);
 
-			if ( !IO::createDirectory(m_shadersSourcesDirectory) )
+			if ( !IO::createDirectory(m_generatedShadersDirectory) )
 			{
-				TraceWarning{ClassId} << "Unable to create '" << m_shadersSourcesDirectory << "' directory ! The generated source dump is disabled.";
+				TraceWarning{ClassId} << "Unable to create '" << m_generatedShadersDirectory << "' directory ! The generated source dump is disabled.";
 
-				m_shadersSourcesDirectory.clear();
-				m_sourceCodeCacheEnabled = false;
+				m_generatedShadersDirectory.clear();
+				m_sourceCodeDumpEnabled = false;
 			}
 		}
 
@@ -184,8 +184,8 @@ namespace EmEn::Saphir
 		else if ( m_binaryCacheEnabled )
 		{
 			/* NOTE: Only the BINARY cache is ever read back; the source dump index was scanned
-			 * for nothing (nothing ever reads a dumped source — see cacheShaderSourceCode()). */
-			this->readCache();
+			 * for nothing (nothing ever reads a dumped source — see dumpShaderSourceCode()). */
+			this->readBinaryCache();
 		}
 
 		if ( m_showInformation )
@@ -311,25 +311,25 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	ShaderManager::cacheShaderSourceCode (const AbstractShader & shader, const char * generatorClassId) const noexcept
+	ShaderManager::dumpShaderSourceCode (const AbstractShader & shader, const char * generatorClassId) const noexcept
 	{
-		if ( !m_sourceCodeCacheEnabled )
+		if ( !m_sourceCodeDumpEnabled )
 		{
 			return true;
 		}
 
-		const auto cacheFilepath = this->generateShaderSourceCacheFilepath(shader, generatorClassId);
+		const auto dumpFilepath = this->generateShaderDumpFilepath(shader, generatorClassId);
 
-		if ( cacheFilepath.empty() )
+		if ( dumpFilepath.empty() )
 		{
-			TraceError{ClassId} << "Unable to get a proper source cache path for shader '" << shader.name() << "' !";
+			TraceError{ClassId} << "Unable to get a proper source dump path for shader '" << shader.name() << "' !";
 
 			return false;
 		}
 
-		if ( !shader.writeSourceCode(cacheFilepath) )
+		if ( !shader.writeSourceCode(dumpFilepath) )
 		{
-			TraceError{ClassId} << "Unable to write the source cache file '" << cacheFilepath << "' for shader '" << shader.name() << "' !";
+			TraceError{ClassId} << "Unable to write the source dump file '" << dumpFilepath << "' for shader '" << shader.name() << "' !";
 
 			return false;
 		}
@@ -577,7 +577,7 @@ namespace EmEn::Saphir
 		/* Dump the generated source for inspection. ⚠️ Done BEFORE the binary-cache check on
 		 * purpose: this is not a cache, it is the window onto what the generators produced, and
 		 * hanging it off the compile path meant a binary cache hit silently stopped producing it. */
-		if ( !this->cacheShaderSourceCode(shader, generatorClassId) )
+		if ( !this->dumpShaderSourceCode(shader, generatorClassId) )
 		{
 			TraceWarning{ClassId} << "Unable to dump the generated source of shader '" << shader.name() << "' !";
 		}
@@ -697,7 +697,7 @@ namespace EmEn::Saphir
 	}
 
 	void
-	ShaderManager::readCache () noexcept
+	ShaderManager::readBinaryCache () noexcept
 	{
 		/* NOTE: Only the BINARY cache is ever read back. The source directory is an inspection
 		 * DUMP that nothing reloads, so indexing it served no purpose; worse, this function only
@@ -733,7 +733,7 @@ namespace EmEn::Saphir
 	{
 		/* NOTE: A disabled facility leaves its directory path EMPTY, and --clear-shader-cache runs
 		 * whatever the settings say, so both loops must be guarded. */
-		for ( const auto & filepath : m_shadersSourcesDirectory.empty() ? std::vector< std::filesystem::path >{} : IO::directoryEntries(m_shadersSourcesDirectory) )
+		for ( const auto & filepath : m_generatedShadersDirectory.empty() ? std::vector< std::filesystem::path >{} : IO::directoryEntries(m_generatedShadersDirectory) )
 		{
 			const auto extension = IO::getFileExtension(filepath);
 			bool isShaderFile = false;
@@ -775,7 +775,7 @@ namespace EmEn::Saphir
 	}
 
 	std::filesystem::path
-	ShaderManager::generateShaderSourceCacheFilepath (const AbstractShader & shader, const char * generatorClassId) const noexcept
+	ShaderManager::generateShaderDumpFilepath (const AbstractShader & shader, const char * generatorClassId) const noexcept
 	{
 		const auto & name = shader.name();
 		const auto hashStr = std::to_string(shader.hash());
@@ -789,7 +789,7 @@ namespace EmEn::Saphir
 		filename += '.';
 		filename += extension;
 
-		auto filepath = m_shadersSourcesDirectory;
+		auto filepath = m_generatedShadersDirectory;
 
 		/* One sub-directory per generator, so the dump can be inspected by category instead of
 		 * being one flat pile. Created lazily: a generator that never runs leaves no directory. */
@@ -801,7 +801,7 @@ namespace EmEn::Saphir
 			{
 				TraceWarning{ClassId} << "Unable to create the generator sub-directory '" << filepath << "' ! Dumping at the dump root instead.";
 
-				filepath = m_shadersSourcesDirectory;
+				filepath = m_generatedShadersDirectory;
 			}
 		}
 

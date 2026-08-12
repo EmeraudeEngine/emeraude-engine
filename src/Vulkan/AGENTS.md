@@ -692,10 +692,14 @@ are all wiped by `--clear-shader-cache`.
 
 | What | Setting key | Default | Owner — read there, not here |
 |---|---|---|---|
-| Generated shader SOURCE — a **dump**, nothing ever reads it back | `EnableSourceCodeCache` | `false` | `Saphir::ShaderManager` — [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) |
+| Generated shader SOURCE — a **dump**, nothing ever reads it back | `EnableSourceCodeDump` | `false` | `Saphir::ShaderManager` — [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) |
 | Compiled **SPIR-V binaries** — skips glslang entirely on a hit | `EnableBinaryCache` | **`true`** | `Saphir::ShaderManager` — [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) |
 | **`VkPipelineCache`** — skips the DRIVER's pipeline compilation | `EnablePipelineCache` | **`true`** | `Vulkan::Device` + `Graphics::Renderer` — **this section** |
 | In-memory reuse of ShaderModule / Program / GraphicsPipeline objects **within one run** | *(none — always on)* | — | [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md) |
+
+⚠️ The first row's key was `EnableSourceCodeCache` until Aug 2026 (the dump was misnamed a cache).
+There is **no migration**: an old key left in `settings.json` is dead JSON, silently ignored, so
+anyone who had the dump enabled finds it off until they set the new key. Details in the owner doc.
 
 The two disk caches cut **different** costs and neither substitutes for the other: the SPIR-V
 cache removes GLSL→SPIR-V compilation, the pipeline cache removes SPIR-V→machine-code

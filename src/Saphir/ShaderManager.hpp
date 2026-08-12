@@ -71,7 +71,7 @@ namespace EmEn::Saphir
 	/**
 	 * @brief All recognized shader source file extensions.
 	 * @note Used to filter shader source files apart from any other file sharing the
-	 * same cache directory (readCache(), clearCache()).
+	 * same directory (the generated-source dump, clearCache()).
 	 */
 	static constexpr std::array< const char * const, 6 > ShaderFileExtensions{
 		VertexShaderFileExtension,
@@ -238,12 +238,14 @@ namespace EmEn::Saphir
 			bool compile (const std::string & shaderName, ShaderType type, const std::string & sourceCode, std::vector< uint32_t > & binaryCode) noexcept;
 
 			/**
-			 * @brief Writes a shader source code on disk cache.
+			 * @brief Dumps a generated shader source to disk for inspection.
+			 * @note This is a DUMP, not a cache: nothing ever reads these files back.
 			 * @param shader A reference to a shader.
+			 * @param generatorClassId The generator identity, used as the sub-directory name.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool cacheShaderSourceCode (const AbstractShader & shader, const char * generatorClassId) const noexcept;
+			bool dumpShaderSourceCode (const AbstractShader & shader, const char * generatorClassId) const noexcept;
 
 			/**
 			 * @brief Writes a shader binary on disk cache.
@@ -255,24 +257,29 @@ namespace EmEn::Saphir
 			bool cacheShaderBinary (const AbstractShader & shader, const std::vector< uint32_t > & binaryCode) const noexcept;
 
 			/**
-			 * @brief Reads the cache to get shader source codes and binaries.
+			 * @brief Indexes the SPIR-V binary cache directory, keyed by shader hash.
+			 * @note Binaries ONLY. The generated-source dump is never indexed: nothing reads it
+			 * back, and since this runs only when the binary cache is on while the dump is off by
+			 * default, scanning it meant walking an EMPTY path on every startup.
 			 * @return void
 			 */
-			void readCache () noexcept;
+			void readBinaryCache () noexcept;
 
 			/**
-			 * @brief Removes all sources and binary from shader cache.
+			 * @brief Erases every dumped source and every cached binary from disk.
+			 * @note Each loop is guarded: a disabled facility leaves its directory path empty.
 			 * @return void
 			 */
 			void clearCache () noexcept;
 
 			/**
-			 * @brief Generates a unique cache filepath for the shader source.
+			 * @brief Generates a unique filepath for a dumped shader source.
 			 * @param shader A reference to a shader.
+			 * @param generatorClassId The generator identity, used as the sub-directory name.
 			 * @return std::filesystem::path
 			 */
 			[[nodiscard]]
-			std::filesystem::path generateShaderSourceCacheFilepath (const AbstractShader & shader, const char * generatorClassId) const noexcept;
+			std::filesystem::path generateShaderDumpFilepath (const AbstractShader & shader, const char * generatorClassId) const noexcept;
 
 			/**
 			 * @brief Generates a unique cache filepath for the shader binary.
@@ -286,7 +293,7 @@ namespace EmEn::Saphir
 			 * @brief Returns the shader hash from the filepath.
 			 * @note Expects a filename matching "<name>_<hash>.<extension>" exactly (one '_',
 			 * and after it exactly one '.'). Returns 0 — never a valid hash — otherwise; callers
-			 * (readCache()) must treat 0 as "reject this cache entry", not as an actual hash.
+			 * (readBinaryCache()) must treat 0 as "reject this cache entry", not as an actual hash.
 			 * @param filepath A reference to a filesystem path.
 			 * @return size_t
 			 */
@@ -325,8 +332,8 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static VkShaderStageFlagBits vkShaderType (ShaderType shaderType) noexcept;
 
-			/** @brief Name of the cache subdirectory holding cached GLSL source files. */
-			static constexpr auto ShaderSourcesDirectoryName{"shader-sources"};
+			/** @brief Name of the subdirectory holding the generated GLSL dump. */
+			static constexpr auto GeneratedShadersDirectoryName{"generated-shaders"};
 			/** @brief Name of the cache subdirectory holding compiled SPIR-V binaries. */
 			static constexpr auto ShaderBinariesDirectoryName{"shader-binaries"};
 
@@ -345,12 +352,12 @@ namespace EmEn::Saphir
 			PrimaryServices & m_primaryServices;
 			std::map< size_t, std::shared_ptr< Vulkan::ShaderModule > > m_shaderModules; ///< Loaded shader modules, keyed by AbstractShader::hash().
 			std::map< size_t, std::filesystem::path > m_cachedShaderBinaries; ///< Disk binary cache index, keyed by shader hash; looked up by checkBinaryFromCache() to skip a recompilation.
-			std::filesystem::path m_shadersSourcesDirectory;
+			std::filesystem::path m_generatedShadersDirectory;
 			std::filesystem::path m_shadersBinariesDirectory;
 			std::unique_ptr< GLSLangContext > m_glslang;
 			bool m_showInformation{false};
 			bool m_showSourceCode{false};
-			bool m_sourceCodeCacheEnabled{false};
+			bool m_sourceCodeDumpEnabled{false};
 			bool m_binaryCacheEnabled{false};
 	};
 }

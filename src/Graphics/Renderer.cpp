@@ -2408,7 +2408,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) noexcept
+	Renderer::discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) const noexcept
 	{
 		/* Primary semaphores (shadow maps) may not have been promoted yet when the frame
 		 * failed early, so drain both lists. */
@@ -2417,10 +2417,9 @@ namespace EmEn::Graphics
 		/* Deduplicated: a binary semaphore may be waited on only ONCE per batch, and the caller
 		 * may already have appended the acquisition semaphore to the pending list before failing. */
 		StaticVector< VkSemaphore, 17 > drainedSemaphores;
-
 		drainedSemaphores.emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
 
-		for ( const auto semaphore : currentFrameScope.secondarySemaphores() )
+		for ( VkSemaphore semaphore : currentFrameScope.secondarySemaphores() )
 		{
 			if ( std::ranges::find(drainedSemaphores, semaphore) == drainedSemaphores.cend() )
 			{

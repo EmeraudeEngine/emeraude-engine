@@ -198,7 +198,7 @@ one of them is implemented in this directory:
 |---|---|---|---|---|
 | `VkPipelineCache` (driver blob) | `EnablePipelineCache` | **true** | `Vulkan::Device` | **`Graphics::Renderer`** |
 | SPIR-V binary cache | `EnableBinaryCache` | **true** (flipped Aug 2026) | `Saphir::ShaderManager` | `Saphir::ShaderManager` |
-| "Source code cache" | `EnableSourceCodeCache` | `false` | `Saphir::ShaderManager` | a DUMP — nothing ever reads it back |
+| Generated-GLSL dump (NOT a cache) | `EnableSourceCodeDump` | `false` | `Saphir::ShaderManager` | a DUMP — nothing ever reads it back; renamed Aug 2026, the old `EnableSourceCodeCache` key is silently ignored (no migration) |
 
 **The part that lives here.** `Renderer::loadPipelineCache()` runs right after the device is
 acquired — the cache **must exist BEFORE any pipeline is created**, so do not move that call —

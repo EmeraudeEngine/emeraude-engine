@@ -1104,23 +1104,45 @@ tiers of one mechanism, and only two of them are caches at all:
 
 | Stage | Setting key | Default | Stores | Read back? | Measured gain |
 |---|---|---|---|---|---|
-| 1. Source dump | `Core/Graphics/Shader/EnableSourceCodeCache` | `false` | the generated GLSL, one sub-directory per generator | **NEVER** | none — it is an inspection tool |
+| 1. Source dump | `Core/Graphics/Shader/EnableSourceCodeDump` | `false` | the generated GLSL, one sub-directory per generator | **NEVER** | none — it is an inspection tool |
 | 2. SPIR-V binary cache | `Core/Graphics/Shader/EnableBinaryCache` | **`true`** since Aug 2026 | glslang's SPIR-V output, one blob per shader | yes | 393 ms → 10.3 ms on 232 modules (**38x**) |
 | 3. `VkPipelineCache` | `Core/Graphics/Shader/EnablePipelineCache` | `true` | the driver's SPIR-V→ISA result, one blob | yes | 5702 ms → 31 ms on 294 pipelines (**182x**) |
 
-The defaults live in `SettingKeys.hpp` (`DefaultSourceCodeCacheEnabled`,
+The defaults live in `SettingKeys.hpp` (`DefaultSourceCodeDumpEnabled`,
 `DefaultBinaryCacheEnabled`, `DefaultPipelineCacheEnabled`).
 
 `--clear-shader-cache` wipes the shader caches, the pipeline cache included.
 
-### Stage 1 — the "source code cache" is a DUMP, not a cache
+### Stage 1 — the generated-GLSL DUMP, not a cache (renamed Aug 2026)
 
-`Core/Graphics/Shader/EnableSourceCodeCache` writes every generated GLSL to
-`~/.cache/<app>/shader-sources/`. **Nothing ever reads it back**:
+`Core/Graphics/Shader/EnableSourceCodeDump` writes every generated GLSL to
+`~/.cache/<app>/generated-shaders/`. **Nothing ever reads it back**:
 `AbstractShader::loadSourceCode()` — the only function able to re-inject a file into a shader —
 has zero callers in the whole cascade. It structurally cannot be a cache either: its key is
 `std::hash` of the source it stores, so you must have generated the source already to know which
-file to read.
+file to read. That is why it was renamed away from "cache" — the old name described something
+this facility never was.
+
+> [!WARNING]
+> **The Aug 2026 rename ships with NO migration, deliberately.** No alias, no fallback, no
+> warning at startup — `Settings` has no key-migration mechanism at all. Consequence: an
+> existing `settings.json` keeps `Core/Graphics/Shader/EnableSourceCodeCache` as **dead JSON**
+> that is silently ignored, and anyone who had the dump enabled finds it **OFF** until they set
+> `Core/Graphics/Shader/EnableSourceCodeDump`. The owner accepted the break because this is a
+> debug facility defaulting to `false`. Do NOT add a compatibility alias to "fix" a report of
+> the dump having stopped — point at the new key instead.
+>
+> The private `ShaderManager` symbols moved with it (no public API touched):
+> `SourceCodeCacheEnabledKey`→`SourceCodeDumpEnabledKey`,
+> `DefaultSourceCodeCacheEnabled`→`DefaultSourceCodeDumpEnabled`,
+> `m_sourceCodeCacheEnabled`→`m_sourceCodeDumpEnabled`,
+> `ShaderSourcesDirectoryName`→`GeneratedShadersDirectoryName`,
+> `m_shadersSourcesDirectory`→`m_generatedShadersDirectory`,
+> `cacheShaderSourceCode()`→`dumpShaderSourceCode()`,
+> `generateShaderSourceCacheFilepath()`→`generateShaderDumpFilepath()`,
+> `readCache()`→`readBinaryCache()` (it only ever reads binaries now). The two sibling keys
+> `EnableBinaryCache` and `EnablePipelineCache` are untouched, and so is `ShowSourceCode` —
+> that one logs, it does not write files.
 
 It exists to let a human inspect what the generators produced, and it is now shaped for that:
 
@@ -1131,16 +1153,23 @@ It exists to let a human inspect what the generators produced, and it is now sha
 - the dump now happens **before** the binary-cache check. It used to hang off the compile path,
   so a binary cache hit silently stopped producing it.
 
+Re-verified at runtime after the rename (`material-debug`, all 10 options): the dump lands in
+`generated-shaders/` — 232 files, SceneRendering 226, OverlayRendering 3, PostProcessing 2,
+ShadowCasting 1 — and the run logs no error. ⚠️ That file count and the 336 below are **different
+measurements**, not a contradiction: 336 counts distinct generated SceneRendering sources, not
+files left on disk. Do not try to reconcile them.
+
 ⚠️ Measured on one `material-debug` load: **336 distinct sources for SceneRendering alone**
 (265 fragment, 71 vertex), against 3 for OverlayRendering, 2 for PostProcessing and 1 for
 ShadowCasting. That number is the program-variant count, and it is the real load-time driver —
 worth understanding before optimising any cache.
 
-⚠️ **`readCache()` no longer touches this directory at all.** It used to index the dumped sources
-into `m_cachedShaderSourceCodes` — a member that was written and never once read, not even by
-`clearCache()`, which walks the directory itself. Since `readCache()` only runs when the *binary*
-cache is on, and the dump is off by default, that loop was scanning an **empty path** and logging
-an `IO::directoryEntries()` error on every startup as soon as the binary cache became the default.
+⚠️ **`readBinaryCache()` no longer touches this directory at all** — hence its name: it only ever
+reads binaries now. It used to index the dumped sources into `m_cachedShaderSourceCodes` — a
+member that was written and never once read, not even by `clearCache()`, which walks the
+directory itself. Since `readBinaryCache()` only runs when the *binary* cache is on, and the dump
+is off by default, that loop was scanning an **empty path** and logging an
+`IO::directoryEntries()` error on every startup as soon as the binary cache became the default.
 The member is gone and the function returns early on an empty binaries directory. `clearCache()`
 guards both of its loops for the same reason: a disabled facility leaves its path empty, and
 `--clear-shader-cache` runs whatever the settings say. See
