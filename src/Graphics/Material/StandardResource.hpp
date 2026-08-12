@@ -367,6 +367,18 @@ namespace EmEn::Graphics::Material
 			}
 
 			/**
+			 * @brief No-op alias for API parity with PBRResource — Standard has no albedo-alpha
+			 * cutout path (glTF alphaMode MASK); the legacy material is scheduled for removal
+			 * (material merge, Lot 4).
+			 * @return void
+			 */
+			void
+			enableAlphaTest (float /*threshold*/) noexcept
+			{
+				/* Intentional no-op. */
+			}
+
+			/**
 			 * @brief No-op alias for API parity with PBRResource — Standard has no clearcoat layer.
 			 * @return bool Always true.
 			 */

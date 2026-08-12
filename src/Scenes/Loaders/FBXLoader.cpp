@@ -656,10 +656,14 @@ namespace EmEn::Scenes::Loaders
 					|| pbr.emission_color.value_vec3.y > 0.0F
 					|| pbr.emission_color.value_vec3.z > 0.0F);
 
-			/* Opacity → alpha blend. ufbx.pbr.opacity is 1.0 (fully opaque) by
-			 * default. Any texture-driven opacity or value < 1 triggers blending. */
-			const bool isAlphaBlend = pbr.opacity.texture != nullptr
-				|| (pbr.opacity.has_value && pbr.opacity.value_real < 0.999F);
+			/* Opacity (engine opacity contract). ufbx.pbr.opacity is 1.0 (fully opaque) by
+			 * default. FBX has no cutout notion: a texture-driven opacity is a grayscale
+			 * per-pixel alpha scale (rule 3), a scalar < 1 a uniform transparency (rule 1) —
+			 * both blend. The map is DATA (linear, red channel). */
+			auto opacityTex = resolveTexture(pbr.opacity.texture);
+
+			const auto opacityValue = pbr.opacity.has_value
+				? static_cast< float >(pbr.opacity.value_real) : 1.0F;
 
 			auto configure = [
 				albedoTex = std::move(albedoTex), albedoColor,
@@ -668,7 +672,7 @@ namespace EmEn::Scenes::Loaders
 				normalTex = std::move(normalTex),
 				aoTex = std::move(aoTex),
 				emissiveTex = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
-				isAlphaBlend
+				opacityTex = std::move(opacityTex), opacityValue
 			] (auto & materialResource) {
 				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
 				 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
@@ -726,8 +730,17 @@ namespace EmEn::Scenes::Loaders
 					materialResource.setAutoIlluminationComponent(emissiveColor, emissiveStrength);
 				}
 
-				if ( isAlphaBlend )
+				/* Opacity: the component carries the alpha (map or global value); the explicit
+				 * enableBlending() keeps the legacy StandardResource-mode behaviour identical
+				 * (its component setter does not raise the blending flag itself). */
+				if ( opacityTex != nullptr )
 				{
+					materialResource.setOpacityComponent(opacityTex, opacityValue);
+					materialResource.enableBlending(BlendingMode::Normal);
+				}
+				else if ( opacityValue < 0.999F )
+				{
+					materialResource.setOpacityComponent(opacityValue);
 					materialResource.enableBlending(BlendingMode::Normal);
 				}
 

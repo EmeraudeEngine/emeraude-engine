@@ -100,6 +100,129 @@
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
 - RENDERING SYSTEM: Indirect Draw / Draw Call Batching — Use vkCmdDrawIndexedIndirect to batch draws by pipeline/material, reducing per-draw CPU overhead.
 
+## Material System Merge — StandardResource + PBRResource → ONE PBR material (DECIDED 2026-08-12)
+
+**Owner decision.** The engine converges on a single lit material: Cook-Torrance PBR, taking the
+*name and role* "Standard" (Godot-style: the standard material IS PBR). Existing materials are
+CONVERTED — backward compatibility is not a goal. Grounded in a full audit (8-agent sweep,
+2026-08-12; state of the art: UE4/5, Godot 4, Filament, glTF 2.0 all dropped Phong — the only
+lit-cheap survivor, Unity Simple Lit, maps to Basic's tier, not Standard's).
+
+**Approved decisions:**
+- **D1 — Name/ClassId**: the merged class becomes `StandardResource` and **reuses ClassId
+  `"MaterialStandardResource"`** (UID = FNV1a of that string). Payoff: the 19 mesh JSONs carrying
+  that ClassId stay valid without edits; only 3 data files need fixing (see Lot 5).
+- **D2 — Artistic `Amount` on Reflection/Refraction**: ported into the merged material as an
+  optional override (Standard's artistic mix; PBR currently hard-codes 1.0).
+- **D3 — Ambient component**: dropped (AO + IBL replace the concept in PBR).
+- **D4 — Canonical legacy→PBR conversion at the parse boundary** (Khronos archived spec-gloss
+  extension): `cdiff = diffuse × (1 − max(spec))`, F0 → `KHR_materials_specular` (Factor+Color),
+  `roughness = 1 − glossiness`. Reminder: the JSON `Shininess` key IS an authored glossiness [0,1]
+  (contract of `813ea2ea`). Unify PBR's existing fallback `1 − sqrt(s/128)`, which does not match.
+- **D5 — Timing**: the glTF conformance bench runs BEFORE the merge (MaterialDebug's Phong
+  comparison rows are the A/B control group and die with StandardResource).
+- Feature blocks (clearcoat, sheen, transmission, iridescence, anisotropy, SSS…) stay **optional
+  blocks inside the one material — never separate classes** (they compose; classes don't).
+  PBRResource already has them all.
+- **D6 — BasicResource is removed too (owner, 2026-08-12).** Final taxonomy:
+  `Material::Interface` survives ONLY as the extension contract for future, genuinely different
+  materials (different BRDF *structure* — cloth/hair/skin someday), and **`StandardResource` is
+  the single concrete material in the engine**. "Quick cases" become configurations/presets of
+  the one class: a color-only Standard binds zero texture samplers already (descriptor layouts
+  are keyed per declared components, Interface.cpp:88-97).
+
+**Blocking locks — no removal before all three are closed:**
+1. **PBR cannot cut out**: zero `discard` in PBRResource.cpp — no `alphaMode:MASK`, no
+   alpha-tested shadows (`requiresAlphaTestedShadows`). Standard's Opacity component
+   (value+texture, configurable `AlphaThreshold`, StandardResource.cpp:1904-1909) is the model.
+   Known degradation already documented at USDLoader.cpp:1539-1543 (cutouts fall back to blending).
+   This is the one real piece of engineering in the merge.
+2. **TerrainResource is hard-locked on Standard** (TerrainResource.cpp:124/195/215 — default,
+   reject-anything-else, container).
+3. **Two paths route through Standard's *container***: DefinitionResource.cpp:243 (JSON matType
+   `"PBR"` is routed to the Standard container) and the remote console's named-material resolution
+   (Manager.console.cpp:105/401). Reroute atomically; the merge makes both coherent.
+
+**Lots:**
+- [ ] **Lot 0 — Before anything**: git tag (two unattributed crashes are open — USD SIGABRT,
+  shutdown SIGILL — protect the bisection space); glTF conformance bench against the live Phong
+  baseline; measured baseline captures of affected demos; GPU A/B Phong vs Cook-Torrance
+  (informative — the owner decided the taxonomy by design, not by measurement).
+- [ ] **Lot 1 — Parity in PBRResource — CORE DONE (2026-08-12), remainder below.**
+  DONE (documented in `src/Graphics/AGENTS.md` § "Alpha Test" and
+  `docs/pipeline-caching-system.md`): the owner's 3-rule Opacity contract (value = global
+  blend / map+`AlphaThreshold` = cutout / map = grayscale blend), UBO slots 50-51
+  (Opacity/AlphaThreshold — former std140 padding, size unchanged), `enableAlphaTest(threshold)`,
+  shadow trio reading the UBO threshold, RT `alphaCutoff` export, the program-cache key contract
+  fix (material flag bits in `ProgramCacheKey` + SceneRendering/ShadowCasting generator keys),
+  loaders (glTF `alphaMode MASK`, USD cutout + translucent value, FBX opacity rules 1/3),
+  `gltf-loader` demo option 7 = IridescentDishWithOlives (MASK validation asset). Validated:
+  clean -Werror build, 1967/1967 base unit tests, MaterialDebug bit-exact vs the Lot 0 baseline,
+  goldLeaf cutout rendering confirmed. ⚠️ Shadow/RT cutout behaviour still needs a dedicated
+  visual check (no shadow-casting MASK scene exists yet — conformance bench material).
+  REMAINING: value-only AutoIllumination overload; D2 artistic Reflection/Refraction `Amount`
+  port. ⚠️ Legacy Standard JSONs conflate blending+discard@0.1 on opacity textures — map them
+  to rule 3 at conversion (Lot 3), validate visually.
+- [ ] **Lot 2 — Decouple hard dependencies**: port TerrainResource, BasicGroundResource (:262),
+  MultiLayerMeshResource 3-way ClassId dispatch, DefinitionResource, remote console,
+  Resources/Manager containers. Visual check per port (terrain, water-world).
+- [ ] **Lot 3 — Canonical conversion** (D4) at the parse boundary; the 17 Diffuse-only material
+  JSONs (Doom3/Quake2, Woods/Wood012) go through these fallbacks.
+- [ ] **Lot 4 — Removal**: delete the `MaterialMode` dual paths in GLTF/FBX/USD loaders, delete
+  `StandardResource.{hpp,cpp}`, drop the entry from `Materials.hpp` Types + Resources/Manager.
+  ⚠️ **Relocate `StandardResource::specularExponentFromGlossiness()` into the LightGenerator
+  first** — Saphir references it (LightGenerator.PerFragment.cpp:442) and Basic still needs the
+  legacy path. ⚠️ Do NOT remove the LightGenerator Phong path (`m_usePBRMode=false` default):
+  BasicResource still consumes it until Lot 7. Retire the orphaned `ComponentType` entries
+  (Ambient/Diffuse/Specular). App-side migration tracked in projet-alpha `TODO.md`.
+- [ ] **Lot 5 — Rename (same session as Lot 4, two separate commits)**: `git mv` PBRResource →
+  StandardResource, class + ClassId rename. Fix the 3 data files: `Meshes/Furnitures/MetalBarrel.json`
+  (sole `"MaterialPBRResource"` user), `Scenes/demo.json:17` + `Scenes/terrain_demo.json:36`
+  (invalid generic `"Material"` value — already hitting error paths today). LGPL note: ClassId is a
+  public data-format contract; 0.6.x break, release note required.
+- [ ] **Lot 6 — Documentation (same day, per project rule)**: AGENTS.md network (Graphics, Scenes,
+  Console — `Console/AGENTS.md:204` finally becomes exact), material JSON schema docs,
+  projet-alpha `.claude/rules/` mirror, `generate_materials.py` header (optional: regenerate the
+  3,918 dual-schema JSONs to single-schema — nothing requires the dual layout after the merge).
+- [ ] **Lot 7 — Remove BasicResource (one concrete material class)**. Runs AFTER the merge
+  stabilises (Lots 0-5 validated) — it has its own parity prerequisites in the merged Standard:
+  - **Parity first**: vertex colors — **owner-decided contract (2026-08-12): they MODULATE the
+    albedo** (multiply, glTF `COLOR_0` semantics); "vertex colors AS albedo" is the SAME path
+    with a White (neutral) albedo factor and no texture, i.e. a factory preset, not a second
+    mode. Today Standard only *checks* `usingVertexColors()` and never enables the flag; Basic
+    renders them — port the actual codegen (sprites and debug helpers need it); alpha-test comes
+    from Lot 1; **verify the
+    unlit/emissive story** — SkyBox, sprites, debug helpers and baked-lighting content ride
+    Basic's SimplePass/`emissionMultiplier()` path today; check whether an emissive-only Standard
+    configuration reproduces it or whether an explicit unlit flag (glTF `KHR_materials_unlit`
+    model) must be added; `isComplex()` becomes **feature-derived** instead of hard-coded per
+    class (it drives the SimplePass fast path, SceneRendering.cpp:185); factory presets replace
+    the "quick color material" ergonomics (Toolkit color materials, debug helpers, default
+    resources of MeshResource/MultiLayerMesh/Ground/Sea/SkyBox/Sprite).
+  - **Migration**: 27 engine code sites (+10 includes) — WADLoader.cpp:1775 (Basic-only today),
+    SpriteResource, SkyBoxResource, BasicGround/BasicSea, MeshResource/MultiLayerMeshResource
+    defaults, Toolkit, DefinitionResource fallback (:247/252), console "default"
+    (Manager.console.cpp:101/397), all debug helpers; app side in projet-alpha TODO.md;
+    15 mesh JSONs carry `"MaterialBasicResource"`. WAD demo must be re-validated visually
+    (its lit look shifts from Phong to Cook-Torrance; photometric calibration is one package).
+  - **Then the whole legacy lighting machinery dies for good**: the LightGenerator dual mode
+    (`m_usePBRMode`, 14 branches), the (n+2)/(8π) Blinn-Phong normalisation, the Gouraud legacy
+    branches, and the temporarily relocated `specularExponentFromGlossiness` — PBR becomes the
+    only lighting path in Saphir. (The open "PBR low-quality specular approximation" TODO above
+    stays relevant: the LQ tier survives as PBR-LQ.)
+
+**Validation, every lot**: full-cascade compile, `EmeraudeBaseUnitTests` (Release), measured
+screenshots (pixel stats, never eyeballed) vs the Lot 0 baseline.
+
+**What the audit CLEARED (do not re-investigate):** the RT path needs no work
+(`GPURTMaterialData` has no type field, `SceneMetaData` is interface-only — removal deletes ONE
+export function); the 3,918 material JSONs need no regeneration (dual-schema, the requesting
+container is the discriminator); WAD (Basic-only) and MDx (zero direct refs) are unaffected;
+Saphir couples through `setupLightGenerator`/`enablePBRMode()`, not class names.
+Measured duplication being removed: ~4,300 lines (StandardResource 3,227+1,069), the 8 latest
+commits touched both materials identically, ~37% of Standard's fragment codegen is verbatim in
+PBR, three helpers byte-identical.
+
 ## Post-Processing Pipeline (Effects/Framebuffer + Effects/Lens)
 
 - [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).

@@ -613,6 +613,75 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	PBRResource::parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, OpacityString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Value :
+			{
+				/* Rule 1: a global value is a uniform transparency (blending). */
+				const auto value = parseValueComponent(componentData);
+
+				if ( !this->setOpacityComponent(value) )
+				{
+					return false;
+				}
+			}
+				return true;
+
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+				this->enableFlag(OpacityEnabled);
+
+				this->setOpacity(FastJSON::getValue< float >(data[OpacityString], JKAmount).value_or(DefaultOpacity));
+
+				/* Owner's 3-rule contract: an explicit AlphaThreshold key selects the binary
+				 * CUTOUT mode (rule 2) — alpha test, the material STAYS OPAQUE. Without it the
+				 * map is a grayscale per-pixel alpha scale (rule 3) — blending. */
+				if ( const auto threshold = FastJSON::getValue< float >(data[OpacityString], JKAlphaThreshold) )
+				{
+					this->enableAlphaTest(threshold.value());
+				}
+				else
+				{
+					this->enableBlending(BlendingMode::Normal);
+				}
+			}
+				return true;
+
+			case FillingType::None :
+				/* Opacity is optional. */
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for PBR material '" << this->name() << "' resource opacity component !";
+
+				return false;
+		}
+	}
+
+	bool
 	PBRResource::parseAmbientOcclusionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
@@ -1120,6 +1189,13 @@ namespace EmEn::Graphics::Material
 		if ( !this->parseAutoIlluminationComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the auto-illumination component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseOpacityComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the opacity component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
@@ -1714,11 +1790,13 @@ namespace EmEn::Graphics::Material
 			outData.flags |= GPURTMaterialData::HasClearCoat;
 		}
 
-		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time. */
+		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time. The
+		 * cutoff mirrors the raster threshold (UBO slot); blending materials keep the 0.5
+		 * default of the mirror, unchanged behaviour. */
 		if ( this->isAlphaTest() )
 		{
 			outData.flags |= GPURTMaterialData::IsAlphaTest;
-			outData.alphaCutoff = 0.5F;
+			outData.alphaCutoff = m_materialProperties[AlphaThresholdOffset];
 		}
 
 		/* Normal map intensity for the RT hit shading (same value the raster uses). */
@@ -1758,6 +1836,106 @@ namespace EmEn::Graphics::Material
 				}
 			}
 		}
+	}
+
+	const Texture *
+	PBRResource::alphaSourceTextureComponent () const noexcept
+	{
+		for ( const auto componentType : {ComponentType::Opacity, ComponentType::Albedo} )
+		{
+			const auto componentIt = m_components.find(componentType);
+
+			if ( componentIt != m_components.cend() && componentIt->second != nullptr && componentIt->second->type() == Type::Texture )
+			{
+				return static_cast< const Texture * >(componentIt->second.get());
+			}
+		}
+
+		return nullptr;
+	}
+
+	bool
+	PBRResource::requiresAlphaTestedShadows () const noexcept
+	{
+		if ( !this->isFlagEnabled(AlphaTestEnabled) )
+		{
+			return false;
+		}
+
+		/* A binary CUTOUT must cast a CUTOUT shadow — a grate that shadows as a solid
+		 * rectangle is worse than no shadow at all (same contract as BasicResource). The
+		 * shadow discard reads the SAME UBO threshold as the colour pass, so the two agree
+		 * by construction. */
+		return this->alphaSourceTextureComponent() != nullptr;
+	}
+
+	bool
+	PBRResource::generateShadowVertexCode (const Saphir::Generator::Abstract & /*generator*/, Saphir::VertexShader & vertexShader) const noexcept
+	{
+		const auto * component = this->alphaSourceTextureComponent();
+
+		if ( component == nullptr )
+		{
+			return true;
+		}
+
+		/* Request texture coordinates output to the fragment shader. */
+		const auto * textureCoordVar = component->isVolumetricTexture()
+			? ShaderVariable::Primary3DTextureCoordinates
+			: ShaderVariable::Primary2DTextureCoordinates;
+
+		if ( !vertexShader.requestSynthesizeInstruction(textureCoordVar) )
+		{
+			TraceError{ClassId} << "Unable to synthesize texture coordinates for the shadow vertex shader of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	PBRResource::generateShadowAlphaTestCode (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept
+	{
+		const auto * component = this->alphaSourceTextureComponent();
+
+		if ( component == nullptr )
+		{
+			return true;
+		}
+
+		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
+
+		/* The threshold is a material UBO VALUE (program-cache contract: never a shader
+		 * literal), so the block must be declared in the shadow fragment shader too. */
+		if ( !fragmentShader.declare(this->getUniformBlock(materialSet, 0)) )
+		{
+			TraceError{ClassId} << "Unable to declare the material uniform block for the shadow alpha test of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !fragmentShader.declare(Declaration::Sampler{materialSet, component->binding(), component->textureType(), component->samplerName()}) )
+		{
+			TraceError{ClassId} << "Unable to declare the texture sampler for the shadow alpha test of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		const auto * texCoordVariable = component->isVolumetricTexture()
+			? ShaderVariable::Primary3DTextureCoordinates
+			: ShaderVariable::Primary2DTextureCoordinates;
+
+		/* Sample the alpha source: the opacity component reads its red channel, the albedo
+		 * fallback reads its alpha channel — the same sources the colour pass tests. */
+		const char * channel = this->isComponentPresent(ComponentType::Opacity) ? "r" : "a";
+
+		Code{fragmentShader, Location::Top} << "const float " << SurfaceOpacityAmount << " = texture(" << component->samplerName() << ", " << texCoordVariable << ")." << channel << ";";
+
+		/* Discard fragments below the material threshold. */
+		Code{fragmentShader, Location::Output} << "if ( " << SurfaceOpacityAmount << " < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+
+		return true;
 	}
 
 	bool
@@ -1936,6 +2114,23 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* Opacity component: light passes must respect the surface translucency (rules 1 and
+		 * 3 of the opacity contract). Cutout mode (rule 2) needs no declaration — surviving
+		 * texels are opaque. */
+		if ( this->isFlagEnabled(OpacityEnabled) && !this->isFlagEnabled(AlphaTestEnabled) )
+		{
+			const auto componentIt = m_components.find(ComponentType::Opacity);
+
+			if ( componentIt != m_components.cend() && componentIt->second->type() == Type::Texture )
+			{
+				lightGenerator.declareSurfaceOpacity(componentIt->second->variableName());
+			}
+			else
+			{
+				lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::Opacity));
+			}
+		}
+
 		/* Reflectivity Map component (texture-based only) */
 		{
 			const auto componentIt = m_components.find(ComponentType::ReflectivityMap);
@@ -2102,12 +2297,33 @@ namespace EmEn::Graphics::Material
 	{
 		/* For PBR, the fragment color is the albedo (base color).
 		 * The actual shading is computed by the BRDF in the light generator. */
-		if ( this->isComponentPresent(ComponentType::Albedo) )
+		const std::string base = this->isComponentPresent(ComponentType::Albedo)
+			? std::string{m_components.at(ComponentType::Albedo)->variableName()}
+			: MaterialUB(UniformBlock::Component::AlbedoColor);
+
+		/* Blending modes of the opacity contract (rules 1 and 3): the alpha channel carries
+		 * the opacity. Cutout mode (rule 2) keeps the base alpha — surviving texels are opaque. */
+		if ( this->isFlagEnabled(OpacityEnabled) && !this->isFlagEnabled(AlphaTestEnabled) )
 		{
-			return m_components.at(ComponentType::Albedo)->variableName();
+			const auto componentIt = m_components.find(ComponentType::Opacity);
+
+			std::stringstream code;
+
+			if ( componentIt != m_components.cend() && componentIt->second->type() == Type::Texture )
+			{
+				/* Rule 3: the opacity variable is the amount-scaled texel (see the fragment codegen). */
+				code << "vec4((" << base << ").rgb, " << componentIt->second->variableName() << ")";
+			}
+			else
+			{
+				/* Rule 1: global opacity from the material UBO. */
+				code << "vec4((" << base << ").rgb, " << MaterialUB(UniformBlock::Component::Opacity) << ")";
+			}
+
+			return code.str();
 		}
 
-		return MaterialUB(UniformBlock::Component::AlbedoColor);
+		return base;
 	}
 
 	std::shared_ptr< DescriptorSetLayout >
@@ -2176,6 +2392,8 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SpecularColorFactor);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ClearCoatNormalScale);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Opacity);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AlphaThreshold);
 		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWTransform);
@@ -2885,6 +3103,15 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Cutout on the albedo alpha channel (glTF alphaMode MASK without a dedicated opacity
+		 * map): the albedo sample carries the coverage. The threshold is a UBO VALUE, never a
+		 * shader literal (program-cache contract). A dedicated opacity component, when present,
+		 * owns the test instead (see the opacity component block below). */
+		if ( this->isFlagEnabled(AlphaTestEnabled) && !this->isComponentPresent(ComponentType::Opacity) && this->isComponentPresent(ComponentType::Albedo) )
+		{
+			Code{fragmentShader, Location::Top} << "if ( " << m_components.at(ComponentType::Albedo)->variableName() << ".a < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+		}
+
 		/* Roughness component.
 		 * The source channel is a component property (glTF packed metallic-roughness: Green;
 		 * grayscale maps: Red). The material scalar MULTIPLIES the texel — the glTF
@@ -3058,6 +3285,26 @@ namespace EmEn::Graphics::Material
 		}, fragmentShader, materialSet) )
 		{
 			TraceError{ClassId} << "Unable to generate fragment code for the auto-illumination component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Opacity component (owner's 3-rule contract). The variable is the amount-scaled texel;
+		 * rule 2 (cutout) adds a discard against the UBO threshold — a VALUE, never a shader
+		 * literal (program-cache contract); rule 3 (grayscale) emits no test and the alpha
+		 * lands in fragmentColor() for blending. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
+
+			if ( this->isFlagEnabled(AlphaTestEnabled) )
+			{
+				Code{shader, Location::Top} << "if ( " << component->variableName() << " < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+			}
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the opacity component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -3774,6 +4021,77 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	PBRResource::setOpacityComponent (float amount) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the opacity component.";
+
+			return false;
+		}
+
+		/* Rule 1: a global opacity value makes the whole surface uniformly translucent. */
+		this->enableFlag(OpacityEnabled);
+		this->enableBlending(BlendingMode::Normal);
+
+		this->setOpacity(amount);
+
+		return true;
+	}
+
+	bool
+	PBRResource::setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the opacity component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for opacity component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+		this->enableFlag(OpacityEnabled);
+
+		/* Rule 3 (grayscale per-pixel alpha scale) by default: the material blends. Calling
+		 * enableAlphaTest() afterwards switches to rule 2 (binary cutout, stays opaque). */
+		this->enableBlending(BlendingMode::Normal);
+
+		this->setOpacity(amount);
+
+		return true;
+	}
+
+	void
+	PBRResource::enableAlphaTest (float threshold) noexcept
+	{
+		/* Rule 2: binary CUTOUT — the fragment discards below the threshold and the material
+		 * STAYS OPAQUE (opaque render list, depth write kept, no back-to-front sorting). */
+		this->enableFlag(AlphaTestEnabled);
+		this->disableFlag(BlendingEnabled);
+
+		this->setAlphaThresholdToDiscard(threshold);
+	}
+
+	bool
 	PBRResource::setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity) noexcept
 	{
 		if ( this->isCreated() )
@@ -4234,6 +4552,22 @@ namespace EmEn::Graphics::Material
 	PBRResource::setAutoIlluminationAmount (float value) noexcept
 	{
 		m_materialProperties[AutoIlluminationAmountOffset] = std::max(0.0F, value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	PBRResource::setOpacity (float value) noexcept
+	{
+		m_materialProperties[OpacityOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	PBRResource::setAlphaThresholdToDiscard (float threshold) noexcept
+	{
+		m_materialProperties[AlphaThresholdOffset] = clampToUnit(threshold);
 
 		m_videoMemoryUpdated = true;
 	}

@@ -118,6 +118,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceSpecularFactor{"SurfaceSpecularFactor"};
 			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
 			static constexpr auto SurfaceReflectivityMap{"SurfaceReflectivityMap"};
+			static constexpr auto SurfaceOpacityAmount{"SurfaceOpacityAmount"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
@@ -226,6 +227,18 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::collectRTTextures() */
 			void collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::requiresAlphaTestedShadows() */
+			[[nodiscard]]
+			bool requiresAlphaTestedShadows () const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowVertexCode() */
+			[[nodiscard]]
+			bool generateShadowVertexCode (const Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowAlphaTestCode() */
+			[[nodiscard]]
+			bool generateShadowAlphaTestCode (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::setupLightGenerator() */
 			[[nodiscard]]
@@ -493,6 +506,75 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setAutoIlluminationComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultAutoIlluminationAmount) noexcept;
+
+			/**
+			 * @brief Sets the opacity component as a global value (rule 1: uniform transparency).
+			 * @note Enables blending: the whole surface becomes uniformly translucent.
+			 * @warning This function is available before creation time.
+			 * @param amount The global opacity [0,1] (0.0 = invisible, 1.0 = opaque).
+			 * @return bool
+			 */
+			bool setOpacityComponent (float amount) noexcept;
+
+			/**
+			 * @brief Sets the opacity component as a texture (rules 2 and 3).
+			 * @note Grayscale mode (default): the map scales the alpha per pixel and the material
+			 * blends (rule 3). Cutout mode: call enableAlphaTest() afterwards — texels below the
+			 * threshold are discarded and the material STAYS OPAQUE (rule 2).
+			 * @warning This function is available before creation time.
+			 * @param texture A reference to a texture smart pointer (grayscale opacity map, red channel).
+			 * @param amount The opacity multiplier applied to the sampled texel. Default 1.0.
+			 * @return bool
+			 */
+			bool setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultOpacity) noexcept;
+
+			/**
+			 * @brief Updates the global opacity amount (dynamic property).
+			 * @param value The opacity [0,1].
+			 * @return void
+			 */
+			void setOpacity (float value) noexcept;
+
+			/**
+			 * @brief Returns the global opacity amount.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			opacity () const noexcept
+			{
+				return m_materialProperties[OpacityOffset];
+			}
+
+			/**
+			 * @brief Declares the material a binary CUTOUT (glTF alphaMode MASK): fragments whose
+			 * alpha falls below the threshold are discarded and the material STAYS OPAQUE.
+			 * @note Opaque render list, depth write kept, no back-to-front sorting. The alpha
+			 * source is the opacity texture component when present, the albedo texture alpha
+			 * channel otherwise. The threshold lives in the material UBO (never a shader literal,
+			 * per the program-cache contract), so it is configurable per material and at runtime.
+			 * @param threshold The alpha cutoff [0,1]. Default 0.5 (glTF alphaCutoff default).
+			 * @return void
+			 */
+			void enableAlphaTest (float threshold = DefaultAlphaThreshold) noexcept;
+
+			/**
+			 * @brief Updates the alpha-test threshold (dynamic property).
+			 * @param threshold The alpha cutoff [0,1].
+			 * @return void
+			 */
+			void setAlphaThresholdToDiscard (float threshold) noexcept;
+
+			/**
+			 * @brief Returns the alpha-test threshold.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			alphaThresholdToDiscard () const noexcept
+			{
+				return m_materialProperties[AlphaThresholdOffset];
+			}
 
 			/**
 			 * @brief Sets the ambient occlusion component as a baked texture.
@@ -1080,6 +1162,18 @@ namespace EmEn::Graphics::Material
 			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
+			 * @brief Parses the opacity component from JSON data (owner's 3-rule contract).
+			 * @note Type Value = global transparency, blending (rule 1). Texture WITH AlphaThreshold
+			 * key = binary cutout, alpha test, stays opaque (rule 2). Texture WITHOUT AlphaThreshold
+			 * = grayscale per-pixel alpha scale, blending (rule 3).
+			 * @param data A reference to the JSON data.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
 			 * @brief Parses the ambient occlusion component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
@@ -1195,6 +1289,16 @@ namespace EmEn::Graphics::Material
 			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component) const noexcept;
 
 			/**
+			 * @brief Returns the texture component feeding the alpha test, if any.
+			 * @note The alpha source is the opacity texture component when present, the albedo
+			 * texture (alpha channel) otherwise. Used by the cutout codegen and the alpha-tested
+			 * shadow path so both read the same source by construction.
+			 * @return const Component::Texture *
+			 */
+			[[nodiscard]]
+			const Component::Texture * alphaSourceTextureComponent () const noexcept;
+
+			/**
 			 * @brief Copies each texture component's UV transform into its material UBO slot.
 			 * @note Called at creation time, before the first video memory update — the
 			 * components are the single source of truth (loader and JSON paths both land there).
@@ -1242,7 +1346,7 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateGrabPassTransmissionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
 
-			/* Uniform buffer object layout (STD140 aligned, 52 floats = 208 bytes):
+			/* Uniform buffer object layout (STD140 aligned, 76 floats = 304 bytes):
 			 * vec4 albedoColor			  (offset 0-3)
 			 * float roughness			   (offset 4)
 			 * float metalness			   (offset 5)
@@ -1275,7 +1379,8 @@ namespace EmEn::Graphics::Material
 			 * vec4 specularColorFactor	 (offset 44-47) - KHR_materials_specular color (tints dielectric F0)
 			 * float emissiveStrength	   (offset 48) - KHR_materials_emissive_strength HDR multiplier
 			 * float clearCoatNormalScale   (offset 49) - Clear coat normal map scale
-			 * float padding[2]			 (offset 50-51) - STD140 padding
+			 * float opacity				 (offset 50) - Global/texture opacity amount (1.0 = opaque)
+			 * float alphaThreshold		   (offset 51) - Alpha-test cutoff (cutout mode, glTF alphaCutoff)
 			 * vec4 albedoUVWTransform	  (offset 52-55) - UV transform (scale.xy, offset.zw), KHR_texture_transform
 			 * vec4 roughnessUVWTransform   (offset 56-59) - UV transform (scale.xy, offset.zw)
 			 * vec4 metalnessUVWTransform   (offset 60-63) - UV transform (scale.xy, offset.zw)
@@ -1315,6 +1420,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SpecularColorOffset{44UL};
 			static constexpr auto EmissiveStrengthOffset{48UL};
 			static constexpr auto ClearCoatNormalScaleOffset{49UL};
+			static constexpr auto OpacityOffset{50UL};
+			static constexpr auto AlphaThresholdOffset{51UL};
 			/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw).
 			 * Neutral (1,1,0,0) — applied UNCONDITIONALLY at the sampling sites, so the neutral
 			 * value MUST be the identity (same precedent as DefaultAlbedoColor/DefaultTextureFactor). */
@@ -1366,6 +1473,8 @@ namespace EmEn::Graphics::Material
 			static constexpr Base::PixelFactory::Color< float > DefaultSpecularColor{1.0F, 1.0F, 1.0F, 1.0F}; /* White = no tint (pass-through). */
 			static constexpr auto DefaultEmissiveStrength{1.0F}; /* KHR_materials_emissive_strength: HDR multiplier (1.0 = pass-through). */
 			static constexpr auto DefaultClearCoatNormalScale{1.0F}; /* Clear coat normal map scale (1.0 = full effect). */
+			static constexpr auto DefaultOpacity{1.0F}; /* Fully opaque; also the multiplicative identity when a texture drives the component. */
+			static constexpr auto DefaultAlphaThreshold{0.5F}; /* glTF alphaCutoff default (cutout mode). */
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
@@ -1395,8 +1504,8 @@ namespace EmEn::Graphics::Material
 				DefaultIridescenceIOR, DefaultIridescenceThicknessMin, DefaultIridescenceThicknessMax, DefaultDispersion,
 				/* SpecularColorFactor (4) */
 				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
-				/* EmissiveStrength (1), ClearCoatNormalScale (1) + padding (2) for STD140 alignment */
-				DefaultEmissiveStrength, DefaultClearCoatNormalScale, 0.0F, 0.0F,
+				/* EmissiveStrength (1), ClearCoatNormalScale (1), Opacity (1), AlphaThreshold (1) */
+				DefaultEmissiveStrength, DefaultClearCoatNormalScale, DefaultOpacity, DefaultAlphaThreshold,
 				/* Per-component UV transforms (6 x vec4 = scale.xy, offset.zw), identity neutral:
 				 * Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination. */
 				1.0F, 1.0F, 0.0F, 0.0F,

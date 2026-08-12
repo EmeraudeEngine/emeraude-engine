@@ -782,6 +782,7 @@ namespace EmEn::Saphir
 				constexpr auto AutoIlluminationAmount{"autoIlluminationAmount"};
 				constexpr auto EmissiveStrength{"emissiveStrength"};
 				constexpr auto Opacity{"opacity"};
+				constexpr auto AlphaThreshold{"alphaThreshold"};
 				constexpr auto NormalScale{"normalScale"};
 				constexpr auto ReflectionAmount{"reflectionAmount"};
 				constexpr auto RefractionAmount{"refractionAmount"};

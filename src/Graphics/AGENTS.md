@@ -413,9 +413,32 @@ These are propagated through `Renderable::Abstract::isOpaque(layerIndex)` and `R
 shader discards the texels whose alpha falls below a cutoff, and the material **STAYS OPAQUE** — opaque
 render list, depth write kept, no back-to-front sorting, state-sorted batching preserved.
 
-`BasicResource::enableAlphaTest()` sets the flag. It requires a texture whose alpha channel is enabled
-(`setTextureResource(texture, true)`); without one the flag emits no code. Like every other material
-setter it refuses to act once the resource is created (it warns and returns).
+Two setters raise the flag:
+
+- **`BasicResource::enableAlphaTest()`** — fixed 0.5 cutoff. It requires a texture whose alpha channel
+  is enabled (`setTextureResource(texture, true)`); without one the flag emits no code. Like every other
+  material setter it refuses to act once the resource is created (it warns and returns).
+- **`PBRResource::enableAlphaTest(threshold = 0.5)`** (Aug 2026) — **configurable, UBO-backed** cutoff
+  (`AlphaThreshold`, UBO offset 51): the generated GLSL compares against the uniform, never a literal,
+  so the threshold is per-material and runtime-adjustable (`setAlphaThresholdToDiscard()`). The alpha
+  source is the **opacity texture component** when present (red channel), the **albedo texture alpha**
+  otherwise (glTF `alphaMode: MASK`). It also disables the blending flag — cutout and blending are
+  mutually exclusive by construction.
+
+**PBR opacity — the owner's 3-rule contract (Aug 2026).** `PBRResource` expresses opacity exactly three
+ways, parsed from the JSON `Opacity` component and mirrored by `setOpacityComponent()`:
+
+1. **Scalar value [0,1]** → GLOBAL transparency: uniform alpha from the UBO (`Opacity`, offset 50),
+   blending (glTF BLEND).
+2. **Map + `AlphaThreshold` key** → binary CUTOUT: per-pixel discard below the UBO threshold, NO
+   blending, stays opaque, casts cutout shadows, RT alpha-tests at the same cutoff (glTF MASK +
+   `alphaCutoff`).
+3. **Map without `AlphaThreshold`** → grayscale per-pixel alpha SCALE: `texel.r × amount`, blending.
+
+Loader wiring: glTF `alphaMode MASK` → `enableAlphaTest(alphaCutoff)` (no-op parity stub on
+StandardResource); USD `opacityThreshold > 0` → cutout, translucent USD/FBX materials get
+`setOpacityComponent()` so the alpha VALUE finally reaches the blend (both used to raise the blending
+flag with no alpha wired).
 
 The discard fires on that flag **INDEPENDENTLY of the blending mode**. Gating it on blending was exactly
 what used to force a cutout out of the opaque list: the only way to obtain a discard was to call
@@ -449,27 +472,31 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 
 - **`isAlphaTest()`** returns `true` for `AlphaTestEnabled` (in addition to `OpacityEnabled` and
   `BlendingEnabled`), so the **RT pipeline alpha-tests at hit time** — candidate hits are confirmed
-  against the material's cutoff instead of being taken as solid. See
-  [`docs/reflection-pipeline.md`](../../docs/reflection-pipeline.md).
-- **`BasicResource::requiresAlphaTestedShadows()`** now returns `true` for the flag too: a cutout must
-  cast a **CUTOUT shadow**, not a solid rectangle. It previously required `BlendingMode::Normal`, so an
-  alpha-tested grate shadowed solid. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md).
+  against the material's cutoff instead of being taken as solid.
+  `PBRResource::exportRTMaterialData()` exports its UBO threshold as `alphaCutoff` (Basic keeps 0.5).
+  See [`docs/reflection-pipeline.md`](../../docs/reflection-pipeline.md).
+- **`requiresAlphaTestedShadows()`**: a cutout must cast a **CUTOUT shadow**, not a solid rectangle.
+  `BasicResource` returns `true` for the flag (or `BlendingMode::Normal`); `PBRResource` returns `true`
+  for the flag when an alpha source exists, and its shadow discard **reads the UBO threshold** (the
+  shadow fragment shader declares the material uniform block — the colour pass and the shadow agree by
+  construction). See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md).
 
 > [!CAUTION]
-> **The cutoff is FIXED at 0.5 and deliberately NOT configurable.** Two structural reasons:
+> **BasicResource's cutoff is FIXED at 0.5** (PBRResource's is configurable — see above). The program
+> caches now key on the material FLAG BITS as well as the descriptor layout hash (Aug 2026: both
+> `Renderable::ProgramCacheKey` and the generators' `computeProgramCacheKey()` fold in
+> `material->flags()`), so the *structural* presence of the discard is discriminated. But plain VALUES
+> are still not part of any key: a per-material cutoff **literal** baked into the generated GLSL could
+> still serve one material's program to another sharing layout and flags. The rule is therefore:
+> **a configurable threshold lives in the material UBO** (PBRResource's `AlphaThreshold` slot) — never
+> in the GLSL. Basic cannot follow: its 12-float material block is FULL (diffuseColor 0-3,
+> specularColor 4-7, shininess 8, opacity 9, autoIllumination 10, emissiveStrength 11); growing it is
+> the price of ever making Basic's cutoff configurable. See
+> [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md).
 >
-> 1. **The shader program cache keys on the material's DESCRIPTOR LAYOUT hash** — not on its flags, not
->    on its values. A per-material cutoff literal baked into the generated GLSL could therefore serve one
->    material's program to another material that happens to share the same layout. A configurable cutoff
->    needs the cache key fixed FIRST — see
->    [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md).
-> 2. **`BasicResource`'s material-properties buffer is FULL**: all twelve floats are claimed
->    (diffuseColor 0-3, specularColor 4-7, shininess 8, opacity 9, autoIllumination 10, emissiveStrength
->    11). A uniform-borne cutoff would require growing the block.
->
-> 0.5 is the right value for a mask authored as coverage, which is the only case this mode targets, and
-> the **three paths now agree at 0.5**: the colour discard, the shadow discard, and
-> `GPURTMaterialData::alphaCutoff` (which already defaulted to 0.5).
+> 0.5 is the right value for a mask authored as coverage, and Basic's **three paths agree at 0.5**: the
+> colour discard, the shadow discard, and `GPURTMaterialData::alphaCutoff`. PBR's three paths agree on
+> its UBO threshold the same way.
 
 **Which mode for which authoring intent:**
 
@@ -483,9 +510,14 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 - `Material/Interface.hpp:MaterialFlagBits::AlphaTestEnabled` — the flag and its contract
 - `Material/Interface.hpp:isOpaque()` — blind to the flag ON PURPOSE
 - `Material/Interface.hpp:isAlphaTest()` — RT hit-time alpha test
-- `Material/BasicResource.hpp:enableAlphaTest()` — the setter
+- `Material/BasicResource.hpp:enableAlphaTest()` — the fixed-0.5 setter
 - `Material/BasicResource.cpp:requiresAlphaTestedShadows()` — flag OR `BlendingMode::Normal`
-- `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side of the same 0.5
+- `Material/PBRResource.hpp:enableAlphaTest(threshold)` — the configurable, UBO-backed setter
+- `Material/PBRResource.cpp:parseOpacityComponent()` — the 3-rule JSON contract
+- `Material/PBRResource.cpp:alphaSourceTextureComponent()` — opacity component, else albedo alpha
+- `Material/PBRResource.cpp:generateShadowAlphaTestCode()` — shadow discard against the UBO threshold
+- `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side (Basic 0.5, PBR = UBO threshold)
+- `Graphics/Renderable/ProgramCacheKey.hpp:materialFlags` — codegen flags in the program cache key
 - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` — the `isOpaque()` branch
 
 ### Normal Map Scale

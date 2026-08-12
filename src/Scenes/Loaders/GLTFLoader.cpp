@@ -1074,6 +1074,8 @@ namespace EmEn::Scenes::Loaders
 
 			/* Alpha mode (OPAQUE, MASK, BLEND). */
 			const bool isAlphaBlend = glTFMaterial.alphaMode == fastgltf::AlphaMode::Blend;
+			const bool isAlphaMask = glTFMaterial.alphaMode == fastgltf::AlphaMode::Mask;
+			const auto alphaCutoff = static_cast< float >(glTFMaterial.alphaCutoff);
 
 			/* Async material creation — lambda is fully self-contained, no this/reference captures.
 			 * The lambda is generic so the same configuration code path applies whether the
@@ -1091,7 +1093,7 @@ namespace EmEn::Scenes::Loaders
 					transmissionFactor,
 					iridescenceFactor,
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
-					isAlphaBlend
+					isAlphaBlend, isAlphaMask, alphaCutoff
 				] (auto & materialResource) {
 					/* Albedo. */
 					/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
@@ -1221,6 +1223,15 @@ namespace EmEn::Scenes::Loaders
 					if ( isAlphaBlend )
 					{
 						materialResource.enableBlending(BlendingMode::Normal);
+					}
+
+					/* Alpha cutout (glTF alphaMode: MASK): binary alpha test on the albedo alpha
+					 * channel at the authored cutoff — the material stays opaque, casts cutout
+					 * shadows and alpha-tests at RT hit time. No-op on StandardResource (parity
+					 * stub — the legacy material has no albedo-alpha cutout path). */
+					if ( isAlphaMask )
+					{
+						materialResource.enableAlphaTest(alphaCutoff);
 					}
 
 					return materialResource.setManualLoadSuccess(true);

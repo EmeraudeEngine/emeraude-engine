@@ -1503,7 +1503,7 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			auto material = m_resources.container< Material::PBRResource >()
-				->getOrCreateResource(materialName, [albedoTexture, roughnessTexture, metalnessTexture, normalTexture, albedoValue, roughnessValue, metalnessValue, isTranslucent, isCutout] (auto & materialResource) {
+				->getOrCreateResource(materialName, [albedoTexture, roughnessTexture, metalnessTexture, normalTexture, albedoValue, roughnessValue, metalnessValue, isTranslucent, isCutout, opacityValue, opacityThreshold] (auto & materialResource) {
 					if ( albedoTexture != nullptr )
 					{
 						materialResource.setAlbedoComponent(albedoTexture);
@@ -1536,19 +1536,22 @@ namespace EmEn::Scenes::Loaders
 						materialResource.setNormalComponent(normalTexture);
 					}
 
-					/* ⚠️ `enableAlphaTest()` exists on `BasicResource` ONLY — a PBR material has no
-					 * cutout path in the engine today (Material::Interface documents the flag as
-					 * settable through BasicResource alone). So a cutout falls back to blending
-					 * here: visually close, but it pays sorting and loses depth write, and it does
-					 * NOT alpha-test at ray-hit time. Giving PBRResource its own alpha test is a
-					 * named engine gap, not something to fake with a wrong flag.
+					/* USD opacity, following the engine's opacity contract. A CUTOUT
+					 * (opacityThreshold > 0) is a binary alpha test on the albedo alpha at the
+					 * authored threshold — the material stays opaque, casts cutout shadows and
+					 * alpha-tests at RT hit time. A TRANSLUCENT material (opacity < 1, no
+					 * threshold) gets the global opacity value — setOpacityComponent() enables
+					 * the blending itself.
 					 *
-					 * No material of the reference asset exercises this: all 141 report
-					 * `opacityThreshold = 0`. The branch is here so the next asset does not silently
-					 * lose its cutouts. */
-					if ( isTranslucent || isCutout )
+					 * No material of the reference asset exercises the cutout branch: all 141
+					 * report `opacityThreshold = 0`. */
+					if ( isCutout )
 					{
-						materialResource.enableBlending(BlendingMode::Normal);
+						materialResource.enableAlphaTest(opacityThreshold);
+					}
+					else if ( isTranslucent )
+					{
+						materialResource.setOpacityComponent(opacityValue);
 					}
 
 					return materialResource.setManualLoadSuccess(true);

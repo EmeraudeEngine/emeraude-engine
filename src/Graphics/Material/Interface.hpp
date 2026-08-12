@@ -198,12 +198,13 @@ namespace EmEn::Graphics::Material
 			 * must alpha-test at hit time (cutout foliage, sprites, glTF alphaMode=MASK/BLEND).
 			 * @note The engine expresses opacity in three ways depending on the material type:
 			 *  - `AlphaTestEnabled` — a binary cutout that stays in the OPAQUE list; the mode to
-			 *	prefer for a coverage mask. Set through `BasicResource::enableAlphaTest()`; there is
-			 *	no generic setter on the interface, so it is NOT available on every material type.
-			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`.
-			 *  - PBR/Standard set `BlendingEnabled` and source opacity from the albedo
-			 *	texture alpha channel (or a dedicated opacity component) — without
-			 *	setting `OpacityEnabled`.
+			 *	prefer for a coverage mask. Set through `BasicResource::enableAlphaTest()` (fixed
+			 *	0.5 cutoff) or `PBRResource::enableAlphaTest(threshold)` (configurable, UBO-backed);
+			 *	there is no generic setter on the interface.
+			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`; PBRResource sets it for
+			 *	its Opacity component (global value or map, blending or cutout).
+			 *  - PBR/Standard blending set `BlendingEnabled` and source opacity from the albedo
+			 *	texture alpha channel (or a dedicated opacity component).
 			 * Materials needing a grab pass (true refraction/transparency like water) are
 			 * excluded — they're handled by a different post-process path, not by RT
 			 * alpha-test.
