@@ -33,7 +33,6 @@
 #include "Scenes/Loaders/SceneData.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
-#include "Graphics/Material/Materials.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderer.hpp"
 #include "FastJSON.hpp"
@@ -136,7 +135,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(this->serviceProvider().container< BasicResource >()->getDefaultResource(), {}, 0) )
+		if ( !this->setMaterial(this->serviceProvider().container< StandardResource >()->getDefaultResource(), {}, 0) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -258,30 +257,32 @@ namespace EmEn::Graphics::Renderable
 	std::shared_ptr< Material::Interface >
 	MultiLayerMeshResource::parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
-		const auto materialType = FastJSON::getValidatedStringValue(data, JKMaterialType, Material::Types).value_or(BasicResource::ClassId);
-		const auto materialResourceName = FastJSON::getValue< std::string >(data, JKMaterialName);
+		/* NOTE: StandardResource is the only material type left, so the type key no longer
+		 * dispatches anything. It is still read to keep the on-disk meshes honest: the legacy
+		 * "MaterialBasicResource" name is accepted as a synonym (those JSONs were authored
+		 * before the merge), an absent key means the default type, and anything else is a
+		 * genuine typo worth a warning instead of a silent fallback. */
+		constexpr auto LegacyBasicMaterialClassId{"MaterialBasicResource"};
 
-		/* C++20 lambda template to load material from the appropriate container. */
-		auto loadMaterial = [&] < typename ResourceType > () -> std::shared_ptr< Material::Interface >
+		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
+
+		if ( materialType && materialType.value() != StandardResource::ClassId && materialType.value() != LegacyBasicMaterialClassId )
 		{
-			auto * container = serviceProvider.container< ResourceType >();
-
-			if ( !materialResourceName )
-			{
-				TraceError{ClassId} << "The key '" << JKMaterialName << "' for '" << ResourceType::ClassId << "' is not present or not a string !";
-
-				return container->getDefaultResource();
-			}
-
-			return container->getResource(materialResourceName.value());
-		};
-
-		if ( materialType == StandardResource::ClassId )
-		{
-			return loadMaterial.operator() < StandardResource > ();
+			TraceWarning{ClassId} << "Material resource type '" << materialType.value() << "' is not handled ! Using '" << StandardResource::ClassId << "' instead.";
 		}
 
-		return loadMaterial.operator() < BasicResource > ();
+		const auto materialResourceName = FastJSON::getValue< std::string >(data, JKMaterialName);
+
+		auto * container = serviceProvider.container< StandardResource >();
+
+		if ( !materialResourceName )
+		{
+			TraceError{ClassId} << "The key '" << JKMaterialName << "' for '" << StandardResource::ClassId << "' is not present or not a string !";
+
+			return container->getDefaultResource();
+		}
+
+		return container->getResource(materialResourceName.value());
 	}
 
 	RasterizationOptions

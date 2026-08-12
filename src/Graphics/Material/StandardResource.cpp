@@ -1916,7 +1916,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* A binary CUTOUT must cast a CUTOUT shadow — a grate that shadows as a solid
-		 * rectangle is worse than no shadow at all (same contract as BasicResource). The
+		 * rectangle is worse than no shadow at all. The
 		 * shadow discard reads the SAME UBO threshold as the colour pass, so the two agree
 		 * by construction. */
 		return this->alphaSourceTextureComponent() != nullptr;

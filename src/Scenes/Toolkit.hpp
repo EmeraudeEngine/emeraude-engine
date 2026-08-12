@@ -827,7 +827,7 @@ namespace EmEn::Scenes
 
 				if ( materialResource == nullptr )
 				{
-					materialResource = m_resourceManager.container< Material::BasicResource >()->getDefaultResource();
+					materialResource = m_resourceManager.container< Material::StandardResource >()->getDefaultResource();
 				}
 
 				std::stringstream resourceName;

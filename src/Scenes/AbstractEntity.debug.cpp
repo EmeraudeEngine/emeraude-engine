@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Physics/CapsuleCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
@@ -52,6 +53,11 @@ namespace EmEn::Scenes
 	constexpr auto VelocityDebugName{"+EntityVelocity"};
 	constexpr auto BoundingShapeDebugName{"+EntityBoundingShape"};
 	constexpr auto CameraDebugName{"+EntityCamera"};
+
+	/* NOTE: Visual debug helpers are UNLIT, so their colour IS their emitted radiance. This
+	 * luminance anchors the [0,1] vertex colours in the photometric pipeline; without it, a
+	 * helper would write its raw [0,1] colour and read black under the camera exposure. */
+	constexpr auto VisualDebugLuminance{2000.0F};
 
 	void
 	AbstractEntity::enableVisualDebug (Resources::Manager & resourceManager, VisualDebugType type) noexcept
@@ -337,24 +343,34 @@ namespace EmEn::Scenes
 		}
 	}
 
-	std::shared_ptr< Material::BasicResource >
+	std::shared_ptr< Material::StandardResource >
 	AbstractEntity::getPlainVisualDebugMaterial (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Material::BasicResource >()
+		return resources.container< Material::StandardResource >()
 			->getOrCreateResource("+PlainVisualDebug", [] (auto & materialResource) {
 				materialResource.enableVertexColor();
+				/* NOTE: A debug helper must stay readable whatever the scene lighting is,
+				 * so it is unlit and carries its own radiance. */
+				materialResource.enableUnlit();
+				materialResource.setAutoIlluminationComponent(1.0F);
+				materialResource.setEmissiveStrength(VisualDebugLuminance);
 
 				return materialResource.setManualLoadSuccess(true);
 			});
 	}
 
-	std::shared_ptr< Material::BasicResource >
+	std::shared_ptr< Material::StandardResource >
 	AbstractEntity::getTranslucentVisualDebugMaterial (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Material::BasicResource >()
+		return resources.container< Material::StandardResource >()
 			->getOrCreateResource("+TranslucentVisualDebug", [] (auto & materialResource) {
 				materialResource.enableVertexColor();
-				materialResource.setOpacity(0.333F);
+				/* NOTE: A debug helper must stay readable whatever the scene lighting is,
+				 * so it is unlit and carries its own radiance. */
+				materialResource.enableUnlit();
+				materialResource.setAutoIlluminationComponent(1.0F);
+				materialResource.setEmissiveStrength(VisualDebugLuminance);
+				materialResource.setOpacityComponent(0.333F);
 
 				return materialResource.setManualLoadSuccess(true);
 			});
@@ -417,7 +433,7 @@ namespace EmEn::Scenes
 			->getOrCreateResource(CameraDebugName, [&resources] (auto & meshResource) {
 				return meshResource.load(
 					resources.container< Geometry::IndexedVertexResource >()->getResource("Items/Camera"),
-					resources.container< Material::BasicResource >()->getDefaultResource()
+					resources.container< Material::StandardResource >()->getDefaultResource()
 				);
 			});
 	}

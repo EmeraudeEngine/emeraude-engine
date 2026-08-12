@@ -33,7 +33,7 @@
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Material/Helpers.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
@@ -65,7 +65,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(this->serviceProvider().container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(this->serviceProvider().container< Material::StandardResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -83,7 +83,7 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		const auto material = this->serviceProvider().container< Material::BasicResource >()
+		const auto material = this->serviceProvider().container< Material::StandardResource >()
 			->getOrCreateResource("SpriteMaterial" + this->name(), [&, data] (auto & materialResource) {
 				if ( !data.isMember(Material::JKData) || !data[Material::JKData].isObject() )
 				{
@@ -105,7 +105,7 @@ namespace EmEn::Graphics::Renderable
 								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
 								.value_or(Resources::Default));
 
-							if ( !materialResource.setTextureResource(textureResource, true) )
+							if ( !materialResource.setAlbedoComponent(textureResource, true) )
 							{
 								return materialResource.setManualLoadSuccess(false);
 							}
@@ -118,7 +118,7 @@ namespace EmEn::Graphics::Renderable
 								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
 								.value_or(Resources::Default));
 
-							if ( !materialResource.setTextureResource(textureResource, true) )
+							if ( !materialResource.setAlbedoComponent(textureResource, true) )
 							{
 								return materialResource.setManualLoadSuccess(false);
 							}
@@ -138,6 +138,16 @@ namespace EmEn::Graphics::Renderable
 					return materialResource.setManualLoadSuccess(false);
 				}
 
+				/* A sprite shows a PICTURE: it must never be lit. The ambient and light passes would
+				 * add their own contribution on top of a texel that already IS the final colour. The
+				 * unlit path writes `fragmentColor().rgb * emissionMultiplier()`, and that multiplier
+				 * only exists when an AutoIllumination component is present: without it the sprite
+				 * writes its raw [0,1] colour and reads black under the photometric exposure. So the
+				 * component comes FIRST, then the flag; the amount and the emissive strength below
+				 * only refine the luminance it carries. */
+				materialResource.setAutoIlluminationComponent(1.0F);
+				materialResource.enableUnlit();
+
 				/* Check the blending mode. */
 				materialResource.enableBlendingFromJson(data);
 
@@ -152,21 +162,30 @@ namespace EmEn::Graphics::Renderable
 				 * cannot carry a brightness: `AutoIllumination: 1.0` alone emits exactly 1 nit,
 				 * which is invisible next to any real light source. A self-illuminating sprite
 				 * (a flame, an explosion, a neon sign) declares its LUMINANCE in cd/m^2 here,
-				 * same key and same contract as StandardResource / StandardResource and as the glTF
-				 * extension KHR_materials_emissive_strength. */
+				 * same key and same contract as StandardResource and as the glTF extension
+				 * KHR_materials_emissive_strength. */
 				if ( data.isMember(EmissiveStrengthString) )
 				{
-					materialResource.setEmissiveStrength(FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(materialResource.emissiveStrength()));
+					materialResource.setEmissiveStrength(FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(1.0F));
 				}
 
-				/* Always declare opacity for sprites: their texture is intrinsically
-				 * alpha-mapped (cutout). Calling setOpacity sets the OpacityEnabled flag,
-				 * which the RT pipeline reads (Material::Interface::isAlphaTest) to know
-				 * it must alpha-test against the texture at hit time. Without this, sprites
-				 * with the default Opacity=1.0 would not enter the RT TLAS as alpha-test
-				 * and would never appear in reflections. */
-				const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F);
-				materialResource.setOpacity(opacity);
+				/* A sprite texture is intrinsically alpha-mapped, and that texture alpha keeps priority
+				 * over the uniform opacity: it is sampled through the enableAlpha flag above. A global
+				 * opacity below 1.0 additionally makes the whole sprite uniformly translucent (blending);
+				 * left at the default 1.0 the sprite stays a binary CUTOUT at the historical 0.5 threshold
+				 * instead of becoming a blended surface.
+				 * Either way the material enters the RT alpha-test path — Material::Interface::isAlphaTest
+				 * reads AlphaTestEnabled/BlendingEnabled — so sprites alpha-test against their texture at
+				 * hit time and do appear in reflections. */
+				if ( const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F); opacity < 1.0F )
+				{
+					materialResource.setOpacityComponent(opacity);
+				}
+
+				if ( materialResource.blendingMode() == BlendingMode::None )
+				{
+					materialResource.enableAlphaTest(0.5F);
+				}
 
 				return materialResource.setManualLoadSuccess(true);
 			}, 0);

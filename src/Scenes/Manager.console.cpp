@@ -35,7 +35,6 @@
 #include "Component/Camera.hpp"
 #include "Component/Microphone.hpp"
 #include "Component/Visual.hpp"
-#include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -102,7 +101,7 @@ namespace EmEn::Scenes
 
 				if ( matName == "default" )
 				{
-					materialResource = m_resourceManager.container< Graphics::Material::BasicResource >()->getDefaultResource();
+					materialResource = m_resourceManager.container< Graphics::Material::StandardResource >()->getDefaultResource();
 				}
 				else
 				{
@@ -398,7 +397,7 @@ namespace EmEn::Scenes
 
 			if ( matName == "default" )
 			{
-				materialResource = m_resourceManager.container< Graphics::Material::BasicResource >()->getDefaultResource();
+				materialResource = m_resourceManager.container< Graphics::Material::StandardResource >()->getDefaultResource();
 			}
 			else
 			{

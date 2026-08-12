@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderer.hpp"
@@ -62,6 +62,14 @@ namespace EmEn::Scenes
 
 	/** @brief Debug entity name prefix for ground zero plane. */
 	constexpr auto GroundZeroPlaneDisplay{"+GroundZeroPlane"};
+
+	/** @brief Luminance carried by the debug grids, in nits.
+	 * @note Unlike the compass, these planes are drawn INSIDE the scene pass (they need depth
+	 * occlusion), so the camera exposure applies to them. They are unlit and emissive: without an
+	 * absolute luminance their raw [0,1] vertex colors would be crushed to black by the photometric
+	 * exposure. This value sits in the overcast-sky range — readable against any usual exposure
+	 * without blowing the tone mapping out. */
+	constexpr auto DebugGridLuminance{2000.0F};
 
 	/** @brief Debug entity name prefix for boundary planes. */
 	constexpr std::array< debugAxis , AxisCount > BoundaryPlanes{{
@@ -192,9 +200,15 @@ namespace EmEn::Scenes
 
 				const auto geometry = generator.surface(planeSize, planeDivision, GroundZeroPlaneDisplay);
 
-				const auto material = resources.container< Material::BasicResource >()
+				const auto material = resources.container< Material::StandardResource >()
 					->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
+						/* NOTE: A measurement reference must never depend on the lighting of the scene
+						 * it measures: unlit, carrying its own luminance, with the vertex colors as the
+						 * only signal. */
 						materialResource.enableVertexColor();
+						materialResource.enableUnlit();
+						materialResource.setAutoIlluminationComponent(1.0F);
+						materialResource.setEmissiveStrength(DebugGridLuminance);
 
 						return materialResource.setManualLoadSuccess(true);
 					});
@@ -256,9 +270,14 @@ namespace EmEn::Scenes
 
 					const auto geometryResource = generator.surface(planeSize, planeDivision, plane.label);
 
-					const auto material = resources.container< Material::BasicResource >()
+					const auto material = resources.container< Material::StandardResource >()
 						->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
+							/* NOTE: Same shared debug material as the ground-zero plane: unlit and
+							 * emissive, so the exposure of the scene pass cannot crush the reference. */
 							materialResource.enableVertexColor();
+							materialResource.enableUnlit();
+							materialResource.setAutoIlluminationComponent(1.0F);
+							materialResource.setEmissiveStrength(DebugGridLuminance);
 
 							return materialResource.setManualLoadSuccess(true);
 						});

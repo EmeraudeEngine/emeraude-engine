@@ -47,7 +47,7 @@
 
 /* Local inclusions for usages. */
 #include "Component/Abstract.hpp"
-#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/OrientedCuboid.hpp"
@@ -1106,25 +1106,25 @@ namespace EmEn::Scenes
 			 * @brief Returns or creates opaque material for debug visuals (axes, velocity).
 			 *
 			 * @param resources Reference to resource manager (used for material creation).
-			 * @return std::shared_ptr< Graphics::Material::BasicResource > Shared pointer to plain debug material.
+			 * @return std::shared_ptr< Graphics::Material::StandardResource > Shared pointer to plain debug material.
 			 *
 			 * @note Cached after first creation - subsequent calls return same material.
 			 * @todo This should be moved to a centralized debug utilities class.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Material::BasicResource > getPlainVisualDebugMaterial (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Material::StandardResource > getPlainVisualDebugMaterial (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates translucent material for debug visuals (bounding shapes).
 			 *
 			 * @param resources Reference to resource manager (used for material creation).
-			 * @return std::shared_ptr< Graphics::Material::BasicResource > Shared pointer to translucent debug material.
+			 * @return std::shared_ptr< Graphics::Material::StandardResource > Shared pointer to translucent debug material.
 			 *
 			 * @note Cached after first creation - subsequent calls return same material.
 			 * @todo This should be moved to a centralized debug utilities class.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Material::BasicResource > getTranslucentVisualDebugMaterial (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Material::StandardResource > getTranslucentVisualDebugMaterial (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the axis debug mesh (RGB arrows for XYZ).

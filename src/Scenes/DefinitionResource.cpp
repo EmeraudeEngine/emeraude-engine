@@ -27,7 +27,6 @@
 #include "DefinitionResource.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -233,20 +232,20 @@ namespace EmEn::Scenes
 			const auto matType = FastJSON::getValue< std::string >(mat, TypeKey).value_or("Basic");
 			const auto matResource = FastJSON::getValue< std::string >(mat, ResourceKey).value_or("");
 
-			/* One lit material: the legacy "Standard" and "PBR" type strings are accepted as
-			 * synonyms of the single StandardResource (material merge, Lot 4). */
+			/* One lit material: the legacy "Basic", "Standard" and "PBR" type strings are
+			 * accepted as synonyms of the single StandardResource (material merge, Lot 4). */
 			if ( ( matType == "Standard" || matType == "PBR" ) && !matResource.empty() )
 			{
 				materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(matResource);
 			}
 			else
 			{
-				materialResource = this->serviceProvider().container< Material::BasicResource >()->getDefaultResource();
+				materialResource = this->serviceProvider().container< Material::StandardResource >()->getDefaultResource();
 			}
 		}
 		else
 		{
-			materialResource = this->serviceProvider().container< Material::BasicResource >()->getDefaultResource();
+			materialResource = this->serviceProvider().container< Material::StandardResource >()->getDefaultResource();
 		}
 
 		if ( materialResource == nullptr )

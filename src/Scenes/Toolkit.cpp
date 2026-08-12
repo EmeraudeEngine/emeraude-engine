@@ -26,6 +26,9 @@
 
 #include "Toolkit.hpp"
 
+/* Local inclusions. */
+#include "Graphics/Material/StandardResource.hpp"
+
 namespace EmEn::Scenes
 {
 	using namespace Base;
@@ -193,8 +196,12 @@ namespace EmEn::Scenes
 		std::stringstream materialName;
 		materialName << "+Color(" << color << ")";
 
-		return m_resourceManager.container< Material::BasicResource >()->getOrCreateResource(materialName.str(), [color] (auto & material) {
-			material.setColor(color);
+		return m_resourceManager.container< Material::StandardResource >()->getOrCreateResource(materialName.str(), [color] (auto & material) {
+			material.setAlbedoComponent(color);
+			/* NOTE: Quick debug color, kept lit but perfectly matte and dielectric
+			 * to avoid any highlight altering the requested color on screen. */
+			material.setRoughnessComponent(0.8F);
+			material.setMetalnessComponent(0.0F);
 
 			return material.setManualLoadSuccess(true);
 		});

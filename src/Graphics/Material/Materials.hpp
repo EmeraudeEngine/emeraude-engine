@@ -31,13 +31,13 @@
 #include <string_view>
 
 /* Local inclusions for usages. */
-#include "BasicResource.hpp"
 #include "StandardResource.hpp"
 
 namespace EmEn::Graphics::Material
 {
-	constexpr auto Types = std::array< std::string_view, 2 >{
-		BasicResource::ClassId,
+	/* One concrete material remains: StandardResource (Cook-Torrance). Material::Interface
+	 * survives only as the extension contract for future, structurally different models. */
+	constexpr auto Types = std::array< std::string_view, 1 >{
 		StandardResource::ClassId
 	};
 }

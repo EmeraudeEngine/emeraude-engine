@@ -27,7 +27,7 @@
 #include "SkyBoxResource.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
@@ -58,21 +58,25 @@ namespace EmEn::Graphics::Renderable
 
 		auto defaultCubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getDefaultResource();
 
-		const auto material = this->serviceProvider().container< BasicResource >()
+		const auto material = this->serviceProvider().container< StandardResource >()
 			->getOrCreateResource("DefaultSkyboxMaterial", [defaultCubemapResource] (auto & materialResource) {
-				if ( !materialResource.setTextureResource(defaultCubemapResource) )
+				/* The cubemap IS the sky albedo; the setter propagates the 3D texture coordinates. */
+				if ( !materialResource.setAlbedoComponent(defaultCubemapResource) )
 				{
 					return false;
 				}
 
 				/* A sky EMITS, it is not lit: full self-illumination, scaled to a physical
-				 * luminance. The cubemap itself is LDR ([0,1] JPEG/PNG/Targa — the image pipeline
-				 * has no HDR format), so this strength is what turns a normalized gradient into
-				 * candela per square meter. ⚠️ Known limit of the LDR source: the sun disc clamps
-				 * with the rest of the sky, so specular reflections of the sun are dull rather
-				 * than blinding — see TODO.md, the HDR file format item. */
-				materialResource.setAutoIlluminationAmount(1.0F);
+				 * luminance. The material is UNLIT (KHR_materials_unlit): no light pass runs over
+				 * it and the cubemap texel IS the emitted radiance, which is exactly what the
+				 * AutoIllumination component below scales. The cubemap itself is LDR ([0,1]
+				 * JPEG/PNG/Targa — the image pipeline has no HDR format), so this strength is what
+				 * turns a normalized gradient into candela per square meter. ⚠️ Known limit of the
+				 * LDR source: the sun disc clamps with the rest of the sky, so specular reflections
+				 * of the sun are dull rather than blinding — see TODO.md, the HDR file format item. */
+				materialResource.setAutoIlluminationComponent(1.0F);
 				materialResource.setEmissiveStrength(DefaultSkyLuminance);
+				materialResource.enableUnlit();
 
 				return materialResource.setManualLoadSuccess(true);
 			}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);
@@ -126,21 +130,25 @@ namespace EmEn::Graphics::Renderable
 		/* ⚠️ The luminance is part of the material IDENTITY: two manifests sharing one cubemap at
 		 * different luminances must not share a material, or whichever loaded first would silently
 		 * impose its exposure on the other. */
-		const auto material = this->serviceProvider().container< BasicResource >()
+		const auto material = this->serviceProvider().container< StandardResource >()
 			->getOrCreateResource(textureName + "SkyboxMaterial" + std::to_string(luminance), [cubemapResource, luminance] (auto & materialResource) {
-				if ( !materialResource.setTextureResource(cubemapResource) )
+				/* The cubemap IS the sky albedo; the setter propagates the 3D texture coordinates. */
+				if ( !materialResource.setAlbedoComponent(cubemapResource) )
 				{
 					return false;
 				}
 
 				/* A sky EMITS, it is not lit: full self-illumination, scaled to a physical
-				 * luminance. The cubemap itself is LDR ([0,1] JPEG/PNG/Targa — the image pipeline
-				 * has no HDR format), so this strength is what turns a normalized gradient into
-				 * candela per square meter. ⚠️ Known limit of the LDR source: the sun disc clamps
-				 * with the rest of the sky, so specular reflections of the sun are dull rather
-				 * than blinding — see TODO.md, the HDR file format item. */
-				materialResource.setAutoIlluminationAmount(1.0F);
+				 * luminance. The material is UNLIT (KHR_materials_unlit): no light pass runs over
+				 * it and the cubemap texel IS the emitted radiance, which is exactly what the
+				 * AutoIllumination component below scales. The cubemap itself is LDR ([0,1]
+				 * JPEG/PNG/Targa — the image pipeline has no HDR format), so this strength is what
+				 * turns a normalized gradient into candela per square meter. ⚠️ Known limit of the
+				 * LDR source: the sun disc clamps with the rest of the sky, so specular reflections
+				 * of the sun are dull rather than blinding — see TODO.md, the HDR file format item. */
+				materialResource.setAutoIlluminationComponent(1.0F);
 				materialResource.setEmissiveStrength(luminance);
+				materialResource.enableUnlit();
 
 				return materialResource.setManualLoadSuccess(true);
 			}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);

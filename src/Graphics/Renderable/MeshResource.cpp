@@ -78,7 +78,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(this->serviceProvider().container< BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(this->serviceProvider().container< StandardResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}

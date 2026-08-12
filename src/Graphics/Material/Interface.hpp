@@ -222,13 +222,10 @@ namespace EmEn::Graphics::Material
 			 * must alpha-test at hit time (cutout foliage, sprites, glTF alphaMode=MASK/BLEND).
 			 * @note The engine expresses opacity in three ways depending on the material type:
 			 *  - `AlphaTestEnabled` — a binary cutout that stays in the OPAQUE list; the mode to
-			 *	prefer for a coverage mask. Set through `BasicResource::enableAlphaTest()` (fixed
-			 *	0.5 cutoff) or `StandardResource::enableAlphaTest(threshold)` (configurable, UBO-backed);
-			 *	there is no generic setter on the interface.
-			 *  - BasicResource sets `OpacityEnabled` via `setOpacity()`; StandardResource sets it for
-			 *	its Opacity component (global value or map, blending or cutout).
-			 *  - PBR/Standard blending set `BlendingEnabled` and source opacity from the albedo
-			 *	texture alpha channel (or a dedicated opacity component).
+			 *	prefer for a coverage mask. Set through `StandardResource::enableAlphaTest(threshold)`
+			 *	(configurable, UBO-backed); there is no generic setter on the interface.
+			 *  - `OpacityEnabled` — the Opacity component (global value or map, blending or cutout).
+			 *  - Blending sources opacity from the albedo texture alpha channel.
 			 * Materials needing a grab pass (true refraction/transparency like water) are
 			 * excluded — they're handled by a different post-process path, not by RT
 			 * alpha-test.
@@ -244,10 +241,9 @@ namespace EmEn::Graphics::Material
 				}
 
 				/* Three conventions express alpha cutouts in this engine:
-				 *  - AlphaTestEnabled: an explicit binary cutout (BasicResource::enableAlphaTest()).
-				 *  - BasicResource sets OpacityEnabled via setOpacity().
-				 *  - PBR/Standard rely on BlendingEnabled with the alpha sourced from
-				 *	the albedo texture (no separate flag set today).
+				 *  - AlphaTestEnabled: an explicit binary cutout (StandardResource::enableAlphaTest()).
+				 *  - OpacityEnabled: the Opacity component.
+				 *  - BlendingEnabled with the alpha sourced from the albedo texture.
 				 * All three must enter the RT alpha-test path so the trace shader samples
 				 * the opacity (or albedo .a fallback) at hit time. The earlier tie-dye
 				 * artefact with this broader check was caused by multi-instance/same-BLAS

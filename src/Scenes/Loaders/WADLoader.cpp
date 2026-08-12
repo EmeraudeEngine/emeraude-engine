@@ -44,7 +44,7 @@
 #include "SceneData.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/MovieResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
@@ -866,7 +866,7 @@ namespace EmEn::Scenes::Loaders
 
 			const auto textureName = "WAD:" + wadStem + "/Texture/" + name;
 
-			/* NOT sRGB on purpose: unlit Basic materials on the direct swap-chain path keep the
+			/* NOT sRGB on purpose: unlit materials on the direct swap-chain path keep the
 			 * whole chain in perceptual space, exactly like the original renderer (palette
 			 * texel × sector light). Decoding to linear here would darken everything. */
 			return m_resources.container< TextureResource::Texture2D >()->getOrCreateResource(textureName, [image] (TextureResource::Texture2D & texture) {
@@ -1751,7 +1751,7 @@ namespace EmEn::Scenes::Loaders
 			/* An animated range wins over the static texture: every name of the range resolved to the
 			 * same AnimatedTexture2D, a Texture2DArray whose layer is selected by the per-draw
 			 * frameIndex push constant. Nothing animation-specific is declared on the material —
-			 * setTextureResource() raises PrimaryTextureCoordinatesUses3D from the texture's own
+			 * setAlbedoComponent() raises PrimaryTextureCoordinatesUses3D from the texture's own
 			 * request3DTextureCoordinates(), create() raises IsAnimated from duration() > 0, and
 			 * Component::Visual ticks the animation time on the logic thread. */
 			std::shared_ptr< TextureResource::Abstract > texture;
@@ -1772,7 +1772,7 @@ namespace EmEn::Scenes::Loaders
 			std::stringstream materialName;
 			materialName << "WAD:" << wadStem << "/Material/" << surfaceKey.name << (isMasked ? "/Masked" : "");
 
-			auto material = m_resources.container< Material::BasicResource >()->getOrCreateResource(materialName.str(), [texture, isMasked] (Material::BasicResource & materialResource) {
+			auto material = m_resources.container< Material::StandardResource >()->getOrCreateResource(materialName.str(), [texture, isMasked] (Material::StandardResource & materialResource) {
 				materialResource.enableVertexColor();
 
 				if ( texture != nullptr )
@@ -1782,29 +1782,37 @@ namespace EmEn::Scenes::Loaders
 					 * ALPHA-TEST, not blending: vanilla writes the texel straight to the framebuffer
 					 * and never reads the destination, so the transparency is strictly binary. This
 					 * keeps the layer in the opaque list with depth write on — no sorting needed. */
-					if ( !materialResource.setTextureResource(texture, isMasked) )
+					if ( !materialResource.setAlbedoComponent(texture, isMasked) )
 					{
 						return false;
 					}
 
 					if ( isMasked )
 					{
-						materialResource.enableAlphaTest();
+						/* 0.5 EXPLICITLY: vanilla's cutout is binary (alpha is 0 or 255), any
+						 * threshold in between behaves identically, and this is the value the
+						 * fixed cutoff used before the threshold became configurable. */
+						materialResource.enableAlphaTest(0.5F);
 					}
 				}
-				else if ( !materialResource.setColor(PixelFactory::Color< float >{0.5F, 0.5F, 0.5F, 1.0F}) )
+				else if ( !materialResource.setAlbedoComponent(PixelFactory::Color< float >{0.5F, 0.5F, 0.5F, 1.0F}) )
 				{
 					return false;
 				}
 
 				/* The surface EMITS, it is not lit — the sector light level is already baked into
-				 * the vertex colors, so re-lighting would double-count it. Full self-illumination
-				 * mask, scaled to an absolute luminance: the emitted quantity is
-				 * texel x vertexColor x FullBrightLuminance, which anchors a 1993 [0,1] ordinal in
+				 * the vertex colors, so re-lighting would double-count it. UNLIT declares exactly
+				 * that: no light pass runs over the surface and its colour IS its emitted radiance.
+				 * ⚠️ Unlit writes fragmentColor().rgb x emissionMultiplier(), so the
+				 * AutoIllumination COMPONENT below is MANDATORY — without it the surface writes its
+				 * raw [0,1] colour and reads black under the photometric exposure.
+				 * Full self-illumination mask, scaled to an absolute luminance: the emitted quantity
+				 * is texel x vertexColor x FullBrightLuminance, which anchors a 1993 [0,1] ordinal in
 				 * candela per square meter and lets a dim sector emit proportionally less.
 				 * ⚠️ The AMOUNT is the mask and is clamped to [0,1]; the luminance belongs to the
 				 * STRENGTH. Passing the nits through the amount silently clamps them to 1. */
-				materialResource.setAutoIlluminationAmount(1.0F);
+				materialResource.enableUnlit();
+				materialResource.setAutoIlluminationComponent(1.0F);
 				materialResource.setEmissiveStrength(FullBrightLuminance);
 
 				return materialResource.setManualLoadSuccess(true);
@@ -1839,7 +1847,8 @@ namespace EmEn::Scenes::Loaders
 		meshDescriptor.geometry = std::static_pointer_cast< Geometry::Interface >(geometry);
 		meshDescriptor.materials = std::move(materialList);
 		/* UNLIT, and it must stay that way: the sector light levels are already baked into the
-		 * vertex colors of unlit Basic materials, exactly like the original renderer. On the LIT
+		 * vertex colors of the materials, which declare themselves UNLIT above through
+		 * enableUnlit(), exactly like the original renderer. On the LIT
 		 * path the ambient/IBL pass is scaled by the background luminance, so installing a sky
 		 * would multiply every surface by the sky brightness and the baked look would be destroyed.
 		 * ⚠️ LATENT ONLY, and do not claim otherwise: with the light set disabled — which is the

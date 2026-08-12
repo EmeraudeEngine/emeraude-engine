@@ -30,7 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Material/BasicResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -60,7 +60,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(this->serviceProvider().container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(this->serviceProvider().container< Material::StandardResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
