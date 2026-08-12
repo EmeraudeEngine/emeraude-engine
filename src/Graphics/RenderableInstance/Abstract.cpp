@@ -452,6 +452,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex, bool isMDIEnabled) const noexcept
 	{
 		size_t materialLayoutHash = 0;
+		uint32_t materialFlags = 0;
 		bool isBindlessEnabled = false;
 
 		if ( m_renderable != nullptr )
@@ -462,6 +463,10 @@ namespace EmEn::Graphics::RenderableInstance
 				{
 					materialLayoutHash = layout->getHash();
 				}
+
+				/* Codegen-driving flag bits: same layout, structurally different GLSL
+				 * (e.g. the alpha-test discard) must not share a cached program. */
+				materialFlags = material->flags();
 
 				/* Bindless is required by the automatic environment reflections AND by every
 				 * lit program: the ambient pass reads the IBL reserved slots (irradiance,
@@ -493,6 +498,7 @@ namespace EmEn::Graphics::RenderableInstance
 			.renderPassHandle = renderPassHandle,
 			.layerIndex = layerIndex,
 			.materialLayoutHash = materialLayoutHash,
+			.materialFlags = materialFlags,
 			.isInstancing = this->useModelVertexBufferObject(),
 			.isLightingEnabled = this->isLightingEnabled(),
 			.isDepthTestDisabled = this->isDepthTestDisabled(),

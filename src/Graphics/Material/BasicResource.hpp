@@ -320,11 +320,13 @@ namespace EmEn::Graphics::Material
 			 * not need. Requires a texture whose alpha channel is enabled
 			 * (setTextureResource(texture, true)); without it the flag emits no code.
 			 * @warning The cutoff is FIXED at 0.5 and deliberately not configurable: the shader
-			 * program cache keys on the material's DESCRIPTOR LAYOUT hash, not on its flags or
-			 * values, so baking a per-material cutoff literal into the generated GLSL could serve
-			 * one material's program to another with the same layout. 0.5 is the right value for a
-			 * mask authored as coverage, which is the only case this mode targets. A configurable
-			 * cutoff needs the cache key fixed first.
+			 * program caches now key on the material FLAG BITS as well as the descriptor layout
+			 * hash (so the discard's structural presence is discriminated), but plain VALUES are
+			 * still not part of any key — baking a per-material cutoff literal into the generated
+			 * GLSL could serve one material's program to another with the same layout and flags.
+			 * 0.5 is the right value for a mask authored as coverage, which is the only case this
+			 * mode targets. A configurable cutoff needs the value read from the material UBO
+			 * instead of a literal (the road PBRResource takes with its AlphaThreshold slot).
 			 * @return void
 			 */
 			void enableAlphaTest () noexcept;

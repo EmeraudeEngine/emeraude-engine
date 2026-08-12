@@ -438,6 +438,10 @@ namespace EmEn::Saphir::Generator
 			{
 				hashCombine(hash, layout->getHash());
 			}
+
+			/* Material codegen flag bits: same layout, structurally different shadow GLSL
+			 * (e.g. which alpha source feeds the discard) must not share a cached program. */
+			hashCombine(hash, static_cast< size_t >(this->getMaterialInterface()->flags()));
 		}
 
 		return hash;

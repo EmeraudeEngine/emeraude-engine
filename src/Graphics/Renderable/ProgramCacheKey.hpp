@@ -56,6 +56,7 @@ namespace EmEn::Graphics::Renderable
 	 * - The render pass type (ambient, directional light, etc.)
 	 * - The render pass handle (for Vulkan render pass compatibility)
 	 * - The material layer index
+	 * - The material codegen state (descriptor layout hash + material flag bits)
 	 * - Instance-specific flags that affect shader generation
 	 *
 	 * Two RenderableInstances sharing the same Renderable and having the same
@@ -73,6 +74,10 @@ namespace EmEn::Graphics::Renderable
 		uint32_t layerIndex{0};
 		/** @brief Hash of the material descriptor set layout to ensure pipeline compatibility. */
 		size_t materialLayoutHash{0};
+		/** @brief Raw material flag bits (MaterialFlagBits): two materials can share a descriptor
+		 * layout yet generate structurally different GLSL (e.g. the alpha-test discard), so the
+		 * codegen-driving flags must discriminate the cached program. */
+		uint32_t materialFlags{0};
 		/** @brief Whether the instance uses GPU instancing (Multiple vs Unique). */
 		bool isInstancing{false};
 		/** @brief Whether lighting code is enabled. */
@@ -114,6 +119,7 @@ namespace EmEn::Graphics::Renderable
 			hashCombine(static_cast< size_t >(isDepthTestDisabled));
 			hashCombine(static_cast< size_t >(isDepthWriteDisabled));
 			hashCombine(materialLayoutHash);
+			hashCombine(static_cast< size_t >(materialFlags));
 			hashCombine(static_cast< size_t >(isBindlessEnabled));
 			hashCombine(static_cast< size_t >(isMDIEnabled));
 			hashCombine(static_cast< size_t >(isSkeletalAnimationEnabled));
@@ -140,6 +146,7 @@ namespace EmEn::Graphics::Renderable
 				isDepthTestDisabled == other.isDepthTestDisabled &&
 				isDepthWriteDisabled == other.isDepthWriteDisabled &&
 				materialLayoutHash == other.materialLayoutHash &&
+				materialFlags == other.materialFlags &&
 				isBindlessEnabled == other.isBindlessEnabled &&
 				isMDIEnabled == other.isMDIEnabled &&
 				isSkeletalAnimationEnabled == other.isSkeletalAnimationEnabled &&

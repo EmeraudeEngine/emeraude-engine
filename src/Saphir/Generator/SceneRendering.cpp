@@ -835,6 +835,10 @@ namespace EmEn::Saphir::Generator
 			{
 				hashCombine(hash, layout->getHash());
 			}
+
+			/* 8. Material codegen flag bits: two materials can share a descriptor layout yet
+			 * generate structurally different GLSL (e.g. the alpha-test discard). */
+			hashCombine(hash, static_cast< size_t >(this->getMaterialInterface()->flags()));
 		}
 
 		return hash;

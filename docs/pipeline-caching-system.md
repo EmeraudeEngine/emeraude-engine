@@ -211,6 +211,8 @@ When implementing `computeProgramCacheKey()` in generators:
 | `layerIndex` | Material layer |
 | `renderPassType` | Ambient, directional, point, spot |
 | `flags` | Instancing, lighting, facing camera |
+| `materialLayoutHash` | Material descriptor layout (pipeline compatibility) |
+| `materialFlags` | **Material codegen flag bits** — same layout, structurally different GLSL (e.g. the alpha-test discard) must not share a program (Aug 2026) |
 | `staticLighting` | Scene lighting state |
 
 ### ShadowCasting
@@ -221,6 +223,15 @@ When implementing `computeProgramCacheKey()` in generators:
 | `renderableName` | Geometry identity |
 | `layerIndex` | Material layer |
 | `flags` | Instancing, facing camera |
+| `materialLayoutHash` + `materialFlags` | Only when alpha-tested shadows are needed: which alpha source feeds the shadow discard (Aug 2026) |
+
+> [!IMPORTANT]
+> **Values are still not part of any key.** The `materialFlags` addition (mirrored in
+> `Renderable::ProgramCacheKey`) discriminates the *structural* shape of the generated GLSL. A
+> per-material VALUE (an alpha cutoff, a scale…) must reach the shader through the material UBO —
+> never as a baked literal — or two materials sharing layout and flags could exchange programs.
+> Precedent: `PBRResource`'s `AlphaThreshold` UBO slot; counter-example kept fixed: `BasicResource`'s
+> 0.5 cutoff (its 12-float block is full).
 
 ### OverlayRendering
 | Component | Purpose |
