@@ -740,17 +740,12 @@ namespace EmEn
 			/* Cache generated shader source on disk. */
 			constexpr auto SourceCodeCacheEnabledKey{"Core/Graphics/Shader/EnableSourceCodeCache"};
 			constexpr auto DefaultSourceCodeCacheEnabled{false};
+			/* Cache compiled SPIR-V binaries on disk. */
 			/* Persist the DRIVER's pipeline cache across runs. This is the one that matters:
-			 * measured on material-debug, the driver-side pipeline compilation costs 5.7 s with a
+			 * measured on material-debug, the driver-side pipeline compilation costs 5.4 s with a
 			 * cold driver cache against 33 ms with a warm one, for 294 pipelines. */
 			constexpr auto PipelineCacheEnabledKey{"Core/Graphics/Shader/EnablePipelineCache"};
 			constexpr auto DefaultPipelineCacheEnabled{true};
-			/* Cache compiled SPIR-V binaries on disk, skipping glslang entirely on a hit.
-			 * Measured on material-debug (232 shader modules): the compile path costs 393 ms
-			 * against 10.3 ms when served from the cache, a 38x factor. Writing the cache on a
-			 * cold run is free (391 ms), so there is no first-launch penalty to trade against
-			 * the gain. Safe to enable by default since the cache key carries the full toolchain
-			 * identity and every blob is validated before it reaches vkCreateShaderModule. */
 			constexpr auto BinaryCacheEnabledKey{"Core/Graphics/Shader/EnableBinaryCache"};
 			constexpr auto DefaultBinaryCacheEnabled{true};
 

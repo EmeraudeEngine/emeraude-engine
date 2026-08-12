@@ -49,7 +49,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		s_cacheDirectory = baseCacheDirectory / "TextureCache";
+		s_cacheDirectory = baseCacheDirectory / "texture-cache";
 
 		if ( std::error_code ec; !std::filesystem::exists(s_cacheDirectory, ec) )
 		{
