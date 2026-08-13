@@ -358,6 +358,13 @@ namespace EmEn
 			/* Parallax occlusion mapping ray-march iteration count. */
 			constexpr auto GraphicsTexturePOMIterationsKey{"Core/Graphics/Texture/POMIterations"};
 			constexpr auto DefaultGraphicsTexturePOMIterations{0};
+			/* Persist BC7-compressed mip chains on disk, so a texture is encoded once and not at
+			 * every launch. Measured on material-debug: 231 mip levels cost 7705 ms of CPU BC7 on a
+			 * cold cache against 0 ms warm, which makes it the most profitable of the three on-disk
+			 * renderer caches. Turn it OFF to measure encoding cost, or to force a re-encode without
+			 * wiping the directory. */
+			constexpr auto GraphicsTextureCacheEnabledKey{"Core/Graphics/Texture/EnableTextureCache"};
+			constexpr auto DefaultGraphicsTextureCacheEnabled{true};
 
 			/* GPU Profiler (Vulkan timestamp queries).
 			 * Per-pass GPU timings of the main frame command buffer, harvested without

@@ -36,6 +36,7 @@
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "Renderer.hpp"
 #include "TextureCompressor.hpp"
 #include "Tracer.hpp"
 
@@ -104,9 +105,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		TextureCompressor::initialize();
-
-		auto mip = TextureCompressor::compressSingle(pixmap, *this->serviceProvider().primaryServices().threadPool());
+		auto mip = this->serviceProvider().graphicsRenderer().textureCompressor().compressSingle(pixmap);
 
 		if ( mip.data.empty() )
 		{

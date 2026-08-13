@@ -34,7 +34,6 @@
 
 /* Local inclusions. */
 #include "PixelFactory/Processor.hpp"
-#include "ThreadPool.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 
@@ -42,37 +41,128 @@ namespace EmEn::Graphics
 {
 	using namespace Base::PixelFactory;
 
-	bool TextureCompressor::s_initialized = false;
-
-	void
-	TextureCompressor::initialize () noexcept
+	namespace
 	{
-		if ( s_initialized )
+		/**
+		 * @brief Generates a half-resolution mip level using a linear filter.
+		 * @param source A reference to the source pixmap.
+		 * @return Pixmap< uint8_t >
+		 */
+		[[nodiscard]]
+		Pixmap< uint8_t >
+		generateMip (const Pixmap< uint8_t > & source) noexcept
 		{
-			return;
+			const auto newWidth = std::max(source.width() / 2, static_cast< decltype(source.width()) >(1));
+			const auto newHeight = std::max(source.height() / 2, static_cast< decltype(source.height()) >(1));
+
+			return Processor< uint8_t >::resize(source, newWidth, newHeight, FilteringMode::Linear);
 		}
 
+		/**
+		 * @brief Compresses one mip level to BC7 blocks.
+		 * @note Blocks are compressed sequentially on the calling thread. Parallelism comes from
+		 * the resource manager loading several textures at once on different workers, which is why
+		 * this takes no thread pool: the one it used to receive was never used.
+		 * @param pixmap A reference to the source RGBA8 pixel data for this mip level.
+		 * @return CompressedMipLevel
+		 */
+		[[nodiscard]]
+		CompressedMipLevel
+		compressLevel (const Pixmap< uint8_t > & pixmap) noexcept
+		{
+			constexpr auto BlockSize = TextureCompressor::BlockSize;
+			constexpr auto BlockBytes = TextureCompressor::BlockBytes;
+
+			const auto startTime = std::chrono::steady_clock::now();
+
+			const auto width = static_cast< uint32_t >(pixmap.width());
+			const auto height = static_cast< uint32_t >(pixmap.height());
+			const auto blocksX = (width + BlockSize - 1) / BlockSize;
+			const auto blocksY = (height + BlockSize - 1) / BlockSize;
+			const auto totalBlocks = blocksX * blocksY;
+			const auto * sourcePixels = pixmap.data().data();
+			const auto stride = width * 4; /* RGBA8 = 4 bytes per pixel. */
+
+			CompressedMipLevel result;
+			result.width = width;
+			result.height = height;
+			result.data.resize(totalBlocks * BlockBytes);
+
+			/* Setup BC7 compression parameters. */
+			bc7enc_compress_block_params params;
+			bc7enc_compress_block_params_init(&params);
+
+			/* Fast quality preset: uber_level 0 (no extra refinement passes),
+			 * 16 partitions (vs 64 max). Good quality with ~5x faster compression.
+			 * The disk cache will make this a one-time cost anyway. */
+			bc7enc_compress_block_params_init_linear_weights(&params);
+			params.m_max_partitions = 16;
+			params.m_uber_level = 0;
+
+			for ( size_t blockIndex = 0; blockIndex < totalBlocks; ++blockIndex )
+			{
+				const auto blockX = static_cast< uint32_t >(blockIndex % blocksX);
+				const auto blockY = static_cast< uint32_t >(blockIndex / blocksX);
+				const auto pixelX = blockX * BlockSize;
+				const auto pixelY = blockY * BlockSize;
+
+				/* Extract 4x4 block of RGBA pixels, handling edge padding. */
+				uint8_t blockPixels[BlockSize * BlockSize * 4];
+
+				for ( uint32_t row = 0; row < BlockSize; ++row )
+				{
+					for ( uint32_t col = 0; col < BlockSize; ++col )
+					{
+						/* Clamp to edge for textures not multiple of 4. */
+						const auto srcX = std::min(pixelX + col, width - 1);
+						const auto srcY = std::min(pixelY + row, height - 1);
+						const auto srcOffset = (srcY * stride) + (srcX * 4);
+						const auto dstOffset = (row * BlockSize + col) * 4;
+
+						std::memcpy(&blockPixels[dstOffset], &sourcePixels[srcOffset], 4);
+					}
+				}
+
+				/* Compress the block. */
+				auto * outputBlock = &result.data[blockIndex * BlockBytes];
+
+				bc7enc_compress_block(outputBlock, blockPixels, &params);
+			}
+
+			const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - startTime).count();
+
+			TraceInfo{TextureCompressor::ClassId} << "Compressed " << width << "x" << height << " mip level (" << totalBlocks << " blocks) in " << elapsed << " ms.";
+
+			return result;
+		}
+	}
+
+	TextureCompressor::TextureCompressor (PrimaryServices & primaryServices) noexcept
+		: ServiceInterface{ClassId},
+		m_primaryServices{primaryServices}
+	{
+
+	}
+
+	bool
+	TextureCompressor::onInitialize () noexcept
+	{
 		bc7enc_compress_block_init();
 
-		s_initialized = true;
-
 		Tracer::success(ClassId, "BC7 encoder initialized.");
+
+		return true;
+	}
+
+	bool
+	TextureCompressor::onTerminate () noexcept
+	{
+		return true;
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCompressor::compress (
-		const Pixmap< uint8_t > & pixmap,
-		uint32_t maxMipLevels,
-		Base::ThreadPool & threadPool
-	) noexcept
+	TextureCompressor::compress (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept
 	{
-		if ( !s_initialized )
-		{
-			Tracer::error(ClassId, "BC7 encoder not initialized ! Call TextureCompressor::initialize() first.");
-
-			return {};
-		}
-
 		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
 		{
 			Tracer::error(ClassId, "Invalid pixmap: must be valid RGBA8 data.");
@@ -82,13 +172,13 @@ namespace EmEn::Graphics
 
 		/* Compute the number of mip levels. */
 		const auto fullMipCount = Vulkan::Image::getMIPLevels(pixmap.width(), pixmap.height());
-		const auto mipCount = (maxMipLevels == 0) ? fullMipCount : std::min(maxMipLevels, fullMipCount);
+		const auto mipCount = maxMipLevels == 0 ? fullMipCount : std::min(maxMipLevels, fullMipCount);
 
 		std::vector< CompressedMipLevel > result;
 		result.reserve(mipCount);
 
 		/* Compress base level. */
-		result.emplace_back(compressLevel(pixmap, threadPool));
+		result.emplace_back(compressLevel(pixmap));
 
 		if ( result.back().data.empty() )
 		{
@@ -111,7 +201,7 @@ namespace EmEn::Graphics
 				break;
 			}
 
-			result.emplace_back(compressLevel(currentMip, threadPool));
+			result.emplace_back(compressLevel(currentMip));
 
 			if ( result.back().data.empty() )
 			{
@@ -138,18 +228,8 @@ namespace EmEn::Graphics
 	}
 
 	CompressedMipLevel
-	TextureCompressor::compressSingle (
-		const Pixmap< uint8_t > & pixmap,
-		Base::ThreadPool & threadPool
-	) noexcept
+	TextureCompressor::compressSingle (const Pixmap< uint8_t > & pixmap) const noexcept
 	{
-		if ( !s_initialized )
-		{
-			Tracer::error(ClassId, "BC7 encoder not initialized !");
-
-			return {};
-		}
-
 		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
 		{
 			Tracer::error(ClassId, "Invalid pixmap: must be valid RGBA8 data.");
@@ -157,87 +237,6 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		return compressLevel(pixmap, threadPool);
-	}
-
-	Pixmap< uint8_t >
-	TextureCompressor::generateMip (const Pixmap< uint8_t > & source) noexcept
-	{
-		const auto newWidth = std::max(source.width() / 2, static_cast< decltype(source.width()) >(1));
-		const auto newHeight = std::max(source.height() / 2, static_cast< decltype(source.height()) >(1));
-
-		return Processor< uint8_t >::resize(source, newWidth, newHeight, FilteringMode::Linear);
-	}
-
-	CompressedMipLevel
-	TextureCompressor::compressLevel (
-		const Pixmap< uint8_t > & pixmap,
-		Base::ThreadPool & threadPool
-	) noexcept
-	{
-		const auto startTime = std::chrono::steady_clock::now();
-
-		const auto width = static_cast< uint32_t >(pixmap.width());
-		const auto height = static_cast< uint32_t >(pixmap.height());
-		const auto blocksX = (width + BlockSize - 1) / BlockSize;
-		const auto blocksY = (height + BlockSize - 1) / BlockSize;
-		const auto totalBlocks = blocksX * blocksY;
-		const auto * sourcePixels = pixmap.data().data();
-		const auto stride = width * 4; /* RGBA8 = 4 bytes per pixel. */
-
-		CompressedMipLevel result;
-		result.width = width;
-		result.height = height;
-		result.data.resize(totalBlocks * BlockBytes);
-
-		/* Setup BC7 compression parameters. */
-		bc7enc_compress_block_params params;
-		bc7enc_compress_block_params_init(&params);
-
-		/* Fast quality preset: uber_level 0 (no extra refinement passes),
-		 * 16 partitions (vs 64 max). Good quality with ~5x faster compression.
-		 * The disk cache will make this a one-time cost anyway. */
-		bc7enc_compress_block_params_init_linear_weights(&params);
-		params.m_max_partitions = 16;
-		params.m_uber_level = 0;
-
-		/* Compress blocks sequentially within this worker thread.
-		 * Parallelism comes from the resource manager loading multiple
-		 * textures concurrently on different thread pool workers. */
-		for ( size_t blockIndex = 0; blockIndex < totalBlocks; ++blockIndex )
-		{
-			const auto blockX = static_cast< uint32_t >(blockIndex % blocksX);
-			const auto blockY = static_cast< uint32_t >(blockIndex / blocksX);
-			const auto pixelX = blockX * BlockSize;
-			const auto pixelY = blockY * BlockSize;
-
-			/* Extract 4x4 block of RGBA pixels, handling edge padding. */
-			uint8_t blockPixels[BlockSize * BlockSize * 4];
-
-			for ( uint32_t row = 0; row < BlockSize; ++row )
-			{
-				for ( uint32_t col = 0; col < BlockSize; ++col )
-				{
-					/* Clamp to edge for textures not multiple of 4. */
-					const auto srcX = std::min(pixelX + col, width - 1);
-					const auto srcY = std::min(pixelY + row, height - 1);
-					const auto srcOffset = (srcY * stride) + (srcX * 4);
-					const auto dstOffset = (row * BlockSize + col) * 4;
-
-					std::memcpy(&blockPixels[dstOffset], &sourcePixels[srcOffset], 4);
-				}
-			}
-
-			/* Compress the block. */
-			auto * outputBlock = &result.data[blockIndex * BlockBytes];
-
-			bc7enc_compress_block(outputBlock, blockPixels, &params);
-		}
-
-		const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - startTime).count();
-
-		TraceInfo{ClassId} << "Compressed " << width << "x" << height << " mip level (" << totalBlocks << " blocks) in " << elapsed << " ms.";
-
-		return result;
+		return compressLevel(pixmap);
 	}
 }

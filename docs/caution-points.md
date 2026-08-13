@@ -2082,7 +2082,10 @@ driver cache from a 5.7-second stall.
 `material-debug` load generates **336 distinct SceneRendering sources** (265 fragment, 71 vertex).
 Attack that number before micro-optimising the compiler path.
 
-`--clear-shader-cache` wipes the shader caches, pipeline cache included.
+`--clear-renderer-cache` — renamed from `--clear-shader-cache` in Aug 2026 — wipes **three** on-disk
+renderer caches: the SPIR-V binary cache, the pipeline cache, and the BC7 texture cache (see below).
+An unknown switch is simply *absent*, so a script still passing the old name clears **nothing**, and
+says nothing.
 
 **Files:** `SettingKeys.hpp` (the three defaults), `Saphir/ShaderManager.cpp` (header struct,
 `toolchainIdentity()`, write-then-rename), `Vulkan/Device.{hpp,cpp}` + `Graphics/Renderer.cpp`
@@ -2113,9 +2116,9 @@ is the NOMINAL first-launch state, and every one of these sites treated it as a 
 | Site | What it did on a first launch |
 |---|---|
 | `ShaderManager::readBinaryCache()` (then named `readCache()`) | Scanned the source-dump directory too. The dump is OFF by default, so its path is empty ⇒ `IO::directoryEntries("")` logged an error at **every** startup. It also indexed into `m_cachedShaderSourceCodes`, a member nothing ever read back — the loop was pure dead work. Both are gone; the function now returns early when the binaries directory is empty. |
-| `ShaderManager::clearCache()` | Same empty-path scan, and `--clear-shader-cache` runs whatever the settings say. Both loops are now guarded. |
+| `ShaderManager::clearCache()` | Same empty-path scan, and `--clear-renderer-cache` runs whatever the settings say. Both loops are now guarded. |
 | `Renderer::loadPipelineCache()` | Read `pipeline.cache` unconditionally ⇒ `IO::fileGetContents` logged an error on the one launch where the file is *supposed* to be missing. Now checks existence first and starts empty, silently. |
-| `--clear-shader-cache` | Erased the blob and the `.loading` marker unconditionally ⇒ an `IO::eraseFile` error per absent file. Guarded. |
+| `--clear-renderer-cache` | Erased the blob and the `.loading` marker unconditionally ⇒ an `IO::eraseFile` error per absent file. Guarded. |
 
 > [!CAUTION]
 > **A feature that ships disabled has an untested first-run path, and flipping the default is what
@@ -2124,7 +2127,7 @@ is the NOMINAL first-launch state, and every one of these sites treated it as a 
 > cold start. When you enable something by default, **delete its state and run it cold**, then read
 > the log for errors that are really just "nothing here yet".
 
-Verified after the fixes: a fresh install and a `--clear-shader-cache` run on a completely absent
+Verified after the fixes: a fresh install and a `--clear-renderer-cache` run on a completely absent
 cache both log **zero** errors (only the pre-existing, unrelated GLFW Wayland gamma-ramp one).
 
 ### `std::stoull` in a `-fno-exceptions` build terminates the process (fixed Aug 2026)
@@ -2139,6 +2142,67 @@ startup**. Replaced with `std::from_chars`, which reports failure through a retu
 > The throwing `std::sto*` family is a **crash primitive** in this cascade, and the danger is
 > proportional to how untrusted the input is — a cache directory the user can write to is about as
 > untrusted as it gets. Prefer `std::from_chars` for every parse of external data.
+
+### A cache key that LOOKED content-sensitive and was not — the BC7 texture cache (fixed Aug 2026)
+
+The BC7 disk cache keyed its entries on `SHA256(resourceName | sourceFileSize | sourceModTime)`.
+Nothing in that signature looks wrong, and the class documentation duly claimed "file size and
+modification time". But the **caller** passed the **decoded pixel byte count** as `sourceFileSize`,
+and `width * 1000000 + height` as `sourceModTime`. The key therefore reduced to **name +
+dimensions**: repaint a texture without changing its size and the stale blob was served forever, no
+error anywhere.
+
+Fixed by making it content-addressed — `Base::Hash::FNV1a` over the **decoded pixels**, folded with
+width, height and `colorCount` (`TextureCache::cacheKey()`). Correct by construction, and it needs no
+plumbing through `ResourceTrait`. File format `Version` **1 → 2**.
+
+> [!CAUTION]
+> **Check what a cache key is FED at the call site, not what its parameters are NAMED.** A hash of
+> the wrong inputs is indistinguishable from a hash of the right ones — same length, same
+> distribution, no validation can catch it — and the only symptom is an edit that never takes effect.
+> The parameter names, and the doc comment repeating them, actively hid the defect. Same discipline
+> as the binary-cache header above: a cache is only as trustworthy as the identity it keys on.
+
+**No migration concern:** the engine is pre-release, so there is no deployed version whose caches
+would need converting. Worth keeping for whoever touches `cacheKey()` NEXT, though: changing a
+content-addressed key scheme does not *invalidate* existing entries, it **orphans** them — their
+filenames simply stop being produced, so they sit there unreachable. `--clear-renderer-cache` is the
+remedy (**40** stale entries erased here when the key changed).
+
+**What the cache is worth** (`material-debug`, all 10 options, RTX 3070 Ti, Release): cold cache
+**231** mip-level compressions for **7705 ms** of BC7 compression; warm cache **0** compressions,
+**0 ms**. That is ~7.7 s of load time — more than the `VkPipelineCache` (5702 → 31 ms) and about
+twenty times the SPIR-V binary cache (393 → 10.3 ms). Zero compressions on the warm run is also the
+proof that the content-addressed key is deterministic: every texture found its entry.
+
+**On disk:** `~/.cache/<app>/texture-cache/`, extension `.bc7cache`. Documents claiming
+`~/.cache/AppName/TextureCache/` are **wrong** — the code has always used `texture-cache`.
+
+**Only one of the two BC7 paths touches this cache**, and which one runs depends on the **source**,
+not on a setting: an `ImageResource` (PNG, JPEG, procedural) is CPU-encoded at load time and cached;
+a `CompressedImageResource` (KTX2 / `KHR_texture_basisu`) arrives already block-compressed, is
+uploaded verbatim, and touches neither bc7enc nor the cache.
+
+**Files:** `Graphics/TextureCache.{hpp,cpp}` (`TextureCacheService`) and
+`Graphics/TextureCompressor.{hpp,cpp}` (`TextureCompressorService`). Both were "a grouping of
+statics" and are now real `ServiceInterface` sub-services: value members of `Graphics::Renderer`,
+enrolled by `initializeSubServices()` (compressor **first** — the cache holds a reference to it),
+terminated in reverse order with the rest, reachable as `renderer.textureCompressor()` /
+`renderer.textureCache()`, both **const** references. All mutable static state is gone —
+`bc7enc_compress_block_init()` now runs in `onInitialize()`, so no caller can reach a compression
+method before the encoder is ready, and the static `initialize()` one had to remember to call (whose
+omission only logged a runtime error) is deleted. `TextureCache::getOrCompress()` owns
+lookup → compress → store, so `Texture2D::createFromPixelData()` no longer orchestrates
+try/compress/store itself. The second migrated call site, `CompressedImageResource::load()`, does
+**not** go through the cache: it calls `compressSingle()` on the compressor sub-service directly, for
+its own procedural default payload only — which is why the "touches neither bc7enc nor the cache"
+statement above still holds for every KTX2 texture that actually comes from disk.
+
+> [!WARNING]
+> **BC7 compression is NOT parallelised across blocks.** `compressLevel()` received a
+> `Base::ThreadPool` and never used it; `compress()` and `compressSingle()` no longer take one.
+> Compression is sequential per texture — the parallelism comes from the resource manager loading
+> several textures concurrently on different workers. Any document claiming otherwise is false.
 
 ---
 

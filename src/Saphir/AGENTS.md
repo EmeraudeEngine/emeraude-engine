@@ -1111,7 +1111,7 @@ tiers of one mechanism, and only two of them are caches at all:
 The defaults live in `SettingKeys.hpp` (`DefaultSourceCodeDumpEnabled`,
 `DefaultBinaryCacheEnabled`, `DefaultPipelineCacheEnabled`).
 
-`--clear-shader-cache` wipes the shader caches, the pipeline cache included.
+`--clear-renderer-cache` wipes the shader caches, the pipeline cache included.
 
 ### Stage 1 — the generated-GLSL DUMP, not a cache (renamed Aug 2026)
 
@@ -1172,7 +1172,7 @@ is off by default, that loop was scanning an **empty path** and logging an
 `IO::directoryEntries()` error on every startup as soon as the binary cache became the default.
 The member is gone and the function returns early on an empty binaries directory. `clearCache()`
 guards both of its loops for the same reason: a disabled facility leaves its path empty, and
-`--clear-shader-cache` runs whatever the settings say. See
+`--clear-renderer-cache` runs whatever the settings say. See
 [`docs/caution-points.md`](../../docs/caution-points.md) § "Flipping a default to ON runs a path
 nobody had ever run".
 

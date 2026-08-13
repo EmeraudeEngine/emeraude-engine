@@ -688,7 +688,7 @@ and `vkCreate*Pipelines` accepts that as "no cache" — which is why `GraphicsPi
 
 Four distinct mechanisms are commonly called "the shader cache". Only the `VkPipelineCache` (third
 row) is owned by this layer; the three on-disk ones share the `Core/Graphics/Shader/…` prefix and
-are all wiped by `--clear-shader-cache`.
+are all wiped by `--clear-renderer-cache`.
 
 | What | Setting key | Default | Owner — read there, not here |
 |---|---|---|---|
@@ -745,7 +745,7 @@ Three more defences, each answering a real failure mode:
 - **Zero-initialised destination** before `vkGetPipelineCacheData`: drivers leave the padding
   uninitialised, which makes the hash unstable and writes process memory into a file.
 
-`--clear-shader-cache` wipes it along with the other shader caches.
+`--clear-renderer-cache` wipes it along with the other shader caches.
 
 ### Thread safety
 

@@ -255,6 +255,27 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* Initialize the BC7 texture compressor. It must come BEFORE the texture cache, which
+		 * delegates to it on a miss. */
+		if ( m_textureCompressor.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_textureCompressor.name() << " service up!";
+		}
+		else
+		{
+			TraceWarning{ClassId} << m_textureCompressor.name() << " service failed to execute! Textures will not be BC7 compressed.";
+		}
+
+		/* Initialize the texture disk cache. */
+		if ( m_textureCache.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_textureCache.name() << " service up!";
+		}
+		else
+		{
+			TraceWarning{ClassId} << m_textureCache.name() << " service failed to execute! Textures will be compressed at every launch.";
+		}
+
 		/* Initialize post-processor. */
 		if ( m_postProcessor.initialize(m_subServicesEnabled) )
 		{
@@ -2750,7 +2771,7 @@ namespace EmEn::Graphics
 		markerPath.append(PipelineCacheLoadMarkerName);
 
 		/* Same switch as the shader caches: one command clears every shader-related cache. */
-		if ( m_primaryServices.arguments().isSwitchPresent("--clear-shader-cache") )
+		if ( m_primaryServices.arguments().isSwitchPresent("--clear-renderer-cache") )
 		{
 			/* NOTE: Clearing a cache that was never written is a no-op, not a failure: erasing
 			 * unconditionally made IO log an error for each absent file. */

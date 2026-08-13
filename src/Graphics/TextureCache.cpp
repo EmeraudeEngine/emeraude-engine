@@ -27,54 +27,152 @@
 #include "TextureCache.hpp"
 
 /* STL inclusions. */
-#include <array>
-#include <cstring>
 #include <fstream>
-#include <sstream>
+#include <ios>
+#include <string_view>
 
 /* Local inclusions. */
-#include "Hash/SHA256.hpp"
+#include "Arguments.hpp"
+#include "FileSystem.hpp"
+#include "Hash/FNV1a.hpp"
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
-	std::filesystem::path TextureCache::s_cacheDirectory;
-	bool TextureCache::s_initialized = false;
+	using namespace Base::PixelFactory;
+
+	TextureCache::TextureCache (PrimaryServices & primaryServices, const TextureCompressor & compressor) noexcept
+		: ServiceInterface{ClassId},
+		m_primaryServices{primaryServices},
+		m_compressor{compressor}
+	{
+
+	}
+
+	bool
+	TextureCache::onInitialize () noexcept
+	{
+		if ( !m_primaryServices.settings().getOrSetDefault< bool >(GraphicsTextureCacheEnabledKey, DefaultGraphicsTextureCacheEnabled) )
+		{
+			/* NOTE: An empty directory is what makes every lookup miss, so the service stays usable
+			 * and getOrCompress() simply always compresses. */
+			Tracer::info(ClassId, "The texture disk cache is disabled by settings. Textures will be compressed at every launch.");
+
+			return true;
+		}
+
+		m_cacheDirectory = m_primaryServices.fileSystem().cacheDirectory(CacheDirectoryName);
+
+		if ( std::error_code error; !std::filesystem::exists(m_cacheDirectory, error) )
+		{
+			if ( !std::filesystem::create_directories(m_cacheDirectory, error) )
+			{
+				TraceError{ClassId} << "Failed to create the texture cache directory '" << m_cacheDirectory << "' ! The cache is disabled.";
+
+				/* NOTE: A disabled disk cache costs compression time, it is never a reason to bring
+				 * the renderer down. An empty directory makes every lookup miss. */
+				m_cacheDirectory.clear();
+
+				return true;
+			}
+		}
+
+		if ( m_primaryServices.arguments().isSwitchPresent("--clear-renderer-cache") )
+		{
+			this->clearCache();
+		}
+
+		return true;
+	}
+
+	bool
+	TextureCache::onTerminate () noexcept
+	{
+		m_cacheDirectory.clear();
+
+		return true;
+	}
 
 	void
-	TextureCache::initialize (const std::filesystem::path & baseCacheDirectory) noexcept
+	TextureCache::clearCache () const noexcept
 	{
-		if ( s_initialized )
+		if ( m_cacheDirectory.empty() )
 		{
 			return;
 		}
 
-		s_cacheDirectory = baseCacheDirectory / "texture-cache";
+		size_t erasedCount = 0;
 
-		if ( std::error_code ec; !std::filesystem::exists(s_cacheDirectory, ec) )
+		std::error_code error;
+
+		for ( const auto & entry : std::filesystem::directory_iterator{m_cacheDirectory, error} )
 		{
-			if ( !std::filesystem::create_directories(s_cacheDirectory, ec) )
+			if ( !entry.is_regular_file(error) || entry.path().extension() != CacheFileExtension )
 			{
-				TraceError{ClassId} << "Failed to create texture cache directory: " << s_cacheDirectory;
+				continue;
+			}
 
-				return;
+			if ( std::filesystem::remove(entry.path(), error) )
+			{
+				++erasedCount;
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to erase the texture cache entry '" << entry.path() << "' !";
 			}
 		}
 
-		s_initialized = true;
+		TraceSuccess{ClassId} << "Texture cache cleared (" << erasedCount << " entrie(s) erased).";
+	}
+
+	size_t
+	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap) noexcept
+	{
+		/* NOTE: Content-addressed on purpose. Anything derived from the resource NAME alone lets an
+		 * edited texture keep serving its stale blob; hashing the decoded pixels cannot. The
+		 * geometry is folded in because two different layouts could otherwise share a byte run. */
+		const auto & bytes = pixmap.data();
+
+		auto key = Base::Hash::FNV1a(std::string_view{reinterpret_cast< const char * >(bytes.data()), bytes.size()});
+
+		const auto fold = [&key] (size_t value) noexcept {
+			key ^= value + 0x9e3779b9 + (key << 6) + (key >> 2);
+		};
+
+		fold(static_cast< size_t >(pixmap.width()));
+		fold(static_cast< size_t >(pixmap.height()));
+		fold(static_cast< size_t >(pixmap.colorCount()));
+
+		return key;
+	}
+
+	std::filesystem::path
+	TextureCache::cacheFilePath (size_t key) const noexcept
+	{
+		static constexpr auto HexChars = "0123456789abcdef";
+
+		std::string filename;
+		filename.reserve(sizeof(key) * 2 + 8);
+
+		for ( size_t shift = sizeof(key) * 8; shift > 0; shift -= 4 )
+		{
+			filename += HexChars[(key >> (shift - 4)) & 0xF];
+		}
+
+		filename += CacheFileExtension;
+
+		return m_cacheDirectory / filename;
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCache::tryLoad (const std::string & resourceName, uint64_t sourceFileSize,  uint64_t sourceModTime) noexcept
+	TextureCache::tryLoad (size_t key) const noexcept
 	{
-		if ( !s_initialized )
-		{
-			return {};
-		}
+		const auto path = this->cacheFilePath(key);
 
-		const auto path = cacheFilePath(resourceName, sourceFileSize, sourceModTime);
-
-		std::ifstream file(path, std::ios::binary);
+		std::ifstream file{path, std::ios::binary};
 
 		if ( !file.is_open() )
 		{
@@ -99,7 +197,7 @@ namespace EmEn::Graphics
 		std::vector< CompressedMipLevel > result;
 		result.reserve(mipCount);
 
-		for ( uint32_t i = 0; i < mipCount; ++i )
+		for ( uint32_t index = 0; index < mipCount; ++index )
 		{
 			uint32_t width = 0;
 			uint32_t height = 0;
@@ -129,26 +227,24 @@ namespace EmEn::Graphics
 			result.emplace_back(std::move(mip));
 		}
 
-		TraceDebug{ClassId} << "Cache hit: " << resourceName;
-
 		return result;
 	}
 
 	bool
-	TextureCache::store (const std::string & resourceName, uint64_t sourceFileSize, uint64_t sourceModTime, const std::vector< CompressedMipLevel > & mipLevels) noexcept
+	TextureCache::store (size_t key, const std::vector< CompressedMipLevel > & mipLevels) const noexcept
 	{
-		if ( !s_initialized || mipLevels.empty() )
+		if ( mipLevels.empty() )
 		{
 			return false;
 		}
 
-		const auto path = cacheFilePath(resourceName, sourceFileSize, sourceModTime);
+		const auto path = this->cacheFilePath(key);
 
-		std::ofstream file(path, std::ios::binary | std::ios::trunc);
+		std::ofstream file{path, std::ios::binary | std::ios::trunc};
 
 		if ( !file.is_open() )
 		{
-			TraceError{ClassId} << "Failed to open cache file for writing: " << path;
+			TraceError{ClassId} << "Failed to open the cache file '" << path << "' for writing !";
 
 			return false;
 		}
@@ -175,7 +271,7 @@ namespace EmEn::Graphics
 
 		if ( !file )
 		{
-			TraceError{ClassId} << "Failed to write cache file: " << path;
+			TraceError{ClassId} << "Failed to write the cache file '" << path << "' !";
 
 			return false;
 		}
@@ -183,32 +279,36 @@ namespace EmEn::Graphics
 		return true;
 	}
 
-	std::filesystem::path
-	TextureCache::cacheFilePath (const std::string & resourceName, uint64_t sourceFileSize, uint64_t sourceModTime) noexcept
+	std::vector< CompressedMipLevel >
+	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept
 	{
-		/* Build a unique key from resource name + file size + modification time. */
-		std::ostringstream key;
-		key << resourceName << "|" << sourceFileSize << "|" << sourceModTime;
-		const auto keyStr = key.str();
+		const auto cacheEnabled = !m_cacheDirectory.empty();
+		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap) : 0;
 
-		/* Hash the key with SHA256. */
-		Base::Hash::SHA256 sha;
-		sha.update(reinterpret_cast< const uint8_t * >(keyStr.data()), keyStr.size());
-
-		std::array< uint8_t, 32 > digest{};
-		sha.final(digest);
-
-		/* Convert to hex string for the filename. */
-		static constexpr auto hexChars = "0123456789abcdef";
-		std::string hexHash;
-		hexHash.reserve(64);
-
-		for ( const auto byte : digest )
+		if ( cacheEnabled )
 		{
-			hexHash += hexChars[(byte >> 4) & 0xF];
-			hexHash += hexChars[byte & 0xF];
+			auto cached = this->tryLoad(key);
+
+			if ( !cached.empty() )
+			{
+				TraceDebug{ClassId} << "Cache hit: " << resourceName;
+
+				return cached;
+			}
 		}
 
-		return s_cacheDirectory / (hexHash + ".bc7cache");
+		auto compressed = m_compressor.compress(pixmap, maxMipLevels);
+
+		if ( compressed.empty() || !cacheEnabled )
+		{
+			return compressed;
+		}
+
+		if ( !this->store(key, compressed) )
+		{
+			TraceWarning{ClassId} << "Unable to cache the compressed texture '" << resourceName << "' ! It will be compressed again on the next run.";
+		}
+
+		return compressed;
 	}
 }

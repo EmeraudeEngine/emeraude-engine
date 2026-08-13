@@ -33,12 +33,15 @@
 #include <cstdint>
 #include <vector>
 
+/* Local inclusions for inheritance. */
+#include "ServiceInterface.hpp"
+
 /* Local inclusions for usages. */
 #include "PixelFactory/Pixmap.hpp"
 
-namespace EmEn::Base
+namespace EmEn
 {
-	class ThreadPool;
+	class PrimaryServices;
 }
 
 namespace EmEn::Graphics
@@ -54,23 +57,29 @@ namespace EmEn::Graphics
 	};
 
 	/**
-	 * @brief Utility class for compressing RGBA pixel data to BC7 format.
+	 * @brief BC7 texture compression sub-service of the Renderer.
 	 *
 	 * Uses bc7enc_rdo for block compression. Generates CPU-side mipmaps
 	 * (linear downscale) and compresses each level independently.
-	 * Compression is parallelized across blocks using the engine ThreadPool.
+	 * Blocks are compressed SEQUENTIALLY on the calling thread: parallelism comes from the
+	 * resource manager loading several textures at once on different workers, never from within
+	 * one texture. The thread pool this used to receive was threaded through and never used.
 	 *
 	 * BC7 produces 16 bytes per 4x4 pixel block, giving a 4:1 compression
 	 * ratio on RGBA8 textures. The compressed data is suitable for direct
 	 * upload to VkImage with VK_FORMAT_BC7_UNORM_BLOCK or VK_FORMAT_BC7_SRGB_BLOCK.
 	 *
-	 * @note This class is stateless. Call initialize() once at engine startup.
+	 * @note The encoder's one-time setup happens in onInitialize(), so a caller can
+	 * never reach a compression method before the encoder is ready. This used to be a
+	 * static initialize() the caller had to remember to invoke; forgetting it only
+	 * produced a runtime error log.
+	 * @extends EmEn::ServiceInterface This is a sub-service of the graphics renderer.
 	 */
-	class EMEN_API TextureCompressor final
+	class EMEN_API TextureCompressor final : public ServiceInterface
 	{
 		public:
 
-			static constexpr auto ClassId{"TextureCompressor"};
+			static constexpr auto ClassId{"TextureCompressorService"};
 
 			/** @brief BC7 block size in pixels (4x4). */
 			static constexpr uint32_t BlockSize = 4;
@@ -79,33 +88,32 @@ namespace EmEn::Graphics
 			static constexpr uint32_t BlockBytes = 16;
 
 			/**
-			 * @brief One-time initialization of the BC7 encoder.
-			 * @note Must be called before any compression. Safe to call multiple times.
+			 * @brief Constructs the texture compressor.
+			 * @param primaryServices A reference to the primary services.
 			 */
-			static void initialize () noexcept;
+			explicit TextureCompressor (PrimaryServices & primaryServices) noexcept;
 
 			/**
 			 * @brief Compresses an RGBA8 pixmap to BC7 with full mipchain.
 			 * @param pixmap Source RGBA8 pixel data. Dimensions should be multiples of 4.
 			 * @param maxMipLevels Maximum number of mip levels to generate (0 = full chain down to 1x1).
-			 * @param threadPool Thread pool for parallel block compression.
 			 * @return Vector of compressed mip levels, empty on failure.
 			 * @note Non-multiple-of-4 dimensions are padded by repeating edge pixels.
 			 */
 			[[nodiscard]]
-			static std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & pixmap,uint32_t maxMipLevels,Base::ThreadPool & threadPool) noexcept;
+			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept;
 
 			/**
 			 * @brief Compresses a single RGBA8 pixmap to BC7 (no mipchain).
 			 * @param pixmap Source RGBA8 pixel data.
-			 * @param threadPool Thread pool for parallel block compression.
 			 * @return Compressed mip level, empty data on failure.
 			 */
 			[[nodiscard]]
-			static CompressedMipLevel compressSingle (const Base::PixelFactory::Pixmap< uint8_t > & pixmap,Base::ThreadPool & threadPool) noexcept;
+			CompressedMipLevel compressSingle (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
 
 			/**
 			 * @brief Returns the compressed size in bytes for a given resolution.
+			 * @note Pure arithmetic on its arguments, hence static: it holds no state.
 			 * @param width Texture width in pixels.
 			 * @param height Texture height in pixels.
 			 * @return Size in bytes of the BC7 compressed data.
@@ -123,25 +131,12 @@ namespace EmEn::Graphics
 
 		private:
 
-			TextureCompressor () = delete;
+			/** @copydoc EmEn::ServiceInterface::onInitialize() */
+			bool onInitialize () noexcept override;
 
-			/**
-			 * @brief Generates a half-resolution mip level using box filter.
-			 * @param source Source pixmap.
-			 * @return Downscaled pixmap (half width, half height, minimum 1x1).
-			 */
-			[[nodiscard]]
-			static Base::PixelFactory::Pixmap< uint8_t > generateMip (const Base::PixelFactory::Pixmap< uint8_t > & source) noexcept;
+			/** @copydoc EmEn::ServiceInterface::onTerminate() */
+			bool onTerminate () noexcept override;
 
-			/**
-			 * @brief Compresses a single mip level to BC7 blocks.
-			 * @param pixmap Source RGBA8 pixel data for this mip level.
-			 * @param threadPool Thread pool for parallel block compression.
-			 * @return Compressed data for this mip level.
-			 */
-			[[nodiscard]]
-			static CompressedMipLevel compressLevel (const Base::PixelFactory::Pixmap< uint8_t > & pixmap,Base::ThreadPool & threadPool) noexcept;
-
-			static bool s_initialized;
+			PrimaryServices & m_primaryServices;
 	};
 }

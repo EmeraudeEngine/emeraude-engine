@@ -56,6 +56,8 @@
 #include "StaticVector.hpp"
 #include "Time/Statistics/RealTime.hpp"
 #include "PostProcessor.hpp"
+#include "TextureCache.hpp"
+#include "TextureCompressor.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -414,6 +416,30 @@ namespace EmEn::Graphics
 			shaderManager () const noexcept
 			{
 				return m_shaderManager;
+			}
+
+			/**
+			 * @brief Returns the reference to the texture compressor service.
+			 * @return const TextureCompressor &
+			 */
+			[[nodiscard]]
+			const TextureCompressor &
+			textureCompressor () const noexcept
+			{
+				return m_textureCompressor;
+			}
+
+			/**
+			 * @brief Returns the reference to the texture disk cache service.
+			 * @note This is the entry point for the whole BC7 path: TextureCache::getOrCompress()
+			 * looks the entry up and only compresses on a miss.
+			 * @return const TextureCache &
+			 */
+			[[nodiscard]]
+			const TextureCache &
+			textureCache () const noexcept
+			{
+				return m_textureCache;
 			}
 
 			/**
@@ -1576,6 +1602,9 @@ namespace EmEn::Graphics
 			SharedUBOManager m_sharedUBOManager;
 			BindlessTextureManager m_bindlessTextureManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
+			TextureCompressor m_textureCompressor{m_primaryServices};
+			/* NOTE: Declared AFTER the compressor: it binds a reference to it. */
+			TextureCache m_textureCache{m_primaryServices, m_textureCompressor};
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
 			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};

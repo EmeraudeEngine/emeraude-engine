@@ -177,7 +177,7 @@ namespace EmEn::Saphir
 		}
 
 		/* Checks shader cache. */
-		if ( m_primaryServices.arguments().isSwitchPresent("--clear-shader-cache") )
+		if ( m_primaryServices.arguments().isSwitchPresent("--clear-renderer-cache") )
 		{
 			this->clearCache();
 		}
@@ -201,7 +201,6 @@ namespace EmEn::Saphir
 		}
 
 		auto & builtInResource = m_glslang->builtInResource;
-
 		builtInResource.maxLights = 32;
 		builtInResource.maxClipPlanes = 6;
 		builtInResource.maxTextureUnits = 32;
@@ -731,7 +730,7 @@ namespace EmEn::Saphir
 	void
 	ShaderManager::clearCache () noexcept
 	{
-		/* NOTE: A disabled facility leaves its directory path EMPTY, and --clear-shader-cache runs
+		/* NOTE: A disabled facility leaves its directory path EMPTY, and --clear-renderer-cache runs
 		 * whatever the settings say, so both loops must be guarded. */
 		for ( const auto & filepath : m_generatedShadersDirectory.empty() ? std::vector< std::filesystem::path >{} : IO::directoryEntries(m_generatedShadersDirectory) )
 		{

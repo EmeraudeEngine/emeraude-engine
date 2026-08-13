@@ -32,25 +32,47 @@
 #include <string>
 #include <vector>
 
+/* Local inclusions for inheritance. */
+#include "ServiceInterface.hpp"
+
 /* Local inclusions for usages. */
 #include "Graphics/TextureCompressor.hpp"
+
+namespace EmEn
+{
+	class PrimaryServices;
+}
 
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief Disk cache for BC7-compressed textures.
+	 * @brief Disk cache for BC7-compressed textures, sub-service of the Renderer.
 	 *
-	 * Stores and retrieves pre-compressed BC7 mip chains on disk to avoid
-	 * re-compressing textures at every engine launch. Cache files are stored
-	 * in the user cache directory under a "TextureCache" subdirectory.
+	 * Stores and retrieves pre-compressed BC7 mip chains on disk to avoid re-compressing
+	 * textures at every engine launch. Cache files live in a "texture-cache" sub-directory
+	 * of the user cache directory.
 	 *
-	 * Invalidation is based on a SHA256 hash of the resource name combined
-	 * with the source file size and modification time. If the source file
-	 * changes, the cache entry is automatically invalidated.
+	 * The service owns the whole BC7 path through getOrCompress(): look the entry up, compress
+	 * it on a miss through the TextureCompressor sub-service, store the result. A caller only
+	 * asks for compressed mips and never sees the cache policy.
+	 *
+	 * Governed by "Core/Graphics/Texture/EnableTextureCache", default true. Disabled, the service
+	 * stays up with an empty directory: every lookup misses and every texture is re-encoded, which
+	 * is what you want to measure the encoding cost.
+	 *
+	 * @note Invalidation is keyed on a FNV-1a hash of the DECODED PIXELS plus the dimensions and
+	 * the channel count. Hashing the content is what makes it correct: the previous key mixed the
+	 * resource name with a "file size" that was the decoded byte count and a "modification time"
+	 * that was width * 1000000 + height, so it reduced to name + dimensions. Repainting a texture
+	 * without resizing it served the stale BC7 blob forever.
+	 * @warning Changing the key scheme does not INVALIDATE existing entries, it ORPHANS them: their
+	 * filenames simply stop being produced, so they sit on disk unreachable. Whoever touches
+	 * cacheKey() again must clear the directory, which --clear-renderer-cache does.
+	 * @extends EmEn::ServiceInterface This is a sub-service of the graphics renderer.
 	 *
 	 * File format (.bc7cache):
 	 *   [4 bytes] Magic ("BC7C")
-	 *   [4 bytes] Version (1)
+	 *   [4 bytes] Version
 	 *   [4 bytes] Mip level count
 	 *   For each mip level:
 	 *	 [4 bytes] Width
@@ -58,57 +80,85 @@ namespace EmEn::Graphics
 	 *	 [4 bytes] Compressed data size
 	 *	 [N bytes] Compressed data
 	 */
-	class EMEN_API TextureCache final
+	class EMEN_API TextureCache final : public ServiceInterface
 	{
 		public:
 
-			static constexpr auto ClassId{"TextureCache"};
+			static constexpr auto ClassId{"TextureCacheService"};
 
 			/**
-			 * @brief Initializes the texture cache with the base cache directory.
-			 * @param baseCacheDirectory The application cache directory (from FileSystem).
+			 * @brief Constructs the texture cache.
+			 * @param primaryServices A reference to the primary services.
+			 * @param compressor A reference to the texture compressor sub-service, used on a miss.
 			 */
-			static void initialize (const std::filesystem::path & baseCacheDirectory) noexcept;
+			TextureCache (PrimaryServices & primaryServices, const TextureCompressor & compressor) noexcept;
 
 			/**
-			 * @brief Tries to load compressed mip data from the disk cache.
-			 * @param resourceName The texture resource name (used for cache key).
-			 * @param sourceFileSize Size of the original source file in bytes.
-			 * @param sourceModTime Last modification time of the source file.
-			 * @return Vector of compressed mip levels, empty if cache miss.
-			 */
-			[[nodiscard]]
-			static std::vector< CompressedMipLevel > tryLoad (const std::string & resourceName,uint64_t sourceFileSize,uint64_t sourceModTime) noexcept;
-
-			/**
-			 * @brief Stores compressed mip data to the disk cache.
-			 * @param resourceName The texture resource name (used for cache key).
-			 * @param sourceFileSize Size of the original source file in bytes.
-			 * @param sourceModTime Last modification time of the source file.
-			 * @param mipLevels The compressed mip chain to store.
-			 * @return True if stored successfully.
+			 * @brief Returns the BC7 mip chain for a pixmap, compressing it only on a cache miss.
+			 * @param resourceName The texture resource name, used for logging ONLY: the key is
+			 * derived from the pixel content, never from the name.
+			 * @param pixmap A reference to the decoded RGBA8 source pixels.
+			 * @param maxMipLevels Maximum number of mip levels (0 = full chain).
+			 * @return Vector of compressed mip levels, empty on failure.
 			 */
 			[[nodiscard]]
-			static bool store (const std::string & resourceName,uint64_t sourceFileSize,uint64_t sourceModTime,const std::vector< CompressedMipLevel > & mipLevels) noexcept;
+			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept;
+
+			/**
+			 * @brief Erases every cache entry from disk.
+			 * @note Called on startup when --clear-renderer-cache is present.
+			 * @return void
+			 */
+			void clearCache () const noexcept;
 
 		private:
 
-			TextureCache () = delete;
+			/** @copydoc EmEn::ServiceInterface::onInitialize() */
+			bool onInitialize () noexcept override;
+
+			/** @copydoc EmEn::ServiceInterface::onTerminate() */
+			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Computes the cache file path for a given resource.
-			 * @param resourceName The texture resource name.
-			 * @param sourceFileSize Size of the original source file.
-			 * @param sourceModTime Last modification time of the source file.
-			 * @return Full path to the cache file.
+			 * @brief Computes the content-addressed cache key for a pixmap.
+			 * @param pixmap A reference to the decoded RGBA8 source pixels.
+			 * @return size_t
 			 */
 			[[nodiscard]]
-			static std::filesystem::path cacheFilePath (const std::string & resourceName,uint64_t sourceFileSize,uint64_t sourceModTime) noexcept;
+			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+
+			/**
+			 * @brief Returns the cache file path for a key.
+			 * @param key The content-addressed cache key.
+			 * @return std::filesystem::path
+			 */
+			[[nodiscard]]
+			std::filesystem::path cacheFilePath (size_t key) const noexcept;
+
+			/**
+			 * @brief Tries to load a compressed mip chain from disk.
+			 * @param key The content-addressed cache key.
+			 * @return Vector of compressed mip levels, empty on a miss.
+			 */
+			[[nodiscard]]
+			std::vector< CompressedMipLevel > tryLoad (size_t key) const noexcept;
+
+			/**
+			 * @brief Stores a compressed mip chain on disk.
+			 * @param key The content-addressed cache key.
+			 * @param mipLevels A reference to the compressed mip chain.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool store (size_t key, const std::vector< CompressedMipLevel > & mipLevels) const noexcept;
 
 			static constexpr uint32_t Magic{0x43374342}; /* "BC7C" */
 			static constexpr uint32_t Version{1};
+			static constexpr auto CacheDirectoryName{"texture-cache"};
+			static constexpr auto CacheFileExtension{".bc7cache"};
 
-			static std::filesystem::path s_cacheDirectory;
-			static bool s_initialized;
+			PrimaryServices & m_primaryServices;
+			const TextureCompressor & m_compressor;
+			std::filesystem::path m_cacheDirectory;
 	};
 }
