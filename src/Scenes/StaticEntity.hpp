@@ -231,7 +231,7 @@ namespace EmEn::Scenes
 			{
 				if ( transformSpace == Base::Math::TransformSpace::Local )
 				{
-					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.downwardVector() * position);
+					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.localYAxis() * position);
 				}
 				else
 				{

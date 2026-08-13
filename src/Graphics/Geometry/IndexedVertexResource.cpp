@@ -201,7 +201,10 @@ namespace EmEn::Graphics::Geometry
 		this->enableFlag(EnablePrimaryTextureCoordinates);
 
 		VertexFactory::ReadOptions options{};
-		options.flipYAxis = true;
+		/* NOTE: flipYAxis is gone with the Y-up convention -- it mirrored the geometry to compensate
+		 * the renderer's mirror. flipV stays: the texture V flip is a real OBJ convention difference
+		 * and has nothing to do with the world axis, which is exactly why the two were separated. */
+		options.flipV = true;
 		options.requestNormal = this->isFlagEnabled(EnableNormal);
 		options.requestTangentSpace = this->isFlagEnabled(EnableTangentSpace);
 		options.requestTextureCoordinates = this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates);

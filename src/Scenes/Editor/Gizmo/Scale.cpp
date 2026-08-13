@@ -61,8 +61,8 @@ namespace EmEn::Scenes::Editor::Gizmo
 		{
 			Geometry::ResourceGenerator gen{resourceManager, Geometry::EnableVertexColor};
 
-			const auto shaftOffset = Matrix< 4, float >::translation(0.0F, -Gap, 0.0F);
-			const auto cubeOffset = Matrix< 4, float >::translation(0.0F, -(Gap + ShaftLength), 0.0F);
+			const auto shaftOffset = Matrix< 4, float >::translation(0.0F, Gap, 0.0F);
+			const auto cubeOffset = Matrix< 4, float >::translation(0.0F, Gap + ShaftLength, 0.0F);
 
 			/* X axis (Red) */
 			const auto rotX = Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 0.0F, 0.0F, 1.0F);
@@ -179,19 +179,19 @@ namespace EmEn::Scenes::Editor::Gizmo
 			}
 		}
 
-		/* NOTE: Axis AABBs (same as Translate). */
+		/* NOTE: Axis AABBs (same as Translate), extending in positive directions. */
 		const std::array< std::pair< AACuboid< float >, AxisID >, 3 > axes{{
 			{AACuboid< float >{
-				pos + Vector< 3, float >{-Gap * s, r, r},
-				pos + Vector< 3, float >{-axisEnd, -r, -r}
+				pos + Vector< 3, float >{axisEnd, r, r},
+				pos + Vector< 3, float >{Gap * s, -r, -r}
 			}, AxisID::X},
 			{AACuboid< float >{
-				pos + Vector< 3, float >{r, -Gap * s, r},
-				pos + Vector< 3, float >{-r, -axisEnd, -r}
+				pos + Vector< 3, float >{r, axisEnd, r},
+				pos + Vector< 3, float >{-r, Gap * s, -r}
 			}, AxisID::Y},
 			{AACuboid< float >{
-				pos + Vector< 3, float >{r, r, -Gap * s},
-				pos + Vector< 3, float >{-r, -r, -axisEnd}
+				pos + Vector< 3, float >{r, r, axisEnd},
+				pos + Vector< 3, float >{-r, -r, Gap * s}
 			}, AxisID::Z}
 		}};
 
@@ -230,7 +230,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 		const float finalScale = isHighlighted ? (m_screenScale * HighlightScale) : m_screenScale;
 
-		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.downwardVector(), m_worldFrame.backwardVector());
+		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.localYAxis(), m_worldFrame.backwardVector());
 
 		const auto modelMatrix = Matrix< 4, float >::translation(m_worldFrame.position()) * rotationMatrix * Matrix< 4, float >::scaling(finalScale) * axisRotation;
 

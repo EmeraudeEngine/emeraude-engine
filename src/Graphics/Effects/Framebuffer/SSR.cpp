@@ -210,14 +210,14 @@ vec3 reconstructPosition (vec2 uv, float depth)
 {
 	float linearZ = linearizeDepth(depth);
 	vec2 ndc = uv * 2.0 - 1.0;
-	float t = abs(tanHalfFovY);
+	float t = tanHalfFovY;
 	return vec3(ndc * vec2(t * aspectRatio, t) * linearZ, linearZ);
 }
 
 /* Project view-space position back to screen UV. */
 vec2 projectToUV (vec3 viewPos)
 {
-	float t = abs(tanHalfFovY);
+	float t = tanHalfFovY;
 	vec2 ndc = viewPos.xy / (viewPos.z * vec2(t * aspectRatio, t));
 	return ndc * 0.5 + 0.5;
 }
@@ -522,7 +522,7 @@ void main()
 		float hitDepth = texture(depthTex, vUV).r;
 		float hitLinearZ = linearizeDepth(hitDepth);
 		vec2 hitNdc = vUV * 2.0 - 1.0;
-		float hitT = abs(tanHalfFovY);
+		float hitT = tanHalfFovY;
 		vec3 hitViewPos = vec3(hitNdc.x * hitT * aspectRatio * hitLinearZ, hitNdc.y * hitT * hitLinearZ, -hitLinearZ);
 		vec3 hitNormal = normalize(texture(normalTex, vUV).rgb);
 		float hitNdotV = max(dot(hitNormal, -normalize(hitViewPos)), 0.0);
@@ -552,7 +552,7 @@ void main()
 		/* Reconstruct view-space position (standard: Z negative = into screen). */
 		float linearZ = linearizeDepth(depth);
 		vec2 ndc = vUV * 2.0 - 1.0;
-		float t = abs(tanHalfFovY);
+		float t = tanHalfFovY;
 		vec3 viewPos = vec3(ndc.x * t * aspectRatio * linearZ,
 							ndc.y * t * linearZ, -linearZ);
 
@@ -572,11 +572,11 @@ void main()
 		mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
 		vec3 worldReflDir = invViewRot * reflDir;
 
-		/* ENGINE CUBEMAP CONVENTION: world direction D samples at vec3(D.x, -D.y, D.z)
-		 * (engine UP = -Y, cubemap stored Y-up) — same as skybox/material reflections.
+		/* The world is Y-UP: a world direction samples the cubemap as-is. The former
+		 * vec3(D.x, -D.y, D.z) compensation of the Y-DOWN world is deleted.
 		 * The prefiltered chain handles the roughness (the old smoothstep attenuation
 		 * compensated a mirror-only sample); mip 0 is an exact environment copy. */
-		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], vec3(worldReflDir.x, -worldReflDir.y, worldReflDir.z), clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], worldReflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
 
 		/* Same primary-surface Fresnel COLOR as the hit path (see the comment there). */
 		float missNdotV = max(dot(normal, -normalize(viewPos)), 0.0);

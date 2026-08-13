@@ -125,7 +125,14 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				Code{vertexShader, Location::Output} << ShaderVariable::Primary3DTextureCoordinates << " = normalize(vec3(" << Attribute::Position << ".x, -" << Attribute::Position << ".y, " << Attribute::Position << ".z));";
+				/* NOTE: The only consumer is the skybox (SkyBoxResource), whose cuboid is centered on
+				 * the camera and never rotated, so the local vertex position IS the world sampling
+				 * direction. The world is Y-UP: the direction feeds the cubemap sampler as-is. The
+				 * former (P.x, -P.y, P.z) compensation belonged to the Y-DOWN era and was the LAST
+				 * cubemap Y negation of the whole pipeline — the five others (StandardResource,
+				 * LightGenerator, SSR, RTGI, RTR) went away with the Y-up flip. Keeping it swapped
+				 * the +Y/-Y faces and mirrored the four side faces vertically. */
+				Code{vertexShader, Location::Output} << ShaderVariable::Primary3DTextureCoordinates << " = normalize(" << Attribute::Position << ");";
 			}
 			else
 			{
@@ -134,7 +141,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				Code{vertexShader, Location::Output} << ShaderVariable::Primary2DTextureCoordinates << " = normalize(" << Attribute::Position << ".x, -" << Attribute::Position << ".y);";
+				/* NOTE: The vec2() wrapper was missing, so this emitted `normalize(pos.x, -pos.y)`, and GLSL
+				 * normalize() takes ONE argument. The 3D sibling above shows the intended form. */
+				Code{vertexShader, Location::Output} << ShaderVariable::Primary2DTextureCoordinates << " = normalize(vec2(" << Attribute::Position << ".x, -" << Attribute::Position << ".y));";
 			}
 
 			return true;

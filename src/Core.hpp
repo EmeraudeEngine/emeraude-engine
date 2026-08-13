@@ -335,6 +335,37 @@ namespace EmEn
 			void resume () noexcept;
 
 			/**
+			 * @brief Enables or disables the physical simulation of the active scene.
+			 * @details When disabled, Scene::processLogics() skips resolveCollisions() entirely:
+			 * entities still move under their own logic, but no collision, no boundary clipping
+			 * and no ground response is applied. This is a DEBUG affordance meant to isolate a
+			 * rendering or logic defect from a physics one — it is not a pause, and it is not a
+			 * scene setting.
+			 * @note Callable from any thread; read once per logic cycle.
+			 * @param state The state.
+			 * @return void
+			 * @see physicalSimulationEnabled()
+			 */
+			void
+			enablePhysicalSimulation (bool state) noexcept
+			{
+				m_physicalSimulationEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the physical simulation of the active scene is enabled.
+			 * @note Callable from any thread.
+			 * @return bool
+			 * @see enablePhysicalSimulation()
+			 */
+			[[nodiscard]]
+			bool
+			physicalSimulationEnabled () const noexcept
+			{
+				return m_physicalSimulationEnabled;
+			}
+
+			/**
 			 * @brief Requests a main-loop cycle to run within a given delay (thread-safe).
 			 * @details Generic integration contract for external subsystems hooked into the main
 			 * loop through onCoreMainLoopCycle(), e.g., an external message pump such as CEF's
@@ -1622,6 +1653,7 @@ namespace EmEn
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isRenderingLoopRunning{true}; ///< Render thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_paused{false}; ///< Current pause state (atomic for thread-safe access).
+			std::atomic< bool > m_physicalSimulationEnabled{true}; ///< Whether Scene::processLogics() runs resolveCollisions(). Debug affordance, written from the console thread and read by the logic thread, hence atomic. @see enablePhysicalSimulation()
 			bool m_willNotRun{false};
 			bool m_resetSettingsOnNewVersion{false}; ///< Reset settings when the file was written by an older engine version. @see resetSettingsIfOutdated()
 			bool m_pausable{false}; ///< Whether pause is currently allowed.

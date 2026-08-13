@@ -47,7 +47,7 @@ namespace EmEn::Scenes::Component
 	MultipleVisuals::composeWithWorldFrame (const CartesianFrame< float > & localFrame) const noexcept
 	{
 		const auto & right = m_worldFrame.rightVector();
-		const auto & downward = m_worldFrame.downwardVector();
+		const auto & downward = m_worldFrame.localYAxis();
 		const auto & backward = m_worldFrame.backwardVector();
 
 		/* The local axes are only ROTATED by the parent: a direction carries no translation, and
@@ -71,7 +71,7 @@ namespace EmEn::Scenes::Component
 
 		return CartesianFrame< float >{
 			m_worldFrame.position() + rotate(scaledPosition),
-			rotate(localFrame.downwardVector()),
+			rotate(localFrame.localYAxis()),
 			rotate(localFrame.backwardVector()),
 			{
 				parentScaling[X] * localScaling[X],

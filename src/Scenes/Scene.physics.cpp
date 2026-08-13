@@ -60,12 +60,12 @@ namespace EmEn::Scenes
 		/* Apply grounded response if standing on a surface.
 		 * Surface is considered "ground" if:
 		 * - Direct ground collision (groundPenetration > 0), OR
-		 * - Normal points downward (Y > 0.7 in Y-down = surface faces up) */
+		 * - Normal points downward (Y < -0.7 in Y-up = surface faces up) */
 		constexpr auto GroundNormalThreshold{0.7F}; /* ~45 degrees */
-		const bool isOnSurface = (groundPenetration > 0.0F) || (surfaceNormal[Y] > GroundNormalThreshold);
+		const bool isOnSurface = (groundPenetration > 0.0F) || (surfaceNormal[Y] < -GroundNormalThreshold);
 
-		/* Only apply grounded response if not bouncing away (velocity Y near zero or positive). */
-		if ( isOnSurface && velocity[Y] >= -0.1F )
+		/* Only apply grounded response if not bouncing away (velocity Y near zero or negative). */
+		if ( isOnSurface && velocity[Y] <= 0.1F )
 		{
 			velocity[Y] = 0.0F;
 			movable->setLinearVelocity(velocity);
@@ -93,7 +93,7 @@ namespace EmEn::Scenes
 
 		/* Lock the physics octree for the duration of the simulation to prevent
 		 * concurrent modifications from other threads (e.g., checkEntityLocationInOctrees). */
-		const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
+		const std::scoped_lock lock{m_physicsOctreeAccess};
 
 		/* ============================================================
 		 * PHASE 1: STATIC COLLISIONS (Boundaries, Ground, StaticEntity)
@@ -155,10 +155,12 @@ namespace EmEn::Scenes
 					{
 						/* Only mark as grounded on Boundary if it's the floor (bottom face).
 						 * Side walls and ceiling cannot ground an entity.
-						 * In Y-down, floor normal points in +Y direction (downward). */
+						 * ⚠️ +Y is UP, so the world box's FLOOR is its Y = -boundary plane, and the
+						 * contact normal there points from the body towards that wall — DOWNWARD.
+						 * The test below is therefore Y-UP correct as written: do not "fix" it. */
 						constexpr auto GroundNormalThreshold{0.7F};
 
-						if ( dominantNormal[Y] > GroundNormalThreshold )
+						if ( dominantNormal[Y] < -GroundNormalThreshold )
 						{
 							dominantSource = GroundedSource::Boundary;
 						}
@@ -190,10 +192,11 @@ namespace EmEn::Scenes
 					{
 						/* Only mark as grounded on Entity if standing on top of it.
 						 * Hitting the side of a wall doesn't ground you.
-						 * In Y-down, floor-like normal points in +Y direction. */
+						 * ⚠️ +Y is UP: standing ON something means the contact normal points from
+						 * the body DOWN into it. Y-UP correct as written: do not "fix" it. */
 						constexpr auto GroundNormalThreshold{0.7F};
 
-						if ( dominantNormal[Y] > GroundNormalThreshold )
+						if ( dominantNormal[Y] < -GroundNormalThreshold )
 						{
 							dominantSource = GroundedSource::Entity;
 							dominantEntity = collidedEntity;
@@ -557,8 +560,9 @@ namespace EmEn::Scenes
 		{
 			const auto groundLevel = m_groundLevel->getLevelAt(position);
 
-			/* NOTE: Y- is up, so position[Y] must be <= groundLevel to be above ground. */
-			if ( position[Y] > groundLevel )
+			/* ⚠️ +Y is UP: a point is above ground while position[Y] >= groundLevel, so the
+			 * violation to clip is position[Y] < groundLevel. */
+			if ( position[Y] < groundLevel )
 			{
 				entity->setYPosition(groundLevel, TransformSpace::World);
 			}
@@ -575,7 +579,7 @@ namespace EmEn::Scenes
 			{
 				const auto groundLevel = m_groundLevel->getLevelAt(position);
 
-				if ( position[Y] > groundLevel )
+				if ( position[Y] < groundLevel )
 				{
 					entity->setYPosition(groundLevel, TransformSpace::World);
 				}
@@ -587,12 +591,13 @@ namespace EmEn::Scenes
 				const auto aabb = model->getAABB(worldCoords);
 				const auto radius = aabb.width() * 0.5F;
 				const auto groundLevel = m_groundLevel->getLevelAt(position);
-				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
-				const auto lowestPoint = position[Y] + radius;
+				/* ⚠️ +Y is UP, so the lowest point of the sphere is position[Y] - radius, and
+				 * resting on the surface puts its CENTRE one radius ABOVE the ground level. */
+				const auto lowestPoint = position[Y] - radius;
 
-				if ( lowestPoint > groundLevel )
+				if ( lowestPoint < groundLevel )
 				{
-					entity->setYPosition(groundLevel - radius, TransformSpace::World);
+					entity->setYPosition(groundLevel + radius, TransformSpace::World);
 				}
 			}
 				break;
@@ -601,21 +606,31 @@ namespace EmEn::Scenes
 			{
 				const auto aabb = model->getAABB(worldCoords);
 
-				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
-				 * Check all four bottom corners and use the deepest penetration. */
-				const std::array< Vector< 3, float >, 4 > bottomCorners{
-					aabb.bottomSouthEast(),
-					aabb.bottomSouthWest(),
-					aabb.bottomNorthWest(),
-					aabb.bottomNorthEast()
+				/* ⚠️ +Y is UP, so the box's ground-facing face is its MINIMUM-Y one. The accessors
+				 * say which extremum they return rather than "bottom"/"top", so this choice is
+				 * explicit at the site that makes it.
+				 * ⚠️ This block is DUPLICATED THREE TIMES in this file. Changing one and not the
+				 * others is a silent half-migration: bodies would rest on the ground in one code path
+				 * and sink through it in another.
+				 * ⚠️⚠️ The corner CHOICE and the penetration ARITHMETIC below are ONE decision. The
+				 * Y-up flip moved the corners to minY* and left the subtraction reversed, which is
+				 * how this block ended up half-migrated INSIDE the warning telling it not to be. */
+				const std::array< Vector< 3, float >, 4 > groundFacingCorners{
+					aabb.minYSouthEast(),
+					aabb.minYSouthWest(),
+					aabb.minYNorthWest(),
+					aabb.minYNorthEast()
 				};
 
 				auto deepestPenetration = 0.0F;
 
-				for ( const auto & corner : bottomCorners )
+				for ( const auto & corner : groundFacingCorners )
 				{
 					const auto groundLevel = m_groundLevel->getLevelAt(corner);
-					const auto penetration = corner[Y] - groundLevel;
+					/* ⚠️ +Y is UP: the corner is BELOW the surface when it sits at a LOWER Y, so the
+					 * penetration is (ground - corner). Written the other way round it measures the
+					 * CLEARANCE above the ground and reports every airborne body as colliding. */
+					const auto penetration = groundLevel - corner[Y];
 
 					if ( penetration > deepestPenetration )
 					{
@@ -625,8 +640,8 @@ namespace EmEn::Scenes
 
 				if ( deepestPenetration > 0.0F )
 				{
-					/* NOTE: Move up (Y-) by the penetration amount. */
-					entity->moveY(-deepestPenetration, TransformSpace::World);
+					/* ⚠️ +Y is UP: clipping a body out of the ground moves it towards +Y. */
+					entity->moveY(deepestPenetration, TransformSpace::World);
 				}
 			}
 				break;
@@ -860,13 +875,14 @@ namespace EmEn::Scenes
 			{
 				const auto groundLevel = m_groundLevel->getLevelAt(position);
 
-				/* NOTE: Y- is up, so position[Y] > groundLevel means below ground. */
-				if ( position[Y] > groundLevel )
+				/* ⚠️ +Y is UP, so position[Y] < groundLevel means below ground. */
+				if ( position[Y] < groundLevel )
 				{
-					const auto penetration = position[Y] - groundLevel;
+					const auto penetration = groundLevel - position[Y];
 					ContactManifold manifold(movable);
-					/* Normal points from bodyA (entity) towards bodyB (ground/Y+). */
-					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, 1.0F, 0.0F}, penetration);
+					/* Normal points from bodyA (entity) towards bodyB (the ground), which is
+					 * DOWNWARD now that +Y is up. */
+					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 			}
@@ -877,15 +893,16 @@ namespace EmEn::Scenes
 				const auto aabb = model->getAABB(worldCoords);
 				const auto radius = aabb.width() * 0.5F;
 				const auto groundLevel = m_groundLevel->getLevelAt(position);
-				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
-				const auto lowestPoint = position[Y] + radius;
+				/* ⚠️ +Y is UP, so the lowest point of the sphere is position[Y] - radius. */
+				const auto lowestPoint = position[Y] - radius;
 
-				if ( lowestPoint > groundLevel )
+				if ( lowestPoint < groundLevel )
 				{
-					const auto penetration = lowestPoint - groundLevel;
+					const auto penetration = groundLevel - lowestPoint;
 					ContactManifold manifold(movable);
-					/* Normal points from bodyA (entity) towards bodyB (ground/Y+). */
-					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, 1.0F, 0.0F}, penetration);
+					/* Normal points from bodyA (entity) towards bodyB (the ground), which is
+					 * DOWNWARD now that +Y is up. */
+					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 			}
@@ -895,21 +912,31 @@ namespace EmEn::Scenes
 			{
 				const auto aabb = model->getAABB(worldCoords);
 
-				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
-				 * Check all four bottom corners and use the deepest penetration. */
-				const std::array< Vector< 3, float >, 4 > bottomCorners{
-					aabb.bottomSouthEast(),
-					aabb.bottomSouthWest(),
-					aabb.bottomNorthWest(),
-					aabb.bottomNorthEast()
+				/* ⚠️ +Y is UP, so the box's ground-facing face is its MINIMUM-Y one. The accessors
+				 * say which extremum they return rather than "bottom"/"top", so this choice is
+				 * explicit at the site that makes it.
+				 * ⚠️ This block is DUPLICATED THREE TIMES in this file. Changing one and not the
+				 * others is a silent half-migration: bodies would rest on the ground in one code path
+				 * and sink through it in another.
+				 * ⚠️⚠️ The corner CHOICE and the penetration ARITHMETIC below are ONE decision. The
+				 * Y-up flip moved the corners to minY* and left the subtraction reversed, which is
+				 * how this block ended up half-migrated INSIDE the warning telling it not to be. */
+				const std::array< Vector< 3, float >, 4 > groundFacingCorners{
+					aabb.minYSouthEast(),
+					aabb.minYSouthWest(),
+					aabb.minYNorthWest(),
+					aabb.minYNorthEast()
 				};
 
 				auto deepestPenetration = 0.0F;
 
-				for ( const auto & corner : bottomCorners )
+				for ( const auto & corner : groundFacingCorners )
 				{
 					const auto groundLevel = m_groundLevel->getLevelAt(corner);
-					const auto penetration = corner[Y] - groundLevel;
+					/* ⚠️ +Y is UP: the corner is BELOW the surface when it sits at a LOWER Y, so the
+					 * penetration is (ground - corner). Written the other way round it measures the
+					 * CLEARANCE above the ground and reports every airborne body as colliding. */
+					const auto penetration = groundLevel - corner[Y];
 
 					if ( penetration > deepestPenetration )
 					{
@@ -921,8 +948,9 @@ namespace EmEn::Scenes
 				{
 					const auto groundLevel = m_groundLevel->getLevelAt(position);
 					ContactManifold manifold(movable);
-					/* Normal points from bodyA (entity) towards bodyB (ground/Y+). */
-					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, 1.0F, 0.0F}, deepestPenetration);
+					/* Normal points from bodyA (entity) towards bodyB (the ground), which is
+					 * DOWNWARD now that +Y is up. */
+					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, -1.0F, 0.0F}, deepestPenetration);
 					manifolds.push_back(manifold);
 				}
 			}
@@ -1088,8 +1116,12 @@ namespace EmEn::Scenes
 		 * Gets the actual terrain normal at the contact position. */
 		auto accumulateCollision = [this, &positionCorrection, &dominantNormal, &maxPenetration, &groundNormal, &groundPenetration] (const Vector< 3, float > & contactPosition, float penetration) {
 			/* Get actual terrain normal at this position.
-			 * getNormalAt() returns normal pointing UP (away from ground, Y-).
-			 * We negate it to get normal pointing INTO ground (Y+) for consistent bounce math. */
+			 * ⚠️ getNormalAt() returns the surface's OUTWARD normal, which points UP (+Y).
+			 * The file-wide contact convention is the opposite one — the normal points FROM the
+			 * body INTO the surface it penetrates — which is what applyCollisionResponse() reads
+			 * (vn > 0 means "moving into the surface") and what makes the correction below
+			 * (positionCorrection -= normal * penetration) push the body UP. Hence the negation:
+			 * it survived the Y-up flip unchanged, because BOTH sides of it flipped together. */
 			const auto normal = -m_groundLevel->getNormalAt(contactPosition);
 
 			/* Accumulate position correction (move opposite to normal = up). */
@@ -1113,10 +1145,10 @@ namespace EmEn::Scenes
 			{
 				const auto groundLevel = m_groundLevel->getLevelAt(position);
 
-				/* NOTE: Y- is up, so position[Y] > groundLevel means below ground. */
-				if ( position[Y] > groundLevel )
+				/* ⚠️ +Y is UP, so position[Y] < groundLevel means below ground. */
+				if ( position[Y] < groundLevel )
 				{
-					accumulateCollision(position, position[Y] - groundLevel);
+					accumulateCollision(position, groundLevel - position[Y]);
 				}
 			}
 				break;
@@ -1126,12 +1158,12 @@ namespace EmEn::Scenes
 				const auto aabb = model->getAABB(worldCoords);
 				const auto radius = aabb.width() * 0.5F;
 				const auto groundLevel = m_groundLevel->getLevelAt(position);
-				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
-				const auto lowestPoint = position[Y] + radius;
+				/* ⚠️ +Y is UP, so the lowest point of the sphere is position[Y] - radius. */
+				const auto lowestPoint = position[Y] - radius;
 
-				if ( lowestPoint > groundLevel )
+				if ( lowestPoint < groundLevel )
 				{
-					accumulateCollision(position, lowestPoint - groundLevel);
+					accumulateCollision(position, groundLevel - lowestPoint);
 				}
 			}
 				break;
@@ -1140,21 +1172,31 @@ namespace EmEn::Scenes
 			{
 				const auto aabb = model->getAABB(worldCoords);
 
-				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
-				 * Check all four bottom corners and use the deepest penetration. */
-				const std::array< Vector< 3, float >, 4 > bottomCorners{
-					aabb.bottomSouthEast(),
-					aabb.bottomSouthWest(),
-					aabb.bottomNorthWest(),
-					aabb.bottomNorthEast()
+				/* ⚠️ +Y is UP, so the box's ground-facing face is its MINIMUM-Y one. The accessors
+				 * say which extremum they return rather than "bottom"/"top", so this choice is
+				 * explicit at the site that makes it.
+				 * ⚠️ This block is DUPLICATED THREE TIMES in this file. Changing one and not the
+				 * others is a silent half-migration: bodies would rest on the ground in one code path
+				 * and sink through it in another.
+				 * ⚠️⚠️ The corner CHOICE and the penetration ARITHMETIC below are ONE decision. The
+				 * Y-up flip moved the corners to minY* and left the subtraction reversed, which is
+				 * how this block ended up half-migrated INSIDE the warning telling it not to be. */
+				const std::array< Vector< 3, float >, 4 > groundFacingCorners{
+					aabb.minYSouthEast(),
+					aabb.minYSouthWest(),
+					aabb.minYNorthWest(),
+					aabb.minYNorthEast()
 				};
 
 				auto deepestPenetration = 0.0F;
 
-				for ( const auto & corner : bottomCorners )
+				for ( const auto & corner : groundFacingCorners )
 				{
 					const auto groundLevel = m_groundLevel->getLevelAt(corner);
-					const auto penetration = corner[Y] - groundLevel;
+					/* ⚠️ +Y is UP: the corner is BELOW the surface when it sits at a LOWER Y, so the
+					 * penetration is (ground - corner). Written the other way round it measures the
+					 * CLEARANCE above the ground and reports every airborne body as colliding. */
+					const auto penetration = groundLevel - corner[Y];
 
 					if ( penetration > deepestPenetration )
 					{

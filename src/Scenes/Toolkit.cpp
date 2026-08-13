@@ -118,7 +118,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		node->lookAt(lookAt, false);
+		node->lookAt(lookAt, true);
 
 		return node;
 	}

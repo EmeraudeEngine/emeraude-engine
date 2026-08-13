@@ -43,22 +43,50 @@ namespace EmEn::Graphics
 	using namespace Base::Math;
 	using namespace Vulkan;
 
+	/* Face capture orientations — the camera for each face of a cubemap RENDER TARGET.
+	 *
+	 * ⚠️⚠️ THE THREE PIECES BELOW ARE ONE MECHANISM. Change one alone and the cubemap breaks:
+	 *   1. this table: each face looks along ITS OWN axis, with NEGATED up vectors
+	 *      (sides -Y, the +Y pole +Z, the -Y pole -Z);
+	 *   2. updatePerspectiveViewProperties(): the Y-up projection flip is UNDONE for cube faces;
+	 *   3. GraphicsPipeline::configureRasterizationState(..., mirroredViewport = isCubemap()):
+	 *      the front face is inverted.
+	 *
+	 * WHY, and it is not negotiable: the cube-face convention is LEFT-handed — a face wants
+	 * `right x up = +look` (see the (dx,dy,dz) tables in CubemapResource / IBLBaker) — while a camera
+	 * is right-handed and gives `right x up = -look`. MEASURED: with honest look/up vectors, all six
+	 * faces come out with EXACTLY the opposite right vector. No choice of look/up can repair that,
+	 * because changing `up` only ROTATES a face (up -> -up gives right -> -right AND up -> -up,
+	 * i.e. a 180 degree turn) and never MIRRORS it. Handedness is invariant under that reparameter-
+	 * isation, so the fix has to be a reflection — items 2 and 3 above. Undoing the projection Y flip
+	 * supplies the second mirror (mirror + mirror = a 180 degree rotation, orientation-preserving),
+	 * and the negated ups in this table cancel that rotation. Item 3 pays for the winding the
+	 * reflection reverses.
+	 *
+	 * ⚠️ Before the Y-up flip this table was ALSO half-migrated: the Y+ row looked at -Y, the Y- row
+	 * at +Y, and both Z rows carried a "(direction swapped)" comment. Those compensated the Y-down
+	 * world and are gone.
+	 *
+	 * THE THREE SYMPTOMS, in the order they were peeled off in `reflexion-debug --demo-options 0,3,0`
+	 * (mode 3 = CameraOnce, a probe baked once — the only mode where left/right is READABLE, because
+	 * a reflected sky has no landmark):
+	 *   - wrong face axes  -> GROUND at the top of the sphere, SKY at the bottom, faces not joining;
+	 *   - missing mirror   -> palm TRUNK left but its CROWN crossed to the right (the crown lands on
+	 *                         the +Y pole face, whose mirror axis is X: a GLOBAL mirror would have
+	 *                         moved the whole tree, a per-face one cuts it in two);
+	 *   - missing item 3   -> geometry correctly PLACED but the cubemap mostly BLACK (culling).
+	 * Correct: palm whole on the left, dragon on the right, continuous horizon, no black.
+	 *
+	 * ⚠️⚠️ This mechanism feeds EVERY cubemap render target — reflection probes AND point-light
+	 * shadow cubemaps. Do not tune it against one of them alone. `light-and-shadow-debug` measured
+	 * 3329 differing pixels out of 4665600 across the change: shadows are unaffected. */
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X-
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}), // Y+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}), // Y-
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // Z+ (direction swapped)
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}) // Z- (direction swapped)
-	};
-
-	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::ShadowCubemapOrientation{
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X-
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X-
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}), // Y+
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}), // Y-
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // Z+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}) // Z-
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // Z+
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}) // Z-
 	};
 
 	const Matrix< 4, float > &
@@ -172,7 +200,13 @@ namespace EmEn::Graphics
 
 		constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
 
-		return std::atan(1.0F / m_logicState.projection[M4x4Col1Row1]) * 2.0F * Rad2Deg;
+		/* ⚠️ std::abs() is a NO-OP today and load-bearing tomorrow. This recovers the FOV from the
+		 * matrix and SceneRenderTarget::setViewDistance() feeds it straight back into
+		 * perspectiveProjection(), which rebuilds that same matrix. The Y-up migration makes
+		 * [Col1Row1] NEGATIVE; without abs() the recovered FOV is negative, cotan(fov/2) is
+		 * negative, and -a comes out POSITIVE again — the flip would silently undo itself on the
+		 * first view-distance change, on every resize path. Do not remove. */
+		return std::atan(1.0F / std::abs(m_logicState.projection[M4x4Col1Row1])) * 2.0F * Rad2Deg;
 	}
 
 	void
@@ -193,6 +227,15 @@ namespace EmEn::Graphics
 		m_logicState.bufferData[NearPlaneOffset] = 0.1F / std::sqrt(1.0F + powA * 2.0F);
 
 		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]);
+
+		/* ⚠️ Undo the Y-up projection flip — for CUBE FACES ONLY, and never in isolation.
+		 * This is piece 2 of the three-part mechanism documented on CubemapOrientation above: it
+		 * supplies the mirror the left-handed cube-face convention needs, the negated up vectors in
+		 * that table cancel the resulting 180 degree rotation, and the front-face inversion in
+		 * GraphicsPipeline pays for the reversed winding. Remove any one of the three and the
+		 * captured cubemap is mirrored, upside down or black. */
+		m_logicState.projection[M4x4Col1Row1] = -m_logicState.projection[M4x4Col1Row1];
+
 
 		/*TraceDebug{ClassId} <<
 			"Perspective projection:" "\n"

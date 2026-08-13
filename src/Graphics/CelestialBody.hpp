@@ -42,7 +42,7 @@ namespace EmEn::Graphics
 	 * @brief Describes a distant light emitter identified in a background (a sun, a moon, a
 	 * bright star, ...), carrying the photometric parameters needed to derive an analytic
 	 * directional light from the sky.
-	 * @note The contract: the direction points TOWARD the body in the engine frame (UP = -Y),
+	 * @note The contract: the direction points TOWARD the body in the engine frame (UP = +Y),
 	 * the illuminance is measured on a surface facing the body, in lux, and the color is
 	 * resolved in sRGB — either authored directly or derived from a color temperature in
 	 * kelvins, the industry-standard authoring (UE "Use Temperature", Unity HDRP
@@ -95,7 +95,7 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Sets the direction pointing TOWARD the body, in the engine frame (UP = -Y).
+			 * @brief Sets the direction pointing TOWARD the body, in the engine frame (UP = +Y).
 			 * @param direction A reference to a vector. It is normalized on store.
 			 * @return void
 			 */
@@ -283,7 +283,7 @@ namespace EmEn::Graphics
 
 		private:
 
-			Base::Math::Vector< 3, float > m_direction{0.0F, -1.0F, 0.0F}; /**< Toward the body, normalized. Default: zenith (UP = -Y). */
+			Base::Math::Vector< 3, float > m_direction{0.0F, 1.0F, 0.0F}; /**< Toward the body, normalized. Default: zenith (UP = +Y). */
 			Base::PixelFactory::Color< float > m_color{Base::PixelFactory::White}; /**< Resolved sRGB color. */
 			float m_illuminance{0.0F}; /**< Illuminance facing the body, in lux. */
 			float m_temperature{DefaultTemperature}; /**< Color temperature, in kelvins. */

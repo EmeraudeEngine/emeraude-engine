@@ -715,7 +715,7 @@ namespace EmEn::Scenes::Editor
 
 						case Gizmo::AxisID::Y :
 							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
-								? entityFrame.downwardVector()
+								? entityFrame.localYAxis()
 								: Vector< 3, float >{0.0F, 1.0F, 0.0F};
 							break;
 

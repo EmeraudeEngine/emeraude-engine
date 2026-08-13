@@ -45,9 +45,14 @@ namespace EmEn::Audio
 
 		const auto & position = worldCoordinates.position();
 		const auto & atVector = worldCoordinates.forwardVector();
-		/* NOTE: This is not a bug, OpenAL was designed to work with OpenGL.
-		 * Here we are using Vulkan which inverted the Y axis.
-		 * As the engine follow the Vulkan rule at every level, we must send the downward vector instead. */
+		/* ⚠️ Y-UP MIGRATION — THIS LINE FLIPS. OpenAL's AL_ORIENTATION takes a genuine UP vector, and
+		 * this deliberately hands it the DOWN one because the engine world is currently Y-down. It is
+		 * therefore a compensation for the same defect as the loader winding swaps and the gizmo
+		 * negative axes, not an OpenAL quirk: once +Y means up, this must read upwardVector() and this
+		 * comment must go.
+		 * ⚠️ It is invisible to every visual check — get it wrong and stereo/HRTF panning silently
+		 * disagrees with the picture, with nothing on screen to show for it. Verify by playing a
+		 * positional sound at world +X and confirming the side it comes from. */
 		const auto & upVector = worldCoordinates.downwardVector();
 
 		const std::array< ALfloat, 12 > properties = {

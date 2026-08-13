@@ -133,7 +133,7 @@ scaleFactor = screenRatio * distance * tan(FOV/2)
 5. **GizmoRendering generator needs geometry flags** — Must pass `Topology::TriangleList` + `EnableVertexColor`
 6. **World rotation save/restore position** — `rotate(TransformSpace::World)` orbits; save position before, restore after
 7. **Local rotation uses unit axes** — Pass `(1,0,0)` with `TransformSpace::Local`, NOT the already-transformed world vector
-8. **Arrow directions are NEGATIVE** — `PointTo::NegativeX/Y/Z` to align visually with compass reference spheres (projection pipeline inversion)
+8. **Arrow directions are POSITIVE** — the gizmo arrows are authored along +X/+Y/+Z, and the hit-test AABBs extend in positive directions. The mirror-era negative-axis compensation ("projection pipeline inversion") died with the Y-up flip (stage 4): the renderer is no longer orientation-reversing, so what is authored positive DISPLAYS positive, aligned with the compass reference spheres.
 
 ## Future Work
 - Plane handles for 2-axis translation (XY, YZ, XZ)

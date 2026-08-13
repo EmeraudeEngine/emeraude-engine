@@ -156,7 +156,7 @@ namespace EmEn
 				 * preventing locking the "rendering thread" for updating the scene logic. */
 				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene ) {
 					/* This should run "freely" on one thread. */
-					activeScene->processLogics(m_cycle);
+					activeScene->processLogics(m_cycle, m_physicalSimulationEnabled);
 
 					/* Tells the system one snapshot of the logic is ready to be synced. */
 					activeScene->publishStateForRendering();

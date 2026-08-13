@@ -139,7 +139,7 @@ namespace EmEn::Overlay
 	{
 		m_surfaceGeometry = std::make_shared< Geometry::IndexedVertexResource >(m_resourceManager, "OverlayQuad", Geometry::EnablePrimaryTextureCoordinates);
 
-		if ( !m_surfaceGeometry->load(ShapeGenerator::generateQuad(2.0F, 2.0F)) )
+		if ( !m_surfaceGeometry->load(ShapeGenerator::generateScreenQuad()) )
 		{
 			TraceError{ClassId} << "Unable to generate a geometry for UI surfaces !";
 

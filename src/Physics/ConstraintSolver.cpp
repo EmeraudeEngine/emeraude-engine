@@ -236,7 +236,7 @@ namespace EmEn::Physics
 
 				/* Body A is grounded if normal points downward (A is on top).
 				 * Only ground against static surfaces, not other dynamic bodies. */
-				if ( normal[Base::Math::Y] > GroundNormalThreshold && (!bodyB || !bodyB->isMovable()) )
+				if ( normal[Base::Math::Y] < -GroundNormalThreshold && (!bodyB || !bodyB->isMovable()) )
 				{
 					/* Ground on Entity since this is Node-to-Node collision resolution. */
 					bodyA->setGrounded(GroundedSource::Entity, bodyB);
@@ -256,7 +256,7 @@ namespace EmEn::Physics
 
 				/* Body B is grounded if normal points upward (B is on top).
 				 * Only ground against static surfaces, not other dynamic bodies. */
-				if ( normal[Base::Math::Y] < -GroundNormalThreshold && (!bodyA || !bodyA->isMovable()) )
+				if ( normal[Base::Math::Y] > GroundNormalThreshold && (!bodyA || !bodyA->isMovable()) )
 				{
 					/* Ground on Entity since this is Node-to-Node collision resolution. */
 					bodyB->setGrounded(GroundedSource::Entity, bodyA);

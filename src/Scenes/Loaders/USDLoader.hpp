@@ -242,7 +242,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param metersPerUnit The stage's linear unit.
 			 * @param instancers The list being filled.
 			 */
-			static void collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, const AxisFlip & axisFlip, std::vector< Instancer > & instancers) noexcept;
+			static void collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
 
 			/**
 			 * @brief Turns the collected instancers into instance sets referencing built meshes.
@@ -288,7 +288,7 @@ namespace EmEn::Scenes::Loaders
 			 * @return size_t The number of lights translated.
 			 */
 			[[nodiscard]]
-			static size_t buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, const AxisFlip & axisFlip, SceneData & output) noexcept;
+			static size_t buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept;
 
 			/**
 			 * @brief Walks a stage's xform hierarchy and records every prim's world placement.

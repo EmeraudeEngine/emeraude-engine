@@ -228,10 +228,14 @@ namespace EmEn::Vulkan
 			 * @param renderPassType The render pass type.
 			 * @param options A pointer to rasterization options. Default none.
 			 * @param flags Flags value for this stage. Default 0.
+			 * @param mirroredViewport The pass renders through a MIRRORED projection, so the
+			 * on-screen triangle winding is reversed and the front face must be inverted to keep
+			 * back-face culling meaning the same thing. Cubemap render targets need it: their face
+			 * convention is left-handed while a camera is right-handed. Default false.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureRasterizationState (Graphics::RenderPassType renderPassType, const Graphics::RasterizationOptions * options = nullptr, VkPipelineRasterizationStateCreateFlags flags = 0) noexcept;
+			bool configureRasterizationState (Graphics::RenderPassType renderPassType, const Graphics::RasterizationOptions * options = nullptr, VkPipelineRasterizationStateCreateFlags flags = 0, bool mirroredViewport = false) noexcept;
 
 			/**
 			 * @brief Generates rasterization state into the graphics pipeline createInfo.

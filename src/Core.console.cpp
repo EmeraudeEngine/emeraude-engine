@@ -56,6 +56,18 @@ namespace EmEn
 			return true;
 		}, "Toggles the RushMaker audio/video recording (same as Shift+Ctrl+F12).");
 
+		this->bindCommand("togglePhysicalSimulation", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* Debug affordance: isolates a rendering or logic defect from a physics one without
+			 * a rebuild. Not a pause — entities keep moving, only the collision resolution stops. */
+			const auto state = !this->physicalSimulationEnabled();
+
+			this->enablePhysicalSimulation(state);
+
+			outputs.emplace_back(Severity::Success, state ? "Physical simulation ENABLED." : "Physical simulation DISABLED (entities move, nothing collides).");
+
+			return true;
+		}, "Toggles the physical simulation (collisions, boundaries, ground response) of the active scene.");
+
 		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");
 

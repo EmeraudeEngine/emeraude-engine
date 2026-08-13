@@ -62,7 +62,8 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 		/* NOTE: Build arrows via ResourceGenerator (cylinder + cone), no sphere.
 		 * Two sub-elements per axis (shaft + tip) for pure flat RGB color.
-		 * Default geometry is built along -Y. Tip is offset to end of shaft. */
+		 * Default geometry is built along +Y (the mirror-era -Y compensation is
+		 * gone). Tip is offset to end of shaft. */
 		{
 			Geometry::ResourceGenerator gen{resourceManager, Geometry::EnableVertexColor};
 
@@ -71,10 +72,10 @@ namespace EmEn::Scenes::Editor::Gizmo
 			constexpr float gap{0.1F};
 			constexpr float shaftLength{AxisLength * 0.65F};
 			constexpr float tipLength{AxisLength * 0.25F};
-			const auto shaftOffset = Matrix< 4, float >::translation(0.0F, -gap, 0.0F);
-			const auto tipOffset = Matrix< 4, float >::translation(0.0F, -(gap + shaftLength), 0.0F);
+			const auto shaftOffset = Matrix< 4, float >::translation(0.0F, gap, 0.0F);
+			const auto tipOffset = Matrix< 4, float >::translation(0.0F, gap + shaftLength, 0.0F);
 
-			/* X axis (Red): rotate -90° around Z to point in -X. */
+			/* X axis (Red): rotate -90° around Z to point in +X. */
 			const auto rotX = Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 0.0F, 0.0F, 1.0F);
 			gen.parameters().setGlobalVertexColor({1.0F, 0.0F, 0.0F, 1.0F});
 			gen.parameters().setTransformMatrix(rotX * shaftOffset);
@@ -82,14 +83,14 @@ namespace EmEn::Scenes::Editor::Gizmo
 			gen.parameters().setTransformMatrix(rotX * tipOffset);
 			m_subGeometries[TipX] = gen.cone(tipRadius, tipLength, 8, 1, {}, "+GizmoTipX");
 
-			/* Y axis (Green): no rotation, default -Y direction. */
+			/* Y axis (Green): no rotation, default +Y direction. */
 			gen.parameters().setGlobalVertexColor({0.0F, 1.0F, 0.0F, 1.0F});
 			gen.parameters().setTransformMatrix(shaftOffset);
 			m_subGeometries[ShaftY] = gen.cylinder(shaftRadius, shaftRadius, shaftLength, 8, 1, {}, "+GizmoShaftY");
 			gen.parameters().setTransformMatrix(tipOffset);
 			m_subGeometries[TipY] = gen.cone(tipRadius, tipLength, 8, 1, {}, "+GizmoTipY");
 
-			/* Z axis (Blue): rotate +90° around X to point in -Z. */
+			/* Z axis (Blue): rotate +90° around X to point in +Z. */
 			const auto rotZ = Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 1.0F, 0.0F, 0.0F);
 			gen.parameters().setGlobalVertexColor({0.0F, 0.0F, 1.0F, 1.0F});
 			gen.parameters().setTransformMatrix(rotZ * shaftOffset);
@@ -168,24 +169,24 @@ namespace EmEn::Scenes::Editor::Gizmo
 		float closestDistance = std::numeric_limits< float >::max();
 
 		/* NOTE: Build world-space AABBs for each axis directly from gizmo position + scale.
-		 * Arrows use NegativeX/Y/Z, so they extend in negative directions from center.
+		 * Arrows point along PositiveX/Y/Z, so they extend in positive directions from center.
 		 * No local-space transformation — test the world ray directly. */
 
 		const std::array< std::pair< AACuboid< float >, AxisID >, 3 > axes{{
-			/* X axis: extends in -X from gizmo center. */
+			/* X axis: extends in +X from gizmo center. */
 			{AACuboid< float >{
-				pos + Vector< 3, float >{-CenterRadius * s, r, r},
-				pos + Vector< 3, float >{-AxisLength * s, -r, -r}
+				pos + Vector< 3, float >{AxisLength * s, r, r},
+				pos + Vector< 3, float >{CenterRadius * s, -r, -r}
 			}, AxisID::X},
-			/* Y axis: extends in -Y from gizmo center. */
+			/* Y axis: extends in +Y from gizmo center. */
 			{AACuboid< float >{
-				pos + Vector< 3, float >{r, -CenterRadius * s, r},
-				pos + Vector< 3, float >{-r, -AxisLength * s, -r}
+				pos + Vector< 3, float >{r, AxisLength * s, r},
+				pos + Vector< 3, float >{-r, CenterRadius * s, -r}
 			}, AxisID::Y},
-			/* Z axis: extends in -Z from gizmo center. */
+			/* Z axis: extends in +Z from gizmo center. */
 			{AACuboid< float >{
-				pos + Vector< 3, float >{r, r, -CenterRadius * s},
-				pos + Vector< 3, float >{-r, -r, -AxisLength * s}
+				pos + Vector< 3, float >{r, r, AxisLength * s},
+				pos + Vector< 3, float >{-r, -r, CenterRadius * s}
 			}, AxisID::Z}
 		}};
 
@@ -229,7 +230,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 		/* NOTE: Use the full rotation from the entity's CartesianFrame.
 		 * In World mode, m_worldFrame has identity rotation (set by Manager).
 		 * In Local mode, m_worldFrame carries the entity's orientation. */
-		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.downwardVector(), m_worldFrame.backwardVector());
+		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.localYAxis(), m_worldFrame.backwardVector());
 
 		const auto modelMatrix = Matrix< 4, float >::translation(m_worldFrame.position()) * rotationMatrix * Matrix< 4, float >::scaling(finalScale) * axisRotation;
 

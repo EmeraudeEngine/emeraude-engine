@@ -164,7 +164,7 @@ namespace EmEn::Scenes::Loaders
 	 * conventions (right-handed Y-up, meters). */
 	static
 	CartesianFrame< float >
-	extractFrameFromNode (const ufbx_node & node, const AxisFlip & axisFlip) noexcept
+	extractFrameFromNode (const ufbx_node & node) noexcept
 	{
 		const auto & trs = node.local_transform;
 
@@ -217,12 +217,12 @@ namespace EmEn::Scenes::Loaders
 		/* ⚠️ CONJUGATED (M·T·M), not merely mirrored: a hierarchy of conjugated transforms
 		 * telescopes into one mirror at the root, which keeps every node a PROPER rotation while
 		 * the mirror itself lives in the vertex data. */
-		if ( axisFlip.isIdentity() )
+		if ( true )
 		{
 			return frame;
 		}
 
-		return axisFlip.frame(frame);
+		return frame;
 	}
 
 	/* Helper: build a sanitized node name with fallback to the node's element id. */
@@ -773,16 +773,16 @@ namespace EmEn::Scenes::Loaders
 
 		bool allSuccess = true;
 
-		/* ⚠️ The axis flip is baked into the VERTEX DATA (positions and normals). A normal needs no
-		 * special case: the inverse-transpose of a diagonal ±1 matrix is the matrix itself. The
-		 * winding then follows the PARITY of the flip — see AxisFlip.hpp. */
-		const auto axisFlip = this->axisFlip();
-		const bool swapWinding = axisFlip.mustSwapTriangleWinding();
+		/* ⚠️ The axis conversion is baked into the VERTEX DATA (positions and normals). A normal
+		 * needs no special case: the inverse-transpose of a diagonal ±1 matrix is the matrix itself.
+		 * The triangle winding is kept exactly as authored: the unconditional swap that used to be
+		 * declared here only compensated the engine's ORIENTATION-REVERSING projection, and that
+		 * mirror went away with the Y-up convention flip. */
 
 		/* ⚠️ Geometry and mesh resources are cached BY NAME and their content depends on the flip,
 		 * so the flip is part of the key: without it, loading the same asset twice with different
 		 * flags would serve the first variant to the second caller, silently. */
-		const auto flipKey = axisFlip.resourceNameSuffix();
+		const auto flipKey = std::string{};
 
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
 			return m_resources.container< Material::StandardResource >()->getDefaultResource();
@@ -937,20 +937,12 @@ namespace EmEn::Scenes::Loaders
 								const uint32_t corner = cornerIndices[k];
 								const auto pos = ufbx_get_vertex_vec3(&mesh.vertex_position, corner);
 
-								vertices[globalVertexOffset + k].setPosition(axisFlip.vector(
-									static_cast< float >(pos.x) * m_options.uniformScale,
-									static_cast< float >(pos.y) * m_options.uniformScale,
-									static_cast< float >(pos.z) * m_options.uniformScale
-								));
+								vertices[globalVertexOffset + k].setPosition(Vector< 3, float >{static_cast< float >(pos.x) * m_options.uniformScale, static_cast< float >(pos.y) * m_options.uniformScale, static_cast< float >(pos.z) * m_options.uniformScale});
 
 								if ( hasNormals )
 								{
 									const auto n = ufbx_get_vertex_vec3(&mesh.vertex_normal, corner);
-									vertices[globalVertexOffset + k].setNormal(axisFlip.vector(
-										static_cast< float >(n.x),
-										static_cast< float >(n.y),
-										static_cast< float >(n.z)
-									));
+									vertices[globalVertexOffset + k].setNormal(Vector< 3, float >{static_cast< float >(n.x), static_cast< float >(n.y), static_cast< float >(n.z)});
 								}
 
 								if ( hasUV )
@@ -1007,29 +999,14 @@ namespace EmEn::Scenes::Loaders
 								}
 							}
 
-							/* ⚠️⚠️ The swap compensates the engine's ORIENTATION-REVERSING projection
-							 * (`docs/coordinate-system.md` § OPEN DEFECT), NOT the consumer's 180° X
-							 * rotation as this comment used to claim: a rotation has determinant +1
-							 * and never inverts a winding. So it applies only while the import
-							 * preserves orientation — an odd number of axis flips reverses the
-							 * winding too, and swapping on top of that renders every face
-							 * inside-out. The parity is the ONLY authority. */
-							if ( swapWinding )
-							{
-								triangles.emplace_back(
-									globalVertexOffset + 0,
-									globalVertexOffset + 2,
-									globalVertexOffset + 1
-								);
-							}
-							else
-							{
-								triangles.emplace_back(
-									globalVertexOffset + 0,
-									globalVertexOffset + 1,
-									globalVertexOffset + 2
-								);
-							}
+							/* The winding is kept as authored — the swap of indices 1 and 2 that used to
+							 * sit here compensated the engine's ORIENTATION-REVERSING projection, gone
+							 * with the Y-up convention flip. */
+							triangles.emplace_back(
+								globalVertexOffset + 0,
+								globalVertexOffset + 1,
+								globalVertexOffset + 2
+							);
 
 							globalVertexOffset += 3;
 							groupTriangleCount++;
@@ -1073,7 +1050,9 @@ namespace EmEn::Scenes::Loaders
 			}
 			else
 			{
-				shape->computeTriangleNormal(true);
+				/* No inversion: nothing reflects the vertex data any more (the winding swap that
+				 * used to force it is gone with the orientation-reversing projection). */
+				shape->computeTriangleNormal(false);
 				shape->computeVertexNormal();
 
 				TraceInfo{ClassId} << "Generated smooth normals for mesh '" << baseName << "' (not provided by FBX).";
@@ -1247,7 +1226,6 @@ namespace EmEn::Scenes::Loaders
 
 		/* ⚠️ The rig is mirrored exactly like the mesh it deforms — bind-pose translations,
 		 * bind-pose ROTATIONS and inverse bind matrices — or the skin slides off the geometry. */
-		const auto axisFlip = this->axisFlip();
 
 		/* Skin deformers are indexed by typed_id (which equals their position
 		 * in scene.skin_deformers.data[]). loadMeshes wrote this typed_id into
@@ -1317,7 +1295,7 @@ namespace EmEn::Scenes::Loaders
 				/* ⚠️ Conjugate the WHOLE matrix (M·IBM·M), linear part included — unlike the uniform
 				 * scale above, which only touches the translation column. Skinning stays coherent
 				 * because the joint world matrices are conjugated identically and the two M cancel. */
-				inverseBindMatrices[ci] = axisFlip.matrix(inverseBindMatrices[ci]);
+				inverseBindMatrices[ci] = inverseBindMatrices[ci];
 				joints[ci].inverseBindMatrix = inverseBindMatrices[ci];
 
 				/* Walk up the bone's parent chain until we hit another bone
@@ -1346,20 +1324,16 @@ namespace EmEn::Scenes::Loaders
 				 * built in loadAnimations. */
 				const auto & trs = bone.local_transform;
 
-				joints[ci].translation = axisFlip.vector(
-					static_cast< float >(trs.translation.x) * m_options.uniformScale,
-					static_cast< float >(trs.translation.y) * m_options.uniformScale,
-					static_cast< float >(trs.translation.z) * m_options.uniformScale
-				);
+				joints[ci].translation = Vector< 3, float >{static_cast< float >(trs.translation.x) * m_options.uniformScale, static_cast< float >(trs.translation.y) * m_options.uniformScale, static_cast< float >(trs.translation.z) * m_options.uniformScale};
 
-				/* ⚠️ The conjugation carries the det(M) angle inversion (see AxisFlip.hpp): without
+				/* ⚠️ The conjugation carries the det(M) angle inversion: without
 				 * it the bind pose looks right and the animation plays backwards. */
-				joints[ci].rotation = axisFlip.rotation(Quaternion< float >{
+				joints[ci].rotation = Quaternion< float >{
 					static_cast< float >(trs.rotation.x),
 					static_cast< float >(trs.rotation.y),
 					static_cast< float >(trs.rotation.z),
 					static_cast< float >(trs.rotation.w)
-				});
+				};
 
 				/* NOTE: A scale is invariant under the flip — M·diag(s)·M = diag(s). */
 				joints[ci].scale = {
@@ -1382,7 +1356,7 @@ namespace EmEn::Scenes::Loaders
 
 			Skin< float > engineSkin{std::move(skinJointIndices), inverseBindMatrices};
 
-			const std::string skeletonName = m_resourcePrefix + axisFlip.resourceNameSuffix() + "Skeleton/"
+			const std::string skeletonName = m_resourcePrefix + std::string{} + "Skeleton/"
 				+ (skin.name.length == 0 ? std::to_string(skinIndex) : std::string{skin.name.data, skin.name.length});
 
 			auto skeletonResource = m_resources.container< Animations::SkeletonResource >()
@@ -1444,7 +1418,7 @@ namespace EmEn::Scenes::Loaders
 		{
 			const ufbx_anim_stack & stack = *scene.anim_stacks.data[si];
 
-			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale, this->axisFlip());
+			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale);
 
 			if ( channels.empty() )
 			{
@@ -1459,7 +1433,7 @@ namespace EmEn::Scenes::Loaders
 
 			auto clipResource = m_resources.container< Animations::AnimationClipResource >()
 				->getOrCreateResourceSync(
-					m_resourcePrefix + this->axisFlip().resourceNameSuffix() + "Animation/" + clipName,
+					m_resourcePrefix + "Animation/" + clipName,
 					[&clip] (auto & resource) {
 						return resource.load(std::move(clip));
 					}
@@ -1478,7 +1452,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	std::vector< AnimationChannel< float > >
-	FBXLoader::sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale, const AxisFlip & axisFlip) noexcept
+	FBXLoader::sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept
 	{
 		std::vector< AnimationChannel< float > > channels;
 
@@ -1551,18 +1525,14 @@ namespace EmEn::Scenes::Loaders
 				/* ⚠️ A translation is mirrored, a rotation is CONJUGATED (with its det(M) angle
 				 * inversion), a scale is invariant. A clip mirrored inconsistently with the bind
 				 * pose it drives makes the rig snap on the first animated frame. */
-				translation.vectorKeyFrames.push_back({relTime, axisFlip.vector(
-					static_cast< float >(xf.translation.x) * uniformScale,
-					static_cast< float >(xf.translation.y) * uniformScale,
-					static_cast< float >(xf.translation.z) * uniformScale
-				)});
+				translation.vectorKeyFrames.push_back({relTime, Vector< 3, float >{static_cast< float >(xf.translation.x) * uniformScale, static_cast< float >(xf.translation.y) * uniformScale, static_cast< float >(xf.translation.z) * uniformScale}});
 
-				rotation.quaternionKeyFrames.push_back({relTime, axisFlip.rotation(Quaternion< float >{
+				rotation.quaternionKeyFrames.push_back({relTime, Quaternion< float >{
 					static_cast< float >(xf.rotation.x),
 					static_cast< float >(xf.rotation.y),
 					static_cast< float >(xf.rotation.z),
 					static_cast< float >(xf.rotation.w)
-				})});
+				}});
 
 				scaleChannel.vectorKeyFrames.push_back({relTime, Vector< 3, float >{
 					static_cast< float >(xf.scale.x),
@@ -1671,7 +1641,7 @@ namespace EmEn::Scenes::Loaders
 		const std::string fileStem = filepath.stem().string();
 		/* ⚠️ The flip is part of the cache key: a clip mirrored one way must never be served to a
 		 * rig loaded with a different flip. */
-		const std::string resourcePrefix = "FBX:" + fileStem + this->axisFlip().resourceNameSuffix() + "/Animation/";
+		const std::string resourcePrefix = "FBX:" + fileStem + "/Animation/";
 		const size_t producedBefore = output.size();
 
 		/* When stripRootMotion is enabled, collect the indices of every root
@@ -1691,7 +1661,7 @@ namespace EmEn::Scenes::Loaders
 		{
 			const ufbx_anim_stack & stack = *scene->anim_stacks.data[si];
 
-			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale, this->axisFlip());
+			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale);
 
 			if ( channels.empty() )
 			{
@@ -1853,7 +1823,7 @@ namespace EmEn::Scenes::Loaders
 
 			NodeDescriptor descriptor;
 			descriptor.name = buildNodeName(m_resourcePrefix, *node);
-			descriptor.localFrame = extractFrameFromNode(*node, this->axisFlip());
+			descriptor.localFrame = extractFrameFromNode(*node);
 
 			if ( node->mesh != nullptr )
 			{

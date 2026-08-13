@@ -1947,24 +1947,70 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 >
 > **Code reference:** `Effects/Framebuffer/AtmosphericFog.cpp` — shader inscattering section
 
-### Critical: Environment Cubemap Sampling Convention (Y negation)
+### Critical: Environment Cubemap Sampling Convention (RAW direction since Y-up)
 
 > [!CRITICAL]
-> **A world direction `D` samples any environment cubemap at `vec3(D.x, -D.y, D.z)` —
-> never the raw direction.** The engine world is Y-down (UP = -Y) while cubemaps are
-> stored Y-up.
+> **A world direction `D` samples any environment cubemap RAW — `D` itself, never a
+> negated component.** The world is Y-UP and cubemaps are stored Y-up: nothing to
+> compensate.
 >
-> Reference sites (visually validated — celestial servoing reproduces star directions
-> within 1°): the skybox (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and
-> the material reflections (`StandardResource` bindless reflection GLSL).
+> ⚠️ **The old rule `vec3(D.x, -D.y, D.z)` is DEAD.** It was correct only while the world
+> was Y-down (UP = -Y). Do not restore it from an old capture, an old comment, or this
+> paragraph's history. Sites that must all agree: the skybox
+> (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`), the material reflections
+> (`StandardResource` bindless reflection GLSL), `LightGenerator`, SSR, RTGI, RTR,
+> `IBLBaker`.
 >
-> **Symptom of the raw-direction bug:** the sky is read upside-down — GI bounces tinted
-> by the ground where the sky should be, ray-miss reflections showing the wrong hemisphere.
-> Invisible on near-uniform skies, wrong on sunsets/HDR. RTGI, RTR and SSR all had it
-> (fixed Jul 2026, IBL lot 1).
+> **Symptom of a stray negation:** the sky is read upside-down — GI bounces tinted by the
+> ground where the sky should be, ray-miss reflections showing the wrong hemisphere,
+> and on the skybox itself the +Y/-Y faces swapped with the four side faces mirrored
+> vertically. **Invisible on a near-uniform sky, and no assertion can see it.** The only
+> detector is an axis-labelled cubemap on screen: `coordinates-debug` +
+> `AxisDebug` (bright R=X+, G=Y+, B=Z+, Cyan=X-, Magenta=Y-, Yellow=Z-, same palette as
+> the compass) — the face colour must equal the compass sphere colour in that direction,
+> for all six. ⚠️ Looking at the nadir needs the camera BELOW the ground
+> (`Act.setPosition(0,-30,0)`) or the ground plane masks the `-Y` face entirely.
 >
-> **Any new cubemap sampling site — and the IBL irradiance/prefiltered generation — must
-> apply the same negation.**
+> **What is NOT a defect:** each face displays **mirrored horizontally** relative to its
+> stored pixels. Said properly: **a cubemap face stores the view of that wall taken from
+> OUTSIDE the cube, looking inward** — the standard Vulkan cube-face mapping is left-handed
+> while the world is right-handed (`screen-right = look × up`, measured). The engine does
+> NOTHING at load: `CubemapResource::load(Pixmap)` cuts the 3×2 cross into six pixmaps and
+> uploads them as-is. The equirectangular loader already bakes the convention in
+> (`u = atan2(dz,dx)/2π + 0.5` reads non-mirrored on screen). Do not "fix" it with a
+> negation at a sampling site — that would desynchronise the display from the IBL, which
+> samples the same cubemaps.
+>
+> **Seam-continuity test — decides an asset's authoring convention numerically, no launch.**
+> Under the hardware convention the four side faces form a closed ring whose seams are
+> pixel-exact:
+>
+>     +X col 0 ≡ +Z col N-1    +Z col 0 ≡ -X col N-1
+>     -X col 0 ≡ -Z col N-1    -Z col 0 ≡ +X col N-1     (rows correspond directly)
+>
+> An "authored from inside" (mirrored) set matches the SAME column pattern against the
+> OPPOSITE neighbour (`+X col 0 ≡ -Z col N-1`, …). Compare the mean absolute difference of
+> both pairings. Measured Aug 2026 over the 11 packed assets: 9 give **0.17–1.87** for the
+> outside pairing against **6.22–56.85** for the inside one — the engine convention is
+> confirmed by the content itself. Two are mute, and knowing why matters: `DNCity` reuses
+> ONE image for both `+X` and `-X` (MAD 0.0), which makes the two hypotheses symmetric, and
+> `AxisDebug` is flat colour per face. **A tie is a degenerate asset, not a failed test.**
+>
+> **Correcting an inside-authored asset:** flip each face tile horizontally **in place**.
+> ⚠️ Never mirror the whole packed cross — that also exchanges the columns, moving faces onto
+> the wrong axes. All six tiles take the same flip, poles included (`+Y`/`-Y` keep their top
+> edge on the same axis, `-Z` and `+Z` respectively). `AxisDebug.Packed.png` was re-authored
+> this way (Aug 2026) and is now correct: **its labels read BACKWARDS in an image editor and
+> upright on screen. That is the correct state — do not "fix" the file.**
+>
+> ⚠️⚠️ **Reading a POLE capture: a pole face has no absolute on-screen orientation.** Its
+> apparent rotation is set by the camera YAW, because looking straight up/down leaves the
+> screen-up direction entirely to the body heading. A zenith shot taken while facing `-Z`
+> shows `Y+` rotated 180° (`+⅄`) on a perfectly correct asset. **Never conclude from a pole
+> capture without declaring its yaw** — shoot `lookAt(0,2,±100)` first, then the pole.
+> Discriminator when in doubt, and it is exact: a 180° ROTATION preserves orientation
+> (`Y+` → `+⅄`), a horizontal MIRROR does not (`Y+` → `+Y`, the `Y` staying upright).
+> Getting this backwards turns a yaw artefact into a phantom asset defect.
 
 ### POM GPU Stress on Large Surfaces
 

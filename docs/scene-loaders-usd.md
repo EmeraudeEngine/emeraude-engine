@@ -51,7 +51,7 @@ Root layer `USD/JungleRuins_Karma.usda`:
 |----------|-------|--------|
 | `subLayers` | 19 layers | Root composition arc is a sublayer, not a reference |
 | `metersPerUnit` | `0.01` (centimetres) | Unit conversion required |
-| `upAxis` | `"Z"` | Engine uses the **Y-DOWN** convention (UP = -Y) — axis conversion required |
+| `upAxis` | `"Z"` | Engine uses the **Y-UP** convention (UP = +Y) since Aug 2026 — axis conversion still required (USD is Z-up) |
 | `startTimeCode` / `endTimeCode` | `0` / `4800` | 200 s of animation at 24 fps |
 
 Content: one `DomeLight` (equirectangular HDR, 8K, 67 MB), one `Camera` layer exported from
@@ -566,7 +566,7 @@ Each row is native scene work, useful beyond USD.
 | `DomeLight` + equirect HDR | Photometric sky contract | **Equirectangular → cubemap conversion** |
 | `Camera` | Physical camera | Photometric mapping |
 | `TimeSamples` on transforms | `AnimatableInterface` + `KeyFrame`/`Sequence` | — mechanism exists |
-| `upAxis=Z`, `metersPerUnit` | Engine **Y-DOWN** convention (UP = -Y) | Baked at import, **normals and tangents included** |
+| `upAxis=Z`, `metersPerUnit` | Engine **Y-UP** convention (UP = +Y) | Baked at import, **normals and tangents included** |
 | Lights / cameras / instancers | — | `SceneData` extension (§ 5.3) |
 
 ### 6.1 Per-instance culling
@@ -845,7 +845,7 @@ Two conventions carried by that walk, each of which fails silently if got wrong:
 - **A UsdLux light emits along its LOCAL -Z.** Not -Y, and not the stage's up axis — this stage is
   Z-up, which makes the two easy to confuse.
 
-Verified in the scene graph dump: spots land at `Y ≈ -3.8 … -4.5` (≈ 4 m above the floor, `UP = -Y`)
+⚠️ **Y-DOWN-era measurement, kept for the record — the SIGN no longer holds.** Verified in the scene graph dump of the time: spots landed at `Y ≈ -3.8 … -4.5` (≈ 4 m above the floor, when `UP` was `-Y`). Under Y-up the same lights sit at `Y ≈ +3.8 … +4.5`; re-measure before quoting a number from this section
 with direction `(0, 1, 0)`, i.e. straight down. 29/29 placed, 0 dropped.
 
 > [!CAUTION]

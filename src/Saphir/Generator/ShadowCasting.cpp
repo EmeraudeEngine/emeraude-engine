@@ -333,7 +333,8 @@ namespace EmEn::Saphir::Generator
 	bool
 	ShadowCasting::onGraphicsPipelineConfiguration (const Program & /*program*/, GraphicsPipeline & graphicsPipeline) noexcept
 	{
-		if ( !graphicsPipeline.configureRasterizationState(RenderPassType::SimplePass) )
+		/* A cubemap shadow map renders through a mirrored projection — the front face must follow. */
+		if ( !graphicsPipeline.configureRasterizationState(RenderPassType::SimplePass, nullptr, 0, this->renderTarget()->isCubemap()) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline rasterization state !");
 

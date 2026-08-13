@@ -102,10 +102,17 @@ namespace EmEn::Physics
 			m_linearVelocity[X] *= frictionFactor;
 			m_linearVelocity[Z] *= frictionFactor;
 
-			/* Clamp downward velocity to prevent micro-bounces.
-			 * Only for stable surfaces (Ground/Boundary).
-			 * Y-down: positive Y = moving down. */
-			if ( isOnStableSurface && m_linearVelocity[Y] > 0.0F )
+			/* Clamp DOWNWARD velocity to prevent micro-bounces, on stable surfaces only.
+			 * ⚠️ +Y is UP, so "downward" is NEGATIVE. This test read `> 0.0F` under the Y-down
+			 * convention, where a positive Y velocity meant sinking. Left as it was, it clamps
+			 * every UPWARD velocity instead — and since a body is still grounded on the frame it
+			 * pushes off, it silently ATE THE PLAYER'S JUMP: the force was applied, the velocity
+			 * went positive, and this line zeroed it before integration, every tick, so the
+			 * position never moved off the ground.
+			 * ⚠️⚠️ Symptom to recognise: velocity[Y] reads exactly ONE frame's worth of impulse
+			 * instead of an accumulating value. That signature means the velocity is being wiped
+			 * between frames, not that the force is missing. */
+			if ( isOnStableSurface && m_linearVelocity[Y] < 0.0F )
 			{
 				m_linearVelocity[Y] = 0.0F;
 			}
@@ -120,7 +127,7 @@ namespace EmEn::Physics
 
 		if ( !isOnStableSurface && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
 		{
-			m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();
+			m_linearVelocity += envProperties.steppedSurfaceGravity();
 			m_linearSpeed = m_linearVelocity.length();
 		}
 

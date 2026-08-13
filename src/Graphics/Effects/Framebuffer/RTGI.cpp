@@ -141,11 +141,12 @@ vec3 skyRadiance (vec3 direction)
 		return vec3(0.0);
 	}
 
-	/* ENGINE CUBEMAP CONVENTION: a world direction D samples the cubemap at
-	 * vec3(D.x, -D.y, D.z) — the engine world is Y-down (UP = -Y) while the cubemap is
-	 * stored Y-up. Same negation as the skybox (Material/Helpers.cpp) and the material
-	 * reflections (PBR/Standard); sampling the raw direction reads the sky upside-down. */
-	return texture(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], vec3(direction.x, -direction.y, direction.z)).rgb * skyParams.x;
+	/* ENGINE CUBEMAP CONVENTION (Y-UP): a world direction D samples the cubemap RAW, as D itself.
+	 * ⚠️ The comment here used to justify a `(D.x, -D.y, D.z)` negation that the Y-up flip deleted —
+	 * the code below already sampled the raw direction, so the text described a compensation that
+	 * was no longer there. Same contract as the skybox (Material/Helpers.cpp) and the material
+	 * reflections: no negation anywhere. */
+	return texture(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], direction).rgb * skyParams.x;
 }
 
 /* NOTE: GLSL has no built-in PI constant. */

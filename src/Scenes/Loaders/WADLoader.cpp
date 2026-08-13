@@ -1597,27 +1597,29 @@ namespace EmEn::Scenes::Loaders
 					}
 				}
 
-				/* Engine world space (Y-down, after the consumer's 180° X rotation):
-				 * Xw = x, Yw = -height, Zw = -y.
+				/* Doom map space (x, y, height) → engine world space, through the SAME bake the
+				 * geometry below uses: Xw = x, Yw = height, Zw = -y. The consumer's import
+				 * transform is the identity since the engine went Y-up, so loader space IS
+				 * world space.
 				 *
-				 * ⚠️ The axis flip applies here too, and it may be applied to this ALREADY-CONVERTED
-				 * triple because the consumer's rotation and the flip are both diagonal, hence
-				 * commute. A player start left unmirrored while the level is mirrored spawns the
-				 * player inside a wall. */
-				const auto axisFlip = this->axisFlip();
+				 * It used to read Xw = x, Yw = -height, Zw = -y, that being the Y-down world the
+				 * consumer's 180° X rotation produced. Only the HEIGHT sign moved, which is why
+				 * the direction below is untouched: its height component is zero.
+				 *
+				 * ⚠️ The start and the level MUST go through one and the same bake. A start baked
+				 * differently from the level it stands in spawns the player inside a wall. */
 
-				m_playerStartPosition = axisFlip.vector(startX * scale, -floorHeight * scale, -startY * scale);
-				m_playerStartDirection = axisFlip.vector(std::cos(startAngle), 0.0F, -std::sin(startAngle));
+				m_playerStartPosition = Vector< 3, float >{startX * scale, floorHeight * scale, -startY * scale};
+				m_playerStartDirection = Vector< 3, float >{std::cos(startAngle), 0.0F, -std::sin(startAngle)};
 
 				break;
 			}
 		}
 
 		/* ---- Build the multi-material Shape (loader space: Y-up, meters). ---- */
-		/* ⚠️ Same flip as the player start above, and the winding follows its PARITY — see
-		 * AxisFlip.hpp. */
-		const auto axisFlip = this->axisFlip();
-		const bool swapWinding = axisFlip.mustSwapTriangleWinding();
+		/* ⚠️ Same axis bake as the player start above. The winding swap below is UNCONDITIONAL and
+		 * MUST stay so — see the determinant argument at the swap itself. */
+		const bool swapWinding = true;
 
 		auto shape = std::make_shared< Shape< float > >();
 
@@ -1673,11 +1675,18 @@ namespace EmEn::Scenes::Loaders
 					{
 						const auto & corner = corners[(triangle * 3) + cornerIdx];
 
-						/* Doom map space → loader space (Y-up, right-handed): X = x, Y = height, Z = y,
-						 * then through the axis flip — position and normal alike. */
+						/* Doom map space (x, y, height) → loader space (Y-up, right-handed):
+						 * X = x, Y = height, Z = -y. POSITION AND NORMAL go through the very same
+						 * map, or the lighting ends up disagreeing with the geometry.
+						 * ⚠️ The Z negation is what makes this bake a ROTATION (det +1). It used to
+						 * be the bare transposition (x, y, h) → (x, h, y), det -1, and that -1 was
+						 * the ONLY reason Doom maps read correctly while every other asset came out
+						 * mirrored: it cancelled the engine's orientation-reversing projection. The
+						 * projection is orientation-preserving since the Y-up flip, so the
+						 * compensation had to go with it. */
 						const ShapeVertex< float > vertex{
-							axisFlip.vector(corner.x * scale, corner.z * scale, corner.y * scale),
-							axisFlip.vector(corner.nx, corner.nz, corner.ny),
+							Vector< 3, float >{corner.x * scale, corner.z * scale, -corner.y * scale},
+							Vector< 3, float >{corner.nx, corner.nz, -corner.ny},
 							Vector< 3, float >{corner.u, corner.v, 0.0F}
 						};
 
@@ -1685,12 +1694,17 @@ namespace EmEn::Scenes::Loaders
 						colorIndexes[cornerIdx] = colorIndexFor(corner.light);
 					}
 
-					/* ⚠️⚠️ The swap compensates the engine's ORIENTATION-REVERSING projection
-					 * (`docs/coordinate-system.md` § OPEN DEFECT), not the consumer's 180° X
-					 * rotation as this comment used to claim — a rotation never inverts a winding.
-					 * An odd number of axis flips reverses the winding too, so the swap must then be
-					 * skipped. ⚠️ The per-corner COLOUR INDEXES must follow the very same order as
-					 * the vertex indexes, or the baked lighting lands on the wrong corners. */
+					/* ⚠️⚠️ KEEP THIS SWAP. It is NOT a leftover compensation for the old mirrored
+					 * projection, and deleting it alongside the other Y-up compensations inverts
+					 * the facing of every triangle in every map.
+					 * The screen winding is the product of three signs: the corner order emitted
+					 * above, the bake, and the world→screen map. The bake went from det -1 to
+					 * det +1 (Z negated, just above) in the same commit as the projection went from
+					 * orientation-reversing to orientation-preserving. Those two sign changes
+					 * cancel, so the screen winding is exactly what it always was and this swap
+					 * stays exactly as it was. A third change is one too many.
+					 * ⚠️ The per-corner COLOUR INDEXES must follow the very same order as the vertex
+					 * indexes, or the baked lighting lands on the wrong corners. */
 					if ( swapWinding )
 					{
 						auto & shapeTriangle = triangles.emplace_back(baseVertex, baseVertex + 2, baseVertex + 1);

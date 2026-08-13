@@ -201,8 +201,6 @@ namespace EmEn::Graphics
 
 			/** @brief Orientation matrices for the 6 faces of a standard cubemap. */
 			static const std::array< Base::Math::Matrix< 4, float >, CubemapFaceCount > CubemapOrientation;
-			/** @brief Orientation matrices for the 6 faces of a shadow cubemap. */
-			static const std::array< Base::Math::Matrix< 4, float >, CubemapFaceCount > ShadowCubemapOrientation;
 
 			/**
 			 * @brief Internal state structure holding view matrices and related data for all 6 cubemap faces.

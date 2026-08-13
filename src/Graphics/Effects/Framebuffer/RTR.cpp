@@ -153,11 +153,6 @@ const float PI = 3.14159265359;
 /* Prefiltered environment mip count - 1 (IBLTexture::PrefilteredMipLevels). */
 const float PrefilteredMaxLod = 5.0;
 
-/* ENGINE CUBEMAP CONVENTION: world direction D samples at (D.x, -D.y, D.z). */
-vec3 cubeDir (vec3 d)
-{
-	return vec3(d.x, -d.y, d.z);
-}
 
 /* GGX/Smith/Schlick — the same microfacet family as the raster PBR pass, so a
  * reflected surface matches the directly rendered one. */
@@ -677,11 +672,11 @@ void main()
 		 * (reserved cube slot 1, stores E/pi) and a prefiltered specular tap (slot 2,
 		 * roughness-driven LOD), both scaled by the sky luminance (normalized sources). */
 		{
-			vec3 irradiance = texture(texturesCube[nonuniformEXT(1)], cubeDir(hitNormal)).rgb;
+			vec3 irradiance = texture(texturesCube[nonuniformEXT(1)], hitNormal).rgb;
 			vec3 iblDiffuse = albedo * (1.0 - hitMetalness) * irradiance;
 
 			vec3 hitR = reflect(reflDir, hitNormal);
-			vec3 prefiltered = textureLod(texturesCube[nonuniformEXT(2)], cubeDir(hitR), clamp(hitRoughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
+			vec3 prefiltered = textureLod(texturesCube[nonuniformEXT(2)], hitR, clamp(hitRoughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
 			vec3 iblSpecular = prefiltered * fresnelSchlick(hitNdotV, hitF0);
 
 			litColor += albedo * ambientLight.rgb;

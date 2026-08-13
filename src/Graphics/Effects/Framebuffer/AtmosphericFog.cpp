@@ -94,7 +94,7 @@ void main()
 
 	/* Reconstruct ray direction (needed for both geometry and sky pixels). */
 	vec2 ndc = vUV * 2.0 - 1.0;
-	float t = abs(tanHalfFovY);
+	float t = tanHalfFovY;
 
 	vec3 cameraPosition = vec3(cameraPosX, cameraPosY, cameraPosZ);
 	vec3 cameraRight = vec3(cameraRightX, cameraRightY, cameraRightZ);

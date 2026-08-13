@@ -188,8 +188,10 @@ namespace EmEn::Graphics::Geometry
 
 		m_localData = std::move(loadResult.shape);
 
-		/* FIXME: Should set that at reading step. */
-		m_localData.flipYAxis();
+		/* NOTE: The geometric flipYAxis() is gone with the Y-up convention -- it compensated the
+		 * renderer's mirror. The V flip stays: it is an OBJ texture convention, not a world axis.
+		 * FIXME: Should set that at reading step. */
+		m_localData.flipTextureV();
 
 		return this->setLoadSuccess(true);
 	}

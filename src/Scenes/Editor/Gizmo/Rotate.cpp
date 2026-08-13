@@ -205,7 +205,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 		const float finalScale = isHighlighted ? (m_screenScale * HighlightScale) : m_screenScale;
 
-		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.downwardVector(), m_worldFrame.backwardVector());
+		const auto rotationMatrix = Matrix< 4, float >::rotation(m_worldFrame.rightVector(), m_worldFrame.localYAxis(), m_worldFrame.backwardVector());
 
 		const auto modelMatrix = Matrix< 4, float >::translation(m_worldFrame.position()) * rotationMatrix * Matrix< 4, float >::scaling(finalScale) * axisRotation;
 

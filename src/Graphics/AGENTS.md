@@ -1808,7 +1808,7 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
   mostly dark ceiling). Owner decision (review session Jul 2026): the uniform-dome π over-lit
   every non-uniform sky. HDR sources are calibrated to exactly π by construction.
 - `Stars` (optional, 0..N): celestial bodies (`Graphics::CelestialBody`) to derive analytic
-  directional lights from — `Direction` points TOWARD the body (engine frame, UP = -Y),
+  directional lights from — `Direction` points TOWARD the body (engine frame, UP = +Y),
   `Illuminance` in lux, `Temperature` in kelvins (industry-standard authoring; wins over a direct
   `"Color"` when both are present) resolved via `Photometry::colorFromTemperature()` (Planckian
   locus), `AngularDiameter` in degrees, `InTexture` = anti-double-counting flag (informative in
@@ -2861,14 +2861,26 @@ with `updateTexture2D(BindlessTextureManager::BRDFLutSlot, …)`; `Renderer::brd
 exposes it for effects binding it through their own descriptor sets.
 
 > [!CRITICAL]
-> **Engine cubemap sampling convention (settled Jul 2026):** a world direction `D` samples
-> any environment cubemap at **`vec3(D.x, -D.y, D.z)`** — the engine world is Y-down
-> (UP = -Y) while cubemaps are stored Y-up. Reference sites: the skybox
-> (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`) and the material reflections
-> (`StandardResource`), both validated visually (celestial servoing within 1°).
-> RTGI/RTR/SSR sampled the RAW direction (sky upside-down in GI bounces and ray-miss
-> reflections) — fixed in lot 1. **The IBL generation (lot 2) MUST produce and consume
-> cubemaps under this same convention.**
+> **Engine cubemap sampling convention (Y-UP, settled Aug 2026):** a world direction `D`
+> samples any environment cubemap **RAW — `D` itself, no component negation.** Every
+> sampling site obeys it: the skybox (`Material/Helpers.cpp` `checkPrimaryTextureCoordinates`),
+> the material reflections (`StandardResource`), `LightGenerator`, SSR, RTGI, RTR, and the
+> IBL generation (`IBLBaker`).
+>
+> ⚠️ **This REPLACES the Jul 2026 rule `vec3(D.x, -D.y, D.z)`**, which existed only because
+> the world was Y-down (UP = -Y) while cubemaps are stored Y-up. The Y-up flip removed the
+> reason; five of the six negations went with the flip and the sixth — the skybox display —
+> followed once measured in the `coordinates-debug` scene. **A negation re-introduced anywhere
+> now swaps the +Y/-Y faces and mirrors the four side faces vertically**; measured symptom:
+> the magenta `Y-` face of `AxisDebug` at the zenith while the compass sphere there is green.
+>
+> **The hardware face convention is untouched and NOT negotiable**: the `(dx, dy, dz)` tables
+> in `CubemapResource` / `CubemapMovieResource` and the frozen `IBLBaker.cpp:211-216` table
+> are the standard Vulkan cube-face mapping. Consequence to know: that convention is
+> LEFT-handed, so in this right-handed world **each face image displays mirrored horizontally**
+> relative to the stored pixels. The equirectangular loader bakes that in (its
+> `u = atan2(dz,dx)/2π + 0.5` output reads non-mirrored on screen); packed / per-face assets
+> must therefore be authored the same way — as the standard skybox sets are.
 
 ### Environment cubemap mip chains (IBL lot 1, Jul 2026)
 

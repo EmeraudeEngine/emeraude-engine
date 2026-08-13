@@ -81,7 +81,11 @@ namespace EmEn::Physics
 			if ( distance > std::numeric_limits< float >::epsilon() )
 			{
 				results.m_depth = m_radius - distance;
-				results.m_impactNormal = centerToPoint / distance;
+				/* ⚠️ NEGATED: the contract is "normal points from B (the other shape) toward A
+				 * (this one)" — see CollisionDetection.cpp. centerToPoint runs from this sphere
+				 * TOWARD the point, so using it directly pushed the sphere INTO the point, the
+				 * opposite of what the comment above says this block does. */
+				results.m_impactNormal = -centerToPoint / distance;
 				results.m_MTV = results.m_impactNormal * results.m_depth;
 			}
 			else

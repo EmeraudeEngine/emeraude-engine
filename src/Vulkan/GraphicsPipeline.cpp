@@ -283,7 +283,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureRasterizationState (RenderPassType renderPassType, const RasterizationOptions * options, VkPipelineRasterizationStateCreateFlags flags) noexcept
+	GraphicsPipeline::configureRasterizationState (RenderPassType renderPassType, const RasterizationOptions * options, VkPipelineRasterizationStateCreateFlags flags, bool mirroredViewport) noexcept
 	{
 		m_rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 		m_rasterizationState.pNext = nullptr;
@@ -340,6 +340,21 @@ namespace EmEn::Vulkan
 			m_rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 			m_rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
 			m_rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		}
+
+		/* ⚠️ A mirrored projection reverses the on-screen winding of every triangle, so the SAME
+		 * geometry would be culled the other way round. Inverting the front face restores the
+		 * meaning of "back face" instead of hiding the model's outside.
+		 * Cubemap render targets need this: their face convention is LEFT-handed (a face wants
+		 * right x up = +look) while a camera is right-handed, so the capture cannot be made correct
+		 * by choosing look/up vectors alone — that only rotates a face, never mirrors it.
+		 * ⚠️⚠️ Symptom when it is missing: the cubemap comes out mostly BLACK with the geometry
+		 * correctly PLACED — orientation right, faces eaten by the culling. */
+		if ( mirroredViewport )
+		{
+			m_rasterizationState.frontFace = m_rasterizationState.frontFace == VK_FRONT_FACE_COUNTER_CLOCKWISE
+				? VK_FRONT_FACE_CLOCKWISE
+				: VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		}
 
 		switch ( renderPassType )

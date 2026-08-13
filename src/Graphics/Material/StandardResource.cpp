@@ -2547,26 +2547,26 @@ namespace EmEn::Graphics::Material
 				{
 					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::ReflectionTextureCoordinates, GLSL::Smooth});
 
-					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+					/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone).
 					 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
 					 * so we always use 'false' for isCubemap parameter. */
 					Code(vertexShader) <<
 						"vec3 reflectDir = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-						ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);";
+						ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;";
 				}
 
 				if ( this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction )
 				{
 					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::RefractionTextureCoordinates, GLSL::Smooth});
 
-					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+					/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone).
 					 * For refraction, we use IOR ratio: eta = 1.0 / IOR (air to material).
 					 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
 					 * so we always use 'false' for isCubemap parameter. */
 					Code(vertexShader) <<
 						"float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 						"vec3 refractDir = refract(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ", eta);" << Line::End <<
-						ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);";
+						ShaderVariable::RefractionTextureCoordinates << " = refractDir;";
 				}
 			}
 		}
@@ -2741,11 +2741,11 @@ namespace EmEn::Graphics::Material
 				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
 			}
 
-			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+			/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
-				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
+				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;" << Line::End <<
 				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
 		}
 		else
@@ -2808,7 +2808,7 @@ namespace EmEn::Graphics::Material
 				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
 			}
 
-			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+			/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone).
 			 * For refraction, eta = 1.0 / IOR (air to material).
 			 * When chromatic dispersion is enabled, sample R/G/B with separate IORs (Cauchy dispersion). */
 			if ( m_materialProperties[DispersionOffset] > 0.0F )
@@ -2823,9 +2823,9 @@ namespace EmEn::Graphics::Material
 					"const vec3 refractDirR = refract(reflectionI, reflectionNormal, etaR);" << Line::End <<
 					"const vec3 refractDirG = refract(reflectionI, reflectionNormal, etaG);" << Line::End <<
 					"const vec3 refractDirB = refract(reflectionI, reflectionNormal, etaB);" << Line::End <<
-					"float convergR = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", vec3(refractDirR.x, -refractDirR.y, refractDirR.z)).r;" << Line::End <<
-					"float convergG = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", vec3(refractDirG.x, -refractDirG.y, refractDirG.z)).g;" << Line::End <<
-					"float convergB = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", vec3(refractDirB.x, -refractDirB.y, refractDirB.z)).b;" << Line::End <<
+					"float convergR = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", refractDirR).r;" << Line::End <<
+					"float convergG = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", refractDirG).g;" << Line::End <<
+					"float convergB = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", refractDirB).b;" << Line::End <<
 					"const vec4 " << SurfaceRefractionColor << " = vec4(convergR, convergG, convergB, 1.0);";
 			}
 			else
@@ -2833,7 +2833,7 @@ namespace EmEn::Graphics::Material
 				Code(fragmentShader, Location::Top) <<
 					"const float refractionEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 					"const vec3 refractDir = refract(reflectionI, reflectionNormal, refractionEta);" << Line::End <<
-					"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
+					"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = refractDir;" << Line::End <<
 					"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 			}
 		}
@@ -2899,7 +2899,7 @@ namespace EmEn::Graphics::Material
 			/* Sample the REAL prefiltered cubemap (reserved slot 2) — the frosted-glass LOD
 			 * used to read the raw environment whose mips did not even exist.
 			 * NOTE: Transmission goes through the surface (not reflected), so we use the view direction
-			 * but with Y flipped for cubemap convention.
+			 * as-is: the world is Y-UP, the former cubemap Y flip is gone.
 			 * The LOD reads the per-pixel roughness variable when a texture component drives it
 			 * (the UBO scalar is only the FACTOR in that case), the UBO value otherwise. */
 			const auto componentIt = m_components.find(ComponentType::Roughness);
@@ -2908,7 +2908,7 @@ namespace EmEn::Graphics::Material
 				: std::string{MaterialUB(UniformBlock::Component::Roughness)};
 
 			Code(fragmentShader, Location::Top) <<
-				"const vec3 transmissionDir = vec3(reflectionI.x, -reflectionI.y, reflectionI.z);" << Line::End <<
+				"const vec3 transmissionDir = reflectionI;" << Line::End <<
 				"const float transmissionLod = clamp(" << transmissionRoughness << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0;" << Line::End <<
 				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, transmissionLod).rgb;";
 		}
@@ -2916,7 +2916,7 @@ namespace EmEn::Graphics::Material
 		{
 			/* Low quality: sample at a fixed LOD using the reflection coordinates (view direction approximation). */
 			Code(fragmentShader, Location::Top) <<
-				"const vec3 transmissionDir = vec3(" << ShaderVariable::ReflectionTextureCoordinates << ".x, -" << ShaderVariable::ReflectionTextureCoordinates << ".y, " << ShaderVariable::ReflectionTextureCoordinates << ".z);" << Line::End <<
+				"const vec3 transmissionDir = " << ShaderVariable::ReflectionTextureCoordinates << ";" << Line::End <<
 				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, 3.0).rgb;";
 		}
 
@@ -3219,11 +3219,11 @@ namespace EmEn::Graphics::Material
 					Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
 				}
 
-				/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+				/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 				Code(shader, Location::Top) <<
 					"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 					"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
-					"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);";
+					"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;";
 
 				/* A render-target cubemap (dynamic probe) carries a GGX-prefiltered mip
 				 * chain (mip 0 = mirror, upper mips convolved per render — see
@@ -3298,7 +3298,7 @@ namespace EmEn::Graphics::Material
 						Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
 					}
 
-					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+					/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 					Code(shader, Location::Top) <<
 						"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End;
 
@@ -3310,7 +3310,7 @@ namespace EmEn::Graphics::Material
 
 					Code(shader, Location::Top) <<
 						"const vec3 refractDir = refract(reflectionI, reflectionNormal, eta);" << Line::End <<
-						"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
+						"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = refractDir;" << Line::End <<
 						"const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 				}
 				else

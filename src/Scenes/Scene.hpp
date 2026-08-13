@@ -401,8 +401,9 @@ namespace EmEn::Scenes
 			 * @note Call publishStateForRendering() after this to make changes visible to the render thread.
 			 *
 			 * @param engineCycle The cycle number of the engine (for time-based logic).
+			 * @param enablePhysicalSimulation Enables the physical simulation.
 			 */
-			void processLogics (size_t engineCycle) noexcept;
+			void processLogics (size_t engineCycle, bool enablePhysicalSimulation) noexcept;
 
 			/**
 			 * @brief Publishes the current simulation state for the render thread.

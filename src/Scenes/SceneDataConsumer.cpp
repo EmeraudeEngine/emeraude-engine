@@ -51,15 +51,13 @@ namespace EmEn::Scenes
 	bool
 	SceneDataConsumer::build (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
 	{
-		/* glTF is Y-up, engine is Y-down: 180° rotation around X.
-		 * Build the root transform that will be applied to all children.
-		 *
-		 * ⚠️ This is a ROTATION (determinant +1): it REORIENTS, it never mirrors. It therefore
-		 * cannot fix the chirality difference documented in `docs/coordinate-system.md` § OPEN
-		 * DEFECT — that is what `LoaderOptions::swapX/swapY/swapZ` is for, applied loader-side in
-		 * the geometry. The two compose: with `swapZ`, the net mapping is `diag(1,-1,1)`. */
-		CartesianFrame< float > yUpToYDownFrame;
-		yUpToYDownFrame.rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), true);
+		/* NOTE: The import is now the IDENTITY. glTF, USD and FBX are all Y-up with -Z forward, and
+		 * so is the engine since Aug 2026, so nothing has to be reoriented on the way in. This used
+		 * to be a 180° rotation around X converting Y-up to the old Y-down world -- and, being a
+		 * rotation, it could never fix the chirality difference that made every imported asset
+		 * render mirrored. That defect is gone with the convention, and so is the per-asset flag
+		 * that used to cancel it. */
+		const CartesianFrame< float > importFrame;
 
 		/* ⚠️ An asset can be made ENTIRELY of instances and hold no drawable node at all — every
 		 * `PI_*.usd` element of Jungle Ruins is exactly that. Returning here on an empty node
@@ -73,7 +71,7 @@ namespace EmEn::Scenes
 				return true;
 			}
 
-			this->buildInstanceSets(sceneData, scene, yUpToYDownFrame);
+			this->buildInstanceSets(sceneData, scene, importFrame);
 
 			return true;
 		}
@@ -85,14 +83,13 @@ namespace EmEn::Scenes
 			/* Static mode: create StaticEntity for each mesh node with world coordinates. */
 			for ( const auto nodeIndex : sceneData.rootNodeIndices )
 			{
-				this->processNodeAsStatic(sceneData, nodeIndex, scene, yUpToYDownFrame);
+				this->processNodeAsStatic(sceneData, nodeIndex, scene, importFrame);
 			}
 		}
 		else
 		{
-			/* Node mode: build content under the caller-provided node.
-			 * Apply the Y-up → Y-down coordinate conversion. */
-			parentNode->rotate(std::numbers::pi_v< float >, Vector< 3, float >::positiveX(), TransformSpace::Local);
+			/* NOTE: Node mode. No coordinate conversion either -- see the identity import frame
+			 * above; this branch used to apply the same 180° X rotation. */
 
 			if ( m_flattenHierarchy )
 			{
@@ -147,7 +144,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		this->buildInstanceSets(sceneData, scene, yUpToYDownFrame);
+		this->buildInstanceSets(sceneData, scene, importFrame);
 
 		return true;
 	}

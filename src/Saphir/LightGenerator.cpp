@@ -737,10 +737,10 @@ namespace EmEn::Saphir
 
 			/* The GEOMETRIC world normal is enough for the irradiance lookup: a 32² cosine
 			 * convolved cubemap carries no frequency a normal map could reveal.
-			 * ENGINE CUBEMAP CONVENTION: world direction D samples at (D.x, -D.y, D.z). */
+			 * The world is Y-UP: the world normal samples the cubemap as-is (the former (D.x, -D.y, D.z) compensation is gone). */
 			Code{fragmentShader} <<
 				"const vec3 iblAmbientNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], vec3(iblAmbientNormal.x, -iblAmbientNormal.y, iblAmbientNormal.z)).rgb;";
+				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], iblAmbientNormal).rgb;";
 		}
 
 		/* The tint of the IBL diffuse irradiance term is ALWAYS the raw base color

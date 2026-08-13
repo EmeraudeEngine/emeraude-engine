@@ -51,13 +51,22 @@ namespace EmEn::Scenes
 
 	constexpr auto AxisDebugName{"+EntityAxis"};
 	constexpr auto VelocityDebugName{"+EntityVelocity"};
-	constexpr auto BoundingShapeDebugName{"+EntityBoundingShape"};
+	constexpr auto BoundingShapeDebugName{"+EntityCollisionShape"};
+	constexpr auto RenderBoundingBoxDebugName{"+EntityRenderBoundingBox"};
 	constexpr auto CameraDebugName{"+EntityCamera"};
 
 	/* NOTE: Visual debug helpers are UNLIT, so their colour IS their emitted radiance. This
 	 * luminance anchors the [0,1] vertex colours in the photometric pipeline; without it, a
 	 * helper would write its raw [0,1] colour and read black under the camera exposure. */
 	constexpr auto VisualDebugLuminance{2000.0F};
+
+	/* The axis gizmo is scaled by the collision model radius so it matches the object it describes,
+	 * then overshoots it slightly: arrows buried inside the mesh are unreadable.
+	 * ⚠️ This is only safe because a debug helper no longer contributes to the PHYSICAL extent
+	 * (Component::Abstract::setContributesToEntityExtents). While it did, the gizmo fed its own
+	 * mesh extent back into the collider, the collider grew, and the gizmo was drawn bigger still —
+	 * enlarging it here would have amplified that loop instead of just showing more. */
+	constexpr auto AxisDebugRadiusOvershoot{1.5F};
 
 	void
 	AbstractEntity::enableVisualDebug (Resources::Manager & resourceManager, VisualDebugType type) noexcept
@@ -82,7 +91,7 @@ namespace EmEn::Scenes
 				meshResource = AbstractEntity::getVelocityVisualDebug(resourceManager);
 				break;
 
-			case VisualDebugType::BoundingShape :
+			case VisualDebugType::CollisionShape :
 				label = BoundingShapeDebugName;
 				if ( m_collisionModel != nullptr )
 				{
@@ -105,6 +114,11 @@ namespace EmEn::Scenes
 				}
 				break;
 
+			case VisualDebugType::RenderBoundingBox :
+				label = RenderBoundingBoxDebugName;
+				meshResource = AbstractEntity::getRenderBoundingBoxVisualDebug(resourceManager);
+				break;
+
 			case VisualDebugType::Camera :
 				label = CameraDebugName;
 				meshResource = AbstractEntity::getCameraVisualDebug(resourceManager);
@@ -118,9 +132,18 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		/* NOTE: Create an instance of this visual debug mesh. */
+		/* NOTE: Create an instance of this visual debug mesh.
+		 * ⚠️ setContributesToEntityExtents(false) MUST happen in setup(), which runs BEFORE the
+		 * component is linked — and linking calls updateEntityProperties() straight away. A helper
+		 * left contributing merges its own extent into the COLLISION model of the entity it is only
+		 * supposed to describe: the axis gizmo is generated at extent 1.0, so it nearly doubled the
+		 * collider of a 1 m cube, and the bounding-shape helper then drew that inflated collider —
+		 * the box "growing on its own" when switching objects in the geometry-debug demo. It gates
+		 * the RENDER extent too: a gizmo is debug logic and must not move a measurement of the
+		 * content — a helper culled a touch early costs nothing, a falsified extent costs a session. */
 		const auto meshInstance = this->componentBuilder< Component::Visual >(label)
 			 .setup([] (auto & component) {
+				 component.setContributesToEntityExtents(false);
 				 component.getRenderableInstance()->enableLighting();
 			 }).build(meshResource);
 
@@ -139,7 +162,7 @@ namespace EmEn::Scenes
 			case VisualDebugType::Axis :
 				if ( m_collisionModel != nullptr )
 				{
-					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
+					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius() * AxisDebugRadiusOvershoot));
 				}
 				else
 				{
@@ -150,7 +173,7 @@ namespace EmEn::Scenes
 			case VisualDebugType::Velocity :
 				break;
 
-			case VisualDebugType::BoundingShape :
+			case VisualDebugType::CollisionShape :
 				if ( m_collisionModel != nullptr )
 				{
 					switch ( m_collisionModel->modelType() )
@@ -161,7 +184,9 @@ namespace EmEn::Scenes
 							break;
 
 						case CollisionModelType::Sphere :
-							/* Sphere is centered at local origin. */
+							/* Sphere is centered at local origin.
+							 * ⚠️ EXACT radius, no overshoot: this helper's job is to report the
+							 * collider truthfully. Only the AXIS gizmo is allowed to overshoot. */
 							renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
 							break;
 
@@ -201,11 +226,33 @@ namespace EmEn::Scenes
 				}
 				break;
 
+			case VisualDebugType::RenderBoundingBox :
+				AbstractEntity::applyRenderBoundingBoxTransform(*renderableInstance, m_renderBoundingBox);
+				break;
+
 			case VisualDebugType::Camera :
 				break;
 		}
 
 		renderableInstance->disableDepthTest(false);
+	}
+
+	void
+	AbstractEntity::applyRenderBoundingBoxTransform (Graphics::RenderableInstance::Abstract & renderableInstance, const Space3D::AACuboid< float > & renderBoundingBox) noexcept
+	{
+		/* ⚠️ Unlike the collision helper above, NOTHING is inverted here: m_renderBoundingBox is
+		 * already expressed in the entity's LOCAL space, whereas the collision model answers in
+		 * WORLD space and has to be mapped back. Wrapping this one in the inverse entity matrix
+		 * would apply the entity transform twice. */
+		if ( !renderBoundingBox.isValid() )
+		{
+			return;
+		}
+
+		renderableInstance.setTransformationMatrix(
+			Matrix< 4, float >::translation(renderBoundingBox.centroid()) *
+			Matrix< 4, float >::scaling(renderBoundingBox.width(), renderBoundingBox.height(), renderBoundingBox.depth())
+		);
 	}
 
 	void
@@ -221,8 +268,12 @@ namespace EmEn::Scenes
 				this->removeComponent(VelocityDebugName);
 				break;
 
-			case VisualDebugType::BoundingShape :
+			case VisualDebugType::CollisionShape :
 				this->removeComponent(BoundingShapeDebugName);
+				break;
+
+			case VisualDebugType::RenderBoundingBox :
+				this->removeComponent(RenderBoundingBoxDebugName);
 				break;
 
 			case VisualDebugType::Camera :
@@ -257,8 +308,11 @@ namespace EmEn::Scenes
 			case VisualDebugType::Velocity :
 				return this->containsComponent(VelocityDebugName);
 
-			case VisualDebugType::BoundingShape :
+			case VisualDebugType::CollisionShape :
 				return this->containsComponent(BoundingShapeDebugName);
+
+			case VisualDebugType::RenderBoundingBox :
+				return this->containsComponent(RenderBoundingBoxDebugName);
 
 			case VisualDebugType::Camera :
 				return this->containsComponent(CameraDebugName);
@@ -277,12 +331,19 @@ namespace EmEn::Scenes
 
 			if ( m_collisionModel != nullptr )
 			{
-				renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
+				renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius() * AxisDebugRadiusOvershoot));
 			}
 			else
 			{
 				renderableInstance->setTransformationMatrix(Matrix< 4, float >::identity());
 			}
+		}
+
+		/* Update the RENDER extent helper. It does not depend on the collision model, so it is
+		 * refreshed before the early return below. */
+		if ( const auto component = this->getComponent(RenderBoundingBoxDebugName); component != nullptr )
+		{
+			AbstractEntity::applyRenderBoundingBoxTransform(*component->getRenderableInstance(), m_renderBoundingBox);
 		}
 
 		/* Update bounding shape. */
@@ -303,7 +364,9 @@ namespace EmEn::Scenes
 					break;
 
 				case CollisionModelType::Sphere :
-					/* Sphere is centered at local origin. */
+					/* Sphere is centered at local origin.
+					 * ⚠️ EXACT radius, no overshoot: this helper's job is to report the collider
+					 * truthfully. Only the AXIS gizmo is allowed to overshoot. */
 					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
 					break;
 
@@ -421,6 +484,41 @@ namespace EmEn::Scenes
 				return meshResource.load(
 					Geometry::ResourceGenerator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor}.cube(1.0F),
 					AbstractEntity::getTranslucentVisualDebugMaterial(resources),
+					{PolygonMode::Line, CullingMode::None}
+				);
+			});
+	}
+
+	std::shared_ptr< Renderable::MeshResource >
+	AbstractEntity::getRenderBoundingBoxVisualDebug (Resources::Manager & resources) noexcept
+	{
+		return resources.container< Renderable::MeshResource >()
+			->getOrCreateResource("+RenderBoundingBox", [&resources] (auto & meshResource) {
+				/* A SECOND cube resource on purpose: this helper is meant to be shown next to the
+				 * collision one, so it carries a flat cyan material instead of the vertex colours,
+				 * and the two extents can be told apart in a single capture. */
+				const auto material = resources.container< Material::StandardResource >()
+					->getOrCreateResource("+RenderExtentVisualDebug", [] (auto & materialResource) {
+						if ( !materialResource.setAlbedoComponent(PixelFactory::Cyan) )
+						{
+							return false;
+						}
+
+						/* NOTE: Same photometric contract as the other debug materials — unlit
+						 * helpers must carry their own radiance or the camera exposure reads them
+						 * black. setAutoIlluminationComponent() FIRST: it creates the component
+						 * that setEmissiveStrength() then scales. */
+						materialResource.enableUnlit();
+						materialResource.setAutoIlluminationComponent(1.0F);
+						materialResource.setEmissiveStrength(VisualDebugLuminance);
+						materialResource.setOpacityComponent(0.333F);
+
+						return materialResource.setManualLoadSuccess(true);
+					});
+
+				return meshResource.load(
+					Geometry::ResourceGenerator{resources, Geometry::EnableNormal}.cube(1.0F, "+RenderBoundingBoxGeometry"),
+					material,
 					{PolygonMode::Line, CullingMode::None}
 				);
 			});

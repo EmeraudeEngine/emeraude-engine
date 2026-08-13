@@ -413,6 +413,21 @@ echo "Core.SceneManagerService.setNodeLookAt(Camera, 50.0, 0.0, 50.0)" | nc -q 1
 
 ## 6. Visual Verification (AI Feedback Loop)
 
+### Isolating the physical simulation
+
+```bash
+echo "Core.togglePhysicalSimulation()" | nc -q 2 localhost 7777
+# Response: Physical simulation ENABLED. / DISABLED (entities move, nothing collides).
+```
+
+Turns `Scene::resolveCollisions()` on and off at runtime — collisions, boundary clipping and
+ground response. **It is not a pause**: entities keep moving under their own logic and gravity,
+only the resolution stops. Use it to settle "is this a rendering defect or a physics one?" in one
+command instead of a rebuild. Enabled by default.
+
+⚠️ A body released with the simulation OFF keeps accelerating downwards for ever — re-enabling it
+mid-fall makes it resolve a very deep penetration in one step. Toggle before spawning, not during.
+
 ### Taking a screenshot
 
 ```bash

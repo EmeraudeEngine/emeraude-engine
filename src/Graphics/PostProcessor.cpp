@@ -463,7 +463,7 @@ namespace EmEn::Graphics
 		/* Create the fullscreen quad geometry. */
 		m_quadGeometry = std::make_shared< Geometry::IndexedVertexResource >(m_resourcesManager, "PostProcessQuad", Geometry::EnablePrimaryTextureCoordinates);
 
-		if ( !m_quadGeometry->load(ShapeGenerator::generateQuad(2.0F, 2.0F)) )
+		if ( !m_quadGeometry->load(ShapeGenerator::generateScreenQuad()) )
 		{
 			TraceError{ClassId} << "Unable to generate the fullscreen quad geometry !";
 
@@ -1112,7 +1112,16 @@ namespace EmEn::Graphics
 		const auto mainRT = m_renderer.mainRenderTarget();
 		const auto & extent = mainRT->extent();
 		const auto fovDeg = mainRT->viewMatrices().fieldOfView();
-		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
+		/* ⚠️ SIGNED CONTRACT — tanHalfFovY carries the projection's Y direction, it is not a magnitude.
+		 * Consumers reconstruct view-space position as `ndc.y * tanHalfFovY * linearZ`, where ndc.y
+		 * comes from the framebuffer and therefore always points DOWN under Vulkan. So the constant
+		 * is what tells them which way view-space Y runs, and taking abs() of it — which every
+		 * consumer used to do "to handle a Y-flipped projection" — throws away exactly the
+		 * information it claims to protect.
+		 * Positive today ([Col1Row1] > 0, world Y-down). At the Y-up flip it becomes negative on its
+		 * own and all nine reconstruction sites follow, with no shader edit. */
+		const auto projectionYSign = mainRT->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
+		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 
 		/* Execute each enabled effect in the chain.
 		 * Each effect receives the output of the previous one.
@@ -1462,7 +1471,9 @@ namespace EmEn::Graphics
 			static const auto startTime = std::chrono::steady_clock::now();
 			const auto elapsedTime = std::chrono::duration< float >(std::chrono::steady_clock::now() - startTime).count();
 			const auto fovDeg = renderTarget->viewMatrices().fieldOfView();
-			const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
+			/* @see the signed contract documented at the other producer site above. */
+			const auto projectionYSign = renderTarget->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
+			const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 
 			const PushConstants pc{
 				.frameWidth = static_cast< float >(extent.width),

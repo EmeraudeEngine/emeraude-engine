@@ -512,7 +512,7 @@ namespace EmEn::Graphics::Geometry
 
 		return m_resources.container< IndexedVertexResource >()
 			->getOrCreateResource(resourceName, [size, depth, tableRatio, cornerBevel, steps, parameters = m_generationParameters] (auto & geometryResource) {
-				auto shape = ShapeGenerator::generateAssscherCutGem< float, uint32_t >(size, depth, tableRatio, cornerBevel, steps, parameters.getShapeBuilderOptions(false, false, false));
+				auto shape = ShapeGenerator::generateAsscherCutGem< float, uint32_t >(size, depth, tableRatio, cornerBevel, steps, parameters.getShapeBuilderOptions(false, false, false));
 
 				if ( !parameters.transformMatrix().isIdentity() )
 				{
@@ -744,13 +744,13 @@ namespace EmEn::Graphics::Geometry
 				options.setTextureCoordinatesMultiplier(parameters.textureCoordinatesMultiplier());
 				options.setCenterAtBottom(parameters.isCenteredAtBottom());
 
-				const auto translate = Matrix< 4, float >::translation(0.0F, -(gape + arrowLength), 0.0F);
+				const auto translate = Matrix< 4, float >::translation(0.0F, gape + arrowLength, 0.0F);
 
 				/* Base arrow. */
 				{
 					auto chunk = ShapeGenerator::generateCylinder< float, uint32_t >(arrowThickness, arrowThickness, arrowLength, quality, 1, VertexFactory::CapUVMapping::Planar, options);
 
-					assembler.merge(chunk, Matrix< 4, float >::translation(0.0F, -gape, 0.0F));
+					assembler.merge(chunk, Matrix< 4, float >::translation(0.0F, gape, 0.0F));
 				}
 
 				/* Arrow cap. */
@@ -783,27 +783,27 @@ namespace EmEn::Graphics::Geometry
 				switch (pointTo)
 				{
 					case PointTo::PositiveX :
-						shape.transform(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 0.0F, 0.0, 1.0F));
-						break;
-
-					case PointTo::NegativeX :
 						shape.transform(Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 0.0F, 0.0, 1.0F));
 						break;
 
+					case PointTo::NegativeX :
+						shape.transform(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 0.0F, 0.0, 1.0F));
+						break;
+
 					case PointTo::PositiveY :
-						shape.transform(Matrix< 4, float >::rotation(Radian(HalfRevolution< float >), 1.0F, 0.0, 0.0F));
+						/* Nothing to do, the arrow is built pointing to Y+ by default. */
 						break;
 
 					case PointTo::NegativeY :
-						/* Nothing to do, the arrow is built pointing to Y- by default. */
+						shape.transform(Matrix< 4, float >::rotation(Radian(HalfRevolution< float >), 1.0F, 0.0, 0.0F));
 						break;
 
 					case PointTo::PositiveZ :
-						shape.transform(Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 1.0F, 0.0, 0.0F));
+						shape.transform(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 1.0F, 0.0, 0.0F));
 						break;
 
 					case PointTo::NegativeZ :
-						shape.transform(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 1.0F, 0.0, 0.0F));
+						shape.transform(Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 1.0F, 0.0, 0.0F));
 						break;
 				}
 
@@ -853,13 +853,13 @@ namespace EmEn::Graphics::Geometry
 					{
 						ShapeAssembler arrowAssembler{arrow};
 
-						const auto translate = Matrix< 4, float >::translation(0.0F, -arrowLength, 0.0F);
+						const auto translate = Matrix< 4, float >::translation(0.0F, arrowLength, 0.0F);
 
 						/* Base arrow. */
 						{
 							auto chunk = ShapeGenerator::generateCylinder< float, uint32_t >(arrowThickness, arrowThickness, arrowLength, quality, 1, VertexFactory::CapUVMapping::Planar, options);
 
-							arrowAssembler.merge(chunk, Matrix< 4, float >::translation(0.0F, -gape, 0.0F));
+							arrowAssembler.merge(chunk, Matrix< 4, float >::translation(0.0F, gape, 0.0F));
 						}
 
 						/* Arrow cap. */
@@ -881,20 +881,20 @@ namespace EmEn::Graphics::Geometry
 						}
 					}
 
-					/* Adds the Y+ arrow in green. This should point downward. */
+					/* Adds the Y+ arrow in green. This should point upward. */
 					arrow.setGlobalVertexColor(Green);
 
-					assembler.merge(arrow, Matrix< 4, float >::rotation(Radian(HalfRevolution< float >), 1.0F, 0.0F, 0.0F));
+					assembler.merge(arrow);
 
 					/* Adds the X+ arrow in red. This should point toward the right. */
 					arrow.setGlobalVertexColor(Red);
 
-					assembler.merge(arrow, Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 0.0F, 0.0F, 1.0F));
+					assembler.merge(arrow, Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 0.0F, 0.0F, 1.0F));
 
 					/* Adds the Z+ arrow in blue. This should point to camera. */
 					arrow.setGlobalVertexColor(Blue);
 
-					assembler.merge(arrow, Matrix< 4, float >::rotation(Radian(-QuartRevolution< float >), 1.0F, 0.0F, 0.0F));
+					assembler.merge(arrow, Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 1.0F, 0.0F, 0.0F));
 				}
 
 				/* Arrow origin. */

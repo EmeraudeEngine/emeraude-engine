@@ -341,7 +341,7 @@ namespace EmEn::Scenes::Loaders
 	 * node keep a PROPER rotation while the mirror lives in the vertex data. */
 	static
 	CartesianFrame< float >
-	extractFrameFromNode (const fastgltf::Node & glTFNode, const AxisFlip & axisFlip) noexcept
+	extractFrameFromNode (const fastgltf::Node & glTFNode) noexcept
 	{
 		CartesianFrame< float > frame;
 
@@ -387,12 +387,12 @@ namespace EmEn::Scenes::Loaders
 			frame.setPosition({trs->translation.x(), trs->translation.y(), trs->translation.z()});
 		}
 
-		if ( axisFlip.isIdentity() )
+		if ( true )
 		{
 			return frame;
 		}
 
-		return axisFlip.frame(frame);
+		return frame;
 	}
 
 	/* Helper: Build a node name from the glTF node. */
@@ -1279,7 +1279,7 @@ namespace EmEn::Scenes::Loaders
 		 * different flags would silently hand the first variant to the second caller. Images,
 		 * textures and materials are deliberately NOT keyed this way: the flip does not touch them,
 		 * and duplicating 84 images per variant would cost memory for nothing. */
-		const auto flipKey = this->axisFlip().resourceNameSuffix();
+		const auto flipKey = std::string{};
 
 		for ( size_t meshIndex = 0; meshIndex < asset.meshes.size(); ++meshIndex )
 		{
@@ -1369,7 +1369,6 @@ namespace EmEn::Scenes::Loaders
 			 * A normal needs no special case: the inverse-transpose of a diagonal ±1 matrix is the
 			 * matrix itself. Tangents are not read from the asset (the shape generator derives them
 			 * from the mirrored positions and UVs), so they follow for free. */
-			const auto axisFlip = this->axisFlip();
 
 			/* Second pass: fill vertices and triangles directly into pre-allocated vectors. */
 			const bool buildSuccess = shape->build([&] (auto & groups, auto & vertices, auto & triangles) {
@@ -1409,11 +1408,7 @@ namespace EmEn::Scenes::Loaders
 						size_t index = 0;
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, posAccessor, [&] (const fastgltf::math::fvec3 & v) {
-							vertices[globalVertexOffset + index].setPosition(axisFlip.vector(
-								v.x() * m_options.uniformScale,
-								v.y() * m_options.uniformScale,
-								v.z() * m_options.uniformScale
-							));
+							vertices[globalVertexOffset + index].setPosition(Vector< 3, float >{v.x() * m_options.uniformScale, v.y() * m_options.uniformScale, v.z() * m_options.uniformScale});
 							index++;
 						}, adapter);
 					}
@@ -1427,7 +1422,7 @@ namespace EmEn::Scenes::Loaders
 						size_t index = 0;
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, normAccessor, [&] (const fastgltf::math::fvec3 & v) {
-							vertices[globalVertexOffset + index].setNormal(axisFlip.vector(v.x(), v.y(), v.z()));
+							vertices[globalVertexOffset + index].setNormal(Vector< 3, float >{v.x(), v.y(), v.z()});
 							index++;
 						}, adapter);
 					}
@@ -1489,16 +1484,11 @@ namespace EmEn::Scenes::Loaders
 						const auto & indexAccessor = asset.accessors[glTFPrimitive.indicesAccessor.value()];
 						const auto primTriangleCount = static_cast< uint32_t >(indexAccessor.count / 3);
 
-						/* Stream indices directly into triangles, swapping 1 and 2 when required.
+						/* Stream indices directly into triangles, in the order the asset authored them.
 						 *
-						 * ⚠️⚠️ The swap compensates the engine's ORIENTATION-REVERSING projection
-						 * (`docs/coordinate-system.md` § OPEN DEFECT), NOT the consumer's 180° X
-						 * rotation as this comment used to claim — a rotation has determinant +1 and
-						 * can never invert a winding. It follows that the swap is required only
-						 * while the import preserves orientation: an odd number of axis flips
-						 * reverses the winding as well, and swapping on top of that would render
-						 * every single face inside-out. The parity is the ONLY authority. */
-						const bool swapWinding = axisFlip.mustSwapTriangleWinding();
+						 * A swap of indices 1 and 2 used to sit here to compensate the engine's
+						 * ORIENTATION-REVERSING projection. The Y-up convention flip removed that mirror,
+						 * so the authored winding is now the correct one and is kept untouched. */
 
 						std::array< uint32_t, 3 > triangleBuffer{};
 						uint32_t triangleSlot = 0;
@@ -1508,14 +1498,7 @@ namespace EmEn::Scenes::Loaders
 
 							if ( triangleSlot == 3 )
 							{
-								if ( swapWinding )
-								{
-									triangles.emplace_back(triangleBuffer[0], triangleBuffer[2], triangleBuffer[1]);
-								}
-								else
-								{
-									triangles.emplace_back(triangleBuffer[0], triangleBuffer[1], triangleBuffer[2]);
-								}
+								triangles.emplace_back(triangleBuffer[0], triangleBuffer[1], triangleBuffer[2]);
 
 								triangleSlot = 0;
 							}
@@ -1548,7 +1531,9 @@ namespace EmEn::Scenes::Loaders
 			/* Generate normals from geometry when the glTF mesh does not provide them. */
 			if ( !hasNormals )
 			{
-				shape->computeTriangleNormal(true);
+				/* No inversion: nothing reflects the vertex data any more (the winding swap that
+				 * used to force it is gone with the orientation-reversing projection). */
+				shape->computeTriangleNormal(false);
 				shape->computeVertexNormal();
 
 				TraceDebug{ClassId} << "Generated smooth normals for mesh '" << glTFMesh.name << "' (not provided by glTF).";
@@ -1694,10 +1679,9 @@ namespace EmEn::Scenes::Loaders
 
 		const MeshoptBufferAdapter adapter{m_bufferCache.get()};
 
-		/* ⚠️ The rig is mirrored exactly like the mesh it deforms, or the skin slides off the
-		 * geometry: bind-pose translations, bind-pose ROTATIONS and inverse bind matrices all go
-		 * through the same flip. See AxisFlip.hpp for why a rotation needs the det(M) factor. */
-		const auto axisFlip = this->axisFlip();
+		/* ⚠️ The rig follows the mesh it deforms, or the skin slides off the geometry: bind-pose
+		 * translations, bind-pose rotations and inverse bind matrices all go through the same
+		 * conversion. */
 
 		/* Build a node-index → parent-node-index lookup from the node tree. */
 		std::vector< int32_t > nodeParents(asset.nodes.size(), Base::Animation::NoParent);
@@ -1762,7 +1746,7 @@ namespace EmEn::Scenes::Loaders
 					 * translation column as the uniform scale above does. Skinning stays coherent
 					 * because the joint world matrices are conjugated the same way, so the two M
 					 * cancel: (M·W·M)·(M·IBM·M)·(M·v) = M·(W·IBM·v). */
-					inverseBindMatrices[index] = axisFlip.matrix(ibm);
+					inverseBindMatrices[index] = ibm;
 					index++;
 				}, adapter);
 			}
@@ -1805,12 +1789,11 @@ namespace EmEn::Scenes::Loaders
 				/* Extract local TRS from the node. GLTF stores parent-relative transforms. */
 				if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
 				{
-					engineJoints[j].translation = axisFlip.vector(
+					engineJoints[j].translation = Vector< 3, float >{
 						trs->translation.x() * m_options.uniformScale,
 						trs->translation.y() * m_options.uniformScale,
-						trs->translation.z() * m_options.uniformScale
-					);
-					engineJoints[j].rotation = axisFlip.rotation(Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()});
+						trs->translation.z() * m_options.uniformScale};
+					engineJoints[j].rotation = Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()};
 					/* NOTE: A scale is invariant under the flip — M·diag(s)·M = diag(s). */
 					engineJoints[j].scale = {trs->scale.x(), trs->scale.y(), trs->scale.z()};
 				}
@@ -1834,7 +1817,7 @@ namespace EmEn::Scenes::Loaders
 				std::string{glTFSkin.name};
 
 			auto skeletonResource = m_resources.container< Animations::SkeletonResource >()
-				->getOrCreateResourceSync(m_resourcePrefix + axisFlip.resourceNameSuffix() + "/skeleton/" + skinName, [&skeleton] (auto & resource) {
+				->getOrCreateResourceSync(m_resourcePrefix + std::string{} + "/skeleton/" + skinName, [&skeleton] (auto & resource) {
 					return resource.load(std::move(skeleton));
 				});
 
@@ -1865,7 +1848,6 @@ namespace EmEn::Scenes::Loaders
 		/* ⚠️ The clips are mirrored with the very same flip as the bind pose they animate. A rig
 		 * whose bind pose is mirrored but whose clips are not snaps to the unmirrored pose on the
 		 * first animated frame — the classic symptom of a half-applied conversion. */
-		const auto axisFlip = this->axisFlip();
 
 		/* For mapping node indices to joint indices, we need the skin context. */
 		std::unordered_map< size_t, int32_t > nodeToJointIndex;
@@ -1974,7 +1956,7 @@ namespace EmEn::Scenes::Loaders
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
 							const Vector< 3, float > scaled{v.x() * valueScale, v.y() * valueScale, v.z() * valueScale};
 
-							values.push_back(isTranslation ? axisFlip.vector(scaled) : scaled);
+							values.push_back(isTranslation ? scaled : scaled);
 						}, adapter);
 
 						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
@@ -2013,7 +1995,7 @@ namespace EmEn::Scenes::Loaders
 						 * carries the det(M) angle inversion, without which the bind pose would look
 						 * right while the animation played backwards. */
 						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, outputAccessor, [&] (const fastgltf::math::fvec4 & v) {
-							values.push_back(axisFlip.rotation(Quaternion< float >{v.x(), v.y(), v.z(), v.w()}));
+							values.push_back(Quaternion< float >{v.x(), v.y(), v.z(), v.w()});
 						}, adapter);
 
 						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
@@ -2057,7 +2039,7 @@ namespace EmEn::Scenes::Loaders
 
 				auto clipResource = m_resources.container< Animations::AnimationClipResource >()
 					->getOrCreateResourceSync(
-						m_resourcePrefix + axisFlip.resourceNameSuffix() + "/animation/" + clipName,
+						m_resourcePrefix + std::string{} + "/animation/" + clipName,
 						[&clip] (auto & resource) {
 							return resource.load(std::move(clip));
 						}
@@ -2113,7 +2095,7 @@ namespace EmEn::Scenes::Loaders
 
 			auto & descriptor = output.nodes[nodeIndex];
 			descriptor.name = buildNodeName(m_resourcePrefix, glTFNode, nodeIndex);
-			descriptor.localFrame = extractFrameFromNode(glTFNode, this->axisFlip());
+			descriptor.localFrame = extractFrameFromNode(glTFNode);
 
 			if ( glTFNode.meshIndex.has_value() )
 			{

@@ -140,12 +140,17 @@ namespace EmEn::Scenes
 			{
 				/* Checks render ability, and accumulates the VISUAL extent that the rendering
 				 * octree places this entity with. Kept separate from the collision model on
-				 * purpose: culling asks "is any of this visible", collision asks "against what". */
+				 * purpose: culling asks "is any of this visible", collision asks "against what".
+				 * ⚠️ A debug overlay still SETS the rendering ability — it does draw — but it must
+				 * not enlarge the extent. @see Component::Abstract::setContributesToEntityExtents() */
 				if ( component->isRenderable() )
 				{
 					this->setRenderingAbilityState(true);
 
-					m_renderBoundingBox.merge(component->renderBoundingBox());
+					if ( component->contributesToEntityExtents() )
+					{
+						m_renderBoundingBox.merge(component->renderBoundingBox());
+					}
 				}
 
 				/* Gets physical properties of a component. */
@@ -162,6 +167,16 @@ namespace EmEn::Scenes
 					inertiaTensor = physicalProperties.inertiaTensor();
 
 					physicalEntityCount++;
+				}
+
+				/* ⚠️ Same gate on the COLLISION side. Without it the axis gizmo (generated at
+				 * extent 1.0) merged into the collider of whatever it was attached to, so a 1 m cube
+				 * got its collider nearly doubled by the mere act of looking at it — and since the
+				 * gizmo is itself SCALED BY that collider's radius, the arrows then overshot the
+				 * object, which is how the defect was spotted. */
+				if ( !component->contributesToEntityExtents() )
+				{
+					continue;
 				}
 
 				/* NOTE: If no collision model we create a default AABB. */

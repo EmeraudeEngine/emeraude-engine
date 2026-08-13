@@ -31,6 +31,7 @@
 
 /* Local inclusions for usages. */
 #include "Audio/Types.hpp"
+#include "Math/Vector.hpp"
 #include "Physics.hpp"
 
 namespace EmEn::Physics
@@ -43,6 +44,12 @@ namespace EmEn::Physics
 	{
 		public:
 
+			/** @brief The direction gravity pulls toward.
+			 * ⚠️ This is the ONE place the physics loop learns which way is down. The integrators
+			 * add the vector and never test a Y sign, so a world with sideways or radial gravity
+			 * only needs this to become per-environment data. */
+			static constexpr Base::Math::Vector< 3, float > DownDirection{0.0F, -1.0F, 0.0F};
+
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"EnvironmentPhysicalProperties"};
 
@@ -53,8 +60,8 @@ namespace EmEn::Physics
 			 * @param planetRadius The radius of the planet environment in m.
 			 */
 			EnvironmentPhysicalProperties (float surfaceGravity, float atmosphericDensity, float planetRadius) noexcept
-				: m_surfaceGravity{surfaceGravity},
-				m_steppedSurfaceGravity{surfaceGravity * WorldPhysicsUpdateCycleDurationS< float >},
+				: m_surfaceGravity{DownDirection * surfaceGravity},
+				m_steppedSurfaceGravity{DownDirection * surfaceGravity * WorldPhysicsUpdateCycleDurationS< float >},
 				m_atmosphericDensity{atmosphericDensity},
 				m_planetRadius{planetRadius}
 			{
@@ -62,22 +69,37 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Returns the surface gravity in m/s².
-			 * @return float
+			 * @brief Returns the surface gravity as an ACCELERATION VECTOR in m/s².
+			 * @note Direction is data, not a convention baked into the physics code: an integrator
+			 * adds this vector and never needs to know which way is down. Today it points along
+			 * DownDirection; at the Y-up flip that constant changes and nothing else does.
+			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			float
+			const Base::Math::Vector< 3, float > &
 			surfaceGravity () const noexcept
 			{
 				return m_surfaceGravity;
 			}
 
 			/**
-			 * @brief Returns the surface gravity in m/s² per engine update cycle.
+			 * @brief Returns the surface gravity magnitude in m/s².
+			 * @note For callers that want "how strong is gravity here", not "which way does it pull".
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
+			surfaceGravityMagnitude () const noexcept
+			{
+				return m_surfaceGravity.length();
+			}
+
+			/**
+			 * @brief Returns the surface gravity vector in m/s² per engine update cycle.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
 			steppedSurfaceGravity () const noexcept
 			{
 				return m_steppedSurfaceGravity;
@@ -96,7 +118,7 @@ namespace EmEn::Physics
 
 				// gh = g (1 + h/R)–2
 				// R is your distance from the center of the Earth
-				return m_surfaceGravity;
+				return m_surfaceGravity.length();
 			}
 
 			/**
@@ -271,8 +293,8 @@ namespace EmEn::Physics
 			 */
 			friend EMEN_API std::ostream & operator<< (std::ostream & out, const EnvironmentPhysicalProperties & obj);
 
-			float m_surfaceGravity;
-			float m_steppedSurfaceGravity;
+			Base::Math::Vector< 3, float > m_surfaceGravity;
+			Base::Math::Vector< 3, float > m_steppedSurfaceGravity;
 			float m_atmosphericDensity;
 			float m_planetRadius;
 			float m_speedOfSound{Physics::SpeedOfSound::Air< float >};

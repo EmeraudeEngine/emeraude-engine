@@ -70,40 +70,7 @@ namespace EmEn::Scenes::Loaders
 		 */
 		bool resolveReferences{false};
 		bool skipSkinning{false};
-		/**
-		 * @brief Negates the X / Y / Z axis of the asset AT IMPORT, in the geometry itself.
-		 *
-		 * ⚠️ "swap" here means **negate this axis**, not "exchange two axes". `swapZ` maps
-		 * `(x, y, z)` to `(x, y, -z)`.
-		 *
-		 * The whole import is routed through `AxisFlip` (see `AxisFlip.hpp` for the full rule):
-		 * vertex positions, normals and tangents, node transforms, joint bind poses, inverse bind
-		 * matrices, animation keyframes — and the triangle winding, which follows the PARITY of
-		 * these three flags.
-		 *
-		 * **What this is for.** The engine's world→screen mapping is orientation-REVERSING
-		 * (measured; `docs/coordinate-system.md` § OPEN DEFECT), while importers convert with a
-		 * ROTATION, which cannot undo a chirality difference. Chiral content — text baked in a
-		 * texture, an asset with a readable left and right — therefore lands MIRRORED on screen.
-		 * Enabling an ODD number of these flags makes the import orientation-reversing too, which
-		 * cancels the pipeline's reversal and puts the asset back the right way round.
-		 *
-		 * ⚠️⚠️ **For glTF and FBX the flag to use is `swapZ`, not `swapY`.** The consumer still
-		 * applies its 180° X rotation `diag(1,-1,-1)`; composed with `swapZ` it gives
-		 * `diag(1,-1,1)` — chirality fixed, up axis still up. `swapY` also fixes the chirality but
-		 * renders the scene UPSIDE DOWN.
-		 *
-		 * ⚠️ Enabling a flag changes the SIGN OF A WORLD COORDINATE for the whole asset: every
-		 * camera position, lookAt target and actor placement hard-coded against that asset must be
-		 * revisited on the flipped axis. Default `false` on all three, so existing scenes are
-		 * untouched.
-		 *
-		 * @note Two flags cancel each other's effect on chirality (a 180° rotation about the third
-		 * axis), which is occasionally what an asset needs for orientation, never for mirroring.
-		 */
-		bool swapX{false};
-		bool swapY{false};
-		bool swapZ{false};
+
 		/**
 		 * @brief Forces every material part of the loaded model to render
 		 * double-sided (back-face culling disabled, CullingMode::None),

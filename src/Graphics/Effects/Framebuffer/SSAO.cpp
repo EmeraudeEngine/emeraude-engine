@@ -71,12 +71,13 @@ float linearizeDepth (float depth)
 }
 
 /* Reconstruct view-space position from depth and UV.
- * Uses abs(tanHalfFovY) so a Y-flipped projection matrix (common in Vulkan) is handled. */
+ * NOTE: tanHalfFovY is SIGNED and carries the projection's Y direction (see PostProcessor).
+ * Do NOT wrap it in abs(): that discards exactly the information it looks like it protects. */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
 	float linearZ = linearizeDepth(depth);
 	vec2 ndc = uv * 2.0 - 1.0;
-	float t = abs(tanHalfFovY);
+	float t = tanHalfFovY;
 	return vec3(ndc * vec2(t * aspectRatio, t) * linearZ, linearZ);
 }
 
@@ -139,7 +140,7 @@ void main()
 		vec3 samplePos = centerPos + sampleDir * radius;
 
 		/* Project sample back to screen space. */
-		float t = abs(tanHalfFovY);
+		float t = tanHalfFovY;
 		vec2 sampleUV = samplePos.xy / (samplePos.z * vec2(t * aspectRatio, t)) * 0.5 + 0.5;
 
 		/* Samples projected outside the frame have no depth information: treat them as

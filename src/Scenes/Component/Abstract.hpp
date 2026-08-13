@@ -281,6 +281,46 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Declares whether this component contributes to its entity's extents.
+			 *
+			 * @details Clear it on anything that DRAWS without being part of the object: every
+			 * visual debug helper. Such an overlay is DEBUG LOGIC — it must never move an
+			 * engine-level measurement of the content it only describes. It gates BOTH extents:
+			 * the RENDER one (culling, rendering octree) and the PHYSICS one (collision model).
+			 *
+			 * @note ⚠️ A cleared component can therefore be culled slightly before its entity's
+			 * content would be. That is deliberate and harmless: an overlay is co-located with the
+			 * entity it annotates, and being exact about a debug gizmo is not worth falsifying the
+			 * extent of the content.
+			 *
+			 * @note ⚠️⚠️ Set it from the builder's setup() callback, never after build(): build()
+			 * links the component, and linking runs updateEntityProperties() immediately. Setting it
+			 * afterwards leaves the entity carrying an extent it should never have had until the
+			 * next component add or remove recomputes it.
+			 *
+			 * @param state The state.
+			 * @return void
+			 * @see contributesToEntityExtents()
+			 */
+			void
+			setContributesToEntityExtents (bool state) noexcept
+			{
+				m_contributesToEntityExtents = state;
+			}
+
+			/**
+			 * @brief Returns whether this component contributes to its entity's PHYSICAL extent.
+			 * @return bool
+			 * @see setContributesToEntityExtents()
+			 */
+			[[nodiscard]]
+			bool
+			contributesToEntityExtents () const noexcept
+			{
+				return m_contributesToEntityExtents;
+			}
+
+			/**
 			 * @brief Returns the local COLLISION bounding sphere of this component.
 			 * @note Can be invalid. On non-overridden method, this will return a null bounding sphere.
 			 * @return const Base::Math::Space3D::Sphere< float > &
@@ -414,5 +454,6 @@ namespace EmEn::Scenes::Component
 
 			const AbstractEntity & m_parentEntity;
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
+			bool m_contributesToEntityExtents{true}; ///< Whether AbstractEntity::updateEntityProperties() feeds this component's extent to the entity's RENDER and COLLISION extents. @see setContributesToEntityExtents()
 	};
 }

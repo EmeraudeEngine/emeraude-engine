@@ -74,11 +74,19 @@ namespace EmEn::Scenes
 	/** @brief Types of visual debug overlays that can be enabled on entities. */
 	enum class EMEN_API VisualDebugType : std::uint8_t
 	{
-		Axis,			///< Local coordinate system axes (RGB = XYZ).
-		Velocity,		///< Velocity vector visualization for moving entities.
-		BoundingShape,   ///< Collision model shape wireframe (adapts to model type).
-		Camera,		  ///< Camera frustum visualization.
+		Axis,				///< Local coordinate system axes (RGB = XYZ).
+		Velocity,			///< Velocity vector visualization for moving entities.
+		CollisionShape,		///< PHYSICS extent: the collision model wireframe (adapts to model type). Vertex-coloured.
+		RenderBoundingBox,	///< RENDER extent: the box that drives frustum culling and the rendering octree. Solid cyan.
+		Camera,				///< Camera frustum visualization.
 	};
+
+	/* ⚠️ An entity carries TWO extents and they are NOT the same object: the RENDER one
+	 * (Component::renderBoundingBox() -> AbstractEntity::m_renderBoundingBox, culling) and the
+	 * PHYSICS one (Component::localBoundingBox() -> m_collisionModel, collision). The physics one
+	 * INHERITS the render one by default, which is why the two are so easily confused. Enable both
+	 * helpers at once to see them apart — that comparison is the fastest way to catch a component
+	 * leaking a visual extent into the collider. @see Component::Abstract::setContributesToPhysicalExtent() */
 
 	/**
 	 * @brief Builder for creating components with a fluent API.
@@ -1169,6 +1177,35 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
+
+			/**
+			 * @brief Returns or creates the RENDER bounding box debug mesh (cube wireframe, solid cyan).
+			 *
+			 * @note Deliberately a DIFFERENT mesh resource from getBoundingBoxVisualDebug(): both
+			 * helpers are usually enabled together to compare the two extents, so they must be
+			 * distinguishable at a glance. This one is uniformly cyan, the collision one is
+			 * vertex-coloured.
+			 *
+			 * @param resources Reference to resource manager (used for mesh creation).
+			 * @return std::shared_ptr< Graphics::Renderable::MeshResource >
+			 *
+			 * @note Cached after first creation - subsequent calls return same mesh.
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getRenderBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
+
+			/**
+			 * @brief Applies the RENDER bounding box helper transform to a renderable instance.
+			 *
+			 * @note ⚠️ The render extent is stored in the entity's LOCAL space, unlike the collision
+			 * model which answers in WORLD space. No inverse entity matrix here — adding one would
+			 * apply the entity transform twice.
+			 *
+			 * @param renderableInstance A reference to the helper's renderable instance.
+			 * @param renderBoundingBox A reference to the entity's local render bounding box.
+			 * @return void
+			 */
+			static void applyRenderBoundingBoxTransform (Graphics::RenderableInstance::Abstract & renderableInstance, const Base::Math::Space3D::AACuboid< float > & renderBoundingBox) noexcept;
 
 			/**
 			 * @brief Returns or creates the camera debug mesh (frustum wireframe).

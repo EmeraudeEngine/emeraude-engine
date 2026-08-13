@@ -437,7 +437,7 @@ namespace EmEn::Scenes
 
 			if ( arguments.empty() )
 			{
-				outputs.emplace_back(Severity::Error, "Usage: loadGLTF(filePath [, swapZ [, createLights]])");
+				outputs.emplace_back(Severity::Error, "Usage: loadGLTF(filePath [, unused [, createLights]])");
 
 				return false;
 			}
@@ -451,15 +451,14 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: swapZ defaults to true — the per-asset chirality workaround every
-			 * glTF demo asset uses (see the coordinate-system documentation). */
-			const auto swapZ = arguments.size() > 1 ? arguments[1].asBoolean() : true;
+			/* NOTE: the second argument used to be swapZ, the per-asset chirality workaround. That
+			 * layer is gone: the mirror is now uniform across every asset, and it is corrected once,
+			 * in the projection. createLights keeps its position so existing scripts still work. */
 			const auto createLights = arguments.size() > 2 && arguments[2].asBoolean();
 
 			Loaders::GLTFLoader loader{m_resourceManager};
 
 			Loaders::LoaderOptions options;
-			options.swapZ = swapZ;
 			options.environmentReflectionIntensity = 1.0F;
 			loader.setOptions(options);
 

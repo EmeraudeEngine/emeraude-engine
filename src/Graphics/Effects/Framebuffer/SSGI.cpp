@@ -86,14 +86,14 @@ vec3 reconstructPosition (vec2 uv, float depth)
 {
 	float linearZ = linearizeDepth(depth);
 	vec2 ndc = uv * 2.0 - 1.0;
-	float t = abs(tanHalfFovY);
+	float t = tanHalfFovY;
 	return vec3(ndc * vec2(t * aspectRatio, t) * linearZ, linearZ);
 }
 
 /* Project view-space position back to screen UV. */
 vec2 projectToUV (vec3 viewPos)
 {
-	float t = abs(tanHalfFovY);
+	float t = tanHalfFovY;
 	vec2 ndc = viewPos.xy / (viewPos.z * vec2(t * aspectRatio, t));
 	return ndc * 0.5 + 0.5;
 }

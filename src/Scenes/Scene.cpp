@@ -351,7 +351,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::processLogics (size_t engineCycle) noexcept
+	Scene::processLogics (size_t engineCycle, bool enablePhysicalSimulation) noexcept
 	{
 		m_lifetimeUS += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 		/* ⚠️ DERIVED from the microsecond clock, never accumulated on its own.
@@ -429,7 +429,10 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: Simulate physical collisions. */
-		this->resolveCollisions();
+		if ( enablePhysicalSimulation )
+		{
+			this->resolveCollisions();
+		}
 
 		if ( m_groundLevel != nullptr )
 		{

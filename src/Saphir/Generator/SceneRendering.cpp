@@ -749,7 +749,8 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		if ( !graphicsPipeline.configureRasterizationState(m_renderPassType, renderable->layerRasterizationOptions(this->layerIndex())) )
+		/* A cubemap target renders through a mirrored projection — the front face must follow. */
+		if ( !graphicsPipeline.configureRasterizationState(m_renderPassType, renderable->layerRasterizationOptions(this->layerIndex()), 0, this->renderTarget()->isCubemap()) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline rasterization state !");
 

@@ -437,10 +437,10 @@ the silhouette — crop 550×390 px; sharpness = mean |gradient| and variance of
 instead of being neutralized.
 
 > [!NOTE]
-> **Engine cubemap convention.** A world direction `D` samples the cubemap at
-> `vec3(D.x, -D.y, D.z)` — engine UP is -Y, cubemaps are stored Y-up. This holds in the skybox,
-> in the material reflection code and in both post-process miss branches. Get it wrong and the
-> reflection is vertically mirrored.
+> **Engine cubemap convention (Y-UP, Aug 2026).** A world direction `D` samples the cubemap
+> **RAW** — no component negation. This holds in the skybox, in the material reflection code
+> and in both post-process miss branches. ⚠️ The former `vec3(D.x, -D.y, D.z)` rule belonged to
+> the Y-down era and is gone; re-adding it mirrors the reflection vertically.
 
 ### 3.3 Skinned geometry in the TLAS — per-frame BLAS refit (Aug 2026)
 

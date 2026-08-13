@@ -83,7 +83,10 @@ namespace EmEn::Physics
 			if ( distance > std::numeric_limits< float >::epsilon() )
 			{
 				results.m_depth = m_localCapsule.radius() - distance;
-				results.m_impactNormal = axisToPoint / distance;
+				/* ⚠️ NEGATED, same defect as SphereCollisionModel::collideWithPoint: axisToPoint
+				 * runs from this capsule's axis TOWARD the point, which pushed the capsule into it
+				 * instead of away. */
+				results.m_impactNormal = -axisToPoint / distance;
 				results.m_MTV = results.m_impactNormal * results.m_depth;
 			}
 			else

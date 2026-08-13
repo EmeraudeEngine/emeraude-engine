@@ -177,7 +177,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_logicStateCoordinates.setPosition(m_logicStateCoordinates.downwardVector() * position);
+				m_logicStateCoordinates.setPosition(m_logicStateCoordinates.localYAxis() * position);
 				break;
 
 			case TransformSpace::Parent :
@@ -190,7 +190,7 @@ namespace EmEn::Scenes
 				}
 				else
 				{
-					m_logicStateCoordinates.setPosition(parentNode->m_logicStateCoordinates.downwardVector() * position);
+					m_logicStateCoordinates.setPosition(parentNode->m_logicStateCoordinates.localYAxis() * position);
 				}
 			}
 				break;

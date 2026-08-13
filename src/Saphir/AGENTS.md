@@ -324,8 +324,9 @@ since lot 3, see `RenderableInstance/Abstract.cpp` gating), the pass reads the r
 slots: cube 1 = baked irradiance (E/π), cube 2 = GGX-prefiltered environment, 2D 3 =
 split-sum BRDF LUT.
 
-- **Diffuse irradiance** (every branch): `baseColor × texture(irradiance, N') × envLuminance`
-  with `N' = (N.x, -N.y, N.z)` (engine cubemap convention) — the GEOMETRIC world normal
+- **Diffuse irradiance** (every branch): `baseColor × texture(irradiance, N) × envLuminance`
+  with the **RAW** world normal `N` (Y-up cubemap convention — the former `(N.x, -N.y, N.z)`
+  compensation belonged to the Y-down era and is gone) — the GEOMETRIC world normal
   (`NormalWorldSpace`, synthesized in the ambient-pass vertex branch when bindless is on);
   a 32² cosine-convolved cubemap carries no frequency a normal map could reveal.
   ⚠️ The tint is ALWAYS the raw base color (albedo/diffuse), never the 1/π photometric
@@ -817,6 +818,46 @@ not "ready" even when the renderable-level program cache holds its program. See
 ## Cubemap Rendering Mode (Multiview)
 
 When rendering to a cubemap (e.g., environment probes, reflection captures), the shader system operates differently:
+
+> [!CRITICAL]
+> **Rendering INTO a cubemap takes THREE coupled pieces. They are one mechanism — never touch one alone.**
+>
+> | # | Where | What |
+> |---|---|---|
+> | 1 | `ViewMatrices3DUBO::CubemapOrientation` | each face looks along ITS OWN axis, **up vectors NEGATED** (sides `-Y`, `+Y` pole `+Z`, `-Y` pole `-Z`) |
+> | 2 | `ViewMatrices3DUBO::updatePerspectiveViewProperties()` | the Y-up projection flip is **UNDONE** for cube faces |
+> | 3 | `GraphicsPipeline::configureRasterizationState(..., mirroredViewport = renderTarget()->isCubemap())` | the **front face is inverted** |
+>
+> **Why it cannot be done in coordinates alone.** The cube-face convention is LEFT-handed — a face
+> wants `right × up = +look` (the `(dx,dy,dz)` tables in `CubemapResource` / `IBLBaker`) — while a
+> camera is right-handed and gives `right × up = -look`. **Measured: with honest look/up vectors all
+> six faces come out with exactly the OPPOSITE right vector.** Changing `up` only ROTATES a face
+> (`up → -up` gives `right → -right` *and* `up → -up`, a 180° turn), it never MIRRORS it, so no
+> re-parameterisation can repair the handedness. Piece 2 supplies the second mirror
+> (mirror + mirror = a 180° rotation, orientation-preserving), piece 1's negated ups cancel that
+> rotation, and piece 3 pays for the winding the reflection reverses.
+>
+> **The three symptoms, in the order they peel off** — reproduce with
+> `reflexion-debug --demo-options 0,3,0` (mode 3 = `CameraOnce`). ⚠️ **It is the only usable mode**:
+> modes 1/2/5 reflect a SKY, which has no left/right landmark, so a mirrored reflection is
+> invisible there. Do not "verify" a cubemap orientation against a sky.
+>
+> | Missing piece | What you see |
+> |---|---|
+> | face axes wrong (pre-Aug-2026 table) | GROUND at the top of the sphere, SKY at the bottom, faces not joining |
+> | 1 + 2 | palm TRUNK left, its CROWN crossed to the RIGHT — the crown lands on the `+Y` pole face whose mirror axis is X. ⚠️ A GLOBAL mirror moves the whole tree; a PER-FACE one cuts it in two. That distinction is what identifies the defect. |
+> | 3 | geometry correctly PLACED but the cubemap mostly **BLACK** (culling eats it) |
+>
+> Correct: palm whole on the left, dragon on the right, continuous horizon, no black.
+>
+> ⚠️⚠️ **This mechanism feeds EVERY cubemap render target — reflection probes AND point-light shadow
+> cubemaps.** Measured across the change on `light-and-shadow-debug`: 3329 differing pixels out of
+> 4 665 600, i.e. shadows unaffected.
+>
+> **What is NOT this defect** (measured, do not re-chase): the material reflection path, the IBL
+> split-sum, SSR and RTR are healthy — modes 1, 2 and 5 (both the SSR and the RTR branch) reflect
+> correctly, including after a sky change with and without lighting derivation. All three sampling
+> paths take the raw world-space `reflect(I, N)` with no negation, which is the correct contract.
 
 ### Matrix Sources by Render Mode
 

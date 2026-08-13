@@ -179,7 +179,13 @@ namespace EmEn::Graphics
 	{
 		constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
 
-		return std::atan(1.0F / m_logicState.projection[M4x4Col1Row1]) * 2.0F * Rad2Deg;
+		/* ⚠️ std::abs() is a NO-OP today and load-bearing tomorrow. This recovers the FOV from the
+		 * matrix and SceneRenderTarget::setViewDistance() feeds it straight back into
+		 * perspectiveProjection(), which rebuilds that same matrix. The Y-up migration makes
+		 * [Col1Row1] NEGATIVE; without abs() the recovered FOV is negative, cotan(fov/2) is
+		 * negative, and -a comes out POSITIVE again — the flip would silently undo itself on the
+		 * first view-distance change, on every resize path. Do not remove. */
+		return std::atan(1.0F / std::abs(m_logicState.projection[M4x4Col1Row1])) * 2.0F * Rad2Deg;
 	}
 
 	void

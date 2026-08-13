@@ -415,7 +415,7 @@ namespace EmEn::Physics
 		const EnvironmentPhysicalProperties & envProperties = scene.physicalEnvironmentProperties();
 
 		/* Apply gravity. */
-		m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();
+		m_linearVelocity += envProperties.steppedSurfaceGravity();
 
 		/* Apply drag force. */
 		const auto linearSpeed = this->linearSpeed();
