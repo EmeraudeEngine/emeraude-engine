@@ -199,11 +199,35 @@
   symptom reads as "the demo closed by itself".
   TIMING IS THE LEAD: the error fires inside the **RT skinned-geometry creation burst** (Fox +
   Paladin BLAS mirrors, ~4 MB of mirror buffers allocated back to back) — the same "heavy load
-  starves the Wayland dialogue" family already suspected elsewhere. `explicit sync` is the
-  protocol involved (`wp_linux_drm_syncobj`): the engine attaches an acquire/release point without a
-  buffer, which the compositor treats as a protocol violation and kills the surface for.
-  Next step: audit the swap-chain present path for a present submitted with a sync point but no
-  attached buffer, most likely on a frame that raced a swap-chain recreation or a stall.
+  starves the Wayland dialogue" family already suspected elsewhere.
+  ⚠️ **ROOT-CAUSE ATTRIBUTION CORRECTED 2026-08-22 — the entry previously said "the engine attaches
+  an acquire/release point without a buffer". It does not, and it cannot: THE ENGINE DOES NOT SPEAK
+  EXPLICIT SYNC AT ALL.** Measured — of every object in the process's startup link map (engine,
+  GLFW inside it, libdecor and its plugins, CEF), **not one references `wp_linux_drm_syncobj`**; the
+  only binary that does is `libnvidia-glcore.so.610.57.04`, the NVIDIA Vulkan driver, dlopen'd at
+  runtime. The acquire/release points therefore come from the **driver's WSI**, inside
+  `vkQueuePresentKHR`. Auditing our present path for a sync point we never set would burn a session
+  looking for absent code.
+  The protocol rule being violated (`linux-drm-syncobj-v1`): a client must set the acquire and
+  release points **if and only if a non-null buffer is attached in the SAME surface commit**. So the
+  violation is an EXTRA `wl_surface_commit()` on the window surface, carrying the driver's pending
+  sync-point state but no buffer — i.e. it comes from whoever else commits that surface. That is
+  **GLFW**: its Wayland backend (3.4-108-g4263be2a here) calls `wl_surface_commit` at 11 sites and
+  drives libdecor through 74 call sites (resize, fractional scale, opaque region, decoration
+  updates), which is exactly why the failure is intermittent — one of those has to land between the
+  driver setting its points and attaching its buffer.
+  Known upstream family, same protocol, same shape, all GLFW/libdecor/explicit-sync:
+  godotengine/godot#93669, kovidgoyal/kitty#7767, blender#135039 (needs a Blender-specific
+  libdecor), wezterm#6699.
+  Next steps, in order: (1) capture the protocol trace on the owner's session —
+  `WAYLAND_DEBUG=1 ./projet-alpha … 2> wl.log`, then read the requests on the offending surface id
+  right before the error, which names the committer outright; (2) A/B the libdecor plugin —
+  `LIBDECOR_PLUGIN_DIR=<dir with only libdecor-cairo.so>` — since the GTK3 plugin only started
+  loading on 2026-08-22 (the symbol-interposition fix removed the `png_free` conflict that had been
+  making libdecor refuse it), so the plugin in use CHANGED that day. ⚠️ The defect itself predates
+  it — this entry measured it on 2026-08-04, with the cairo plugin — but nothing says the FREQUENCY
+  is unchanged, and that A/B is what settles it. (3) Only then consider a GLFW-side fix/update; a
+  vendored-submodule bug is fixed upstream, never worked around here.
 - RENDERING SYSTEM: Hi-Z Occlusion (see the GPU-driven roadmap below — the SSR Hi-Z pyramid
   already exists, occlusion culling does not).
 - RENDERING SYSTEM: GPU Frustum Culling — Move frustum culling to a compute shader for scalability with high instance counts.
