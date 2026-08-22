@@ -187,6 +187,11 @@ namespace EmEn::Vulkan
 			default :
 				TraceError{ClassId} << "Unable to present an image : " << vkResultToCString(result) << " !";
 
+				if ( const auto * hint = vkResultDiagnosticHint(result); hint != nullptr )
+				{
+					TraceWarning{ClassId} << hint;
+				}
+
 				if ( result == VK_ERROR_DEVICE_LOST )
 				{
 					m_device->dumpDeviceLostDiagnostics("Queue::present");

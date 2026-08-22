@@ -1386,6 +1386,11 @@ namespace EmEn::Vulkan
 			default:
 				TraceError{ClassId} << "Error from the swap-chain : " << vkResultToCString(result) << " !";
 
+				if ( const auto * hint = vkResultDiagnosticHint(result); hint != nullptr )
+				{
+					TraceWarning{ClassId} << hint;
+				}
+
 				m_status = SwapChainStatus::Failure;
 
 				return std::nullopt;

@@ -47,6 +47,20 @@ namespace EmEn::Vulkan
 	EMEN_API const char * vkResultToCString (VkResult code) noexcept;
 
 	/**
+	 * @brief Returns what a Vulkan result code actually means for diagnosis, for the codes that are
+	 * systematically misread, or nullptr when there is nothing worth adding.
+	 * @note Exists because VK_ERROR_SURFACE_LOST_KHR keeps being investigated as a GPU fault
+	 * alongside VK_ERROR_DEVICE_LOST, which sends the reader into the wrong subsystem entirely: the
+	 * GPU is fine, the WINDOW is gone. On Wayland it is usually a compositor protocol error killing
+	 * the wl_display connection, printed on stderr by libwayland itself just above — nothing the
+	 * engine can catch or recover from, since every Wayland object of the process dies with it.
+	 * @param code The vulkan code.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	EMEN_API const char * vkResultDiagnosticHint (VkResult code) noexcept;
+
+	/**
 	 * @brief Gets the validation layers available from Vulkan in a string.
 	 * @param validationLayers A reference to a validation layer list.
 	 * @return std::string

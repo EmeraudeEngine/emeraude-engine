@@ -193,6 +193,25 @@ namespace EmEn::Vulkan
 		}
 	}
 
+	const char *
+	vkResultDiagnosticHint (VkResult code) noexcept
+	{
+		switch ( code )
+		{
+			case VK_ERROR_SURFACE_LOST_KHR :
+				/* Measured on Wayland/NVIDIA (engine TODO, 2026-08-04 and 2026-08-22): the compositor
+				 * killed the wl_display connection over a protocol error on the window surface — the
+				 * acquire/release points of the driver's explicit-sync path committed without a
+				 * buffer. The engine never sets those points (only the driver's WSI does), so there
+				 * is nothing here to fix and nothing to recover: every Wayland object of the process
+				 * dies with the connection. */
+				return "The WINDOWING SURFACE is gone, not the GPU — do not look for a device fault. On Wayland this is usually a compositor protocol error that killed the display connection, printed on stderr by libwayland just above this line (look for a 'wl_' or 'wp_' interface name); the connection cannot be recovered, so shutting down is the only outcome. Capture it with WAYLAND_DEBUG=1 to name the request at fault.";
+
+			default:
+				return nullptr;
+		}
+	}
+
 	std::string
 	getItemListAsString (const std::vector< VkLayerProperties > & validationLayers) noexcept
 	{

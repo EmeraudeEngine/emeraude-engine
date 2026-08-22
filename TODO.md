@@ -219,6 +219,9 @@
   Known upstream family, same protocol, same shape, all GLFW/libdecor/explicit-sync:
   godotengine/godot#93669, kovidgoyal/kitty#7767, blender#135039 (needs a Blender-specific
   libdecor), wezterm#6699.
+  Since 2026-08-22 both reporting sites (`Queue::present()`, `SwapChain::acquireNextImage()`) print
+  that reading next to the error, through `vkResultDiagnosticHint()` — so a future run says on its
+  own that the window died and the GPU did not.
   Next steps, in order: (1) capture the protocol trace on the owner's session —
   `WAYLAND_DEBUG=1 ./projet-alpha … 2> wl.log`, then read the requests on the offending surface id
   right before the error, which names the committer outright; (2) A/B the libdecor plugin —
