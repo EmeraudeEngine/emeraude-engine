@@ -430,6 +430,18 @@ endif ()
 
 unset(TARGET_BINARY_FOR_SETUP)
 
+# Every third-party archive (base's + the engine's own) is attached at this point: keep them out of
+# the shared library's export table. Without this, the static copies vendored here interpose the
+# system libraries of every plugin the host process loads — measured with libpng, where cairo,
+# FreeType and gdk-pixbuf behind CEF all bound to the engine's libpng 1.6.58 instead of the system
+# libpng16.so.16 1.6.48, and libdecor refused its GTK3 plugin over the conflict.
+# jsoncpp is the documented exception: Json::Value is part of the surface a consumer resolves from
+# libEmeraude (measured on projet-alpha), and jsoncpp has no system twin to interpose.
+# See emeraude-base/cmake/HideThirdPartyExports.cmake.
+include(HideThirdPartyExports)
+
+emeraude_base_target_hide_third_party_exports(${PROJECT_NAME} EXCEPT jsoncpp)
+
 #######################################################################
 ## Write the project C++ config file
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/emeraude_config.hpp.in ${CMAKE_BINARY_DIR}/include/emeraude_config.hpp)

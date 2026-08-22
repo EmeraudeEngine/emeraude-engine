@@ -48,6 +48,20 @@ Emeraude.lib : fatal error LNK1120: 1 unresolved externals
 GCC/Clang are unaffected (no `.def`; ELF/Mach-O export via symbol visibility). The fix is to stop
 auto-exporting and declare the public boundary explicitly with the `EMEN_API` macro.
 
+> [!IMPORTANT]
+> **ELF has its own face of the same disease, and it is not fixed by this macro.** A large part of
+> the symbol surface that pushed `exports.def` past the 65535-ordinal PE limit was never ours: it
+> came from the **vendored third-party archives** linked into the library (libpng alone contributed
+> 372 symbols; the ELF export table held **44127** in total, of which 28609 were third-party). On
+> Windows explicit exports already keep them out of the `.def`. On ELF they were exported by
+> visibility, and being exported they **interposed the system copies** used by any plugin the process
+> loads — measured: cairo/FreeType/gdk-pixbuf behind CEF calling our libpng 1.6.58 instead of the
+> system 1.6.48, and libdecor refusing its GTK3 plugin over the conflict. That side is handled by
+> `emeraude_base_target_hide_third_party_exports()` (2026-08-22) — see
+> [`../dependencies/emeraude-base/AGENTS.md`](../dependencies/emeraude-base/AGENTS.md) § 3b. Read the
+> two together: `EMEN_API` defines what our **public API** is, the hiding helper defines what is
+> **not ours to export at all**.
+
 ## 2. The toggle
 
 `option(EMERAUDE_USE_EXPLICIT_EXPORTS …)` in `CMakeLists.txt` — default **ON on MSVC** (export-all

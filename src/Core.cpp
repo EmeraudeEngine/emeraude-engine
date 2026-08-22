@@ -56,6 +56,7 @@
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
 #include "IO/IO.hpp"
+#include "Locale.hpp"
 #include "Net/Manager.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Time/Time.hpp"
@@ -583,6 +584,19 @@ namespace EmEn
 	bool
 	Core::initializeBaseLevel () noexcept
 	{
+		/* The engine serialises floats through the C numeric family (settings, scene files, cache
+		 * keys, generated shader code), so it states the numeric locale it needs instead of hoping
+		 * nobody changed it: in a comma-decimal locale (fr_BE, fr_FR, de_DE …) every written float
+		 * changes format and strtod() stops parsing at the dot. See Base::Locale::enforceNumericC().
+		 * ⚠️ This call covers the engine's own bring-up ONLY. A library initialised later can still
+		 * change it — CEF is initialised AFTER the engine and Chromium does call
+		 * setlocale(LC_ALL, ""), so an application embedding such a library must re-assert it at
+		 * that point. */
+		if ( Base::Locale::enforceNumericC() )
+		{
+			TraceWarning{ClassId} << "The C numeric locale was not 'C' when the engine started: something already called setlocale() in this process. Restored, but any float parsed or written before this point may have used a comma as decimal separator.";
+		}
+
 		std::cout << "\n"
 			"Engine	  : " << m_identification.engineId() << "\n"
 			"Application : " << m_identification.applicationId() << "\n"
