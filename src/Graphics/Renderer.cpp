@@ -293,7 +293,7 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			TraceWarning{ClassId} << m_recorder.name() << " service failed or disabled at startup!";
+			TraceWarning{ClassId} << m_externalInput.name() << " service failed or disabled at startup!";
 		}
 
 		/* Initialize video recorder. */
