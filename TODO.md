@@ -222,9 +222,13 @@
   Since 2026-08-22 both reporting sites (`Queue::present()`, `SwapChain::acquireNextImage()`) print
   that reading next to the error, through `vkResultDiagnosticHint()` — so a future run says on its
   own that the window died and the GPU did not.
-  Next steps, in order: (1) capture the protocol trace on the owner's session —
-  `WAYLAND_DEBUG=1 ./projet-alpha … 2> wl.log`, then read the requests on the offending surface id
-  right before the error, which names the committer outright; (2) A/B the libdecor plugin —
+  Next steps, in order: (1) capture the protocol trace on the owner's session (only a real
+  compositor will do — X11/Xvfb has no libdecor and no explicit sync):
+  `python3 tools/wayland-protocol-trace.py --capture -- ./projet-alpha --load-demo game-logic --disable-cef`
+  keeps only the failing run, then `--analyse <log>` resolves the offending object to its
+  `wl_surface`, prints the requests of the rejected commit and says whether it carried an attach —
+  which names the committer outright. ⚠️ `WAYLAND_DEBUG` slows the client enough to hide a tight
+  race: a clean sweep is a RESULT, not a failed attempt; (2) A/B the libdecor plugin —
   `LIBDECOR_PLUGIN_DIR=<dir with only libdecor-cairo.so>` — since the GTK3 plugin only started
   loading on 2026-08-22 (the symbol-interposition fix removed the `png_free` conflict that had been
   making libdecor refuse it), so the plugin in use CHANGED that day. ⚠️ The defect itself predates

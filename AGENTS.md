@@ -287,6 +287,7 @@ This engine is developed **with AI and for AI** — AI is not a helper, it is th
 - **RenderDoc Python module** — autonomous .rdc analysis (draw calls, render passes, vertex throughput)
 - **Remote Console screenshot** — `Core.RendererService.screenshot()` via TCP console for visual regression testing
 - **RenderDoc CLI capture** — `renderdoccmd capture` for pipeline regression testing
+- **Wayland protocol trace** — `tools/wayland-protocol-trace.py` (Linux/Wayland): `--capture` reruns a command under `WAYLAND_DEBUG` until a compositor protocol error reproduces and keeps only the failing log; `--analyse` names the offending object, resolves the `wl_surface` it wraps, and prints the requests of the rejected commit with a reading. Use it whenever a window dies on its own or `VK_ERROR_SURFACE_LOST_KHR` shows up — the culprit is a request, not a GPU state
 
 See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions.md#ai-friendly-code-guidelines) for detailed guidelines.
 
