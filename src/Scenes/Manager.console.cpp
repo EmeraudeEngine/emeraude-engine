@@ -487,7 +487,7 @@ namespace EmEn::Scenes
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "glTF file '" << filepath.string() << "' loaded into scene '" << m_activeScene->name() << "'.");
 
 			return true;
-		}, "Loads a glTF file into the active scene (AI/bench harness, small assets only). Usage: loadGLTF(filePath [, swapZ = true [, createLights = false]])");
+		}, "Loads a glTF file into the active scene (AI/bench harness, small assets only). Usage: loadGLTF(filePath [, ignored (ex-swapZ, the deleted axis flip) [, createLights = false]])");
 
 		this->bindCommand("addMesh", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.size() < 5 )

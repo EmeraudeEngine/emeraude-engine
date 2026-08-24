@@ -1118,8 +1118,9 @@ namespace EmEn::Graphics
 		 * is what tells them which way view-space Y runs, and taking abs() of it — which every
 		 * consumer used to do "to handle a Y-flipped projection" — throws away exactly the
 		 * information it claims to protect.
-		 * Positive today ([Col1Row1] > 0, world Y-down). At the Y-up flip it becomes negative on its
-		 * own and all nine reconstruction sites follow, with no shader edit. */
+		 * NEGATIVE today ([Col1Row1] < 0, world Y-up): the projection carries the Y flip that
+		 * reconciles the Y-up world with Vulkan's Y-down NDC. It went negative on its own at the
+		 * Y-up flip and all nine reconstruction sites followed, with no shader edit. */
 		const auto projectionYSign = mainRT->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 

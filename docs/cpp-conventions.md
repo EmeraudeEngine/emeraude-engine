@@ -498,4 +498,4 @@ whenever any CMake-driven value changes. Use the lighter `Libs/emeraude_platform
 
 - [AGENTS.md](../AGENTS.md) - Main project documentation
 - [Tracer System Usage](../AGENTS.md#tracer-system-usage) - Logging conventions
-- [Coordinate System](coordinate-system.md) - Y-down convention
+- [Coordinate System](coordinate-system.md) - Y-up convention

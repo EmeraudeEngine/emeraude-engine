@@ -3,6 +3,46 @@
 > Open work only. Completed items are removed once their knowledge lives in `docs/` or the
 > `AGENTS.md` network — measurements, traps and owner decisions belong there, not here.
 
+## Y-UP RESIDUES — sites the Aug 2026 Y-up flip missed (found 2026-08-24)
+
+Three sites still carry the **retired Y-DOWN** convention in their *behaviour*, not just in their
+prose. Each was found during the documentation sweep of the Y-up migration and is **deliberately not
+fixed yet** (owner decision): each needs a check the compiler and the unit suite cannot perform.
+Every site carries a `🔴 KNOWN DEFECT — OPEN` comment pointing back here.
+
+⚠️ **None of the three is visible to `-Werror` or to the emeraude-base unit suite.** Two of them are
+invisible to a screenshot as well. Do not close any of them on "it compiles and the tests pass".
+
+- [ ] **AUDIO — listener UP vector inverted.** `Audio/HardwareOutput.cpp`,
+  `updateDeviceFromCoordinates()` hands OpenAL's `AL_ORIENTATION` the `downwardVector()` where the
+  API wants a genuine UP vector. It was a Y-down compensation; the world is Y-up now, so it must read
+  `upwardVector()`. **The vertical axis of the audio field is inverted as it stands.**
+  ⚠️ Invisible to every visual check. **Verification:** play a positional sound ABOVE the listener and
+  confirm which way it comes from — a one-line change is worthless without that check.
+
+- [ ] **ATMOSPHERIC FOG — height falloff inverted.**
+  `Graphics/Effects/Framebuffer/AtmosphericFog.cpp` computes `exp(k * (y - baseHeight))` with
+  `Parameters::heightFalloff` defaulting to `+0.2F`. Under Y-down, `+Y` meant deeper, so density grew
+  downward; under Y-up the same expression makes fog **denser with ALTITUDE**. Fix is to negate `k` at
+  the use site **or** to flip the parameter's documented sign convention — that choice is an API
+  decision, which is why it is not applied unilaterally.
+  ⚠️ The **ray-reconstruction** half of the same shader is SOUND and needs no edit: it rides the
+  signed `tanHalfFovY` contract and followed the flip on its own. Do not "fix" it too.
+  **Verification:** a fog demo, camera below then above `baseHeight`.
+
+- [ ] **MD5 ANIMATION — a FIFTH conversion site, missed by the migration.** (emeraude-base)
+  `src/Animation/MD5AnimParser.hpp` still converts with `(md5.y, -md5.z, md5.x)`, a **REFLECTION**
+  (det -1), in `md5ToEnginePosition()` **and** in `md5ToEngineQuaternion()`. The MD5 **mesh** path,
+  `src/VertexFactory/FileFormatMDx.hpp`, was migrated to `(md5.y, md5.z, md5.x)`, a **ROTATION**
+  (det +1). The two now disagree, so a clip parsed here does not live in the same frame as the mesh it
+  animates — exactly the failure `FileFormatMDx.hpp` warns about in its own comment.
+  ⚠️ The migration notes recorded FOUR sites for this conversion; this is a fifth, in a different
+  module. It **is** reachable: projet-alpha's `animation-debug` demo calls it
+  (`src/Builtin/AnimationDebug.cpp`).
+  ⚠️ The two helpers move **together or not at all** — converting positions and leaving orientations
+  on the old mirror is what renders a skinned MD5 upside down.
+  **Verification:** visual, per format — `geometry-loader --demo-options 6` (MD5) with a clip applied.
+
 - GENERAL: Remove all invalid noexcept keyword. (WIP)
 - GENERAL: Increase inlining. (WIP)
 - GENERAL: Improve functions args to use "std::move" when useful. (WIP)

@@ -62,7 +62,7 @@ auto texture = resources.get<TextureResource>("missing.png");
 }
 
 // CORRECT: Type safety prevents errors at compile time
-Vector3 gravity(0, +9.81, 0);  // Y-down enforced by convention
+Vector3 gravity(0, -9.807, 0);  // Y-up: gravity pulls toward -Y
 
 // ANTI-PATTERN: Requires manual error checking (easy to forget)
 auto texture = loadTexture("file.png");
@@ -115,6 +115,6 @@ Where this applies:
 
 How these principles apply to Emeraude Engine:
 - Fail-safe Resources = Pit of Success (impossible to crash from nullptr)
-- Y-down Coordinate System = Least Astonishment (total consistency, no surprises)
+- Y-up Coordinate System = Least Astonishment (total consistency, and the same axes as glTF/USD/FBX)
 - Vulkan Abstraction = Avoid Gulf of Execution (complexity hidden from users)
 - RAII Memory Management = Pit of Success (automatic cleanup, can't forget)

@@ -62,10 +62,10 @@ namespace EmEn::Scenes
 	 * All world coordinates are computed by traversing the tree from root to node.
 	 *
 	 * @par Coordinate System
-	 * Uses the engine world convention, which is MIGRATING from Y-down to Y-up (see
-	 * docs/coordinate-system.md). Positive Y still points downward today. Node translates along its
-	 * local Y through CartesianFrame::localYAxis(), the orientation-neutral accessor, so the axis it
-	 * moves on follows the convention rather than the word "down".
+	 * Uses the engine world convention: right-handed Y-UP (+X right, +Y up, -Z forward), see
+	 * docs/coordinate-system.md. Node translates along its local Y through
+	 * CartesianFrame::localYAxis(), the orientation-neutral accessor — prefer it to
+	 * upwardVector()/downwardVector() for any structural read of the basis.
 	 *
 	 * @par Observable Notifications
 	 * Nodes emit notifications for lifecycle events:

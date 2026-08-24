@@ -223,11 +223,14 @@ namespace EmEn::Physics
 			const auto linearImpulse = contact.normal() * lambda;
 			const auto & normal = contact.normal();
 
-			/* Check if this is a ground collision for each body.
-			 * In Y-down system, normal points from bodyA to bodyB.
-			 * - If normal.Y > 0.7 (pointing down), bodyA is above and grounded.
-			 * - If normal.Y < -0.7 (pointing up), bodyB is above and grounded.
-			 * Threshold of 0.7 allows surfaces up to ~45 degrees to count as ground. */
+			/* Check if this is a ground collision for each body. The contact normal points from
+			 * bodyA to bodyB. Y-UP: a body resting ON a surface has that normal pointing DOWN.
+			 * - If normal.Y < -0.7, bodyA is on top and grounded.
+			 * - If normal.Y > +0.7, bodyB is on top and grounded.
+			 * Threshold of 0.7 allows surfaces up to ~45 degrees to count as ground.
+			 * ⚠️ Both tests below were ALREADY Y-up correct — only this comment was stale (it still
+			 * said "In Y-down system" and stated the bodyA sign backwards). Do not "fix" the code
+			 * to match a stale comment. */
 			constexpr auto GroundNormalThreshold{0.7F};
 
 			if ( bodyA && bodyA->isMovable() )

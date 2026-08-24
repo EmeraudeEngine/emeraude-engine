@@ -478,7 +478,7 @@ consumer can decide how to treat the result without hard-coding format names.
 > **Frozen with two known loose ends** (owner decision to jump to milestone 3 early). Neither
 > affects correctness of the shipped contract; both are cheap to close when someone passes by:
 > 1. **`PhotometricProbe.gltf` has an inverted winding order** — its quad's front face ends up
->    pointing down after the Y-up → Y-down conversion, so it is only visible from below. The
+>    pointing down — the asset's own winding, not a conversion (the import has been the identity since the Y-up flip), so it is only visible from below. The
 >    loader is not at fault; the generator that authored the asset is. Reverse the index order.
 > 2. **The per-light / per-camera values were never read back.** They are traced with
 >    `TraceDebug`, which is `#ifdef DEBUG` — compiled out of Release, where the check was run.

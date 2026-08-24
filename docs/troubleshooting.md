@@ -124,7 +124,7 @@ The variable is generated in `Saphir/LightGenerator.cpp`, `generateAmbientFragme
 **Solutions:**
 1. Check boundaries are configured in scene
 2. Verify the object has physics MovableTrait enabled
-3. Check Y-down coordinate system (positive Y is down in Emeraude Engine)
+3. Check the Y-up coordinate system (positive Y is UP in Emeraude Engine; gravity pulls toward `-Y`)
 4. Verify collision mesh is loaded for floor geometry
 
 ### Collisions not working

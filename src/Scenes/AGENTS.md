@@ -22,7 +22,7 @@ Scene graph system based on composition architecture (Entity-Component) with two
 See @docs/scene-graph-architecture.md for complete details.
 
 ### Coordinate Convention
-- **Y-DOWN mandatory** in CartesianFrame
+- **Y-UP mandatory** in CartesianFrame — `localYAxis()` is `m_upward`, and `downwardVector()` is its INVERSE (they are opposites, not aliases)
 - Local transforms for Nodes (parent-relative)
 - World space recalculated on demand (no cache currently)
 
@@ -186,7 +186,7 @@ ctest -R Scenes
 - `Component/SphericalPushModifier.cpp/.hpp` - Radial push force modifier
 - `Component/DirectionalPushModifier.cpp/.hpp` - Directional push force modifier
 - `@docs/scene-graph-architecture.md` - **Complete detailed architecture**
-- `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
+- `@docs/coordinate-system.md` - Y-up convention (CRITICAL)
 
 ## Scene Class Organization
 
@@ -670,7 +670,7 @@ See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
 - **Manager and Scene**: Handle fail-safe construction/destruction (in development)
 - **Root Node**: Immutable, cannot move nor receive Components
 - **NodeCrawler**: the iteration NEVER yields the base node; `currentNode()` is the base node before the first `fetchNextNode()` and `nullptr` after the last. Process the base node BEFORE the loop when you need it
-- **Y-down convention**: CartesianFrame uses Y-down everywhere
+- **Y-up convention**: CartesianFrame uses Y-up everywhere — `localYAxis()` for any STRUCTURAL read (the basis Y column), `upwardVector()`/`downwardVector()` reserved for code actually talking about gravity
 - **No world cache**: On-demand recalculation (future optimization planned)
 - **Observers**: Automatic registration, do not register manually
 - **Suspend/Wakeup**: Every new Component MUST implement `onSuspend()`/`onWakeup()` (pure virtual)
@@ -1211,15 +1211,21 @@ barred by the "Ave robustus!" feature freeze.
 > **Node mode entities are Nodes, not StaticEntities.** Code that uses `findStaticEntity()` will NOT
 > find entities created in Node mode. Use `scene.root()->findChild(name)` instead.
 
-### Coordinate System Conversion
+### Coordinate System Conversion — there is NONE (since Aug 2026)
 
-glTF uses **Y-up, right-handed** coordinates. The engine uses **Y-down**. The loader applies a **180° X rotation** to the root (parentNode in Node mode, accumulated in StaticEntity mode).
+glTF uses **Y-up, right-handed, `-Z` forward** coordinates. So does the engine. **The import is the
+IDENTITY**: no rotation, no mirror, no per-asset flag.
 
-**Winding order compensation:** The 180° rotation flips triangle winding from CCW to CW. The loader swaps indices 1 and 2 during triangle building:
+> [!CAUTION]
+> **Do not reintroduce the 180° X rotation, and do not reintroduce the winding swap.** Until Aug 2026
+> the engine was Y-DOWN, the consumer applied a 180° X rotation to the root, and all four loaders
+> swapped triangle indices 1↔2 — the latter justified by the claim that *"the 180° rotation flips the
+> winding"*. That claim is **false**: a rotation has determinant +1 and NEVER inverts a winding. The
+> swap was compensating an orientation-reversing projection, which is the defect the Y-up flip fixed
+> at its root. Both the rotation and the swap are **deleted**.
 
-```cpp
-triangles.emplace_back(triBuffer[0], triBuffer[2], triBuffer[1]);  // swap 1↔2
-```
+If an imported asset looks mirrored or inside-out, the cause is **not** here — measure it
+(`docs/coordinate-system.md` § *The measurement that proves it*) before compensating anywhere.
 
 ### Resource Naming Convention
 

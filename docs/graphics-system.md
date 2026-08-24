@@ -70,7 +70,7 @@ Reuse the `renderable` for multiple nodes. The engine automatically batches them
 
 ## 5. Critical Constraints
 
-1.  **Coordinate System**: **Y-DOWN**. Never flip Y in shaders or transforms.
+1.  **Coordinate System**: **Y-UP**. Never flip Y in shaders or transforms — the ONE Y flip that reconciles the Y-up world with Vulkan's Y-down NDC lives in `Matrix::perspectiveProjection()` / `orthographicProjection()` and nowhere else.
 2.  **Resource Loading**: Never in the render loop. Load once, reuse.
 3.  **Vulkan Access**: Never call `vk*` functions directly. Use the abstraction.
 4.  **Tangent Space**: Normal maps require Geometry with Tangents.

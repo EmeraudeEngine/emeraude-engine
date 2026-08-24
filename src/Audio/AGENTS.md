@@ -9,7 +9,7 @@ Context for developing the Emeraude Engine 3D spatial audio system.
 ## Audio-Specific Rules
 
 ### Coordinate Convention
-- **Y-DOWN mandatory** in Audio abstraction
+- **Y-UP mandatory** in Audio abstraction (`+Y` up, `-Z` forward — which is also OpenAL's own convention, so `AL_ORIENTATION` takes the engine vectors verbatim)
 - Internal conversions to OpenAL if necessary
 - Total consistency with the rest of the engine (Physics, Graphics, Scenes)
 
@@ -56,7 +56,7 @@ ctest -R Audio
 - `AmbienceSound.hpp` - Ambient sound configuration
 - `Recorder.cpp/.hpp` - Audio recording via OpenAL Soft loopback passthrough (game audio capture, not microphone)
 - `ExternalInput.cpp/.hpp` - Microphone capture (dual mode: memory for real-time, streaming for rush voice-over)
-- `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
+- `@docs/coordinate-system.md` - Y-up convention (CRITICAL)
 
 ## Development Patterns
 
@@ -114,7 +114,8 @@ Ambience uses a `State` enum for playback state. See `Ambience.hpp:State`
 - **Sound format**: MONO mandatory for 3D spatial positioning
 - **Music format**: STEREO supported (no spatialization)
 - **Thread safety**: OpenAL handles threading internally
-- **Coordinate system**: Always Y-down in Audio API
+- **Coordinate system**: Always Y-up in Audio API
+- 🔴 **KNOWN DEFECT (open):** `HardwareOutput::updateDeviceFromCoordinates()` still hands OpenAL `downwardVector()` as the listener UP vector — a Y-down compensation the Y-up flip should have removed. The vertical axis of the audio field is therefore inverted. ⚠️ **Invisible to every visual check**: verify by playing a positional sound above the listener and confirming the side it comes from. See `TODO.md` § Y-UP RESIDUES
 - **Resource integration**: Never load directly, go through Resources
 - **Microphone privacy**: `Core/Audio/Capture/Enable` must be explicitly `true` before any microphone access. Default is `false`. Voice-over (`Core/RushMaker/EnableVoiceOver`) depends on this gate.
 - **Available devices in settings**: Both playback (`Core/Audio/AvailableDevices`) and capture (`Core/Audio/Capture/AvailableDevices`) device lists are written to settings on each startup for easy device switching via settings file editing

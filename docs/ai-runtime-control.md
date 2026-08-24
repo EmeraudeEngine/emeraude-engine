@@ -201,7 +201,7 @@ From camera position `(camX, camY, camZ)`:
 ### AI workflow for spatial awareness
 
 ```
-1. Create scene with camera at Y=-2     --> verify ground exists (screenshot)
+1. Create scene with camera at Y=2      --> verify ground exists (screenshot)
 2. Move camera to Y=10, Z=20            --> above ground, behind origin
 3. LookAt (0, 0, 0)                     --> aim at origin (ground level)
 4. Screenshot                            --> analyze: do I see sky+ground?

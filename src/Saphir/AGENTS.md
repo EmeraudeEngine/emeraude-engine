@@ -766,7 +766,7 @@ MDI shaders are NOT generated for objects with special rendering requirements:
 - **Strict checking**: Material requirements MUST be satisfied by geometry
 - **Hash-based cache**: Identical inputs → same shader (performance)
 - **Fail-safe integration**: Failures logged but app continues (no crash)
-- **Y-down convention**: Projection matrices configured for Vulkan
+- **Y-up convention**: the world is Y-up; the projection carries the single Y flip that reconciles it with Vulkan's Y-down NDC
 - **Thread safety**: Cache protected, generation can be parallel
 - **Used by Graphics and Overlay**: Graphics (3D), Overlay (2D) use Saphir
 - **Runtime generation**: Shaders generated on demand during resource loading

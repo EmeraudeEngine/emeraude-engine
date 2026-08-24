@@ -155,10 +155,6 @@ namespace EmEn::Scenes::Loaders
 			 * @param stack The FBX animation stack to evaluate.
 			 * @param jointToNode Per-joint ufbx_node mapping. Entries can be null.
 			 * @param uniformScale The uniform scale applied to translation keyframes.
-			 * @param axisFlip The axis negation the whole import is routed through: translation
-			 * keyframes are mirrored, rotation keyframes CONJUGATED, scale keyframes untouched.
-			 * ⚠️ It must be the very same flip the bind pose was built with, or the rig snaps to the
-			 * unmirrored pose on the first animated frame.
 			 * @return std::vector< Base::Animation::AnimationChannel< float > >
 			 */
 			[[nodiscard]]

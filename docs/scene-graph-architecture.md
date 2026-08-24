@@ -494,7 +494,7 @@ struct CartesianFrame {
 **Key Points:**
 - **Orthonormal basis**: All axis vectors are unit length and perpendicular
 - **Computed axis**: One axis derived from cross product (redundancy elimination)
-- **Y-down convention**: Consistent with Vulkan throughout engine
+- **Y-up convention**: `+Y` is up throughout the engine (the Vulkan NDC Y flip is confined to the projection matrix)
 - **Efficient representation**: Avoids matrix storage, computed when needed
 
 ### Transformation Hierarchy

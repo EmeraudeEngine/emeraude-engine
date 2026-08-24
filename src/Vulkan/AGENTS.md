@@ -149,9 +149,9 @@ optionally signals a fence. Never just `return` out of a frame that already sign
 semaphores.
 
 ### Coordinate Convention
-- Projection matrices configured for Y-down
-- Vulkan Y-inverted viewport handled automatically
-- No conversion in shaders
+- The world is **Y-UP**; Vulkan's NDC is Y-down. The single reconciling flip is the NEGATIVE `[Col1Row1]` of `Matrix::perspectiveProjection()` / `orthographicProjection()`
+- No Y conversion anywhere else — not in shaders, not in viewports, not per-asset
+- ⚠️ Cubemap targets are the ONE documented exception: they cancel that flip and invert the front face (`GraphicsPipeline::configureRasterizationState(..., mirroredViewport)`), because the cube-face convention is left-handed. See `@src/Saphir/AGENTS.md`
 
 ### Compute Shader Support
 - `ComputePipeline` — Full compute pipeline with `setShaderModule()` for shader stage init
@@ -654,7 +654,7 @@ The command buffer supports `drawIndexedIndirect()` for GPU-driven rendering. De
 - **Validation layers**: Always active in development (note: ~6% CPU overhead, ~41% when combined with rwlock)
 - **Never direct calls**: Graphics, Resources, Saphir use Vulkan abstractions
 - **VMA mandatory**: All GPU allocation via VMA, never direct vkAllocateMemory
-- **Y-down setup**: Viewport and projection configured for engine Y-down
+- **Y-up setup**: the projection carries the Y flip for Vulkan's Y-down NDC; the world itself stays Y-up
 - **`VK_ERROR_SURFACE_LOST_KHR` is NOT a GPU fault** — the window is gone, the device is fine. Do not investigate it alongside `VK_ERROR_DEVICE_LOST`. On Wayland it means the compositor killed the `wl_display` connection over a protocol error, printed on stderr by libwayland just above (a `wl_`/`wp_` interface name); nothing is recoverable, since every Wayland object of the process dies with the connection. `vkResultDiagnosticHint()` (`Vulkan/Utility.hpp`) carries that reading and both reporting sites print it — `Queue::present()` and `SwapChain::acquireNextImage()`. Add a case there rather than re-explaining a misread code in a comment. To attribute an occurrence, do not read the trace by hand: `tools/wayland-protocol-trace.py --capture -- <command>` then `--analyse <log>` names the committer. Open occurrence: `TODO.md` § WAYLAND.
 
 ## Detailed Documentation
@@ -663,7 +663,7 @@ For Vulkan platform:
 - Official Vulkan documentation - Complete API specifications
 
 Related systems:
-- @docs/coordinate-system.md - Y-down configuration for Vulkan
+- @docs/coordinate-system.md - Y-up configuration for Vulkan
 - @src/Graphics/AGENTS.md - Uses Vulkan abstractions (Buffer, Image, Pipeline)
 - @src/Saphir/AGENTS.md - Generates SPIR-V for Vulkan pipelines
 - @src/Resources/AGENTS.md - GPU upload via TransferManager

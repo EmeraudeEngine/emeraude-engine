@@ -188,9 +188,27 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    `BasicGroundResource::getNormalAt`'s fallback, `NodeController`'s D-Pad Up/Down, and the
    Player/Drone/Sun Y values in the two scene JSONs. A conscientious sweep for Y literals WILL
    "fix" them and break them a second time.
-7. **Docs**: `docs/coordinate-system.md` rewritten for Y-up, the root `AGENTS.md` chirality and
-   camera bullets, `.claude/rules/build-and-run.md` and `actors.md`, `src/Scenes/Loaders/AGENTS.md`
-   (it still documents the deleted `AxisFlip`).
+7. **Docs — ✅ DONE (2026-08-24), full cascade sweep.** ~60 stale assertions corrected across the
+   three repos. Entry points that were still declaring the retired convention: engine `README.md`
+   ("Right-handed, Y-DOWN… Gravity is `+Y`") and engine `AGENTS.md` ("**Y-DOWN** is absolute law"),
+   plus `graphics-system.md`, `architecture-philosophy.md`, `scene-graph-architecture.md`,
+   `troubleshooting.md`, `cpp-conventions.md` and the `AGENTS.md` of Audio, Physics, Scenes, Saphir,
+   Graphics, Vulkan and `src/`. `src/Scenes/Loaders/AGENTS.md` lost its ~50-line `AxisFlip` section
+   (replaced by a tombstone) and `src/Scenes/AGENTS.md` its "Coordinate System Conversion" block.
+   projet-alpha: the § 3b chirality and camera bullets, `docs/caution-points.md` (the six-step
+   mirroring recipe → tombstone), `ai_documentation_map.md`, `development-patterns.md`,
+   `src/Actor/AGENTS.md`. emeraude-base: `VertexFactory/Grid.hpp`, `docs/ai_documentation_map.md`.
+   ⚠️⚠️ **The two worst offenders were the tooling, not the prose:**
+   `projet-alpha/.claude/agents/emeraude-code-reviewer.md` and
+   `.claude/commands/check-emeraude-conventions.md` *enforced* Y-down — their grep patterns flagged
+   `-9.81` and every Y-up comment as a CRITICAL violation. An external AI review run against them
+   reported the migrated engine as broken; that is what triggered this sweep.
+   ⚠️ Rule applied throughout, and to keep applying: a comment **asserting** "the engine is Y-down"
+   is a defect; a comment saying a compensation **belonged to** the Y-down era and is gone is
+   deliberate memory that stops the workaround being reintroduced — those were all KEPT.
+   🔴 The sweep surfaced **three behavioural residues**, logged in `TODO.md` § Y-UP RESIDUES:
+   the OpenAL listener UP vector, the atmospheric-fog height falloff, and a **fifth** MD5 conversion
+   site (`emeraude-base/src/Animation/MD5AnimParser.hpp`) that the four-site inventory missed.
 8. **The physics gate, five points. Point 1 PASSED (Aug 2026), four to go**: a ball dropped on flat
    ground comes to REST on it ✅ — `physics-debug`, a 1 kg sphere and a barrel released at Y = +25
    both fall and settle, and two captures **6 s apart differ by 0 pixels out of 4 665 600**: no

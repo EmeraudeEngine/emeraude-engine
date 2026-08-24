@@ -71,8 +71,8 @@ namespace EmEn::Physics
 			/**
 			 * @brief Returns the surface gravity as an ACCELERATION VECTOR in m/s².
 			 * @note Direction is data, not a convention baked into the physics code: an integrator
-			 * adds this vector and never needs to know which way is down. Today it points along
-			 * DownDirection; at the Y-up flip that constant changes and nothing else does.
+			 * adds this vector and never needs to know which way is down. It points along
+			 * DownDirection, which is `{0, -1, 0}` in the Y-up world.
 			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]

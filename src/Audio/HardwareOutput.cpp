@@ -45,14 +45,15 @@ namespace EmEn::Audio
 
 		const auto & position = worldCoordinates.position();
 		const auto & atVector = worldCoordinates.forwardVector();
-		/* ⚠️ Y-UP MIGRATION — THIS LINE FLIPS. OpenAL's AL_ORIENTATION takes a genuine UP vector, and
-		 * this deliberately hands it the DOWN one because the engine world is currently Y-down. It is
-		 * therefore a compensation for the same defect as the loader winding swaps and the gizmo
-		 * negative axes, not an OpenAL quirk: once +Y means up, this must read upwardVector() and this
-		 * comment must go.
-		 * ⚠️ It is invisible to every visual check — get it wrong and stereo/HRTF panning silently
-		 * disagrees with the picture, with nothing on screen to show for it. Verify by playing a
-		 * positional sound at world +X and confirming the side it comes from. */
+		/* 🔴 KNOWN DEFECT — OPEN (Y-up residue). OpenAL's AL_ORIENTATION takes a genuine UP vector.
+		 * This hands it the DOWN one: a compensation for the retired Y-DOWN world that the Aug 2026
+		 * Y-up flip should have removed. The world is Y-up now, so this MUST read upwardVector();
+		 * as it stands the vertical axis of the audio field is INVERTED.
+		 * ⚠️ Invisible to every visual check — stereo/HRTF panning silently disagrees with the
+		 * picture, with nothing on screen to show for it. Verify by playing a positional sound
+		 * ABOVE the listener and confirming which way it comes from.
+		 * Deliberately NOT corrected here: it needs an audible check (owner decision, Aug 2026).
+		 * See TODO.md § Y-UP RESIDUES. */
 		const auto & upVector = worldCoordinates.downwardVector();
 
 		const std::array< ALfloat, 12 > properties = {

@@ -32,7 +32,7 @@
 
 ### Constraints
 1.  **Thread Safety**: `TransferManager` handles CPU->GPU. Main thread for Logic.
-2.  **Y-DOWN**: Strictly Y-down coordinate system.
+2.  **Y-UP**: Strictly Y-up coordinate system (`+X` right, `+Y` up, `-Z` forward).
 3.  **Fail-Safe**: Resources must never be null. Use neutral fallbacks.
 4.  **G-Buffer MRT (fixed order)**: scene target color attachments are
     `[0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity` (+ depth
@@ -1496,7 +1496,7 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 
 **Push constants** (116 bytes): Camera basis (pos, right, forward), depth reconstruction (near, far, tanHalfFovY, aspectRatio), fog params (density, heightFalloff, baseHeight, maxDistance, color), inscatter params (lightDir, exponent, color, intensity), skyFogEnabled.
 
-**Y-DOWN convention:** In Y-DOWN, `+Y = deeper into fog`. The height falloff density function increases with Y. See `docs/caution-points.md` for the critical Y-reconstruction pitfall.
+**Height fog and the Y-up flip — 🔴 KNOWN DEFECT, OPEN:** the shader computes `exp(k · (y − baseHeight))` with `heightFalloff` defaulting to `+0.2F`. That was right under Y-down (`+Y` = deeper = denser); under **Y-up it makes the fog DENSER WITH ALTITUDE** — inverted. Fix is either to negate `k` at the use site or to flip the parameter's documented sign convention; **not yet applied**, see `TODO.md` § Y-UP RESIDUES. ⚠️ The *ray-reconstruction* half of the same shader is **sound** and needs no edit — it rides the signed `tanHalfFovY` contract and followed the flip on its own. See `docs/caution-points.md` for the Y-reconstruction pitfall.
 
 **Code references:**
 - `Effects/Framebuffer/AtmosphericFog.hpp` — Parameters, FogPushConstants, API

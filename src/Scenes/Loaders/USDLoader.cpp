@@ -1568,8 +1568,8 @@ namespace EmEn::Scenes::Loaders
 
 		/* ⚠️ AXIS AND UNIT BAKING — the single site where USD's convention is left behind.
 		 *
-		 * USD here is Z-up right-handed; the engine's law is Y-DOWN (docs/coordinate-system.md).
-		 * A point one unit "up" in USD is (0, 0, 1) and must become (0, -1, 0):
+		 * USD here is Z-up right-handed; the engine's law is Y-UP (docs/coordinate-system.md).
+		 * A point one unit "up" in USD is (0, 0, 1) and must become (0, +1, 0):
 		 *
 		 *     engine.x =  usd.x        engine.y =  usd.z        engine.z = -usd.y
 		 *
@@ -1583,9 +1583,9 @@ namespace EmEn::Scenes::Loaders
 		 * lighting is subtly wrong, which then gets blamed on the material system.
 		 *
 		 * `metersPerUnit` scales positions ONLY — a direction has no length to convert. */
-		/* ⚠️ The axis flip is COMPOSED INTO both bakes, so positions, normals and tangents cannot
-		 * drift apart. A normal needs no special case: the inverse-transpose of a diagonal ±1
-		 * matrix is the matrix itself. */
+		/* ⚠️ The SAME axis bake feeds positions, normals AND tangents, so they cannot drift apart.
+		 * A normal needs no special case: the inverse-transpose of a diagonal ±1 matrix is the
+		 * matrix itself. (The per-asset AxisFlip layer that used to compose in here is deleted.) */
 
 		const auto bakePosition = [metersPerUnit] (const auto & p) {
 			return Vector< 3, float >{static_cast< float >(p[0]) * metersPerUnit, static_cast< float >(p[2]) * metersPerUnit, -static_cast< float >(p[1]) * metersPerUnit};

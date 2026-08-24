@@ -703,7 +703,7 @@ Subsystems orchestrated by Core:
 - @src/Overlay/AGENTS.md - 2D overlay interface
 
 Related concepts:
-- @docs/coordinate-system.md - Y-down convention (CRITICAL)
+- @docs/coordinate-system.md - Y-up convention (CRITICAL)
 - @docs/resource-management.md - Fail-safe loading
 
 Platform-specific:

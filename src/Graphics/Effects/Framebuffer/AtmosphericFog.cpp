@@ -99,7 +99,9 @@ void main()
 	vec3 cameraPosition = vec3(cameraPosX, cameraPosY, cameraPosZ);
 	vec3 cameraRight = vec3(cameraRightX, cameraRightY, cameraRightZ);
 	vec3 cameraForward = vec3(cameraForwardX, cameraForwardY, cameraForwardZ);
-	/* cross(right, forward) = row 1 of view matrix in right-handed Y-DOWN. */
+	/* Y-UP, right-handed: cross(right, forward) = cross(+X, -Z) = +Y, a genuine UP vector.
+	 * The DOWNWARD screen direction is carried by the SIGN of tanHalfFovY (negative since the
+	 * Y-up flip), never by this vector - see the signed-contract note in PostProcessor.cpp. */
 	vec3 cameraUp = cross(cameraRight, cameraForward);
 
 	/* Unit ray direction in world space. */
@@ -136,7 +138,11 @@ void main()
 		effectiveLength = min(length(worldPos - cameraPosition), fogMaxDistance);
 	}
 
-	/* Exponential height fog (Y-DOWN: +Y = deeper into fog). */
+	/* Exponential height fog.
+	 * KNOWN DEFECT - OPEN (Y-up residue): exp(k * (y - baseHeight)) with a POSITIVE
+	 * heightFalloff made fog denser DOWNWARD under Y-down. Under Y-up it makes fog denser with
+	 * ALTITUDE, which is inverted. Fix is to negate k here or to flip the parameter's documented
+	 * sign convention; NOT applied yet - see TODO.md, section Y-UP RESIDUES. */
 	vec3 effectiveEnd = cameraPosition + rayDir * effectiveLength;
 	float heightDiff = effectiveEnd.y - cameraPosY;
 

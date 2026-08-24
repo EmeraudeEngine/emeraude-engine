@@ -1909,7 +1909,7 @@ The clear coat normal map must use a fragment-local tangent frame, NOT `ViewTBNM
 
 Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clear Coat Normal section).
 
-### Critical: World-Space Y Reconstruction from Depth (Y-DOWN)
+### Critical: World-Space Y Reconstruction from Depth (Y-UP)
 
 > [!CRITICAL]
 > **`cross(right, forward) = viewYAxis` (row 1 of view matrix). NOT `cross(forward, right)`!**

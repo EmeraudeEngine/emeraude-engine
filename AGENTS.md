@@ -3,7 +3,7 @@
 ## 1. Context
 
 **Core Framework**: Modern C++20 Vulkan 3D Engine.
-**Coordinates**: **Right-Handed Y-DOWN** (Consistent across Physics, Rendering, Audio).
+**Coordinates**: **Right-Handed Y-UP** — `+X` right, `+Y` up, `-Z` forward (consistent across Physics, Rendering, Scene graph, Audio). Same axes as glTF 2.0, USD and FBX, so imports are the identity. ⚠️ The engine was Y-DOWN until Aug 2026 — any statement to that effect is stale, see [`docs/coordinate-system.md`](docs/coordinate-system.md).
 **Platform**: Windows 11, Linux (Debian/Ubuntu), macOS.
 **Graphics API**: **Vulkan-only** — no D3D11, no D3D12, no Metal, no OpenGL. Single backend, mastered in full.
 
@@ -238,7 +238,7 @@ and the AI executes, measures, and iterates at industrial speed.
 3.  **No Gulf:** Avoid complexity in user-facing APIs.
 
 ### Constraints
-1.  **Coordinates:** **Y-DOWN** is absolute law. Gravity is `+Y`.
+1.  **Coordinates:** **Y-UP** is absolute law (`+X` right, `+Y` up, `-Z` forward). Gravity is a **vector** pulling toward `-Y` (`EnvironmentPhysicalProperties::DownDirection`), never a signed scalar — read the direction, never assume it.
 2.  **Vulkan:** NEVER call Vulkan directly. Use `Graphics/` abstractions.
 3.  **Memory:** Use **VMA** for GPU. Use **RAII** for CPU. No raw pointers.
 4.  **Frame Sync:** Any GPU buffer (SSBO/UBO) updated per-frame **MUST** be double-buffered (one per frame-in-flight). See [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) → Frame Synchronization.
@@ -318,7 +318,7 @@ how to add new commands.
 -   **Conventions:** [`docs/cpp-conventions.md`](docs/cpp-conventions.md) (Includes AI-friendly guidelines).
 -   **Physics:** [`docs/physics-system.md`](docs/physics-system.md).
 -   **Resources:** [`docs/resource-management.md`](docs/resource-management.md).
--   **Coordinates:** [`docs/coordinate-system.md`](docs/coordinate-system.md) (Y-DOWN convention — absolute law).
+-   **Coordinates:** [`docs/coordinate-system.md`](docs/coordinate-system.md) (Y-UP convention — absolute law).
 -   **Graphics Hub:** [`docs/graphics-system.md`](docs/graphics-system.md) (High-level rendering architecture).
 -   **Scene Graph:** [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) (Entity-Component hierarchy).
 -   **Multi-Scene Resource Ownership:** [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) (**Code-generation doctrine** — who owns what across scene load/switch/delete; read before writing resource code).

@@ -9,9 +9,9 @@ The Emeraude Engine physics system implements a 4-entity type architecture with 
 ## Physics-Specific Rules
 
 ### CRITICAL Coordinate Convention
-- **Y-DOWN mandatory** in all physics calculations
-- Gravity: `+9.81` on Y axis (pulls downward)
-- Jump impulse: negative Y value (pushes upward)
+- **Y-UP mandatory** in all physics calculations
+- Gravity: a **VECTOR**, not a signed scalar — `EnvironmentPhysicalProperties::DownDirection{0,-1,0}` scaled by the surface gravity magnitude (`Physics::Gravity::Earth = 9.807`). Read the direction from the environment properties, never hard-code a Y sign
+- Jump impulse: POSITIVE Y value (pushes upward)
 - Forward thrust: negative Z value
 
 ### Entity Types (4 distinct types)

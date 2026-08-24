@@ -89,8 +89,9 @@ engine builds on a pinned package of it.
 
 ### Conventions
 
-- **Right-handed, Y-DOWN** coordinate system, consistent across physics, rendering and audio.
-  Gravity is `+Y`.
+- **Right-handed, Y-UP** coordinate system (`+X` right, `+Y` up, `-Z` forward), consistent across
+  physics, rendering, scene graph and audio. It is the convention of glTF 2.0, USD and FBX, so scene
+  imports are the identity. Gravity pulls toward `-Y`.
 - **C++20**, zero-cost abstractions on the hot paths, RAII everywhere, VMA for GPU memory.
 
 ## Requirements
@@ -387,7 +388,7 @@ Engine-internal documentation lives in [`docs/`](docs/) — start with:
 | Document | Content |
 |---|---|
 | [`docs/architecture-philosophy.md`](docs/architecture-philosophy.md) | Design axioms and why the engine is shaped this way. |
-| [`docs/coordinate-system.md`](docs/coordinate-system.md) | The Y-DOWN convention, in full. |
+| [`docs/coordinate-system.md`](docs/coordinate-system.md) | The Y-UP convention, in full. |
 | [`docs/graphics-system.md`](docs/graphics-system.md) | Rendering architecture (+ `graphics-subsystems.md`, `render-targets.md`, `shadow-mapping.md`). |
 | [`docs/saphir-shader-system.md`](docs/saphir-shader-system.md) | Runtime shader generation. |
 | [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) | Scenes, nodes, components (+ `multi-scene-resource-ownership.md`). |

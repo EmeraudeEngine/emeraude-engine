@@ -131,8 +131,9 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			/**
-			 * @brief Returns the Player 1 start position in ENGINE WORLD space (Y-down),
-			 * i.e. after the consumer's 180° X rotation, at the sector floor height.
+			 * @brief Returns the Player 1 start position in ENGINE WORLD space (Y-up),
+			 * at the sector floor height. The consumer applies NO rotation: since the Y-up
+			 * flip the import is the identity.
 			 * @note Valid after load(). The eye height is up to the caller.
 			 * @return const Base::Math::Vector< 3, float > &
 			 */
@@ -144,7 +145,7 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			/**
-			 * @brief Returns the Player 1 facing direction in ENGINE WORLD space (Y-down), unit XZ vector.
+			 * @brief Returns the Player 1 facing direction in ENGINE WORLD space (Y-up), unit XZ vector.
 			 * @return const Base::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
