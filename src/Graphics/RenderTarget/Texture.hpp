@@ -48,6 +48,7 @@
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "Resources/Types.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Instance.hpp"
 

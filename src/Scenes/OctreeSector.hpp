@@ -45,6 +45,7 @@
 #include "Math/Space3D/AACuboid.hpp"
 
 /* Local inclusions for usages. */
+#include "NameableTrait.hpp"
 #include "Math/Space3D/Collisions/PointCuboid.hpp"
 #include "Math/Space3D/Collisions/PointSphere.hpp"
 #include "Math/Space3D/Collisions/SamePrimitive.hpp"
