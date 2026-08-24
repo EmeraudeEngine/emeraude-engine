@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 
 /* Project configuration. */
 #include "emeraude_config.hpp"

@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Local inclusions for usages. */
 #include "Frustum.hpp"
 #include "Math/CartesianFrame.hpp"

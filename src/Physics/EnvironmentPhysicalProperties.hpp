@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* Third-party inclusions. */
 #include "magic_enum/magic_enum.hpp"
 

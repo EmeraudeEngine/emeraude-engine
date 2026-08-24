@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /*
  * EMEN_API — public boundary annotation for the engine shared library (Emeraude.dll).
  * See docs/windows-export-api.md for the full migration procedure and rationale.
