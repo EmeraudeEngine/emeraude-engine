@@ -71,7 +71,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Constructs an intermediate render target.
 			 */
-			IntermediateRenderTarget () noexcept = default;
+			IntermediateRenderTarget () noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -102,7 +102,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Destructs the intermediate render target.
 			 */
-			~IntermediateRenderTarget () override = default;
+			~IntermediateRenderTarget () override;
 
 			/**
 			 * @brief Creates the render target on the GPU.

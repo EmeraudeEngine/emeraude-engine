@@ -74,11 +74,12 @@ namespace EmEn::Graphics
 			 * @param renderer A reference to the graphics renderer.
 			 */
 			explicit
-			CombinePass (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
-			{
+			CombinePass (Renderer & renderer) noexcept;
 
-			}
+			/**
+			 * @brief Destructs the combine pass.
+			 */
+			~CombinePass () override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]

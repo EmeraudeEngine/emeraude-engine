@@ -75,11 +75,12 @@ namespace EmEn::Graphics
 			 * @param renderer A reference to the graphics renderer.
 			 */
 			explicit
-			DenoisePass (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
-			{
+			DenoisePass (Renderer & renderer) noexcept;
 
-			}
+			/**
+			 * @brief Destructs the denoise pass.
+			 */
+			~DenoisePass () override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]

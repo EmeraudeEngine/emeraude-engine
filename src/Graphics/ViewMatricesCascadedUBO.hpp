@@ -71,6 +71,11 @@ namespace EmEn::Graphics
 			 */
 			explicit ViewMatricesCascadedUBO (uint32_t cascadeCount = MaxCascadeCount, float lambda = DefaultCascadeLambda) noexcept;
 
+			/**
+			 * @brief Destructs the cascaded view matrices.
+			 */
+			~ViewMatricesCascadedUBO () override;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > &

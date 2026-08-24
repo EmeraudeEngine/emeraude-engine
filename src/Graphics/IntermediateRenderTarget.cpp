@@ -37,6 +37,10 @@ namespace EmEn::Graphics
 {
 	using namespace Vulkan;
 
+	IntermediateRenderTarget::IntermediateRenderTarget () noexcept = default;
+
+	IntermediateRenderTarget::~IntermediateRenderTarget () = default;
+
 	bool
 	IntermediateRenderTarget::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format, const std::string & identifier, VkImageUsageFlags extraUsageFlags) noexcept
 	{

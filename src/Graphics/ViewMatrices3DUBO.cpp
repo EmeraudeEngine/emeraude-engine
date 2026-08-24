@@ -43,6 +43,10 @@ namespace EmEn::Graphics
 	using namespace Base::Math;
 	using namespace Vulkan;
 
+	ViewMatrices3DUBO::ViewMatrices3DUBO () noexcept = default;
+
+	ViewMatrices3DUBO::~ViewMatrices3DUBO () = default;
+
 	/* Face capture orientations — the camera for each face of a cubemap RENDER TARGET.
 	 *
 	 * ⚠️⚠️ THE THREE PIECES BELOW ARE ONE MECHANISM. Change one alone and the cubemap breaks:

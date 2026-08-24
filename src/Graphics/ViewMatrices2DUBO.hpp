@@ -59,7 +59,12 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Creates 2D view matrices.
 			 */
-			ViewMatrices2DUBO () noexcept = default;
+			ViewMatrices2DUBO () noexcept;
+
+			/**
+			 * @brief Destructs the 2D view matrices.
+			 */
+			~ViewMatrices2DUBO () override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]

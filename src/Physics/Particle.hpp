@@ -162,10 +162,7 @@ namespace EmEn::Physics
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionModel(std::unique_ptr< CollisionModelInterface >) */
 			void
-			setCollisionModel (std::unique_ptr< CollisionModelInterface > /*model*/) noexcept override
-			{
-				/* Particles are points without collision model. */
-			}
+			setCollisionModel (std::unique_ptr< CollisionModelInterface > /*model*/) noexcept override;
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::hasCollisionModel() const */
 			[[nodiscard]]

@@ -45,6 +45,8 @@ namespace EmEn::Graphics
 	using namespace Base::Math;
 	using namespace Vulkan;
 
+	ViewMatricesCascadedUBO::~ViewMatricesCascadedUBO () = default;
+
 	ViewMatricesCascadedUBO::ViewMatricesCascadedUBO (uint32_t cascadeCount, float lambda) noexcept
 		: m_cascadeCount{std::clamp(cascadeCount, 1U, MaxCascadeCount)},
 		m_lambda{std::clamp(lambda, 0.0F, 1.0F)}

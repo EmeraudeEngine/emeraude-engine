@@ -79,7 +79,7 @@ namespace EmEn::Graphics::Compute
 			/**
 			 * @brief Constructs a probe convolver.
 			 */
-			ProbeConvolver () noexcept = default;
+			ProbeConvolver () noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).

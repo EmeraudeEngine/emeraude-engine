@@ -58,6 +58,14 @@ namespace EmEn::Graphics
 
 	/* ---- Lifecycle ---- */
 
+	DenoisePass::DenoisePass (Renderer & renderer) noexcept
+		: IndirectPostProcessEffect{renderer}
+	{
+
+	}
+
+	DenoisePass::~DenoisePass () = default;
+
 	void
 	DenoisePass::destroy () noexcept
 	{

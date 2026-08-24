@@ -50,6 +50,14 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 	using namespace Saphir;
 
+	CombinePass::CombinePass (Renderer & renderer) noexcept
+		: IndirectPostProcessEffect{renderer}
+	{
+
+	}
+
+	CombinePass::~CombinePass () = default;
+
 	namespace
 	{
 		/* Context sampler names, declared in a fixed order after the chain color. */

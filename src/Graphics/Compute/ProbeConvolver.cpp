@@ -57,6 +57,8 @@ namespace EmEn::Graphics::Compute
 {
 	using namespace Vulkan;
 
+	ProbeConvolver::ProbeConvolver () noexcept = default;
+
 	ProbeConvolver::~ProbeConvolver () noexcept = default;
 
 	bool

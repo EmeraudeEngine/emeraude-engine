@@ -27,6 +27,7 @@
 #include "Particle.hpp"
 
 /* Local inclusions. */
+#include "CollisionModelInterface.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/Component/AbstractModifier.hpp"
 
@@ -34,6 +35,12 @@ namespace EmEn::Physics
 {
 	using namespace Base;
 	using namespace Base::Math;
+
+	void
+	Particle::setCollisionModel (std::unique_ptr< CollisionModelInterface > /*model*/) noexcept
+	{
+		/* Particles are points without collision model. */
+	}
 
 	void
 	Particle::initialize (uint32_t initialLife, float initialSize, float spreadingRadius, const CartesianFrame< float > & initialLocation) noexcept

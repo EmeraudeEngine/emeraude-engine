@@ -43,6 +43,10 @@ namespace EmEn::Graphics
 	using namespace Base::Math;
 	using namespace Vulkan;
 
+	ViewMatrices2DUBO::ViewMatrices2DUBO () noexcept = default;
+
+	ViewMatrices2DUBO::~ViewMatrices2DUBO () = default;
+
 	Matrix< 4, float >
 	ViewMatrices2DUBO::getJitteredProjection (const Matrix< 4, float > & projection, const Vector< 2, float > & ndcOffset) noexcept
 	{

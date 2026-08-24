@@ -39,6 +39,10 @@ namespace EmEn::Graphics
 {
 	using namespace Vulkan;
 
+	RendererFrameScope::RendererFrameScope () noexcept = default;
+
+	RendererFrameScope::~RendererFrameScope () = default;
+
 	bool
 	RendererFrameScope::initialize (const std::shared_ptr< Device > & device, uint32_t frameIndex) noexcept
 	{

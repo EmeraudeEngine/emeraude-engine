@@ -64,7 +64,12 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Constructs a render frame scope.
 			 */
-			RendererFrameScope () noexcept = default;
+			RendererFrameScope () noexcept;
+
+			/**
+			 * @brief Destructs the render frame scope.
+			 */
+			~RendererFrameScope ();
 
 			/**
 			 * @brief Initializes the command pool and the command buffer.
