@@ -1496,7 +1496,9 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 
 **Push constants** (116 bytes): Camera basis (pos, right, forward), depth reconstruction (near, far, tanHalfFovY, aspectRatio), fog params (density, heightFalloff, baseHeight, maxDistance, color), inscatter params (lightDir, exponent, color, intensity), skyFogEnabled.
 
-**Height fog and the Y-up flip — 🔴 KNOWN DEFECT, OPEN:** the shader computes `exp(k · (y − baseHeight))` with `heightFalloff` defaulting to `+0.2F`. That was right under Y-down (`+Y` = deeper = denser); under **Y-up it makes the fog DENSER WITH ALTITUDE** — inverted. Fix is either to negate `k` at the use site or to flip the parameter's documented sign convention; **not yet applied**, see `TODO.md` § Y-UP RESIDUES. ⚠️ The *ray-reconstruction* half of the same shader is **sound** and needs no edit — it rides the signed `tanHalfFovY` contract and followed the flip on its own. See `docs/caution-points.md` for the Y-reconstruction pitfall.
+**Height fog sign convention:** `Parameters::heightFalloff` is a **POSITIVE decay rate** — how fast density falls off going **UP** (`+Y`). The shader NEGATES it (`float k = -fogHeightFalloff;`) before feeding `exp(k · (y − baseHeight))`. Never pass a negative value.
+
+⚠️ The negation was missing until Aug 2026, so under Y-up the fog grew **DENSER WITH ALTITUDE**. It was silent because the analytic integral below it stays valid for either sign of `k`: nothing breaks, nothing warns, the fog is simply upside down. ⚠️ The *ray-reconstruction* half of the same shader was **always sound** and needed no edit — it rides the signed `tanHalfFovY` contract and followed the flip on its own. Do not "fix" it in passing. See `docs/caution-points.md` for the Y-reconstruction pitfall.
 
 **Code references:**
 - `Effects/Framebuffer/AtmosphericFog.hpp` — Parameters, FogPushConstants, API

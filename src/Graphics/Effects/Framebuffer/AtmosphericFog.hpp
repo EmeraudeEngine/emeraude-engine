@@ -69,6 +69,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			struct EMEN_API Parameters
 			{
 				float density{0.02F};
+				/* POSITIVE decay rate: how fast the density falls off going UP (+Y).
+				 * The shader negates it (Y-up world) — do NOT pass a negative value. */
 				float heightFalloff{0.2F};
 				float baseHeight{0.0F};
 				float maxDistance{10000.0F};

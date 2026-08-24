@@ -206,9 +206,27 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    ⚠️ Rule applied throughout, and to keep applying: a comment **asserting** "the engine is Y-down"
    is a defect; a comment saying a compensation **belonged to** the Y-down era and is gone is
    deliberate memory that stops the workaround being reintroduced — those were all KEPT.
-   🔴 The sweep surfaced **three behavioural residues**, logged in `TODO.md` § Y-UP RESIDUES:
-   the OpenAL listener UP vector, the atmospheric-fog height falloff, and a **fifth** MD5 conversion
-   site (`emeraude-base/src/Animation/MD5AnimParser.hpp`) that the four-site inventory missed.
+   🔴 The sweep surfaced **three behavioural residues** — all **✅ FIXED (2026-08-25)**, so the
+   `TODO.md` § Y-UP RESIDUES section is gone and its knowledge moved into the AGENTS.md network:
+   - **OpenAL listener UP vector** (`Audio/HardwareOutput.cpp`): passed `downwardVector()`, now
+     `upwardVector()`. OpenAL follows the OpenGL convention, which IS the engine convention now, so
+     both orientation vectors pass verbatim — see `src/Audio/AGENTS.md`.
+   - **Atmospheric fog height falloff**: `heightFalloff` is a POSITIVE decay rate and the shader now
+     negates it. Silent because the analytic integral is valid for either sign — see
+     `src/Graphics/AGENTS.md`.
+   - **A FIFTH MD5 conversion site** (`emeraude-base/src/Animation/MD5AnimParser.hpp`) that the
+     four-site inventory missed, in a different module: `.md5anim` clips kept the `(y,-z,x)`
+     reflection while the mesh path had moved to `(y,z,x)`. Now pinned by a regression test —
+     see `emeraude-base/src/VertexFactory/AGENTS.md`.
+   ⚠️ Writing that test exposed a **second-order trap worth keeping**: its two halves need DIFFERENT
+   discriminating axes. For POSITIONS only md5 Z separates the transforms; for ROTATIONS md5 Z is
+   exactly the axis that CANNOT, since conjugating a rotation by a reflection that negates the
+   rotation's own axis leaves it unchanged (`S·R(Y,θ)·Sᵀ == R(Y,θ)`). A rotation pin about md5 Z
+   passes against the very defect it is meant to catch.
+   ⚠️ It also exposed an unrelated defect in the foundation: `Quaternion::rotatedVector()` called
+   the MUTATING `conjugate()` instead of `conjugated()`, so it never compiled on a const quaternion
+   and had never been called anywhere — while the test named after it silently exercised
+   `operator*` instead. Both fixed; see `emeraude-base/src/AGENTS.md`.
 8. **The physics gate, five points. Point 1 PASSED (Aug 2026), four to go**: a ball dropped on flat
    ground comes to REST on it ✅ — `physics-debug`, a 1 kg sphere and a barrel released at Y = +25
    both fall and settle, and two captures **6 s apart differ by 0 pixels out of 4 665 600**: no

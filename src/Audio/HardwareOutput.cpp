@@ -45,16 +45,16 @@ namespace EmEn::Audio
 
 		const auto & position = worldCoordinates.position();
 		const auto & atVector = worldCoordinates.forwardVector();
-		/* 🔴 KNOWN DEFECT — OPEN (Y-up residue). OpenAL's AL_ORIENTATION takes a genuine UP vector.
-		 * This hands it the DOWN one: a compensation for the retired Y-DOWN world that the Aug 2026
-		 * Y-up flip should have removed. The world is Y-up now, so this MUST read upwardVector();
-		 * as it stands the vertical axis of the audio field is INVERTED.
-		 * ⚠️ Invisible to every visual check — stereo/HRTF panning silently disagrees with the
-		 * picture, with nothing on screen to show for it. Verify by playing a positional sound
-		 * ABOVE the listener and confirming which way it comes from.
-		 * Deliberately NOT corrected here: it needs an audible check (owner decision, Aug 2026).
-		 * See TODO.md § Y-UP RESIDUES. */
-		const auto & upVector = worldCoordinates.downwardVector();
+		/* OpenAL follows the OpenGL convention — right-handed, +Y up, -Z forward — which is exactly
+		 * the engine world convention since the Aug 2026 Y-up flip. Both AL_ORIENTATION vectors are
+		 * therefore passed VERBATIM: there is nothing to convert, and any negation added here is a
+		 * bug, not an OpenAL quirk.
+		 * ⚠️ This read `downwardVector()` until Aug 2026 — a compensation for the retired Y-DOWN
+		 * world that the flip should have removed, leaving the vertical axis of the audio field
+		 * INVERTED. It survived because it is invisible to every visual check: stereo/HRTF panning
+		 * disagrees with the picture with nothing on screen to show for it. If you ever suspect it
+		 * again, play a positional sound ABOVE the listener and confirm which way it comes from. */
+		const auto & upVector = worldCoordinates.upwardVector();
 
 		const std::array< ALfloat, 12 > properties = {
 			position[X], position[Y], position[Z],

@@ -138,15 +138,15 @@ void main()
 		effectiveLength = min(length(worldPos - cameraPosition), fogMaxDistance);
 	}
 
-	/* Exponential height fog.
-	 * KNOWN DEFECT - OPEN (Y-up residue): exp(k * (y - baseHeight)) with a POSITIVE
-	 * heightFalloff made fog denser DOWNWARD under Y-down. Under Y-up it makes fog denser with
-	 * ALTITUDE, which is inverted. Fix is to negate k here or to flip the parameter's documented
-	 * sign convention; NOT applied yet - see TODO.md, section Y-UP RESIDUES. */
+	/* Exponential height fog. fogHeightFalloff is a POSITIVE decay rate, so the exponent it
+	 * feeds must be NEGATED: density falls off going UP (+Y) in this Y-up world.
+	 * The analytic integral below stays valid for either sign of k, which is exactly what made
+	 * this defect silent: until Aug 2026 k was used unnegated, correct while +Y meant DOWN, and
+	 * the Y-up flip turned it into fog that grew DENSER WITH ALTITUDE. */
 	vec3 effectiveEnd = cameraPosition + rayDir * effectiveLength;
 	float heightDiff = effectiveEnd.y - cameraPosY;
 
-	float k = fogHeightFalloff;
+	float k = -fogHeightFalloff;
 	float cameraOffset = cameraPosY - fogBaseHeight;
 
 	float fogOpticalDepth;
