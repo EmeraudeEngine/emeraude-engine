@@ -711,11 +711,21 @@ namespace EmEn::Saphir
 
 				if ( lightType == LightType::Point )
 				{
+					/* ⚠️ NEGATED: 'DirectionWorldSpace' is the FRAGMENT -> LIGHT vector, and a gobo
+					 * must be sampled along the direction the light EMITS, light -> fragment. The
+					 * two are antipodal, so sampling the raw vector returns the OPPOSITE cubemap
+					 * face — measured on 'global-illumination --demo-options 0,1', which projects
+					 * the AxisDebug cubemap from the room's only omni: the ceiling above the light
+					 * read MAGENTA (-Y) and the floor GREEN (+Y), exactly swapped.
+					 * The point-light SHADOW lookup right above takes the same vector and negates
+					 * it inside generate3DShadowMapCode() for the same reason; this site was simply
+					 * missed when that one was fixed. */
 					Code{fragmentShader} <<
 						"{ const uint cpIdx = floatBitsToUint(" << LightUB(UniformBlock::Component::ColorProjectionIndex) << ");" << Line::End <<
 						"  const uint cpFrameBits = floatBitsToUint(" << LightUB(UniformBlock::Component::ColorProjectionFrameIndex) << ");" << Line::End <<
-						"  if ( cpIdx != 0xFFFFFFFFu && cpFrameBits == 0xFFFFFFFFu ) { projectionColor = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], DirectionWorldSpace.xyz).rgb; }" << Line::End <<
-						"  if ( cpIdx != 0xFFFFFFFFu && cpFrameBits != 0xFFFFFFFFu ) { projectionColor = texture(" << Bindless::TexturesCubeArray << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], vec4(DirectionWorldSpace.xyz, float(cpFrameBits))).rgb; } }" << Line::End;
+						"  const vec3 cpDir = -DirectionWorldSpace.xyz;" << Line::End <<
+						"  if ( cpIdx != 0xFFFFFFFFu && cpFrameBits == 0xFFFFFFFFu ) { projectionColor = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], cpDir).rgb; }" << Line::End <<
+						"  if ( cpIdx != 0xFFFFFFFFu && cpFrameBits != 0xFFFFFFFFu ) { projectionColor = texture(" << Bindless::TexturesCubeArray << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], vec4(cpDir, float(cpFrameBits))).rgb; } }" << Line::End;
 				}
 				else if ( !useCSM )
 				{

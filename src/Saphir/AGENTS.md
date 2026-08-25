@@ -596,10 +596,33 @@ uint cpIdx = floatBitsToUint(uLight.ColorProjectionIndex);
 if ( cpIdx != 0xFFFFFFFFu ) {
     // 2D lights (directional, spot):
     projectionColor = texture(uBindlessTextures2D[nonuniformEXT(cpIdx)], projCoords.xy).rgb;
-    // Point lights (cubemap):
-    projectionColor = texture(uBindlessTexturesCube[nonuniformEXT(cpIdx)], direction.xyz).rgb;
+    // Point lights (cubemap) — NEGATED, see the CAUTION below:
+    projectionColor = texture(uBindlessTexturesCube[nonuniformEXT(cpIdx)], -DirectionWorldSpace.xyz).rgb;
 }
 ```
+
+> [!CAUTION]
+> **A point-light gobo is sampled along `-DirectionWorldSpace`, never the raw vector.**
+> `DirectionWorldSpace` is the **FRAGMENT → LIGHT** vector; a projection texture must be sampled
+> along the direction the light **EMITS**, light → fragment. The two are antipodal, so the raw
+> vector returns the **opposite cubemap face** — and it did, from the day the gobo was written
+> (0.8.6, Feb 2026) until Aug 2026.
+>
+> Measured with `global-illumination --demo-options 0,1`, which projects the `AxisDebug` cubemap
+> from the room's only omni light: the ceiling above the light read **MAGENTA (-Y)** and the floor
+> **GREEN (+Y)** — exactly swapped. After negating, at the same two camera poses: ceiling green,
+> floor magenta.
+>
+> ⚠️ **This is NOT a Y-up residual**, and it would have been misfiled as one. `git log -S` puts the
+> line at 0.8.6 (2026-02-20) with no Y negation ever present, six months before the flip. Check the
+> history before filing a sign error under the migration that happens to be nearby — the same
+> mistake was made on SSR's camera-ward ray rejection the same week.
+>
+> ⚠️ The point-light SHADOW lookup takes the SAME vector and negates it inside
+> `generate3DShadowMapCode()`, for the same reason. When that one was fixed, this site — six lines
+> away in the same generator, fed by the same variable — was not checked. **A sign fix on a
+> direction is a cue to audit every other consumer of that variable**, not just the one that
+> produced the visible symptom.
 
 The bindless array declarations use `Declaration::Sampler::UnboundedArray` and are placed on the `PerBindless` set. The `GL_EXT_nonuniform_qualifier` extension is required.
 
