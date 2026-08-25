@@ -175,13 +175,17 @@ stay **independent of the winding** — pinned by `theWindingCheckRejectsAMirror
 Primitives are authored **Y-up**: a cone/arrow/dome points `+Y`, a disk and a plane face `+Y`, a
 tetrahedron's apex is at `+Y`, `setCenterAtBottom()` rests the shape on `Y=0` extending toward `+Y`.
 
-⚠️ **KNOWN DEBT — the twelve gem-cut generators.** `generateDiamondCutGem` and friends still author
-their facet math with the table (or the rose cut's flat base) toward `-Y`, the "up" of the retired
-convention. Each one ends with `convertYDownAuthoring(shape)`, which mirrors the finished shape
-(`flipYAxis()`) and restores the front-face orientation the mirror reversed (`reverseWinding()` —
-**not** `flipSurface()`, which would negate the freshly mirrored normals a second time). A future
-chantier re-authors the facet math and deletes the helper with its eleven call sites (the Asscher cut
-delegates to the Emerald cut). Witness: the `parametric-geometries` demo.
+✅ **The twelve gem cuts are authored Y-up too (Aug 2026), and `convertYDownAuthoring()` is DELETED.**
+They used to author their facet math with the table (or the rose cut's flat base) toward `-Y` and
+mirror the finished shape at the end. All eleven generators now write the Y-up frame directly.
+
+⚠️⚠️ **Removing that mirror had FOUR consequences, not one** — the recipe is worth knowing before
+re-authoring anything else: the `Y` literals negate; every face swaps its first two vertices AND
+their UVs; each cross product feeding a per-face normal swaps its operands, since
+`cross(M·e₁, M·e₂) = −M·cross(e₁, e₂)`; and **the bitangent** of the per-face tangent frame flips —
+miss that last one and `v` silently becomes `1 − v`. Full account and the two measuring traps it
+exposed: [`emeraude-base/src/VertexFactory/AGENTS.md`](../dependencies/emeraude-base/src/VertexFactory/AGENTS.md)
+§ *The gem cuts are authored Y-UP*. Witness: the `parametric-geometries` demo.
 
 ### Patterns for Ring-Based Geometry
 
@@ -227,8 +231,8 @@ emitTriangle(ring[0], ring[i+1], ring[i]);  // reversed winding
   [`emeraude-base/src/VertexFactory/AGENTS.md`](../dependencies/emeraude-base/src/VertexFactory/AGENTS.md)
   § *The gem cuts are the exception*.
 - The pavilion pattern normal uses the diamond's `cross(culet - girdle, girdleTangent)` convention
-- See `ShapeGenerator.hpp:generateDiamondCutGem()` for the reference implementation — and read the
-  `convertYDownAuthoring()` note above before touching its vertical math
+- See `ShapeGenerator.hpp:generateDiamondCutGem()` for the reference implementation — its vertical
+  math is now plain Y-up, with no conversion step to keep in mind
 - A strip generator's emission order is NOT interchangeable between generators: the sphere and torus
   need `[0]/[2]/[1]/[3]` while the cylinder needs `[0]/[1]/[2]/[3]`, because their ring
   parameterizations differ. Recompute, never harmonize.
