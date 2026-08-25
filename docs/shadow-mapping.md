@@ -120,6 +120,31 @@ Shadow map filtering code is generated in `LightGenerator.ShadowMap.cpp`:
 - `Saphir/LightGenerator.ShadowMap.cpp` - All shadow map code generation
 - `Saphir/LightGenerator.hpp:PCFMethod` - PCF method enum
 
+### Outside the map is LIT, and that is enforced in the GENERATED CODE
+
+A directional light is a light at infinity: its 2D map covers a finite box, and a fragment outside
+that box is not "in shadow", it is **unknown** — the only defensible answer for a sun is **lit**.
+`insideShadowVolumeCondition()` guards the lookup on **all three axes** (`x`, `y` and `z` against
+`w`, projectively), and `shadowFactor` keeps its `1.0` initial value when the test fails.
+
+> [!CAUTION]
+> Only **Z** was guarded until Aug 2026. Lateral overflow fell through to the sampler's address
+> mode — and through the `"ShadowMap"` cache-key collision (see `src/Graphics/AGENTS.md`), that mode
+> was `CLAMP_TO_EDGE`, not the `CLAMP_TO_BORDER` the shadow map explicitly requested. The edge texel
+> ring therefore shadowed the entire exterior: on `reflexion-debug` (coverage 60 ⇒ a 120×120 m box,
+> on a 200×200 m floor) the floor went black past the coverage limit. **Both** halves are needed and
+> neither is redundant: the border mode absorbs the PCF taps that stray across the edge (a hard
+> guard alone would stair-step at the limit), while the guard makes the semantic independent of
+> whatever addressing the sampler cache hands out.
+
+The same code path serves **spot** lights and is correct for them too: outside its cone a spot
+already has a zero cone factor, so answering "lit" outside the map adds no light anywhere.
+
+Structural limit, not a bug: past the coverage box there is simply **no shadow information**, so
+distant casters cast nothing. The classic map's box is anchored on the **world origin** and never
+follows the camera — enlarging `coverageSize` trades texel density for reach. That is what CSM
+exists to solve.
+
 ## Alpha-Tested Shadows — the shadow pass must honour the opacity mask
 
 The shadow pass renders depth only, so it is tempting to skip texture sampling entirely.

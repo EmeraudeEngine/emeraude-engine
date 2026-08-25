@@ -40,6 +40,56 @@ namespace EmEn::Saphir
 	using namespace Saphir::Keys;
 	using namespace Vulkan;
 
+	/**
+	 * @brief Builds the GLSL condition stating that a projective light-space position falls INSIDE
+	 * the 2D shadow map volume, on all three axes.
+	 * @note A DIRECTIONAL light is a light at infinity: its map covers a finite box, and everything
+	 * outside that box is NOT "in shadow", it is "unknown" — and the only physically defensible
+	 * answer for a sun is LIT. Guarding all three axes here makes that semantic a property of the
+	 * generated code instead of a property of the sampler's address mode: the border mode still
+	 * handles the PCF taps that stray across the edge, but the centre sample can no longer be
+	 * decided by whatever addressing the sampler cache happened to hand out.
+	 * ⚠️ Z alone was guarded before, so lateral overflow fell through to the sampler — which,
+	 * through a cache-key collision, was CLAMP_TO_EDGE: the edge texel ring shadowed the entire
+	 * exterior and produced a broad black band past the coverage box.
+	 * @note Shared with SPOT lights, and correct for them too: outside its cone a spot already has a
+	 * zero cone factor, so answering LIT outside the map adds no light anywhere.
+	 * @param fragmentPosition The GLSL expression naming the light-space position (xyzw, pre-divide).
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	static
+	std::string
+	insideShadowVolumeCondition (const std::string & fragmentPosition)
+	{
+		std::string condition;
+		condition.reserve(160 + (fragmentPosition.size() * 7));
+
+		/* NOTE: The coordinates are still projective (the perspective divide happens in
+		 * textureProj), so each axis is tested against w, not against 1.0. Requiring z >= 0 and
+		 * z <= w also rules out w < 0, i.e. anything behind the light. */
+		condition += fragmentPosition;
+		condition += ".z >= 0.0 && ";
+		condition += fragmentPosition;
+		condition += ".z <= ";
+		condition += fragmentPosition;
+		condition += ".w && ";
+		condition += fragmentPosition;
+		condition += ".x >= 0.0 && ";
+		condition += fragmentPosition;
+		condition += ".x <= ";
+		condition += fragmentPosition;
+		condition += ".w && ";
+		condition += fragmentPosition;
+		condition += ".y >= 0.0 && ";
+		condition += fragmentPosition;
+		condition += ".y <= ";
+		condition += fragmentPosition;
+		condition += ".w";
+
+		return condition;
+	}
+
 	bool
 	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept
 	{
@@ -137,12 +187,11 @@ namespace EmEn::Saphir
 	LightGenerator::generate2DShadowMapCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept
 	{
 		std::string code;
-		code.reserve(256 + shadowMap.size() + (fragmentPosition.size() * 3));
+		code.reserve(320 + shadowMap.size() + (fragmentPosition.size() * 8));
 
-		/* NOTE: Skip shadow calculation if outside the shadow map's valid depth range.
-		 * In clip space, z is in [0, w] range (Vulkan depth [0,1]).
-		 * z < 0 means before the near plane, z > w means beyond the far plane.
-		 * In both cases, the fragment is not covered by the shadow map, so no shadow. */
+		/* NOTE: Skip the shadow lookup entirely when the fragment falls outside the shadow map
+		 * volume — laterally as well as in depth. shadowFactor keeps its 1.0 initial value, so
+		 * "not covered by the map" reads as LIT. See insideShadowVolumeCondition(). */
 
 		code +=
 			"/* Shadow map 2D resolution. */" "\n\n"
@@ -150,13 +199,9 @@ namespace EmEn::Saphir
 			"float shadowFactor = 1.0;" "\n\n"
 
 			"if ( ";
-		code += fragmentPosition;
-		code += ".z >= 0.0 && ";
-		code += fragmentPosition;
-		code += ".z <= ";
-		code += fragmentPosition;
+		code += insideShadowVolumeCondition(fragmentPosition);
 		code +=
-			".w )" "\n"
+			" )" "\n"
 			"{" "\n"
 			"shadowFactor = textureProj(";
 		code += shadowMap;
@@ -178,24 +223,22 @@ namespace EmEn::Saphir
 	LightGenerator::generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept
 	{
 		std::string code;
-		code.reserve(1536 + (shadowMap.size() * 2) + (fragmentPosition.size() * 4));
+		code.reserve(1600 + (shadowMap.size() * 2) + (fragmentPosition.size() * 9));
 
 		code += "/* Shadow map 2D resolution (PCF). */" "\n\n";
 
 		code += "float shadowFactor = 1.0;" "\n\n";
 
-		/* NOTE: Skip shadow calculation if outside the shadow map's valid depth range.
-		 * In clip space, z is in [0, w] range (Vulkan depth [0,1]).
-		 * z < 0 means before the near plane, z > w means beyond the far plane.
-		 * In both cases, the fragment is not covered by the shadow map, so no shadow. */
+		/* NOTE: Skip the shadow lookup entirely when the fragment falls outside the shadow map
+		 * volume — laterally as well as in depth. shadowFactor keeps its 1.0 initial value, so
+		 * "not covered by the map" reads as LIT. The individual PCF taps may still stray past the
+		 * edge; those are absorbed by the sampler's border (opaque white = unoccluded), which is
+		 * what keeps the transition smooth instead of stair-stepping at the coverage limit.
+		 * See insideShadowVolumeCondition(). */
 		code += "if ( ";
-		code += fragmentPosition;
-		code += ".z >= 0.0 && ";
-		code += fragmentPosition;
-		code += ".z <= ";
-		code += fragmentPosition;
+		code += insideShadowVolumeCondition(fragmentPosition);
 		code +=
-			".w )" "\n"
+			" )" "\n"
 			"{" "\n"
 			"	const vec2 texelSize = 1.0 / vec2(textureSize(";
 		code += shadowMap;
