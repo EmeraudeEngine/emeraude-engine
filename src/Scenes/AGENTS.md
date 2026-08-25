@@ -73,12 +73,15 @@ names use the manual-resource `+` prefix so Core can recognize (and replace) the
 | Builder | Scene name | Content |
 |---------|------------|---------|
 | `Viewers::ImageViewer` | `+ImageViewer` | Unlit quad at the image aspect ratio, double-sided (mirrored from behind, like a slide). LightSet DISABLED + camera out of HDR ⇒ texels reach the screen unmodified |
-| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, neutral lighting (ambient 200 lux + key light 100 000 lux), HDR camera with **MANUAL sunny-16 exposure** |
+| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, OR raw geometry file (`VertexFactory::FileIO::isReadableExtension()` : OBJ, STL, MDx, ee3d) wearing a neutral clay material (mid-grey, dull, dielectric, EXPLICIT lit path). Neutral lighting (ambient 200 lux + key 100 000 lux + cool fill 15 000 lux opposite, so the orbit shadow side stays readable), HDR camera with **MANUAL sunny-16 exposure**. `ModelViewer::handlesFile()` is the single "can I display this?" decision site |
 
 ⚠️ Lessons already paid for:
 - **Never rely on auto-exposure in a viewer**: the metering averages the whole frame, and a small
   lit model over the black void is crushed to pure white. The lighting is ours, so the exposure is
   paired manually (100 000 lux ↔ f/16, 1/100 s, ISO 100).
+- **The lit path must be EXPLICIT on a bare Visual**: `setLightingState(true)` in the component
+  setup, exactly like the SceneDataConsumer does per mesh — left on the unlit path, the clay's raw
+  [0,1] albedo goes through the photometric exposure and reads black (measured on the Bunny).
 - **Extents are NOT valid right after `SceneDataConsumer::build()`** — mesh resources load on the
   thread pool. `ModelViewer` waits (bounded budget) for `getWorldRenderBoundingBox()` validity
   before framing; on timeout it falls back to a default framing.

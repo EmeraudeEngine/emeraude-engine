@@ -85,7 +85,18 @@ namespace EmEn::Scenes::Viewers
 			}
 
 			/**
-			 * @brief Creates the viewer scene from a composite asset file.
+			 * @brief Returns whether this viewer can display a file.
+			 * @details True for composite assets handled by a scene loader (glTF, FBX, USD,
+			 * WAD, ...) and for raw geometry files readable by the vertex factory (OBJ, STL, ...).
+			 * @param sceneManager A reference to the scene manager, for the loader registry.
+			 * @param filepath A reference to a filesystem path.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool handlesFile (const Manager & sceneManager, const std::filesystem::path & filepath) noexcept;
+
+			/**
+			 * @brief Creates the viewer scene from a composite asset or raw geometry file.
 			 * @note An existing viewer scene with the same name is deleted first.
 			 * The returned scene is not enabled, the caller decides when.
 			 * @param filepath A reference to a filesystem path to a loadable asset.
@@ -95,6 +106,15 @@ namespace EmEn::Scenes::Viewers
 			std::shared_ptr< Scene > createScene (const std::filesystem::path & filepath) noexcept;
 
 		private:
+
+			/**
+			 * @brief Imports a raw geometry file as a single mesh wearing a neutral clay material.
+			 * @param filepath A reference to a filesystem path.
+			 * @param scene A reference to the viewer scene.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool importGeometry (const std::filesystem::path & filepath, Scene & scene) noexcept;
 
 			/** @brief Half-size of the cubic viewer scene, in meters. */
 			static constexpr auto SceneBoundary{1000.0F};

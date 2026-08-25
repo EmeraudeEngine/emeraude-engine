@@ -1753,8 +1753,8 @@ namespace EmEn
 	bool
 	Core::openModelViewer (const std::filesystem::path & filepath) noexcept
 	{
-		/* NOTE: No scene loader for this file, let the dispatch continue. */
-		if ( m_sceneManager.createSceneLoader(filepath) == nullptr )
+		/* NOTE: Neither a composite asset nor a raw geometry file, let the dispatch continue. */
+		if ( !Viewers::ModelViewer::handlesFile(m_sceneManager, filepath) )
 		{
 			return false;
 		}

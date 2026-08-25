@@ -26,15 +26,22 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <thread>
 
 /* Local inclusions. */
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
 #include "IO/IO.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/Visual.hpp"
 #include "Scenes/Loaders/Interface.hpp"
 #include "Scenes/Loaders/LoaderOptions.hpp"
 #include "Scenes/Loaders/SceneData.hpp"
@@ -43,20 +50,33 @@
 #include "Scenes/SceneDataConsumer.hpp"
 #include "Scenes/Toolkit.hpp"
 #include "Tracer.hpp"
+#include "VertexFactory/FileIO.hpp"
 
 namespace EmEn::Scenes::Viewers
 {
 	using namespace Base;
 	using namespace Base::Math;
+	using namespace Graphics;
+
+	bool
+	ModelViewer::handlesFile (const Manager & sceneManager, const std::filesystem::path & filepath) noexcept
+	{
+		if ( sceneManager.createSceneLoader(filepath) != nullptr )
+		{
+			return true;
+		}
+
+		return VertexFactory::FileIO::isReadableExtension(IO::getFileExtension(filepath, true));
+	}
 
 	std::shared_ptr< Scene >
 	ModelViewer::createScene (const std::filesystem::path & filepath) noexcept
 	{
 		const auto loader = m_sceneManager.createSceneLoader(filepath);
 
-		if ( loader == nullptr )
+		if ( loader == nullptr && !VertexFactory::FileIO::isReadableExtension(IO::getFileExtension(filepath, true)) )
 		{
-			TraceError{ClassId} << "No scene loader handles the file '" << IO::toU8String(filepath) << "' !";
+			TraceError{ClassId} << "No loader handles the file '" << IO::toU8String(filepath) << "' !";
 
 			return nullptr;
 		}
@@ -74,29 +94,42 @@ namespace EmEn::Scenes::Viewers
 			return nullptr;
 		}
 
-		/* NOTE: Showcase reflection level, the asset is displayed for itself. */
-		Loaders::LoaderOptions loaderOptions;
-		loaderOptions.environmentReflectionIntensity = 1.0F;
-
-		loader->setOptions(loaderOptions);
-
+		/* NOTE: Stays empty on the raw geometry path, which makes the
+		 * readiness check over its meshes trivially true. */
 		Loaders::SceneData sceneData;
 
-		/* NOTE: Synchronous import on the calling thread, intended for reasonably sized assets. */
-		if ( !loader->load(filepath, sceneData) )
+		if ( loader != nullptr )
 		{
-			TraceError{ClassId} << "Unable to import the file '" << IO::toU8String(filepath) << "' !";
+			/* NOTE: Showcase reflection level, the asset is displayed for itself. */
+			Loaders::LoaderOptions loaderOptions;
+			loaderOptions.environmentReflectionIntensity = 1.0F;
 
-			m_sceneManager.deleteScene(SceneName);
+			loader->setOptions(loaderOptions);
 
-			return nullptr;
+			/* NOTE: Synchronous import on the calling thread, intended for reasonably sized assets. */
+			if ( !loader->load(filepath, sceneData) )
+			{
+				TraceError{ClassId} << "Unable to import the file '" << IO::toU8String(filepath) << "' !";
+
+				m_sceneManager.deleteScene(SceneName);
+
+				return nullptr;
+			}
+
+			SceneDataConsumer consumer;
+
+			if ( !consumer.build(sceneData, *scene) )
+			{
+				TraceError{ClassId} << "Unable to build the scene from the file '" << IO::toU8String(filepath) << "' !";
+
+				m_sceneManager.deleteScene(SceneName);
+
+				return nullptr;
+			}
 		}
-
-		SceneDataConsumer consumer;
-
-		if ( !consumer.build(sceneData, *scene) )
+		else if ( !this->importGeometry(filepath, *scene) )
 		{
-			TraceError{ClassId} << "Unable to build the scene from the file '" << IO::toU8String(filepath) << "' !";
+			TraceError{ClassId} << "Unable to import the geometry file '" << IO::toU8String(filepath) << "' !";
 
 			m_sceneManager.deleteScene(SceneName);
 
@@ -112,6 +145,11 @@ namespace EmEn::Scenes::Viewers
 		Toolkit toolkit{m_settings, m_resourceManager, scene};
 		toolkit.setCursor(600.0F, 1000.0F, 600.0F);
 		toolkit.generateDirectionalLight< StaticEntity >("KeyLight", {1.0F, 0.98F, 0.92F, 1.0F}, 100000.0F);
+
+		/* NOTE: A cool fill light opposite the key keeps the shadow
+		 * side readable while the orbit passes behind the model. */
+		toolkit.setCursor(-600.0F, 400.0F, -600.0F);
+		toolkit.generateDirectionalLight< StaticEntity >("FillLight", {0.9F, 0.95F, 1.0F, 1.0F}, 15000.0F);
 
 		/* NOTE: The loaders enqueue mesh resources on the thread pool, the entity extents
 		 * publish only once the resources are loaded. The wait is bounded : on a timeout,
@@ -199,5 +237,62 @@ namespace EmEn::Scenes::Viewers
 		orbitController.controlNode(cameraNode);
 
 		return scene;
+	}
+
+	bool
+	ModelViewer::importGeometry (const std::filesystem::path & filepath, Scene & scene) noexcept
+	{
+		/* NOTE: Each viewing session gets its own resource names, a resource
+		 * container always returns an existing resource for a known name. */
+		static std::atomic< uint32_t > s_sessionCount{0};
+
+		const auto suffix = std::to_string(++s_sessionCount);
+
+		const auto geometry = m_resourceManager.container< Geometry::IndexedVertexResource >()->getOrCreateResource("+ModelViewerGeometry" + suffix, [filepath] (Geometry::IndexedVertexResource & geometryResource) {
+			return geometryResource.load(filepath);
+		});
+
+		/* NOTE: A raw geometry file carries no material, the mesh wears
+		 * a neutral clay : mid-grey albedo, dull, dielectric. */
+		const auto material = m_resourceManager.container< Material::StandardResource >()->getOrCreateResource("+ModelViewerMaterial" + suffix, [] (Material::StandardResource & materialResource) {
+			if ( !materialResource.setAlbedoComponent(PixelFactory::Color< float >{0.5F, 0.5F, 0.5F, 1.0F}) )
+			{
+				return materialResource.setManualLoadSuccess(false);
+			}
+
+			if ( !materialResource.setRoughnessComponent(0.65F) || !materialResource.setMetalnessComponent(0.0F) )
+			{
+				return materialResource.setManualLoadSuccess(false);
+			}
+
+			return materialResource.setManualLoadSuccess(true);
+		});
+
+		const auto mesh = m_resourceManager.container< Renderable::MeshResource >()->getOrCreateResource("+ModelViewerMesh" + suffix, [geometry, material] (Renderable::MeshResource & meshResource) {
+			return meshResource.load(geometry, material);
+		});
+
+		if ( mesh == nullptr )
+		{
+			return false;
+		}
+
+		const auto modelEntity = scene.createStaticEntity("Model");
+
+		if ( modelEntity == nullptr )
+		{
+			return false;
+		}
+
+		/* NOTE: The lit path is explicit, exactly like the scene data consumer does :
+		 * an unlit instance would send its raw [0,1] albedo through the photometric
+		 * exposure and read black. */
+		modelEntity->componentBuilder< Component::Visual >("Model")
+			.setup([] (Component::Visual & component) {
+				component.getRenderableInstance()->setLightingState(true);
+			})
+			.build(mesh);
+
+		return true;
 	}
 }

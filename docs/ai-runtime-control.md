@@ -287,7 +287,8 @@ Per-file behavior (after the application's `onCoreOpenFiles()` hook declined):
 | JSON with `"Stores"` key | Completes the resource stores (`Resources::Manager::update()`) — consumed at the Core first-view stage, before the application hook |
 | JSON scene definition (`Nodes`/`StaticEntities`/`Boundary` keys) | `loadScene()`; enabled only when NO scene is active |
 | Image (`jpg/jpeg/png/tga/tif/tiff/hdr`) | `+ImageViewer` scene: unlit double-sided quad at the image ratio, orbit camera |
-| Composite asset (any extension a scene loader supports: glTF/GLB/FBX/USD*/WAD) | `+ModelViewer` scene: neutral lighting, manual sunny-16 HDR exposure, orbit camera framed on the model |
+| Composite asset (any extension a scene loader supports: glTF/GLB/FBX/USD*/WAD) | `+ModelViewer` scene: neutral lighting (key + cool fill), manual sunny-16 HDR exposure, orbit camera framed on the model |
+| Raw geometry (`obj/stl/mdl/md2/md3/md5mesh/ee3d`, per `VertexFactory::FileIO::isReadableExtension()`) | Same `+ModelViewer` scene, the mesh wears a neutral clay material (mid-grey, dull, dielectric) |
 | Audio (`wav/flac/ogg/oga/opus/mp3/aiff/aif/au/caf/mid/midi`) | Ad-hoc track appended to the TrackMixer playlist and played immediately (`nowPlaying()` to verify) |
 | Anything else | On-screen notification `Unable to open the file '...'` |
 
