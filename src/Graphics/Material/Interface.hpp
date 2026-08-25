@@ -122,6 +122,12 @@ namespace EmEn::Graphics::Material
 		 * instead would push the layer out of the opaque list and buy sorting nobody needs.
 		 */
 		AlphaTestEnabled = 1U << 16,
+		/** @brief The material publishes a post-process-only reflectivity (no cubemap, no sampler):
+		 * the SCALAR lives in the material UBO at ReflectionAmount, this bit only says the codegen
+		 * must route it to the reflectivity ladder. Splitting it this way is deliberate — the
+		 * program caches key on the descriptor layout and on these FLAG BITS, never on plain
+		 * values, so a value baked as a GLSL literal is not part of the key. */
+		PostProcessReflectivityEnabled = 1U << 17,
 		/**
 		 * @brief The material declares it must NOT be lit — its colour IS its emitted radiance
 		 * (glTF KHR_materials_unlit semantics).

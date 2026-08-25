@@ -1620,7 +1620,6 @@ namespace EmEn::Graphics::Material
 			uint32_t m_sharedUBOIndex{0};
 			bool m_videoMemoryUpdated{false};
 			bool m_invertRoughness{false};
-			float m_postProcessReflectivityAmount{-1.0F};
 			bool m_isUsingEnvironmentCubemap{false};
 			/** @brief Explicitly authored cubemap reflection (texture mode): never replaced by SSR/RTR. */
 			bool m_reflectionIsArtistic{false};

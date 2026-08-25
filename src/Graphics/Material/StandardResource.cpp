@@ -449,9 +449,18 @@ namespace EmEn::Graphics::Material
 
 			case FillingType::Value :
 			{
-				/* Post-process only reflection: no cubemap IBL, just SSR/RTR via G-buffer reflectivity.
-				 * The Amount is stored as a constant reflectivity value for the material properties output. */
-				m_postProcessReflectivityAmount = FastJSON::getValue< float >(componentData, JKAmount).value_or(0.5F);
+				/* Post-process only reflection: no cubemap IBL, just SSR/RTR via the G-buffer
+				 * reflectivity. The scalar shares the ReflectionAmount UBO slot with the artistic
+				 * override — the two are mutually exclusive by construction, this branch creates no
+				 * Reflection component and the component branch never reaches here. */
+				/* ⚠️ parseValueComponent, NOT getValue(componentData, "Amount"): for a Value type
+				 * parseComponentBase sets componentData to the NUMBER itself
+				 * (`componentData = component["Data"]`), so reading an "Amount" key out of it
+				 * always failed and the authored value was silently replaced by the 0.5 fallback.
+				 * The path had therefore never honoured its own parameter — which is also why the
+				 * documented "publish exactly zero" opt-out did not work. Same helper the Roughness
+				 * component uses for the identical shape. */
+				this->setPostProcessReflectivity(parseValueComponent(componentData));
 			}
 				return true;
 
@@ -2216,10 +2225,11 @@ namespace EmEn::Graphics::Material
 			{
 				lightGenerator.declareSurfaceReflectivityMap(componentIt->second->variableName());
 			}
-			else if ( m_postProcessReflectivityAmount >= 0.0F )
+			else if ( this->isFlagEnabled(PostProcessReflectivityEnabled) )
 			{
-				/* Post-process only reflection (Value type): pass the constant as a GLSL literal. */
-				lightGenerator.declareSurfaceReflectivityMap("(" + std::to_string(m_postProcessReflectivityAmount) + ")");
+				/* Post-process only reflection (Value type): the scalar comes from the UBO, so the
+				 * generated GLSL is identical whatever the amount. */
+				lightGenerator.declareSurfaceReflectivityMap(MaterialUB(UniformBlock::Component::ReflectionAmount));
 			}
 		}
 
@@ -3996,11 +4006,20 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* NOTE: No cubemap, no sampler, no Reflection component: the value only reaches
-		 * LightGenerator::declareSurfaceReflectivityMap() as a GLSL literal, which puts it in the
+		/* No cubemap, no sampler, no Reflection component: the value is published into the
 		 * material-properties G-buffer for SSR/RTR to read. Mirror of the "Value" filling type
-		 * handled in parseReflectionComponent(). */
-		m_postProcessReflectivityAmount = std::clamp(amount, 0.0F, 1.0F);
+		 * handled in parseReflectionComponent().
+		 * ⚠️ The scalar goes in the UBO and the ROUTING in a flag bit, deliberately. It used to
+		 * reach the shader as a GLSL literal (`"(" + std::to_string(amount) + ")"`), and the
+		 * program caches key on the descriptor layout and on material FLAG BITS, never on plain
+		 * values — so two materials differing only in this amount were one edit away from sharing
+		 * a program built with the other one's literal. The UBO slot is shared with the artistic
+		 * ReflectionAmount, which this path never sets. */
+		m_materialProperties[ReflectionAmountOffset] = std::clamp(amount, 0.0F, 1.0F);
+
+		this->enableFlag(PostProcessReflectivityEnabled);
+
+		m_videoMemoryUpdated = true;
 
 		return true;
 	}

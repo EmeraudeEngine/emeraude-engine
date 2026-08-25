@@ -1574,6 +1574,34 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 > guaranteed non-null inside `execute()`.
 
 > [!CAUTION]
+> **The post-process reflectivity is a UBO value behind a FLAG, never a GLSL literal.**
+> `"Reflection": { "Type": "Value", "Data": x }` publishes a reflectivity for SSR/RTR without any
+> cubemap or sampler. The scalar used to reach the shader as a baked literal
+> (`declareSurfaceReflectivityMap("(" + std::to_string(amount) + ")")`), and **the program caches
+> key on the descriptor layout and on material FLAG BITS — never on plain values**. Two materials
+> differing only in that amount were one edit away from sharing a program built with the other
+> one's literal. The scalar now lives in the UBO (sharing the `ReflectionAmount` slot, which this
+> path never sets — the two branches of `parseReflectionComponent` are alternatives) and the
+> routing in `MaterialFlagBits::PostProcessReflectivityEnabled`, which the caches DO key on.
+>
+> ⚠️ Same pass fixed the parse: it read `getValue(componentData, "Amount")` while
+> `parseComponentBase` sets `componentData` to the **NUMBER itself** for a `Value` type, so the
+> authored figure was silently replaced by the 0.5 fallback — the path had never honoured its own
+> parameter. It now uses `parseValueComponent()`, the helper the Roughness component uses for the
+> identical shape. **The correct JSON is `"Data": x`, not `"Amount": x`** — an earlier revision of
+> this file documented the wrong key.
+>
+> 🔴 **OPEN, NOT DIAGNOSED.** Authoring `"Reflection": { "Type": "Value", "Data": 0.0 }` on
+> `Grounds/Pavement005` makes that material's ROUGHNESS fall from its authored 0.8 to the 0.5
+> default — measured in the normals attachment, where the 1,050,417-pixel floor group at packed
+> 0.800 vanishes into the 0.500 group, and returns exactly when the key is removed. The material
+> loads without error, and a JSON round-trip of the file is byte-identical, so neither a parse
+> failure nor the rewrite explains it. Whatever it is, it predates the flag/UBO change above: that
+> change is verified NEUTRAL on existing content (no material and no C++ call site uses the `Value`
+> path, and the baseline capture is identical pixel-count for pixel-count). **Reproduce with that
+> one key before trusting the `Value` path.**
+
+> [!CAUTION]
 > **The material-properties A channel had TWO consumers and NO producer until Aug 2026.**
 > `fogResponse` (high nibble) and `dofMask` (low nibble) were decoded faithfully by
 > `AtmosphericFog` and `DepthOfField` — and the pack wrote a hardcoded literal `1.0` for the whole
