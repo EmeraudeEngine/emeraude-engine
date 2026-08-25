@@ -79,7 +79,17 @@ namespace EmEn::Graphics
 	 *
 	 * ⚠️⚠️ This mechanism feeds EVERY cubemap render target — reflection probes AND point-light
 	 * shadow cubemaps. Do not tune it against one of them alone. `light-and-shadow-debug` measured
-	 * 3329 differing pixels out of 4665600 across the change: shadows are unaffected. */
+	 * 3329 differing pixels out of 4665600 across the change: shadows are unaffected.
+	 *
+	 * ⚠️⚠️ THAT LAST SENTENCE IS TRUE AND IT MISLED US FOR WEEKS. It says this change did not move
+	 * the shadows; it does NOT say the shadows were CORRECT — and they were not. Only the RENDER
+	 * is shared with the probes. The point-light shadow LOOKUP lives in
+	 * `LightGenerator::generate3DShadowMapCode()` and is shared with nothing, and it still carried
+	 * an X-only negation from 0.8.5, i.e. a Y-DOWN-era compensation: on `global-illumination` the
+	 * walking paladin cast his shadow on the CEILING. Fixed Aug 2026 by using the plain
+	 * light-to-fragment direction. Lesson: validating the cubemap on probes proves nothing about
+	 * shadows, and a measurement that only shows "X did not change Y" is not a verification that
+	 * Y is right. */
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X-

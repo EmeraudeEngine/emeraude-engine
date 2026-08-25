@@ -382,11 +382,28 @@ namespace EmEn::Saphir
 
 			"float shadowFactor = 1.0;" "\n\n"
 
+			/* The direction from the LIGHT to the fragment, which is the plain negation of
+			 * DirectionWorldSpace (fragment TO light). Nothing else: the cubemap render path —
+			 * the face table, the undone projection Y flip and the inverted winding — already
+			 * makes `texture(cube, d)` return what was rendered in direction `d`, and that path is
+			 * SHARED with the reflection probes.
+			 *
+			 * ⚠️ It used to read `vec3(-x, y, z)`: an X-only negation dating from 0.8.5, i.e. a
+			 * compensation for the Y-DOWN world that the Aug 2026 Y-up flip never revisited. The
+			 * symptom was spectacular and took a while to be reported — on `global-illumination`,
+			 * the walking paladin's shadow was cast on the CEILING, with no shadow at all under
+			 * his feet. Negating Y alone brought it down to the floor but left it MIRRORED along
+			 * the corridor; only the full negation puts it at his feet, pointing away from the
+			 * light.
+			 *
+			 * ⚠️⚠️ The lookup is NOT shared with the reflection probes — the render is. So a
+			 * cubemap change validated on probes alone says NOTHING about shadows, and vice
+			 * versa: check both. */
 			"const vec3 lookupVector = vec3(-";
 		code += directionWorldSpace;
-		code += ".x, ";
+		code += ".x, -";
 		code += directionWorldSpace;
-		code += ".y, ";
+		code += ".y, -";
 		code += directionWorldSpace;
 		code += ".z);" "\n"
 			"const float smallestDepth = texture(";
@@ -425,11 +442,28 @@ namespace EmEn::Saphir
 
 			"float shadowFactor = 1.0;" "\n\n"
 
+			/* The direction from the LIGHT to the fragment, which is the plain negation of
+			 * DirectionWorldSpace (fragment TO light). Nothing else: the cubemap render path —
+			 * the face table, the undone projection Y flip and the inverted winding — already
+			 * makes `texture(cube, d)` return what was rendered in direction `d`, and that path is
+			 * SHARED with the reflection probes.
+			 *
+			 * ⚠️ It used to read `vec3(-x, y, z)`: an X-only negation dating from 0.8.5, i.e. a
+			 * compensation for the Y-DOWN world that the Aug 2026 Y-up flip never revisited. The
+			 * symptom was spectacular and took a while to be reported — on `global-illumination`,
+			 * the walking paladin's shadow was cast on the CEILING, with no shadow at all under
+			 * his feet. Negating Y alone brought it down to the floor but left it MIRRORED along
+			 * the corridor; only the full negation puts it at his feet, pointing away from the
+			 * light.
+			 *
+			 * ⚠️⚠️ The lookup is NOT shared with the reflection probes — the render is. So a
+			 * cubemap change validated on probes alone says NOTHING about shadows, and vice
+			 * versa: check both. */
 			"const vec3 lookupVector = vec3(-";
 		code += directionWorldSpace;
-		code += ".x, ";
+		code += ".x, -";
 		code += directionWorldSpace;
-		code += ".y, ";
+		code += ".y, -";
 		code += directionWorldSpace;
 		code +=
 			".z);" "\n"

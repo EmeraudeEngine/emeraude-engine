@@ -60,6 +60,25 @@ Each of these was worked around locally instead of being recognised as one root 
 | Editor gizmo arrows authored on NEGATIVE axes | authored POSITIVE (`src/Scenes/Editor/AGENTS.md`) |
 | Cubemap sampling negating Y (`StandardResource`, `LightGenerator`, `SSR`, `RTGI`, `RTR`) | deleted (`docs/reflection-pipeline.md`) |
 | `ShapeGenerator` mirror-wound faces (16 sites + 8 loop-driven generators) | rewound CCW around each declared outward normal |
+| **Point-light shadow cubemap lookup** `vec3(-d.x, d.y, d.z)` (`LightGenerator::generate3DShadowMapCode()` + its PCF twin) | **MISSED at migration time, fixed Aug 2026** — now the plain `-d` |
+
+> [!CAUTION]
+> **The shadow-cubemap lookup was missed, and the way it was missed is the lesson.** The migration
+> checked the cubemap machinery on the reflection probes (`reflexion-debug`) and separately measured
+> that the change moved almost no shadow pixels — 3329 out of 4665600 on `light-and-shadow-debug` —
+> and recorded "shadows are unaffected". That sentence was TRUE and it bought weeks of false
+> confidence: it said the change did not MOVE the shadows, never that the shadows were RIGHT. Only
+> the cubemap RENDER is shared with the probes; the shadow LOOKUP is shared with nothing, and it
+> still carried an X-only negation dating from 0.8.5.
+>
+> The symptom, once someone looked at the right scene: on `global-illumination` the walking
+> paladin's shadow was cast on the **CEILING**, with none under his feet. `light-and-shadow-debug`
+> is a poor detector for it — its 100 000 lux directional Sun drowns the single 800 lm omni — while
+> `global-illumination` has exactly ONE shadow-casting omni light and shows it immediately.
+>
+> Two rules come out of this: **a measurement of the form "X did not change Y" is not a verification
+> that Y is correct**, and **pick the scene from the failure mode** — validating a point-light
+> shadow needs a scene where a point light is the only caster.
 
 ⚠️ The winding swap was justified by a **false statement** in those loaders: *"the 180° X rotation
 inverts the winding"*. A rotation has determinant +1 and NEVER inverts winding. The swap was
