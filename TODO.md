@@ -3,6 +3,28 @@
 > Open work only. Completed items are removed once their knowledge lives in `docs/` or the
 > `AGENTS.md` network — measurements, traps and owner decisions belong there, not here.
 
+## PHYSICS — a chantier of its own, NOT a Y-up residue (opened 2026-08-25)
+
+> [!IMPORTANT]
+> **Owner decision: the physics defects below are a SEPARATE subject from the Y-up migration.**
+> None of them depends on an axis sign; they were merely surfaced while measuring the Y-up physics
+> gate. Do not fold them back into that migration.
+
+- [ ] **NaN linear velocities.** Measured on `balls-of-steel`: **3 of 41 sampled bodies** carry
+  `linearVelocity = [-nan, -nan, -nan]` while their position is still finite and they report
+  `grounded: false`. Not attributed — it is NOT known whether this predates the grounded-decay fix
+  of the same day, and attributing it is the first task. Read it with
+  `Core.SceneManagerService.getNodePhysics(<node>)`.
+  ⚠️ A finite position with a NaN velocity means the NaN has not propagated yet: something either
+  skips integration for those bodies or resets the position. Find the producer, not the symptom.
+
+- [ ] **Bodies never come to rest on generated terrain.** On `balls-of-steel` (diamond-square
+  ground) a tracked ball descended steadily for 50 s (Y −19.5 → −33.2, ~3 units per 10 s) without
+  converging. ⚠️ NOT free fall — `|v|` stayed between 0.2 and 1.8 instead of accelerating toward
+  9.81 m/s², and contact kept re-arming, so the motion IS surface-constrained. Whether a permanent
+  roll is correct on that terrain, or friction is too low, is open. Flat ground DOES rest correctly
+  (`physics-debug`: a 1 m sphere settles at exactly Y = 1.000000, velocity 0).
+
 - GENERAL: Remove all invalid noexcept keyword. (WIP)
 - GENERAL: Increase inlining. (WIP)
 - GENERAL: Improve functions args to use "std::move" when useful. (WIP)

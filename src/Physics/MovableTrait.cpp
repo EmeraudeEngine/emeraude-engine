@@ -213,12 +213,22 @@ namespace EmEn::Physics
 	void
 	MovableTrait::updateGroundedState () noexcept
 	{
-		/* Don't decay grounded state if Y velocity is negligible. */
-		if ( std::abs(m_linearVelocity[Y]) < 0.001F )
-		{
-			return;
-		}
-
+		/* ⚠️⚠️ The grace period must ALWAYS decay. It used to return early when the vertical
+		 * velocity was negligible ("don't decay grounded state if Y velocity is negligible"),
+		 * which closed a CIRCULAR LOCK with updateSimulation():
+		 *   grounded on a stable surface -> gravity is not applied at all
+		 *   -> the vertical velocity stays 0
+		 *   -> this early return refused to decay the grace period
+		 *   -> still grounded -> gravity still skipped, forever.
+		 * A body resting on Ground or Boundary that LOST its support therefore never fell again:
+		 * teleport it into the air and it hovers there permanently. Measured Aug 2026 on both a
+		 * ball and the player (`Act.setPosition(x, 80, z)` — a console command this project uses
+		 * constantly), still at Y = 80 five seconds later.
+		 * ⚠️ Decaying unconditionally is safe BECAUSE contact re-arms the period every frame it is
+		 * detected (`setGrounded()` resets it to GroundedGracePeriod). The countdown therefore only
+		 * ever runs down while contact is genuinely absent — which is exactly when it must expire.
+		 * ⚠️ Bodies grounded on an Entity were immune: updateSimulation() keeps applying gravity to
+		 * them on purpose, so they could always fall off. Only the stable-surface path locked up. */
 		if ( m_groundedFrames > 0 )
 		{
 			m_groundedFrames--;

@@ -936,6 +936,64 @@ namespace EmEn::Scenes
 			return true;
 		}, "Returns node info as JSON. Usage: getNode(name)");
 
+		this->bindCommand("getNodePhysics", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: getNodePhysics(name)");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto name = arguments[0].asString();
+			const auto node = m_activeScene->root()->findChild(name);
+
+			if ( node == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Node '" << name << "' not found !");
+
+				return false;
+			}
+
+			/* ⚠️ WORLD position, not local: a node parented under another reports a local position
+			 * that says nothing about where it rests in the world, which is what a physics
+			 * measurement is about. */
+			const auto worldPosition = node->getWorldCoordinates().position();
+			const auto & localPosition = node->localCoordinates().position();
+			const auto & velocity = node->linearVelocity();
+
+			const auto * groundedSource = "None";
+
+			switch ( node->groundedSource() )
+			{
+				case Physics::GroundedSource::Ground : groundedSource = "Ground"; break;
+				case Physics::GroundedSource::Boundary : groundedSource = "Boundary"; break;
+				case Physics::GroundedSource::Entity : groundedSource = "Entity"; break;
+				case Physics::GroundedSource::None : break;
+			}
+
+			std::stringstream info;
+			info << "{";
+			info << "\"name\":\"" << node->name() << "\",";
+			info << "\"worldPosition\":[" << worldPosition[0] << "," << worldPosition[1] << "," << worldPosition[2] << "],";
+			info << "\"localPosition\":[" << localPosition[0] << "," << localPosition[1] << "," << localPosition[2] << "],";
+			info << "\"linearVelocity\":[" << velocity[0] << "," << velocity[1] << "," << velocity[2] << "],";
+			info << "\"movable\":" << (node->isMovable() ? "true" : "false") << ",";
+			info << "\"grounded\":" << (node->isGrounded() ? "true" : "false") << ",";
+			info << "\"groundedSource\":\"" << groundedSource << "\"";
+			info << "}";
+
+			outputs.emplace_back(Severity::Info, info.str());
+
+			return true;
+		}, "Returns the physics state of a node as JSON: world/local position, linear velocity, movable, grounded and WHICH surface it rests on (Ground/Boundary/Entity). Usage: getNodePhysics(name)");
+
 		this->bindCommand("setNodePosition", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.size() < 4 )
 			{
