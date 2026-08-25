@@ -216,7 +216,16 @@ emitTriangle(ring[0], ring[i+1], ring[i]);  // reversed winding
 ```
 
 ### Critical Notes
-- The crown pattern normal may point inward for small faces (acceptable for refractive gems)
+- ⚠️⚠️ **"The crown pattern normal may point inward for small faces (acceptable for refractive gems)"
+  — this line used to stand here, and it legitimised a real defect.** Measured Aug 2026: it was not
+  "small faces" but **11 of the 12 cuts**, the princess cut having *every* facet normal pointing into
+  the solid, so those facets were lit as if facing away. Fixed in `emeraude-base`: a flat facet's
+  normal is now DERIVED from the triangle emitted, which makes the drift structurally impossible.
+  Gated by `gemCutsWindAndFaceOutward`.
+  ⚠️ Their **winding was correct throughout** — judging a gem against its own normals therefore
+  reports the exact opposite conclusion, and did. See
+  [`emeraude-base/src/VertexFactory/AGENTS.md`](../dependencies/emeraude-base/src/VertexFactory/AGENTS.md)
+  § *The gem cuts are the exception*.
 - The pavilion pattern normal uses the diamond's `cross(culet - girdle, girdleTangent)` convention
 - See `ShapeGenerator.hpp:generateDiamondCutGem()` for the reference implementation — and read the
   `convertYDownAuthoring()` note above before touching its vertical math
