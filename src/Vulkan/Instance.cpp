@@ -860,6 +860,12 @@ namespace EmEn::Vulkan
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK10().independentBlend = VK_TRUE; // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
 		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
+		/* ⚠️ depthClamp is NOT depthBiasClamp — distinct features, both needed by the shadow cast
+		 * pass. This one lets it set depthClampEnable, which FLATTENS casters sitting in front of
+		 * the light's near plane onto that plane instead of CLIPPING them out of the map. Without
+		 * it a caster closer to the light than the near plane writes nothing, so the map keeps its
+		 * 1.0 clear there and the receiver below reads "lit": a shadow-shaped HOLE. */
+		requirements.featuresVK10().depthClamp = VK_TRUE; // Required for shadow map depth clamping (see ShadowCasting)
 		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
 		requirements.featuresVK10().imageCubeArray = VK_TRUE; // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)

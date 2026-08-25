@@ -714,11 +714,36 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
-					/* NOTE: Perform an initial layout transition from UNDEFINED to DEPTH_STENCIL_READ_ONLY_OPTIMAL.
-					 * This allows the shadow map to be used immediately in descriptors/samplers.
-					 * The RenderPass will transition to DEPTH_STENCIL_ATTACHMENT_OPTIMAL when rendering,
-					 * then back to DEPTH_STENCIL_READ_ONLY_OPTIMAL when done. */
-					if ( !renderer.transferManager().transitionImageLayout(*m_depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL) )
+					/* NOTE: Bring the fresh image to DEPTH_STENCIL_READ_ONLY_OPTIMAL so the shadow map
+					 * can be used immediately in descriptors/samplers. The RenderPass then flips to
+					 * DEPTH_STENCIL_ATTACHMENT_OPTIMAL while rendering and back when done.
+					 *
+					 * ⚠️ CLEAR IT TO 1.0 ON THE WAY, exactly as DummyShadowTexture does. The
+					 * descriptor set is written as soon as the light is created, while the first
+					 * shadow pass only runs on the next rendered frame: a light pass in between
+					 * samples whatever the allocation happens to hold. Transitioning alone leaves
+					 * that content UNDEFINED, and undefined depth below the receiver's reference
+					 * reads as SHADOW — a one-frame black flash on scene load, invisible in a
+					 * screenshot and impossible to attribute later. 1.0 is the far plane, i.e. the
+					 * "nothing occludes" value, and clearDepthImage() covers every array layer, so
+					 * cascades and cubemap faces are all initialised. */
+					auto & transferManager = renderer.transferManager();
+
+					if ( !transferManager.transitionImageLayout(*m_depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) )
+					{
+						TraceError{ClassId} << "Unable to transition depth image to TRANSFER_DST_OPTIMAL for shadow map '" << this->id() << "' !";
+
+						return false;
+					}
+
+					if ( !transferManager.clearDepthImage(*m_depthImage, 1.0F) )
+					{
+						TraceError{ClassId} << "Unable to clear the depth image for shadow map '" << this->id() << "' !";
+
+						return false;
+					}
+
+					if ( !transferManager.transitionImageLayout(*m_depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL) )
 					{
 						TraceError{ClassId} << "Unable to transition depth image to DEPTH_STENCIL_READ_ONLY_OPTIMAL for shadow map '" << this->id() << "' !";
 

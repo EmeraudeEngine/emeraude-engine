@@ -347,7 +347,16 @@ namespace EmEn::Saphir::Generator
 			createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 			createInfo.pNext = nullptr;
 			createInfo.flags = 0;
-			createInfo.depthClampEnable = VK_FALSE;
+			/* ⚠️ ENABLED here and NOWHERE ELSE: this is the shadow CAST pass, the one place where
+			 * clamping is right rather than wrong. A caster between the light and the light's near
+			 * plane must still occlude — clamped onto the near plane it writes depth 0.0 and casts;
+			 * clipped away (depthClampEnable = FALSE) it writes nothing, the map keeps its 1.0 clear
+			 * and the receiver reads "lit", leaving a shadow-shaped HOLE exactly where the tallest
+			 * caster is. Requires the depthClamp DEVICE feature — distinct from depthBiasClamp
+			 * below, and requested in Instance.cpp alongside it.
+			 * The far side needs no such care: past the far plane a clamped fragment writes 1.0,
+			 * which is the clear value anyway. */
+			createInfo.depthClampEnable = VK_TRUE;
 			createInfo.rasterizerDiscardEnable = VK_FALSE;
 			createInfo.polygonMode = VK_POLYGON_MODE_FILL;
 			createInfo.cullMode = VK_CULL_MODE_NONE;
