@@ -2,12 +2,21 @@
 > **TEMPORARY FILE.** It exists only while the Y-up migration is mid-flight, so the work can be
 > picked up on another machine. DELETE IT in the commit that completes stage 4, and fold whatever
 > is still true into `docs/coordinate-system.md`.
+>
+> ⚠️⚠️ **THIS MAP GOES STALE FASTER THAN THE CODE.** On 2026-08-25 four of its entries described
+> defects that had already been fixed, and one overstated the remaining work. Acting on them would
+> have sent a session chasing ghosts. **Before acting on ANY item here, verify it against the code —
+> and correct the item in the same pass.** An item is a lead, never a finding.
 
-# Y-up migration — stage 4 in progress, NOT committed
+# Y-up migration — stage 4 COMMITTED as work-in-progress
 
-The working tree across the three repositories is **half-flipped**. It builds `-Werror` clean and
-`EmeraudeBaseUnitTests` is 1975/1975 green, but the flip is INCOMPLETE and nothing is committed,
-because stage 4 is atomic by construction. `stage4-working-tree.txt` lists the 27 modified files.
+The flip is **incomplete but committed** on all three repositories, so the tree is clean and work
+proceeds **step by step, one measured defect at a time**. It builds `-Werror` clean and
+`EmeraudeBaseUnitTests` is 1987/1987 green.
+
+⚠️⚠️ **Green does NOT mean correct here.** Three of the four defect classes this migration deals with
+(vertex coordinates, UV pairing, declared normals) are invisible to the compiler AND to the unit
+suite. A passing build is the floor, never the evidence.
 
 ## The core result, measured and archived
 
@@ -86,8 +95,18 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    `generateTube` (`generateCone` and `generateAssscherCutGem` delegate and inherit the decision).
    ⚠️ The audit found the whole file was authored mirror-wound, not just the sites the plan named —
    twelve `emitTriangle` copies plus two `emitFace`, not three.
-2. **`generatePlane` is a DIFFERENT failure mode** — do not sweep it with the others. Its winding is
-   already correct for Y-up; the stale part is the hard-coded `enableGlobalNormal(negativeY())`.
+   ⚠️⚠️ **NO TEST COVERS ANY OF THEM (measured 2026-08-25).** The suite pins only `triangle`, `quad`,
+   both `cuboid` overloads, `plane` and `screenQuad`, so a regression in the generators listed here
+   is silent today. **Highest-leverage next step**: extend the existing pins to them — it converts a
+   per-shape visual inspection into an automatic gate.
+   ⚠️ **This item is about WINDING. Do NOT assume it implies the UV class — measured, see 3b.**
+2. **`generatePlane` — ✅ DONE (verified 2026-08-25).** It was a DIFFERENT failure mode from item 1:
+   its winding was already correct for Y-up and only the declared normal was stale. It now reads
+   `enableGlobalNormal(positiveY())` and says so in place. Pinned by
+   `planeTopFaceGrowsVWithPositiveZ`, cross-checked against the cuboid by
+   `cuboidTopFaceAgreesWithPlane`.
+   ⚠️ The only `negativeY()` calls left in `ShapeGenerator` are LEGITIMATE: the bottom face of both
+   `generateCuboid` overloads, and `generateHemisphere`'s cap normal. Do not sweep them.
 3. **Y-down content authoring** in `ShapeGenerator`, pervasive: `generateTriangle`'s apex at `-Y`,
    `generateTetrahedron`'s "Y- is up", `generateOctahedron`'s top pyramid. Not winding, actual
    vertex coordinates.
@@ -101,12 +120,32 @@ reading, so if pose C had moved, something other than the projection Y sign had 
 3b. **UV pairing — a FOURTH defect class, missing from this plan until now.** Distinct from winding,
    from vertex coordinates and from declared normals: the `setTextureCoordinates` call still carries
    the `V` it had when `-Y` was up, so the texture renders upside down on geometry that is otherwise
-   perfectly correct. ⚠️ **It compiles clean, it passes 1975/1975 tests, and no geometric assertion
+   perfectly correct. ⚠️ **It compiles clean, it passes 1987/1987 tests, and no geometric assertion
    can see it** — the shape, the normals and the winding are all right. The only detector is a
-   legible test texture on screen. `generateCuboid` (both overloads) is done and measured;
-   **every other hand-authored generator must be re-read for this**, and it must be checked
-   independently of the winding audit, which cannot reveal it. Rules in
-   `dependencies/emeraude-base/src/VertexFactory/AGENTS.md` § "Texture coordinate convention".
+   legible test texture on screen, or a probe over the generated vertices. `generateCuboid` (both
+   overloads) is done and measured.
+
+   ✅ **MEASURED 2026-08-25 — this class is LARGELY CLOSED, contrary to how this item used to read.**
+   A probe over the generated shapes (mean `V` of vertices above vs below mid-height, vertical faces
+   only) shows `V` DECREASING with `Y` — the Y-up pairing — on **`generateCylinder`, `generateTube`,
+   `generateCone` and `generateCapsule`** (V ≈ 0.125 top against 0.75 bottom); a pole probe puts
+   **`generateHemisphere`** at V = 0 on its `+Y` pole against V ≈ 0.89 at its rim. **Nothing to do on
+   those five.**
+
+   ⚠️⚠️ **`generateTorus` and `generateDisk` are OUT OF SCOPE BY CONSTRUCTION, not "unverified".** A
+   torus's `V` runs periodically around the tube cross-section, and a disk is horizontal so its `Y`
+   is constant. A `V`-versus-`Y` test on either is **VACUOUS** and will report whatever the sampling
+   order happens to give — the first version of this probe called both "INVERTED" on exactly that
+   artefact. Do not add such a test for them, and do not read an old one as evidence.
+
+   🔴 **`generateSphere` — a SEPARATE, PRE-EXISTING defect, NOT a Y-up residue.** Its texture
+   coordinates are TRANSPOSED: `texCoordU` advances per STACK (latitude) while `texCoordV` advances
+   per SLICE (longitude), so each lands in the other's slot, and
+   `textureCoordinates[1] = {texCoordU - deltaV, ...}` even mixes `deltaV` into the `U` term. That is
+   why a `V`-versus-`Y` probe reads a flat 0.5/0.5 on a sphere: it is measuring longitude. Fixing it
+   is its own task with its own visual check — **do not fold it into the Y-up sweep.**
+
+   Rules in `dependencies/emeraude-base/src/VertexFactory/AGENTS.md` § "Texture coordinate convention".
    `generateHollowedCube` is out of scope by construction (UVs parameterised per beam, not by
    world `Y`).
 4. **Terrain**: the `Inverse` flag in `TerrainResource.cpp:282` and `BasicGroundResource.cpp:215`,
@@ -174,8 +213,18 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    ⚠️ **Rejected on purpose: doing this at load time.** A 180° Y rotation in the loaders would make
    every asset fight a standard it already respects, and would re-orient Sponza, Doom and every
    calibrated demo camera. Owner decision.
-   🔴 `Drone.cpp:216` still carries the old assumption — same defect by construction, NOT verified
-   on screen.
+   ✅ **`Drone` done too (verified 2026-08-25)**: it reads `backwardVector()` and writes
+   `setBackwardVector()` un-negated, and aims at `player.headNode()`.
+   ⚠️ It had carried a SECOND compensation on top: a `diag(1, 1, -1)` instance matrix, commented
+   "the mesh is exported facing +Z instead of -Z" — right observation, wrong conclusion. Its
+   determinant is **-1**, a REFLECTION, so it reversed the WINDING as well as the axis: the drone
+   rendered inside-out AND backwards from a single sign. Removed. Contrast with Fox/Paladin's
+   `diag(s,-s,-s)`, determinant **+1**, a 180° X rotation — a different story entirely.
+   **Read the determinant before you read the intent.**
+   ⚠️ Aim at `headNode()`, never `baseNode()`: since the AABB is foot-anchored, an actor's origin is
+   at ground level. The resulting defect is DISTANCE-DEPENDENT, which makes it deceptive — far away
+   the horizontal term dominates and the aim looks perfect; up close the height gap takes over and
+   it dips, reading as "it targets the ground".
 
 5. **projet-alpha actor contracts** — the six head-pitch sites that must move together or not at all
    (`AbstractLiving::setHeadPitch` and its atan2 recovery, `Act.cpp` lookAt and getOrientation,
@@ -271,7 +320,9 @@ reading, so if pose C had moved, something other than the projection Y sign had 
 
 ## Do not
 
-- Do not commit a partial stage 4. Either finish it or revert the 27 files as a unit.
+- ⚠️ **The old "never commit a partial stage 4" rule is RETIRED.** Stage 4 is committed as WIP on all
+  three repositories; the tree is clean and work proceeds one measured defect at a time. Commit each
+  fix with its evidence rather than accumulating an atomic block nobody can review.
 - Do not "fix" a Y-up literal you find in isolation: check the freeze list first.
 - ⚠️ Do not migrate `ShapeGenerator::generateScreenQuad()`. It pairs `V` with `+Y`, the opposite of
   every world-space generator, **on purpose**: it is the fullscreen NDC quad of the post-processor
