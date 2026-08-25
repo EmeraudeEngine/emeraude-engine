@@ -156,10 +156,28 @@ Doing that makes alpha-cut geometry cast the shadow of its **QUAD**: the palm tr
 each material type samples its own opacity source. Any new material type that supports an
 opacity mask MUST implement it, otherwise its cut-outs silently cast solid shadows again.
 
-`BasicResource::requiresAlphaTestedShadows()` returns `true` for `MaterialFlagBits::AlphaTestEnabled`
-as well as for `BlendingMode::Normal` (Aug 2026). It previously required the blending mode alone, so a
-binary cutout — a grate, a fence, a Doom two-sided middle texture — cast a **solid** shadow, which is
-worse than no shadow at all. Both branches still need a texture whose alpha channel is enabled.
+`StandardResource::requiresAlphaTestedShadows()` requires an alpha source texture, then returns
+`true` for `MaterialFlagBits::AlphaTestEnabled` **as well as** for `BlendingMode::Normal`.
+
+> [!CAUTION]
+> Until Aug 2026 this text described `BasicResource` — the unlit material, **removed** by the
+> material merge (`a1619516`) — and it never matched `StandardResource`, which has always gated on
+> the flag ALONE. That gap was not cosmetic: a material manifest declaring an `"Opacity"` texture
+> routes through `setOpacityComponent()`, which arms `BlendingMode::Normal` and NOT
+> `AlphaTestEnabled`, **and there is no JSON key to request a cutout** (`getBlendingModeFromJSON()`
+> accepts Normal/Add/Multiply/Screen/None only). Every JSON-authored foliage therefore cast the
+> shadow of its QUAD. Measured on `reflexion-debug`: the palm dropped a solid blob, and now casts
+> its fronds. The threshold needed no change — the material UBO already ships
+> `DefaultAlphaThreshold` = 0.5 whether or not alpha testing was ever enabled.
+
+Genuinely **translucent** surfaces are the deliberate trade-off: a depth-only map stores no partial
+occlusion, so a window at a uniform alpha 0.3 now casts NOTHING instead of a solid block. Both are
+wrong; nothing is far less conspicuous than an opaque shadow under glass. Coloured or stochastic
+shadow maps are the real answer, not a different cutoff here.
+
+Expect **hard, ragged shadow edges**: the cutout is binary, so the texture's antialiased border
+texels (8.7 % of the palm's mask) collapse to all-or-nothing at the map's texel scale. PCF softens
+them and is off by default.
 
 The shadow discard uses the **same fixed 0.5 cutoff** as the colour pass, so the two agree by
 construction (the third path, `GPURTMaterialData::alphaCutoff`, agrees too). The cutoff is not
@@ -167,7 +185,7 @@ configurable on purpose — the reasons live with the flag's contract in
 [`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § 5, "Alpha Test — the Binary Cutout Contract".
 
 **Code reference:** `Saphir/Generator/ShadowCasting.cpp` (fragment shader generation),
-`Graphics/Material/BasicResource.cpp:requiresAlphaTestedShadows()`.
+`Graphics/Material/StandardResource.cpp:requiresAlphaTestedShadows()`.
 
 ## Cascaded Shadow Maps (CSM) — STATUS: PARTIALLY REPAIRED, STILL NOT USABLE (Jul 2026)
 

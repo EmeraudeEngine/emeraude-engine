@@ -554,10 +554,12 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
   `StandardResource::exportRTMaterialData()` exports its UBO threshold as `alphaCutoff` (Basic keeps 0.5).
   See [`docs/reflection-pipeline.md`](../../docs/reflection-pipeline.md).
 - **`requiresAlphaTestedShadows()`**: a cutout must cast a **CUTOUT shadow**, not a solid rectangle.
-  `BasicResource` returns `true` for the flag (or `BlendingMode::Normal`); `StandardResource` returns `true`
-  for the flag when an alpha source exists, and its shadow discard **reads the UBO threshold** (the
-  shadow fragment shader declares the material uniform block — the colour pass and the shadow agree by
-  construction). See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md).
+  `StandardResource` returns `true` when an alpha source exists AND (the flag is set **OR** the blending
+  mode is `Normal`), and its shadow discard **reads the UBO threshold** (the shadow fragment shader
+  declares the material uniform block — the colour pass and the shadow agree by construction).
+  ⚠️ The `BlendingMode::Normal` branch is load-bearing, not belt-and-braces: a JSON `"Opacity"` texture
+  arms blending and NOT the flag, and no JSON key can request a cutout — gating on the flag alone made
+  every JSON-authored foliage shadow its quad. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md).
 
 > [!CAUTION]
 > **BasicResource's cutoff is FIXED at 0.5** (StandardResource's is configurable — see above). The program
@@ -588,8 +590,7 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 - `Material/Interface.hpp:MaterialFlagBits::AlphaTestEnabled` — the flag and its contract
 - `Material/Interface.hpp:isOpaque()` — blind to the flag ON PURPOSE
 - `Material/Interface.hpp:isAlphaTest()` — RT hit-time alpha test
-- `Material/BasicResource.hpp:enableAlphaTest()` — the fixed-0.5 setter
-- `Material/BasicResource.cpp:requiresAlphaTestedShadows()` — flag OR `BlendingMode::Normal`
+- `Material/StandardResource.cpp:requiresAlphaTestedShadows()` — alpha source AND (flag OR `BlendingMode::Normal`)
 - `Material/StandardResource.hpp:enableAlphaTest(threshold)` — the configurable, UBO-backed setter
 - `Material/StandardResource.cpp:parseOpacityComponent()` — the 3-rule JSON contract
 - `Material/StandardResource.cpp:alphaSourceTextureComponent()` — opacity component, else albedo alpha

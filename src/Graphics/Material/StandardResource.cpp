@@ -1949,16 +1949,32 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::requiresAlphaTestedShadows () const noexcept
 	{
-		if ( !this->isFlagEnabled(AlphaTestEnabled) )
+		/* No alpha source, nothing to test against: the whole surface casts, as it should. */
+		if ( this->alphaSourceTextureComponent() == nullptr )
 		{
 			return false;
 		}
 
 		/* A binary CUTOUT must cast a CUTOUT shadow — a grate that shadows as a solid
-		 * rectangle is worse than no shadow at all. The
-		 * shadow discard reads the SAME UBO threshold as the colour pass, so the two agree
-		 * by construction. */
-		return this->alphaSourceTextureComponent() != nullptr;
+		 * rectangle is worse than no shadow at all. The shadow discard reads the SAME UBO
+		 * threshold as the colour pass, so the two agree by construction.
+		 *
+		 * ⚠️ BlendingMode::Normal COUNTS, and that is not a detail: declaring an "Opacity"
+		 * texture in a material manifest routes through setOpacityComponent(), which arms
+		 * BlendingMode::Normal and NOT the AlphaTestEnabled flag — there is no JSON key to ask
+		 * for a cutout. Gating on the flag alone therefore left every JSON-authored foliage
+		 * casting the shadow of its QUAD: the reflexion-debug palm dropped a solid rectangle
+		 * where its leaves should have been. The removed BasicResource tested both from the
+		 * start and docs/shadow-mapping.md has described both ever since; this material never
+		 * did, so the doc has been describing the intent rather than the behaviour.
+		 *
+		 * Consequence to keep in mind for genuinely TRANSLUCENT surfaces (a window at a
+		 * uniform alpha 0.3): a depth-only map cannot store partial occlusion, so the 0.5
+		 * cutoff makes them cast NOTHING instead of a solid block. Both are wrong; casting
+		 * nothing is far less conspicuous than an opaque shadow under a pane of glass. Real
+		 * translucent shadows need a separate mechanism (coloured/stochastic maps), not a
+		 * different threshold here. */
+		return this->isFlagEnabled(AlphaTestEnabled) || this->blendingMode() == BlendingMode::Normal;
 	}
 
 	bool
