@@ -73,7 +73,7 @@ names use the manual-resource `+` prefix so Core can recognize (and replace) the
 | Builder | Scene name | Content |
 |---------|------------|---------|
 | `Viewers::ImageViewer` | `+ImageViewer` | Unlit quad at the image aspect ratio, double-sided (mirrored from behind, like a slide). LightSet DISABLED + camera out of HDR ⇒ texels reach the screen unmodified |
-| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, OR raw geometry file (`VertexFactory::FileIO::isReadableExtension()` : OBJ, STL, MDx, ee3d) wearing a neutral clay material (mid-grey, dull, dielectric, EXPLICIT lit path). Neutral lighting (ambient 200 lux + key 100 000 lux + cool fill 15 000 lux opposite, so the orbit shadow side stays readable), HDR camera with **MANUAL sunny-16 exposure**. `ModelViewer::handlesFile()` is the single "can I display this?" decision site |
+| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, OR raw geometry file (`VertexFactory::FileIO::isReadableExtension()` : OBJ, STL, MDx, ee3d) wearing a neutral clay material (mid-grey, dull, dielectric, EXPLICIT lit path). Neutral lighting (ambient 200 lux + key 100 000 lux + cool fill 15 000 lux opposite, so the orbit shadow side stays readable), HDR camera with **MANUAL sunny-16 exposure**, and a **default sky** (`installBackground()`, setting `Core/Viewers/Background`, default `GreenLandscape`) supplying the background AND the IBL. `ModelViewer::handlesFile()` is the single "can I display this?" decision site |
 
 ⚠️ Lessons already paid for:
 - **Never rely on auto-exposure in a viewer**: the metering averages the whole frame, and a small
@@ -89,6 +89,17 @@ names use the manual-resource `+` prefix so Core can recognize (and replace) the
   and a three-quarter start orientation.
 - Resource names carry a per-session counter (`+ImageViewerImage3`, ...) — containers return the
   EXISTING resource for a known name, a fixed name would show the first image forever.
+- **A model viewer without an environment cannot show a material.** `ModelViewer::installBackground()`
+  puts a sky on the scene: reflective, transmissive, clearcoat, sheen and iridescent materials have
+  literally nothing to reflect without one, and the Khronos normal/tangent tests ask by name for
+  "an environment map that contains a clear horizon line". The resource name is a SETTING
+  (`Core/Viewers/Background`, default `GreenLandscape`) because the skybox belongs to the
+  CONSUMER's data store, not to the engine — an unknown name degrades to no background with a
+  warning, never to a viewer failure. ⚠️ The direct lighting stays manual on purpose: deriving it
+  from the sky (`applyBackgroundLighting()`) would make every sky change the SUBJECT's exposure,
+  and the viewer exposure is deliberately fixed. The background feeds the reflections, not the key
+  light. The flat 200 lux ambient is only a floor for the no-sky case; a loaded sky's irradiance
+  dominates it by two orders of magnitude.
 
 ### Scene Loader Registry
 
@@ -1017,6 +1028,31 @@ so its key is `0` in the `Opaque` multimap — head of the list, drained first. 
 512 m cuboid (`Renderable::AbstractBackground::SkySize`) with flipped winding drawn on the
 translation-free infinity view: it fills every pixel, and the level geometry drawn afterwards with
 depth test + write ON simply overwrites it.
+
+> [!CAUTION]
+> **The sky's clip DEPTH is pinned to the far plane, and its geometric size is therefore
+> irrelevant. Never "fix" a missing sky by growing the cuboid or by pushing the camera's far
+> distance out.** `VertexShader::synthesizeVertexPositionInScreenSpace()` emits
+> `gl_Position.z = gl_Position.w` for every infinity-view program (the standard skybox trick,
+> `clipPosition.xyww` in the Khronos glTF Sample Viewer's `skybox.vert`); the projection maps near
+> to 0 and far to 1, so `z = w` lands exactly on the far plane and can never be clipped.
+>
+> **Why this exists (measured Aug 2026).** Disabling the depth TEST does not disable Z CLIPPING.
+> Before the pin, the 512 m cuboid put its faces 256 m from the camera and its corners at 443 m, so
+> **any scene whose camera far distance fell under that lost its sky ENTIRELY** — silently: no
+> error, no warning, no broken-renderable trace, and the environment cubemap still adopted and the
+> IBL still baked, so the log looked perfectly healthy. Hit on `Viewers::ModelViewer`, whose far
+> distance is derived from the model size (`max(100, radius * 20)`): every asset under ~22 m of
+> radius rendered against a **bit-exact (0,0,0)** void, which also made every reflective,
+> transmissive and clearcoat material unjudgeable in the viewer.
+>
+> ⚠️ **Attribution trap, lived twice on the way to this diagnosis.** A black surround is NOT proof
+> that the background failed to load: measure the pixels. Bit-exact `(0,0,0)` means "never drawn";
+> small non-zero values mean "drawn and crushed by the exposure" — two completely different bugs.
+> And the first hypothesis here (far plane vs the 256 m faces) was **falsified** by a model whose
+> far distance was 290 m and which still came out black; only a model at far 1547 m brought the sky
+> back, because the corners sit at 443 m. A hypothesis that predicts the right answer for the wrong
+> reason is worth nothing — vary the ONE parameter and check both outcomes.
 
 That is what lets a loader emit **no geometry at all** where the sky must show through — the `F_SKY1`
 sectors of a Doom map are holes on purpose, no stencil and no portal involved. With no background

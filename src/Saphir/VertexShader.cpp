@@ -893,6 +893,31 @@ namespace EmEn::Saphir
 		outputInstructions += posExpr;
 		outputInstructions += ", 1.0);" "\n";
 
+		/* ⚠️ Infinity view (the sky background, its ONLY user): the clip depth is pinned to the
+		 * far plane, so the sky can never be clipped away by a short far distance. The projection
+		 * maps near to 0 and far to 1 (Vulkan range, not reversed), hence z = w. This is the
+		 * standard skybox depth trick (`gl_Position = clipPosition.xyww` in the Khronos glTF
+		 * Sample Viewer's skybox.vert).
+		 *
+		 * WHY, and it is not a micro-optimisation: the sky is a 512 m cuboid centred on the
+		 * camera, so its faces sit 256 m away and its corners 443 m. ANY scene whose camera far
+		 * distance fell under that lost its sky ENTIRELY — silently, with no error, no warning and
+		 * no broken-renderable trace. Measured on the +ModelViewer, whose far is derived from the
+		 * model size (`max(100, radius * 20)`): every asset under ~22 m of radius rendered against
+		 * a bit-exact (0,0,0) void, which also made every reflective, transmissive and clearcoat
+		 * material unjudgeable. Pinning the depth removes the whole class of bug and makes the
+		 * geometric size of the sky irrelevant.
+		 *
+		 * Safe by construction: the background is the only renderable carrying the infinity view
+		 * (Scene::registerSceneVisualComponents), and it is drawn with the depth test AND the depth
+		 * write disabled, so pinning its depth can neither fail a comparison nor pollute the
+		 * depth buffer. The velocity clip positions are synthesized independently of gl_Position
+		 * (synthesizeVelocityClipPositions), so the motion vectors are untouched. */
+		if ( this->isInfinityViewEnabled() )
+		{
+			outputInstructions += "\t" "gl_Position.z = gl_Position.w;" "\n";
+		}
+
 		/* TAA sub-pixel jitter: applied HERE and nowhere else. Offsetting the clip position by
 		 * jitter * W is exactly an NDC translation after the perspective division. Keeping it
 		 * out of every matrix is what makes the velocity outputs jitter-free and, above all,

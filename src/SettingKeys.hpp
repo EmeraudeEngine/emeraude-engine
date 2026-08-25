@@ -792,6 +792,16 @@ namespace EmEn
 		constexpr auto RushMakerEnableVoiceOverKey{"Core/RushMaker/EnableVoiceOver"};
 		constexpr auto DefaultRushMakerEnableVoiceOver{false};
 
+		/* Viewers (the +ImageViewer / +ModelViewer scenes behind the dropped-files pipeline) */
+		/* Skybox resource shown behind a model in the +ModelViewer, and the source of its IBL.
+		 * An environment is not decoration here: a reflective, transmissive, clearcoat, sheen or
+		 * iridescent material has NOTHING to reflect without one, and the asset cannot be judged.
+		 * The name is a setting because the resource belongs to the CONSUMER's data store, not to
+		 * the engine; an unknown name degrades to no background (traced), never to a failure.
+		 * Empty string = no background at all. */
+		constexpr auto ViewerBackgroundKey{"Core/Viewers/Background"};
+		constexpr auto DefaultViewerBackground{"GreenLandscape"};
+
 		/* Physics */
 		/* Enable the spatial acceleration structure for physics. */
 		constexpr auto EnablePhysicsAccelerationKey{"Core/Physics/EnableAcceleration"};

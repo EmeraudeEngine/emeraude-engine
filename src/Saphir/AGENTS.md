@@ -939,6 +939,20 @@ The classic non-instanced scene path reads its model matrix from the per-scene
   camera translation and therefore does NOT cancel on a static camera (lived: a smooth
   NDC-position-like velocity gradient over the entire sky, blamed on the translucent glass in
   front of it for two sessions before anyone visualised the buffer).
+- **⚠️ Infinity view also PINS THE CLIP DEPTH** (added Aug 2026):
+  `synthesizeVertexPositionInScreenSpace()` emits `gl_Position.z = gl_Position.w` right after the
+  MVP multiply whenever `isInfinityViewEnabled()`. The projection maps near to 0 and far to 1
+  (Vulkan range, NOT reversed), so `z = w` lands exactly on the far plane — the standard skybox
+  trick (`clipPosition.xyww` in the Khronos glTF Sample Viewer's `skybox.vert`). **The geometric
+  size of the sky therefore stops mattering, and no camera far distance can ever clip it.**
+  Before the pin, a short far distance silently deleted the whole sky (see
+  `Scenes/AGENTS.md` § "The background is drawn FIRST"). Safe by construction: the background is
+  the ONLY user of the infinity view in the whole cascade, and it is drawn with the depth test AND
+  the depth write disabled, so pinning its depth can neither fail a comparison nor pollute the
+  depth buffer. ⚠️ It must stay OUT of the velocity path: the velocity clip positions are
+  synthesized independently of `gl_Position` (`synthesizeVelocityClipPositions()`), which is
+  precisely what keeps the motion vectors correct — never "simplify" that by reusing
+  `gl_Position`.
 
 ### TAA Sub-Pixel Jitter — The Per-Draw Push Constant Contract (fixed 2026-07-25)
 

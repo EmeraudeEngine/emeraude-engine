@@ -37,6 +37,7 @@
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "IO/IO.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "Resources/Manager.hpp"
@@ -49,6 +50,8 @@
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneDataConsumer.hpp"
 #include "Scenes/Toolkit.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 #include "VertexFactory/FileIO.hpp"
 
@@ -136,7 +139,20 @@ namespace EmEn::Scenes::Viewers
 			return nullptr;
 		}
 
-		/* NOTE: Neutral lighting recipe : a soft ambient and one warm key light. */
+		/* NOTE: An environment behind the model, and the IBL that comes with it. Without one, a
+		 * reflective, transmissive, clearcoat, sheen or iridescent material has nothing to reflect
+		 * and the asset simply cannot be judged — the whole point of a model viewer. A sky with a
+		 * clear horizon line is what the Khronos normal/tangent tests ask for by name, the horizon
+		 * being the readable feature in a curved reflection.
+		 * ⚠️ The DIRECT lighting below stays manual on purpose: deriving it from the sky
+		 * (applyBackgroundLighting) would make every sky change the exposure of the subject, and
+		 * the viewer's exposure is deliberately fixed (see the camera setup further down). The
+		 * background feeds the reflections, not the key light. */
+		this->installBackground(*scene);
+
+		/* NOTE: Neutral lighting recipe : a soft ambient and one warm key light.
+		 * The flat ambient is a floor for the case where no background resource is available; the
+		 * sky irradiance dominates it by two orders of magnitude when one is. */
 		auto & lightSet = scene->lightSet();
 		lightSet.enable();
 		lightSet.setAmbientLightColor({0.4F, 0.4F, 0.45F, 1.0F});
@@ -237,6 +253,40 @@ namespace EmEn::Scenes::Viewers
 		orbitController.controlNode(cameraNode);
 
 		return scene;
+	}
+
+	void
+	ModelViewer::installBackground (Scene & scene) noexcept
+	{
+		const auto backgroundName = m_settings.getOrSetDefault< std::string >(ViewerBackgroundKey, DefaultViewerBackground);
+
+		if ( backgroundName.empty() )
+		{
+			return;
+		}
+
+		auto * skyBoxes = m_resourceManager.container< Renderable::SkyBoxResource >();
+
+		if ( skyBoxes == nullptr )
+		{
+			return;
+		}
+
+		/* NOTE: The resource belongs to the consumer's data store, so a missing name is a
+		 * configuration matter, never a viewer failure: the model still opens, against a void. */
+		const auto skyBox = skyBoxes->getResource(backgroundName);
+
+		if ( skyBox == nullptr )
+		{
+			TraceWarning{ClassId} <<
+				"No skybox resource named '" << backgroundName << "' (setting '" << ViewerBackgroundKey << "'). "
+				"The model is displayed without an environment: reflections, transmission and clearcoat "
+				"will have nothing to reflect.";
+
+			return;
+		}
+
+		scene.setBackground(skyBox);
 	}
 
 	bool

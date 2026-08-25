@@ -108,6 +108,19 @@ namespace EmEn::Scenes::Viewers
 		private:
 
 			/**
+			 * @brief Installs the viewer environment (background + IBL source) on the scene.
+			 * @details The skybox resource name comes from the `Core/Viewers/Background` setting,
+			 * because the resource belongs to the CONSUMER's data store, not to the engine. An
+			 * unknown name degrades to no background with a warning — the model still opens.
+			 * @note The scene lighting is deliberately NOT derived from it: the viewer exposure is
+			 * fixed and manual, and a sky-driven key light would make every sky change the
+			 * subject's exposure. The background feeds the reflections, not the key light.
+			 * @param scene A reference to the viewer scene.
+			 * @return void
+			 */
+			void installBackground (Scene & scene) noexcept;
+
+			/**
 			 * @brief Imports a raw geometry file as a single mesh wearing a neutral clay material.
 			 * @param filepath A reference to a filesystem path.
 			 * @param scene A reference to the viewer scene.
