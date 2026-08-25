@@ -26,15 +26,11 @@
 
 #include "TrackMixer.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <algorithm>
 #include <limits>
 #include <numeric>
 #include <random>
-#include <ranges>
 #include <set>
 
 /* Local inclusions. */

@@ -31,7 +31,6 @@
 #include "Declaration/Function.hpp"
 #include "Declaration/OutputBlock.hpp"
 #include "Declaration/Sampler.hpp"
-#include "Declaration/SpecializationConstant.hpp"
 #include "Generator/Abstract.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 

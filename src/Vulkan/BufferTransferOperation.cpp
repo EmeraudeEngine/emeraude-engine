@@ -26,9 +26,6 @@
 
 #include "BufferTransferOperation.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 namespace EmEn::Vulkan
 {
 	bool

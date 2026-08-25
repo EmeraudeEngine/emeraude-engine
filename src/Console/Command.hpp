@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <functional>
 #include <string>
-#include <vector>
 
 /* Local inclusions for usages. */
 #include "Argument.hpp"

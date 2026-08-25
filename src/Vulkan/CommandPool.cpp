@@ -26,9 +26,6 @@
 
 #include "CommandPool.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Tracer.hpp"

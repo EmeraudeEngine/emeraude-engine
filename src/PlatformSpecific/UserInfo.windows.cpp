@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <array>
-#include <iostream>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX

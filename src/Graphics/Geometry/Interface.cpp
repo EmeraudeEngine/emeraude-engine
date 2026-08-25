@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <iterator>
-#include <ranges>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"

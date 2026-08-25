@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <set>

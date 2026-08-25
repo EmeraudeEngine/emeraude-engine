@@ -30,7 +30,6 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <memory>
 
 /* Local inclusions for inheritances. */

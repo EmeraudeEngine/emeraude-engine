@@ -38,7 +38,6 @@
 #include <array>
 #include <memory>
 #include <span>
-#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"

@@ -26,9 +26,6 @@
 
 #include "Renderer.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <bit>
 #include <cstring>

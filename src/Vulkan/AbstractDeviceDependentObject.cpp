@@ -26,9 +26,6 @@
 
 #include "AbstractDeviceDependentObject.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Vulkan/Device.hpp"
 

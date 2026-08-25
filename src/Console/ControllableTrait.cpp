@@ -27,7 +27,6 @@
 #include "ControllableTrait.hpp"
 
 /* STL inclusions. */
-#include <iostream>
 #include <ranges>
 
 /* Local inclusions. */

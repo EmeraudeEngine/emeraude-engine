@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <array>
-#include <string>
 
 /* Local inclusions. */
 #include "Audio/Manager.hpp"

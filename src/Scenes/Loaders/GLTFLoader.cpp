@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cmath>
 #include <span>
 #include <unordered_map>
 #include <variant>

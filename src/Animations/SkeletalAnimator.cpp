@@ -27,7 +27,6 @@
 #include "SkeletalAnimator.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cmath>
 #include <utility>
 

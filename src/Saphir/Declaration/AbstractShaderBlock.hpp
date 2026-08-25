@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <map>
 
 /* Local inclusions for inheritances. */
 #include "BlockInterface.hpp"

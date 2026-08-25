@@ -26,9 +26,6 @@
 
 #include "CompressedImageResource.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "IO/IO.hpp"
 #include "PixelFactory/Color.hpp"

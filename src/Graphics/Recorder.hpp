@@ -46,7 +46,6 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "vpx/vp8cx.h"
 #include "vpx/vpx_encoder.h"
 #include "VideoFrameConverter.hpp"
 #include "Vulkan/Buffer.hpp"

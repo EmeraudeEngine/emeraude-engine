@@ -26,9 +26,6 @@
 
 #include "ImageTransferOperation.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Sync/ImageMemoryBarrier.hpp"
 

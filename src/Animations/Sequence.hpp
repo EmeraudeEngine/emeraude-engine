@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 #include <map>
 #include <string>
 

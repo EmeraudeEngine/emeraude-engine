@@ -26,9 +26,6 @@
 
 #include "InputPrimitive.hpp"
 
-/* STL inclusions. */
-#include <sstream>
-
 namespace EmEn::Saphir::Declaration
 {
 	using namespace Saphir::Keys;

@@ -28,6 +28,8 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <string>
+#include <vector>
 
 /* Local inclusions. */
 #include "WaveFactory/FileIO.hpp"

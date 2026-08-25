@@ -30,8 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Types.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Types.hpp"
 #include "PixelFactory/Color.hpp"
 
 namespace EmEn

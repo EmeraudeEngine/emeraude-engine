@@ -46,7 +46,6 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Frustum.hpp"
-#include "Math/OrientedCuboid.hpp"
 #include "Variant.hpp"
 
 namespace EmEn::Scenes

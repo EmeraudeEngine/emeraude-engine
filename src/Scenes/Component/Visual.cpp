@@ -28,7 +28,6 @@
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
-#include "Animations/SkeletonResource.hpp"
 #include "Constants.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Scenes/Scene.hpp"

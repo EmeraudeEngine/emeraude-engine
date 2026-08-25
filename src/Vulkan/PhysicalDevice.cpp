@@ -31,7 +31,6 @@
 #include <cstring>
 #include <iomanip>
 #include <iterator>
-#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */

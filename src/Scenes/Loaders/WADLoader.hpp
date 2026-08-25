@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
-#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"

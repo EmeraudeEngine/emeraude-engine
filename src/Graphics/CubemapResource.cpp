@@ -26,15 +26,11 @@
 
 #include "CubemapResource.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <numbers>
-#include <ranges>
 
 /* STL inclusions. */
 #include <cstring>

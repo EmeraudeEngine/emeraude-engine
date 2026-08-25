@@ -26,9 +26,6 @@
 
 #include "Multiple.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <array>
 #include <cstring>

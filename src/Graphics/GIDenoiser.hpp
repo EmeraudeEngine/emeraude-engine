@@ -33,7 +33,6 @@
 #include <array>
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <vector>
 
 /* Local inclusions for inheritances. */

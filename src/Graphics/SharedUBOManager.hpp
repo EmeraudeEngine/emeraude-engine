@@ -30,8 +30,6 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <array>
-#include <cstddef>
 #include <map>
 #include <memory>
 #include <mutex>

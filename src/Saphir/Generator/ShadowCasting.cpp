@@ -31,7 +31,6 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
-#include "SourceCodeParser.hpp"
 #include "Saphir/Code.hpp"
 #include "SkinningLayoutHelper.hpp"
 #include "Vulkan/Framebuffer.hpp"

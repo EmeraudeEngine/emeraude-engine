@@ -26,9 +26,6 @@
 
 #include "Types.hpp"
 
-/* STL inclusions. */
-#include <iostream>
-
 namespace EmEn::Saphir
 {
 	const char *

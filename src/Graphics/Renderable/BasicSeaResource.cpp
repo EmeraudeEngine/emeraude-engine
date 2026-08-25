@@ -26,9 +26,6 @@
 
 #include "BasicSeaResource.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Graphics/Material/StandardResource.hpp"
 #include "Resources/Container.hpp"

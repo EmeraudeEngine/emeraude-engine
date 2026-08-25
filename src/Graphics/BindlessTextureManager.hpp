@@ -33,7 +33,6 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <queue>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>

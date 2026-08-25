@@ -34,9 +34,6 @@
 #include <memory>
 #include <vector>
 
-/* Third-party inclusions. */
-#include <vulkan/vulkan.h>
-
 /* Forward declarations. */
 namespace EmEn::Graphics
 {

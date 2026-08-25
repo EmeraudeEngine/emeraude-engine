@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <memory>
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"

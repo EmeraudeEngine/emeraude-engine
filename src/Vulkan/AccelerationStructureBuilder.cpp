@@ -34,7 +34,6 @@
 #include "Queue.hpp"
 #include "Sync/Fence.hpp"
 #include "Tracer.hpp"
-#include "Utility.hpp"
 
 namespace EmEn::Vulkan
 {

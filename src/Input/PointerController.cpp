@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstddef>
-#include <ranges>
 #include <sstream>
 
 /* Third-party inclusions. */

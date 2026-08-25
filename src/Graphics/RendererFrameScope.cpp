@@ -27,7 +27,7 @@
 #include "RendererFrameScope.hpp"
 
 /* Project configuration. */
-#include "emeraude_config.hpp"
+#include "emeraude_platform.hpp"
 
 /* Local inclusions. */
 #include "Vulkan/Sync/Fence.hpp"

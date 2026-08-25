@@ -26,13 +26,9 @@
 
 #include "SoundEmitter.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <any>
 #include <memory>
-#include <string>
 
 /* Local inclusions. */
 #include "Audio/Manager.hpp"

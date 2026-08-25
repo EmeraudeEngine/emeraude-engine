@@ -29,9 +29,6 @@
 /* STL inclusions. */
 #include <sstream>
 
-/* Local inclusions. */
-#include "StageOutput.hpp"
-
 namespace EmEn::Saphir::Declaration
 {
 	using namespace Saphir::Keys;

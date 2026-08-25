@@ -39,7 +39,6 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Vulkan/ComputePipeline.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"

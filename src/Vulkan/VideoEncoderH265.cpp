@@ -27,7 +27,6 @@
 #include "VideoEncoderH265.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cstring>
 
 /* Local inclusions. */

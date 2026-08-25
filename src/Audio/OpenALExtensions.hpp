@@ -26,14 +26,10 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_export.hpp"
-
 /* Third-party inclusions. */
 #include "AL/al.h"
 #include "AL/alc.h"
 #include "AL/alext.h"
-#include "AL/efx-presets.h"
 #include "AL/efx.h"
 
 /* Local inclusions for usages. */

@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <bit>
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>

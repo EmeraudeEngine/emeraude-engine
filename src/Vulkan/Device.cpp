@@ -25,7 +25,7 @@
  */
 
 /* Project configuration. */
-#include "emeraude_config.hpp"
+#include "emeraude_platform.hpp"
 
 #if IS_WINDOWS
 	#define VK_USE_PLATFORM_WIN32_KHR

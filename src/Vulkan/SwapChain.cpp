@@ -27,7 +27,7 @@
 #include "SwapChain.hpp"
 
 /* Project configuration. */
-#include "emeraude_config.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #if !IS_MACOS

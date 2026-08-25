@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 #include <string>
 
 /* Local inclusions for inheritances. */

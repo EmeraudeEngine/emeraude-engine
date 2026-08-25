@@ -30,6 +30,9 @@
 #include <algorithm>
 #include <cstring>
 
+/* Third-party inclusions. */
+#include "vpx/vp8cx.h"
+
 /* Local inclusions. */
 #include "String.hpp"
 #include "PrimaryServices.hpp"

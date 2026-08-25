@@ -26,9 +26,6 @@
 
 #include "ViewMatrices2DUBO.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>

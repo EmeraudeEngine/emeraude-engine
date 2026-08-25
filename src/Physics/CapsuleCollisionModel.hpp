@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cmath>
 
 /* Local inclusions for inheritances. */
 #include "CollisionModelInterface.hpp"

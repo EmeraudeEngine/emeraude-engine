@@ -26,9 +26,6 @@
 
 #include "MultiLayerMeshResource.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Scenes/Loaders/SceneData.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"

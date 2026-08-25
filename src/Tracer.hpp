@@ -31,7 +31,6 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>

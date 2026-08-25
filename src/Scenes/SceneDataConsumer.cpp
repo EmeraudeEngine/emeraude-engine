@@ -26,9 +26,6 @@
 
 #include "SceneDataConsumer.hpp"
 
-/* STL inclusions. */
-#include <numbers>
-
 /* Local inclusions. */
 #include "Math/Vector.hpp"
 #include "Graphics/Photometry.hpp"
