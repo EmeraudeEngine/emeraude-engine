@@ -1458,6 +1458,33 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 | **DepthOfField** | `Effects/Framebuffer/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
 | **ToneMapping** | `Effects/Framebuffer/ToneMapping.hpp/cpp` | Multi-pass (auto-exposure chain) | HDR, **camera-materialized** |
 | **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | 2-pass (Occlusion+EMA ping-pong → RadialBlur); IGN-dithered march, jitter-compensated mask, `temporalAlpha` 0.2 (sub-pixel sources rasterize jitter-unstable — caution-points § dash train) | Depth, HDR |
+
+> [!CAUTION]
+> **`VolumetricLight` is NOT a volumetric effect, and its settings keys are an OVERRIDE, not a
+> default.** It is the screen-space radial-blur god ray (Mitchell, GPU Gems 3): the occlusion mask
+> is a depth threshold at 0.9999 — "this pixel is sky" — and the second pass marches in SCREEN space
+> toward the sun's projected position. `density` is a screen-space step multiplier, `decay` an ad-hoc
+> geometric falloff, and `exposure` an arbitrary gain converting the light's **LUX** into the **nits**
+> buffer. **There is no participating medium anywhere in it**: no scattering coefficient, no phase
+> function, no height profile, and nothing shared with `AtmosphericFog`'s.
+>
+> ⚠️ Its keys (`Core/Graphics/VolumetricLight/{Density,Decay,Exposure,SampleCount,TemporalAlpha}`)
+> are read with `settings.get(key, m_parameters.x)` — **`get()`, not `getOrSetDefault()`, and the
+> CURRENT parameter as the fallback**. This deliberately breaks the TAA/MotionBlur contract, where a
+> setting overrides the constructor and registers itself in the file. Five demos pass deliberately
+> tuned values (Citadel 1.2/0.97/0.12/96, Liminal 0.6/0.98/0.12/96, LightAndShadowDebug and
+> BasicScenery 0.8/0.98/0.12/64) and an engine-wide default would **silently double their god rays**
+> (exposure 0.12 against a 0.25 default); worse, `getOrSetDefault` would let whichever demo runs
+> FIRST write its own values into a key the other seven then inherit. An absent key must change
+> nothing.
+>
+> Verified: with no key the frame sits at 580 k differing pixels against a 634 k run-to-run noise
+> floor — below it, so nothing moved; with `Exposure = 1.0` the sun-facing mean goes 188.4 → 240.5.
+>
+> **The keys exist to make this effect comparable at runtime**, because it had none at all while
+> eight demos used it, and the world-space single-scattering pass meant to replace it needs an A/B
+> that does not require a rebuild. Every one of these knobs becomes meaningless the day the medium
+> is real.
 | **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
 | **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |

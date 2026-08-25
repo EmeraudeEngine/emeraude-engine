@@ -598,6 +598,25 @@ namespace EmEn
 			constexpr auto GraphicsMotionBlurSoftDepthExtentKey{"Core/Graphics/MotionBlur/SoftDepthExtent"};
 			constexpr auto DefaultGraphicsMotionBlurSoftDepthExtent{0.05F};
 
+			/* Volumetric light — the SCREEN-SPACE radial-blur god rays (Mitchell, GPU Gems 3).
+			 * ⚠️ These are radial-blur tuning knobs, NOT a participating medium: 'density' is a
+			 * screen-space step multiplier and 'exposure' an arbitrary gain that converts the
+			 * light's LUX into the nits buffer. A world-space single-scattering pass sharing the
+			 * atmosphere's medium would make all of them meaningless — they are exposed so the two
+			 * implementations can be compared at runtime without a rebuild, which is the only
+			 * reason this effect had no settings key for so long. */
+			constexpr auto GraphicsVolumetricLightDensityKey{"Core/Graphics/VolumetricLight/Density"};
+			constexpr auto DefaultGraphicsVolumetricLightDensity{1.0F};
+			constexpr auto GraphicsVolumetricLightDecayKey{"Core/Graphics/VolumetricLight/Decay"};
+			constexpr auto DefaultGraphicsVolumetricLightDecay{0.975F};
+			constexpr auto GraphicsVolumetricLightExposureKey{"Core/Graphics/VolumetricLight/Exposure"};
+			constexpr auto DefaultGraphicsVolumetricLightExposure{0.25F};
+			constexpr auto GraphicsVolumetricLightSampleCountKey{"Core/Graphics/VolumetricLight/SampleCount"};
+			constexpr auto DefaultGraphicsVolumetricLightSampleCount{64U};
+			/* EMA weight of the occlusion mask: 1 = no accumulation, 0.2 ~= 8 frames. */
+			constexpr auto GraphicsVolumetricLightTemporalAlphaKey{"Core/Graphics/VolumetricLight/TemporalAlpha"};
+			constexpr auto DefaultGraphicsVolumetricLightTemporalAlpha{0.2F};
+
 			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
 			 * focal length, focus) belong to the active camera (physical camera model,
 			 * Scenes::Component::Camera), NOT to the settings. */

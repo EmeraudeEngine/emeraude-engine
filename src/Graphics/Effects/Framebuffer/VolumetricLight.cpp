@@ -34,7 +34,9 @@
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "PrimaryServices.hpp"
 #include "Scenes/LightSet.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -196,6 +198,29 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	VolumetricLight::create (uint32_t width, uint32_t height) noexcept
 	{
 		auto & renderer = this->renderer();
+
+		/* Runtime OVERRIDES, absent by default. This effect had no settings key at all while EIGHT
+		 * demos instantiated it with hand-tuned constants, so nothing about it could be A/B-ed at
+		 * runtime — including against the world-space single-scattering pass meant to replace it.
+		 *
+		 * ⚠️ get(), NOT getOrSetDefault(), and the CURRENT parameter as the default. The TAA and
+		 * MotionBlur contract (settings override the constructor, and register themselves in the
+		 * file) is wrong here: five demos pass deliberately tuned values — Citadel 1.2/0.97/0.12/96,
+		 * Liminal 0.6/0.98/0.12/96, LightAndShadowDebug and BasicScenery 0.8/0.98/0.12/64 — and an
+		 * engine-wide default would silently double their god rays (exposure 0.12 vs 0.25). Worse,
+		 * getOrSetDefault would let the FIRST demo run write its own values into a key the other
+		 * seven then inherit. An absent key must change nothing; only a key the owner deliberately
+		 * created takes over.
+		 *
+		 * ⚠️ None of these describes a participating medium: 'density' is a screen-space step
+		 * multiplier and 'exposure' an arbitrary gain turning the light's LUX into the nits buffer.
+		 * They all become meaningless the day the medium is real. */
+		const auto & settings = renderer.primaryServices().settings();
+		m_parameters.density = settings.get< float >(GraphicsVolumetricLightDensityKey, m_parameters.density);
+		m_parameters.decay = settings.get< float >(GraphicsVolumetricLightDecayKey, m_parameters.decay);
+		m_parameters.exposure = settings.get< float >(GraphicsVolumetricLightExposureKey, m_parameters.exposure);
+		m_parameters.numSamples = settings.get< uint32_t >(GraphicsVolumetricLightSampleCountKey, m_parameters.numSamples);
+		m_parameters.temporalAlpha = settings.get< float >(GraphicsVolumetricLightTemporalAlphaKey, m_parameters.temporalAlpha);
 
 		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
 
