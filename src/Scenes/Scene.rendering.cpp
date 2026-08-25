@@ -831,6 +831,22 @@ namespace EmEn::Scenes
 		const auto & frustum = renderTarget->viewMatrices().frustum(0);
 		const auto viewDistance = renderTarget->viewDistance();
 
+		/* ⚠️⚠️ A CSM shadow map has NO meaningful camera position, so the distance test below must
+		 * not be applied to it — it emptied the map completely and was the third independent reason
+		 * a CSM light produced no shadow at all.
+		 * For every other target the "camera" is the light itself and the test is sound. A CSM
+		 * target inherits its coordinates from the light ENTITY (DirectionalLight::move() only
+		 * re-anchors the classic map), while its cascades are fitted to the MAIN CAMERA's frustum:
+		 * the two have nothing to do with each other. Measured on reflexion-debug: the sun entity
+		 * sits at (457, 762, 457), i.e. 999 m from the scene, against a viewDistance of 500 m
+		 * derived from the camera — so EVERY caster failed `distance > viewDistance` and the map
+		 * was rendered empty, frame after frame.
+		 * TODO(perf): this now walks every caster in the scene for a CSM target. The right filter is
+		 * the union of the per-cascade frustums, which viewMatrices().frustum(index) already
+		 * exposes; it is a pure optimisation and belongs in its own change, measured on a scene
+		 * dense enough to show it (reflexion-debug is not). */
+		const auto isCascaded = renderTarget->isCascadedShadowMap();
+
 		for ( const auto & component : m_sceneVisualComponents )
 		{
 			if ( component == nullptr )
@@ -886,7 +902,7 @@ namespace EmEn::Scenes
 				 * - CSM uses multiple cascade frustums; objects may be visible in any cascade */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap() && !staticEntity->isVisibleTo(frustum) ) )
+					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !isCascaded && !staticEntity->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
@@ -936,7 +952,7 @@ namespace EmEn::Scenes
 				 * - CSM uses multiple cascade frustums; objects may be visible in any cascade */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap() && !currentNode->isVisibleTo(frustum) ) )
+					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !isCascaded && !currentNode->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
