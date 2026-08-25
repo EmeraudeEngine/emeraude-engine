@@ -160,7 +160,15 @@ compensation and is gone. Callers list each face CCW around its own outward norm
 
 ⚠️ **Verify a winding by computing it, never by eye**: take the face's cross product and check it
 against the generator's own declared outward normal. That is how the 16 + 8 reversals of the Y-up
-migration were each validated.
+migration were each validated — and it is now an automatic gate,
+`loopDrivenGeneratorsWindCCWAroundTheirNormals` in emeraude-base, covering every loop-driven
+generator with `cuboid`/`plane`/`triangle` as controls.
+
+⚠️⚠️ Two traps make a naive version of that check lie, both documented in
+[`emeraude-base/src/VertexFactory/AGENTS.md`](../dependencies/emeraude-base/src/VertexFactory/AGENTS.md)
+§ *Winding convention*: triangles straddling a **normal discontinuity** carry no evidence (ignoring
+them produced 13 false positives on the arrow alone), and the check is only valid while the normals
+stay **independent of the winding** — pinned by `theWindingCheckRejectsAMirroredShape`.
 
 ### Vertical authoring for primitives
 

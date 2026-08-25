@@ -90,16 +90,23 @@ reading, so if pose C had moved, something other than the projection Y sign had 
 
 ## NOT done — the remaining work
 
-1. **`ShapeGenerator` loop-driven generators, still mirrored**: `generateSphere`, `generateCylinder`,
-   `generateDisk`, `generateTorus`, `generateCapsule`, `generateHemisphere`, `generateArrow`,
-   `generateTube` (`generateCone` and `generateAssscherCutGem` delegate and inherit the decision).
-   ⚠️ The audit found the whole file was authored mirror-wound, not just the sites the plan named —
-   twelve `emitTriangle` copies plus two `emitFace`, not three.
-   ⚠️⚠️ **NO TEST COVERS ANY OF THEM (measured 2026-08-25).** The suite pins only `triangle`, `quad`,
-   both `cuboid` overloads, `plane` and `screenQuad`, so a regression in the generators listed here
-   is silent today. **Highest-leverage next step**: extend the existing pins to them — it converts a
-   per-shape visual inspection into an automatic gate.
-   ⚠️ **This item is about WINDING. Do NOT assume it implies the UV class — measured, see 3b.**
+1. **`ShapeGenerator` loop-driven generators — ✅ WINDING MEASURED CORRECT AND LOCKED (2026-08-25).**
+   This item claimed `generateSphere`, `generateCylinder`, `generateDisk`, `generateTorus`,
+   `generateCapsule`, `generateHemisphere`, `generateArrow` and `generateTube` were *"still
+   mirrored"*. **They are not.** Measured mechanically — `cross(B-A, C-A)` against each triangle's
+   own authored vertex normals — **all nine come out 100% CCW around their outward normal.**
+   No geometry was changed.
+
+   The work was therefore to **LOCK** them, since nothing covered them:
+   `loopDrivenGeneratorsWindCCWAroundTheirNormals` gates all nine, plus `cuboid`/`plane`/`triangle`
+   as **CONTROLS** — a probe that fails a control is a broken probe, not a discovery.
+   Full rules: `emeraude-base/src/VertexFactory/AGENTS.md` § *Winding convention*.
+
+   ⚠️⚠️ **Skipping the normal-coherence filter reported 13 FALSE POSITIVES on `generateArrow` alone**,
+   reading exactly like a real mirror defect. Triangles straddling a normal discontinuity carry no
+   evidence. With the filter the arrow is 15/15 clean.
+
+   ⚠️ **This item was about WINDING only. It never implied the UV class — see 3b, measured separately.**
 2. **`generatePlane` — ✅ DONE (verified 2026-08-25).** It was a DIFFERENT failure mode from item 1:
    its winding was already correct for Y-up and only the declared normal was stale. It now reads
    `enableGlobalNormal(positiveY())` and says so in place. Pinned by
