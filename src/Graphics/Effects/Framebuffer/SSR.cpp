@@ -211,14 +211,14 @@ vec3 reconstructPosition (vec2 uv, float depth)
 	float linearZ = linearizeDepth(depth);
 	vec2 ndc = uv * 2.0 - 1.0;
 	float t = tanHalfFovY;
-	return vec3(ndc * vec2(t * aspectRatio, t) * linearZ, linearZ);
+	return vec3(ndc * vec2(abs(t) * aspectRatio, t) * linearZ, linearZ);
 }
 
 /* Project view-space position back to screen UV. */
 vec2 projectToUV (vec3 viewPos)
 {
 	float t = tanHalfFovY;
-	vec2 ndc = viewPos.xy / (viewPos.z * vec2(t * aspectRatio, t));
+	vec2 ndc = viewPos.xy / (viewPos.z * vec2(abs(t) * aspectRatio, t));
 	return ndc * 0.5 + 0.5;
 }
 
@@ -553,7 +553,7 @@ void main()
 		float linearZ = linearizeDepth(depth);
 		vec2 ndc = vUV * 2.0 - 1.0;
 		float t = tanHalfFovY;
-		vec3 viewPos = vec3(ndc.x * t * aspectRatio * linearZ,
+		vec3 viewPos = vec3(ndc.x * abs(t) * aspectRatio * linearZ,
 							ndc.y * t * linearZ, -linearZ);
 
 		/* Read view-space normal from MRT. */

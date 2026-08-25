@@ -105,7 +105,7 @@ void main()
 	vec3 cameraUp = cross(cameraRight, cameraForward);
 
 	/* Unit ray direction in world space. */
-	vec3 rawDir = cameraRight * (ndc.x * t * aspectRatio) + cameraUp * (ndc.y * t) + cameraForward;
+	vec3 rawDir = cameraRight * (ndc.x * abs(t) * aspectRatio) + cameraUp * (ndc.y * t) + cameraForward;
 	vec3 rayDir = normalize(rawDir);
 
 	bool isSky = (depth >= 0.9999);
@@ -132,7 +132,7 @@ void main()
 		float linearZ = (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
 
 		/* Reconstruct world position for accurate ray length. */
-		float vx = ndc.x * t * aspectRatio * linearZ;
+		float vx = ndc.x * abs(t) * aspectRatio * linearZ;
 		float vy = ndc.y * t * linearZ;
 		vec3 worldPos = cameraPosition + cameraRight * vx + cameraUp * vy + cameraForward * linearZ;
 		effectiveLength = min(length(worldPos - cameraPosition), fogMaxDistance);

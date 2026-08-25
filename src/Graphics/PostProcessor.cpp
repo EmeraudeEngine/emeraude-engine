@@ -1120,7 +1120,20 @@ namespace EmEn::Graphics
 		 * information it claims to protect.
 		 * NEGATIVE today ([Col1Row1] < 0, world Y-up): the projection carries the Y flip that
 		 * reconciles the Y-up world with Vulkan's Y-down NDC. It went negative on its own at the
-		 * Y-up flip and all nine reconstruction sites followed, with no shader edit. */
+		 * Y-up flip and all nine reconstruction sites followed, with no shader edit.
+		 *
+		 * ⚠️⚠️ THE OTHER HALF OF THE CONTRACT, and it was violated for weeks: the sign belongs to
+		 * Y ALONE. The projection is `[Col0Row0] = a/aspect` (POSITIVE) against `[Col1Row1] = -a`,
+		 * so a consumer must reconstruct X from the MAGNITUDE — `ndc.x * abs(tanHalfFovY) * aspect`
+		 * — and only Y from the signed value. Writing `ndc * vec2(t * aspect, t)`, which every
+		 * consumer did, was harmless while `t` was positive and silently MIRRORED X the moment the
+		 * Y-up flip made it negative. The reconstructed positions then disagreed with the G-buffer
+		 * normals (which are not mirrored), so every reflect() and every hemisphere built from both
+		 * was wrong: SSAO and SSGI painted large dark blobs unrelated to any geometry, and SSR's
+		 * screen-space march lost most of its hits. Fixed Aug 2026 in SSAO, SSGI, SSR and
+		 * AtmosphericFog. ⚠️ ContactShadows and the RT effects were never affected — they
+		 * reconstruct through `inverseProjViewMatrix`/`invViewProj`, which inherits the flip for
+		 * free. Prefer the matrix form in new code; if you must use this constant, X takes abs(). */
 		const auto projectionYSign = mainRT->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 

@@ -78,7 +78,7 @@ vec3 reconstructPosition (vec2 uv, float depth)
 	float linearZ = linearizeDepth(depth);
 	vec2 ndc = uv * 2.0 - 1.0;
 	float t = tanHalfFovY;
-	return vec3(ndc * vec2(t * aspectRatio, t) * linearZ, linearZ);
+	return vec3(ndc * vec2(abs(t) * aspectRatio, t) * linearZ, linearZ);
 }
 
 /* Hash function for pseudo-random sampling. */
@@ -141,7 +141,7 @@ void main()
 
 		/* Project sample back to screen space. */
 		float t = tanHalfFovY;
-		vec2 sampleUV = samplePos.xy / (samplePos.z * vec2(t * aspectRatio, t)) * 0.5 + 0.5;
+		vec2 sampleUV = samplePos.xy / (samplePos.z * vec2(abs(t) * aspectRatio, t)) * 0.5 + 0.5;
 
 		/* Samples projected outside the frame have no depth information: treat them as
 		 * unoccluded. The clamp-to-edge sampler used to recycle the border depth, turning
