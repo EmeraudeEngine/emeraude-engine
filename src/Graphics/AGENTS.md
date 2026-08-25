@@ -1810,6 +1810,34 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 > Without the sign bug the saturation would have been confined to ~1.3° above the horizon.
 
 > [!CAUTION]
+> **The MEDIUM belongs to the scene, not to the effect.** `AtmosphericFog::Parameters` used to hold
+> both: a participating medium (density, height falloff, base height, max distance, chromaticity,
+> luminance) and the technique's own knobs (inscatter exponent and intensity, sky fog). The medium
+> half now lives in `Scenes::ParticipatingMedium`, owned by the `Scene` beside its
+> `EnvironmentPhysicalProperties`, and reaches effects through `FrameContext::medium` the way
+> `skyLuminance` already does.
+>
+> ⚠️ It had to move before anything else could share it: an effect's `Parameters` are private to one
+> instance and effects in a stack cannot see each other, while `AtmosphericFog` is used by ONE demo
+> and `VolumetricLight` by EIGHT. "Share the fog's medium" had no instance to share with in seven
+> cases out of eight.
+>
+> ⚠️ **No medium means NO FOG** — the effect returns the chain colour untouched and warns once. An
+> atmospheric fog without an atmosphere is a pass-through, not a fog with invented parameters; that
+> is the whole point of having exactly one place that describes the air. Every `Scene` defaults to
+> `ParticipatingMedium::Vacuum()`, so a scene that adds the effect must declare a medium.
+>
+> ⚠️ `ParticipatingMedium::density` is an extinction coefficient in **1/m**.
+> `VolumetricLight::Parameters::density` is a **screen-space step multiplier** for a radial blur and
+> has no physical unit. Same word, nothing in common — never merge them.
+>
+> Verified as a pure move on `light-and-shadow-debug`: the four band means agree to **four decimal
+> places** across the change (sky 70.1415 → 70.1416, ground 130.3641 → 130.3644), with the deviation
+> the same order as between two runs of the SAME binary. The differing-pixel count sits above a
+> single-sample noise floor (480 k against 138 k) while its maximum stays below it and no band mean
+> shifts — dithering phase, not a value change.
+
+> [!CAUTION]
 > **`fogColor` and the inscatter colour are CHROMATICITIES and must be scaled to nits.** The effect
 > composites into the ABSOLUTE-LUMINANCE buffer, before tone mapping. Until Aug 2026 the [0,1]
 > parameters were pushed raw, so the fog carried ~0.6 **nits**: with `skyFogEnabled` the sky's fog

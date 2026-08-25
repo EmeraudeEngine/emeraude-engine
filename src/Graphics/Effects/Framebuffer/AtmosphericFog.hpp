@@ -66,30 +66,24 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief User-facing atmospheric fog parameters.
 			 */
+			/**
+			 * @brief The TECHNIQUE knobs of the fog effect.
+			 * @note ⚠️ The MEDIUM is no longer here. Density, height falloff, base height, max
+			 * distance, chromaticity and luminance moved to Scenes::ParticipatingMedium, owned by
+			 * the scene and reached through FrameContext — because a medium is a property of the
+			 * WORLD, not of whichever effect integrates it, and keeping it private to one effect
+			 * instance is what made it unshareable with the volumetric pass. What remains here is
+			 * what belongs to this particular technique.
+			 */
 			struct EMEN_API Parameters
 			{
-				float density{0.02F};
-				/* POSITIVE decay rate: how fast the density falls off going UP (+Y).
-				 * The shader negates it (Y-up world) — do NOT pass a negative value. */
-				float heightFalloff{0.2F};
-				float baseHeight{0.0F};
-				float maxDistance{10000.0F};
-				/** @brief CHROMATICITY of the fog, not a luminance — see 'luminance' below. */
-				Base::PixelFactory::Color<> fogColor{0.5F, 0.6F, 0.7F};
+				/* Henyey-Greenstein-ish inscattering lobe of the sun halo: how tight it is. */
 				float inscatterExponent{8.0F};
+				/* Gain of that halo over the medium's own luminance. */
 				float inscatterIntensity{1.0F};
-				/**
-				 * @brief Absolute luminance of the fog, in NITS. Negative (the default) derives it
-				 * from the scene's main directional light: L = E · ρ / π, where E is the light's
-				 * illuminance in lux and ρ the fogColor chromaticity — the same Lambertian relation
-				 * the engine uses for a lit surface.
-				 * @note ⚠️ The engine composites into an ABSOLUTE-LUMINANCE buffer. Before Aug 2026
-				 * 'fogColor' was multiplied in raw, so a fog of 0.5-0.7 **nits** replaced the sky
-				 * with black under any real exposure — measured on light-and-shadow-debug at a
-				 * pinned sunny-16: sky mean 7.05 → 1.34 with fog on, while the ground did not move.
-				 * A [0,1] constant reaching this buffer is always a bug; give it a scale.
-				 */
-				float luminance{-1.0F};
+				/* Whether far-plane fragments are fogged too. ⚠️ Their fog amount saturates (the
+				 * fictive ray length is the medium's maxDistance), so enabling this REPLACES the
+				 * sky with the fog rather than tinting it. */
 				bool skyFogEnabled{false};
 			};
 
@@ -251,5 +245,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_fogLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_fogPerFrame;
 			std::optional< Base::PixelFactory::Color<> > m_inscatterColorOverride;
+			/* One warning per effect instance, not one per frame. */
+			bool m_missingMediumReported{false};
 	};
 }

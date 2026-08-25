@@ -34,6 +34,7 @@
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Scenes/LightSet.hpp"
+#include "Scenes/ParticipatingMedium.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -328,6 +329,24 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return inputColor;
 		}
 
+		/* ⚠️ No medium, no fog. An atmospheric fog effect without an atmosphere is a pass-through,
+		 * not a fog with invented parameters — the whole point of moving the medium to the scene is
+		 * that there is exactly ONE place that describes it. A scene that adds this effect and
+		 * forgets to declare a medium gets the chain colour untouched, and says so once. */
+		const auto * medium = context.medium;
+
+		if ( medium == nullptr )
+		{
+			if ( !m_missingMediumReported )
+			{
+				m_missingMediumReported = true;
+
+				TraceWarning{ClassId} << "The scene declares no participating medium: the atmospheric fog is a no-op. Set one with Scene::setParticipatingMedium().";
+			}
+
+			return inputColor;
+		}
+
 		const auto lightDir = mainLight->direction().normalized();
 		const auto inscatterColor = m_inscatterColorOverride.value_or(mainLight->color());
 
@@ -339,9 +358,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * mainLight->color() and mainLight->intensity().
 		 * Default derivation: L = E · ρ / π, the Lambertian relation used everywhere else in the
 		 * engine, with E the illuminance in lux and ρ carried by the chromaticity itself. */
-		const auto fogLuminance = m_parameters.luminance >= 0.0F
-			? m_parameters.luminance
-			: mainLight->illuminance() / std::numbers::pi_v< float >;
+		const auto fogLuminance = medium->resolveLuminance(mainLight->illuminance());
 
 		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
@@ -371,13 +388,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.farPlane = constants.farPlane,
 			.tanHalfFovY = tanHalfFovY,
 			.aspectRatio = aspectRatio,
-			.fogDensity = m_parameters.density,
-			.fogHeightFalloff = m_parameters.heightFalloff,
-			.fogBaseHeight = m_parameters.baseHeight,
-			.fogMaxDistance = m_parameters.maxDistance,
-			.fogColorR = m_parameters.fogColor.red() * fogLuminance,
-			.fogColorG = m_parameters.fogColor.green() * fogLuminance,
-			.fogColorB = m_parameters.fogColor.blue() * fogLuminance,
+			.fogDensity = medium->density(),
+			.fogHeightFalloff = medium->heightFalloff(),
+			.fogBaseHeight = medium->baseHeight(),
+			.fogMaxDistance = medium->maxDistance(),
+			.fogColorR = medium->scatteringAlbedo().red() * fogLuminance,
+			.fogColorG = medium->scatteringAlbedo().green() * fogLuminance,
+			.fogColorB = medium->scatteringAlbedo().blue() * fogLuminance,
 			.lightDirX = lightDir.x(),
 			.lightDirY = lightDir.y(),
 			.lightDirZ = lightDir.z(),
