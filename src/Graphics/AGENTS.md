@@ -1680,7 +1680,56 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 
 **Height fog sign convention:** `Parameters::heightFalloff` is a **POSITIVE decay rate** — how fast density falls off going **UP** (`+Y`). The shader NEGATES it (`float k = -fogHeightFalloff;`) before feeding `exp(k · (y − baseHeight))`. Never pass a negative value.
 
-⚠️ The negation was missing until Aug 2026, so under Y-up the fog grew **DENSER WITH ALTITUDE**. It was silent because the analytic integral below it stays valid for either sign of `k`: nothing breaks, nothing warns, the fog is simply upside down. ⚠️ The *ray-reconstruction* half of the same shader was **always sound** and needed no edit — it rides the signed `tanHalfFovY` contract and followed the flip on its own. Do not "fix" it in passing. See `docs/caution-points.md` for the Y-reconstruction pitfall.
+⚠️ The negation was missing until Aug 2026, so under Y-up the fog grew **DENSER WITH ALTITUDE**. It was silent because the analytic integral below it stays valid for either sign of `k`: nothing breaks, nothing warns, the fog is simply upside down.
+
+> [!CAUTION]
+> **This section used to claim the ray reconstruction "was always sound […] it rides the signed
+> `tanHalfFovY` contract and followed the flip on its own. Do not fix it in passing." That was
+> WRONG, and it actively told the next reader to leave a live defect alone.** The shader rides the
+> contract; the **C++ did not hand it the contract**. `execute()` recomputed
+> `std::tan(fovDeg · π / 360)` locally, without `projectionYSign` — the only site in the engine that
+> did — while `PostProcessor` publishes the signed value in `context.constants` and SSAO, SSGI and
+> SSR all forward it. The shader's own header even states "the DOWNWARD screen direction is carried
+> by the SIGN of tanHalfFovY (negative since the Y-up flip)", i.e. it documented a contract its
+> caller was breaking.
+>
+> ⚠️ **A genuine Y-up residual, unlike two others found the same week.** Before the flip
+> `projectionYSign` was `+1`, so recomputing the magnitude was *harmless*; the local recomputation
+> became wrong at the exact moment of the flip. (Contrast the point-light gobo and SSR's
+> camera-ward ray rejection, both of which `git log -S` places six months BEFORE the flip — check
+> the history before filing a sign error under a nearby migration.)
+>
+> ⚠️ **Commit `2571a4b6` claimed this file** in its signed-`tanHalfFovY` pass and delivered nothing:
+> it added `abs(t)` to the X terms, and `t` was already a positive magnitude, so the edit was a
+> **no-op**. Its own message admitted the fog was never verified by observation. A fix applied to a
+> site nobody has run is a fix you have not made.
+>
+> Measured on `light-and-shadow-debug` at a pinned sunny-16 (auto-exposure OFF), same pose
+> throughout: with the sign wrong, `exp(k · heightDiff)` overflows to `+inf` for the whole sky above
+> the horizon, `fogAmount` is exactly 1.0, and the sky is REPLACED — sky mean **207.5**, ground
+> 114.9, i.e. fog thicker with altitude. After forwarding `constants.tanHalfFovY`: sky **70.1**,
+> ground **134.7** — thinner up, thicker down, the palm's fronds legible again and the skybox back.
+> Without the sign bug the saturation would have been confined to ~1.3° above the horizon.
+
+> [!CAUTION]
+> **`fogColor` and the inscatter colour are CHROMATICITIES and must be scaled to nits.** The effect
+> composites into the ABSOLUTE-LUMINANCE buffer, before tone mapping. Until Aug 2026 the [0,1]
+> parameters were pushed raw, so the fog carried ~0.6 **nits**: with `skyFogEnabled` the sky's fog
+> amount saturates (the fictive ray length is `maxDistance`) and the sky was not fogged but
+> **overwritten with black**. Measured: sky mean 7.05 with fog off → **1.34** with fog on, while the
+> ground did not move — the fog only ever touched the sky.
+>
+> `Parameters::luminance` (nits) now carries the scale; negative, the default, derives it from the
+> scene's main directional light as `L = E · ρ / π` — the same Lambertian relation the engine uses
+> for a lit surface, with `E` the illuminance in lux and `ρ` the chromaticity. Same separation
+> `VolumetricLight` already makes between `mainLight->color()` and `mainLight->intensity()`.
+> `execute()` now also returns `inputColor` untouched when there is no directional light, instead of
+> dereferencing a null `mainDirectionalLight()`.
+>
+> ⚠️ **A [0,1] constant reaching this buffer is always a bug.** It reads black at any real exposure,
+> and the mistake is invisible in code review because the numbers look like colours.
+
+See `docs/caution-points.md` for the Y-reconstruction pitfall.
 
 **Code references:**
 - `Effects/Framebuffer/AtmosphericFog.hpp` — Parameters, FogPushConstants, API

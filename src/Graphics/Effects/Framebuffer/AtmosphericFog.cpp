@@ -304,15 +304,44 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto fY = -viewMat(2, 1);
 		const auto fZ = -viewMat(2, 2);
 
-		/* Compute tanHalfFovY and aspect ratio. */
-		const auto fovDeg = this->renderer().mainRenderTarget()->viewMatrices().fieldOfView();
-		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
+		/* ⚠️ tanHalfFovY comes from the FrameContext and is NEVER recomputed here. It is a SIGNED
+		 * contract (PostProcessor.cpp: `std::tan(...) * projectionYSign`, negative since the Y-up
+		 * flip) and the sign is what carries the downward screen direction — this shader's own
+		 * header says so. Recomputing it locally threw the sign away and handed the shader a
+		 * magnitude, inverting rayDir.y and with it the height falloff, the optical-depth integral
+		 * and the inscatter cosine: the fog grew DENSER with altitude instead of thinner, most
+		 * visibly by erasing a palm's fronds while leaving its trunk clear.
+		 * The Aug 2026 signed-contract pass added abs(t) on X here but never delivered the Y half,
+		 * because t was already a positive magnitude — the abs() was a no-op. Every other consumer
+		 * forwards the context value (SSAO.cpp, SSR.cpp); do the same. */
+		const auto tanHalfFovY = constants.tanHalfFovY;
 		const auto aspectRatio = this->renderer().mainRenderTarget()->viewMatrices().getAspectRatio();
 
 		/* Read light direction and inscatter color from LightSet. */
-		const auto mainLight = lightSet->mainDirectionalLight();
+		const auto mainLight = lightSet != nullptr ? lightSet->mainDirectionalLight() : nullptr;
+
+		if ( mainLight == nullptr )
+		{
+			/* No directional light: the fog has nothing lighting it and no direction to scatter
+			 * along. Passing the chain colour through untouched is the only honest answer —
+			 * compositing the parameters raw is what used to paint the sky black. */
+			return inputColor;
+		}
+
 		const auto lightDir = mainLight->direction().normalized();
 		const auto inscatterColor = m_inscatterColorOverride.value_or(mainLight->color());
+
+		/* PHOTOMETRIC SCALE. 'fogColor' and the light colour are CHROMATICITIES; the buffer this
+		 * effect composites into holds ABSOLUTE LUMINANCE in nits. Multiplying the chromaticity in
+		 * raw made the fog ~0.6 nits, which is black once the camera exposure is applied — and for
+		 * a sky pixel the fog amount saturates (the fictive ray length is maxDistance), so the sky
+		 * was REPLACED by that black. Same separation VolumetricLight already makes between
+		 * mainLight->color() and mainLight->intensity().
+		 * Default derivation: L = E · ρ / π, the Lambertian relation used everywhere else in the
+		 * engine, with E the illuminance in lux and ρ carried by the chromaticity itself. */
+		const auto fogLuminance = m_parameters.luminance >= 0.0F
+			? m_parameters.luminance
+			: mainLight->illuminance() / std::numbers::pi_v< float >;
 
 		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
@@ -346,16 +375,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.fogHeightFalloff = m_parameters.heightFalloff,
 			.fogBaseHeight = m_parameters.baseHeight,
 			.fogMaxDistance = m_parameters.maxDistance,
-			.fogColorR = m_parameters.fogColor.red(),
-			.fogColorG = m_parameters.fogColor.green(),
-			.fogColorB = m_parameters.fogColor.blue(),
+			.fogColorR = m_parameters.fogColor.red() * fogLuminance,
+			.fogColorG = m_parameters.fogColor.green() * fogLuminance,
+			.fogColorB = m_parameters.fogColor.blue() * fogLuminance,
 			.lightDirX = lightDir.x(),
 			.lightDirY = lightDir.y(),
 			.lightDirZ = lightDir.z(),
 			.inscatterExponent = m_parameters.inscatterExponent,
-			.inscatterColorR = inscatterColor.red(),
-			.inscatterColorG = inscatterColor.green(),
-			.inscatterColorB = inscatterColor.blue(),
+			.inscatterColorR = inscatterColor.red() * fogLuminance,
+			.inscatterColorG = inscatterColor.green() * fogLuminance,
+			.inscatterColorB = inscatterColor.blue() * fogLuminance,
 			.inscatterIntensity = m_parameters.inscatterIntensity,
 			.skyFogEnabled = m_parameters.skyFogEnabled ? 1.0F : 0.0F
 		};
