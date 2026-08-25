@@ -2276,6 +2276,11 @@ namespace EmEn::Graphics
 			}
 
 			currentFrameScope.declareSemaphore(shadowMap->semaphore(), true);
+
+			/* NOTE: Shadow maps were the only targets never marking themselves, so
+			 * hasBeenRendered() answered "never" for a map that renders every single frame — a
+			 * false negative that sent a CSM investigation chasing a phantom empty map. */
+			shadowMap->markRendered();
 		});
 	}
 
