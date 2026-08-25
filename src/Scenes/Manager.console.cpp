@@ -35,7 +35,9 @@
 #include "Component/Camera.hpp"
 #include "Component/Microphone.hpp"
 #include "Component/Visual.hpp"
+#include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
@@ -935,6 +937,120 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Returns node info as JSON. Usage: getNode(name)");
+
+		this->bindCommand("addTexturedShape", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.size() < 6 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: addTexturedShape(shape, imageName, entityName, x, y, z [, size]) — shapes: sphere, cuboid, plane, cylinder, cone, torus, disk, capsule, hemisphere");
+
+				return false;
+			}
+
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto shapeName = arguments[0].asString();
+			const auto imageName = arguments[1].asString();
+			const auto entityName = arguments[2].asString();
+			const auto size = arguments.size() > 6 ? arguments[6].asFloat() : 1.0F;
+
+			/* ⚠️ Resource names carry the shape, the size AND the image: two calls that differ in any
+			 * of them must not silently serve each other's cached resource. */
+			const auto suffix = shapeName + "-" + std::to_string(size) + "-" + imageName;
+
+			/* ⚠️ SYNCHRONOUS on purpose. The unsuffixed getOrCreateResource() runs its factory on the
+			 * thread pool, which for a console command means the caller gets a success reply before
+			 * anything exists — and the factory would outlive the locals it captured. These are small
+			 * procedural assets, so blocking here is the correct trade. */
+			const auto material = m_resourceManager.container< Graphics::Material::StandardResource >()
+				->getOrCreateResourceSync("ConsoleUV-" + imageName, [this, &imageName] (Graphics::Material::StandardResource & newMaterial) {
+					const auto texture = m_resourceManager.container< Graphics::TextureResource::Texture2D >()->getResource(imageName);
+
+					if ( texture == nullptr || !newMaterial.setAlbedoComponent(texture) )
+					{
+						return newMaterial.setManualLoadSuccess(false);
+					}
+
+					return newMaterial.setManualLoadSuccess(true);
+				});
+
+			if ( material == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to build a material from image '" << imageName << "' !");
+
+				return false;
+			}
+
+			/* Texture coordinates are the whole point of this command, so they are requested
+			 * explicitly rather than left to whatever the default happens to be. */
+			const Graphics::Geometry::ResourceGenerator generator{m_resourceManager, Graphics::Geometry::EnableTangentSpace | Graphics::Geometry::EnablePrimaryTextureCoordinates};
+
+			std::shared_ptr< Graphics::Geometry::IndexedVertexResource > geometry;
+
+			if ( shapeName == "sphere" ) { geometry = generator.sphere(size, 32, 16, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "cuboid" ) { geometry = generator.cuboid(size, size, size, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "plane" ) { geometry = generator.plane(size, size, 1, 1, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "cylinder" ) { geometry = generator.cylinder(size, size, size * 2.0F, 32, 4, {}, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "cone" ) { geometry = generator.cone(size, size * 2.0F, 32, 4, {}, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "torus" ) { geometry = generator.torus(size, size * 0.3F, 32, 32, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "disk" ) { geometry = generator.disk(size, size * 0.4F, 32, 1, Base::VertexFactory::CapUVMapping::Planar, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "capsule" ) { geometry = generator.capsule(size * 0.5F, size * 2.0F, 32, 16, "ConsoleUVGeo-" + suffix); }
+			else if ( shapeName == "hemisphere" ) { geometry = generator.hemisphere(size, 32, 16, "ConsoleUVGeo-" + suffix); }
+			else
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unknown shape '" << shapeName << "' ! Known: sphere, cuboid, plane, cylinder, cone, torus, disk, capsule, hemisphere");
+
+				return false;
+			}
+
+			if ( geometry == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to generate the '" << shapeName << "' geometry !");
+
+				return false;
+			}
+
+			const auto mesh = m_resourceManager.container< Graphics::Renderable::MultiLayerMeshResource >()
+				->getOrCreateResourceSync("ConsoleUVMesh-" + suffix, [&geometry, &material] (Graphics::Renderable::MultiLayerMeshResource & meshResource) {
+					return meshResource.load(geometry, material);
+				});
+
+			if ( mesh == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "Failed to build the mesh !");
+
+				return false;
+			}
+
+			const Base::Math::Vector< 3, float > position{arguments[3].asFloat(), arguments[4].asFloat(), arguments[5].asFloat()};
+			auto entity = m_activeScene->createStaticEntity(entityName, position);
+
+			if ( entity == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to create entity '" << entityName << "' !");
+
+				return false;
+			}
+
+			/* Lit, like addMesh: a UV check must be readable in the scene it lives in. ⚠️ In a scene
+			 * with no light the shape renders BLACK — that is a missing light, not a broken UV. */
+			if ( entity->componentBuilder< Component::Visual >(entityName + "Visual").setup([] (auto & component) {
+				component.getRenderableInstance()->enableLighting();
+			}).build(mesh) == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "Failed to attach the visual !");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "'" << shapeName << "' textured with '" << imageName << "' added as '" << entityName << "'.");
+
+			return true;
+		}, "Spawns a generated shape textured with a data-store image — the tool for inspecting UV mapping. Usage: addTexturedShape(shape, imageName, entityName, x, y, z [, size])");
 
 		this->bindCommand("getNodePhysics", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
