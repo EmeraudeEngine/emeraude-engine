@@ -194,6 +194,15 @@ configurable on purpose — the reasons live with the flag's contract in
 > before Jul 2026, and still does not light correctly after the three fixes below.** Prefer the
 > classic constructor (`shadowMapResolution`, `coverageSize`) until this is closed.
 >
+> **Aug 2026 — the two remaining causes are now identified (defects 4a and 4b below) and the
+> "parked" note is lifted: the CSM ground-up review is a scheduled chantier, owner-approved.** The
+> cause originally written for defect #4 was WRONG; do not act on it. A ground-up review must also
+> add what has never existed in this path: texel snapping (the camera-motion shimmer), inter-cascade
+> blending, a per-cascade depth bias, `depthClamp` on the cast pass, and a single source of truth for
+> the light-space transform (today it is computed at three sites that must agree — see
+> `DirectionalLight::updateLightSpaceMatrix()`, `DirectionalLight::move()` and
+> `ViewMatrices2DUBO::updateOrthographicViewProperties()`).
+>
 > `Toolkit::generateDirectionalLight` selects CSM purely by ARGUMENT COUNT — `(name, colour, lux,
 > 2048, 4, 0.5F)` is CSM, `(name, colour, lux, 2048, 140.0F)` is the classic map. The two are
 > easy to confuse and the failure is silent.
@@ -205,7 +214,9 @@ configurable on purpose — the reasons live with the flag's contract in
 | 1 | `Scene::prepareRenderPassTypes()` never emitted `DirectionalLightPassCSM`, while `renderLightedSelection()` selects it as soon as `light->usesCSM()` | Program lookup missed at draw time → the whole directional pass was skipped. No diffuse, no specular, NO shadow. Only the ambient pass survived, so the scene looked flatly ambient-lit | **FIXED** |
 | 2 | `generateCSMShadowMapCode()` emitted `ubView.viewMatrix`, which the 2D view block does not declare (the view matrix travels as a PUSH CONSTANT, vertex stage only) | The CSM fragment shader could not compile. `setBroken()` on the instance then removed the renderable from rendering entirely — a disappearing ground and a frozen animated material | **FIXED** — reads `svPositionViewSpace.z`, requested `ToNextStage` in all four light generators |
 | 3 | `LightSet::initialize()` sized the shared directional UBO on the CLASSIC block (~120 B) while a CSM light always uploads the CSM block (324 B) | Cascade splits, cascade count, shadow bias and the light's own colour / direction / intensity were truncated away and never reached the GPU | **FIXED** — sized on `max(classic, CSM)` |
-| 4 | The CSM block's colour / direction / intensity are written **only** inside `DirectionalLight::updateCascades()`, which returns early when `m_shadowMap == nullptr` | Measured live after fixes 1-3: the ground still receives no sun from a CSM light. Switching the same scene to the classic constructor lights it correctly — an A/B on `water-world` with everything else unchanged | **OPEN, PARKED BY OWNER DECISION** (Jul 2026) — the classic map is the right tool for the scenes at hand and the investigation was closed deliberately. Do NOT relaunch the light-UBO host readback without a new reason. |
+| 4 | ~~The CSM block's colour / direction / intensity are written **only** inside `DirectionalLight::updateCascades()`, which returns early when `m_shadowMap == nullptr`~~ **RE-ATTRIBUTED Aug 2026 — the cause below is the real one** | Measured live after fixes 1-3: the ground still receives no sun from a CSM light. Switching the same scene to the classic constructor lights it correctly — an A/B on `water-world` with everything else unchanged | **OPEN** — cause identified (see 4a / 4b), fix not yet written |
+| 4a | `updateCascades()` fills `m_CSMBuffer` every frame but **never calls `requestVideoMemoryUpdate()`**, and `AbstractLightEmitter::updateVideoMemory()` uploads nothing without that flag. The early return is NOT the cause: when `shadowMapResolution > 0` the map exists and the function runs to completion | The only upload ever performed is the one from `createOnHardware()`, at a point where `updateCascades()` has not run yet and `m_CSMBuffer` is **all zeros** — black colour, zero intensity, null matrices. Hence "no light at all", permanently, for a STATIC light | **OPEN** — falsifiable prediction that distinguishes this cause from any other: a CSM light in **continuous motion** should light correctly, because `move()` raises the flag every frame and publishes the buffer filled on the previous frame |
+| 4b | `ViewMatricesCascadedUBO::computeCascadeProjection()` passes `minZ - margin` / `maxZ + margin` as the ortho near/far, but those are **view-space z coordinates** (negative in front of the camera) while `orthographicProjection()` expects positive **distances** | Cascade depth lands outside [0,1]: casters are clipped out of the map at render time, and at sampling time the `projCoords.z >= 0 && <= 1` guard fails, leaving `shadowFactor = 1.0`. No shadow, ever — independently of 4a | **OPEN** — correct bounds are `near = -maxZ - margin`, `far = -minZ + margin` (sign **and** order inverted). Note `frustumCenter` is computed in the same function and never used: the light camera stays at the world origin, contrary to its own comment |
 
 ### The CSM ⊕ colour-projection contract is now enforced in code
 
@@ -413,8 +424,9 @@ Shadow map images follow this layout progression:
 | Setting Key | Type | Default | Description |
 |-------------|------|---------|-------------|
 | `GraphicsShadowMappingEnabledKey` | bool | true | Global shadow mapping enable |
-| `GraphicsShadowMappingPCFEnabledKey` | bool | true | PCF soft shadows enable |
+| `GraphicsShadowMappingEnablePCFKey` | bool | **false** | PCF soft shadows enable |
 | `GraphicsShadowMappingPCFMethodKey` | string | "Balanced" | PCF sampling method ("Performance", "Balanced", "Quality", "Ultra") |
-| `GraphicsShadowMappingPCFSampleKey` | int | 2 | PCF sample count (for Grid) |
+| `GraphicsShadowMappingPCFSamplesKey` | int | 2 | PCF sample count (for Grid) |
+| `GraphicsShadowMappingViewDistanceKey` | float | 5000.0 | ⚠️ **DEAD KEY** — no code reads it through `Settings`. Only the compile-time default is used, as a spot/point radius fallback (`SpotLight.hpp`, `PointLight.hpp`). Changing it in a config file does nothing |
 
 **Code reference:** `SettingKeys.hpp` - All shadow mapping setting keys

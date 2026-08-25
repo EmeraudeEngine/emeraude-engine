@@ -62,7 +62,12 @@ namespace EmEn::Scenes::Component
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution The shadow map resolution in pixels.
-			 * @param coverageSize The coverage size in world units (width/height of the shadow area).
+			 * @param coverageSize The coverage HALF-extent in world units: the shadow box spans
+			 * [-coverageSize, +coverageSize] on both axes, so the covered area is
+			 * (2 × coverageSize)² — a value of 60 covers 120 × 120 m, NOT 60 × 60. Texel density is
+			 * therefore (2 × coverageSize) / resolution. The box is centered on the WORLD ORIGIN,
+			 * not on the light and not on the camera; beyond it there is no shadow information at
+			 * all (fragments read as lit, by design — see docs/shadow-mapping.md).
 			 */
 			DirectionalLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution, float coverageSize) noexcept
 				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution},

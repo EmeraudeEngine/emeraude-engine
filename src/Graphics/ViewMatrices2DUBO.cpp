@@ -239,9 +239,13 @@ namespace EmEn::Graphics
 		m_logicState.bufferData[NearPlaneOffset] = nearDistance;
 		m_logicState.bufferData[FarPlaneOffset] = farDistance;
 
-		/* NOTE: The farDistance parameter represents the TOTAL coverage size.
-		 * We divide by 2 to get the half-size for the orthographic projection bounds.
-		 * This makes coverageSize intuitive: coverageSize=100 means a 100x100 unit area. */
+		/* NOTE: farDistance is the FULL side of the box, so halving it gives the ortho half-extent.
+		 * ⚠️ Do not read "coverageSize" into this parameter: a directional light reaches here through
+		 * getDistanceOrFar() = coverageSize × 2, i.e. coverageSize is the HALF-extent and this
+		 * farDistance is already the doubled value. A light built with coverageSize=60 lands here
+		 * with farDistance=120 and covers 120 × 120 m — the comment previously claimed
+		 * "coverageSize=100 means a 100x100 unit area", which was off by a factor of two and made
+		 * every texel-density estimate wrong in the optimistic direction. */
 		const auto halfSide = (m_logicState.bufferData[FarPlaneOffset] * 0.5F) * this->getAspectRatio();
 
 		m_logicState.projection = Matrix< 4, float >::orthographicProjection(
