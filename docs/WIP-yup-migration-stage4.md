@@ -355,12 +355,36 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    (default is the inverted-infinite invalid box, merge handles it), and
    `AbstractEntity::updateEntityProperties()` DOES reset the model, conditioned on
    `areShapeParametersOverridden()`.
-9. **Content witnesses**: Sponza's inscriptions must read CORRECTLY with no per-asset flag (compare
-   `Sponza_inscription_mirrored_stage3.png`); Doom E1M1 must NOT change orientation, only up/down;
-   Paladin's bind pose and walk cycle must agree.
-10. **The FOV round-trip re-run**: change the view distance at runtime, then re-shoot pose C — it
-    must be unchanged. The only check that catches the round-trip if the stage 1 `std::abs()` guard
-    were ever dropped.
+9. **Content witnesses — ✅ ALL THREE ACCEPTED ON SCREEN (2026-08-25, owner present).**
+
+   - **Sponza ✅** — the arch inscription reads **FALLERE NOSTRA VETANT ET FALLI PONDERA MEQVE …
+     CVM ME[RCES] … PONDERAT IPSE DE[V]S**: letters correctly formed, in order, **not mirrored**
+     (a mirrored render gives "Ǝ" and right-to-left reading). Decisive point: it reads correctly
+     with **NO per-asset flag** — `Sponza.cpp` passes a bare `LoaderOptions`, no `swapZ`. The mirror
+     is fixed at the root, not compensated.
+     Reproduce: `setPosition(-6.072286, 4.461862, 0.853897)` then
+     `lookAt(-15.878870, 3.595881, -0.901378)`.
+   - **Doom E1M1 ✅** — orientation unchanged, accepted by the owner against their own knowledge of
+     the map (no reference capture of the pre-flip state exists, so an outside eye cannot settle it).
+     Corroborated numerically: floors are **invisible from below** and visible from above, i.e. the
+     winding swap `WADLoader` legitimately KEEPS is doing its job.
+     ⚠️ A top-down capture alone proves NOTHING here — without a declared yaw a rotation and a
+     mirror are indistinguishable. Do not close this item from an overhead shot.
+   - **Paladin ✅** — sword in the **RIGHT** hand, shield on the **LEFT** arm: the canonical
+     right-handed knight, so the model is not mirrored. Upright, un-twisted skinning, walking
+     **toward** the camera (the `backwardVector()`/`setBackwardVector()` pair, whose original symptom
+     was Fox and Paladins charging the player BACKWARDS). Owner confirmed the walk cycle agrees with
+     the bind pose in motion.
+     Measured alongside: both actors sit at **Y = 0.000000** with `groundedSource = "Ground"` —
+     the foot-anchored AABB, origin at the feet, exactly as Y-up requires.
+10. **The FOV round-trip re-run — BLOCKED, no runtime affordance (checked 2026-08-25).** Change the
+    view distance at runtime, then re-shoot pose C: it must be unchanged. It is the only check that
+    catches the round-trip if the stage 1 `std::abs()` guard were ever dropped.
+    ⚠️ **Neither `Core.RendererService` nor `Core.SceneManagerService` exposes the view distance or
+    the field of view**, so this cannot be driven from the console today. Closing it needs either a
+    console command for the camera's focal length / view distance, or a demo option. Everything else
+    it depends on is ready: the compass is reachable via `toggleCompass()` and pose C is recorded at
+    the top of this file.
 
 ## Do not
 
