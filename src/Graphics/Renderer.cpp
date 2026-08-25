@@ -101,6 +101,27 @@ namespace
 	}
 
 	/**
+	 * @brief Returns the scene's participating medium, or nullptr when it declares none.
+	 * @note The medium is a property of the SCENE, like its gravity — not of whichever effect
+	 * happens to integrate it. Null when the scene is a vacuum, which is the default and therefore
+	 * what every existing scene gets: an effect reading null must behave exactly as before.
+	 * @param scene A pointer to the scene, may be nullptr.
+	 * @return const EmEn::Scenes::ParticipatingMedium *
+	 */
+	const EmEn::Scenes::ParticipatingMedium *
+	sceneParticipatingMedium (const EmEn::Scenes::Scene * scene) noexcept
+	{
+		if ( scene == nullptr )
+		{
+			return nullptr;
+		}
+
+		const auto & medium = scene->participatingMedium();
+
+		return medium.isEnabled() ? &medium : nullptr;
+	}
+
+	/**
 	 * @brief Composes the effect list of the FINAL fullscreen pass: the scene stack's
 	 * display effects (AA, sharpening) followed by the camera's lens effects.
 	 * @note Returns the camera list unchanged (no allocation) when the stack declares no
@@ -1966,7 +1987,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr));
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2172,7 +2193,7 @@ namespace EmEn::Graphics
 		{
 			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr));
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr));
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen

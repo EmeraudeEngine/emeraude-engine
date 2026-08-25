@@ -65,6 +65,7 @@
 #include "NodeController.hpp"
 #include "OrbitController.hpp"
 #include "OctreeSector.hpp"
+#include "ParticipatingMedium.hpp"
 #include "Physics/ConstraintSolver.hpp"
 #include "RenderBatch.hpp"
 #include "SceneInstanceTransforms.hpp"
@@ -950,6 +951,46 @@ namespace EmEn::Scenes
 			physicalEnvironmentProperties () noexcept
 			{
 				return m_environmentPhysicalProperties;
+			}
+
+			/**
+			 * @brief Sets the scene's participating medium — the ONE atmosphere every volumetric
+			 * consumer integrates.
+			 *
+			 * @note ⚠️ The default is a VACUUM, and it must stay one: a non-zero default would put
+			 * fog in every scene of the engine at once.
+			 *
+			 * @param medium A reference to the medium.
+			 * @return void
+			 *
+			 * @see ParticipatingMedium::ClearAir(), ParticipatingMedium::Fog() For presets.
+			 */
+			void
+			setParticipatingMedium (const ParticipatingMedium & medium) noexcept
+			{
+				m_participatingMedium = medium;
+			}
+
+			/**
+			 * @brief Returns the scene's participating medium (const).
+			 * @return const ParticipatingMedium &
+			 */
+			[[nodiscard]]
+			const ParticipatingMedium &
+			participatingMedium () const noexcept
+			{
+				return m_participatingMedium;
+			}
+
+			/**
+			 * @brief Returns the scene's participating medium (mutable).
+			 * @return ParticipatingMedium &
+			 */
+			[[nodiscard]]
+			ParticipatingMedium &
+			participatingMedium () noexcept
+			{
+				return m_participatingMedium;
 			}
 
 			/* ============================================================
@@ -2683,6 +2724,7 @@ namespace EmEn::Scenes
 			std::weak_ptr< Component::Camera > m_activeCamera;
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
+			ParticipatingMedium m_participatingMedium{ParticipatingMedium::Vacuum()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */
 			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
 			/** @brief Scene-local random float generator. */

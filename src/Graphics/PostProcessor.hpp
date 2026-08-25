@@ -57,6 +57,7 @@ namespace EmEn
 	namespace Scenes
 	{
 		class LightSet;
+		class ParticipatingMedium;
 
 		namespace Component
 		{
@@ -339,7 +340,7 @@ namespace EmEn::Graphics
 			 * background: the sky is a LIGHT SOURCE for the ray-traced GI, not just a backdrop.
 			 * @return bool
 			 */
-			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, const Scenes::ParticipatingMedium * medium) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.

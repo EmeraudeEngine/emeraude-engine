@@ -57,6 +57,7 @@ namespace EmEn
 	namespace Scenes
 	{
 		class LightSet;
+		class ParticipatingMedium;
 
 		namespace Component
 		{
@@ -298,6 +299,17 @@ namespace EmEn::Graphics
 				 * reserved slot — so this scalar also acts as the "there is a sky" flag, since
 				 * that slot falls back to the engine default cubemap. */
 				float skyLuminance{0.0F};
+				/* The scene's participating medium — the ONE atmosphere every volumetric consumer
+				 * integrates. A POINTER, not a value: this header forward-declares its Scenes
+				 * neighbours and includes no Scenes header, and a value would drag one in through
+				 * the whole post-process chain.
+				 * ⚠️ Null is the "this scene declares no medium" flag, exactly the role skyLuminance
+				 * plays for the sky — and it is also what every existing scene gets, since the Scene
+				 * default is a vacuum. An effect must behave as it did before when it reads null.
+				 * ⚠️ The medium had no owner before Aug 2026: it lived inside AtmosphericFog's
+				 * private Parameters while AtmosphericFog was used by ONE demo and VolumetricLight by
+				 * EIGHT, so nothing could share it. */
+				const Scenes::ParticipatingMedium * medium{nullptr};
 				/* Sub-pixel projection jitter of the frame being rendered, in NDC units. Zero when
 				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
 				 * centers; no history counterpart is exposed because nothing in the chain has to
