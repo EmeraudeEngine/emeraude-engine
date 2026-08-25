@@ -903,14 +903,27 @@ namespace EmEn::Scenes::Component
 		const auto coordinates = obj.getWorldCoordinates();
 		const auto velocity = obj.getWorldVelocity();
 
+		/* ⚠️ The photographic state belongs HERE, not in whatever happens to print a camera.
+		 * A console command, a trace and a crash dump must all describe the same camera the same
+		 * way — this operator is that single source of truth. */
 		return out <<
-			"Video Listener information" "\n"
+			"Camera information" "\n"
 			"Position: " << coordinates.position() << "\n"
 			"Forward: " << coordinates.forwardVector() << "\n"
 			"Velocity: " << velocity << "\n"
-			"Focal length: " << obj.focalLength() << " mm on a " << obj.sensorWidth() << " mm sensor\n"
-			"Field of view: " << obj.fieldOfView() << " degrees (derived)\n"
-			"Size of view: " << obj.distance() << "\n";
+			"--- Framing ---" "\n"
+			"Focal length: " << obj.focalLength() << " mm on a " << obj.sensorWidth() << " x " << obj.sensorHeight() << " mm sensor\n"
+			"Field of view: " << obj.fieldOfView() << " degrees (DERIVED from the focal length, never set directly)\n"
+			"View distance: " << obj.distance() << " (near " << obj.getNear() << ", far " << obj.getFar() << ")\n"
+			"Projection: " << (obj.isPerspectiveProjection() ? "perspective" : "orthographic") << (obj.isTechnicalCamera() ? ", TECHNICAL (field of view set directly)" : "") << "\n"
+			"--- Exposure ---" "\n"
+			"Auto exposure: " << (obj.isAutoExposureEnabled() ? "ON (meters the whole frame)" : "OFF (pinned)") << "\n"
+			"Triad: f/" << obj.aperture() << "  " << obj.shutterSpeed() << " s  ISO " << obj.sensitivity() << " (range " << obj.minSensitivity() << " - " << obj.maxSensitivity() << ")\n"
+			"Exposure compensation: " << obj.exposureCompensation() << " EV\n"
+			"--- Focus and lens effects ---" "\n"
+			"Auto focus: " << (obj.isAutoFocusEnabled() ? "ON" : "OFF") << ", focus distance " << obj.focusDistance() << "\n"
+			"Bloom: threshold " << obj.bloomThreshold() << ", intensity " << obj.bloomIntensity() << "\n"
+			"Effects - HDR: " << (obj.isHDREnabled() ? "on" : "off") << ", bloom: " << (obj.isBloomEnabled() ? "on" : "off") << ", depth of field: " << (obj.isDepthOfFieldEnabled() ? "on" : "off") << ", motion blur: " << (obj.isMotionBlurEnabled() ? "on" : "off") << "\n";
 	}
 
 	/**

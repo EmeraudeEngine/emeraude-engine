@@ -377,14 +377,28 @@ reading, so if pose C had moved, something other than the projection Y sign had 
      the bind pose in motion.
      Measured alongside: both actors sit at **Y = 0.000000** with `groundedSource = "Ground"` —
      the foot-anchored AABB, origin at the feet, exactly as Y-up requires.
-10. **The FOV round-trip re-run — BLOCKED, no runtime affordance (checked 2026-08-25).** Change the
-    view distance at runtime, then re-shoot pose C: it must be unchanged. It is the only check that
-    catches the round-trip if the stage 1 `std::abs()` guard were ever dropped.
-    ⚠️ **Neither `Core.RendererService` nor `Core.SceneManagerService` exposes the view distance or
-    the field of view**, so this cannot be driven from the console today. Closing it needs either a
-    console command for the camera's focal length / view distance, or a demo option. Everything else
-    it depends on is ready: the compass is reachable via `toggleCompass()` and pose C is recorded at
-    the top of this file.
+10. **The FOV round-trip re-run — ✅ PASSED (2026-08-25).** It was blocked for want of a runtime
+    affordance; the camera console commands added the same day (`Act.getCamera`, `setLens`,
+    `setViewDistance`, `setExposure`, …) unblocked it.
+
+    Protocol, on `coordinates-debug` with the compass on, pose C (`setPosition(0,0,0)` then
+    `lookAt(100,0,100)`), rendering at 2880×1620:
+
+    | capture | view distance | result |
+    |---|---|---|
+    | A | 10000 (default) | reference |
+    | B | 2500 | **2.27 %** of pixels differ (105 805 / 4 665 600) |
+    | C | 10000 (restored) | **bit-identical to A** |
+
+    ⚠️⚠️ **Both halves are needed and neither alone would do.** A ≠ B proves the change actually
+    reaches the renderer, so the test is not vacuous — that is the failure mode a naive "nothing
+    changed, therefore fine" reading would walk straight into. C = A bit-for-bit proves the
+    projection rebuild lost nothing.
+
+    ⚠️ The defect this guards against is a VERTICAL FLIP, so it is measured as one rather than
+    eyeballed: had B been the vertical mirror of A, **99.97 %** of pixels would differ, against the
+    2.27 % actually measured. The 2 % is a legitimate depth-range effect.
+    (No PIL in this environment — a ~30-line zlib + PNG-filter decoder does it in seconds.)
 
 ## Do not
 
