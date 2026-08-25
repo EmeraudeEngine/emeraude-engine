@@ -715,7 +715,16 @@ void main()
 		 * by the sky luminance — a normalized source becomes nits. The former dedicated
 		 * envCubemap binding fell back to the renderer DEFAULT cubemap when the caller
 		 * passed none (dark sky in every reflection, measured on the bench). */
-		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], vec3(reflDir.x, -reflDir.y, reflDir.z), clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
+		/* ENGINE CUBEMAP CONVENTION (Y-UP): a world direction samples the cubemap RAW. reflDir IS
+		 * a world direction — it is built from worldNormal and (worldPos - cameraPos), and it is
+		 * handed straight to rayQueryInitializeEXT against the world-space TLAS above.
+		 * ⚠️ This site kept a `vec3(D.x, -D.y, D.z)` negation until Aug 2026, long after the Y-up
+		 * flip deleted its twins in SSR, RTGI, the skybox and the LightGenerator. It survived
+		 * because it only affects the MISS path: rays that escape the scene. Measured on
+		 * `reflexion-debug --demo-options 0,5,0` with a clear-horizon sky, the mirror sphere's TOP
+		 * — where rays leave toward the sky — reflected the dark GROUND instead (luminance 85
+		 * against 174 for the real sky, blue-minus-green -2.8 against +9.6). */
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], reflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
 		float confidence = fresnel * roughnessFade;
 
 		outReflection = vec4(envColor * fresnelTint * confidence, confidence);

@@ -61,6 +61,24 @@ Each of these was worked around locally instead of being recognised as one root 
 | Cubemap sampling negating Y (`StandardResource`, `LightGenerator`, `SSR`, `RTGI`, `RTR`) | deleted (`docs/reflection-pipeline.md`) |
 | `ShapeGenerator` mirror-wound faces (16 sites + 8 loop-driven generators) | rewound CCW around each declared outward normal |
 | **Point-light shadow cubemap lookup** `vec3(-d.x, d.y, d.z)` (`LightGenerator::generate3DShadowMapCode()` + its PCF twin) | **MISSED at migration time, fixed Aug 2026** — now the plain `-d` |
+| **RTR environment fallback** `vec3(reflDir.x, -reflDir.y, reflDir.z)` (`Effects/Framebuffer/RTR.cpp`) | **MISSED at migration time, fixed Aug 2026** — now the raw world direction |
+
+> [!NOTE]
+> **Both misses were found by looking for the wrong thing, then the right thing.** The migration
+> hunted "cubemap sampling negating **Y**" and cleaned SSR, RTGI, the skybox and the material
+> reflections. The shadow lookup escaped because its stale compensation negated **X**, not Y; the
+> RTR fallback escaped because it lives in the **miss path only** — rays that escape the scene —
+> so it is invisible unless a smooth reflective surface faces open sky with readable vertical
+> structure.
+>
+> The sweep that found RTR did not search for Y negations: it searched for **any hardcoded
+> per-component sign flip on a direction** across the whole shader codegen and effect sources, then
+> checked each hit against the contract. Use that shape of search, not the symptom-shaped one.
+>
+> Measured on `reflexion-debug --demo-options 0,5,0` with a clear-horizon sky, on the mirror
+> sphere's top (where rays leave toward the sky): luminance 86.3 → 105.1 and blue-minus-green
+> −2.8 → +32.5, while the real sky, the real ground and the sphere's BOTTOM (which uses the hit
+> path and must not move) stayed put to within 0.8 and 0.1 respectively.
 
 > [!CAUTION]
 > **The shadow-cubemap lookup was missed, and the way it was missed is the lesson.** The migration
