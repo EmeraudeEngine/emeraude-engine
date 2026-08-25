@@ -1469,6 +1469,25 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 
 ### SSR (Screen-Space Reflections)
 
+> [!CAUTION]
+> **The Hi-Z pyramid's mip 0 is a DOWNSAMPLE, not a copy — and it must be a MIN.** With pixel
+> doubling on (`Core/Graphics/ScreenSpace/Reflection/PixelDoubling`), the trace target is half-res
+> while the scene depth stays full-res. `SSRHiZCopyComputeShader` used to do
+> `texelFetch(srcDepth, p)` with `p` the DESTINATION texel, which copied the source's **top-left
+> corner** 1:1 into the whole pyramid — `sourceMaxX/Y` only ever clamped, they never scaled. The
+> march then compared its rays against depths belonging to entirely different pixels.
+>
+> Measured before the fix (RenderDoc, `reflexion-debug --demo-options 0,5,0`): mip 0 held the
+> top-left quarter magnified 2×, **88 %** of its texels at the far plane, and the trace kept hits
+> on **3.19 %** of the screen (confidence is channel **B** of the trace target, not alpha —
+> `outHit = vec4(hitUV, confidence, 0.0)`). After: **41.7 %** at the far plane, matching the real
+> frame, and **13.59 %** hit rate — 4.3× more.
+>
+> ⚠️ The reduction is a MIN because a MIN pyramid is conservative; averaging depths invents a
+> surface halfway between two of them. Mip 0 is no exception. ⚠️ The defect was LATENT at full
+> resolution (the engine default), where destination and source sizes coincide — it only appears
+> once pixel doubling is enabled, which is why nothing caught it.
+
 5-pass pipeline at half resolution (except composite at full-res):
 
 1. **Trace**: Ray-marches in screen space using depth+normals, outputs hitUV + confidence

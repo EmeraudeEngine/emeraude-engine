@@ -74,7 +74,35 @@ void main()
 		return;
 	}
 
-	imageStore(dstMip, p, vec4(texelFetch(srcDepth, min(p, ivec2(sourceMaxX, sourceMaxY)), 0).r));
+	/* ⚠️ The destination is NOT necessarily the source resolution: with pixel doubling the trace
+	 * target is half-res while the scene depth is full-res. Fetching `p` directly copied the
+	 * source's top-left CORNER 1:1 into the whole pyramid — `sourceMaxX/Y` only ever clamped, they
+	 * never scaled. Measured on a RenderDoc capture: mip 0 held the top-left quarter of the scene
+	 * magnified 2x (88% of its texels at the far plane), so the march compared its rays against
+	 * depths belonging to entirely different pixels and kept hits on barely 3% of the screen.
+	 * The colour pyramid below always did this correctly; mip 0 of the Hi-Z never did.
+	 *
+	 * The reduction is a MIN, and mip 0 is no exception: averaging depths would invent a surface
+	 * halfway between two of them and break the pyramid's conservative property. */
+	ivec2 sMax = ivec2(sourceMaxX, sourceMaxY);
+	ivec2 srcSize = sMax + ivec2(1);
+	ivec2 destSize = ivec2(destWidth, destHeight);
+
+	ivec2 base = (p * srcSize) / destSize;
+	ivec2 last = min(((p + ivec2(1)) * srcSize) / destSize - ivec2(1), sMax);
+	last = clamp(last, base, base + ivec2(3));   /* 1:1 and 2:1 in practice; bounded regardless. */
+
+	float minDepth = 1.0;
+
+	for ( int y = base.y; y <= last.y; ++y )
+	{
+		for ( int x = base.x; x <= last.x; ++x )
+		{
+			minDepth = min(minDepth, texelFetch(srcDepth, ivec2(x, y), 0).r);
+		}
+	}
+
+	imageStore(dstMip, p, vec4(minDepth));
 }
 )GLSL";
 
