@@ -332,6 +332,7 @@ namespace EmEn::Scenes
 		}
 
 		inputManager.addKeyboardListener(&m_nodeController);
+		inputManager.addPointerListener(&m_orbitController);
 
 		this->wakeupAllEntities();
 
@@ -346,6 +347,10 @@ namespace EmEn::Scenes
 		m_nodeController.disconnectDevice();
 
 		inputManager.removeKeyboardListener(&m_nodeController);
+
+		m_orbitController.releaseNode();
+
+		inputManager.removePointerListener(&m_orbitController);
 
 		this->suspendAllEntities();
 	}

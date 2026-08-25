@@ -63,6 +63,7 @@
 #include "LightSet.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
+#include "OrbitController.hpp"
 #include "OctreeSector.hpp"
 #include "Physics/ConstraintSolver.hpp"
 #include "RenderBatch.hpp"
@@ -849,6 +850,42 @@ namespace EmEn::Scenes
 			NodeController & nodeController () noexcept
 			{
 				return m_nodeController;
+			}
+
+			/**
+			 * @brief Returns the orbit controller (const).
+			 *
+			 * OrbitController provides pointer-driven camera orbiting around
+			 * a fixed target point (drag to rotate, wheel to dolly).
+			 *
+			 * @return Const reference to the orbit controller.
+			 *
+			 * @note Inert until a camera node is attached with OrbitController::controlNode().
+			 *
+			 * @see OrbitController For control API.
+			 */
+			[[nodiscard]]
+			const OrbitController &
+			orbitController () const noexcept
+			{
+				return m_orbitController;
+			}
+
+			/**
+			 * @brief Returns the orbit controller (mutable).
+			 *
+			 * Use to attach/detach the camera node and configure the target,
+			 * distance and angles.
+			 *
+			 * @return Mutable reference to the orbit controller.
+			 *
+			 * @see OrbitController For control API.
+			 */
+			[[nodiscard]]
+			OrbitController &
+			orbitController () noexcept
+			{
+				return m_orbitController;
 			}
 
 			/**
@@ -2580,6 +2617,8 @@ namespace EmEn::Scenes
 			float m_LODScreenCoverageThreshold{DefaultGraphicsLODScreenCoverageThreshold};
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
+			/** @brief Pointer-driven camera orbit controller. Inert without a controlled node. */
+			OrbitController m_orbitController;
 
 			/* ============================================================
 			 * [PRIVATE: FAST ACCESS STRUCTURES]
