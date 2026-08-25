@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <shared_mutex>
@@ -64,6 +65,11 @@ namespace EmEn
 
 	class PrimaryServices;
 	class Notifier;
+}
+
+namespace EmEn::Scenes::Loaders
+{
+	class Interface;
 }
 
 namespace EmEn::Scenes
@@ -280,6 +286,18 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			bool loadSceneFromJson (const std::string & jsonString, Console::Outputs & outputs) noexcept;
+
+			/**
+			 * @brief Creates the scene loader able to read a composite asset file.
+			 * @details Single dispatch point for external composite assets (glTF, FBX, USD, WAD, ...) :
+			 * selects the loader by the file extension, case-insensitively, through
+			 * Loaders::Interface::supportsExtension(). Loaders are cheap per-load objects,
+			 * a new instance is returned on every call.
+			 * @param filepath A reference to a filesystem path.
+			 * @return std::unique_ptr< Loaders::Interface > The loader, or nullptr when no loader handles this file type.
+			 */
+			[[nodiscard]]
+			std::unique_ptr< Loaders::Interface > createSceneLoader (const std::filesystem::path & filepath) const noexcept;
 
 			/**
 			 * @brief Disables and delete a scene.

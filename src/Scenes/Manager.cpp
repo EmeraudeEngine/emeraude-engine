@@ -28,7 +28,9 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <ranges>
@@ -42,8 +44,13 @@
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/Device.hpp"
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/Loaders/FBXLoader.hpp"
+#include "Scenes/Loaders/GLTFLoader.hpp"
+#include "Scenes/Loaders/USDLoader.hpp"
+#include "Scenes/Loaders/WADLoader.hpp"
 #include "Settings.hpp"
 
 namespace EmEn::Scenes
@@ -251,6 +258,45 @@ namespace EmEn::Scenes
 		}
 
 		return true;
+	}
+
+	std::unique_ptr< Loaders::Interface >
+	Manager::createSceneLoader (const std::filesystem::path & filepath) const noexcept
+	{
+		/* NOTE: Every loader matches a dotted lowercase extension,
+		 * so the extension is normalized here once. */
+		const auto extension = '.' + IO::getFileExtension(filepath, true);
+
+		using LoaderFactory = std::unique_ptr< Loaders::Interface > (*) (Resources::Manager &);
+
+		/* NOTE: Loaders::Interface::supportsExtension() stays the single source
+		 * of truth for the handled formats, no extension list is duplicated here. */
+		constexpr std::array< LoaderFactory, 4 > factories{
+			[] (Resources::Manager & resourceManager) -> std::unique_ptr< Loaders::Interface > {
+				return std::make_unique< Loaders::GLTFLoader >(resourceManager);
+			},
+			[] (Resources::Manager & resourceManager) -> std::unique_ptr< Loaders::Interface > {
+				return std::make_unique< Loaders::FBXLoader >(resourceManager);
+			},
+			[] (Resources::Manager & resourceManager) -> std::unique_ptr< Loaders::Interface > {
+				return std::make_unique< Loaders::USDLoader >(resourceManager);
+			},
+			[] (Resources::Manager & resourceManager) -> std::unique_ptr< Loaders::Interface > {
+				return std::make_unique< Loaders::WADLoader >(resourceManager);
+			}
+		};
+
+		for ( const auto factory : factories )
+		{
+			auto loader = factory(m_resourceManager);
+
+			if ( loader->supportsExtension(extension) )
+			{
+				return loader;
+			}
+		}
+
+		return nullptr;
 	}
 
 	bool
