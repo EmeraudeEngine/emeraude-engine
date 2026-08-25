@@ -101,12 +101,11 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		/* Get a Vulkan sampler.
-		 * ⚠️ The identifier IS the cache key of Renderer::getSampler(): the setup lambda runs only
-		 * on a miss, so anything that differentiates two samplers MUST appear in the name.
-		 * Addressing comes from the asset (glTF wrapS / wrapT), so it belongs in the key —
-		 * otherwise whichever texture is created first imposes its addressing on every other one.
-		 * The default repeat/repeat case keeps the historical bare "Texture2D" name, so the common
-		 * path still shares a single sampler and the cache does not fragment. */
+		 * NOTE: The identifier is a DEBUG LABEL, not the cache key — Renderer::getSampler() keys on
+		 * the create-info content, so two textures with different addressing can no longer steal
+		 * each other's sampler and identical ones still share. Encoding the wrap modes in the name
+		 * is therefore no longer load-bearing; it is kept because it makes the Vulkan object labels
+		 * readable in a capture (a "Texture2D-cr" sampler tells you which asset asked for it). */
 		std::string samplerIdentifier{"Texture2D"};
 
 		if ( !this->usesDefaultWrapModes() )

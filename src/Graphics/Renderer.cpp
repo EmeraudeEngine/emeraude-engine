@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <bit>
 #include <cstring>
 #include <algorithm>
 #include <filesystem>
@@ -1186,14 +1187,63 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	/**
+	 * @brief Hashes the effective content of a sampler creation info.
+	 * @note Every field that differentiates two VkSampler objects is mixed in explicitly:
+	 * hashing the raw bytes would be hostage to the structure padding, and hashing a name
+	 * would reintroduce the very defect this function exists to remove.
+	 * @param createInfo A reference to the creation info.
+	 * @return size_t
+	 */
+	[[nodiscard]]
+	static
+	size_t
+	hashSamplerCreateInfo (const VkSamplerCreateInfo & createInfo) noexcept
+	{
+		size_t hash = 0;
+
+		const auto mix = [&hash] (size_t value) noexcept {
+			hash ^= value + 0x9e3779b9 + (hash << 6U) + (hash >> 2U);
+		};
+
+		/* NOTE: pNext takes part as a POINTER. No caller uses an extension chain today; should one
+		 * appear, two distinct chains hash differently (an extra sampler, never a wrong one) while
+		 * two identical chains at the same address still share — conservative in the safe direction. */
+		mix(reinterpret_cast< uintptr_t >(createInfo.pNext));
+		mix(createInfo.flags);
+		mix(createInfo.magFilter);
+		mix(createInfo.minFilter);
+		mix(createInfo.mipmapMode);
+		mix(createInfo.addressModeU);
+		mix(createInfo.addressModeV);
+		mix(createInfo.addressModeW);
+		mix(std::bit_cast< uint32_t >(createInfo.mipLodBias));
+		mix(createInfo.anisotropyEnable);
+		mix(std::bit_cast< uint32_t >(createInfo.maxAnisotropy));
+		mix(createInfo.compareEnable);
+		mix(createInfo.compareOp);
+		mix(std::bit_cast< uint32_t >(createInfo.minLod));
+		mix(std::bit_cast< uint32_t >(createInfo.maxLod));
+		mix(createInfo.borderColor);
+		mix(createInfo.unnormalizedCoordinates);
+
+		return hash;
+	}
+
 	std::shared_ptr< Sampler >
 	Renderer::getSampler (std::string_view identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
 	{
-		if ( const auto samplerIt = m_samplers.find(identifier); samplerIt != m_samplers.cend() )
-		{
-			return samplerIt->second;
-		}
-
+		/* ⚠️⚠️ THE CACHE KEY IS THE CREATE-INFO CONTENT, NEVER THE IDENTIFIER. The setup lambda
+		 * therefore runs on EVERY call — that is the point, and it is why the identifier is now a
+		 * debug label only. Keying on the name meant the FIRST caller of a name imposed its sampler
+		 * on every later one, silently, because the lambda was skipped on a cache hit: two call
+		 * sites shared the name "ShadowMap" while asking for opposite addressing, so every real
+		 * shadow map sampled with DummyShadowTexture's CLAMP_TO_EDGE instead of the
+		 * CLAMP_TO_BORDER + opaque-white border it explicitly requested. The visible symptom was a
+		 * broad black band past the edge of a directional shadow map's coverage — the border texel
+		 * ring smeared over the whole exterior. Do NOT reintroduce a name-keyed lookup, and do not
+		 * "optimize" the lambda call away: it is cheap (field assignments plus, for some callers, a
+		 * settings read) and only runs when a resource is created, never per frame. */
 		VkSamplerCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 		createInfo.pNext = nullptr;
@@ -1216,10 +1266,15 @@ namespace EmEn::Graphics
 
 		setupCreateInfo(this->primaryServices().settings(), createInfo);
 
-		std::string id{identifier};
+		const auto hash = hashSamplerCreateInfo(createInfo);
+
+		if ( const auto samplerIt = m_samplers.find(hash); samplerIt != m_samplers.cend() )
+		{
+			return samplerIt->second;
+		}
 
 		auto sampler = std::make_shared< Sampler >(m_device, createInfo);
-		sampler->setIdentifier(ClassId, id, "Sampler");
+		sampler->setIdentifier(ClassId, std::string{identifier}, "Sampler");
 
 		if ( !sampler->createOnHardware() )
 		{
@@ -1228,7 +1283,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		const auto [samplerPair, success] = m_samplers.emplace(std::move(id), sampler);
+		const auto [samplerPair, success] = m_samplers.emplace(hash, sampler);
 
 		if constexpr ( IsDebug )
 		{

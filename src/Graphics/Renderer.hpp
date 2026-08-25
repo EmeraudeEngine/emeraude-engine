@@ -1637,18 +1637,9 @@ namespace EmEn::Graphics
 			std::array< std::shared_ptr< const DirectEffectList >, 5 > m_lensEffectsSnapshots{};
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
-			/** @brief Transparent hash for heterogeneous string_view lookup in unordered_map. */
-			struct TransparentStringHash
-			{
-				using is_transparent = void;
-
-				size_t
-				operator() (std::string_view sv) const noexcept
-				{
-					return std::hash< std::string_view >{}(sv);
-				}
-			};
-			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler >, TransparentStringHash, std::equal_to<> > m_samplers;
+			/* NOTE: Keyed by the HASH OF THE CREATE-INFO CONTENT, not by the identifier passed to
+			 * getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
+			std::unordered_map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth. */
 			std::array< VkClearValue, 6 > m_clearColors{

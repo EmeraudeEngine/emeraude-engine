@@ -175,7 +175,20 @@ The `Renderer` maintains global caches for performance optimization:
 |-------|--------|------------|---------|
 | Programs | `m_programs` | `Generator::computeProgramCacheKey()` | Saphir Program cache (biggest gain) |
 | Pipelines | `m_graphicsPipelines` | `GraphicsPipeline::getHash(renderPass)` | Vulkan GraphicsPipeline cache |
-| Samplers | `m_samplers` | The **identifier string** passed to `getSampler()` | Texture sampler cache |
+| Samplers | `m_samplers` | `hashSamplerCreateInfo()` — the **content** of the `VkSamplerCreateInfo` | Texture sampler cache |
+
+> [!CAUTION]
+> **The sampler cache key is the create-info CONTENT, not the identifier.** It used to be the
+> identifier string, which meant the FIRST caller of a given name imposed its sampler on every
+> later one — silently, because `getSampler()` skipped the setup lambda on a cache hit. Two call
+> sites shared the name `"ShadowMap"` while requesting **opposite** addressing, so every real shadow
+> map sampled with `DummyShadowTexture`'s `CLAMP_TO_EDGE` instead of the `CLAMP_TO_BORDER` +
+> opaque-white border it asked for. Visible symptom: a broad black band past the edge of a
+> directional shadow map's coverage (the border texel ring smeared over the whole exterior), and a
+> point-light `samplerCube` fed a compare-enabled sampler — undefined per spec, working only by
+> driver leniency. Consequence of the fix: **the setup lambda now runs on every call**, so it must
+> stay cheap and side-effect-free, and the identifier is a debug label only — differentiating two
+> samplers no longer requires encoding anything in the name.
 
 **Statistics** available at shutdown via `programBuiltCount()`, `programsReusedCount()`, `pipelineBuiltCount()`, `pipelineReusedCount()`.
 
