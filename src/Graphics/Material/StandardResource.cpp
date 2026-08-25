@@ -1264,6 +1264,18 @@ namespace EmEn::Graphics::Material
 			m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(DefaultEmissiveStrength));
 		}
 
+		/* Optional per-material atmospheric response. Both are neutral at 1.0, so a manifest that
+		 * says nothing keeps today's behaviour exactly. */
+		if ( data.isMember(FogResponseString) )
+		{
+			this->setFogResponse(FastJSON::getValue< float >(data, FogResponseString).value_or(DefaultFogResponse));
+		}
+
+		if ( data.isMember(DoFMaskString) )
+		{
+			this->setDoFMask(FastJSON::getValue< float >(data, DoFMaskString).value_or(DefaultDoFMask));
+		}
+
 		if ( m_components.empty() )
 		{
 			TraceError{ClassId} << "No component could be read from PBR material '" << this->name() << "' resource JSON file !";
@@ -1574,6 +1586,51 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
+	const std::array< float, 80 > &
+	StandardResource::neutralMaterialProperties () noexcept
+	{
+		static const std::array< float, 80 > properties{
+				/* Albedo color (4) */
+				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
+				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
+				DefaultRoughness, DefaultMetalness, DefaultNormalScale, DefaultSpecularFactor,
+				/* IOR (1), IBLIntensity (1), AutoIlluminationAmount (1), AOIntensity (1) */
+				DefaultIOR, DefaultIBLIntensity, DefaultAutoIlluminationAmount, DefaultAOIntensity,
+				/* AutoIlluminationColor (4) */
+				DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
+				/* ClearCoatFactor (1), ClearCoatRoughness (1), SubsurfaceIntensity (1), SubsurfaceRadius (1) */
+				DefaultClearCoatFactor, DefaultClearCoatRoughness, DefaultSubsurfaceIntensity, DefaultSubsurfaceRadius,
+				/* SubsurfaceColor (4) */
+				DefaultSubsurfaceColor.red(), DefaultSubsurfaceColor.green(), DefaultSubsurfaceColor.blue(), DefaultSubsurfaceColor.alpha(),
+				/* SheenColor (4) */
+				DefaultSheenColor.red(), DefaultSheenColor.green(), DefaultSheenColor.blue(), DefaultSheenColor.alpha(),
+				/* SheenRoughness (1), Anisotropy (1), AnisotropyRotation (1), TransmissionFactor (1) */
+				DefaultSheenRoughness, DefaultAnisotropy, DefaultAnisotropyRotation, DefaultTransmissionFactor,
+				/* AttenuationColor (4) */
+				DefaultAttenuationColor.red(), DefaultAttenuationColor.green(), DefaultAttenuationColor.blue(), DefaultAttenuationColor.alpha(),
+				/* AttenuationDistance (1), ThicknessFactor (1), HeightScale (1), IridescenceFactor (1) */
+				DefaultAttenuationDistance, DefaultThicknessFactor, DefaultHeightScale, DefaultIridescenceFactor,
+				/* IridescenceIOR (1), IridescenceThicknessMin (1), IridescenceThicknessMax (1), Dispersion (1) */
+				DefaultIridescenceIOR, DefaultIridescenceThicknessMin, DefaultIridescenceThicknessMax, DefaultDispersion,
+				/* SpecularColorFactor (4) */
+				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
+				/* EmissiveStrength (1), ClearCoatNormalScale (1), Opacity (1), AlphaThreshold (1) */
+				DefaultEmissiveStrength, DefaultClearCoatNormalScale, DefaultOpacity, DefaultAlphaThreshold,
+				/* ReflectionAmount (1), RefractionAmount (1), FogResponse (1), DoFMask (1) */
+				DefaultReflectionAmount, DefaultRefractionAmount, DefaultFogResponse, DefaultDoFMask,
+				/* Per-component UV transforms (6 x vec4 = scale.xy, offset.zw), identity neutral:
+				 * Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination. */
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F,
+				1.0F, 1.0F, 0.0F, 0.0F
+					};
+
+		return properties;
+	}
+
 	void
 	StandardResource::destroy () noexcept
 	{
@@ -1589,34 +1646,7 @@ namespace EmEn::Graphics::Material
 		m_physicalSurfaceProperties.reset();
 		m_components.clear();
 		m_blendingMode = BlendingMode::None;
-		m_materialProperties = {
-			/* Albedo color (4) */
-			DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
-			/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
-			DefaultRoughness, DefaultMetalness, DefaultNormalScale, DefaultSpecularFactor,
-			/* IOR (1), IBLIntensity (1), AutoIlluminationAmount (1), AOIntensity (1) */
-			DefaultIOR, DefaultIBLIntensity, DefaultAutoIlluminationAmount, DefaultAOIntensity,
-			/* AutoIlluminationColor (4) */
-			DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
-			/* ClearCoatFactor (1), ClearCoatRoughness (1), SubsurfaceIntensity (1), SubsurfaceRadius (1) */
-			DefaultClearCoatFactor, DefaultClearCoatRoughness, DefaultSubsurfaceIntensity, DefaultSubsurfaceRadius,
-			/* SubsurfaceColor (4) */
-			DefaultSubsurfaceColor.red(), DefaultSubsurfaceColor.green(), DefaultSubsurfaceColor.blue(), DefaultSubsurfaceColor.alpha(),
-			/* SheenColor (4) */
-			DefaultSheenColor.red(), DefaultSheenColor.green(), DefaultSheenColor.blue(), DefaultSheenColor.alpha(),
-			/* SheenRoughness (1), Anisotropy (1), AnisotropyRotation (1), TransmissionFactor (1) */
-			DefaultSheenRoughness, DefaultAnisotropy, DefaultAnisotropyRotation, DefaultTransmissionFactor,
-			/* AttenuationColor (4) */
-			DefaultAttenuationColor.red(), DefaultAttenuationColor.green(), DefaultAttenuationColor.blue(), DefaultAttenuationColor.alpha(),
-			/* AttenuationDistance (1), ThicknessFactor (1), HeightScale (1), IridescenceFactor (1) */
-			DefaultAttenuationDistance, DefaultThicknessFactor, DefaultHeightScale, DefaultIridescenceFactor,
-			/* IridescenceIOR (1), IridescenceThicknessMin (1), IridescenceThicknessMax (1), Dispersion (1) */
-			DefaultIridescenceIOR, DefaultIridescenceThicknessMin, DefaultIridescenceThicknessMax, DefaultDispersion,
-			/* SpecularColorFactor (4) */
-			DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
-			/* EmissiveStrength (1), ClearCoatNormalScale (1) + padding (2) for STD140 alignment */
-			DefaultEmissiveStrength, DefaultClearCoatNormalScale, 0.0F, 0.0F
-		};
+		m_materialProperties = neutralMaterialProperties();
 		m_useParallaxOcclusionMapping = false;
 		m_descriptorSetLayout.reset();
 		m_descriptorSet.reset();
@@ -2173,6 +2203,11 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* Atmospheric response — always present in the UBO, so always declared (unlike aoIntensity,
+		 * which exists only when an AO component does). */
+		lightGenerator.declareSurfaceFogResponse(MaterialUB(UniformBlock::Component::FogResponse));
+		lightGenerator.declareSurfaceDoFMask(MaterialUB(UniformBlock::Component::DoFMask));
+
 		/* Reflectivity Map component (texture-based only) */
 		{
 			const auto componentIt = m_components.find(ComponentType::ReflectivityMap);
@@ -2436,6 +2471,10 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::AlphaThreshold);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ReflectionAmount);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionAmount);
+		/* Offsets 54-55. These two used to be implicit STD140 padding before the next vec4; making
+		 * them explicit costs nothing and keeps the GLSL block matching the C++ offsets exactly. */
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::FogResponse);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::DoFMask);
 		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWTransform);
@@ -4709,6 +4748,22 @@ namespace EmEn::Graphics::Material
 	StandardResource::setAOIntensity (float value) noexcept
 	{
 		m_materialProperties[AOIntensityOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setFogResponse (float value) noexcept
+	{
+		m_materialProperties[FogResponseOffset] = clampToUnit(value);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	void
+	StandardResource::setDoFMask (float value) noexcept
+	{
+		m_materialProperties[DoFMaskOffset] = clampToUnit(value);
 
 		m_videoMemoryUpdated = true;
 	}

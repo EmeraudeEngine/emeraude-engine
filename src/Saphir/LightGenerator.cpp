@@ -200,11 +200,25 @@ namespace EmEn::Saphir
 			emissiveMask = "0.0";
 		}
 
+		/* Fog response (A high nibble) and DoF mask (A low nibble):
+		 * both neutral at 1.0 — a surface is fully fogged and fully defocused unless it says
+		 * otherwise. ⚠️ The A channel was a hardcoded literal 1.0 until Aug 2026, so the two
+		 * nibbles were pinned at 15 and the per-material modulation that AtmosphericFog and
+		 * DepthOfField both decode faithfully did NOTHING. A contract with two consumers and no
+		 * producer reads as working code in every review. */
+		const auto fogResponse = m_surfaceFogResponse.empty()
+			? std::string{"1.0"}
+			: "clamp(" + m_surfaceFogResponse + ", 0.0, 1.0)";
+
+		const auto dofMask = m_surfaceDoFMask.empty()
+			? std::string{"1.0"}
+			: "clamp(" + m_surfaceDoFMask + ", 0.0, 1.0)";
+
 		/* Encode nibble-packed vec4:
 		 * R = (reflectivity << 4 | reserved) / 255
 		 * G = (aoResponse << 4 | shadowResponse) / 255	— shadowResponse=15 (full)
 		 * B = (bloomContrib << 4 | emissiveMask) / 255	 — bloomContrib=15 (full)
-		 * A = (fogResponse << 4 | dofMask) / 255		   — both 15 (full)
+		 * A = (fogResponse << 4 | dofMask) / 255
 		 *
 		 * ⚠️ The '+ 0.5' is LOAD-BEARING: uint() truncates, and the values reaching here are
 		 * results of float arithmetic that lands just below the intended step. A roughness-0.8
@@ -221,7 +235,7 @@ namespace EmEn::Saphir
 			"float(uint(" + reflectivity + " * 15.0 + 0.5) << 4u) / 255.0, "
 			"float((uint(" + aoResponse + " * 15.0 + 0.5) << 4u) | 15u) / 255.0, "
 			"float((15u << 4u) | uint(" + emissiveMask + " * 15.0 + 0.5)) / 255.0, "
-			"1.0)";
+			"float((uint(" + fogResponse + " * 15.0 + 0.5) << 4u) | uint(" + dofMask + " * 15.0 + 0.5)) / 255.0)";
 	}
 
 	std::string

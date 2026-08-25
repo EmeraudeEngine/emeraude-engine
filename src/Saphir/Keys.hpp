@@ -786,6 +786,12 @@ namespace EmEn::Saphir
 				constexpr auto NormalScale{"normalScale"};
 				constexpr auto ReflectionAmount{"reflectionAmount"};
 				constexpr auto RefractionAmount{"refractionAmount"};
+				/** @brief Per-material atmospheric response, packed into the material-properties
+				 * G-buffer A channel (high nibble = fog, low nibble = depth of field). 1.0 = fully
+				 * affected (the default), 0.0 = immune — HUD overlays, in-world icons and decals
+				 * that must stay crisp. */
+				constexpr auto FogResponse{"fogResponse"};
+				constexpr auto DoFMask{"dofMask"};
 				constexpr auto RefractionIOR{"refractionIOR"};
 				/* Per-component UV transform (KHR_texture_transform): vec4 = (scale.xy, offset.xy),
 				 * neutral (1,1,0,0). Applied UNCONDITIONALLY at the sampling sites. */

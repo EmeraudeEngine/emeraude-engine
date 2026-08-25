@@ -448,6 +448,10 @@ namespace EmEn::Graphics
 	constexpr auto ReflectivityMapString{"ReflectivityMap"};
 	constexpr auto DispersionString{"Dispersion"};
 	constexpr auto EmissiveStrengthString{"EmissiveStrength"};
+	/** @brief Root-level material keys for the atmospheric response packed into the
+	 * material-properties G-buffer A channel. Both default to 1.0 (fully affected). */
+	constexpr auto FogResponseString{"FogResponse"};
+	constexpr auto DoFMaskString{"DoFMask"};
 	constexpr auto SpecularKHRString{"Specular"};
 
 	/**

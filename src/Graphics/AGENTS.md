@@ -1574,6 +1574,30 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 > guaranteed non-null inside `execute()`.
 
 > [!CAUTION]
+> **The material-properties A channel had TWO consumers and NO producer until Aug 2026.**
+> `fogResponse` (high nibble) and `dofMask` (low nibble) were decoded faithfully by
+> `AtmosphericFog` and `DepthOfField` — and the pack wrote a hardcoded literal `1.0` for the whole
+> channel, so both nibbles were pinned at 15 forever and neither modulation did anything. A
+> contract with two careful readers and no writer reads as working code in every review; the only
+> way to catch it is to trace the value back to its producer.
+>
+> Both are now real material properties, following the pattern of the two live nibbles beside them
+> (`aoResponse` from `aoIntensity`, `emissiveMask` from `autoIlluminationAmount`): continuous,
+> UBO-backed, `clamp(x, 0, 1)`, authored by the root-level JSON keys `"FogResponse"` and
+> `"DoFMask"` or by `setFogResponse()` / `setDoFMask()`. **Both default to 1.0**, so a manifest
+> that says nothing keeps the previous behaviour exactly.
+>
+> ⚠️ They cost NO UBO growth: offsets 54-55 were the two STD140 padding floats before the first
+> `vec4` UV transform, implicit on the GLSL side. Declaring them explicitly fills the hole without
+> shifting a single later offset. There is no room left there — the next scalar needs a real
+> layout change.
+>
+> Verified at runtime on `light-and-shadow-debug`: with the defaults the frame sits inside the
+> scene's own run-to-run noise (646 k pixels / 33 LSB against a 634 k / 33 LSB floor from the same
+> binary twice), and forcing the ground to `FogResponse = 0` drops it to a mean of **93.60** —
+> **bit-identical to the same ground with the fog switched off entirely**.
+
+> [!CAUTION]
 > **`"Reflection": { "Type": "None" }` does NOT publish a zero reflectivity — the name is
 > misleading, and the explicit opt-out is a DIFFERENT declaration.** With `None` the parse returns
 > early, `m_useReflection` stays false, and `LightGenerator::materialPropertiesExpression()` falls

@@ -257,6 +257,32 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the variable holding the surface's atmospheric-fog response.
+			 * @note Packed into the material-properties G-buffer A channel, high nibble, and read
+			 * by AtmosphericFog. Undeclared means 1.0 — fully fogged.
+			 * @param valueVariableName A reference to a string for the GLSL variable.
+			 * @return void
+			 */
+			void
+			declareSurfaceFogResponse (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceFogResponse = valueVariableName;
+			}
+
+			/**
+			 * @brief Declares the variable holding the surface's depth-of-field response.
+			 * @note Packed into the material-properties G-buffer A channel, low nibble, and read
+			 * by DepthOfField. Undeclared means 1.0 — fully defocused.
+			 * @param valueVariableName A reference to a string for the GLSL variable.
+			 * @return void
+			 */
+			void
+			declareSurfaceDoFMask (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceDoFMask = valueVariableName;
+			}
+
+			/**
 			 * @brief Declares a per-pixel reflectivity map for the G-buffer material properties output.
 			 * @param valueVariableName The GLSL variable name of the sampled reflectivity map (luminance).
 			 * @return void
@@ -1030,6 +1056,8 @@ namespace EmEn::Saphir
 			std::string m_surfaceAutoIlluminationColor;
 			std::string m_surfaceAmbientOcclusion;
 			std::string m_surfaceAOIntensity;
+			std::string m_surfaceFogResponse;
+			std::string m_surfaceDoFMask;
 			std::string m_surfaceClearCoatFactor;
 			std::string m_surfaceClearCoatRoughness;
 			std::string m_surfaceClearCoatNormal;

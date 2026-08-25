@@ -796,6 +796,26 @@ namespace EmEn::Graphics::Material
 			void setAOIntensity (float value) noexcept;
 
 			/**
+			 * @brief Changes how much the atmospheric fog affects this surface.
+			 * @note This is a dynamic property, packed into the material-properties G-buffer
+			 * (A channel, high nibble) and read by AtmosphericFog.
+			 * @param value 1.0 = fully fogged (the default), 0.0 = immune — HUD overlays,
+			 * in-world icons and decals that must stay readable through the haze.
+			 * @return void
+			 */
+			void setFogResponse (float value) noexcept;
+
+			/**
+			 * @brief Changes how much the depth of field affects this surface.
+			 * @note This is a dynamic property, packed into the material-properties G-buffer
+			 * (A channel, low nibble) and read by DepthOfField.
+			 * @param value 1.0 = fully defocused (the default), 0.0 = stays crisp whatever the
+			 * focus distance.
+			 * @return void
+			 */
+			void setDoFMask (float value) noexcept;
+
+			/**
 			 * @brief Changes the clear coat factor.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
@@ -1472,7 +1492,8 @@ namespace EmEn::Graphics::Material
 			 * float alphaThreshold		   (offset 51) - Alpha-test cutoff (cutout mode, glTF alphaCutoff)
 			 * float reflectionAmount		 (offset 52) - Artistic reflection mix (texture/probe modes; 1.0 = BRDF-controlled)
 			 * float refractionAmount		 (offset 53) - Artistic refraction mix (texture mode; 1.0 = Fresnel-controlled)
-			 * float padding[2]			 (offset 54-55) - STD140 padding
+			 * float fogResponse			 (offset 54) - Atmospheric fog response (1 = full, 0 = immune)
+			 * float dofMask				(offset 55) - Depth-of-field response (1 = full, 0 = stays crisp)
 			 * vec4 albedoUVWTransform	  (offset 56-59) - UV transform (scale.xy, offset.zw), KHR_texture_transform
 			 * vec4 roughnessUVWTransform   (offset 60-63) - UV transform (scale.xy, offset.zw)
 			 * vec4 metalnessUVWTransform   (offset 64-67) - UV transform (scale.xy, offset.zw)
@@ -1516,6 +1537,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto AlphaThresholdOffset{51UL};
 			static constexpr auto ReflectionAmountOffset{52UL};
 			static constexpr auto RefractionAmountOffset{53UL};
+			static constexpr auto FogResponseOffset{54UL};
+			static constexpr auto DoFMaskOffset{55UL};
 			/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw).
 			 * Neutral (1,1,0,0) — applied UNCONDITIONALLY at the sampling sites, so the neutral
 			 * value MUST be the identity (same precedent as DefaultAlbedoColor/DefaultTextureFactor). */
@@ -1571,48 +1594,26 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultAlphaThreshold{0.5F}; /* glTF alphaCutoff default (cutout mode). */
 			static constexpr auto DefaultReflectionAmount{1.0F}; /* Neutral: the BRDF controls the mix (artistic override, D2). */
 			static constexpr auto DefaultRefractionAmount{1.0F}; /* Neutral: Fresnel controls the mix (artistic override, D2). */
+			static constexpr auto DefaultFogResponse{1.0F}; /* Fully affected by the atmospheric fog. */
+			static constexpr auto DefaultDoFMask{1.0F}; /* Fully affected by the depth of field. */
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
 			BlendingMode m_blendingMode{BlendingMode::None};
-			std::array< float, 80 > m_materialProperties{
-				/* Albedo color (4) */
-				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
-				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
-				DefaultRoughness, DefaultMetalness, DefaultNormalScale, DefaultSpecularFactor,
-				/* IOR (1), IBLIntensity (1), AutoIlluminationAmount (1), AOIntensity (1) */
-				DefaultIOR, DefaultIBLIntensity, DefaultAutoIlluminationAmount, DefaultAOIntensity,
-				/* AutoIlluminationColor (4) */
-				DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
-				/* ClearCoatFactor (1), ClearCoatRoughness (1), SubsurfaceIntensity (1), SubsurfaceRadius (1) */
-				DefaultClearCoatFactor, DefaultClearCoatRoughness, DefaultSubsurfaceIntensity, DefaultSubsurfaceRadius,
-				/* SubsurfaceColor (4) */
-				DefaultSubsurfaceColor.red(), DefaultSubsurfaceColor.green(), DefaultSubsurfaceColor.blue(), DefaultSubsurfaceColor.alpha(),
-				/* SheenColor (4) */
-				DefaultSheenColor.red(), DefaultSheenColor.green(), DefaultSheenColor.blue(), DefaultSheenColor.alpha(),
-				/* SheenRoughness (1), Anisotropy (1), AnisotropyRotation (1), TransmissionFactor (1) */
-				DefaultSheenRoughness, DefaultAnisotropy, DefaultAnisotropyRotation, DefaultTransmissionFactor,
-				/* AttenuationColor (4) */
-				DefaultAttenuationColor.red(), DefaultAttenuationColor.green(), DefaultAttenuationColor.blue(), DefaultAttenuationColor.alpha(),
-				/* AttenuationDistance (1), ThicknessFactor (1), HeightScale (1), IridescenceFactor (1) */
-				DefaultAttenuationDistance, DefaultThicknessFactor, DefaultHeightScale, DefaultIridescenceFactor,
-				/* IridescenceIOR (1), IridescenceThicknessMin (1), IridescenceThicknessMax (1), Dispersion (1) */
-				DefaultIridescenceIOR, DefaultIridescenceThicknessMin, DefaultIridescenceThicknessMax, DefaultDispersion,
-				/* SpecularColorFactor (4) */
-				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
-				/* EmissiveStrength (1), ClearCoatNormalScale (1), Opacity (1), AlphaThreshold (1) */
-				DefaultEmissiveStrength, DefaultClearCoatNormalScale, DefaultOpacity, DefaultAlphaThreshold,
-				/* ReflectionAmount (1), RefractionAmount (1) + padding (2) for STD140 alignment */
-				DefaultReflectionAmount, DefaultRefractionAmount, 0.0F, 0.0F,
-				/* Per-component UV transforms (6 x vec4 = scale.xy, offset.zw), identity neutral:
-				 * Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination. */
-				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F
-			};
+			/**
+			 * @brief Returns the neutral material properties.
+			 * @note ⚠️ ONE definition, deliberately. The member initialiser and destroy() each
+			 * carried their own copy of this list and they had DRIFTED: destroy()'s stopped after
+			 * ClearCoatNormalScale, so assigning it zero-filled the remaining 28 floats — opacity 0,
+			 * reflection amount 0, and every UV transform at scale 0, which collapses each texture
+			 * lookup onto a single texel. A duplicated initialiser list for a fixed-offset UBO is a
+			 * defect waiting on the next field; never reintroduce the second copy.
+			 * @return const std::array< float, 80 > &
+			 */
+			[[nodiscard]]
+			static const std::array< float, 80 > & neutralMaterialProperties () noexcept;
+
+			std::array< float, 80 > m_materialProperties{neutralMaterialProperties()};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
