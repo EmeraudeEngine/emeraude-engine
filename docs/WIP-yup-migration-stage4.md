@@ -117,13 +117,22 @@ reading, so if pose C had moved, something other than the projection Y sign had 
 3. **Y-down content authoring** in `ShapeGenerator`, pervasive: `generateTriangle`'s apex at `-Y`,
    `generateTetrahedron`'s "Y- is up", `generateOctahedron`'s top pyramid. Not winding, actual
    vertex coordinates.
-   ⚠️ **This item is partly stale — RE-VERIFY, do not trust it as written.** As of Aug 2026 the three
-   named sites all carry Y-up authoring: `generateTriangle`'s apex is at `+Y`, `generateTetrahedron`
-   says "Y+ is up: the apex sits at the +Y pole", `generateOctahedron` says "Top pyramid (Y+ is up)".
-   ⚠️⚠️ **But a comment is not evidence in this file.** `generateCuboid` carried `/* Top face (Y+) */`
-   labels through the entire Y-down era while its UV data was Y-down — the labels described intent,
-   the data described the old convention. Check the vertex coordinates themselves, or put the object
-   on screen in `geometry-debug`; never close this item on the strength of a comment.
+   ✅ **RESOLVED — MEASURED 2026-08-25, the item was indeed stale.** Not on the strength of the
+   comments (which this file rightly distrusts) but by reading the produced VERTEX COORDINATES:
+
+   | generator | Y extent | vertices at max Y | verdict |
+   |---|---|---|---|
+   | `generateTriangle` | −0.433 … **+0.433** | **1** (against 2 at the bottom) | apex at **+Y** |
+   | `generateTetrahedron` | −0.333 … **+1** | 3 (against 9) | apex at **+Y** |
+   | `generateOctahedron` | −1 … **+1** | 4 / 4 | symmetric, no bias |
+   | `generateCone` | 0 … **+2** | 17 / 17 | apex at **+Y** |
+
+   (The counts exceed the topological vertex count because flat shading duplicates a shared apex
+   once per face — 3 faces meet at the tetrahedron's apex, 16 + 1 at the cone's.)
+
+   ⚠️⚠️ **The method is the part worth keeping.** `generateCuboid` carried `/* Top face (Y+) */`
+   labels through the entire Y-down era while its UV data was Y-down: the labels described intent,
+   the data described the old convention. **Check the coordinates, never the comment.**
 3b. **UV pairing — a FOURTH defect class, missing from this plan until now.** Distinct from winding,
    from vertex coordinates and from declared normals: the `setTextureCoordinates` call still carries
    the `V` it had when `-Y` was up, so the texture renders upside down on geometry that is otherwise
