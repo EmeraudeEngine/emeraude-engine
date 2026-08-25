@@ -175,6 +175,19 @@ namespace EmEn::Scenes
 		/** @brief CSM split factor (0 = linear, 1 = logarithmic). Ignored with a classic map. */
 		float cascadeLambda{0.5F};
 
+		/**
+		 * @brief CSM coverage zoom, feeding DirectionalLight's csmScale. Ignored with a classic map.
+		 * @note 1 = the cascades span the WHOLE camera frustum; 4 = a quarter of it, and so on.
+		 * ⚠️ This is the knob that decides whether CSM shadows are VISIBLE at all, and leaving it at
+		 * 1 is almost never right: the covered depth is the camera's view distance divided by this
+		 * value, split across at most 4 cascades. On a 500 m view distance at scale 1 the last
+		 * cascade spans hundreds of metres, so an ordinary caster is sub-texel — the map holds its
+		 * shadow, the screen shows nothing, and the mode looks broken while it is merely
+		 * mis-budgeted. Pick it from the scene: covered depth = viewDistance / cascadeScale should
+		 * be about the distance at which shadows still matter to the eye.
+		 */
+		float cascadeScale{1.0F};
+
 		/** @brief Applies the ambient stage (average color + ambient illuminance). */
 		bool applyAmbient{true};
 

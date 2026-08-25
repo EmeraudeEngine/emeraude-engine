@@ -132,7 +132,7 @@ namespace EmEn::Scenes
 				}
 				else if ( options.cascadeCount > 0 )
 				{
-					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build(options.shadowMapResolution, options.cascadeCount, options.cascadeLambda);
+					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build(options.shadowMapResolution, options.cascadeCount, options.cascadeLambda, options.cascadeScale);
 				}
 				else
 				{
