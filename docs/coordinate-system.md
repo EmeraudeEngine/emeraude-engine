@@ -264,3 +264,44 @@ and any Doom/WAD-era tooling):
    verticals move
 5. **Test on a SLOPE, not on flat ground**: flat ground grounds correctly even with a wrong
    `Grid::normal`, so it proves nothing
+
+> [!CAUTION]
+> **THE FREEZE LIST — verify these, never "convert" them.** Six sites were already written Y-UP
+> before the flip, which repaired them by accident. A conscientious sweep for Y literals WILL "fix"
+> them and break them a second time:
+> `BasicSeaResource::isSubmerged` / `getDepthAt` / `getNormalAt`, the fallback in
+> `BasicGroundResource::getNormalAt`, `NodeController`'s D-Pad Up/Down, and the Player/Drone/Sun Y
+> values in the two scene JSONs of the data store.
+> **Never "fix" a Y literal you meet in isolation.** Establish what frame the surrounding code is
+> actually in first — several defects of this migration were comments asserting Y-down over code
+> that was already correct.
+
+> [!CAUTION]
+> **The `Test/512x512square-c` measurement texture is authored Y-DOWN** and prints `Top (-Y)` /
+> `Bottom (+Y)`. With the UVs correct it now shows `Top (-Y)` at the top, which is FALSE.
+> Use it for **orientation** — are the glyphs legible, upright, unmirrored? — and **never for axis
+> naming**. Re-authoring the asset to `Top (+Y)` / `Bottom (-Y)` is an owner decision, still open.
+
+## What the flip actually cost, and how it was proved
+
+Recorded because the migration's own tracking file has been deleted and these are the numbers, not
+the narrative. Everything below is measured, never inferred.
+
+| Check | Result |
+|---|---|
+| Compass, control pose (look `(+X,0,+Z)`) | **bit-identical** before and after — a vertical flip cannot move a horizontal reading |
+| Compass, diagonal pose (pitched toward `+Y`) | X+/Z+ **fall** to y=1447 where they used to **rise** to y=172 |
+| FOV round-trip (`coordinates-debug`, pose C) | view distance 10000 → 2500 moves **2.27 %** of pixels; restoring it returns a **bit-identical** image. A vertical flip would have moved **99.97 %** |
+| Physics: rest on flat ground | a 1 m sphere settles at **exactly Y = 1.000000**, velocity 0, grounded on `"Ground"` |
+| Physics: slope, generated terrain | balls rest at all different elevations and every tracked one descends; `\|v\|` stays 0.2–1.8 instead of accelerating toward 9.81, so the motion is surface-constrained, not a fall through |
+| Player eye height | body Y = 241.618469, eye Y = **243.263474** → offset **+1.645005**, against `DefaultPlayerHeight` 1.75 × 0.94 = **1.645**, eye ABOVE body |
+| Sponza inscription | reads *FALLERE NOSTRA VETANT ET FALLI PONDERA MEQVE …* correctly, letters unmirrored, with **NO per-asset flag** |
+| Paladin | sword in the RIGHT hand, shield on the LEFT: the canonical right-handed knight, so not mirrored |
+
+⚠️ **The control pose is the half that matters most**, and the same shape of argument recurs
+throughout: a check that cannot FAIL for the right reason proves nothing. If pose C had moved,
+something other than the projection's Y sign had been touched; if the FOV round-trip had shown no
+difference at all, the change had not reached the renderer and the test would have been vacuous.
+
+⚠️ Reproducing the Sponza witness: `setPosition(-6.072286, 4.461862, 0.853897)` then
+`lookAt(-15.878870, 3.595881, -0.901378)`.
