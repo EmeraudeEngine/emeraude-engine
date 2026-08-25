@@ -292,14 +292,33 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    the MUTATING `conjugate()` instead of `conjugated()`, so it never compiled on a const quaternion
    and had never been called anywhere — while the test named after it silently exercised
    `operator*` instead. Both fixed; see `emeraude-base/src/AGENTS.md`.
-8. **The physics gate, five points. Point 1 PASSED (Aug 2026), four to go**: a ball dropped on flat
-   ground comes to REST on it ✅ — `physics-debug`, a 1 kg sphere and a barrel released at Y = +25
-   both fall and settle, and two captures **6 s apart differ by 0 pixels out of 4 665 600**: no
-   jitter, no sink, no drift; a ball on a SLOPE rolls DOWNHILL — on generated terrain specifically,
-   because flat ground passes even with `Grid::normal` wrong; the player camera sits at 0.94x height
-   ABOVE the feet; a box on a StaticEntity reports `isGroundedOnEntity()`; an entity against the +Y
-   wall reports `isGroundedOnBoundary()` only at the FLOOR (⚠️ that last one needs a scene with NO
-   ground: the ground stops the body long before it can reach the Y = -boundary floor plane).
+8. **The physics gate — points 1, 2 and 3 PASSED (2026-08-25). Points 4 and 5 moved OUT of this
+   migration.** Measured with the new `Core.SceneManagerService.getNodePhysics(<node>)`, which
+   returns position, velocity, grounded and WHICH surface a body rests on.
+
+   - **1 ✅ a ball on flat ground comes to REST.** `physics-debug`: a 1 m sphere settles at
+     **exactly Y = 1.000000** — its own radius, with the ground at Y = 0 — velocity 0,
+     `groundedSource = "Ground"`. That numeric read supersedes the earlier pixel-diff evidence.
+   - **2 ✅ a ball on a SLOPE rolls DOWNHILL, on generated terrain.** `balls-of-steel`
+     (diamond-square ground): sampled balls rest at **all different elevations** (+15.25, +9.57,
+     −6.94, −15.24, −18.64, −20.30), so they followed the relief rather than a plane, and every
+     tracked ball moves **downward** — one went Y −19.5 → −33.2 over 50 s.
+     ⚠️ It is NOT free fall: `|v|` stayed between 0.2 and 1.8 instead of accelerating toward
+     9.81 m/s², and contact kept re-arming, so the motion is genuinely surface-constrained rather
+     than a body tunnelling through the ground.
+   - **3 ✅ the player camera sits at 0.94× height ABOVE the feet.** `terrain` demo: body
+     Y = 241.618469, eye Y = **243.263474**, offset **+1.645005**, against `DefaultPlayerHeight`
+     1.75 m × 0.94 = **1.645**. Exact, and the eye is ABOVE the body — under Y-down it was below.
+   - **4 and 5 — MOVED to the physics chantier (owner decision).** "A box on a StaticEntity reports
+     `isGroundedOnEntity()`" and "an entity against the wall reports `isGroundedOnBoundary()` only
+     at the FLOOR" (⚠️ that one needs a scene with NO ground, or the ground stops the body long
+     before the boundary floor). Neither depends on an axis sign, so neither belongs to this
+     migration. See `TODO.md` § PHYSICS.
+
+   ⚠️ **Staging the gate exposed a defect that had nothing to do with Y-up**: a gravity/grounded
+   circular lock froze any body that lost its support (fixed, `ddce43e5`). Two further physics
+   defects are logged in `TODO.md` § PHYSICS — NaN velocities, and bodies not settling on generated
+   terrain. **Do not fold them back into this migration.**
 
    **What made point 1 possible — the ground blocks were half-migrated.** The Y-up flip moved the
    AABB corner selection to `minY*` and left the ARITHMETIC Y-down in all three duplicated copies
