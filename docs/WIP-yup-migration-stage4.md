@@ -155,9 +155,18 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    Rules in `dependencies/emeraude-base/src/VertexFactory/AGENTS.md` § "Texture coordinate convention".
    `generateHollowedCube` is out of scope by construction (UVs parameterised per beam, not by
    world `Y`).
-4. **Terrain**: the `Inverse` flag in `TerrainResource.cpp:282` and `BasicGroundResource.cpp:215`,
-   and `"Inverse": true` in `projet-alpha.data` `demo.json:15` / `terrain_demo.json:16`. Decision
-   taken: remove it from the two JSONs, leave the code semantics. Change ONE side only.
+4. **Terrain — ✅ DONE (2026-08-25, data store `2c53edd`).** `"Inverse": true` removed from
+   `projet-alpha.data` `demo.json` and `terrain_demo.json`; the code semantics in
+   `TerrainResource.cpp` and `BasicGroundResource.cpp` are UNTOUCHED, as decided.
+   **Why one side only:** `Inverse` merely negates the displacement scale
+   (`inverse ? -scale : scale`) — it means "flip the height map", not "flip Y", so it carries no
+   convention and needed no migration. What moved is the WORLD: under Y-down a NEGATIVE displacement
+   was what pushed terrain upward, so both scenes set the flag to get hills; under Y-up a positive
+   scale already raises the ground (`Grid::m_pointHeights`, positive = higher), so the flag now digs
+   the terrain out. ⚠️ Editing BOTH sides would have cancelled out and left the terrain inverted —
+   that is the whole point of the "change ONE side only" note.
+   Verified: both files still parse as JSON, they were the only two occurrences in the data store,
+   and no C++ site sets the flag programmatically. Visual acceptance pending (hills, not a mould).
 5d. **Rendering INTO a cubemap — done (Aug 2026). THREE coupled pieces, a site nothing in this
    plan named.** `ViewMatrices3DUBO::CubemapOrientation` (each face on its own axis, ups NEGATED),
    `updatePerspectiveViewProperties()` (the Y-up projection flip UNDONE for cube faces), and
