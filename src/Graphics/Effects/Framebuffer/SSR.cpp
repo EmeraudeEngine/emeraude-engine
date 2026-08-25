@@ -311,16 +311,28 @@ void main()
 	vec3 viewDir = normalize(viewPos);
 	vec3 reflDir = reflect(viewDir, normal);
 
-	/* Rays toward the camera cannot be resolved against a single depth layer. */
-	if (reflDir.z < 0.0)
-	{
-		outHit = vec4(0.0);
-		return;
-	}
-
 	/* ---- Ray endpoints in Hi-Z space: xy in mip-0 TEXELS, z in [0,1] depth. A projective
 	 * transform maps 3D lines to lines, so linear interpolation here is exact. ---- */
-	vec3 viewEnd = viewPos + reflDir * maxDistance;
+
+	/* A ray travelling BACK toward the eye is CLIPPED to the near plane, never rejected: its
+	 * screen-space segment is perfectly marchable, and what used to fail was only the
+	 * projection of an endpoint that had crossed BEHIND the eye. The former wholesale
+	 * rejection ('reflDir.z < 0.0' -> return) discarded every reflection of the geometry
+	 * BETWEEN the surface and the camera — on a mirror sphere that is the entire near floor,
+	 * measured as a hard wall at hitUV.y = 0.578 with 67% of the hits piled against it while
+	 * the lower 42% of the screen was never reached once.
+	 * (McGuire & Mara, "Efficient GPU Screen-Space Ray Tracing", JCGT 3(4), 2014, § 3.)
+	 * A surface sitting ON the near plane clips to a zero-length ray, which the degenerate
+	 * screen-motion guard below rejects. */
+	float rayLength = maxDistance;
+
+	if (reflDir.z < 0.0)
+	{
+		/* Depth decreases along the ray: solve its near-plane crossing and stop just short. */
+		rayLength = clamp((nearPlane * 1.01 - viewPos.z) / reflDir.z, 0.0, rayLength);
+	}
+
+	vec3 viewEnd = viewPos + reflDir * rayLength;
 
 	vec3 P0 = vec3(vUV * mip0Size, centerDepth);
 	vec3 P1 = vec3(projectToUV(viewEnd) * mip0Size, delinearizeDepth(viewEnd.z));
@@ -374,7 +386,11 @@ void main()
 		vec2 tB2 = (boundary - P0.xy) * invD;
 		float tBoundary = min(tB2.x, tB2.y) + tEpsilon;
 
-		/* Parametric crossing of this cell's min-depth plane. */
+		/* Parametric crossing of this cell's min-depth plane. 1e18 means "no crossing", and
+		 * that is the CORRECT answer for a camera-ward ray (D.z < 0, reachable since the ray
+		 * is clipped instead of rejected): depth DECREASES along such a ray, so one already in
+		 * front of this cell's nearest surface can never meet it. The free-flight branch below
+		 * is then right, not a missed refinement. */
 		float tPlane = D.z > 1e-12 ? (minZ - P0.z) / D.z : 1e18;
 
 		if (P.z < minZ && tPlane >= tBoundary)
@@ -509,7 +525,13 @@ float linearizeDepth (float depth)
 
 void main()
 {
-	vec4 traceData = texture(traceTex, vUV);
+	/* texelFetch, NOT texture(): RG carry hit COORDINATES, not a filterable quantity. Trace and
+	 * resolve are both half-res today, so vUV lands exactly on a texel centre and bilinear
+	 * happens to return that texel untouched — the two are bit-identical as long as that
+	 * coupling holds. Move the resolve to full-res and bilinear would fabricate, at every
+	 * hit/miss boundary, a UV halfway toward (0,0) carried by a non-zero confidence: the
+	 * resolve would then sample the screen corner and believe it. */
+	vec4 traceData = texelFetch(traceTex, ivec2(vUV * vec2(textureSize(traceTex, 0))), 0);
 	float confidence = traceData.z;
 
 	if (confidence > 0.001)

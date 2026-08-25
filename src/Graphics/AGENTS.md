@@ -1488,6 +1488,55 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 > resolution (the engine default), where destination and source sizes coincide — it only appears
 > once pixel doubling is enabled, which is why nothing caught it.
 
+> [!CAUTION]
+> **A camera-ward ray is CLIPPED to the near plane, never rejected.** The trace used to bail out
+> on `reflDir.z < 0.0` ("rays toward the camera cannot be resolved against a single depth layer").
+> That threw away every reflection of the geometry sitting **between the surface and the eye** —
+> on a mirror sphere, the entire near floor. Only the *projection* of an endpoint that crossed
+> behind the eye was ill-defined; the screen-space segment itself is perfectly marchable, so the
+> ray length is now solved against the near plane instead (McGuire & Mara, *Efficient GPU
+> Screen-Space Ray Tracing*, JCGT 3(4), 2014, § 3).
+>
+> Measured (RenderDoc, `reflexion-debug --demo-options 0,5,0`): the sphere's hits occupied
+> `hitUV.y ∈ [0.111, 0.578]` with **67 %** piled into the single 0.5–0.6 bin and the lower **42 %**
+> of the screen never reached once — a hard wall, not a fade. After the clip, stone in the
+> sphere's lower half went **7.6 % → 13.6 %** (RTR ground truth 28.7 %), confirmed on screen.
+>
+> ⚠️ This makes `D.z < 0` REACHABLE in the traversal, where `tPlane`'s `1e18` branch used to be
+> dead code. `1e18` is the CORRECT answer there: depth decreases along such a ray, so one already
+> in front of a cell's nearest surface can never meet it, and the free-flight branch is right —
+> it is not a missed refinement. ⚠️ This was **not** a Y-up residual: the rejection predates the
+> flip. The owner's inversion hypothesis was reasonable and wrong, and only the hit-destination
+> histogram separated the two.
+>
+> ⚠️ **The 0.0746 confidence ceiling that looked like a bug was the FLOOR, not the sphere.** A
+> disc validated at one camera pose was reused on a capture taken at another and measured
+> pavement while reporting "sphere". Select a surface by what the shader itself publishes — the
+> normals attachment's packed `roughness + metalness * 2` — never by a remembered pixel disc. On
+> the real sphere pixels the trace is healthy: 62.3 % hit rate, mean confidence 0.494, max 1.0.
+>
+> ⚠️ `reflexion-debug` is **not run-to-run deterministic**: two captures from the SAME binary
+> differ on ~326 k pixels (max 194 LSB). A bit-identical control is inapplicable on this scene —
+> a change can only be shown to sit BELOW that floor.
+
+> [!CAUTION]
+> **The material-properties `reflection` nibble is written and read by NOBODY.** `SSR`, `RTR`,
+> `SSAO` and `SSGI` all set `contribution.needsMaterialProperties = true` — so the attachment is
+> allocated and the scene pass fills it — yet none of the four ever binds or samples it. Only
+> `AtmosphericFog` and `Bloom` are real consumers (`materialPropsTex`). Consequence: a material
+> declaring `"Reflection": { "Type": "None" }` still receives screen-space and ray-traced
+> reflections. `Grounds/Pavement005` (roughness 0.8, `Reflection: None`) is the reference case.
+> Do not "fix" a surface that reflects when it should not by tuning a roughness fade — the
+> response nibble is the contract, and it is currently unread.
+
+> [!NOTE]
+> **The resolve reads the trace target with `texelFetch`, not `texture`.** Channels R and G carry
+> hit **coordinates**, which are not a filterable quantity. Trace and resolve are both half-res,
+> so `vUV` lands on a texel centre and bilinear happened to return that texel untouched — the
+> trap is latent, not active. Move the resolve to full-res with bilinear restored and every
+> hit/miss boundary fabricates a UV halfway toward (0,0) carried by a non-zero confidence: the
+> resolve samples the screen corner and believes it.
+
 5-pass pipeline at half resolution (except composite at full-res):
 
 1. **Trace**: Ray-marches in screen space using depth+normals, outputs hitUV + confidence
