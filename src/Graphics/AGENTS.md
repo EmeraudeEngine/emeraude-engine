@@ -2364,13 +2364,55 @@ The chain has THREE phases, enforced structurally:
 > posterization and halo streaks (observed live on Sponza, Jul 2026) — any new LDR effect
 > MUST override `runsAfterToneMapping()`.
 
-Recommended scene-effect order (used in the demos):
+Scene-effect order, as every scene actually builds it:
 ```
-RTR → SSR → ContactShadows → SSAO → AtmosphericFog → VolumetricLight → LensFlare → Bloom
-[camera: DoF → ToneMapping] [LDR: FXAASharpen]
+RTR|SSR → RTAO|SSAO → RTGI|SSGI → ContactShadows → AtmosphericFog → VolumetricLight → LensFlare
+[camera: DoF → glare/Bloom → ToneMapping] [LDR: FXAASharpen]
 ```
 
-**Rationale:** RTR first (hardware ray tracing, highest quality reflections). SSR as fallback where RTR is unavailable. ContactShadows adds fine-detail shadowing from depth. SSAO then darkens the image globally including reflections, which is acceptable — this matches UE4's approach where AO is applied as a global multiplier after reflection composition. AtmosphericFog before VolumetricLight so god rays bloom through the fog. LensFlare from bright light sources. Bloom before DoF extracts bright pixels from sharp image (avoids runaway glow from DoF blur spreading HDR values).
+**Rationale:** RTR first (hardware ray tracing, highest quality reflections), SSR as the fallback
+where RTR is unavailable — the two are alternatives, never both. AO next, then GI. ContactShadows
+adds fine-detail shadowing from depth. AO darkening the image globally including reflections is
+acceptable and matches UE4's approach, where AO is a global multiplier applied after reflection
+composition. LensFlare last, from bright light sources.
+
+> [!CAUTION]
+> **This list is the one the scenes build; the previous revision matched NO scene and carried a
+> rationale the code does not implement.** It read `RTR → SSR → ContactShadows → SSAO →
+> AtmosphericFog → VolumetricLight → LensFlare → Bloom`, which differed on three counts, all
+> verified against `Sponza`, `Citadel`, `WaterWorld` and `LightAndShadowDebug`:
+> - it put **ContactShadows before AO**; every scene puts AO first;
+> - it **omitted GI entirely** (`RTGI|SSGI`), which every scene inserts after AO;
+> - it ended the SCENE stack with **Bloom**, which is not a scene effect: veiling glare is a LENS
+>   phenomenon carried by the active camera (`enableHDR`/glare threshold), and adding it to the
+>   scene stack would run it before the defocus.
+>
+> ⚠️ **"AtmosphericFog before VolumetricLight so god rays bloom through the fog" was FALSE.** The
+> shafts cannot be attenuated by an effect placed before them: `VolumetricLight::producesOverlay()`
+> is true, its combine snippet is a pure add (`em_Color.rgb += texture(vlightTex, vUV).rgb`), and
+> `recordOverlayPasses()` takes its `inputColor` **unnamed and unused** — the shafts are built from
+> the depth occlusion mask and the light colour/intensity alone and never see the chain. Placing the
+> fog first buys nothing the reverse order would not. If shafts SHOULD extinguish in fog, that is a
+> feature to implement (feed the fog's transmittance into the shaft integration), not a line in an
+> ordering rationale. **OPEN.**
+>
+> ⚠️ An effect that overrides `readsChainColorUpstream()` — `LensFlare` does, for its bright pass —
+> IS genuinely sensitive to what precedes it: `PostProcessor` flushes the pending combine group so
+> the effect sees the real chain colour. That coupling is real, unlike the VolumetricLight one. But
+> the conclusion drawn from it — that the LDR fog was starving LensFlare's 2000-nit threshold and
+> deleting the flares — is **FALSE, and was disproved by measurement before it could be committed**.
+>
+> Four states were shot looking straight at the sun, same pose: fog off; fog fixed; fog with its
+> luminance forced back to 1.0 (the LDR bug re-emulated); and the fog ALSO given back its unsigned
+> `tanHalfFovY`. **The halo ring and the shafts are present in all four.** The fog never gagged
+> LensFlare. What hid the flare was the DEMO's exposure: at f/5.6 with auto-exposure, 42 % of the
+> frame clipped and a soft grey ring on a white sky is invisible by construction. Pinning the triad
+> (`6018bc7`) is what revealed it — the owner had never seen this effect run.
+>
+> ⚠️ **Two rules.** A plausible causal chain between two real defects is still a guess: "the fog is
+> LDR" and "the flare is missing" were both true and unrelated. And when an effect appears to come
+> back after a fix, suspect the EXPOSURE before crediting the fix — on an auto-exposing camera the
+> sensor is the loudest variable in the frame.
 
 ### DepthOfField — Production-Grade Gather DoF (Jul 2026)
 
