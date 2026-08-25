@@ -459,6 +459,19 @@ namespace EmEn::Scenes::Component
 		m_CSMBuffer[CSM_DirectionOffset + 3] = 0.0F;
 
 		m_CSMBuffer[CSM_IntensityOffset] = this->intensity();
+
+		/* ⚠️⚠️ WITHOUT THIS THE WHOLE FUNCTION IS A NO-OP AS FAR AS THE GPU IS CONCERNED, and that
+		 * was the real cause of "a CSM light contributes NO light at all" — filed for months as an
+		 * early return on a null shadow map, which it never was.
+		 * updateVideoMemory() uploads only when this flag is set, and nothing else raises it for a
+		 * light that does not MOVE: the only upload ever performed was the one from
+		 * createOnHardware(), at a point where this function had not run yet and m_CSMBuffer was
+		 * all zeros — black colour, zero intensity, null matrices. Measured on reflexion-debug
+		 * (pinned exposure, one pose): ground mean 73.7 in classic mode against 16.2 in CSM, the
+		 * remainder being the ambient term alone.
+		 * Every frame is correct and not wasteful: the cascade matrices are re-fitted to the camera
+		 * frustum on every logic tick, so their GPU copy is stale by construction otherwise. */
+		this->requestVideoMemoryUpdate();
 	}
 
 	void
