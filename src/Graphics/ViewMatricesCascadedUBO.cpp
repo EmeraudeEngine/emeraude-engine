@@ -451,10 +451,24 @@ namespace EmEn::Graphics
 		 * Add margin for shadow casters behind the frustum. */
 		constexpr float zMargin = 100.0F;
 
+		/* ⚠️⚠️ minZ / maxZ are view-space Z COORDINATES — negative in front of the light camera,
+		 * because the camera looks down -Z. orthographicProjection() wants positive DISTANCES:
+		 * its Vulkan mapping is z_ndc = (d - near) / (far - near) with d = -z_eye. Feeding it the
+		 * raw coordinates mixed the two conventions and put the whole cascade OUTSIDE [0,1]:
+		 * casters were clipped out of the map at render time, and at sampling time the
+		 * `projCoords.z >= 0 && <= 1` guard failed, leaving shadowFactor = 1.0. No shadow, ever —
+		 * measured on reflexion-debug, where the palm lost the shadow it has in classic mode.
+		 * The nearest point is the LARGEST coordinate, hence -maxZ for the near distance: sign AND
+		 * order are inverted. The near margin pulls the plane back TOWARDS the light so casters
+		 * standing between the light and the frustum slice still make it into the map; depthClamp
+		 * on the cast pass now backs that up rather than replacing it. */
+		const auto nearDistance = -maxZ - zMargin;
+		const auto farDistance = -minZ + zMargin;
+
 		const auto lightProjection = Matrix< 4, float >::orthographicProjection(
 			minX, maxX,
 			minY, maxY,
-			minZ - zMargin, maxZ + zMargin
+			nearDistance, farDistance
 		);
 
 		return lightProjection * lightView;
