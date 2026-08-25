@@ -202,16 +202,21 @@ The `Renderer` maintains global caches for performance optimization:
 > `TextureResource` types and `Overlay::Surface`; see [`docs/caution-points.md`](../../docs/caution-points.md)
 > and [`docs/multi-scene-resource-ownership.md`](../../docs/multi-scene-resource-ownership.md).
 
-> [!CAUTION]
-> **The identifier IS the sampler cache key, and the setup lambda runs ONLY on a miss.** Anything
-> that must distinguish two samplers has to appear in the NAME — passing different values from the
-> lambda while reusing a name silently returns the first sampler ever created under it, and every
-> later caller inherits its state. This is not theoretical: `Texture2D` used the bare identifier
-> `"Texture2D"` for every 2D texture in the engine, so when glTF sampler addressing was wired in
-> (Aug 2026), whichever texture happened to be created first would have imposed its wrap modes on
-> all the others. `Texture2D` now appends a `-<U><V>` code (`R`/`M`/`C`) when the modes are not the
-> default repeat/repeat, and keeps the bare name otherwise so the common path still shares ONE
-> sampler and the cache does not fragment.
+> [!NOTE]
+> **`Texture2D`'s `-<U><V>` name suffix is now REDUNDANT, and kept as a debug label.** This block
+> used to say the opposite of the one above — "the identifier IS the sampler cache key, anything
+> that must distinguish two samplers has to appear in the NAME" — and that was true when it was
+> written (Aug 2026) and false a day later, once the key became the create-info content. Two
+> contradicting CAUTION blocks stood in this file until the second one was reread.
+>
+> The history is still worth keeping, because it is what the suffix is for: `Texture2D` used the
+> bare identifier `"Texture2D"` for every 2D texture in the engine, so when glTF sampler addressing
+> was wired in, whichever texture happened to be created first would have imposed its wrap modes on
+> all the others. The suffix (`R`/`M`/`C`, appended only when the modes are not the default
+> repeat/repeat) fixed that under the old keying. Under content keying the two samplers separate on
+> their own, so the suffix no longer carries correctness — it only makes the two entries legible in
+> a capture. ⚠️ Do not restore the old rule: putting distinguishing state in the NAME is now
+> pointless, and a name that varies per material fragments nothing but the debug labels.
 
 ### Texture addressing comes from the ASSET, not from a global default
 
