@@ -26,6 +26,15 @@
 
 #include "Core.hpp"
 
+/* STL inclusions. */
+#include <filesystem>
+#include <string>
+#include <utility>
+#include <vector>
+
+/* Local inclusions. */
+#include "IO/IO.hpp"
+
 namespace EmEn
 {
 	using namespace Base;
@@ -67,6 +76,49 @@ namespace EmEn
 
 			return true;
 		}, "Toggles the physical simulation (collisions, boundaries, ground response) of the active scene.");
+
+		this->bindCommand("openFiles", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			/* NOTE: Exercises the whole dropped-files pipeline without a real drag and drop,
+			 * which cannot be produced from the remote console. */
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: openFiles(filepath[, filepath, ...])");
+
+				return false;
+			}
+
+			std::vector< std::filesystem::path > filepaths;
+			filepaths.reserve(arguments.size());
+
+			for ( const auto & argument : arguments )
+			{
+				auto filepath = IO::u8path(argument.asString());
+
+				if ( !IO::fileExists(filepath) )
+				{
+					outputs.emplace_back(Severity::Warning, "The file '" + argument.asString() + "' doesn't exists! Skipping ...");
+
+					continue;
+				}
+
+				filepaths.emplace_back(std::move(filepath));
+			}
+
+			if ( filepaths.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "No usable file to open !");
+
+				return false;
+			}
+
+			const auto fileCount = filepaths.size();
+
+			this->openFiles(filepaths);
+
+			outputs.emplace_back(Severity::Success, std::to_string(fileCount) + " file(s) submitted to the opening pipeline.");
+
+			return true;
+		}, "Opens files as if they were dropped onto the window. Usage: openFiles(filepath[, filepath, ...])");
 
 		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");

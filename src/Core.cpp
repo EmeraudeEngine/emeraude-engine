@@ -30,11 +30,14 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <ranges>
 #include <sstream>
+#include <string_view>
 #include <thread>
 
 /* Third-party inclusions. */
@@ -46,13 +49,18 @@
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "Audio/MusicResource.hpp"
 #include "Constants.hpp"
+#include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/Effects/Framebuffer/DepthOfField.hpp"
 #include "Graphics/Effects/Framebuffer/ToneMapping.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/PostProcessStack.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Loaders/Interface.hpp"
+#include "Scenes/Viewers/ImageViewer.hpp"
+#include "Scenes/Viewers/ModelViewer.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
 #include "IO/IO.hpp"
@@ -1492,26 +1500,295 @@ namespace EmEn
 	void
 	Core::openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept
 	{
-		std::vector< std::filesystem::path > verifiedFilepaths;
-		verifiedFilepaths.reserve(filepaths.size());
+		std::vector< std::filesystem::path > remainingFilepaths;
+		remainingFilepaths.reserve(filepaths.size());
 
+		/* NOTE: Here Core always has the first view on files to consume engine-level content. */
 		for ( const auto & filepath : filepaths )
 		{
-			TraceDebug{ClassId} << "Check file : " << filepath;
+			if ( this->openResourceIndex(filepath) )
+			{
+				continue;
+			}
 
-			// TODO : Filter files for the application.
-
-			// TODO : If the file is a resource file, read it to complete the resource store.
-
-			verifiedFilepaths.emplace_back(filepath);
+			remainingFilepaths.emplace_back(filepath);
 		}
 
-		if ( verifiedFilepaths.empty() )
+		/* NOTE: If all files are used by Core, we stop the operation. */
+		if ( remainingFilepaths.empty() )
 		{
 			return;
 		}
 
-		this->onCoreOpenFiles(verifiedFilepaths);
+		/* NOTE: The application overrides the Core default behaviors by
+		 * removing every file it consumes from the list. */
+		this->onCoreOpenFiles(remainingFilepaths);
+
+		/* NOTE: Core default behaviors on the files left over by the application. */
+		for ( const auto & filepath : remainingFilepaths )
+		{
+			static constexpr std::array< std::string_view, 7 > imageFileExtensions{
+				"jpg", "jpeg", "png", "tga", "tif", "tiff", "hdr"
+			};
+
+			static constexpr std::array< std::string_view, 12 > audioFileExtensions{
+				"wav", "flac", "ogg", "oga", "opus", "mp3", "aiff", "aif", "au", "caf", "mid", "midi"
+			};
+
+			const auto extension = IO::getFileExtension(filepath, true);
+
+			if ( extension == "json" && this->openSceneDefinition(filepath) )
+			{
+				continue;
+			}
+
+			if ( std::ranges::find(imageFileExtensions, extension) != imageFileExtensions.cend() && this->openImageViewer(filepath) )
+			{
+				continue;
+			}
+
+			if ( std::ranges::find(audioFileExtensions, extension) != audioFileExtensions.cend() && this->openAudioTrack(filepath) )
+			{
+				continue;
+			}
+
+			/* NOTE: The scene loaders decide the composite asset formats themselves. */
+			if ( this->openModelViewer(filepath) )
+			{
+				continue;
+			}
+
+			TraceWarning{ClassId} << "No default behavior to open the file '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to open the file '" << IO::toU8String(filepath.filename()) << "'.");
+		}
+	}
+
+	bool
+	Core::openResourceIndex (const std::filesystem::path & filepath) noexcept
+	{
+		if ( IO::getFileExtension(filepath, true) != "json" )
+		{
+			return false;
+		}
+
+		const auto rootCheck = FastJSON::getRootFromFile(filepath, 16, true);
+
+		if ( !rootCheck || !rootCheck->isMember(Resources::Manager::StoresKey) )
+		{
+			return false;
+		}
+
+		if ( !m_resourceManager.update(rootCheck.value()) )
+		{
+			TraceError{ClassId} << "Unable to update the resource stores from the index '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to read the resource index '" << IO::toU8String(filepath.filename()) << "'.");
+
+			return true;
+		}
+
+		this->notifyUser(BlobTrait{} << "Resource stores updated from '" << IO::toU8String(filepath.filename()) << "'.");
+
+		return true;
+	}
+
+	bool
+	Core::openSceneDefinition (const std::filesystem::path & filepath) noexcept
+	{
+		const auto rootCheck = FastJSON::getRootFromFile(filepath, 16, true);
+
+		if ( !rootCheck )
+		{
+			return false;
+		}
+
+		/* NOTE: Identify a scene definition by its structural top-level keys. */
+		{
+			const auto & root = rootCheck.value();
+
+			if ( !root.isMember(DefinitionResource::NodesKey) && !root.isMember(DefinitionResource::StaticEntitiesKey) && !root.isMember(DefinitionResource::BoundaryKey) )
+			{
+				return false;
+			}
+		}
+
+		const auto [scene, definition] = m_sceneManager.loadScene(filepath);
+
+		if ( scene == nullptr )
+		{
+			TraceError{ClassId} << "Unable to load the scene definition '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to load the scene definition '" << IO::toU8String(filepath.filename()) << "'.");
+
+			return true;
+		}
+
+		/* NOTE: Never disturb an active scene, the loaded scene stays available. */
+		if ( m_sceneManager.hasActiveScene() )
+		{
+			this->notifyUser(BlobTrait{} << "Scene '" << scene->name() << "' loaded. Disable the active scene to enable it.");
+
+			return true;
+		}
+
+		if ( !m_sceneManager.enableScene(scene) )
+		{
+			TraceError{ClassId} << "Unable to enable the scene '" << scene->name() << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to enable the scene '" << scene->name() << "'.");
+
+			return true;
+		}
+
+		this->notifyUser(BlobTrait{} << "Scene '" << scene->name() << "' enabled.");
+
+		return true;
+	}
+
+	bool
+	Core::openAudioTrack (const std::filesystem::path & filepath) noexcept
+	{
+		auto & trackMixer = m_audioManager.trackMixer();
+
+		if ( !trackMixer.usable() )
+		{
+			TraceWarning{ClassId} << "The track mixer is unavailable to play the file '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser("The audio system is unavailable to play the file.");
+
+			return true;
+		}
+
+		const auto track = std::make_shared< Audio::MusicResource >(m_resourceManager, "+" + IO::toU8String(filepath.stem()));
+
+		if ( !track->load(filepath) )
+		{
+			TraceError{ClassId} << "Unable to read the audio file '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to read the audio file '" << IO::toU8String(filepath.filename()) << "'.");
+
+			return true;
+		}
+
+		/* NOTE: The playback starts immediately. A track still loading
+		 * (e.g. MIDI rendering) starts by itself when the loading finishes. */
+		trackMixer.addToPlaylist(track);
+
+		if ( !trackMixer.play(track) )
+		{
+			TraceError{ClassId} << "Unable to play the audio file '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to play the audio file '" << IO::toU8String(filepath.filename()) << "'.");
+
+			return true;
+		}
+
+		this->notifyUser(BlobTrait{} << "Playing '" << track->title() << "' ...");
+
+		return true;
+	}
+
+	bool
+	Core::clearStageForViewerScene () noexcept
+	{
+		if ( !m_sceneManager.hasActiveScene() )
+		{
+			return true;
+		}
+
+		std::string activeSceneName;
+
+		m_sceneManager.withSharedActiveScene([&activeSceneName] (const std::shared_ptr< Scenes::Scene > & scene) {
+			activeSceneName = scene->name();
+		}, true);
+
+		/* NOTE: A regular active scene is never disturbed by a viewer. */
+		if ( activeSceneName != Viewers::ImageViewer::SceneName && activeSceneName != Viewers::ModelViewer::SceneName )
+		{
+			this->notifyUser("A scene is running, the file was ignored.");
+
+			return false;
+		}
+
+		/* NOTE: An active viewer scene is replaced by the incoming one. */
+		return m_sceneManager.deleteScene(activeSceneName);
+	}
+
+	bool
+	Core::openImageViewer (const std::filesystem::path & filepath) noexcept
+	{
+		if ( !this->clearStageForViewerScene() )
+		{
+			return true;
+		}
+
+		Viewers::ImageViewer viewer{m_resourceManager, m_sceneManager};
+
+		const auto scene = viewer.createScene(filepath);
+
+		if ( scene == nullptr )
+		{
+			this->notifyUser(BlobTrait{} << "Unable to display the image '" << IO::toU8String(filepath.filename()) << "'.");
+
+			return true;
+		}
+
+		if ( !m_sceneManager.enableScene(scene) )
+		{
+			TraceError{ClassId} << "Unable to enable the image viewer scene for '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to display the image '" << IO::toU8String(filepath.filename()) << "'.");
+
+			m_sceneManager.deleteScene(Viewers::ImageViewer::SceneName);
+
+			return true;
+		}
+
+		this->notifyUser(BlobTrait{} << "Viewing '" << IO::toU8String(filepath.filename()) << "'.");
+
+		return true;
+	}
+
+	bool
+	Core::openModelViewer (const std::filesystem::path & filepath) noexcept
+	{
+		/* NOTE: No scene loader for this file, let the dispatch continue. */
+		if ( m_sceneManager.createSceneLoader(filepath) == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->clearStageForViewerScene() )
+		{
+			return true;
+		}
+
+		Viewers::ModelViewer viewer{m_resourceManager, m_sceneManager, m_primaryServices.settings()};
+
+		const auto scene = viewer.createScene(filepath);
+
+		if ( scene == nullptr )
+		{
+			this->notifyUser(BlobTrait{} << "Unable to display the model '" << IO::toU8String(filepath.filename()) << "'.");
+
+			return true;
+		}
+
+		if ( !m_sceneManager.enableScene(scene) )
+		{
+			TraceError{ClassId} << "Unable to enable the model viewer scene for '" << IO::toU8String(filepath) << "' !";
+
+			this->notifyUser(BlobTrait{} << "Unable to display the model '" << IO::toU8String(filepath.filename()) << "'.");
+
+			m_sceneManager.deleteScene(Viewers::ModelViewer::SceneName);
+
+			return true;
+		}
+
+		this->notifyUser(BlobTrait{} << "Viewing '" << IO::toU8String(filepath.filename()) << "'.");
+
+		return true;
 	}
 
 	void
@@ -2068,6 +2345,11 @@ namespace EmEn
 	{
 		if ( observable == &m_consoleController )
 		{
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceInfo{ClassId} << "Receiving an event from '" << Console::Controller::ClassId << "' (code:" << notificationCode << ") ...";
+			}
+
 			switch ( notificationCode )
 			{
 				case Console::Controller::Exit :
@@ -2080,10 +2362,7 @@ namespace EmEn
 					break;
 
 				default:
-					if constexpr ( ObserverDebugEnabled )
-					{
-						TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Console::Controller::ClassId << "' ignored.";
-					}
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Console::Controller::ClassId << "' ignored or unknown.";
 					break;
 			}
 
@@ -2092,13 +2371,35 @@ namespace EmEn
 
 		if ( observable == &m_primaryServices.netManager() )
 		{
-			TraceDebug{ClassId} << "Receiving an event from '" << Net::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceInfo{ClassId} << "Receiving an event from '" << Net::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+			}
+
+			switch ( notificationCode )
+			{
+				case Net::Manager::Unknown :
+				case Net::Manager::DownloadingStarted :
+				case Net::Manager::FileDownloaded :
+				case Net::Manager::DownloadingFinished :
+				case Net::Manager::Progress :
+					break;
+
+				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Net::Manager::ClassId << "' ignored or unknown.";
+					break;
+			}
 
 			return true;
 		}
 
 		if ( observable == &m_window )
 		{
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceInfo{ClassId} << "Receiving an event from '" << Window::ClassId << "' (code:" << notificationCode << ") ...";
+			}
+
 			switch ( notificationCode )
 			{
 				case Window::OSNotifiesWindowGetFocus :
@@ -2142,11 +2443,8 @@ namespace EmEn
 					this->stop();
 					break;
 
-				default :
-					if constexpr ( ObserverDebugEnabled )
-					{
-						TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Window::ClassId << "' ignored.";
-					}
+				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Window::ClassId << "' ignored or unknown.";
 					break;
 			}
 
@@ -2155,35 +2453,59 @@ namespace EmEn
 
 		if ( observable == &m_inputManager )
 		{
-			if ( notificationCode == Input::Manager::DroppedFiles )
+			if constexpr ( ObserverDebugEnabled )
 			{
-				const auto filepaths = std::any_cast< std::vector< std::filesystem::path > >(data);
-
-				this->openFiles(filepaths);
+				TraceInfo{ClassId} << "Receiving an event from '" << Input::Manager::ClassId << "' (code:" << notificationCode << ") ...";
 			}
 
-			TraceDebug{ClassId} << "Receiving an event from '" << Input::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+			switch ( notificationCode )
+			{
+				case Input::Manager::DroppedFiles :
+				{
+					const auto filepaths = std::any_cast< std::vector< std::filesystem::path > >(data);
+
+					this->openFiles(filepaths);
+				}
+					break;
+
+				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Input::Manager::ClassId << "' ignored or unknown.";
+					break;
+			}
 
 			return true;
 		}
 
 		if ( observable == &m_graphicsRenderer )
 		{
-			/* NOTE: If the swap-chain has been refreshed, we refresh the application according to the new framebuffer. */
-			if ( notificationCode == Renderer::WindowContentRefreshed )
+			if constexpr ( ObserverDebugEnabled )
 			{
-				m_windowChanged = true;
-
-				return true;
+				TraceInfo{ClassId} << "Receiving an event from '" << Renderer::ClassId << "' (code:" << notificationCode << ") ...";
 			}
 
-			TraceDebug{ClassId} << "Receiving an event from '" << Renderer::ClassId << "' (code:" << notificationCode << ") ...";
+			switch ( notificationCode )
+			{
+				case Renderer::WindowContentRefreshed :
+					/* NOTE: If the swap-chain has been refreshed, we refresh
+					 * the application according to the new framebuffer. */
+					m_windowChanged = true;
+					break;
+
+				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Renderer::ClassId << "' ignored or unknown.";
+					break;
+			}
 
 			return true;
 		}
 
 		if ( observable == &m_graphicsRenderer.shaderManager() )
 		{
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceInfo{ClassId} << "Receiving an event from '" << Saphir::ShaderManager::ClassId << "' (code:" << notificationCode << ") ...";
+			}
+
 			switch ( notificationCode )
 			{
 				case Saphir::ShaderManager::ShaderCompilationSucceed :
@@ -2199,6 +2521,7 @@ namespace EmEn
 					break;
 
 				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Saphir::ShaderManager::ClassId << "' ignored or unknown.";
 					break;
 			}
 
@@ -2207,7 +2530,10 @@ namespace EmEn
 
 		if ( observable == &m_audioManager.trackMixer() )
 		{
-			TraceDebug{ClassId} << "Receiving an event from '" << Audio::TrackMixer::ClassId << "' (code:" << notificationCode << ") ...";
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceInfo{ClassId} << "Receiving an event from '" << Audio::TrackMixer::ClassId << "' (code:" << notificationCode << ") ...";
+			}
 
 			switch ( notificationCode )
 			{
@@ -2229,6 +2555,7 @@ namespace EmEn
 					break;
 
 				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Audio::TrackMixer::ClassId << "' ignored or unknown.";
 					break;
 			}
 
@@ -2238,12 +2565,23 @@ namespace EmEn
 
 		if ( observable == &m_overlayManager )
 		{
-			/* NOTE: The overlay signalled a visual change (surface content/geometry/visibility/order,
-			 * or a screen lifecycle/visibility change). Wake the on-demand rendering thread. No-op in
-			 * continuous rendering. */
-			if ( notificationCode == Overlay::Manager::RedrawRequested )
+			if constexpr ( ObserverDebugEnabled )
 			{
-				this->requestRedraw();
+				TraceInfo{ClassId} << "Receiving an event from '" << Overlay::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+			}
+
+			switch ( notificationCode )
+			{
+				case Overlay::Manager::RedrawRequested :
+					/* NOTE: The overlay signalled a visual change (surface content/geometry/visibility/order,
+					 * or a screen lifecycle/visibility change). Wake the on-demand rendering thread. No-op in
+					 * continuous rendering. */
+					this->requestRedraw();
+					break;
+
+				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Overlay::Manager::ClassId << "' ignored or unknown.";
+					break;
 			}
 
 			return true;
@@ -2251,6 +2589,11 @@ namespace EmEn
 
 		if ( observable == &m_sceneManager )
 		{
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceInfo{ClassId} << "Receiving an event from '" << Scenes::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+			}
+
 			switch ( notificationCode )
 			{
 				case Scenes::Manager::SceneDestroyed :
@@ -2266,16 +2609,15 @@ namespace EmEn
 					this->requestRedraw();
 					break;
 
-				case Scenes::Manager::SceneCreated :
-				case Scenes::Manager::SceneLoaded :
-				default :
-					TraceDebug{ClassId} << "Receiving an event from '" << Scenes::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+				default:
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Scenes::Manager::ClassId << "' ignored or unknown.";
 					break;
 			}
 
 			return true;
 		}
 
+		/* NOTE: If no event observable is identified by core, we pass it to the application level. */
 		return this->onCoreNotification(observable, notificationCode, data);
 	}
 

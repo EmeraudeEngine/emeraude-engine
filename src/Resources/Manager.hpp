@@ -85,6 +85,11 @@ namespace EmEn::Resources
 			/** @brief Class identifier for logging and debugging. */
 			static constexpr auto ClassId{"ResourcesManagerService"};
 
+			/** @brief JSON key for accessing store definitions in resource index files.
+			 * @note Public because it is a file-format contract: external code (e.g. Core's
+			 * dropped-file handling) identifies a resource index by the presence of this key. */
+			static constexpr auto StoresKey{"Stores"};
+
 			/**
 			 * @brief Constructs the resource manager service.
 			 *
@@ -500,9 +505,6 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			static std::vector< std::string > getResourcesIndexFiles (const FileSystem & fileSystem) noexcept;
-
-			/** @brief JSON key for accessing store definitions in resource index files. */
-			static constexpr auto StoresKey{"Stores"};
 
 			/** @brief Reference to the engine's primary services provider. */
 			PrimaryServices & m_primaryServices;

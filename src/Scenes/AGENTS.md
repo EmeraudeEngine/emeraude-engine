@@ -42,6 +42,59 @@ Standalone scene editor for entity picking and gizmo manipulation. See [`Editor/
 - **Activation**: Shift+F3 via Core → `Scenes::Manager::toggleEditorMode()`
 - **Rendering**: Standalone pipeline (not scene entities), renders before overlay
 
+### Controllers (NodeController & OrbitController)
+
+Two input-driven manipulators live BY VALUE inside every `Scene` and are registered/unregistered
+by `Scene::enable()`/`Scene::disable()`. Both are **inert without a controlled node** and consume
+no event until one is attached.
+
+| Controller | Input | Registered as | Behavior |
+|------------|-------|---------------|----------|
+| `NodeController` | Keyboard (numpad) + gamepad | Keyboard listener | Debug node manipulation (move/yaw/pitch/roll) |
+| `OrbitController` | Pointer | Pointer listener | Orbits a camera node around a fixed target : left-drag = azimuth/elevation, wheel = dolly |
+
+`OrbitController` rules:
+- **Canonical state** `(target, azimuth, elevation, distance)` — the node position is RECOMPUTED
+  from it on every event, never integrated incrementally. The dolly distance derives from an
+  INTEGER step index over a reference distance (`reference × factor^index`, re-anchored by
+  `setDistance()`) — the project's anti-FP-accumulation rule.
+- The controlled node **must be a direct child of the scene root** (positioned in Parent space,
+  which equals world space only at level 1; `Node::lookAt()` operates on the local frame).
+- Elevation is clamped near the poles (`PoleGap`) : the aim derives the up vector, an orbit
+  crossing a pole would flip the view.
+- Used by the `Viewers/` scenes; any scene can use it via `scene->orbitController()`.
+
+### Viewer Scenes (`Viewers/`)
+
+Engine-built, ready-to-enable scenes displaying ONE dropped/opened file. These are the **Core
+default behaviors** for files dropped onto the window (see `Core::openFiles()`); reserved scene
+names use the manual-resource `+` prefix so Core can recognize (and replace) them.
+
+| Builder | Scene name | Content |
+|---------|------------|---------|
+| `Viewers::ImageViewer` | `+ImageViewer` | Unlit quad at the image aspect ratio, double-sided (mirrored from behind, like a slide). LightSet DISABLED + camera out of HDR ⇒ texels reach the screen unmodified |
+| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, neutral lighting (ambient 200 lux + key light 100 000 lux), HDR camera with **MANUAL sunny-16 exposure** |
+
+⚠️ Lessons already paid for:
+- **Never rely on auto-exposure in a viewer**: the metering averages the whole frame, and a small
+  lit model over the black void is crushed to pure white. The lighting is ours, so the exposure is
+  paired manually (100 000 lux ↔ f/16, 1/100 s, ISO 100).
+- **Extents are NOT valid right after `SceneDataConsumer::build()`** — mesh resources load on the
+  thread pool. `ModelViewer` waits (bounded budget) for `getWorldRenderBoundingBox()` validity
+  before framing; on timeout it falls back to a default framing.
+- Framing uses the bounding-SPHERE fit (`distance = margin × radius / sin(fov/2)`), a 50 mm focal,
+  and a three-quarter start orientation.
+- Resource names carry a per-session counter (`+ImageViewerImage3`, ...) — containers return the
+  EXISTING resource for a known name, a fixed name would show the first image forever.
+
+### Scene Loader Registry
+
+`Scenes::Manager::createSceneLoader(filepath)` is the **single dispatch point** for composite
+asset formats: it instantiates the loader whose `supportsExtension()` accepts the (dotted,
+lowercased) extension — GLTF, FBX, USD, WAD — and returns it as `std::unique_ptr<Loaders::Interface>`,
+or nullptr. No extension list is duplicated anywhere: `supportsExtension()` stays the single
+source of truth. Loaders are cheap per-call objects; a new instance is returned every time.
+
 ### Level Interfaces (Ground & Sea)
 
 Two interfaces define scene-wide physical levels for gameplay queries:
@@ -172,6 +225,10 @@ ctest -R Scenes
 - `Scene.rendering.cpp` - Render targets, shadow casting, rendering pipeline
 - `Scene.debug.cpp` - Debug displays (compass, ground zero, boundary planes, octrees)
 - `Debug/Compass.cpp/.hpp` - Orientation compass, drawn **after** the post-process chain. ⚠️ **NOT a scene entity** — see "Debug Helpers and the Exposure Trap"
+- `NodeController.cpp/.hpp` - Keyboard/gamepad debug node manipulator (value member of Scene)
+- `OrbitController.cpp/.hpp` - Pointer-driven camera orbit around a fixed target (value member of Scene). See "Controllers"
+- `Viewers/ImageViewer.cpp/.hpp` - Builds the `+ImageViewer` scene (unlit picture quad). See "Viewer Scenes"
+- `Viewers/ModelViewer.cpp/.hpp` - Builds the `+ModelViewer` scene (composite asset showcase). See "Viewer Scenes"
 - `Node.cpp/.hpp` - Hierarchical dynamic entity (tree)
 - `NodeCrawler.hpp` - Header-only tree iterator. ⚠️ **Never yields the base node** — see "Node Tree Iteration — NodeCrawler Contract"
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)

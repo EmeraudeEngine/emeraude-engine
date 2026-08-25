@@ -401,9 +401,15 @@ namespace EmEn
 			/**
 			 * @brief Handles files dropped onto the application window.
 			 * @details This method is called when users drag and drop files onto the window.
-			 * Typical use cases include loading scene files, importing assets, or opening
-			 * project files. The method delegates to onCoreOpenFiles() for application-specific
-			 * handling.
+			 * The files go through three stages, in order :
+			 *  -# Core first view : engine-level content is consumed directly (a JSON resource
+			 *     index carrying the Resources::Manager::StoresKey object completes the resource stores).
+			 *  -# Application : onCoreOpenFiles() receives the remaining files and removes
+			 *     every file the application consumes from the list.
+			 *  -# Core default behaviors : a JSON scene definition is loaded through the scene
+			 *     manager and an audio file is played through the track mixer. A file no stage
+			 *     consumed raises an on-screen notification.
+			 * @note This runs synchronously on the main thread.
 			 * @param filepaths A reference to a vector of filesystem paths representing the dropped files.
 			 * @see onCoreOpenFiles()
 			 */
@@ -1394,6 +1400,72 @@ namespace EmEn
 			 */
 			void displayCoreMessages () noexcept;
 
+			/**
+			 * @brief Consumes an opened file when it is a resource store index.
+			 * @details First stage of openFiles() : a JSON file whose root carries the
+			 * Resources::Manager::StoresKey object completes the resource stores at
+			 * runtime through Resources::Manager::update().
+			 * @param filepath A reference to a filesystem path.
+			 * @return bool true when the file was identified as a resource index, even if the update failed.
+			 * @see openFiles()
+			 */
+			[[nodiscard]]
+			bool openResourceIndex (const std::filesystem::path & filepath) noexcept;
+
+			/**
+			 * @brief Default behavior for an opened JSON scene definition.
+			 * @details Identifies a scene definition by its structural top-level keys, loads
+			 * it through Scenes::Manager::loadScene() and enables the scene when none is active.
+			 * When a scene is already active, the loaded scene is kept available but not enabled.
+			 * @param filepath A reference to a filesystem path.
+			 * @return bool true when the file was identified as a scene definition, even if the loading failed.
+			 * @see openFiles()
+			 */
+			[[nodiscard]]
+			bool openSceneDefinition (const std::filesystem::path & filepath) noexcept;
+
+			/**
+			 * @brief Default behavior for an opened audio file : play it through the track mixer.
+			 * @details Creates an ad-hoc music resource from the file, appends it to the
+			 * playlist and starts the playback immediately.
+			 * @param filepath A reference to a filesystem path.
+			 * @return bool true when the file was taken by the audio system, even if unreadable.
+			 * @see openFiles()
+			 */
+			[[nodiscard]]
+			bool openAudioTrack (const std::filesystem::path & filepath) noexcept;
+
+			/**
+			 * @brief Clears the stage for a viewer scene, respecting the running application.
+			 * @details A viewer scene may appear when no scene is active, and replaces an
+			 * active viewer scene. A regular active scene is never disturbed.
+			 * @return bool true when a viewer scene can be enabled.
+			 * @see openImageViewer()
+			 * @see openModelViewer()
+			 */
+			[[nodiscard]]
+			bool clearStageForViewerScene () noexcept;
+
+			/**
+			 * @brief Default behavior for an opened image file : display it in the image viewer scene.
+			 * @param filepath A reference to a filesystem path.
+			 * @return bool true when the file was taken by the image viewer, even on failure.
+			 * @see Scenes::Viewers::ImageViewer
+			 * @see openFiles()
+			 */
+			[[nodiscard]]
+			bool openImageViewer (const std::filesystem::path & filepath) noexcept;
+
+			/**
+			 * @brief Default behavior for an opened composite asset file : display it in the model viewer scene.
+			 * @param filepath A reference to a filesystem path.
+			 * @return bool true when the file was taken by the model viewer, even on failure.
+			 * @see Scenes::Viewers::ModelViewer
+			 * @see openFiles()
+			 */
+			[[nodiscard]]
+			bool openModelViewer (const std::filesystem::path & filepath) noexcept;
+
 			/** @} */ // End of Internal Engine Methods group
 
 			/** @name Application Callbacks
@@ -1570,13 +1642,17 @@ namespace EmEn
 
 			/**
 			 * @brief Called when files are dropped onto the application window.
-			 * @details Implement to handle drag-and-drop file loading.
-			 * @param filepaths Paths to the dropped files.
+			 * @details Core has already consumed engine-level files (resource store indexes).
+			 * Implement to handle application-specific files : remove from the list every file
+			 * the application consumes. The remaining files fall back to the Core default
+			 * behaviors (scene definitions, audio tracks, ...).
+			 * @param filepaths A reference to the files not yet consumed. Erase the entries handled by the application.
 			 * @see openFiles()
+			 * @return void
 			 */
 			virtual
 			void
-			onCoreOpenFiles ([[maybe_unused]] const std::vector< std::filesystem::path > & filepaths) noexcept
+			onCoreOpenFiles ([[maybe_unused]] std::vector< std::filesystem::path > & filepaths) noexcept
 			{
 				/* Nothing by default. */
 			}

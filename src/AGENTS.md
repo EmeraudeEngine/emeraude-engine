@@ -56,7 +56,7 @@ private:
 - `onCoreKeyPress()` / `onCoreKeyRelease()` - Keyboard input
 - `onCoreCharacterType()` - Unicode text input
 - `onCoreNotification()` - Observer pattern
-- `onCoreOpenFiles()` - File drag & drop
+- `onCoreOpenFiles(std::vector<std::filesystem::path> &)` - File drag & drop. The application REMOVES from the list every file it consumes; leftovers fall back to the Core default behaviors. Core has already consumed engine-level files (JSON resource store indexes) before this hook. Defaults after the hook: JSON scene definition → `Scenes::Manager::loadScene()`; image → `Scenes::Viewers::ImageViewer` scene; composite asset (per scene-loader `supportsExtension()`) → `Scenes::Viewers::ModelViewer` scene; audio file → ad-hoc `MusicResource` played through the TrackMixer; anything else → on-screen notification. Viewer policy: a regular active scene is NEVER disturbed (notification instead); an active viewer scene is replaced. Console: `Core.openFiles(path[, path...])` exercises the whole pipeline without a real drag & drop.
 - `onCoreSurfaceRefreshed()` - Window resize
 
 ### Core - Automatic Settings Reset on Version Change

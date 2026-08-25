@@ -270,6 +270,31 @@ Use `listResources(MeshResource)` to discover available meshes.
 4. **Lighting is automatic** -- `createScene` adds a neutral photometric ambient (5000 lx)
 5. **Always verify with screenshot** -- take a screenshot and read the PNG to confirm visual output
 
+### Opening files (the dropped-files pipeline)
+
+`Core.openFiles(path[, path, ...])` runs the SAME pipeline as dropping files onto the window —
+the only way to exercise it remotely (a real drag & drop cannot be injected). Runs on the main
+thread; heavy imports stall the loop until done.
+
+```bash
+python3 tools/remote-console.py 'Core.openFiles("/abs/path/picture.png", "/abs/path/model.glb")'
+```
+
+Per-file behavior (after the application's `onCoreOpenFiles()` hook declined):
+
+| File | Behavior |
+|------|----------|
+| JSON with `"Stores"` key | Completes the resource stores (`Resources::Manager::update()`) — consumed at the Core first-view stage, before the application hook |
+| JSON scene definition (`Nodes`/`StaticEntities`/`Boundary` keys) | `loadScene()`; enabled only when NO scene is active |
+| Image (`jpg/jpeg/png/tga/tif/tiff/hdr`) | `+ImageViewer` scene: unlit double-sided quad at the image ratio, orbit camera |
+| Composite asset (any extension a scene loader supports: glTF/GLB/FBX/USD*/WAD) | `+ModelViewer` scene: neutral lighting, manual sunny-16 HDR exposure, orbit camera framed on the model |
+| Audio (`wav/flac/ogg/oga/opus/mp3/aiff/aif/au/caf/mid/midi`) | Ad-hoc track appended to the TrackMixer playlist and played immediately (`nowPlaying()` to verify) |
+| Anything else | On-screen notification `Unable to open the file '...'` |
+
+Viewer policy: a regular active scene is **never disturbed** (notification `A scene is running,
+the file was ignored.`); an active `+ImageViewer`/`+ModelViewer` is **replaced** by the new drop.
+In the viewers: left-drag orbits around the content, mouse wheel dollies in/out.
+
 ---
 
 ## 4. Scene Creation via JSON
