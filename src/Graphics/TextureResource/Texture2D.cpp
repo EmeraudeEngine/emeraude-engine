@@ -26,6 +26,9 @@
 
 #include "Texture2D.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions. */
 #include "FileSystem.hpp"
 #include "Graphics/Renderer.hpp"
@@ -97,8 +100,23 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		/* Get a Vulkan sampler. */
-		m_sampler = renderer.getSampler("Texture2D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+		/* Get a Vulkan sampler.
+		 * ⚠️ The identifier IS the cache key of Renderer::getSampler(): the setup lambda runs only
+		 * on a miss, so anything that differentiates two samplers MUST appear in the name.
+		 * Addressing comes from the asset (glTF wrapS / wrapT), so it belongs in the key —
+		 * otherwise whichever texture is created first imposes its addressing on every other one.
+		 * The default repeat/repeat case keeps the historical bare "Texture2D" name, so the common
+		 * path still shares a single sampler and the cache does not fragment. */
+		std::string samplerIdentifier{"Texture2D"};
+
+		if ( !this->usesDefaultWrapModes() )
+		{
+			samplerIdentifier += '-';
+			samplerIdentifier += wrapModeCode(this->wrapModeU());
+			samplerIdentifier += wrapModeCode(this->wrapModeV());
+		}
+
+		m_sampler = renderer.getSampler(samplerIdentifier, [wrapU = this->wrapModeU(), wrapV = this->wrapModeV()] (Settings & settings, VkSamplerCreateInfo & createInfo) {
 			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
 			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
 			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
@@ -109,9 +127,12 @@ namespace EmEn::Graphics::TextureResource
 			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
 			createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
 			createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-			//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			/* The asset's addressing, not a global default: a texture authored with a border and
+			 * declared CLAMP_TO_EDGE must show that border once instead of tiling it. W follows U
+			 * — a 2D sampler never addresses it, and leaving it at repeat would be misleading. */
+			createInfo.addressModeU = toVulkanAddressMode(wrapU);
+			createInfo.addressModeV = toVulkanAddressMode(wrapV);
+			createInfo.addressModeW = toVulkanAddressMode(wrapU);
 			//createInfo.mipLodBias = 0.0F;
 			createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
 			createInfo.maxAnisotropy = anisotropyLevels;

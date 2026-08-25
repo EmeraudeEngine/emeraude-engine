@@ -87,6 +87,28 @@ namespace EmEn::Scenes::Loaders
 	/* The byte span type fastgltf hands to accessor readers. */
 	using ByteSpan = decltype(fastgltf::DefaultBufferDataAdapter{}(std::declval< const fastgltf::Asset & >(), std::size_t{}));
 
+	/* Translates a glTF sampler wrap mode. The three values are the whole of what glTF can
+	 * express (GL_REPEAT, GL_MIRRORED_REPEAT, GL_CLAMP_TO_EDGE), so this conversion is total. */
+	static
+	constexpr
+	TextureResource::WrapMode
+	toWrapMode (fastgltf::Wrap wrap) noexcept
+	{
+		switch ( wrap )
+		{
+			case fastgltf::Wrap::ClampToEdge :
+				return TextureResource::WrapMode::ClampToEdge;
+
+			case fastgltf::Wrap::MirroredRepeat :
+				return TextureResource::WrapMode::MirroredRepeat;
+
+			case fastgltf::Wrap::Repeat :
+				break;
+		}
+
+		return TextureResource::WrapMode::Repeat;
+	}
+
 	/* Returns the whole payload of a glTF buffer. Mirrors what DefaultBufferDataAdapter does for
 	 * a buffer *view*, except EXT_meshopt_compression addresses its compressed source directly in
 	 * the buffer, outside of any view. */
@@ -879,9 +901,25 @@ namespace EmEn::Scenes::Loaders
 					return nullptr;
 				}
 
+				/* The sampler carries the asset's addressing intent (wrapS / wrapT). Ignoring it
+				 * does not fail loudly — the texture simply TILES where the asset asked for a
+				 * clamp, which silently corrupts anything authored with a border (measured on
+				 * TextureTransformTest, whose quads repeat instead of showing their grey border
+				 * once). glTF's own default, when a texture declares no sampler, is repeat. */
+				auto wrapU = TextureResource::WrapMode::Repeat;
+				auto wrapV = TextureResource::WrapMode::Repeat;
+
+				if ( glTFTexture.samplerIndex.has_value() && *glTFTexture.samplerIndex < asset.samplers.size() )
+				{
+					const auto & glTFSampler = asset.samplers[*glTFTexture.samplerIndex];
+
+					wrapU = toWrapMode(glTFSampler.wrapS);
+					wrapV = toWrapMode(glTFSampler.wrapT);
+				}
+
 				/* Build texture resource name. */
 				std::string texName;
-				texName.reserve(m_resourcePrefix.size() + 9 + glTFTexture.name.size());
+				texName.reserve(m_resourcePrefix.size() + 12 + glTFTexture.name.size());
 				texName = m_resourcePrefix;
 				texName += "Texture/";
 				if ( glTFTexture.name.empty() )
@@ -893,12 +931,28 @@ namespace EmEn::Scenes::Loaders
 					texName.append(glTFTexture.name.data(), glTFTexture.name.size());
 				}
 
+				/* ⚠️ The addressing is baked into the sampler at creation, so it is part of the
+				 * resource's identity: two glTF textures may share an image AND a name while
+				 * declaring different samplers, and the container returns the EXISTING resource
+				 * for a known name — the first one loaded would impose its addressing on the
+				 * other. Only non-default modes extend the name, so existing assets keep theirs. */
+				if ( wrapU != TextureResource::WrapMode::Repeat || wrapV != TextureResource::WrapMode::Repeat )
+				{
+					texName += '-';
+					texName += TextureResource::wrapModeCode(wrapU);
+					texName += TextureResource::wrapModeCode(wrapV);
+				}
+
 				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResource(texName, [image, compressedImage, sRGB] (auto & textureResource) {
+					->getOrCreateResource(texName, [image, compressedImage, sRGB, wrapU, wrapV] (auto & textureResource) {
 						/* Set sRGB BEFORE load() so the flag is in place when
 						 * onDependenciesLoaded() fires and creates the VkImage. The colour space is
 						 * decided here, from the usage, for both kinds of source alike. */
 						textureResource.enableSRGB(sRGB);
+
+						/* Same contract for the addressing: the sampler is built once, during
+						 * creation on hardware, and never revisited. */
+						textureResource.setWrapModes(wrapU, wrapV);
 
 						if ( compressedImage != nullptr )
 						{

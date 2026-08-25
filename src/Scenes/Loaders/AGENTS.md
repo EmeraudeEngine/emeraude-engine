@@ -219,6 +219,20 @@ texel. Each loader owns the translation from its format's semantics:
 
 ### KHR_texture_transform + transmission-through-the-scene (added Aug 2026)
 
+- **The glTF SAMPLER is read** (Aug 2026): `asset.samplers[texture.samplerIndex].wrapS / wrapT`
+  reach the texture resource through `TextureResource::setWrapModes()` before `load()`, and end up
+  in the `VkSampler`'s address modes. glTF's own default, when a texture declares no sampler, is
+  repeat. ⚠️ Before this, `asset.samplers` was read **only for animations** and every texture got
+  repeat addressing: an asset asking for `CLAMP_TO_EDGE` had its border TILED instead, silently
+  (measured on the Khronos `TextureTransformTest`). ⚠️ The addressing is baked into the sampler at
+  creation, so it is part of the **resource identity**: two glTF textures may share an image AND a
+  name while declaring different samplers, and the container returns the EXISTING resource for a
+  known name — the loader therefore appends a `-<U><V>` code to the texture resource name when the
+  modes are not the default. Same reasoning applies one level down to the sampler cache key
+  ([`Graphics/AGENTS.md`](../../Graphics/AGENTS.md) § "The identifier IS the sampler cache key").
+  ⚠️ Still NOT read from the sampler: `magFilter` / `minFilter`, which stay driven by the global
+  `Core/Graphics/Texture/*Filtering` settings — a known gap, and the reason an asset that disables
+  mipmapping on purpose does not get it.
 - **`KHR_texture_transform`** (per-texture-info UV scale/offset) is read by `GLTFLoader` and
   lands on the material through `setComponentUVWTransform(componentType, scale, offset)` —
   one glTF metallic-roughness texture info feeds BOTH the Roughness and Metalness components.

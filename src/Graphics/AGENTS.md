@@ -175,7 +175,7 @@ The `Renderer` maintains global caches for performance optimization:
 |-------|--------|------------|---------|
 | Programs | `m_programs` | `Generator::computeProgramCacheKey()` | Saphir Program cache (biggest gain) |
 | Pipelines | `m_graphicsPipelines` | `GraphicsPipeline::getHash(renderPass)` | Vulkan GraphicsPipeline cache |
-| Samplers | `m_samplers` | Sampler properties | Texture sampler cache |
+| Samplers | `m_samplers` | The **identifier string** passed to `getSampler()` | Texture sampler cache |
 
 **Statistics** available at shutdown via `programBuiltCount()`, `programsReusedCount()`, `pipelineBuiltCount()`, `pipelineReusedCount()`.
 
@@ -188,6 +188,31 @@ The `Renderer` maintains global caches for performance optimization:
 > (`VUID-vkDestroySampler-sampler-01082` + invalid descriptors). Fixed Jun 2026 across all
 > `TextureResource` types and `Overlay::Surface`; see [`docs/caution-points.md`](../../docs/caution-points.md)
 > and [`docs/multi-scene-resource-ownership.md`](../../docs/multi-scene-resource-ownership.md).
+
+> [!CAUTION]
+> **The identifier IS the sampler cache key, and the setup lambda runs ONLY on a miss.** Anything
+> that must distinguish two samplers has to appear in the NAME — passing different values from the
+> lambda while reusing a name silently returns the first sampler ever created under it, and every
+> later caller inherits its state. This is not theoretical: `Texture2D` used the bare identifier
+> `"Texture2D"` for every 2D texture in the engine, so when glTF sampler addressing was wired in
+> (Aug 2026), whichever texture happened to be created first would have imposed its wrap modes on
+> all the others. `Texture2D` now appends a `-<U><V>` code (`R`/`M`/`C`) when the modes are not the
+> default repeat/repeat, and keeps the bare name otherwise so the common path still shares ONE
+> sampler and the cache does not fragment.
+
+### Texture addressing comes from the ASSET, not from a global default
+
+`TextureResource::Abstract` carries a `WrapMode` per axis (`setWrapModes()`, defaults repeat/repeat
+— the Vulkan **and** glTF default), consumed once when the sampler is built and never revisited, so
+it must be set BEFORE creation on hardware, exactly like `enableSRGB()`.
+
+⚠️ Ignoring an asset's addressing does not fail loudly — the texture simply TILES where the asset
+asked for a clamp, which silently corrupts anything authored with a border. Measured on the Khronos
+`TextureTransformTest`, whose scaled quads repeated instead of showing their grey border once; the
+fix moved **51 %** of those two quads' pixels while leaving the quads whose UVs stay inside [0,1]
+**bit-identical**. That last point is the useful one for judging regression risk: addressing is
+observable ONLY where UVs actually leave [0, 1], so content that stays in range renders identically
+whatever it declares (`MetalRoughSpheres` declares clamp on both axes and does not move).
 
 ### Persistent (on-disk) Caches — the Renderer owns the pipeline-cache and texture-cache I/O
 

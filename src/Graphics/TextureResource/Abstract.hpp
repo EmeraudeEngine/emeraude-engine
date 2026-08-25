@@ -29,6 +29,9 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
@@ -44,6 +47,71 @@ namespace EmEn::Graphics
 
 namespace EmEn::Graphics::TextureResource
 {
+	/**
+	 * @brief How texture coordinates outside [0, 1] resolve.
+	 * @note These are exactly the three modes a glTF sampler can declare (wrapS / wrapT), and
+	 * each maps one-to-one onto a VkSamplerAddressMode. An asset's choice here is not cosmetic:
+	 * a texture authored with a border and sampled with CLAMP_TO_EDGE shows that border once,
+	 * while REPEAT tiles it — the Khronos TextureTransformTest reads as a failure on exactly
+	 * that difference.
+	 */
+	enum class WrapMode : uint8_t
+	{
+		Repeat,
+		MirroredRepeat,
+		ClampToEdge
+	};
+
+	/**
+	 * @brief Converts a wrap mode to its Vulkan address mode.
+	 * @param mode The wrap mode.
+	 * @return VkSamplerAddressMode
+	 */
+	[[nodiscard]]
+	constexpr
+	VkSamplerAddressMode
+	toVulkanAddressMode (WrapMode mode) noexcept
+	{
+		switch ( mode )
+		{
+			case WrapMode::MirroredRepeat :
+				return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+
+			case WrapMode::ClampToEdge :
+				return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+			case WrapMode::Repeat :
+				break;
+		}
+
+		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	}
+
+	/**
+	 * @brief Returns the one-letter code of a wrap mode, for a sampler cache identifier.
+	 * @param mode The wrap mode.
+	 * @return char
+	 */
+	[[nodiscard]]
+	constexpr
+	char
+	wrapModeCode (WrapMode mode) noexcept
+	{
+		switch ( mode )
+		{
+			case WrapMode::MirroredRepeat :
+				return 'M';
+
+			case WrapMode::ClampToEdge :
+				return 'C';
+
+			case WrapMode::Repeat :
+				break;
+		}
+
+		return 'R';
+	}
+
 	/**
 	 * @brief This is the base class for every vulkan texture resource loaded from disk.
 	 * @extends EmEn::Vulkan::TextureInterface This provides GPU texture capabilities.
@@ -170,6 +238,58 @@ namespace EmEn::Graphics::TextureResource
 				return m_flipNormalMapY;
 			}
 
+			/**
+			 * @brief Sets how texture coordinates outside [0, 1] resolve.
+			 * @warning Must be called BEFORE the texture is created on hardware: the sampler is
+			 * built once, from these values, and never revisited.
+			 * @note This carries the asset's own intent (glTF wrapS / wrapT). Defaults to repeat
+			 * on both axes, which is both the Vulkan and the glTF default.
+			 * @param wrapU Horizontal (S) wrap mode.
+			 * @param wrapV Vertical (T) wrap mode.
+			 * @return void
+			 */
+			void
+			setWrapModes (WrapMode wrapU, WrapMode wrapV) noexcept
+			{
+				m_wrapU = wrapU;
+				m_wrapV = wrapV;
+			}
+
+			/**
+			 * @brief Returns the horizontal (S) wrap mode.
+			 * @return WrapMode
+			 */
+			[[nodiscard]]
+			WrapMode
+			wrapModeU () const noexcept
+			{
+				return m_wrapU;
+			}
+
+			/**
+			 * @brief Returns the vertical (T) wrap mode.
+			 * @return WrapMode
+			 */
+			[[nodiscard]]
+			WrapMode
+			wrapModeV () const noexcept
+			{
+				return m_wrapV;
+			}
+
+			/**
+			 * @brief Returns whether both axes keep the default repeat mode.
+			 * @note Lets a caller keep the historical sampler identifier for the common case,
+			 * so the sampler cache is not fragmented by textures that ask for nothing special.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			usesDefaultWrapModes () const noexcept
+			{
+				return m_wrapU == WrapMode::Repeat && m_wrapV == WrapMode::Repeat;
+			}
+
 		protected:
 
 			/**
@@ -207,6 +327,9 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
 
+			/* NOTE: The asset's own addressing intent, consumed once when the sampler is built. */
+			WrapMode m_wrapU{WrapMode::Repeat};
+			WrapMode m_wrapV{WrapMode::Repeat};
 			bool m_sRGB{false};
 			bool m_flipNormalMapY{false};
 	};
