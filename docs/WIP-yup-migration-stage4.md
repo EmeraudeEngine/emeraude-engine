@@ -154,12 +154,17 @@ reading, so if pose C had moved, something other than the projection Y sign had 
    order happens to give — the first version of this probe called both "INVERTED" on exactly that
    artefact. Do not add such a test for them, and do not read an old one as evidence.
 
-   🔴 **`generateSphere` — a SEPARATE, PRE-EXISTING defect, NOT a Y-up residue.** Its texture
-   coordinates are TRANSPOSED: `texCoordU` advances per STACK (latitude) while `texCoordV` advances
-   per SLICE (longitude), so each lands in the other's slot, and
-   `textureCoordinates[1] = {texCoordU - deltaV, ...}` even mixes `deltaV` into the `U` term. That is
-   why a `V`-versus-`Y` probe reads a flat 0.5/0.5 on a sphere: it is measuring longitude. Fixing it
-   is its own task with its own visual check — **do not fold it into the Y-up sweep.**
+   ✅ **`generateSphere` — FIXED (2026-08-25), and it was NOT a Y-up residue.** Its texture
+   coordinates were TRANSPOSED: `texCoordU` advanced per STACK (latitude) while `texCoordV` advanced
+   per SLICE (longitude), so each landed in the other's slot; the latitude also ran 1 at the `+Y`
+   pole instead of 0. Every texture came out rotated a quarter turn on the sphere. The defect
+   predates the flip and depends on no axis sign.
+   ⚠️⚠️ **It survived the whole migration audit because the obvious probe cannot see it**: a
+   `V`-versus-`Y` comparison reads a flat 0.5 above and below the equator when `V` is actually
+   longitude, which looks like a symmetric shape rather than a defect. The discriminator is a
+   LATITUDE RING: along one, longitude must sweep and latitude must hold. Transposed, the ring shows
+   the exact opposite — measured span `U` = **0** and span `V` = **1**, the perfect signature.
+   Pinned by `sphereMapsUToLongitudeAndVToLatitude`, verified failing before the fix.
 
    Rules in `dependencies/emeraude-base/src/VertexFactory/AGENTS.md` § "Texture coordinate convention".
    `generateHollowedCube` is out of scope by construction (UVs parameterised per beam, not by
