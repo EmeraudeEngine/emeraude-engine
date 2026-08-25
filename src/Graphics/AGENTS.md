@@ -1519,6 +1519,35 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 > differ on ~326 k pixels (max 194 LSB). A bit-identical control is inapplicable on this scene —
 > a change can only be shown to sit BELOW that floor.
 
+> [!NOTE]
+> **The residual gap against RTR is STRUCTURAL — do not spend another session chasing it.** After
+> the near-plane clip, every miss on `reflexion-debug`'s mirror sphere was attributed by a
+> temporary miss-reason code in the trace target's alpha (the resolve reads only `.xy` and `.z`, so
+> the instrumentation could not change a pixel — and the hit count confirmed it, 3,225 vs 3,226).
+> Pose (0, 2, 9), sphere selected by the normals attachment's packed value 2.1:
+>
+> | share of the sphere | reason |
+> |---|---|
+> | 41.6 % | hit |
+> | 43.3 % | the reflected ray LEAVES THE SCREEN |
+> | 9.1 % | end of the ray reached with no hit — rays aimed at the sky, and since the skybox sits at the far plane a ray never gets behind it, so the cubemap fallback is the CORRECT answer |
+> | 6.0 % | step budget exhausted |
+>
+> The dominant term is the structural limit of screen space, which is exactly what RTR does not
+> suffer and what the whole 13.6 % vs 28.7 % gap measures. **The step budget is not recoverable
+> either**: raising `maxSteps` 128 → 512 moved that term 6.0 % → 2.0 % yet left the hit rate at
+> 41.6 % — the freed rays go on to leave the screen or reach the ray's end, never to hit. Four
+> times the iterations, zero extra hits. `maxSteps{128}` stays.
+>
+> ⚠️ The first attempt at that comparison was INVALID and said the opposite (hits 41.6 % → 11.5 %,
+> step-exhaustion 6 % → 28 %, which is arithmetically impossible when the budget grows). The
+> sphere mask held 8,059 texels instead of 7,749: under `renderdoccmd` everything is slowed by
+> orders of magnitude and a fixed sleep does NOT guarantee the camera has been placed. **Read the
+> pose back (`Act.getPosition()`) into the capture log, and treat the mask's texel count as the
+> control** — a differing count means the two captures are not comparable, whatever the numbers
+> say. ⚠️ Never let a capture runner delete previous `.rdc` files either: it destroyed the
+> baseline the probe had to be compared against.
+
 > [!CAUTION]
 > **The material-properties `reflection` nibble is written and read by NOBODY.** `SSR`, `RTR`,
 > `SSAO` and `SSGI` all set `contribution.needsMaterialProperties = true` — so the attachment is
