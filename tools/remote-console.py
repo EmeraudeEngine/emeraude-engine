@@ -12,92 +12,43 @@ Usage:
 
     # Pipe commands
     echo "Core.SceneManagerService.getSceneInfo()" | python remote-console.py
+
+The wire protocol lives in `emeraude_console.py` and is shared with every other Python tool
+here — this file is the command-line front end, nothing more.
 """
 
 import socket
 import sys
-import select
-import time
+from pathlib import Path
 
-DEFAULT_HOST = "localhost"
-DEFAULT_PORT = 7777
-RECV_TIMEOUT = 3.0
-BUFFER_SIZE = 65536
+# The shared client sits next to this script; called through an absolute path or a symlink, the
+# interpreter's search path does not include that directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def recv_all(sock: socket.socket, timeout: float = RECV_TIMEOUT) -> str:
-    """Receive all available data from socket with timeout."""
-    sock.setblocking(False)
-    chunks = []
-    deadline = time.monotonic() + timeout
-
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            break
-
-        ready = select.select([sock], [], [], min(remaining, 0.1))
-        if ready[0]:
-            try:
-                data = sock.recv(BUFFER_SIZE)
-                if not data:
-                    break
-                chunks.append(data.decode("utf-8", errors="replace"))
-                # Reset deadline on new data (response may come in chunks)
-                deadline = time.monotonic() + 0.5
-            except BlockingIOError:
-                break
-            except ConnectionError:
-                break
-        elif chunks:
-            # No more data and we already have some - done
-            break
-
-    return "".join(chunks)
-
-
-def send_command(host: str, port: int, command: str) -> str:
-    """Connect, send a command, return the response."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(5.0)
-        sock.connect((host, port))
-
-        # Read welcome message
-        welcome = recv_all(sock, timeout=1.0)
-
-        # Send command
-        sock.sendall((command.strip() + "\n").encode("utf-8"))
-
-        # Read response
-        response = recv_all(sock, timeout=RECV_TIMEOUT)
-
-    return response
+from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console  # noqa: E402
 
 
 def interactive_mode(host: str, port: int) -> None:
     """Interactive REPL mode."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(5.0)
-        sock.connect((host, port))
-
-        welcome = recv_all(sock, timeout=1.0)
-        print(welcome.strip())
+    with Console(host, port) as console:
+        print(console.welcome.strip())
         print(f"Connected to {host}:{port}. Type 'quit' to exit.\n")
 
         while True:
             try:
-                cmd = input("> ").strip()
+                command = input("> ").strip()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
 
-            if not cmd:
+            if not command:
                 continue
-            if cmd.lower() in ("quit", "exit"):
+
+            if command.lower() in ("quit", "exit"):
                 break
 
-            sock.sendall((cmd + "\n").encode("utf-8"))
-            response = recv_all(sock, timeout=RECV_TIMEOUT)
+            response = console.run(command)
+
             if response.strip():
                 print(response.strip())
 
@@ -124,16 +75,24 @@ def main() -> None:
     try:
         if filtered_args:
             # Single command mode
-            command = " ".join(filtered_args)
-            response = send_command(host, port, command)
+            with Console(host, port) as console:
+                response = console.run(" ".join(filtered_args))
+
             if response.strip():
                 print(response.strip())
         elif not sys.stdin.isatty():
-            # Pipe mode
-            for line in sys.stdin:
-                line = line.strip()
-                if line:
-                    response = send_command(host, port, line)
+            # Pipe mode. One held connection for the whole stream: the console keeps per-session
+            # state (targetActiveScene, targetNode), so a piped sequence that targets a scene and
+            # then acts on it only works if the connection is the same throughout.
+            with Console(host, port) as console:
+                for line in sys.stdin:
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    response = console.run(line)
+
                     if response.strip():
                         print(response.strip())
         else:
@@ -142,7 +101,7 @@ def main() -> None:
     except ConnectionRefusedError:
         print(f"Error: Cannot connect to {host}:{port}. Is the engine running?", file=sys.stderr)
         sys.exit(1)
-    except socket.timeout:
+    except (socket.timeout, TimeoutError):
         print(f"Error: Connection to {host}:{port} timed out.", file=sys.stderr)
         sys.exit(1)
 

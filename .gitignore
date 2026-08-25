@@ -17,3 +17,9 @@ cmake-build-*
 # Claude Code build directories
 .claude/
 .claude-build-*
+
+# Python tooling (tools/) : byte-code, and the output of the glTF conformance bench when it is
+# run from inside the repository — its default --out is relative to the working directory.
+__pycache__/
+*.py[cod]
+gltf-bench-captures/
