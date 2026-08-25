@@ -1549,14 +1549,74 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 > baseline the probe had to be compared against.
 
 > [!CAUTION]
-> **The material-properties `reflection` nibble is written and read by NOBODY.** `SSR`, `RTR`,
-> `SSAO` and `SSGI` all set `contribution.needsMaterialProperties = true` — so the attachment is
-> allocated and the scene pass fills it — yet none of the four ever binds or samples it. Only
-> `AtmosphericFog` and `Bloom` are real consumers (`materialPropsTex`). Consequence: a material
-> declaring `"Reflection": { "Type": "None" }` still receives screen-space and ray-traced
-> reflections. `Grounds/Pavement005` (roughness 0.8, `Reflection: None`) is the reference case.
-> Do not "fix" a surface that reflects when it should not by tuning a roughness fade — the
-> response nibble is the contract, and it is currently unread.
+> **`needsMaterialProperties` is a COMBINE-PASS codegen request, not "give me the texture", and
+> two disjoint delivery paths exist.** A previous revision of this file claimed the `reflection`
+> nibble was "written and read by NOBODY" — that was WRONG, and the mistake came from grepping the
+> effects for `materialPropsTex`/`matProps` while the generated combine sampler is named
+> **`emMaterialProps`**. Seven effects read it there: `SSR.cpp:1655` and `RTR.cpp:1537` decode it
+> as `float(uint(texture(emMaterialProps, vUV).r * 255.0) >> 4u) / 15.0` into
+> `ssrReflectivity`/`rtrReflectivity`, gate on `> 0.0`, and weight their mix by it —
+> `mix(em_Color.rgb, data.rgb / confidence, confidence * intensity * reflectivity)`. SSAO, SSGI,
+> RTAO, RTGI and ContactShadows read their own nibbles the same way.
+>
+> The two paths:
+> - **Overlay effects** (`producesOverlay()`) set `CombineContribution::needsMaterialProperties`
+>   and read `emMaterialProps` in their combine snippet. `CombinePass` emits the sampler, hashes
+>   it into the pipeline variant key, and binds `context.materialProperties` — aborting the whole
+>   combine group with a `TraceError` if it is null. This allocates nothing.
+> - **Direct effects** (`AtmosphericFog`, `Bloom`, `DepthOfField`) declare their own
+>   `materialPropsTex` in `set = 0` at the last binding of `getInputLayout(N)`, and hand-write
+>   `context.materialProperties` into their per-frame set inside `execute()`.
+>
+> Allocation is a THIRD, separate thing: the virtual `requiresMaterialProperties()`, OR-ed by
+> `PostProcessStack` and turned into the `VK_FORMAT_R8G8B8A8_UNORM` MRT attachment by `Renderer`.
+> `PostProcessor` skips any effect whose flag is set while the texture is null, so the pointer is
+> guaranteed non-null inside `execute()`.
+
+> [!CAUTION]
+> **`"Reflection": { "Type": "None" }` does NOT publish a zero reflectivity — the name is
+> misleading, and the explicit opt-out is a DIFFERENT declaration.** With `None` the parse returns
+> early, `m_useReflection` stays false, and `LightGenerator::materialPropertiesExpression()` falls
+> through its priority ladder to `clamp(max(metalness, 1.0 - roughness), 0.0, 1.0)` — a
+> **participation mask** for the traced reflections, deliberately not an energy weight (the code
+> says why: a smooth DIELECTRIC — glass, metalness 0, roughness 0 — must participate, and the old
+> `metalness * smoothness` product zeroed it so glass lost every traced reflection; the effects
+> apply the real Fresnel and roughness fade themselves). Measured on `reflexion-debug`: the
+> polished metal sphere publishes **1.0**, and `Grounds/Pavement005` — roughness 0.8,
+> `Reflection: None` — publishes **0.2**, not 0.
+>
+> **To publish exactly zero, author `"Reflection": { "Type": "Value", "Amount": 0.0 }`.** No new
+> format value is needed and none was added: `FillingType::Value` routes through
+> `StandardResource::parseReflectionComponent()` to `m_postProcessReflectivityAmount`, which
+> `setupLightGenerator()` hands to `declareSurfaceReflectivityMap()` — **priority 1**, the top of
+> the ladder — as a GLSL literal. `ssrReflectivity`/`rtrReflectivity` then fail their `> 0.0` gate
+> and the surface receives no traced reflection at all. The sentinel is `-1.0F` ("not declared"),
+> so `0.0` is honoured rather than treated as absent. The other two ways to reach zero are the
+> artistic-cubemap flag (`m_reflectionArtistic`) and a reflectivity map authored to zero.
+>
+> ⚠️ That literal is NOT keyed by the program caches, which hash descriptor layout + material FLAG
+> BITS and never plain values. It is safe here only because the global key also hashes the
+> **renderable's name** (`SceneRendering::computeProgramCacheKey()` point 3), so two materials with
+> different `Amount`s on different renderables cannot collide. The residual hazard is narrow but
+> real: swapping a material for a differently-valued one on the SAME renderable keeps the same key
+> and reuses the program built with the OLD literal.
+
+> [!NOTE]
+> **The nibble quantization used to TRUNCATE — fixed Aug 2026, and it was worth a full step.** The
+> pack was `uint(x * 15.0)`; it is now `uint(x * 15.0 + 0.5)` for all three live fields
+> (reflectivity, aoResponse, emissiveMask; R's low nibble is hardcoded 0, G's low and B's high are
+> hardcoded 15, A is a literal 1.0). Since 0.8 is not representable in binary,
+> `1.0 - 0.8 = 0.19999998807907104` in float32, times 15 is `2.999999761581421`, and the bare
+> `uint()` yielded **2** where the intent was 3 — the pavement published 0.1333 instead of 0.2, a
+> 33 % under-report. Measured in the attachment with RenderDoc, at a verified pose (sphere mask
+> bit-identical at 31,004 px): floor **0.1333 → 0.2000**, sphere **1.0 → 1.0** unchanged.
+>
+> ⚠️ Only EXACT values escaped the defect (metalness 1.0 gives exactly 15), which is why a mirror
+> read a clean 1.0 and hid it for every other surface — a reference object that happens to sit on
+> an exactly-representable value is the worst possible witness for a quantization bug.
+> ⚠️ `+ 0.5` with truncation, not `round()`: GLSL leaves `round()`'s behaviour on a .5 tie
+> implementation-defined. x is clamped to [0,1] upstream, so `x * 15.0 + 0.5` stays in [0.5, 15.5]
+> and can never overflow the nibble.
 
 > [!NOTE]
 > **The resolve reads the trace target with `texelFetch`, not `texture`.** Channels R and G carry

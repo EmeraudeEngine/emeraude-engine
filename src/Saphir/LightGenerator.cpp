@@ -204,11 +204,23 @@ namespace EmEn::Saphir
 		 * R = (reflectivity << 4 | reserved) / 255
 		 * G = (aoResponse << 4 | shadowResponse) / 255	— shadowResponse=15 (full)
 		 * B = (bloomContrib << 4 | emissiveMask) / 255	 — bloomContrib=15 (full)
-		 * A = (fogResponse << 4 | dofMask) / 255		   — both 15 (full) */
+		 * A = (fogResponse << 4 | dofMask) / 255		   — both 15 (full)
+		 *
+		 * ⚠️ The '+ 0.5' is LOAD-BEARING: uint() truncates, and the values reaching here are
+		 * results of float arithmetic that lands just below the intended step. A roughness-0.8
+		 * dielectric takes the participation branch 'max(metalness, 1.0 - roughness)', and 0.8
+		 * is not representable in binary — '1.0 - 0.8' is 0.19999998807907104, times 15 is
+		 * 2.999999761581421, and a bare uint() yielded 2 instead of 3: the surface published a
+		 * reflectivity of 0.1333 where 0.2 was intended, a 33% under-report measured in the
+		 * attachment with RenderDoc. Only EXACT values escaped it (metalness 1.0 gives exactly
+		 * 15), which is why a mirror read a clean 1.0 and hid the defect for every other
+		 * surface. '+ 0.5' with truncation is preferred over round(), whose behaviour on a
+		 * .5 tie is implementation-defined in GLSL. x is clamped to [0,1] upstream, so
+		 * x * 15.0 + 0.5 stays in [0.5, 15.5] and can never overflow the nibble. */
 		return "vec4("
-			"float(uint(" + reflectivity + " * 15.0) << 4u) / 255.0, "
-			"float((uint(" + aoResponse + " * 15.0) << 4u) | 15u) / 255.0, "
-			"float((15u << 4u) | uint(" + emissiveMask + " * 15.0)) / 255.0, "
+			"float(uint(" + reflectivity + " * 15.0 + 0.5) << 4u) / 255.0, "
+			"float((uint(" + aoResponse + " * 15.0 + 0.5) << 4u) | 15u) / 255.0, "
+			"float((15u << 4u) | uint(" + emissiveMask + " * 15.0 + 0.5)) / 255.0, "
 			"1.0)";
 	}
 

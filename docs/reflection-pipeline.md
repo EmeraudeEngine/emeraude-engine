@@ -377,9 +377,11 @@ effective reflection width = pyramidBaseW / 2^coneLOD
 ```
 
 At 16:9, `hitFraction` 0.15 and roughness 0.1 (α = roughness² = 0.01) that is **593 px, whatever
-the output resolution**. Verified on the bench (`reflexion-debug --demo-options=0,5,0`: sphere,
-AutoPostProcess, Polished), 1920×1080 logical window on a contentScale-1.5 display ⇒ 2880×1620
-framebuffer:
+the output resolution**. Verified on the bench (`reflexion-debug --demo-options=0,6,0`: sphere,
+AutoPostProcessRT, Polished), 1920×1080 logical window on a contentScale-1.5 display ⇒ 2880×1620
+framebuffer. ⚠️ This measurement was taken as `0,5,0` before the bench's two post-process rungs
+were split (Aug 2026): rung 5 now forces SSR and cannot reach the RTR glossy cone at all, so the
+RTR rung is **6**:
 
 | | `PixelDoubling` = true (default) | `PixelDoubling` = false |
 |---|---|---|
