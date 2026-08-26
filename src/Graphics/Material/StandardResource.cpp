@@ -2448,7 +2448,11 @@ namespace EmEn::Graphics::Material
 	uint32_t
 	StandardResource::UBOOffset () const noexcept
 	{
-		return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
+		/* ⚠️ LOCAL offset within the element's bank — see AbstractLightEmitter::UBOOffset(). Nothing
+		 * binds this today (a material owns its own descriptor set, written from
+		 * getDescriptorInfoForElement(), which already applies the modulo), but the formula was the
+		 * broken one and would have failed silently the day a dynamic bind started using it. */
+		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex));
 	}
 
 	const DescriptorSet *

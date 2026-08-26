@@ -178,7 +178,13 @@ namespace EmEn::Scenes::Component
 			return 0;
 		}
 
-		return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
+		/* ⚠️ The offset is LOCAL to the bank the element lives in, exactly like
+		 * SharedUniformBuffer::getByteOffsetForElement(). descriptorSet() already selects the bank
+		 * from the GLOBAL index; feeding the global index to the offset too made the two disagree as
+		 * soon as a scene held more lights of one type than a single 64 KiB bank can carry, pushing
+		 * the dynamic offset past the end of the buffer (VUID-vkCmdBindDescriptorSets-pDynamicOffsets)
+		 * or, worse, silently onto another light's block. */
+		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex));
 	}
 
 	const Vulkan::DescriptorSet *
