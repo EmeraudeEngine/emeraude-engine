@@ -306,7 +306,7 @@ exactly what the warning forbids. Point-light cubemap shadows share the shape (6
 
 | # | Defect | Status |
 |---|---|---|
-| A2 | The light UBO (`SharedUniformBuffer`) was single-instance, host-written every frame while up to `framesInFlight()-1` submitted frames were still reading it; and the scene upload ran **before** the frame's in-flight fence. | **FIXED** — one UBO region per frame-in-flight, folded into the existing dynamic offset; the upload moved behind the fence. ⚠️ The cascaded VIEW UBO is **still single-instance**: harmless while nothing but CSM writes it per tick, but it is the same shape and it is the next one to convert. |
+| A2 | The light UBO (`SharedUniformBuffer`) was single-instance, host-written every frame while up to `framesInFlight()-1` submitted frames were still reading it; and the scene upload ran **before** the frame's in-flight fence. | **FIXED** — one UBO region per frame-in-flight, folded into the existing dynamic offset; the upload moved behind the fence. The cascaded VIEW UBO carries one buffer and one descriptor set per frame-in-flight (it is not a dynamic-offset buffer, so the frame dimension cannot be folded into an offset). The 2D and 3D views keep ONE region and declare the frame index explicitly ignored: they carry no frame-varying value, which their own `[CAUTION]` block enforces. |
 | A1 | **FIXED.** Not CSM-only: EVERY light's sampling matrix was outside the contract. The CSM matrix existed **twice, on two different regimes**: the rasterising copy is published (`m_renderState[readStateIndex]`), the sampling copy (`DirectionalLight::m_CSMBuffer`) is not. `cascadeViewProjectionMatrix()` has **no `readStateIndex` overload** and serves `m_logicState`, unlike every other accessor in that class. **No light emitter has ever overridden `publishStateForRendering()`** — the contract covers entities and render targets only. | **OPEN** |
 | A3 | `m_renderStateIndex` was loaded **independently four times** inside one rendered frame. A frame straddling a publish rasterised the shadow map with tick N and the colour buffer with tick N+1. | **FIXED** — `Scene::beginRenderFrame()` latches once, every consumer reads the latch |
 | A4 | `m_CSMBuffer` was written by the logic thread and memcpy'd by the render thread with no synchronisation. | **FIXED** by A1 — the render thread now reads a published slot, and the publish/`m_renderStateIndex` release-acquire pair is the edge |
@@ -323,6 +323,13 @@ closed it was the GPU half: the light UBO was a single instance, host-written ev
 frames in flight were still reading it. **Publishing a value coherently is worthless if the memory it
 is uploaded into is overwritten under the GPU's feet.** Anyone reasoning about a temporal artefact in
 this engine has to check both sides of the contract, not just the CPU one.
+
+⚠️⚠️ **A plausible frame is not a correct frame.** While converting the light UBO, a region loop
+bounded by a compile-time maximum instead of the buffer's real region count wrote past the end and
+left every bind carrying a dynamic offset outside the allocation. The image looked right the whole
+time; only `VUID-vkCmdBindDescriptorSets-pDescriptorSets-01979` said otherwise. Read the FIRST VUID
+of a burst — the "set not bound" errors that followed were consequences — and never accept "it looks
+stable" as the verification for a synchronisation change.
 
 ⚠️ **`screenshot()` cannot capture this class of artefact.** The capture lands after the console
 command is processed, with the camera already parked for at least a frame and everything reconverged.

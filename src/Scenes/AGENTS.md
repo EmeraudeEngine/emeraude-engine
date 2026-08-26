@@ -800,11 +800,17 @@ the previous frame's data.
 > fence is waited on (`Core.cpp` `updateVideoMemory()` runs before `Renderer::renderFrame()`, whose
 > first synchronisation is `inFlightFence()->wait()`):
 >
-> | Resource | Owner | Frame-varying content? |
-> |----------|-------|------------------------|
-> | Light UBOs | `Graphics::SharedUniformBuffer` (`LightSet`) | **YES for a CSM light** — `updateCascades()` refits the cascade matrices and raises the dirty flag on **every logic tick** |
-> | Cascaded view UBO | `ViewMatricesCascadedUBO` | **YES, entirely** — its first 256 bytes are `mat4[4] cascadeViewProjectionMatrices`, refit to the camera frustum every tick |
-> | 2D / 3D view UBOs | `ViewMatrices2DUBO`, `ViewMatrices3DUBO` | Mostly no — but `WorldPosition` and `VelocityVector` **are** frame-varying while the camera moves |
+> | Resource | Owner | Frame-varying content? | Status |
+> |----------|-------|------------------------|--------|
+> | Light UBOs | `Graphics::SharedUniformBuffer` (`LightSet`) | **YES for ANY light that moves** — a carried torch, a lamp on a vehicle, an animated sun, and every CSM light by construction | **FIXED** — one region per frame-in-flight, folded **into the existing dynamic offset** (separate descriptor sets would re-open the offset-blind dedup defect) |
+> | Cascaded view UBO | `ViewMatricesCascadedUBO` | **YES, entirely** — its first 256 bytes are `mat4[4] cascadeViewProjectionMatrices`, refit to the camera frustum every tick | **FIXED** — one buffer + one descriptor set per frame-in-flight (not a dynamic-offset buffer) |
+> | 2D / 3D view UBOs | `ViewMatrices2DUBO`, `ViewMatrices3DUBO` | Mostly no — but `WorldPosition` and `VelocityVector` **are** frame-varying while the camera moves | **ONE region, deliberately.** They take the frame index and declare it ignored. ⚠️ The two frame-varying fields are a latent hole: they feed reflection/refraction/POM, not shadows |
+
+> [!IMPORTANT]
+> **The region index must be bounded by the buffer's REAL region count**, never by a compile-time
+> maximum that only sizes bookkeeping. Getting that wrong wrote past the end of the buffer and left
+> every bind with a dynamic offset outside the allocation — while the frame still rendered plausibly.
+> Only `VUID-vkCmdBindDescriptorSets-pDescriptorSets-01979` caught it.
 >
 > ⚠️ `ViewMatrices2DUBO.cpp` carries the rule in its own words — *"NEVER write a frame-varying value
 > in here. This uniform buffer object is SINGLE-buffered … the raster of frame N can read what frame
