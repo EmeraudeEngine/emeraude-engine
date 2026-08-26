@@ -826,9 +826,12 @@ namespace EmEn::Scenes
 		/* NOTE: Clean the render list before. */
 		m_renderLists[Shadows].clear();
 
-		/* NOTE: The camera position doesn't move during calculation. */
-		const auto & cameraPosition = renderTarget->viewMatrices().position();
-		const auto & frustum = renderTarget->viewMatrices().frustum(0);
+		/* ⚠️ [DOUBLE-BUFFERING] Published render state, like the main render list. Harmless today for
+		 * a static light (a classic shadow target's own frame is written only when the light moves,
+		 * and a CSM target short-circuits both tests below), but the no-argument overloads are the
+		 * LIVE logic state and have no business being read from the render thread. */
+		const auto & cameraPosition = renderTarget->viewMatrices().position(readStateIndex);
+		const auto & frustum = renderTarget->viewMatrices().frustum(readStateIndex, 0);
 		const auto viewDistance = renderTarget->viewDistance();
 
 		/* ⚠️⚠️ A CSM shadow map has NO meaningful camera position, so the distance test below must
@@ -992,8 +995,14 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Compute LOD level from main camera distance (same as main rendering).
-		 * Shadow detail degrades with the same LOD as the main view. */
+		/* ⚠️ The LOD here is chosen from the distance to the LIGHT, not to the camera: `distance` is
+		 * measured against the SHADOW TARGET's position by the caller (see populateShadowCastingRenderList).
+		 * Shadow LOD and colour LOD are therefore selected from different distances BY CONSTRUCTION —
+		 * this comment used to claim the opposite ("same as main rendering"), which it never was.
+		 * ⚠️ selectLODLevel() also reads m_currentViewDistance, which populateRenderLists() writes and
+		 * which the shadow pass reads BEFORE it on the first frame of a scene (Renderer::renderFrame
+		 * runs renderShadowMaps() before prepareRender()): the very first shadow list of a scene is
+		 * built against the previous scene's leftover. It only guards a `> 0` test today. */
 		const auto objectRadius = renderable->boundingSphere().radius() * renderable->uniformScale();
 		const auto LODLevel = this->selectLODLevel(distance, objectRadius);
 		const auto layerCount = renderable->layerCount();
@@ -1091,14 +1100,17 @@ namespace EmEn::Scenes
 			m_RTOpaqueLightedList.clear();
 		}
 
-		/* NOTE: The camera position doesn't move during calculation. */
-		const auto & cameraPosition = renderTarget->viewMatrices().position();
-		const auto & frustum = renderTarget->viewMatrices().frustum(0);
+		/* ⚠️ [DOUBLE-BUFFERING] These MUST come from the published render state, never from the
+		 * no-argument overloads: those serve the LIVE logic state, which the logic thread rewrites
+		 * every tick (ViewMatrices2DUBO::updateViewCoordinates() → m_logicState.frustum.update()).
+		 * Reading them here culled entities in and out of the frame on a torn frustum — visible ONLY
+		 * while the camera moved, because a parked camera rewrites byte-identical data. That is the
+		 * very artefact the two-state system exists to remove, reintroduced at the culling site.
+		 * The comment this replaced ("the camera position doesn't move during calculation") was true
+		 * of the render thread and false across the thread boundary. */
+		const auto & cameraPosition = renderTarget->viewMatrices().position(readStateIndex);
+		const auto & frustum = renderTarget->viewMatrices().frustum(readStateIndex, 0);
 		const auto viewDistance = renderTarget->viewDistance();
-
-		/* NOTE: Camera position from the read state, used to stage sprite model matrices.
-		 * Mirrors pushMatricesForRendering() which reads position(readStateIndex). */
-		const auto & renderCameraPosition = renderTarget->viewMatrices().position(readStateIndex);
 
 		/* NOTE: Only the primary view target advances the per-instance model matrix history
 		 * (motion vectors) — once per rendered frame, render-to-textures excluded. */
@@ -1176,7 +1188,7 @@ namespace EmEn::Scenes
 				}
 			}
 
-			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, renderCameraPosition, advanceModelHistory);
+			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, cameraPosition, advanceModelHistory);
 		}
 
 		/* Sorting renderable objects from scene static entities. */
@@ -1253,7 +1265,7 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition, advanceModelHistory);
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
 				});
 			}
 		}
@@ -1338,7 +1350,7 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, renderCameraPosition, advanceModelHistory);
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
 				});
 			}
 		}
