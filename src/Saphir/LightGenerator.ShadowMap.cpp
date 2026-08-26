@@ -220,7 +220,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept
+	LightGenerator::generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition, const std::string & fragmentPositionWorldSpace) const noexcept
 	{
 		std::string code;
 		code.reserve(1600 + (shadowMap.size() * 2) + (fragmentPosition.size() * 9));
@@ -290,7 +290,15 @@ namespace EmEn::Saphir
 				code +=
 					"/* Vogel disk PCF with per-fragment rotation. */" "\n"
 					"const float goldenAngle = 2.399963;" "\n"
-					"const float rotationAngle = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.283185;" "\n"
+					"/* ⚠️⚠️ The kernel rotation is hashed from the fragment's WORLD position, never from" "\n"
+					"   gl_FragCoord. A screen-space hash with no frame index mixed in is a noise field FIXED" "\n"
+					"   IN SCREEN SPACE: surfaces slide THROUGH it as the camera moves, which reads as crawl," "\n"
+					"   and a temporal filter is structurally unable to clean it — averaging a value that is" "\n"
+					"   constant in time returns that constant. Anchored to the world, the rotation belongs to" "\n"
+					"   the surface: it is the same every frame for a given point, so nothing crawls, and it" "\n"
+					"   stays stable even when the LIGHT moves (a carried torch), which a light-space anchor" "\n"
+					"   would not. */" "\n"
+					"float rotationAngle = fract(sin(dot(" + fragmentPositionWorldSpace + ", vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.283185;" "\n"
 					"const float cosRot = cos(rotationAngle);" "\n"
 					"const float sinRot = sin(rotationAngle);" "\n"
 					"const int sampleCount = ";
@@ -335,7 +343,15 @@ namespace EmEn::Saphir
 					"	vec2(-0.24188840, 0.99706507), vec2(-0.81409955, 0.91437590)," "\n"
 					"	vec2(0.19984126, 0.78641367), vec2(0.14383161, -0.14100790)" "\n"
 					");" "\n"
-					"const float rotationAngle = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.283185;" "\n"
+					"/* ⚠️⚠️ The kernel rotation is hashed from the fragment's WORLD position, never from" "\n"
+					"   gl_FragCoord. A screen-space hash with no frame index mixed in is a noise field FIXED" "\n"
+					"   IN SCREEN SPACE: surfaces slide THROUGH it as the camera moves, which reads as crawl," "\n"
+					"   and a temporal filter is structurally unable to clean it — averaging a value that is" "\n"
+					"   constant in time returns that constant. Anchored to the world, the rotation belongs to" "\n"
+					"   the surface: it is the same every frame for a given point, so nothing crawls, and it" "\n"
+					"   stays stable even when the LIGHT moves (a carried torch), which a light-space anchor" "\n"
+					"   would not. */" "\n"
+					"float rotationAngle = fract(sin(dot(" + fragmentPositionWorldSpace + ", vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.283185;" "\n"
 					"const float cosRot = cos(rotationAngle);" "\n"
 					"const float sinRot = sin(rotationAngle);" "\n\n"
 
@@ -475,7 +491,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept
+	LightGenerator::generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar, const std::string & fragmentPositionWorldSpace) const noexcept
 	{
 		std::string code;
 		code.reserve(2048 + (shadowMap.size() * 4) + (directionWorldSpace.size() * 3) + (nearFar.size() * 4));
@@ -574,7 +590,15 @@ namespace EmEn::Saphir
 					";" "\n\n"
 
 					"/* Per-fragment rotation to break up patterns. */" "\n"
-					"float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);" "\n\n"
+					"/* ⚠️⚠️ The kernel rotation is hashed from the fragment's WORLD position, never from" "\n"
+					"   gl_FragCoord. A screen-space hash with no frame index mixed in is a noise field FIXED" "\n"
+					"   IN SCREEN SPACE: surfaces slide THROUGH it as the camera moves, which reads as crawl," "\n"
+					"   and a temporal filter is structurally unable to clean it — averaging a value that is" "\n"
+					"   constant in time returns that constant. Anchored to the world, the rotation belongs to" "\n"
+					"   the surface: it is the same every frame for a given point, so nothing crawls, and it" "\n"
+					"   stays stable even when the LIGHT moves (a carried torch), which a light-space anchor" "\n"
+					"   would not. */" "\n"
+					"float noise = fract(sin(dot(" + fragmentPositionWorldSpace + ", vec3(12.9898, 78.233, 37.719))) * 43758.5453);" "\n\n"
 
 					"shadowFactor = 0.0;" "\n"
 					"for ( int i = 0; i < sampleCount; i++ )" "\n"
@@ -619,7 +643,15 @@ namespace EmEn::Saphir
 					");" "\n\n"
 
 					"/* Per-fragment rotation matrix to break up patterns. */" "\n"
-					"float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.283185;" "\n"
+					"/* ⚠️⚠️ The kernel rotation is hashed from the fragment's WORLD position, never from" "\n"
+					"   gl_FragCoord. A screen-space hash with no frame index mixed in is a noise field FIXED" "\n"
+					"   IN SCREEN SPACE: surfaces slide THROUGH it as the camera moves, which reads as crawl," "\n"
+					"   and a temporal filter is structurally unable to clean it — averaging a value that is" "\n"
+					"   constant in time returns that constant. Anchored to the world, the rotation belongs to" "\n"
+					"   the surface: it is the same every frame for a given point, so nothing crawls, and it" "\n"
+					"   stays stable even when the LIGHT moves (a carried torch), which a light-space anchor" "\n"
+					"   would not. */" "\n"
+					"float noise = fract(sin(dot(" + fragmentPositionWorldSpace + ", vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.283185;" "\n"
 					"float cosN = cos(noise);" "\n"
 					"float sinN = sin(noise);" "\n"
 					"mat3 rotation = mat3(" "\n"
@@ -665,7 +697,15 @@ namespace EmEn::Saphir
 					"	vec3(-0.5836,-0.3541, 0.2407), vec3( 0.2890, 0.7152,-0.2167)" "\n"
 					");" "\n\n"
 
-					"float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.283185;" "\n"
+					"/* ⚠️⚠️ The kernel rotation is hashed from the fragment's WORLD position, never from" "\n"
+					"   gl_FragCoord. A screen-space hash with no frame index mixed in is a noise field FIXED" "\n"
+					"   IN SCREEN SPACE: surfaces slide THROUGH it as the camera moves, which reads as crawl," "\n"
+					"   and a temporal filter is structurally unable to clean it — averaging a value that is" "\n"
+					"   constant in time returns that constant. Anchored to the world, the rotation belongs to" "\n"
+					"   the surface: it is the same every frame for a given point, so nothing crawls, and it" "\n"
+					"   stays stable even when the LIGHT moves (a carried torch), which a light-space anchor" "\n"
+					"   would not. */" "\n"
+					"float noise = fract(sin(dot(" + fragmentPositionWorldSpace + ", vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.283185;" "\n"
 					"float cosN = cos(noise);" "\n"
 					"float sinN = sin(noise);" "\n"
 					"mat3 rotation = mat3(cosN, sinN, 0.0, -sinN, cosN, 0.0, 0.0, 0.0, 1.0);" "\n\n"

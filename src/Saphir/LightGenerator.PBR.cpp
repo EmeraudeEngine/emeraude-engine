@@ -481,7 +481,7 @@ namespace EmEn::Saphir
 					}
 					else if ( m_PCFEnabled )
 					{
-						Code{fragmentShader} << this->generate2DShadowMapPCFCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::Blank;
+						Code{fragmentShader} << this->generate2DShadowMapPCFCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace, std::string(ShaderVariable::PositionWorldSpace) + ".xyz") << Line::Blank;
 					}
 					else
 					{
@@ -495,7 +495,7 @@ namespace EmEn::Saphir
 					 * nearFar.y = radius is used to convert stored depth to world-space distance. */
 					if ( m_PCFEnabled )
 					{
-						Code{fragmentShader} << this->generate3DShadowMapPCFCode(Uniform::ShadowMapSampler, "DirectionWorldSpace", "vec2(0.1, " + this->lightRadius() + ")") << Line::End;
+						Code{fragmentShader} << this->generate3DShadowMapPCFCode(Uniform::ShadowMapSampler, "DirectionWorldSpace", "vec2(0.1, " + this->lightRadius() + ")", std::string(ShaderVariable::PositionWorldSpace) + ".xyz") << Line::End;
 					}
 					else
 					{
@@ -506,7 +506,7 @@ namespace EmEn::Saphir
 				case LightType::Spot :
 					if ( m_PCFEnabled )
 					{
-						Code{fragmentShader} << this->generate2DShadowMapPCFCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::End;
+						Code{fragmentShader} << this->generate2DShadowMapPCFCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace, std::string(ShaderVariable::PositionWorldSpace) + ".xyz") << Line::End;
 					}
 					else
 					{

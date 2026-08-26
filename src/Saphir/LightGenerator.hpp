@@ -873,7 +873,7 @@ namespace EmEn::Saphir
 			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
-			std::string generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept;
+			std::string generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition, const std::string & fragmentPositionWorldSpace) const noexcept;
 
 			/**
 			 * @brief Generates the single-sample (no PCF) shadow test for a 3D (cubemap) shadow map, used by point lights.
@@ -901,7 +901,7 @@ namespace EmEn::Saphir
 			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
-			std::string generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept;
+			std::string generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar, const std::string & fragmentPositionWorldSpace) const noexcept;
 
 			/**
 			 * @brief Generates the Cascaded Shadow Map sampling code for directional lights.

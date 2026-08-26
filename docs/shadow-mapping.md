@@ -478,6 +478,44 @@ already concentrates the cascades. **Any CSM demo that looks blockier after this
 ⚠️ Verification is temporal, so a still frame cannot show it: move **slowly** along a shadow edge.
 Before, the edge crawled continuously; after, it either holds still or jumps one clean texel.
 
+### The PCF kernel rotation is anchored to the WORLD, not to the screen (Aug 2026)
+
+`generate2DShadowMapPCFCode()` (VogelDisk and PoissonDisk) and the three cubemap paths rotated
+their sampling kernel by `fract(sin(dot(gl_FragCoord.xy, …)))`. **No frame index was ever mixed in**,
+so the field was fixed in SCREEN space: a surface slides *through* a stationary noise pattern as the
+camera moves. That reads as **crawl**, and — the decisive part — **a temporal filter is structurally
+unable to remove it**, because averaging a value that is constant in time returns that constant. TAA
+could never have helped.
+
+Now hashed from `svPositionWorldSpace.xyz`. The rotation belongs to the surface: identical every
+frame for a given world point, so nothing crawls. World space rather than light space on purpose —
+a light-space anchor is stable only while the LIGHT is still, and a carried torch is the opposite.
+
+⚠️ Engine default is PCF **off** (`DefaultGraphicsShadowMappingEnablePCF`), so a machine that turns
+it on opts into this path. `generateCSMShadowMapCode()` never used the hash at all.
+
+⚠️ Amplitude caveat, unchanged: with `PCFSamples = 4` the kernel is 81 taps inside a **one-texel**
+radius, a grossly over-converged estimator, so the rotation moves the result very little either way.
+What the change removes is the screen-space anchoring, not a large error.
+
+### B3 — inter-cascade blending: FILED, NOT DONE
+
+Deliberately left, at the project owner's call, until it is seen on screen. Recording what it is and
+how to recognise it, so the next session does not have to rediscover it:
+
+- **What:** `generateCSMShadowMapCode()` selects one cascade with a break-on-first-hit loop and
+  applies a single matrix. The boundary is a hard plane **locked to the camera**, between two texel
+  grids that are not aligned with each other.
+- **How you would notice:** a static object's shadow switching grid in one frame as the camera
+  advances — a localised pop travelling with you along the split distance, not a shimmer. Most
+  visible on a long shadow crossing a split, at a low `cascadeScale` where the splits sit close.
+- **Cost of the fix:** a second PCF kernel inside the blend band. With `PCFSamples = 4` that is 81
+  extra taps for the fragments in the band.
+- **Shape:** factor the per-cascade sample into one emitted helper, then sample cascade *n* and
+  *n+1* in the band and `mix()` them by the normalised distance to the split. The band width belongs
+  in a settings key baked as a GLSL literal — matching how `PCFSamples`/`EnablePCF` already work — so
+  a ratio of 0 compiles the branch away entirely and costs nothing when off.
+
 ## Per-Light Shadow Configuration
 
 Each light component can independently configure shadow mapping:
