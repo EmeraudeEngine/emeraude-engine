@@ -1349,16 +1349,19 @@ namespace EmEn::Scenes
 					}
 
 					/* Raster list: frustum culling + distance check.
-					 * Sprites skip frustum culling: their bounding volume is a flat quad (Z=0)
-					 * that doesn't account for billboard rotation done in the vertex shader. */
+					 * ⚠️ Sprites are culled like everything else since Aug 2026. They used to be exempt
+					 * here — and ONLY here, never on the static-entity branch — because their volume
+					 * was the flat quad at Z=0, which ignores the billboard rotation done in the
+					 * vertex shader. SpriteResource now returns the SWEPT volume instead, which is
+					 * rotation-invariant, so the exemption became both redundant and misleading: it
+					 * protected the path nobody used while the other one culled against a shape that
+					 * cannot be culled correctly, and every sprite vanished at altitude. */
 					if ( distance > viewDistance )
 					{
 						return;
 					}
 
-					const bool isBillboardSprite = renderableInstance->renderable() != nullptr && renderableInstance->renderable()->isSprite();
-
-					if ( !isBillboardSprite && !renderTarget->isCubemap() && !currentNode->isVisibleTo(frustum) )
+					if ( !renderTarget->isCubemap() && !currentNode->isVisibleTo(frustum) )
 					{
 						return;
 					}

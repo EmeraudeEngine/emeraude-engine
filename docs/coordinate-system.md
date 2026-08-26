@@ -381,3 +381,25 @@ after a long and fruitless static trace of the render path.** Reach for the hist
 
 ⚠️ Related, NOT fixed here because it is demo data rather than engine: the `sprite` demo scatters its
 fires over `y ∈ [-1.75, 0]`, which was above ground under Y-down and is below it now.
+
+### And the bounding volume that came with it
+
+Once sprites rendered again, they vanished as a block the moment the camera rose above the scene —
+far short of the view distance, so never the distance test.
+
+A billboard is re-oriented toward the camera in the vertex shader, so the quad's own bounds (a flat
+rectangle at Z=0) describe a shape that never exists on screen. The engine knew: `populateRenderLists()`
+carried an `isBillboardSprite` exemption skipping frustum culling, with a comment saying exactly why —
+but **only on the scene-node branch**. The static-entity branch never had it, and the `sprite` demo
+builds everything as static entities, so the workaround protected the path nobody used.
+
+Fixed at the source instead of copied into the second branch: `SpriteResource` returns the **swept**
+volumes — a sphere enclosing the quad under any rotation, and the cube enclosing that sphere. Being
+rotation-invariant they are correct for every camera, and the exemption is gone, so both entity paths
+now read alike.
+
+⚠️ It propagates for free to instancing: `MultipleVisuals::updateRenderBounds()` already builds the
+CLOUD's box by transforming the eight corners of `renderable->boundingBox()` through every instance
+matrix, and `renderBoundingBox()` — distinct from `localBoundingBox()`, which stays per-instance for
+collision — is what feeds the rendering octree and `isVisibleTo()`. That design was already right; it
+was just being handed a flat quad.
