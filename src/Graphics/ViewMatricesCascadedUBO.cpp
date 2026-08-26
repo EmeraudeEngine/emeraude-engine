@@ -233,7 +233,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	ViewMatricesCascadedUBO::updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept
+	ViewMatricesCascadedUBO::updateOrthographicViewProperties (float width, float height, float /*nearDistance*/, float /*farDistance*/) noexcept
 	{
 		if ( width * height <= 0.0 )
 		{
@@ -244,21 +244,23 @@ namespace EmEn::Graphics
 
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
-		m_logicState.bufferData[NearPlaneOffset] = nearDistance;
-		m_logicState.bufferData[FarPlaneOffset] = farDistance;
 
-		/* NOTE: Compute the side AFTER updating ViewDistanceOffset to use the new farDistance value.
-		 * The side represents half the width/height of the orthographic frustum, scaled by aspect ratio. */
-		const auto side = m_logicState.bufferData[FarPlaneOffset] * this->getAspectRatio();
-
-		m_logicState.projection = Matrix< 4, float >::orthographicProjection(
-			-side, side,
-			-side, side,
-			m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]
-		);
-
-		/* Recompute split distances when view properties change. */
-		this->computeSplitDistances(nearDistance, farDistance);
+		/* ⚠️⚠️ A CASCADED VIEW HAS NO SINGLE VIEW RANGE. Its near/far and its projections belong to
+		 * updateFromMainCameraFrustum(), which refits them to the MAIN CAMERA on every logic tick.
+		 * The only caller that reaches here is the light connexion
+		 * (AbstractLightEmitter::onOutputDeviceConnected → ShadowMap::updateViewRangesProperties), and a
+		 * directional light hands it DUMMIES: getFovOrNear() is a hard-coded 0.0 and getDistanceOrFar()
+		 * returns a hard-coded 1.0 in CSM mode, saying so in its own comment.
+		 * Accepting them poisoned the state twice:
+		 *   - computeSplitDistances(0.0, 1.0) evaluates near * pow(far / near, p) = 0 * pow(+inf, p),
+		 *     i.e. 0 * inf = NaN, in EVERY split slot — uploaded as-is on the first frames, where the
+		 *     shader's `viewDepth < splitDistances[i]` is false against a NaN and every fragment falls
+		 *     through to the last cascade;
+		 *   - m_logicState.projection became a 1 × 1 box over [0, 1] and stayed there for the process
+		 *     lifetime, because updateFromMainCameraFrustum() never writes it, leaving mainFrustum()
+		 *     (built from it in updateViewCoordinates()) permanently garbage.
+		 * The size IS meaningful and is kept: it is the shadow map extent, and getAspectRatio() reads it.
+		 * The range is dropped on purpose — do not "restore" it. */
 	}
 
 	void
