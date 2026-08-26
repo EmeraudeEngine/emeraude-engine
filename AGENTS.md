@@ -36,21 +36,30 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > configs must stay green. **Windows is resolved (2026-07):** the old
 > `WINDOWS_EXPORT_ALL_SYMBOLS` + PCH incompatibility (PCH marker symbols leaking into the
 > auto-generated `exports.def` → `LNK2001`) was solved by completing the explicit-export
-> migration: the public surface consumed by a consumer application carries `EMEN_API`, and
+> migration: the public surface consumed by a consumer application carries `EMEN_LEAN_API`, and
 > C4251/C4275 are disabled cascade-wide (decision "2b": emeraude-base types stay unexported,
 > consumers keep their static base copy). Full MSVC cascade verified (build + link with PCH).
 >
-> **`EMERAUDE_USE_EXPLICIT_EXPORTS` defaults to `On` on MSVC, `Off` elsewhere (2026-08-05).**
-> The brief 2026-08 revert to `Off` (motivated by the longer consuming-application link and the
-> standing `EMEN_API` annotation duty) died within days: the engine's symbol surface crossed the
-> **hard PE limit of 65535 exported ordinals per DLL** (`exports.def` at ~65.8k symbols →
-> `LNK1189`), so export-all **no longer links on Windows at all** — explicit exports are the only
-> viable mode there, and their costs are now just the price of linking. On non-MSVC platforms the
-> option is inert (no `.def`; export via symbol visibility), hence `Off`. Any new public symbol a
-> consumer references out-of-line needs `EMEN_API` or the **consumer's** link breaks (`LNK2019` on
-> `__imp_...`), one repository away from the change — let the linker name what is missing. The
-> export-all/PCH guard stays at the `emeraude_base_target_enable_pch()` call site in
-> `CMakeLists.txt` for anyone forcing the option `Off` locally (which no longer links on MSVC). **macOS Objective-C++ is handled (2026-07):** the
+> **Explicit exports are mandatory on MSVC, and the option is now a PAIR (2026-08).** The brief
+> 2026-08 revert to export-all (motivated by the longer consuming-application link and the standing
+> annotation duty) died within days: the engine's symbol surface crossed the **hard PE limit of 65535
+> exported ordinals per DLL** (`exports.def` at ~65.8k symbols → `LNK1189`), so export-all **no
+> longer links on Windows at all**. The single `EMERAUDE_USE_EXPLICIT_EXPORTS` switch was then split
+> into two **mutually exclusive** options (both On is a `FATAL_ERROR`):
+> **`EMERAUDE_USE_FULL_EXPORTS`** (default On on MSVC — exports both `EMEN_LEAN_API` and `EMEN_API`)
+> and **`EMERAUDE_USE_LEAN_EXPORTS`** (default Off — exports `EMEN_LEAN_API` **only**, keeping the
+> ordinal count down to what an embedding application actually references; this is what `app_system`
+> forces). On non-MSVC platforms both are inert (no `.def`; export via symbol visibility), hence Off.
+>
+> **Consequence of LEAN, and the trap it sets: `EMEN_API` is a no-op there.** A public symbol a
+> consumer references out-of-line must carry **`EMEN_LEAN_API`**, or the **consumer's** link breaks
+> (`LNK2019`/`LNK2001` on every member of the class) — one repository away from the change, **and on
+> MSVC only**, so Linux and macOS keep building green. Let the linker name what is missing, then
+> promote the class in the engine; never widen a consumer to `FULL` to silence it. Reference case:
+> `Graphics::Material::StandardResource` stayed `EMEN_API` when it replaced `BasicResource` while all
+> its consumed neighbours were `EMEN_LEAN_API` → 38 unresolved externals in `app_system`. The
+> export-all/PCH guard stays at the `emeraude_base_target_enable_pch()` call site in `CMakeLists.txt`
+> for anyone forcing both options `Off` locally (which no longer links on MSVC). **macOS Objective-C++ is handled (2026-07):** the
 > base helper auto-sets `SKIP_PRECOMPILE_HEADERS` on the engine's `.mm` sources (SerialPort,
 > WiFiScanner, StorageInfo, Window, Dialogs, …) — without it clang rejects the pure-C++ PCH in
 > those TUs (`Objective-C was disabled in PCH file but is currently enabled`), because CMake
@@ -329,7 +338,7 @@ how to add new commands.
 -   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
 -   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
 -   **Scene Loaders & OpenUSD:** [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) (**design; USD not yet implemented** — the `SceneData` extension to lights/cameras/instancers, tinyusdz, and the **absorption rule**: nothing USD survives `load()`, a missing capability is added to `Scenes`. Also defines the Intel Jungle Ruins scene as the engine's **GOLD GOAL** — the owner's *Saint Graal*, the scene whose completion says the runtime has arrived, and the benchmark it is measured against until then. Read before touching any loader or `SceneData`).
--   **Windows Export API:** [`docs/windows-export-api.md`](docs/windows-export-api.md) (`EMEN_API` migration — required on MSVC with PCH; in progress).
+-   **Windows Export API:** [`docs/windows-export-api.md`](docs/windows-export-api.md) (`EMEN_LEAN_API` / `EMEN_API` — required on MSVC; **read § 2 before annotating**: which of the two macros a class gets decides whether a consumer links on Windows).
 
 > [!CRITICAL]
 > **Maintenance:** AI documentation is **MORE IMPORTANT than the code itself.** A code change

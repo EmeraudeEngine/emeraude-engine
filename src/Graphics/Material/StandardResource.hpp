@@ -85,7 +85,7 @@ namespace EmEn::Graphics::Material
 	 * - Normal mapping (optional)
 	 * - Reflection/IBL via cubemap (optional)
 	 */
-	class EMEN_API StandardResource final : public Interface
+	class EMEN_LEAN_API StandardResource final : public Interface
 	{
 		friend class Resources::Container< StandardResource >;
 

@@ -2,7 +2,14 @@
 
 > Status: **migration complete and verified (2026-07); ON by default on MSVC (since 2026-08-05),
 > OFF elsewhere.** The full MSVC cascade (base → engine → a consumer library → consumer
-> executables) builds and links with `EMERAUDE_USE_EXPLICIT_EXPORTS=ON`.
+> executables) builds and links with explicit exports enabled.
+>
+> **The single `EMERAUDE_USE_EXPLICIT_EXPORTS` option was split in two (2026-08):**
+> `EMERAUDE_USE_FULL_EXPORTS` (whole annotated API — the MSVC default) and
+> `EMERAUDE_USE_LEAN_EXPORTS` (only the scopes an embedding application consumes, marked
+> `EMEN_LEAN_API` — what `app_system` forces). **Read § 2 before annotating anything**: in lean mode
+> `EMEN_API` is inert, and picking the wrong macro breaks the *consumer's* link on MSVC while every
+> other platform stays green.
 >
 > **Why ON is now mandatory on MSVC — export-all is dead.** The default had been reverted to OFF
 > in early 2026-08 (consumer link time, annotation duty — see the history in § 7). Within days the
@@ -62,31 +69,70 @@ auto-exporting and declare the public boundary explicitly with the `EMEN_API` ma
 > two together: `EMEN_API` defines what our **public API** is, the hiding helper defines what is
 > **not ours to export at all**.
 
-## 2. The toggle
+## 2. The two toggles — FULL and LEAN
 
-`option(EMERAUDE_USE_EXPLICIT_EXPORTS …)` in `CMakeLists.txt` — default **ON on MSVC** (export-all
-exceeds the 65535 PE export limit, see the status note), **OFF elsewhere** (inert):
+`EMERAUDE_USE_EXPLICIT_EXPORTS` **no longer exists.** It was split (2026-08) into two **mutually
+exclusive** options in `CMakeLists.txt` — enabling both is a `FATAL_ERROR`:
 
-| Mode | `WINDOWS_EXPORT_ALL_SYMBOLS` | `EMEN_API` expands to | Engine PCH on MSVC |
-|------|------------------------------|---------------------------|--------------------|
-| **OFF** (default off-MSVC; **no longer links on MSVC** — `LNK1189`) | `ON` | *nothing* (no-op) | disabled (guard at the call site) |
-| **ON** (default on MSVC) | `OFF` | `__declspec(dllexport)` while building the DLL (`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for consumers, `__attribute__((visibility("default")))` elsewhere | enabled — but a longer consumer link |
+| CMake option | `EMEN_LEAN_API` | `EMEN_API` | `WINDOWS_EXPORT_ALL_SYMBOLS` | Engine PCH on MSVC |
+|---|---|---|---|---|
+| `EMERAUDE_USE_FULL_EXPORTS` (default **On** on MSVC) | exported | exported | `OFF` | enabled |
+| `EMERAUDE_USE_LEAN_EXPORTS` (default Off) | exported | **inert** | `OFF` | enabled |
+| neither (default off-MSVC; **no longer links on MSVC** — `LNK1189`) | inert | inert | `ON` | disabled |
 
-Because the macro is inert while the option is OFF, the public API can be annotated **one class at
-a time without ever breaking the default build**. The switch is flipped to ON only once the whole
-referenced surface is annotated. The macro lives in [`src/emeraude_export.hpp`](../src/emeraude_export.hpp).
+Both macros expand, when active, to `__declspec(dllexport)` while building the DLL
+(`Emeraude_EXPORTS` is auto-defined by CMake for the SHARED target), `__declspec(dllimport)` for
+consumers, and `__attribute__((visibility("default")))` elsewhere. Off MSVC both options stay Off
+and are inert: there is no `.def`; ELF/Mach-O export via symbol visibility, unaffected by the
+ordinal limit. The macros live in [`src/emeraude_export.hpp`](../src/emeraude_export.hpp).
+
+### Why LEAN exists, and who pays for it
+
+FULL exports the whole annotated API — correct by construction for any consumer, but it is also
+what walks the `.def` back towards the 65535-ordinal PE ceiling. LEAN keeps the exported surface
+down to **what an embedding application actually references**, which is a small fraction of the
+annotated API.
+
+> [!IMPORTANT]
+> **In LEAN mode, `EMEN_API` is a no-op — and the failure surfaces one repository away.** A class
+> marked `EMEN_API` and referenced **out-of-line** by the consumer produces `LNK2019`/`LNK2001` on
+> **every** member of that class, at the *consumer's* link step, **on MSVC only** — Linux and macOS
+> keep building green, because symbol visibility does not gate on the lean/full split. The fix is
+> always engine-side: **promote the class to `EMEN_LEAN_API`**, which is precisely what that macro
+> designates. Do not push the consumer to `EMERAUDE_USE_FULL_EXPORTS` to make the error go away —
+> that trades a two-word annotation for the symbol-count problem LEAN was created to solve.
+>
+> **Reference case (2026-08).** `app_system` forces LEAN
+> (`cmake/InstallEmeraudeEngine.cmake`). When `Graphics::Material::BasicResource` was replaced by
+> `Graphics::Material::StandardResource`, the new class was annotated `EMEN_API` while every one of
+> its neighbours on the same consumed path (`Renderable::BasicGroundResource`,
+> `Renderable::MeshResource`, `Material::Interface`, `TextureResource::Texture2D`) was
+> `EMEN_LEAN_API`. `app_system/src/Application.Native3D.cpp` instantiates
+> `Resources::Container< StandardResource >` and calls `setAlbedoComponent()` /
+> `setRoughnessComponent()` / `setMetalnessComponent()` directly → **38 unresolved externals** on
+> MSVC (the full virtual table plus the private static `neutralMaterialProperties()`), nothing at
+> all on Linux/macOS. One-line fix: `class EMEN_LEAN_API StandardResource final : public Interface`.
+>
+> **Rule of thumb when adding to the consumed surface:** a class reachable from an embedding
+> application's own code — i.e. anything a consumer names in a header or `.cpp` of its own — belongs
+> in the lean set. `EMEN_API` is for the rest of the public API: reachable in principle, not
+> referenced by the applications we build.
 
 ## 3. What to annotate
 
-`EMEN_API` marks the boundary of what crosses the DLL edge and is referenced **out-of-line** by
-a consumer (`projet-alpha`, tests, tools).
+Both macros mark the boundary of what crosses the DLL edge and is referenced **out-of-line** by a
+consumer (`app_system`, `projet-alpha`, tests, tools). **Which one** you reach for is the whole
+question — see § 2: `EMEN_LEAN_API` for a scope an embedding application actually references,
+`EMEN_API` for the rest of the public API. When in doubt, prefer `EMEN_LEAN_API`: an over-inclusive
+lean set costs a few ordinals, an under-inclusive one costs a broken consumer link on MSVC only.
 
 - **Annotate**: a public `class`/`struct` that has out-of-line member definitions (i.e. a `.cpp`).
-  Put it on the type — `class EMEN_API Foo` — which exports every member.
+  Put it on the type — `class EMEN_LEAN_API Foo` — which exports every member.
   ```cpp
   #include "emeraude_export.hpp"
 
-  class EMEN_API Foo { … };
+  class EMEN_LEAN_API Foo { … };      // consumed by an embedding application
+  class EMEN_API Bar { … };           // public, but not referenced by our applications
   EMEN_API bool freeFunction (int);   // out-of-line free function
   ```
 - **Do NOT annotate**: header-only / fully-inline classes, function/class **templates** (instantiated
