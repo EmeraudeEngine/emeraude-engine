@@ -8,12 +8,38 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 - [Ray Tracing / Acceleration Structures](#ray-tracing--acceleration-structures)
 - [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
+- [Build / Compiler](#build--compiler)
 - [Platform-Specific](#platform-specific)
 - [Vulkan Validation](#vulkan-validation)
 
 ---
 
 ## Graphics/Material System
+
+### A colour AND a texture cannot both be the same material component — the second `emplace()` is rejected SILENTLY
+
+> **Symptom:** a material is given both a colour and a texture for the same component (albedo being
+> the usual case); only one of them shows up, and **nothing is logged**.
+>
+> **Root cause:** `Material::Interface`'s component map is filled with `m_components.emplace(...)`.
+> `emplace` on an existing key is a no-op that returns `false` — **first call wins**, second call
+> discarded without a trace. Two setters that both create the same `ComponentType` therefore
+> silently conflict.
+>
+> **The correct authoring pattern:** the **texture** is the component, the **colour** is the TINT —
+> `setAlbedoComponent(texture)` + `setAlbedoColor(colour)`. That is what the shader multiplies
+> anyway, so nothing is lost.
+>
+> **Two ordering rules of the same family** (also silent when violated):
+> - Unlit content needs its emissive **in this order**: `setAutoIlluminationComponent(1.0F)` FIRST
+>   (it CREATES the component), then `setEmissiveStrength(<nits>)`, then `enableUnlit()`.
+>   `setAutoIlluminationAmount()` alone is a post-creation setter and does **nothing** if the
+>   component does not exist yet.
+> - Dropping an `enableVertexColor()` call loses the vertex colours with **no log at all**
+>   (`VertexBufferFormatManager` emits `declareJump(VertexColor)` and discards the attribute).
+>
+> **Measured during:** the app-side migration of the material merge (Aug 2026), where each of these
+> cost a debugging round with an empty log.
 
 ### Fixed: Diamond-square ground/terrain — non-power-of-two division now snaps instead of failing (Jun 2026)
 
@@ -892,8 +918,8 @@ reflection, refraction, reflection+refraction).
 > is reused as a raw geometric N.L term inside the PBR low-quality specular `pow()` further down, and
 > scaling it there would change the highlight exponent's input rather than its energy.
 
-**Still open:** the legacy specular is not normalised either (see `TODO.md`) — that one changes the
-look of every legacy material, so it is an owner decision.
+**Moot since the material merge (Aug 2026):** the legacy Blinn-Phong material was deleted, so
+"the legacy specular is not normalised either" no longer describes anything that exists.
 
 ### Fixed: the material-facing grab pass was 8-bit under an HDR scene, and its transmission was scaled twice (Jul 2026)
 
@@ -972,7 +998,7 @@ truthful, so nothing was renamed.
 > same geometry, so at an UNCHANGED `shininess` every highlight is **WIDER** than the Phong one it
 > replaced. Verified live on `water-world`: the sand went visibly glittery. Rule of thumb — a Blinn
 > exponent needs roughly **4x** the Phong one for the same visual width (`Grounds/desert001`'s 192
-> wants something nearer 768). Tracked in `TODO.md`.
+> wants something nearer 768). Was tracked in the historical root `TODO.md`.
 >
 > **RESOLVED (Jul 2026)** — both the normalisation and the shininess retune were done in one pass,
 > exactly as this note asked. See the next entry, "The legacy specular was not energy-normalised, and
@@ -1157,7 +1183,8 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 > [!NOTE]
 > Still unnormalised, deliberately out of scope here: the **PBR low-quality specular approximation**
 > in `LightGenerator.cpp` (`lqSpecPower`), which multiplies the raw illuminance and reuses `N.L`
-> inside its own `pow()`. Tracked in `TODO.md`.
+> inside its own `pow()`. ⚠️ VOID since Aug 2026: `lqSpecPower` lived in
+> `generateFinalFragmentOutput()`, written for the Gouraud path, and was deleted with it.
 
 ### Known Issue: MRT Normal Blend for Translucent Materials
 
@@ -1692,7 +1719,7 @@ Follow-up measurement corrected the reading of that gap: with ray tracing disabl
 is **bit-stable** (peak-to-peak exactly `0.000` with TAA off), so the `0.11` was the RT
 effects' own temporal noise, not a floor. On that clean bench the TAA residual is `0.195` on
 Sponza and `0.021` on a plain box room — **content-driven**, not a leftover of this race. See
-`TODO.md` § "TAA" for the state of the art applied to the resolve (measurement-neutral at the
+the TAA sections of this document for the state of the art applied to the resolve (measurement-neutral at the
 8-bit capture floor). That `0.195` was inspected and judged acceptable to the eye by the owner
 on 2026-07-25 — it is the ACCEPTED baseline of a converged TAA on this content, not an open
 defect.
@@ -1755,7 +1782,8 @@ view-projection. The two matrices differ by the whole camera translation.
 **Fix.** Carry both forms in the header (`previousViewProjection` +
 `previousViewProjectionInfinity`, at no size cost — the CURRENT view-projection that used to sit
 there was read 0 times by the generated GLSL) and select with a generator flag that is part of
-the program cache key. See `TODO.md` § "Infinity-view renderables wrote a garbage velocity".
+the program cache key. (The historical root `TODO.md` entry "Infinity-view renderables wrote a
+garbage velocity" was its origin; that file is gone — open work now lives in `docs/todo/`.)
 
 ---
 
@@ -2253,6 +2281,22 @@ statement above still holds for every KTX2 texture that actually comes from disk
 ---
 
 ## Build / Compiler
+
+### CMake must be RECONFIGURED after a source file is renamed, moved or removed (`GLOB_RECURSE`)
+
+> **Symptom:** after a `git mv` or a deletion, Ninja fails with
+> `<OldName>.cpp missing and no known rule to make it`, or keeps compiling a file that no longer
+> exists.
+>
+> **Root cause:** the source lists are built with `GLOB_RECURSE`, which is evaluated at
+> **configure** time and cached. A build alone never re-globs.
+>
+> **Fix:** re-run the configure step on the affected build directory before building
+> (`cmake -S . -B <build-dir> …`, then `cmake --build <build-dir> -j$(nproc)`).
+>
+> ⚠️ The rule is usually remembered for **added** files; renames and removals break the build in a
+> way that reads like a corrupted tree, which is why it is written here. Paid during the
+> `PBRResource.cpp` → `StandardResource.cpp` rename of the material merge (Aug 2026).
 
 ### PCH shifts GCC's inlining context → `-Wstringop-overread` false positives
 
@@ -3054,7 +3098,8 @@ meter a black scene and pin the exposure to the ISO ceiling.
 >   manual `excludeFromRendering()` list remains for other cases. Cost is confined to probe
 >   renders by a `renderType()` test.
 >
-> **Post-device-loss robustness remains an open item** (tracked in `TODO.md`): the engine does not
+> **Post-device-loss robustness remains an open item**
+> ([`docs/todo/post-device-loss-robustness.md`](todo/post-device-loss-robustness.md)): the engine does not
 > yet recover or fail-stop cleanly after `VK_ERROR_DEVICE_LOST` — it must not be reachable through
 > scene content in the first place.
 >

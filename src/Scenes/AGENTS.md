@@ -888,7 +888,7 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 
 `SceneInstanceTransforms` owns the per-scene **InstanceTransforms SSBO** (one buffer per
 frame-in-flight, `SceneMetaData::initializePerFrameBuffers()` pattern). It is the B1 step of
-the motion-vectors chain (see engine `TODO.md`): move the non-instanced model matrices out of
+the motion-vectors chain (its design is recorded in `docs/caution-points.md`): move the non-instanced model matrices out of
 push constants into a per-instance SSBO indexed by `gl_BaseInstance`, and carry
 `{model, previousModel}` per entry for temporal effects (TAA, RTGI reprojection, motion blur).
 

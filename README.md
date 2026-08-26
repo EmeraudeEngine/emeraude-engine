@@ -378,7 +378,7 @@ Read the
 ## Status
 
 Beta, actively developed. Version history: [`CHANGELOG.md`](CHANGELOG.md). Current tasks and
-known defects: [`TODO.md`](TODO.md) and
+known defects: [`docs/todo/`](docs/todo/) (one file per open idea) and
 [GitHub Issues](https://github.com/EmeraudeEngine/emeraude-engine/issues).
 
 ## Documentation

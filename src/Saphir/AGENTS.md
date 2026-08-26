@@ -399,7 +399,8 @@ energy-normalised".
 
 > [!NOTE]
 > The **PBR low-quality** specular approximation in `LightGenerator.cpp` (`lqSpecPower`) is still
-> unnormalised and still multiplies the raw illuminance. Tracked in `TODO.md`.
+> unnormalised and still multiplies the raw illuminance. ⚠️ VOID since Aug 2026: `lqSpecPower`
+> lived in `generateFinalFragmentOutput()`, written for the Gouraud path, and was deleted with it.
 
 ## PBR Advanced Material Features
 
@@ -1171,7 +1172,7 @@ that was never once executed.
 `ForbidIncluder` is also the safer behaviour: an `#include` appearing by accident now FAILS
 instead of being silently resolved against an empty search stack.
 
-⚠️ **The day hand-written GLSL sources become a thing** (see `TODO.md`, "Prepare a way to use
+⚠️ **The day hand-written GLSL sources become a thing** (see [`docs/todo/manual-glsl-sources.md`](../../docs/todo/manual-glsl-sources.md), "Prepare a way to use
 manual GLSL sources"), a real includer plugs in exactly there — written against an actual
 specification (which directories, which search policy, what caching), not copied from a sample.
 

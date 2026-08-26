@@ -191,7 +191,7 @@ question (RenderDoc is for draw-call-level dissection of ONE pass).
   `Combine`), mirroring the actual command stream. Do not "fix" this by summing.
 - **V1 limit:** only the MAIN frame command buffer. Shadow maps / render-to-textures are
   separate submissions recorded BEFORE it — resetting the shared pool there would wipe
-  their queries (see TODO.md, "GPU profiler V2").
+  their queries (see [`docs/todo/gpu-profiler-v2.md`](../../docs/todo/gpu-profiler-v2.md)).
 - Console: `Core.RendererService.getGPUTimings([reset])` — see `docs/ai-runtime-control.md` §6.
 
 ### Swap-Chain Format Configuration
@@ -675,7 +675,7 @@ The command buffer supports `drawIndexedIndirect()` for GPU-driven rendering. De
 - **Never direct calls**: Graphics, Resources, Saphir use Vulkan abstractions
 - **VMA mandatory**: All GPU allocation via VMA, never direct vkAllocateMemory
 - **Y-up setup**: the projection carries the Y flip for Vulkan's Y-down NDC; the world itself stays Y-up
-- **`VK_ERROR_SURFACE_LOST_KHR` is NOT a GPU fault** — the window is gone, the device is fine. Do not investigate it alongside `VK_ERROR_DEVICE_LOST`. On Wayland it means the compositor killed the `wl_display` connection over a protocol error, printed on stderr by libwayland just above (a `wl_`/`wp_` interface name); nothing is recoverable, since every Wayland object of the process dies with the connection. `vkResultDiagnosticHint()` (`Vulkan/Utility.hpp`) carries that reading and both reporting sites print it — `Queue::present()` and `SwapChain::acquireNextImage()`. Add a case there rather than re-explaining a misread code in a comment. To attribute an occurrence, do not read the trace by hand: `tools/wayland-protocol-trace.py --capture -- <command>` then `--analyse <log>` names the committer. Open occurrence: `TODO.md` § WAYLAND.
+- **`VK_ERROR_SURFACE_LOST_KHR` is NOT a GPU fault** — the window is gone, the device is fine. Do not investigate it alongside `VK_ERROR_DEVICE_LOST`. On Wayland it means the compositor killed the `wl_display` connection over a protocol error, printed on stderr by libwayland just above (a `wl_`/`wp_` interface name); nothing is recoverable, since every Wayland object of the process dies with the connection. `vkResultDiagnosticHint()` (`Vulkan/Utility.hpp`) carries that reading and both reporting sites print it — `Queue::present()` and `SwapChain::acquireNextImage()`. Add a case there rather than re-explaining a misread code in a comment. To attribute an occurrence, do not read the trace by hand: `tools/wayland-protocol-trace.py --capture -- <command>` then `--analyse <log>` names the committer. Open occurrence: [`docs/todo/wayland-surface-lost-protocol-error.md`](../../docs/todo/wayland-surface-lost-protocol-error.md).
 
 ## Detailed Documentation
 

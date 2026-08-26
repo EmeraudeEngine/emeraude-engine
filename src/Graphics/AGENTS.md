@@ -1457,7 +1457,7 @@ was proportional to `1/d^2` anywhere, so a value in lumens was arbitrary.
 
 `legacyUnitCompensation` — the TEMPORARY per-light factor that restored the pre-change
 brightness while content was authored in the old units — is GONE: photometric phase 2
-removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is the clean
+removed it (see [`docs/todo/photometry-phase-2-relight-demos.md`](../../docs/todo/photometry-phase-2-relight-demos.md)), the generated falloff is the clean
 `saturate(1-(d/r)^4)^2 / (d^2+1)`.
 
 **Interface** (`PostProcessEffect.hpp`):
