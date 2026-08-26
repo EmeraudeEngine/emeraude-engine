@@ -491,6 +491,17 @@ Now hashed from `svPositionWorldSpace.xyz`. The rotation belongs to the surface:
 frame for a given world point, so nothing crawls. World space rather than light space on purpose —
 a light-space anchor is stable only while the LIGHT is still, and a carried torch is the opposite.
 
+⚠️⚠️ **A varying referenced must be a varying requested.** The world position was only ever
+forwarded on the CSM path; hashing it from the 2D and cubemap PCF paths without adding
+`requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, ToNextStage)` for them emitted
+`'svPositionWorldSpace' : undeclared identifier`. A fragment shader that cannot compile calls
+`setBroken()` on the instance, which removes the renderable from the scene **entirely** — a
+disappearing object, not an error the eye can attribute to a shader. The request now covers every
+PCF path.
+
+⚠️ The log wording for this is **`Unable to compile shader '<name>'`** (`Saphir/ShaderManager.cpp`).
+Grepping for "failed to compile" finds nothing and reads as success.
+
 ⚠️ Engine default is PCF **off** (`DefaultGraphicsShadowMappingEnablePCF`), so a machine that turns
 it on opts into this path. `generateCSMShadowMapCode()` never used the hash at all.
 

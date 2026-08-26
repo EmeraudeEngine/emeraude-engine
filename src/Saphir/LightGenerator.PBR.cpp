@@ -303,6 +303,20 @@ namespace EmEn::Saphir
 				}
 			}
 
+			/* ⚠️⚠️ The PCF kernel rotation is hashed from the WORLD position — see the note in
+			 * generate2DShadowMapPCFCode(). The varying must therefore exist on EVERY PCF path, not
+			 * just the CSM one, which is the only path that used to need it. Referencing it without
+			 * requesting it emitted a fragment shader that could not compile, and a shader that
+			 * cannot compile calls setBroken() on the instance, which removes the renderable from
+			 * the scene ENTIRELY — a disappearing object, not an error the eye can attribute. */
+			if ( enableShadowMap && m_PCFEnabled && !useCSM )
+			{
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::ToNextStage) )
+				{
+					return false;
+				}
+			}
+
 			if ( !useCSM )
 			{
 				/* NOTE: Point lights use cubemap shadow maps (true = cubemap mode).
