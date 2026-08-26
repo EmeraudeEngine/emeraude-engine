@@ -301,6 +301,15 @@ namespace EmEn::Saphir
 				{
 					return false;
 				}
+
+				/* ⚠️ Normal-offset shadows need the WORLD normal, which the light pass does not
+				 * otherwise interpolate — it synthesizes the VIEW-space one, and later than the
+				 * shadow block. Requested only when the offset is actually enabled, so a scale of 0
+				 * costs neither a varying nor an interpolator. */
+				if ( m_normalOffsetScale > 0.0F && !vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace, VariableScope::ToNextStage) )
+				{
+					return false;
+				}
 			}
 
 			/* ⚠️⚠️ The PCF kernel rotation is hashed from the WORLD position — see the note in
@@ -491,6 +500,8 @@ namespace EmEn::Saphir
 							LightUB(UniformBlock::Component::CascadeSplitDistances),
 							LightUB(UniformBlock::Component::CascadeCount),
 							LightUB(UniformBlock::Component::ShadowBias),
+							ShaderVariable::NormalWorldSpace,
+							LightUB(UniformBlock::Component::DirectionWorldSpace) + ".xyz",
 							fragmentShader
 						) << Line::Blank;
 					}

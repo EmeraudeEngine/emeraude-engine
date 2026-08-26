@@ -295,9 +295,28 @@ as `cascadeProperties.y`, read by nothing — and deliberately NOT deleted: remo
 every offset after it in a layout maintained by hand in three files. It is inert and waits for a
 change that does the whole layout at once.
 
-@todo Normal-offset shadows would beat a pure depth bias on grazing surfaces, but they need the
-world-space normal, which no fragment shader here interpolates: the light pass synthesizes only the
-VIEW-space normal, and later than the shadow block. Its own change.
+### Normal-offset — IMPLEMENTED, and shipped DISABLED (Aug 2026)
+
+`Core/Graphics/ShadowMapping/NormalOffsetScale`, in shadow TEXELS, **default 0**.
+
+The sampled position is pushed along the surface normal before being projected, by
+`texelWorldSize × sin(angle between the normal and the light) × scale`. The texel size is recovered
+from the cascade matrix (`2 / (resolution × length(row0))`), so no uniform and no layout change. The
+world normal is synthesized on demand — and **only when the scale is non-zero**, so a disabled offset
+costs neither a varying nor an interpolator.
+
+⚠️⚠️ **The slope weighting is not a refinement, it is what makes the offset survivable.** `sin(theta)`
+is 0 where the light hits head-on — no acne there — and 1 at grazing incidence, where all of it
+lives. Applied flat, the first version pushed samples straight off every surface.
+
+⚠️⚠️ **Why it ships OFF, measured rather than assumed.** On `reflexion-debug`, pinned pose and
+exposure: scale 1.0 **removes the sphere's and the dragon's contact shadows** (palm shadow band
+69.24 → 73.15); scale 0.05 is indistinguishable from off (69.49); scale 0 is bit-identical to not
+having the feature (69.244 → 69.244). The offset is proportional and correct — it is simply larger
+than the contact shadows of a scene whose cascade texels are wide. **The acne it fights was never
+visible on this scene**, so enabling it by default would trade an artefact nobody sees for one
+everybody does. Raise it on a scene that actually shows grazing-incidence acne, and re-measure the
+contact shadows while you do.
 
 ### The old note on the absence of a bias
 

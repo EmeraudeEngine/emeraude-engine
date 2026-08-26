@@ -737,7 +737,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias, FragmentShader & fragmentShader) const noexcept
+	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias, const std::string & normalWorldSpace, const std::string & lightDirectionWorldSpace, FragmentShader & fragmentShader) const noexcept
 	{
 		/* The per-cascade sample, emitted ONCE as a function so the blend below can call it twice
 		 * without duplicating an 81-tap kernel in the source. */
@@ -755,10 +755,48 @@ namespace EmEn::Saphir
 			sampleCascade.addInParameter(GLSL::FloatVector3, "worldPosition");
 			sampleCascade.addInParameter(GLSL::Float, "cascadeShadowBias");
 
+			if ( m_normalOffsetScale > 0.0F )
+			{
+				sampleCascade.addInParameter(GLSL::FloatVector3, "surfaceNormal");
+				sampleCascade.addInParameter(GLSL::FloatVector3, "lightDirection");
+			}
+
 			std::string body;
 
+			/* ⚠️⚠️ NORMAL-OFFSET, applied to the POSITION and before the projection — that is the whole
+			 * point. A depth bias fights acne along the LIGHT direction, so a grazing surface needs an
+			 * ever larger push and pays for it with peter-panning. Moving the sample off the surface
+			 * ALONG ITS NORMAL attacks where the self-shadowing comes from, and the amount that
+			 * matters is one shadow TEXEL of the cascade being sampled, not a fixed distance.
+			 * The texel size is recovered from the matrix itself: after the bounding-sphere fit the
+			 * orthographic X scale is exactly 1/radius, so
+			 *   worldUnitsPerTexel = 2 * radius / resolution = 2 / (resolution * length(row0)).
+			 * No uniform, no layout change — that layout is hand-maintained in three files. */
+			if ( m_normalOffsetScale > 0.0F )
+			{
+				body +=
+					"const float texelWorldSize = 2.0 / (float(textureSize(shadowMap, 0).x) * length(vec3(cascadeMatrix[0][0], cascadeMatrix[1][0], cascadeMatrix[2][0])));" "\n"
+					"const vec3 offsetNormal = normalize(surfaceNormal);" "\n"
+					"/* ⚠️⚠️ SLOPE-WEIGHTED, and that is not a refinement — it is what makes the offset safe." "\n"
+					"   sin(angle between the normal and the light) is 0 when the light hits the surface" "\n"
+					"   head-on, where there is no acne to fight, and 1 at grazing incidence, where all of" "\n"
+					"   it lives. Applied flat instead, a cascade-0 texel measured in METRES pushes the" "\n"
+					"   sample metres off the surface and it escapes its own shadow: measured on" "\n"
+					"   reflexion-debug, the sphere's contact shadow and the dragon's simply vanished. */" "\n"
+					"const float normalOffsetNdotL = clamp(dot(offsetNormal, -normalize(lightDirection)), 0.0, 1.0);" "\n"
+					"const float normalOffsetSlope = sqrt(max(0.0, 1.0 - normalOffsetNdotL * normalOffsetNdotL));" "\n"
+					"const vec3 offsetPosition = worldPosition + offsetNormal * (texelWorldSize * normalOffsetSlope * ";
+				body += std::to_string(m_normalOffsetScale);
+				body +=
+					");" "\n"
+					"vec4 posLightSpace = cascadeMatrix * vec4(offsetPosition, 1.0);" "\n";
+			}
+			else
+			{
+				body += "vec4 posLightSpace = cascadeMatrix * vec4(worldPosition, 1.0);" "\n";
+			}
+
 			body +=
-				"vec4 posLightSpace = cascadeMatrix * vec4(worldPosition, 1.0);" "\n"
 				"vec3 projCoords = posLightSpace.xyz / posLightSpace.w;" "\n"
 				"/* NOTE: Only X and Y need [-1,1] to [0,1] conversion. Z already is, from the" "\n"
 				"   Vulkan orthographic projection. */" "\n"
@@ -842,6 +880,15 @@ namespace EmEn::Saphir
 		code += fragmentPositionWorldSpace;
 		code += ", ";
 		code += shadowBias;
+
+		if ( m_normalOffsetScale > 0.0F )
+		{
+			code += ", ";
+			code += normalWorldSpace;
+					code += ", ";
+			code += lightDirectionWorldSpace;
+		}
+
 		code += ");" "\n\n";
 
 		/* ⚠️ Cross-fade with the NEXT cascade near the split.
@@ -881,6 +928,15 @@ namespace EmEn::Saphir
 			code += fragmentPositionWorldSpace;
 			code += ", ";
 			code += shadowBias;
+
+			if ( m_normalOffsetScale > 0.0F )
+			{
+				code += ", ";
+				code += normalWorldSpace;
+							code += ", ";
+				code += lightDirectionWorldSpace;
+			}
+
 			code +=
 				"), blend);" "\n"
 				"		}" "\n"

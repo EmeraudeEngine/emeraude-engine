@@ -758,6 +758,24 @@ namespace EmEn
 			 * twice. The band is a thin shell, so the average cost is small, but it is not free. */
 			constexpr auto GraphicsShadowMappingCascadeBlendRatioKey{"Core/Graphics/ShadowMapping/CascadeBlendRatio"};
 			constexpr auto DefaultGraphicsShadowMappingCascadeBlendRatio{0.1F};
+			/* Normal-offset shadows: how far, in SHADOW TEXELS, the sampled position is pushed along
+			 * the surface normal before it is projected into light space. 0 disables it and emits
+			 * nothing — not even the world-normal varying it needs.
+			 * It beats a pure depth bias on grazing surfaces: a depth bias fights acne along the
+			 * LIGHT direction, where a shallow angle needs an ever larger push and pays for it with
+			 * peter-panning, while a normal offset moves the sample off the surface it is testing,
+			 * which is where the self-shadowing actually comes from. The two are complementary, not
+			 * redundant — different axes — so shadowBias stays. */
+			constexpr auto GraphicsShadowMappingNormalOffsetScaleKey{"Core/Graphics/ShadowMapping/NormalOffsetScale"};
+			/* ⚠️ DEFAULT 0 — DISABLED, and that is a measurement, not caution. On reflexion-debug a
+			 * scale of 1.0 REMOVES the sphere's and the dragon's contact shadows (palm shadow band
+			 * 69.24 -> 73.15 at a pinned pose and exposure), while 0.05 is indistinguishable from off
+			 * (69.49). The offset is proportional and correct — it is simply larger than the contact
+			 * shadows of a scene whose cascade texels are metres wide. The acne it fights was never
+			 * visible here, so enabling it by default would trade an artefact nobody sees for one
+			 * everybody does. Raise it on a scene that shows acne at grazing incidence, and re-measure
+			 * the contact shadows while you do. */
+			constexpr auto DefaultGraphicsShadowMappingNormalOffsetScale{0.0F};
 			/* PCF sample count. */
 			constexpr auto GraphicsShadowMappingPCFSamplesKey{"Core/Graphics/ShadowMapping/PCFSamples"};
 			constexpr auto DefaultGraphicsShadowMappingPCFSamples{2U};
