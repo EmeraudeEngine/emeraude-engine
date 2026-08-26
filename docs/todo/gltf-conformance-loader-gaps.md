@@ -69,7 +69,8 @@ near plane (see `hardcoded-near-plane.md`); `SheenCloth`'s rim was not isolated.
 
 ## References
 
-- Full report: artifact `https://claude.ai/code/artifact/21daa10d-043b-4d4a-8566-4e4a2c85a4bc`.
+- Full report: the bench gallery held by the owner (owner-side artifact, not linked here — this
+  repository is public and the link is neither readable nor useful outside it).
 - The owner's gallery verdict on the pre-merge bench run
   (`~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-20260812/galerie-banc-gltf.html`) was
   the D5 gate of the material merge; it is still pending.
