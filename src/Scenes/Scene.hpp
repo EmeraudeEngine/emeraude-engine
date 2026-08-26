@@ -2596,6 +2596,10 @@ namespace EmEn::Scenes
 			static constexpr auto TranslucentGBLighted{6UL};
 
 			/** @brief Cached double-buffer read index set by prepareRender(). */
+			/** @brief Read state index latched ONCE per rendered frame by beginRenderFrame(). Every
+			 * consumer of the frame reads this, never m_renderStateIndex directly — see the note
+			 * there. Render thread only. */
+			uint32_t m_frameReadStateIndex{0};
 			uint32_t m_preparedReadStateIndex{0};
 			/** @brief Cached bindless texture manager pointer set by prepareRender(). Null if not usable. */
 			const Graphics::BindlessTextureManager * m_preparedBindlessManager{nullptr};

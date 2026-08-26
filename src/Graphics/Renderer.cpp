@@ -1466,6 +1466,17 @@ namespace EmEn::Graphics
 
 			scene->beginRenderFrame();
 
+			/* ⚠️ [ONE FRAME, ONE TRUTH] Both of these used to run in Core::renderingTask(), BEFORE
+			 * this function and therefore before the in-flight fence above. They belong here:
+			 * after the fence, and after beginRenderFrame() has latched the read state index this
+			 * whole frame will use.
+			 * Jitter FIRST — the temporal anti-aliasing contract is that every consumer of the
+			 * frame (the view UBO projection, the push-constant MVPs, the instance transforms
+			 * header) sees the same jittered matrix. */
+			this->prepareFrameJitter(scene.get());
+
+			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
+
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */
@@ -1697,6 +1708,17 @@ namespace EmEn::Graphics
 			RenderableInstance::Abstract::setSkinningFrameCursor(++m_skinningFrameCursor);
 
 			scene->beginRenderFrame();
+
+			/* ⚠️ [ONE FRAME, ONE TRUTH] Both of these used to run in Core::renderingTask(), BEFORE
+			 * this function and therefore before the in-flight fence above. They belong here:
+			 * after the fence, and after beginRenderFrame() has latched the read state index this
+			 * whole frame will use.
+			 * Jitter FIRST — the temporal anti-aliasing contract is that every consumer of the
+			 * frame (the view UBO projection, the push-constant MVPs, the instance transforms
+			 * header) sees the same jittered matrix. */
+			this->prepareFrameJitter(scene.get());
+
+			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
 			if ( this->isShadowMapsEnabled() )
 			{

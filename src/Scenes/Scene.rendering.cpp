@@ -325,7 +325,7 @@ namespace EmEn::Scenes
 	void
 	Scene::updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept
 	{
-		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+		const uint32_t readStateIndex = m_frameReadStateIndex;
 
 		if ( shadowMapEnabled )
 		{
@@ -367,7 +367,7 @@ namespace EmEn::Scenes
 	void
 	Scene::castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
 	{
-		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+		const uint32_t readStateIndex = m_frameReadStateIndex;
 
 		if ( !m_lightSet.isEnabled() )
 		{
@@ -407,12 +407,24 @@ namespace EmEn::Scenes
 		}
 
 		m_instanceTransforms.beginFrame(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
+
+		/* ⚠️⚠️ [ONE FRAME, ONE TRUTH] The frame latches the published state ONCE, here, and every
+		 * consumer below reads the latch. It used to be loaded independently at four sites spread
+		 * across the frame — the UBO upload, the shadow pass, the main pass and the TBN debug pass —
+		 * separated by the fence wait and by acquireNextImage(). The logic thread publishes at its
+		 * own 60 Hz cadence, so a frame straddling a publish rasterised the scene into the shadow
+		 * map with tick N and into the colour buffer with tick N+1: a one-tick shadow/geometry
+		 * desync that re-rolled every frame, exactly zero on a static camera and random in motion.
+		 * This is only EXPRESSIBLE because updateVideoMemory() now runs after beginRenderFrame();
+		 * it used to be called from Core before this function, so a latch set here would have been
+		 * read before it was written. */
+		m_frameReadStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
 	}
 
 	bool
 	Scene::prepareRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		m_preparedReadStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+		m_preparedReadStateIndex = m_frameReadStateIndex;
 
 		const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
 
@@ -571,7 +583,7 @@ namespace EmEn::Scenes
 	void
 	Scene::renderTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
 	{
-		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+		const uint32_t readStateIndex = m_frameReadStateIndex;
 
 		auto & renderer = m_AVConsoleManager.graphicsRenderer();
 

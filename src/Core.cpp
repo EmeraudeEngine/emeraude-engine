@@ -276,20 +276,14 @@ namespace EmEn
 				 * (recursive shared_mutex = UB, deadlocks on Windows once a writer queues). */
 				m_frameScene = activeScene.get();
 
-				/* Temporal anti-aliasing contract: advance and apply the sub-pixel projection
-				 * jitter BEFORE the view UBO upload below — every consumer of the frame
-				 * (UBO projection, push-constant MVPs, instance transforms header) must see
-				 * the same jittered matrix. */
-				m_graphicsRenderer.prepareFrameJitter(activeScene.get());
-
-				if ( activeScene != nullptr )
-				{
-					/* This should only synchronize UBOs for the scene. */
-					activeScene->updateVideoMemory(
-						m_graphicsRenderer.isShadowMapsEnabled(),
-						m_graphicsRenderer.isRenderToTexturesEnabled()
-					);
-				}
+				/* ⚠️⚠️ The scene's jitter and UBO upload used to happen HERE, before renderFrame() —
+				 * i.e. before the frame's in-flight fence had been waited on. Every buffer they
+				 * write is single-instance, so the host was overwriting memory that up to
+				 * framesInFlight() - 1 still-executing frames were reading. They now live inside
+				 * Renderer::renderFrame() / renderOffscreenFrame(), after the fence and after
+				 * Scene::beginRenderFrame() has latched the frame's read state index.
+				 * The overlay stays here on purpose: it writes surface IMAGES through the transfer
+				 * manager (a staged transfer, a different hazard class) and already sizes per frame. */
 
 				/* This should only synchronize UBOs for the overlay. */
 				m_overlayManager.updateVideoMemory();
