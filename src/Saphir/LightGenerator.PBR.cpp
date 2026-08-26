@@ -490,7 +490,8 @@ namespace EmEn::Saphir
 							LightUB(UniformBlock::Component::CascadeViewProjectionMatrices),
 							LightUB(UniformBlock::Component::CascadeSplitDistances),
 							LightUB(UniformBlock::Component::CascadeCount),
-							LightUB(UniformBlock::Component::ShadowBias)
+							LightUB(UniformBlock::Component::ShadowBias),
+							fragmentShader
 						) << Line::Blank;
 					}
 					else if ( m_PCFEnabled )

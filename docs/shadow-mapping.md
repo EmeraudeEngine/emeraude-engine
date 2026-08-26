@@ -509,7 +509,39 @@ it on opts into this path. `generateCSMShadowMapCode()` never used the hash at a
 radius, a grossly over-converged estimator, so the rotation moves the result very little either way.
 What the change removes is the screen-space anchoring, not a large error.
 
-### B3 — inter-cascade blending: FILED, NOT DONE
+### B3 — inter-cascade blending: DONE (Aug 2026)
+
+`generateCSMShadowMapCode()` selected one cascade with a break-on-first-hit loop and applied a single
+matrix, so the boundary was a hard plane **locked to the camera**, between two texel grids that are
+not aligned with each other. A static object's shadow switched grid in one frame as the camera
+advanced — a localised pop travelling with you along the split distance, not a shimmer.
+
+The per-cascade sample is now emitted **once**, as a GLSL function, and called twice inside a
+cross-fade band: `mix(sample(n), sample(n+1), blend)` where `blend` ramps over the last
+`CascadeBlendRatio` fraction of the cascade's own depth range — a fraction, so the band scales with
+the split instead of being a fixed number of metres.
+
+`Core/Graphics/ShadowMapping/CascadeBlendRatio`, default **0.1**, clamped to [0, 0.5]. **0 emits
+nothing at all** — no branch, no second sample, no cost — matching how `PCFSamples`/`EnablePCF` are
+already baked as GLSL literals at generator construction.
+
+⚠️ **COST:** inside the band a fragment pays the PCF kernel **twice**. The band is a thin shell so the
+average is small, but it is not free; lower or zero the ratio on a fill-bound scene.
+
+⚠️⚠️ **EVERY input of the helper is a PARAMETER, and that is not style.** A function is emitted at
+FILE SCOPE and the generator declares it BEFORE the uniform blocks: a body naming `ubLight` or the
+sampler directly compiles to `'ubLight' : undeclared identifier`. Six shaders failed that way on the
+first attempt — and a fragment shader that cannot compile calls `setBroken()`, which removes the
+renderable from the scene entirely, so the demo simply fell apart rather than reporting a shader
+problem. GLSL allows an opaque sampler as a function parameter; use that.
+
+⚠️ Honest limit of the verification: the artefact this fixes was never visible on `reflexion-debug`
+to begin with, so what is demonstrated here is that the mechanism is emitted, that every shader
+compiles, that there is zero VUID and that the image outside the band is unchanged (palm shadow band
+68.50 -> 69.24 at a pinned pose and exposure). The seam itself still awaits a scene that shows it.
+
+### The old note, kept for its recognition signature
+
 
 Deliberately left, at the project owner's call, until it is seen on screen. Recording what it is and
 how to recognise it, so the next session does not have to rediscover it:

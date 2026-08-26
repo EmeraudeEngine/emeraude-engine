@@ -737,27 +737,85 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias) const noexcept
+	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias, FragmentShader & fragmentShader) const noexcept
 	{
-		std::string code;
-		code.reserve(1280 + (shadowMapArray.size() * 3) + fragmentPositionWorldSpace.size() + fragmentPositionViewSpace.size() + cascadeMatrices.size() + splitDistances.size() + cascadeCount.size());
+		/* The per-cascade sample, emitted ONCE as a function so the blend below can call it twice
+		 * without duplicating an 81-tap kernel in the source. */
+		{
+			/* ⚠️⚠️ EVERY input is a PARAMETER, on purpose. A function is emitted at FILE SCOPE, and
+			 * the generator declares it BEFORE the uniform blocks: a body referencing `ubLight` or
+			 * the sampler directly compiles to `'ubLight' : undeclared identifier`, and a fragment
+			 * shader that fails to compile calls setBroken() on the instance, which removes the
+			 * renderable from the scene ENTIRELY. Passing them in makes the helper independent of
+			 * declaration order. GLSL allows an opaque sampler as a function parameter. */
+			Declaration::Function sampleCascade{"emCSMSampleCascade", GLSL::Float};
+			sampleCascade.addInParameter(GLSL::Sampler2DArrayShadow, "shadowMap");
+			sampleCascade.addInParameter(GLSL::Matrix4, "cascadeMatrix");
+			sampleCascade.addInParameter(GLSL::Integer, "cascadeIndex");
+			sampleCascade.addInParameter(GLSL::FloatVector3, "worldPosition");
+			sampleCascade.addInParameter(GLSL::Float, "cascadeShadowBias");
 
-		code += "/* Cascaded Shadow Map resolution. */" "\n\n";
+			std::string body;
+
+			body +=
+				"vec4 posLightSpace = cascadeMatrix * vec4(worldPosition, 1.0);" "\n"
+				"vec3 projCoords = posLightSpace.xyz / posLightSpace.w;" "\n"
+				"/* NOTE: Only X and Y need [-1,1] to [0,1] conversion. Z already is, from the" "\n"
+				"   Vulkan orthographic projection. */" "\n"
+				"projCoords.xy = projCoords.xy * 0.5 + 0.5;" "\n"
+				"/* Per-cascade depth bias in WORLD units — see docs/shadow-mapping.md. */" "\n"
+				"const float cascadeInverseRadius = length(vec3(cascadeMatrix[0][0], cascadeMatrix[1][0], cascadeMatrix[2][0]));" "\n"
+				"projCoords.z -= cascadeShadowBias * cascadeInverseRadius / 3.0;" "\n"
+				"/* Outside the cascade's depth range the fragment is LIT — the engine-wide convention. */" "\n"
+				"if ( projCoords.z < 0.0 || projCoords.z > 1.0 )" "\n"
+				"{" "\n"
+				"	return 1.0;" "\n"
+				"}" "\n";
+
+			if ( m_PCFEnabled )
+			{
+				const auto sampleCount = ((2U * m_PCFSample) + 1U) * ((2U * m_PCFSample) + 1U);
+
+				body +=
+					"float shadowFactor = 0.0;" "\n"
+					"const vec2 texelSize = 1.0 / vec2(textureSize(shadowMap, 0).xy);" "\n"
+					"const int offset = ";
+				body += std::to_string(m_PCFSample);
+				body +=
+					";" "\n"
+					"for ( int idy = -offset; idy <= offset; idy++ )" "\n"
+					"{" "\n"
+					"	for ( int idx = -offset; idx <= offset; idx++ )" "\n"
+					"	{" "\n"
+					"		const vec2 offsetUV = projCoords.xy + vec2(float(idx), float(idy)) * texelSize;" "\n"
+					"		shadowFactor += texture(shadowMap, vec4(offsetUV, float(cascadeIndex), projCoords.z));" "\n"
+					"	}" "\n"
+					"}" "\n"
+					"return shadowFactor / ";
+				body += std::to_string(sampleCount);
+				body += ".0;" "\n";
+			}
+			else
+			{
+				body += "return texture(shadowMap, vec4(projCoords.xy, float(cascadeIndex), projCoords.z));" "\n";
+			}
+
+			Code{sampleCascade, Location::Output} << body;
+
+			fragmentShader.declare(sampleCascade);
+		}
+
+		std::string code;
 
 		code += "float shadowFactor = 1.0;" "\n\n";
 
-		/* Compute view-space depth for cascade selection.
-		 * NOTE: read straight off the interpolated view-space position. Re-deriving it from
-		 * the world-space position would need the view matrix, which no fragment shader on
-		 * the main render target can reach. */
-		code += "/* Compute view-space depth for cascade selection. */" "\n"
-			"const float viewDepth = abs(";
+		/* Cascade selection runs on the VIEW-space depth. Re-deriving it from the world position
+		 * would need the view matrix, which no fragment shader on the main render target can reach. */
+		code += "const float viewDepth = abs(";
 		code += fragmentPositionViewSpace;
 		code += ".z);" "\n\n";
 
-		/* Determine which cascade to use based on view-space depth. */
 		code +=
-			"/* Select the appropriate cascade based on depth. */" "\n"
 			"int cascadeIndex = 0;" "\n"
 			"const int numCascades = int(";
 		code += cascadeCount;
@@ -776,96 +834,59 @@ namespace EmEn::Saphir
 			"	cascadeIndex = i;" "\n"
 			"}" "\n\n";
 
-		/* Transform fragment position to light space using the selected cascade matrix. */
-		code +=
-			"/* Transform to the selected cascade's light space. */" "\n"
-			"const mat4 cascadeMatrix = ";
+		code += "shadowFactor = emCSMSampleCascade(";
+		code += shadowMapArray;
+		code += ", ";
 		code += cascadeMatrices;
-		code +=
-			"[cascadeIndex];" "\n"
-			"vec4 posLightSpace = cascadeMatrix * vec4(";
+		code += "[cascadeIndex], cascadeIndex, ";
 		code += fragmentPositionWorldSpace;
-		code +=
-			", 1.0);" "\n"
-			"vec3 projCoords = posLightSpace.xyz / posLightSpace.w;" "\n"
-			"/* NOTE: Only X and Y need [-1,1] to [0,1] conversion for UV coordinates. */" "\n"
-			"/* Z is already in [0,1] range from Vulkan orthographic projection. */" "\n"
-			"projCoords.xy = projCoords.xy * 0.5 + 0.5;" "\n\n";
-
-		/* ⚠️⚠️ PER-CASCADE DEPTH BIAS, and the reason it has to be derived rather than uploaded.
-		 * `shadowBias` was uploaded by DirectionalLight and SpotLight, declared in their uniform
-		 * blocks, and read by NOBODY on either 2D path — its only generated consumers were the
-		 * point-light cubemap ones. Tuning it did nothing at all, silently.
-		 * The rasterizer bias on the cast pass cannot replace it here: it is per-PIPELINE, and all
-		 * cascades go through that one pipeline via multiview, so it cannot vary per cascade — while
-		 * the cascades differ in texel size by more than an order of magnitude.
-		 * The scale is read out of the cascade matrix instead of being uploaded, which keeps the
-		 * uniform block untouched — that layout is described by hand in three separate places and a
-		 * silent truncation has already shipped from editing one of them. After the bounding-sphere
-		 * fit the orthographic X scale is exactly 1/radius and the light view is a rotation plus a
-		 * translation, so `length(row0)` recovers 1/radius, and the depth range is 3 * radius by
-		 * construction. `shadowBias` therefore means WORLD UNITS — metres — which is a quantity worth
-		 * exposing, unlike an opaque NDC epsilon.
-		 * @todo Normal-offset shadows would beat a pure depth bias on grazing surfaces, but they need
-		 * the world-space normal, which no fragment shader here interpolates yet: the light pass only
-		 * synthesizes the VIEW-space normal, and later than this block. That is its own change. */
-		code +=
-			"/* Per-cascade depth bias, expressed in WORLD units (see the note in the generator). */" "\n"
-			"const float cascadeInverseRadius = length(vec3(cascadeMatrix[0][0], cascadeMatrix[1][0], cascadeMatrix[2][0]));" "\n"
-			"projCoords.z -= ";
+		code += ", ";
 		code += shadowBias;
-		code += " * cascadeInverseRadius / 3.0;" "\n\n";
+		code += ");" "\n\n";
 
-		/* Skip shadow calculation if outside the shadow map's valid depth range. */
-		code +=
-			"if ( projCoords.z >= 0.0 && projCoords.z <= 1.0 )" "\n"
-			"{" "\n";
-
-		if ( m_PCFEnabled )
+		/* ⚠️ Cross-fade with the NEXT cascade near the split.
+		 * A cascade boundary is a hard plane locked to the camera, between two texel grids that are
+		 * not aligned with each other: a static object's shadow switches grid in ONE frame as the
+		 * camera advances — a localised pop travelling with the camera along the split distance, not
+		 * a shimmer. The band is expressed as a fraction of the cascade's own depth range so it
+		 * scales with the split instead of being a fixed number of metres.
+		 * A ratio of 0 emits nothing at all: no branch, no second sample, no cost. */
+		if ( m_cascadeBlendRatio > 0.0F )
 		{
-			code += "	";
-			code += GLSL::ConstInteger;
-			code += " offset = ";
-			code += std::to_string(m_PCFSample);
-			code += ";" "\n\n";
-
-			/* NOTE: Reset shadowFactor to 0.0 before accumulating PCF samples.
-			 * The initial value of 1.0 is only for the non-shadow case (outside depth range). */
-			code += "	shadowFactor = 0.0;" "\n\n";
-
-			/* PCF sampling with sampler2DArrayShadow. */
-			code += "	for ( ";
-			code += GLSL::Integer;
-			code += " idy = -offset; idy <= offset; idy++ )" "\n"
+			code +=
+				"if ( cascadeIndex + 1 < numCascades )" "\n"
+				"{" "\n"
+				"	const float splitEnd = ";
+			code += splitDistances;
+			code +=
+				"[cascadeIndex];" "\n"
+				"	const float splitStart = cascadeIndex > 0 ? ";
+			code += splitDistances;
+			code +=
+				"[cascadeIndex - 1] : 0.0;" "\n"
+				"	const float band = (splitEnd - splitStart) * ";
+			code += std::to_string(m_cascadeBlendRatio);
+			code +=
+				";" "\n"
+				"	if ( band > 0.0 )" "\n"
 				"	{" "\n"
-				"		for ( ";
-			code += GLSL::Integer;
-			code += " idx = -offset; idx <= offset; idx++ )" "\n"
+				"		const float blend = clamp((viewDepth - (splitEnd - band)) / band, 0.0, 1.0);" "\n"
+				"		if ( blend > 0.0 )" "\n"
 				"		{" "\n"
-				"			vec2 texelSize = 1.0 / vec2(textureSize(";
+				"			shadowFactor = mix(shadowFactor, emCSMSampleCascade(";
 			code += shadowMapArray;
+			code += ", ";
+			code += cascadeMatrices;
+			code += "[cascadeIndex + 1], cascadeIndex + 1, ";
+			code += fragmentPositionWorldSpace;
+			code += ", ";
+			code += shadowBias;
 			code +=
-				", 0).xy);" "\n"
-				"			vec2 offsetUV = projCoords.xy + vec2(float(idx), float(idy)) * texelSize;" "\n"
-				"			shadowFactor += texture(";
-			code += shadowMapArray;
-			code +=
-				", vec4(offsetUV, float(cascadeIndex), projCoords.z));" "\n"
+				"), blend);" "\n"
 				"		}" "\n"
-				"	}" "\n\n"
-
-				"	shadowFactor /= pow(float(offset) * 2.0 + 1.0, 2);" "\n";
+				"	}" "\n"
+				"}" "\n\n";
 		}
-		else
-		{
-			/* Single sample with sampler2DArrayShadow.
-			 * The fourth component is the reference depth for comparison. */
-			code += "	shadowFactor = texture(";
-			code += shadowMapArray;
-			code += ", vec4(projCoords.xy, float(cascadeIndex), projCoords.z));" "\n";
-		}
-
-		code += "}" "\n\n";
 
 		if ( m_discardUnlitFragment )
 		{

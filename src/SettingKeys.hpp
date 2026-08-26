@@ -749,6 +749,15 @@ namespace EmEn
 			/* Apply percentage-closer filtering (PCF) to soften shadow edges. */
 			constexpr auto GraphicsShadowMappingEnablePCFKey{"Core/Graphics/ShadowMapping/EnablePCF"};
 			constexpr auto DefaultGraphicsShadowMappingEnablePCF{false};
+			/* Width of the cross-fade band between two cascades, as a FRACTION of the cascade's own
+			 * depth range. 0 disables the blend and compiles the branch away entirely.
+			 * Without it a cascade boundary is a hard plane locked to the camera, between two texel
+			 * grids that are not aligned with each other: a static object's shadow switches grid in
+			 * one frame as the camera advances — a localised pop travelling with you along the split.
+			 * ⚠️ COST: inside the band a fragment samples TWO cascades, so it pays the PCF kernel
+			 * twice. The band is a thin shell, so the average cost is small, but it is not free. */
+			constexpr auto GraphicsShadowMappingCascadeBlendRatioKey{"Core/Graphics/ShadowMapping/CascadeBlendRatio"};
+			constexpr auto DefaultGraphicsShadowMappingCascadeBlendRatio{0.1F};
 			/* PCF sample count. */
 			constexpr auto GraphicsShadowMappingPCFSamplesKey{"Core/Graphics/ShadowMapping/PCFSamples"};
 			constexpr auto DefaultGraphicsShadowMappingPCFSamples{2U};

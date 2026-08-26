@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <algorithm>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -136,6 +137,7 @@ namespace EmEn::Saphir
 				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSamplesKey, DefaultGraphicsShadowMappingPCFSamples)},
 				m_PCFMethod{stringToPCFMethod(settings.getOrSetDefault< std::string >(GraphicsShadowMappingPCFMethodKey, DefaultGraphicsShadowMappingPCFMethod))},
 				m_fragmentColor{fragmentColor},
+				m_cascadeBlendRatio{std::clamp(settings.getOrSetDefault< float >(GraphicsShadowMappingCascadeBlendRatioKey, DefaultGraphicsShadowMappingCascadeBlendRatio), 0.0F, 0.5F)},
 				m_PCFEnabled{settings.getOrSetDefault< bool >(GraphicsShadowMappingEnablePCFKey, DefaultGraphicsShadowMappingEnablePCF)}
 			{
 
@@ -919,7 +921,7 @@ namespace EmEn::Saphir
 			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
-			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias) const noexcept;
+			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias, FragmentShader & fragmentShader) const noexcept;
 
 			/**
 			 * @brief Returns the variable responsible for the light position in world space.
@@ -1030,6 +1032,8 @@ namespace EmEn::Saphir
 
 			Graphics::RenderPassType m_renderPassType;
 			uint32_t m_PCFSample{0};
+			/** @brief Cascade cross-fade band, as a fraction of the cascade depth range. 0 = no blend. */
+			float m_cascadeBlendRatio{0.0F};
 			PCFMethod m_PCFMethod{PCFMethod::Grid};
 			std::string m_fragmentColor;
 			std::string m_surfaceAmbientColor;
