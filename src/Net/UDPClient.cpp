@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <sstream>
 #include <utility>
 
@@ -45,6 +46,7 @@
 
 	#include <WinSock2.h>
 	#include <WS2tcpip.h>
+	#include <MSWSock.h>
 
 	using SocketType = SOCKET;
 	static constexpr SocketType InvalidSocket = INVALID_SOCKET;
@@ -53,6 +55,11 @@
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
 	#include <unistd.h>
+
+	/* BSD-derived stacks report the receiving interface as a link-level address. */
+	#ifndef __linux__
+		#include <net/if_dl.h>
+	#endif
 
 	using SocketType = int;
 	static constexpr SocketType InvalidSocket = -1;
@@ -92,7 +99,81 @@ namespace EmEn::Net
 
 		return true;
 	}
+
+	/*
+	 * WSARecvMsg() has no import library: it must be fetched from the provider through
+	 * WSAIoctl(). The pointer is provider-wide, so resolving it once is enough.
+	 */
+	static LPFN_WSARECVMSG
+	resolveWSARecvMsg (SocketType sock) noexcept
+	{
+		static LPFN_WSARECVMSG function = nullptr;
+
+		if ( function != nullptr )
+		{
+			return function;
+		}
+
+		GUID guid = WSAID_WSARECVMSG;
+		DWORD bytesReturned = 0;
+
+		if ( WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &function, sizeof(function), &bytesReturned, nullptr, nullptr) != 0 )
+		{
+			function = nullptr;
+		}
+
+		return function;
+	}
 #endif
+
+	/* ---- Socket helpers (kept private to this TU) ---- */
+
+	/* Only WinSock types the option value as a char pointer, hence the single wrapper. */
+	static bool
+	setSocketOption (SocketType sock, int level, int optionName, const void * value, size_t size) noexcept
+	{
+		return setsockopt(sock, level, optionName, reinterpret_cast< const char * >(value), static_cast< socklen_t >(size)) == 0;
+	}
+
+	static std::string
+	toDottedDecimal (const struct in_addr & address) noexcept
+	{
+		std::array< char, INET_ADDRSTRLEN > buffer{};
+
+		if ( inet_ntop(AF_INET, &address, buffer.data(), buffer.size()) == nullptr )
+		{
+			return {};
+		}
+
+		return buffer.data();
+	}
+
+	static bool
+	isMulticastAddress (const struct in_addr & address) noexcept
+	{
+		/* Class D, 224.0.0.0/4. */
+		return ( ntohl(address.s_addr) & 0xF0000000U ) == 0xE0000000U;
+	}
+
+	/* Returns true when the socket has data to read, or when no timeout was requested. */
+	static bool
+	waitReadable (SocketType sock, uint32_t timeoutMs) noexcept
+	{
+		if ( timeoutMs == 0 )
+		{
+			return true;
+		}
+
+		fd_set readFds;
+		FD_ZERO(&readFds);
+		FD_SET(sock, &readFds);
+
+		struct timeval tv{};
+		tv.tv_sec = static_cast< long >(timeoutMs / 1000);
+		tv.tv_usec = static_cast< long >((timeoutMs % 1000) * 1000);
+
+		return select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv) > 0;
+	}
 
 	/* ---- SSDP helpers (kept private to this TU) ---- */
 
@@ -176,12 +257,17 @@ namespace EmEn::Net
 	}
 
 	UDPClient::UDPClient (UDPClient && other) noexcept
+		: m_multicastMemberships(std::move(other.m_multicastMemberships)),
 #ifdef _WIN32
-		: m_socket(std::exchange(other.m_socket, ~uintptr_t{0}))
+		m_socket(std::exchange(other.m_socket, ~uintptr_t{0})),
 #else
-		: m_fd(std::exchange(other.m_fd, -1))
+		m_fd(std::exchange(other.m_fd, -1)),
 #endif
+		m_datagramInfoEnabled(std::exchange(other.m_datagramInfoEnabled, false))
 	{
+		/* A moved-from vector is valid but unspecified: the source must not keep claiming
+		 * memberships that now belong to this socket. */
+		other.m_multicastMemberships.clear();
 	}
 
 	UDPClient &
@@ -190,6 +276,11 @@ namespace EmEn::Net
 		if ( this != &other )
 		{
 			close();
+
+			m_multicastMemberships = std::move(other.m_multicastMemberships);
+			other.m_multicastMemberships.clear();
+
+			m_datagramInfoEnabled = std::exchange(other.m_datagramInfoEnabled, false);
 
 #ifdef _WIN32
 			m_socket = std::exchange(other.m_socket, ~uintptr_t{0});
@@ -232,14 +323,36 @@ namespace EmEn::Net
 		}
 #endif
 
-		/* Allow address reuse. */
+		/* Allow address reuse. Both options are read by bind() and ignored afterwards:
+		 * they MUST be set here, at creation time, never next to the bind() call. */
 		int reuse = 1;
 
 #ifdef _WIN32
 		setsockopt(static_cast< SocketType >(m_socket), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast< const char * >(&reuse), sizeof(reuse));
 #else
 		setsockopt(m_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+
+	#ifdef SO_REUSEPORT
+		/* POSIX only, WinSock has no equivalent. Required to share a multicast service
+		 * port with a system daemon already holding it (an mDNS responder on 5353, for
+		 * instance): on macOS/BSD, SO_REUSEADDR alone does not grant that. Both processes
+		 * must set the same options before bind() for the sharing to be allowed.
+		 * WARNING: this also relaxes unicast. Two sockets bound to the same unicast port
+		 * no longer collide with EADDRINUSE; the kernel spreads incoming datagrams
+		 * between them, turning a loud conflict into silent packet loss. */
+		setsockopt(m_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+	#endif
 #endif
+
+		/* Best-effort, and deliberately NOT deferred to the first receive(DatagramInfo):
+		 * the kernel builds the ancillary data from what it recorded when the datagram was
+		 * queued. Arming the option later still yields the destination address, which sits
+		 * in the IP header, but the receiving interface index comes back as 0 — a plausible
+		 * structure carrying a silently wrong index. Measured on Linux 6.x: index 2 when
+		 * armed here, 0 when armed after the datagram was queued.
+		 * The cost for consumers using the plain receive() is nil, recvfrom() discards the
+		 * ancillary data. */
+		enableDatagramInfo();
 
 		return true;
 	}
@@ -278,6 +391,13 @@ namespace EmEn::Net
 	void
 	UDPClient::close () noexcept
 	{
+		/* The kernel releases the memberships with the socket, and the next open() starts
+		 * from a clean slate: keeping them recorded would make join() a silent no-op on a
+		 * group this socket is no longer part of. */
+		m_multicastMemberships.clear();
+
+		m_datagramInfoEnabled = false;
+
 #ifdef _WIN32
 		if ( m_socket != ~uintptr_t{0} )
 		{
@@ -395,22 +515,9 @@ namespace EmEn::Net
 #endif
 
 		/* Apply timeout using select(). */
-		if ( timeoutMs > 0 )
+		if ( !waitReadable(sock, timeoutMs) )
 		{
-			fd_set readFds;
-			FD_ZERO(&readFds);
-			FD_SET(sock, &readFds);
-
-			struct timeval tv{};
-			tv.tv_sec = static_cast< long >(timeoutMs / 1000);
-			tv.tv_usec = static_cast< long >((timeoutMs % 1000) * 1000);
-
-			const auto selectResult = select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv);
-
-			if ( selectResult <= 0 )
-			{
-				return 0; /* Timeout or error. */
-			}
+			return 0; /* Timeout or error. */
 		}
 
 		struct sockaddr_in sender{};
@@ -472,6 +579,367 @@ namespace EmEn::Net
 #else
 		return setsockopt(m_fd, SOL_SOCKET, SO_BROADCAST, &flag, sizeof(flag)) == 0;
 #endif
+	}
+
+	bool
+	UDPClient::enableDatagramInfo () noexcept
+	{
+		if ( m_datagramInfoEnabled )
+		{
+			return true;
+		}
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+
+		const DWORD enable = 1;
+
+		if ( !setSocketOption(sock, IPPROTO_IP, IP_PKTINFO, &enable, sizeof(enable)) )
+		{
+			return false;
+		}
+#elif defined(__linux__)
+		const int enable = 1;
+
+		if ( !setSocketOption(m_fd, IPPROTO_IP, IP_PKTINFO, &enable, sizeof(enable)) )
+		{
+			return false;
+		}
+#else
+		const int enable = 1;
+
+		/* BSD-derived stacks split the information across two options. */
+		if ( !setSocketOption(m_fd, IPPROTO_IP, IP_RECVDSTADDR, &enable, sizeof(enable)) )
+		{
+			return false;
+		}
+
+		/* The interface index is a bonus: a stack refusing IP_RECVIF still yields the
+		 * destination address, which is what separates multicast from unicast. */
+		setSocketOption(m_fd, IPPROTO_IP, IP_RECVIF, &enable, sizeof(enable));
+#endif
+
+		m_datagramInfoEnabled = true;
+
+		return true;
+	}
+
+	int
+	UDPClient::receive (void * buffer, size_t maxLength, DatagramInfo & info, uint32_t timeoutMs) noexcept
+	{
+		if ( !isOpen() || !enableDatagramInfo() )
+		{
+			return -1;
+		}
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+#else
+		const auto sock = m_fd;
+#endif
+
+		if ( !waitReadable(sock, timeoutMs) )
+		{
+			return 0; /* Timeout or error. */
+		}
+
+		info = {};
+
+		struct sockaddr_in sender{};
+		struct in_addr destination{};
+		bool destinationKnown = false;
+
+		/* Ancillary data is small (a pktinfo, at most a link-level address); 512 bytes
+		 * leave room for whatever else the stack decides to attach. */
+		std::array< char, 512 > control{};
+
+#ifdef _WIN32
+		const auto recvMsg = resolveWSARecvMsg(sock);
+
+		if ( recvMsg == nullptr )
+		{
+			return -1;
+		}
+
+		WSABUF data{};
+		data.buf = static_cast< char * >(buffer);
+		data.len = static_cast< ULONG >(maxLength);
+
+		WSAMSG message{};
+		message.name = reinterpret_cast< LPSOCKADDR >(&sender);
+		message.namelen = sizeof(sender);
+		message.lpBuffers = &data;
+		message.dwBufferCount = 1;
+		message.Control.buf = control.data();
+		message.Control.len = static_cast< ULONG >(control.size());
+
+		DWORD received = 0;
+
+		if ( recvMsg(sock, &message, &received, nullptr, nullptr) != 0 )
+		{
+			return -1;
+		}
+
+		for ( auto * header = WSA_CMSG_FIRSTHDR(&message); header != nullptr; header = WSA_CMSG_NXTHDR(&message, header) )
+		{
+			if ( header->cmsg_level != IPPROTO_IP || header->cmsg_type != IP_PKTINFO )
+			{
+				continue;
+			}
+
+			IN_PKTINFO packetInfo{};
+			std::memcpy(&packetInfo, WSA_CMSG_DATA(header), sizeof(packetInfo));
+
+			destination = packetInfo.ipi_addr;
+			destinationKnown = true;
+
+			info.interfaceIndex = static_cast< uint32_t >(packetInfo.ipi_ifindex);
+		}
+
+		const auto bytesRead = static_cast< int >(received);
+#else
+		struct iovec data{};
+		data.iov_base = buffer;
+		data.iov_len = maxLength;
+
+		struct msghdr message{};
+		message.msg_name = &sender;
+		message.msg_namelen = sizeof(sender);
+		message.msg_iov = &data;
+		message.msg_iovlen = 1;
+		message.msg_control = control.data();
+		message.msg_controllen = control.size();
+
+		const auto received = recvmsg(sock, &message, 0);
+
+		if ( received < 0 )
+		{
+			return -1;
+		}
+
+		for ( auto * header = CMSG_FIRSTHDR(&message); header != nullptr; header = CMSG_NXTHDR(&message, header) )
+		{
+			if ( header->cmsg_level != IPPROTO_IP )
+			{
+				continue;
+			}
+
+	#ifdef __linux__
+			if ( header->cmsg_type == IP_PKTINFO )
+			{
+				struct in_pktinfo packetInfo{};
+				std::memcpy(&packetInfo, CMSG_DATA(header), sizeof(packetInfo));
+
+				destination = packetInfo.ipi_addr;
+				destinationKnown = true;
+
+				info.interfaceIndex = static_cast< uint32_t >(packetInfo.ipi_ifindex);
+			}
+	#else
+			if ( header->cmsg_type == IP_RECVDSTADDR )
+			{
+				std::memcpy(&destination, CMSG_DATA(header), sizeof(destination));
+
+				destinationKnown = true;
+			}
+			else if ( header->cmsg_type == IP_RECVIF )
+			{
+				struct sockaddr_dl link{};
+				std::memcpy(&link, CMSG_DATA(header), sizeof(link));
+
+				info.interfaceIndex = static_cast< uint32_t >(link.sdl_index);
+			}
+	#endif
+		}
+
+		const auto bytesRead = static_cast< int >(received);
+#endif
+
+		if ( bytesRead > 0 )
+		{
+			info.senderAddress = toDottedDecimal(sender.sin_addr);
+			info.senderPort = ntohs(sender.sin_port);
+		}
+
+		if ( destinationKnown )
+		{
+			info.destinationAddress = toDottedDecimal(destination);
+			info.multicast = isMulticastAddress(destination);
+		}
+
+		return bytesRead;
+	}
+
+	/* ---- IPv4 multicast ---- */
+
+	bool
+	UDPClient::joinMulticastGroup (const std::string & groupAddress, const std::string & interfaceAddress) noexcept
+	{
+		if ( !isOpen() )
+		{
+			return false;
+		}
+
+		struct ip_mreq request{};
+
+		if ( inet_pton(AF_INET, groupAddress.c_str(), &request.imr_multiaddr) != 1 )
+		{
+			return false;
+		}
+
+		if ( interfaceAddress.empty() )
+		{
+			request.imr_interface.s_addr = INADDR_ANY;
+		}
+		else if ( inet_pton(AF_INET, interfaceAddress.c_str(), &request.imr_interface) != 1 )
+		{
+			return false;
+		}
+
+		const auto membership = std::make_pair(
+			static_cast< uint32_t >(request.imr_multiaddr.s_addr),
+			static_cast< uint32_t >(request.imr_interface.s_addr)
+		);
+
+		/* Already a member: the kernel would answer EADDRINUSE, which the consumer's
+		 * periodic interface re-walk must not read as a failure. */
+		if ( std::ranges::find(m_multicastMemberships, membership) != m_multicastMemberships.end() )
+		{
+			return true;
+		}
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+#else
+		const auto sock = m_fd;
+#endif
+
+		if ( !setSocketOption(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &request, sizeof(request)) )
+		{
+			return false;
+		}
+
+		m_multicastMemberships.emplace_back(membership);
+
+		return true;
+	}
+
+	bool
+	UDPClient::leaveMulticastGroup (const std::string & groupAddress, const std::string & interfaceAddress) noexcept
+	{
+		if ( !isOpen() )
+		{
+			return false;
+		}
+
+		struct ip_mreq request{};
+
+		if ( inet_pton(AF_INET, groupAddress.c_str(), &request.imr_multiaddr) != 1 )
+		{
+			return false;
+		}
+
+		if ( interfaceAddress.empty() )
+		{
+			request.imr_interface.s_addr = INADDR_ANY;
+		}
+		else if ( inet_pton(AF_INET, interfaceAddress.c_str(), &request.imr_interface) != 1 )
+		{
+			return false;
+		}
+
+		const auto membership = std::make_pair(
+			static_cast< uint32_t >(request.imr_multiaddr.s_addr),
+			static_cast< uint32_t >(request.imr_interface.s_addr)
+		);
+
+		const auto membershipIt = std::ranges::find(m_multicastMemberships, membership);
+
+		/* Never joined. Teardown paths call this blindly, it is not an error. */
+		if ( membershipIt == m_multicastMemberships.end() )
+		{
+			return true;
+		}
+
+		/* Forget it whatever the kernel answers: a failing IP_DROP_MEMBERSHIP means the
+		 * kernel does not hold us as a member either. */
+		m_multicastMemberships.erase(membershipIt);
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+#else
+		const auto sock = m_fd;
+#endif
+
+		return setSocketOption(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, &request, sizeof(request));
+	}
+
+	bool
+	UDPClient::setMulticastTTL (uint8_t ttl) noexcept
+	{
+		if ( !isOpen() )
+		{
+			return false;
+		}
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+		const DWORD value = ttl;
+#else
+		const auto sock = m_fd;
+		/* BSD-derived stacks expect a single byte here, not an int. */
+		const unsigned char value = ttl;
+#endif
+
+		return setSocketOption(sock, IPPROTO_IP, IP_MULTICAST_TTL, &value, sizeof(value));
+	}
+
+	bool
+	UDPClient::setMulticastLoopback (bool enable) noexcept
+	{
+		if ( !isOpen() )
+		{
+			return false;
+		}
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+		const DWORD value = enable ? 1 : 0;
+#else
+		const auto sock = m_fd;
+		/* Same one-byte expectation as IP_MULTICAST_TTL. */
+		const unsigned char value = enable ? 1 : 0;
+#endif
+
+		return setSocketOption(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &value, sizeof(value));
+	}
+
+	bool
+	UDPClient::setMulticastInterface (const std::string & interfaceAddress) noexcept
+	{
+		if ( !isOpen() )
+		{
+			return false;
+		}
+
+		struct in_addr address{};
+
+		if ( interfaceAddress.empty() )
+		{
+			address.s_addr = INADDR_ANY;
+		}
+		else if ( inet_pton(AF_INET, interfaceAddress.c_str(), &address) != 1 )
+		{
+			return false;
+		}
+
+#ifdef _WIN32
+		const auto sock = static_cast< SocketType >(m_socket);
+#else
+		const auto sock = m_fd;
+#endif
+
+		return setSocketOption(sock, IPPROTO_IP, IP_MULTICAST_IF, &address, sizeof(address));
 	}
 
 	/* ---- SSDP Discovery (static, self-contained) ---- */

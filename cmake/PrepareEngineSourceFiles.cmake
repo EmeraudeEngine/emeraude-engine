@@ -4,6 +4,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/CachedDownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/DownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/NetworkInterfaces.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/SerialPort.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPClient.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPServer.hpp
@@ -35,6 +36,7 @@ set(EMERAUDE_HEADER_FILES
 set(EMERAUDE_SOURCE_FILES
     # Net
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/NetworkInterfaces.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPClient.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPServer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/UDPClient.cpp

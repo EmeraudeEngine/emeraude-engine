@@ -246,6 +246,9 @@ if ( MSVC )
 
 	# Link Dwmapi for DwmSetWindowAttribute (title bar light/dark appearance).
 	target_link_libraries(${PROJECT_NAME} PRIVATE Dwmapi)
+
+	# Link Iphlpapi for GetAdaptersAddresses (Net::NetworkInterfaces).
+	target_link_libraries(${PROJECT_NAME} PRIVATE Iphlpapi)
 elseif ( APPLE )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
 

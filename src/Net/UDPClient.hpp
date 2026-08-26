@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace EmEn::Net
@@ -48,10 +49,28 @@ namespace EmEn::Net
 	};
 
 	/**
+	 * @brief Delivery information attached to a received datagram.
+	 * @note Produced by the receive() overload taking this structure. It answers the
+	 * question the sender address alone cannot: which of the local addresses the
+	 * datagram was aimed at, and through which interface it came in. On a multi-homed
+	 * host (VPN, container bridges) the same multicast answer arrives several times,
+	 * and only the interface index tells the copies apart.
+	 */
+	struct EMEN_LEAN_API DatagramInfo
+	{
+		std::string senderAddress;			/* Source IPv4 address, dotted-decimal. */
+		std::string destinationAddress;		/* Address the datagram was sent TO. Empty when the stack did not report it. */
+		uint32_t interfaceIndex{0};			/* Index of the receiving interface, 0 when unavailable. */
+		uint16_t senderPort{0};				/* Source port. */
+		bool multicast{false};				/* The destination address belongs to 224.0.0.0/4. */
+	};
+
+	/**
 	 * @brief Cross-platform UDP client for sending/receiving datagrams and SSDP discovery.
 	 * @note Uses raw BSD sockets on Linux/macOS and WinSock on Windows.
 	 * Provides both a stateful socket (open/bind/send/receive/close) and a
 	 * self-contained static SSDP discovery method.
+	 * @note IPv4 only, multicast included.
 	 */
 	class EMEN_LEAN_API UDPClient final
 	{
@@ -76,6 +95,14 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Opens a UDP socket.
+			 * @note Enables SO_REUSEADDR, and SO_REUSEPORT on POSIX, before any bind()
+			 * can happen — both options are inert once the socket is bound. Also arms the
+			 * ancillary data read by the receive() overload taking a DatagramInfo, which
+			 * must be in place before the first datagram is queued.
+			 * @warning POSIX only: because SO_REUSEPORT is enabled, two sockets bound to
+			 * the same unicast port no longer collide with EADDRINUSE; the kernel spreads
+			 * incoming unicast datagrams between them instead. Multicast is unaffected,
+			 * every member socket receives its copy.
 			 * @return bool True if the socket was created successfully.
 			 */
 			bool open () noexcept;
@@ -84,12 +111,16 @@ namespace EmEn::Net
 			 * @brief Binds the socket to a local port for receiving.
 			 * @param port The local port to bind to.
 			 * @param address The local address to bind to (empty or "0.0.0.0" for any).
+			 * @note To receive multicast, bind to any address: binding to a single
+			 * interface address filters out group traffic on several stacks.
 			 * @return bool True if binding succeeded.
 			 */
 			bool bind (uint16_t port, const std::string & address = {}) noexcept;
 
 			/**
 			 * @brief Closes the socket.
+			 * @note Drops the recorded multicast memberships, mirroring the kernel which
+			 * releases them when the socket goes away.
 			 * @return void
 			 */
 			void close () noexcept;
@@ -132,6 +163,20 @@ namespace EmEn::Net
 			int receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
 
 			/**
+			 * @brief Receives data from the socket along with its delivery information.
+			 * @note The ancillary data is armed by open(), not here: a datagram already
+			 * queued when the option is set comes back with a valid destination address
+			 * but an interface index of 0. The plain receive() overload is unaffected.
+			 * @warning Windows requires the socket to be bound before this overload works.
+			 * @param buffer The buffer to read into.
+			 * @param maxLength Maximum number of bytes to receive.
+			 * @param info [out] The delivery information of the received datagram.
+			 * @param timeoutMs Receive timeout in milliseconds (0 = non-blocking).
+			 * @return int Number of bytes received, 0 if timeout/no data, or -1 on error.
+			 */
+			int receive (void * buffer, size_t maxLength, DatagramInfo & info, uint32_t timeoutMs = 0) noexcept;
+
+			/**
 			 * @brief Receives data as a string from the socket.
 			 * @param maxLength Maximum number of bytes to receive.
 			 * @param senderAddress [out] The sender's IP address.
@@ -158,6 +203,67 @@ namespace EmEn::Net
 			bool setBroadcast (bool enable) noexcept;
 
 			/**
+			 * @brief Joins an IPv4 multicast group on a given local interface.
+			 * @note Idempotent by design: joining a group already joined on the same
+			 * interface returns true without touching the socket. A consumer re-walking
+			 * the interface list on a timer can therefore re-join blindly, where the
+			 * kernel would have answered EADDRINUSE.
+			 * @warning Windows requires the socket to be bound before joining. POSIX is
+			 * permissive; bind first on every platform to keep the behaviour uniform.
+			 * @warning The kernel caps the number of memberships per socket (20 by default
+			 * on Linux, net.ipv4.igmp_max_memberships). Joining every interface of a host
+			 * running containers or VPNs can reach it, and the join then fails.
+			 * @param groupAddress The multicast group, dotted-decimal (e.g. "224.0.0.251").
+			 * @param interfaceAddress Local interface IP to join on, dotted-decimal. Empty =
+			 * INADDR_ANY, the kernel picks. NOTE: an interface *address*, never a name —
+			 * "192.168.1.42", not "eth0". Use NetworkInterfaces::enumerateMulticastCapable()
+			 * to obtain the candidates.
+			 * @return bool True on success, or when already a member.
+			 */
+			bool joinMulticastGroup (const std::string & groupAddress, const std::string & interfaceAddress = {}) noexcept;
+
+			/**
+			 * @brief Leaves an IPv4 multicast group on a given local interface.
+			 * @note Tolerates a group that was never joined: teardown paths call this
+			 * blindly, so an unknown membership returns true without touching the socket.
+			 * @param groupAddress The multicast group, dotted-decimal.
+			 * @param interfaceAddress The interface the group was joined on, dotted-decimal.
+			 * Must match the value passed to joinMulticastGroup(). An interface *address*,
+			 * never a name.
+			 * @return bool True on success, or when not a member.
+			 */
+			bool leaveMulticastGroup (const std::string & groupAddress, const std::string & interfaceAddress = {}) noexcept;
+
+			/**
+			 * @brief Sets the TTL of outgoing multicast datagrams.
+			 * @note The default of 1 keeps the traffic on the local link. mDNS/DNS-SD
+			 * mandates 255, which also lets the receiver detect forged off-link packets.
+			 * @param ttl The time-to-live, in hops.
+			 * @return bool True if the option was set successfully.
+			 */
+			bool setMulticastTTL (uint8_t ttl) noexcept;
+
+			/**
+			 * @brief Enables or disables the loopback of outgoing multicast datagrams.
+			 * @note Enabled by default on most stacks. Required for several processes of
+			 * the same host to see each other, and to exercise multicast on one machine.
+			 * @param enable True to receive back the datagrams sent by this host.
+			 * @return bool True if the option was set successfully.
+			 */
+			bool setMulticastLoopback (bool enable) noexcept;
+
+			/**
+			 * @brief Selects the local interface used to send multicast datagrams.
+			 * @note Outbound only. It does not affect the groups joined for reception,
+			 * which carry their own interface.
+			 * @param interfaceAddress Local interface IP, dotted-decimal. Empty restores
+			 * INADDR_ANY, letting the routing table decide. An interface *address*, never
+			 * a name.
+			 * @return bool True if the option was set successfully.
+			 */
+			bool setMulticastInterface (const std::string & interfaceAddress = {}) noexcept;
+
+			/**
 			 * @brief Performs an SSDP M-SEARCH and collects responses (self-contained, no instance state needed).
 			 * @note Creates a temporary socket internally. Uses raw UDP multicast.
 			 * @param searchTarget The ST header value (e.g., "ssdp:all", "urn:schemas-upnp-org:device:Printer:1").
@@ -169,10 +275,22 @@ namespace EmEn::Net
 
 		private:
 
+			/**
+			 * @brief Enables the ancillary data carrying the datagram destination address.
+			 * @note Called by open(). The receive() overload taking a DatagramInfo retries
+			 * it, for the case of a stack that refused the option at creation time.
+			 * @return bool True if the socket now reports the delivery information.
+			 */
+			bool enableDatagramInfo () noexcept;
+
+			/* Joined multicast groups, as (group, interface) pairs in network byte order.
+			 * Held to make join/leave idempotent without having to read errno. */
+			std::vector< std::pair< uint32_t, uint32_t > > m_multicastMemberships;
 #ifdef _WIN32
 			uintptr_t m_socket{~uintptr_t{0}};  /* SOCKET (UINT_PTR), INVALID_SOCKET = ~0. */
 #else
 			int m_fd{-1};
 #endif
+			bool m_datagramInfoEnabled{false};
 	};
 }

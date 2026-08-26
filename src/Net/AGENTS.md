@@ -52,11 +52,20 @@ auto texture = resources.container<TextureResource>()->getResource("https://exam
 
 ## Development Commands
 
-```bash
-# Net tests
-ctest -R Net
-./test --filter="*Net*"
-```
+> [!WARNING]
+> **There is no test target in the engine.** This section used to advertise `ctest -R Net`
+> and `./test --filter="*Net*"`; neither exists — the engine `CMakeLists.txt` declares no
+> `add_test()`, and the only unit suite in the cascade lives in **emeraude-base**
+> (`EmeraudeBaseUnitTests`).
+>
+> To exercise a `Net` utility, compile it out-of-tree: the hardware utilities depend on
+> nothing but `emeraude_export.hpp`, so a standalone binary works and gives a real runtime
+> check rather than a compile check.
+>
+> ```bash
+> g++ -std=c++20 -I<engine>/src my_check.cpp \
+>     <engine>/src/Net/UDPClient.cpp <engine>/src/Net/NetworkInterfaces.cpp -o my_check
+> ```
 
 ## Important Files
 
@@ -126,6 +135,14 @@ namespace EmEn::Net
         std::map< std::string, std::string > headers;
     };
 
+    struct DatagramInfo {
+        std::string senderAddress;
+        std::string destinationAddress;   // what the datagram was addressed TO
+        uint32_t interfaceIndex{0};       // receiving interface, 0 when unavailable
+        uint16_t senderPort{0};
+        bool multicast{false};            // destination is in 224.0.0.0/4
+    };
+
     class UDPClient final {
     public:
         // Socket lifecycle
@@ -139,6 +156,8 @@ namespace EmEn::Net
         int send (const std::string & host, uint16_t port, const std::string & data) noexcept;
         int receive (void * buffer, size_t maxLength, std::string & senderAddress,
                      uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
+        int receive (void * buffer, size_t maxLength, DatagramInfo & info,
+                     uint32_t timeoutMs = 0) noexcept;
         std::string receiveString (size_t maxLength, std::string & senderAddress,
                                    uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
 
@@ -147,6 +166,15 @@ namespace EmEn::Net
 
         // Options
         bool setBroadcast (bool enable) noexcept;
+
+        // IPv4 multicast
+        bool joinMulticastGroup (const std::string & groupAddress,
+                                 const std::string & interfaceAddress = {}) noexcept;
+        bool leaveMulticastGroup (const std::string & groupAddress,
+                                  const std::string & interfaceAddress = {}) noexcept;
+        bool setMulticastTTL (uint8_t ttl) noexcept;
+        bool setMulticastLoopback (bool enable) noexcept;
+        bool setMulticastInterface (const std::string & interfaceAddress = {}) noexcept;
 
         // SSDP convenience (static, self-contained)
         static std::vector< SSDPDevice > ssdpDiscover (const std::string & searchTarget,
@@ -158,6 +186,91 @@ namespace EmEn::Net
 **Design**: RAII (closes in destructor), movable, non-copyable, all functions `noexcept`. The `ssdpDiscover()` static method creates a temporary socket internally for UDP multicast M-SEARCH (239.255.255.250:1900).
 
 **Platform**: Cross-platform (BSD sockets on Linux/macOS, Winsock on Windows). No external dependencies.
+
+#### IPv4 multicast
+
+IPv4 only — IPv6 (`ipv6_mreq` / `IPV6_JOIN_GROUP`) is deliberately out of scope.
+
+**Every interface parameter is an interface ADDRESS, never a name**: `"192.168.1.42"`, not
+`"eth0"`. This is the single most common misuse of the API. Obtain the candidates from
+`NetworkInterfaces::enumerateMulticastCapable()`.
+
+**Order**: `open()` → `bind()` → `joinMulticastGroup()`. Windows *requires* the socket to be
+bound before `IP_ADD_MEMBERSHIP`; POSIX is permissive. Bind first everywhere.
+
+**`joinMulticastGroup()` is idempotent.** The client records its memberships as
+`(group, interface)` pairs. A repeat join returns `true` without touching the socket, where
+the kernel would have answered `EADDRINUSE` — a consumer re-walking the interface list on a
+timer can therefore re-join blindly. `leaveMulticastGroup()` on a group never joined is a
+success too, for teardown paths that call it unconditionally. `close()` drops the list, in
+step with the kernel which releases the memberships with the socket.
+
+**`open()` enables `SO_REUSEPORT` on POSIX** (WinSock has no equivalent), alongside the
+pre-existing `SO_REUSEADDR`. Both are read by `bind()` and inert afterwards — they are set at
+creation time and **must never be moved next to the `bind()` call**. This is what allows
+sharing a service port with a system daemon already holding it (mDNS on 5353).
+⚠️ **Side effect on unicast**: two sockets bound to the same unicast port no longer collide
+with `EADDRINUSE`; the kernel spreads incoming datagrams between them. A port conflict that
+used to be a loud failure is now silent packet loss.
+
+**Verified on Linux 6.x** (2026-08-26): binding 5353 next to a running `avahi-daemon`,
+joining `224.0.0.251` on two NICs, and reading real DNS-SD answers from four LAN devices —
+each datagram carrying a resolved interface index.
+⚠️ **macOS is NOT verified.** It compiles (BSD path: `IP_RECVDSTADDR` + `IP_RECVIF`) but no
+run was made. Two distinct risks, in order: sharing 5353 with the system `mDNSResponder`, and
+**since macOS 15 (Sequoia) the Local Network privacy permission** — an app doing Bonjour or
+multicast needs `NSLocalNetworkUsageDescription` and an entry under Privacy & Security, and
+field reports show multicast working from a terminal but not from a double-clicked bundle.
+Any macOS spike must therefore test a **signed, packaged binary**, never a console test.
+
+---
+
+### Network Interfaces (`Net::NetworkInterfaces`)
+
+**File**: `NetworkInterfaces.hpp/.cpp`
+
+Enumeration of the local IPv4 interfaces. Exists because the multicast API takes interface
+*addresses*: without it, every consumer would have to write its own `getifaddrs` /
+`GetAdaptersAddresses` `#ifdef` block — platform divergence leaking downstream, which the
+co-development doctrine forbids.
+
+**API**:
+```cpp
+namespace EmEn::Net::NetworkInterfaces
+{
+    struct Interface {
+        std::string name;              // "eth0", "en0", "Ethernet 2" — informative only
+        std::string address;           // dotted-decimal, THIS is what the multicast API wants
+        std::string netmask;
+        uint32_t index{0};
+        bool loopback{false};
+        bool up{false};
+        bool multicastCapable{false};
+    };
+
+    std::vector< Interface > enumerate () noexcept;
+    std::vector< Interface > enumerateMulticastCapable () noexcept;
+}
+```
+
+One entry **per IPv4 address**: an interface holding several addresses yields several entries
+sharing a name and an index.
+
+**Platform**: `getifaddrs()` on Linux/macOS, `GetAdaptersAddresses()` on Windows (links
+`Iphlpapi`). Unlike `SerialPort` and `WiFiScanner`, this unit is **not** split per OS — a
+single TU with one Windows branch, because `getifaddrs()` covers Linux and macOS identically.
+
+**Traps**:
+- ⚠️ On Linux, **loopback carries no `IFF_MULTICAST` flag**. `lo` is therefore absent from
+  `enumerateMulticastCapable()`, and a multicast self-test on one machine must go through a
+  real NIC with `setMulticastLoopback(true)`.
+- ⚠️ `up` requires `IFF_UP` **and** `IFF_RUNNING`: a NIC with no cable is up but not running,
+  and joining a group on it buys nothing.
+- ⚠️ The result is a snapshot. Interfaces appear and vanish at runtime (VPN, hotplug,
+  container bridges): a consumer tracking them must poll and diff.
+- ⚠️ The kernel caps memberships per socket — **20 by default on Linux**
+  (`net.ipv4.igmp_max_memberships`). Joining every interface of a host running containers or
+  VPNs can reach the cap, and the join then fails.
 
 ---
 
@@ -429,13 +542,16 @@ namespace EmEn::Net::WiFiScanner
 - **URLs in stores**: Resources stores can contain URLs instead of paths
 - **Fail-safe integration**: Download failure → Resources returns neutral resource
 - **No multiplayer**: Net is for assets, not gameplay networking
-- **Hardware utilities are standalone**: UDPClient, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO. TCPClient/TCPServer use ASIO internally but expose a simple blocking-with-timeout API — consumers never see ASIO types.
+- **Hardware utilities are standalone**: UDPClient, NetworkInterfaces, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO. TCPClient/TCPServer use ASIO internally but expose a simple blocking-with-timeout API — consumers never see ASIO types.
 - **noexcept everywhere**: All hardware utility functions are noexcept, errors return false/empty containers (ASIO is configured with `ASIO_NO_EXCEPTIONS`).
+- ⚠️⚠️ **Socket options that feed `bind()` or `recvmsg()` must be set at `open()` time, never lazily.** Measured on Linux 6.x: arming `IP_PKTINFO` at the first `receive(DatagramInfo)` instead of at `open()` still yields a correct destination address — it sits in the IP header — but the receiving interface index comes back as **0** for any datagram already queued. The structure looks perfectly plausible and the index is silently wrong, which is exactly what breaks per-interface attribution on a multi-homed host. Same family as `SO_REUSEADDR`/`SO_REUSEPORT`, which `bind()` reads once and ignores forever after.
+- ⚠️ **A green compile proves nothing about a socket.** The multicast surface was validated by an out-of-tree binary compiled straight from `UDPClient.cpp` + `NetworkInterfaces.cpp` (they depend on nothing but `emeraude_export.hpp`), doing a real round-trip and a real DNS-SD exchange. Reuse that technique rather than trusting the build.
 
 ## Important Files
 
 - `Manager.cpp/.hpp` - Main manager, download requests
-- `UDPClient.hpp/.cpp` - UDP client and SSDP discovery
+- `UDPClient.hpp/.cpp` - UDP client, IPv4 multicast and SSDP discovery
+- `NetworkInterfaces.hpp/.cpp` - Local IPv4 interface enumeration (feeds the multicast API)
 - `TCPClient.hpp/.cpp` - TCP client (Asio-based, blocking-with-timeout API)
 - `TCPServer.hpp/.cpp` - TCP server (Asio-based, accept returns owned TCPClient)
 - `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction
