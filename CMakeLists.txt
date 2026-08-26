@@ -31,7 +31,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.9.6
+	VERSION 0.9.61
 	DESCRIPTION "Emeraude-Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -65,25 +65,20 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
+option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 
-if ( MSVC )
-	option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
-	option(EMERAUDE_USE_FULL_EXPORTS "Export the whole annotated public API (EMEN_API + EMEN_LEAN_API) (Windows only, Default On)." On)
-	option(EMERAUDE_USE_LEAN_EXPORTS "Export only the scopes annotated EMEN_LEAN_API, i.e. those actually consumed by the embedding application (Windows only, Default Off)." Off)
+option(EMERAUDE_USE_FULL_EXPORTS "Export the whole annotated public API (EMEN_API + EMEN_LEAN_API) (Windows only)." "${MSVC}")
+option(EMERAUDE_USE_LEAN_EXPORTS "Export only the scopes annotated EMEN_LEAN_API, i.e. those actually consumed by the embedding application (Windows only)." Off)
 
-	if ( EMERAUDE_USE_FULL_EXPORTS AND EMERAUDE_USE_LEAN_EXPORTS )
-		message(FATAL_ERROR "[EmeraudeEngine] EMERAUDE_USE_FULL_EXPORTS and EMERAUDE_USE_LEAN_EXPORTS are mutually exclusive. Enable exactly one (or neither to fall back on WINDOWS_EXPORT_ALL_SYMBOLS).")
-	endif ()
+if ( EMERAUDE_USE_FULL_EXPORTS AND EMERAUDE_USE_LEAN_EXPORTS )
+	message(FATAL_ERROR "[EmeraudeEngine] EMERAUDE_USE_FULL_EXPORTS and EMERAUDE_USE_LEAN_EXPORTS are mutually exclusive. Enable exactly one (or neither to fall back on WINDOWS_EXPORT_ALL_SYMBOLS).")
 endif ()
 
-if ( UNIX )
-	option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
-	option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
-	option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
-	option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
-	option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
-endif ()
-
+option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 
 # Debug preprocessor macros control (Ignored in Release).
