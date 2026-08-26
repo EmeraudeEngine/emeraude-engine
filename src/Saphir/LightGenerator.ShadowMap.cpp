@@ -697,7 +697,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept
+	LightGenerator::generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias) const noexcept
 	{
 		std::string code;
 		code.reserve(1280 + (shadowMapArray.size() * 3) + fragmentPositionWorldSpace.size() + fragmentPositionViewSpace.size() + cascadeMatrices.size() + splitDistances.size() + cascadeCount.size());
@@ -739,9 +739,11 @@ namespace EmEn::Saphir
 		/* Transform fragment position to light space using the selected cascade matrix. */
 		code +=
 			"/* Transform to the selected cascade's light space. */" "\n"
-			"vec4 posLightSpace = ";
+			"const mat4 cascadeMatrix = ";
 		code += cascadeMatrices;
-		code += "[cascadeIndex] * vec4(";
+		code +=
+			"[cascadeIndex];" "\n"
+			"vec4 posLightSpace = cascadeMatrix * vec4(";
 		code += fragmentPositionWorldSpace;
 		code +=
 			", 1.0);" "\n"
@@ -749,6 +751,30 @@ namespace EmEn::Saphir
 			"/* NOTE: Only X and Y need [-1,1] to [0,1] conversion for UV coordinates. */" "\n"
 			"/* Z is already in [0,1] range from Vulkan orthographic projection. */" "\n"
 			"projCoords.xy = projCoords.xy * 0.5 + 0.5;" "\n\n";
+
+		/* ⚠️⚠️ PER-CASCADE DEPTH BIAS, and the reason it has to be derived rather than uploaded.
+		 * `shadowBias` was uploaded by DirectionalLight and SpotLight, declared in their uniform
+		 * blocks, and read by NOBODY on either 2D path — its only generated consumers were the
+		 * point-light cubemap ones. Tuning it did nothing at all, silently.
+		 * The rasterizer bias on the cast pass cannot replace it here: it is per-PIPELINE, and all
+		 * cascades go through that one pipeline via multiview, so it cannot vary per cascade — while
+		 * the cascades differ in texel size by more than an order of magnitude.
+		 * The scale is read out of the cascade matrix instead of being uploaded, which keeps the
+		 * uniform block untouched — that layout is described by hand in three separate places and a
+		 * silent truncation has already shipped from editing one of them. After the bounding-sphere
+		 * fit the orthographic X scale is exactly 1/radius and the light view is a rotation plus a
+		 * translation, so `length(row0)` recovers 1/radius, and the depth range is 3 * radius by
+		 * construction. `shadowBias` therefore means WORLD UNITS — metres — which is a quantity worth
+		 * exposing, unlike an opaque NDC epsilon.
+		 * @todo Normal-offset shadows would beat a pure depth bias on grazing surfaces, but they need
+		 * the world-space normal, which no fragment shader here interpolates yet: the light pass only
+		 * synthesizes the VIEW-space normal, and later than this block. That is its own change. */
+		code +=
+			"/* Per-cascade depth bias, expressed in WORLD units (see the note in the generator). */" "\n"
+			"const float cascadeInverseRadius = length(vec3(cascadeMatrix[0][0], cascadeMatrix[1][0], cascadeMatrix[2][0]));" "\n"
+			"projCoords.z -= ";
+		code += shadowBias;
+		code += " * cascadeInverseRadius / 3.0;" "\n\n";
 
 		/* Skip shadow calculation if outside the shadow map's valid depth range. */
 		code +=

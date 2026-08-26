@@ -329,6 +329,13 @@ namespace EmEn::Graphics
 			/** @brief Offset of the cascade count in the buffer. */
 			static constexpr auto CascadeCountOffset{CascadeMatricesJumpOffset + 4UL};
 			/** @brief Offset of the shadow bias in the buffer. */
+			/* ⚠️ DEAD SLOT. Written by nobody — grep the .cpp — and its only value is the literal in the
+			 * initialiser. It is exposed to shaders as `cascadeProperties.y` and nothing reads that either.
+			 * The per-cascade bias is wired on the LIGHT side instead (`CSM_ShadowBiasOffset`), because the
+			 * light is what owns a user-facing setShadowBias().
+			 * NOT deleted on purpose: removing a member shifts every offset after it, and this block's
+			 * layout is described BY HAND in three separate places — a desync there has already shipped a
+			 * silent truncation. It is inert, so it waits for a change that does the whole layout at once. */
 			static constexpr auto ShadowBiasOffset{CascadeMatricesJumpOffset + 5UL};
 			/** @brief Offset of the world position in the buffer. */
 			static constexpr auto WorldPositionOffset{CascadeMatricesJumpOffset + 8UL};

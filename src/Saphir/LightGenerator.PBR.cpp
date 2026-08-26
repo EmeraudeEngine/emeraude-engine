@@ -475,7 +475,8 @@ namespace EmEn::Saphir
 							std::string(ShaderVariable::PositionViewSpace),
 							LightUB(UniformBlock::Component::CascadeViewProjectionMatrices),
 							LightUB(UniformBlock::Component::CascadeSplitDistances),
-							LightUB(UniformBlock::Component::CascadeCount)
+							LightUB(UniformBlock::Component::CascadeCount),
+							LightUB(UniformBlock::Component::ShadowBias)
 						) << Line::Blank;
 					}
 					else if ( m_PCFEnabled )

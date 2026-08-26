@@ -266,7 +266,40 @@ through `updateAllVideoDeviceProperties()` and is what `Scene::updateCSMCascades
 small world, the classic constructor is simply the better tool: its coverage is an explicit
 half-extent in world units, so the texel density is fixed and independent of where the camera looks.
 
-### No explicit depth bias
+### Per-cascade depth bias (Aug 2026) — the knob that did nothing
+
+⚠️⚠️ `shadowBias` was uploaded by `DirectionalLight` and `SpotLight`, declared in their uniform
+blocks, and **read by nobody on either 2D path** — its only generated consumers were the point-light
+cubemap ones. Setting it changed nothing at all, silently, for both the classic and the cascaded map.
+
+It is now wired on the CSM path and means **world units — metres**. The rasterizer bias on the cast
+pass cannot do this job: it is per-PIPELINE, and all cascades go through that one pipeline via
+multiview, so it structurally cannot vary per cascade — while cascades differ in texel size by more
+than an order of magnitude.
+
+The per-cascade scale is **derived in the shader** rather than uploaded:
+
+```glsl
+const float cascadeInverseRadius = length(vec3(cascadeMatrix[0][0], cascadeMatrix[1][0], cascadeMatrix[2][0]));
+projCoords.z -= ubLight.shadowBias * cascadeInverseRadius / 3.0;
+```
+
+After the bounding-sphere fit the orthographic X scale is exactly `1/radius` and the light view is a
+rotation plus a translation, so `length(row0)` recovers `1/radius`; the depth range is `3 × radius`
+by construction. That keeps the uniform block untouched — its layout is described by hand in **three**
+places and a silent truncation has already shipped from editing one of them.
+
+⚠️ **Two dead bias slots existed; one is now live.** The light-side `CSM_ShadowBiasOffset` is wired.
+The view-side `ViewMatricesCascadedUBO::ShadowBiasOffset` is still dead — written by nobody, exposed
+as `cascadeProperties.y`, read by nothing — and deliberately NOT deleted: removing a member shifts
+every offset after it in a layout maintained by hand in three files. It is inert and waits for a
+change that does the whole layout at once.
+
+@todo Normal-offset shadows would beat a pure depth bias on grazing surfaces, but they need the
+world-space normal, which no fragment shader here interpolates: the light pass synthesizes only the
+VIEW-space normal, and later than the shadow block. Its own change.
+
+### The old note on the absence of a bias
 
 The CSM sampling path compares `projCoords.z` raw. This matches the 2D **PCF** path (which also has
 no explicit bias and relies on the hardware comparison sampler); only the non-PCF 2D path and the

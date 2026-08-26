@@ -919,7 +919,7 @@ namespace EmEn::Saphir
 			 * @return std::string The generated GLSL code declaring and computing `shadowFactor`.
 			 */
 			[[nodiscard]]
-			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept;
+			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & fragmentPositionViewSpace, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount, const std::string & shadowBias) const noexcept;
 
 			/**
 			 * @brief Returns the variable responsible for the light position in world space.
