@@ -213,10 +213,9 @@ configurable on purpose — the reasons live with the flag's contract in
 > Pick it from the scene: `reflexion-debug` uses 4 (500 m → 125 m of coverage for action inside
 > 106 m).
 >
-> Still missing, and what a polish pass owes: texel snapping (the camera-motion shimmer),
-> inter-cascade
-> blending, a per-cascade depth bias, `depthClamp` on the cast pass, and a single source of truth for
-> the light-space transform. ⚠️ That last one is computed at **FOUR** sites, not three as this line
+> ✅ **Texel snapping and a rotation-invariant fit landed Aug 2026** — see § *Cascade fit stability*
+> below. Still missing, and what the rest of the polish pass owes: inter-cascade blending, a
+> per-cascade depth bias, and a single source of truth for the light-space transform. ⚠️ That last one is computed at **FOUR** sites, not three as this line
 > claimed until Aug 2026: `DirectionalLight::updateLightSpaceMatrix()`, `DirectionalLight::move()`,
 > `ViewMatrices2DUBO::updateOrthographicViewProperties()` **and `DirectionalLight::createOnHardware()`**,
 > which open-codes the same frame recipe a second time with a *different* coverage fallback
@@ -404,12 +403,47 @@ opposite of static. Restated correctly:
 
 ### Amplitude laws — how to tell the classes apart on screen
 
-- **Class B (unsnapped cascade fit):** amplitude = one shadow texel, ∝ 1/resolution, **independent
-  of camera speed**, deterministic in camera pose. Halve the resolution and the staircase doubles.
+- **Class B (unsnapped cascade fit) — FIXED Aug 2026:** amplitude was one shadow texel,
+  ∝ 1/resolution, **independent of camera speed**, deterministic in camera pose. Kept here because
+  the amplitude law is what tells this class apart from a state desync, and because the same law is
+  how you would recognise a regression.
 - **Class A (state desync):** amplitude = camera displacement per logic tick, ∝ camera speed,
   **independent of resolution**, non-deterministic frame to frame.
 - **The PCF hash:** fixed in screen space; freezes the instant the camera parks, crawls the instant
   it moves, and survives TAA.
+
+### Cascade fit stability — sphere fit and texel snapping (Aug 2026)
+
+`computeCascadeProjection()` used a light-space **AABB** of the frustum slice and snapped nothing.
+Two causes, one signature — shadow edges crawling continuously under camera motion, frozen at rest:
+
+- an AABB of a **rotating** slice is not rotation-invariant, so the world size of a texel changed
+  when the camera merely turned;
+- nothing aligned the light-space origin to the texel grid, so the grid slid under the geometry.
+
+Now: **bounding-sphere** fit (radius depends only on the slice geometry, constant per split for a
+fixed FOV), radius **quantised** so float wobble in the split maths cannot make the texel size
+breathe and defeat the snapping, light-space centre **rounded down to a whole texel**, camera
+anchored on that snapped centre. References, technique only: Michal Valient, *Stable Rendering of
+Cascaded Shadow Maps*, ShaderX6 (2008); Microsoft's *Cascaded Shadow Maps* D3D sample.
+
+`frustumCenter` finally does something: it had been computed since the first revision and never
+read, while a comment three lines below claimed the light camera was positioned — it was not, the
+view was a pure rotation about the world origin.
+
+The depth margin, hard-coded at 100 m, becomes **a fraction of the radius**. It was ~5× too large
+for cascade 0, meaningless for cascade 3, and refit every tick, so the depth range breathed with the
+fit. At `margin = radius` the range is exactly `3 × radius`, a pure function of the split. Anchoring
+the camera also deletes the trap that once cost whole cascades: `orthographicProjection()` takes
+positive **distances**, not view-space Z coordinates, and the near plane is now trivially the camera.
+
+⚠️ **A sphere wastes map area against a tight AABB.** Measured on `reflexion-debug`, pinned pose and
+pinned exposure: no visible loss (palm shadow band mean 68.42 → 68.50), because `cascadeScale = 4`
+already concentrates the cascades. **Any CSM demo that looks blockier after this needs its
+`csmScale` re-checked** — that is the expected trade, not a regression.
+
+⚠️ Verification is temporal, so a still frame cannot show it: move **slowly** along a shadow edge.
+Before, the edge crawled continuously; after, it either holds still or jumps one clean texel.
 
 ## Per-Light Shadow Configuration
 
