@@ -429,12 +429,29 @@ The `ColorProjectionIndex` in the UBO is set to `0xFFFFFFFF` (sentinel). The sha
 Shadow map images follow this layout progression:
 
 1. **Creation:** `VK_IMAGE_LAYOUT_UNDEFINED`
-2. **Before shadow pass:** Transition to `VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL`
-3. **During shadow pass:** Depth written
-4. **After shadow pass:** Transition to `VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL`
-5. **During lighting pass:** Sampled as texture
+2. **Still at creation, in `ShadowMap::createImages()`:** transition to `TRANSFER_DST_OPTIMAL` →
+   `clearDepthImage(1.0F)` → transition to `DEPTH_STENCIL_READ_ONLY_OPTIMAL`. The descriptor set
+   is written as soon as the light is created while the first shadow pass only runs on the next
+   rendered frame; a light pass in between would sample whatever the allocation happened to hold,
+   and undefined depth below the receiver's reference reads as SHADOW — a one-frame black flash
+   on scene load. 1.0 is the far plane, i.e. "nothing occludes".
+3. **Shadow pass (render pass):** `initialLayout` and `finalLayout` are both
+   `DEPTH_STENCIL_READ_ONLY_OPTIMAL`; the subpass flips to `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`
+   while writing, with `loadOp = CLEAR`.
+4. **During lighting pass:** sampled as texture, from `DEPTH_STENCIL_READ_ONLY_OPTIMAL`.
 
-**Critical:** If shadow rendering is skipped (global setting disabled), images remain in `UNDEFINED` layout and must not be bound to descriptors.
+> [!CAUTION]
+> Step 2 is why the depth image **must** carry `VK_IMAGE_USAGE_TRANSFER_DST_BIT` on top of
+> `DEPTH_STENCIL_ATTACHMENT_BIT | SAMPLED_BIT`. It was missing between `64f71ade` and the Aug 2026
+> fix: both barriers and the clear were rejected, the image never left `UNDEFINED`, the render
+> pass `initialLayout` above became unreachable, and **`vkQueueSubmit` returned
+> `VK_ERROR_VALIDATION_FAILED_EXT` for the shadow pass on every frame** — directional shadows
+> silently gone. The NVIDIA driver hid it completely with the validation layers off. Full
+> post-mortem: `docs/caution-points.md` § Vulkan Validation.
+
+**Critical:** If shadow rendering is skipped (global setting disabled), the images are still
+cleared and left in `DEPTH_STENCIL_READ_ONLY_OPTIMAL` at creation, so binding them to descriptors
+is safe — they simply read as "nothing occludes".
 
 ## Settings Summary
 

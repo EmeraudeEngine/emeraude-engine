@@ -656,11 +656,20 @@ namespace EmEn::Graphics::RenderTarget
 					const uint32_t maxMipLevels = static_cast< uint32_t >(std::bit_width(this->extent().width));
 					const uint32_t colorMipLevels = convolved ? std::min(IBLTexture::PrefilteredMipLevels, maxMipLevels) : 1U;
 
-					VkImageUsageFlags colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+					/* NOTE: TRANSFER_SRC is unconditional on the COLOR attachment: it is what makes
+					 * the target readable back on the CPU, which both capture() and the
+					 * 'dumpRenderTarget' console command need. TransferManager::downloadImage()
+					 * refuses an image that does not declare it — no layout transition can stand in
+					 * for a missing usage. SceneRenderTarget already carries it on every one of its
+					 * color images, so the (negligible, color-only) cost is an accepted engine-wide
+					 * trade. It is deliberately NOT granted to the depth image below: nothing reads
+					 * that one back today, and TRANSFER_SRC is the flag that actually costs
+					 * depth-compression metadata on some architectures. */
+					VkImageUsageFlags colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
 					if ( convolved )
 					{
-						colorUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+						colorUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
 					}
 
 					/* Create the image for a color buffer in video memory. */

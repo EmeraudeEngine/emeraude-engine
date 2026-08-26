@@ -435,6 +435,26 @@ fails `VUID-vkCmdDrawIndexed-renderPass-02684`. Full pipeline description:
 3. Fence synchronization for coherence
 4. Batching of small transfers
 
+#### The usage flags are part of the contract — declare them at CREATION
+
+`TransferManager` operates on images the *caller* created, and Vulkan grants transfer rights
+through `VkImageCreateInfo::usage` alone. **A layout transition never substitutes for a missing
+usage flag** — this has bitten the engine four times in two months, in both directions:
+
+| Operation | Required at image creation |
+|---|---|
+| `clearDepthImage()` / `clearColorImage()`, any barrier to/from `TRANSFER_DST_OPTIMAL` | `VK_IMAGE_USAGE_TRANSFER_DST_BIT` |
+| `downloadImage()`, `vkCmdCopyImageToBuffer`, `vkCmdBlitImage` as source | `VK_IMAGE_USAGE_TRANSFER_SRC_BIT` |
+
+`downloadImage()` **refuses** an image that does not declare `TRANSFER_SRC_BIT` and traces the
+missing flag. It used to "fall back" on transitioning the source to `VK_IMAGE_LAYOUT_GENERAL` and
+blitting it into a scratch image — invalid by construction (`vkCmdBlitImage` requires the usage
+bit on `srcImage` whatever the layout), so that path was deleted rather than repaired. If a new
+image must be read back, **add the flag where it is created**; do not reintroduce a fallback.
+
+See `docs/caution-points.md` § Vulkan Validation for the three logged occurrences and the VUID
+cascade a missing flag produces (only the FIRST VUID names the real fault).
+
 ## Queue Family Ownership Transfer (buffer uploads)
 
 Buffers are created `VK_SHARING_MODE_EXCLUSIVE`. When the transfer queue and the graphics

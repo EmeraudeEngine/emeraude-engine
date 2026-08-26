@@ -2634,6 +2634,23 @@ The same rule applies outside `IntermediateRenderTarget`: any `SceneRenderTarget
 copied to the grab pass by `PostProcessor::recordBlit()` needs `TRANSFER_SRC_BIT` at creation
 (all six attachments — color, normals, material properties, albedo, velocity, depth — have it).
 
+**And it applies in the WRITE direction too (Aug 2026).** `RenderTarget::ShadowMap` clears its
+depth image to 1.0 through `TransferManager::clearDepthImage()` at creation, so that image needs
+`VK_IMAGE_USAGE_TRANSFER_DST_BIT` alongside `DEPTH_STENCIL_ATTACHMENT_BIT | SAMPLED_BIT`. It was
+missing for a while: the clear and both surrounding barriers were rejected, the image never left
+`UNDEFINED`, and **`vkQueueSubmit` refused the shadow pass on every frame** — directional shadows
+gone, silently, on the NVIDIA driver. Full cascade in `docs/caution-points.md` § Vulkan
+Validation; per-target flag table in `docs/render-targets.md`.
+
+**Readback is a declared capability, not a fallback.** `TransferManager::downloadImage()` now
+**refuses** an image that lacks `TRANSFER_SRC_BIT` (it used to attempt a blit through
+`VK_IMAGE_LAYOUT_GENERAL`, which is invalid by construction — `vkCmdBlitImage` requires the usage
+bit on `srcImage` whatever the layout). Consequently `RenderTarget::Texture` declares
+`TRANSFER_SRC_BIT` unconditionally on its **color** image so `capture()` and the
+`dumpRenderTarget` console command work; its **depth** image deliberately does not, because
+nothing reads it back and `TRANSFER_SRC` is the flag that costs depth-compression metadata on
+some architectures. Grant the flag at the creation site, never work around its absence.
+
 ### Coding Conventions for Effects
 
 **Use engine types for semantic data, raw floats for GPU push constants.**

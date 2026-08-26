@@ -19,6 +19,27 @@ auto cameraFeed = RenderTarget::Texture::create(
 material->setTexture("diffuse", cameraFeed->colorTexture());
 ```
 
+## Image Usage Flags — who may be cleared, who may be read back
+
+Every image a render target allocates must declare, **at creation**, the transfer rights the
+engine will later exercise on it. A layout transition grants a layout, never a usage; getting
+this wrong produces a VUID cascade in which only the first message names the real fault (see
+`docs/caution-points.md` § Vulkan Validation).
+
+| Target | Image | Usage | Why |
+|---|---|---|---|
+| `ShadowMap` | depth | `DEPTH_STENCIL_ATTACHMENT \| SAMPLED \| TRANSFER_DST` | `TRANSFER_DST` is required by the initial `clearDepthImage(1.0F)` — see § 4 below. Dropping it disables the shadow pass entirely. |
+| `Texture` | color | `COLOR_ATTACHMENT \| SAMPLED \| TRANSFER_SRC` (`+ STORAGE` when GGX-convolved) | `TRANSFER_SRC` makes the target readable back: `capture()` and the `dumpRenderTarget` console command. |
+| `Texture` | depth | `DEPTH_STENCIL_ATTACHMENT` | Deliberately **no** `TRANSFER_SRC`: nothing reads it back, and that flag is the one that costs depth-compression metadata on some architectures. |
+| `SceneRenderTarget` | all color + depth | `… \| TRANSFER_SRC` | Every G-buffer attachment is blitted to the grab pass. |
+| `SwapChain` | color | `COLOR_ATTACHMENT \| TRANSFER_SRC` | Screenshots. |
+
+> [!IMPORTANT]
+> Adding a readback (`TransferManager::downloadImage()`, `vkCmdCopyImageToBuffer`) or a clear
+> (`clearDepthImage()`, `clearColorImage()`) to an existing target means **editing its
+> `createImages()` first**. `downloadImage()` refuses an image without `TRANSFER_SRC_BIT`
+> outright — there is no fallback, by design.
+
 ## Architecture
 
 ### 1. Image Layout Management

@@ -3064,6 +3064,63 @@ meter a black scene and pin the exposure to the ISO ceiling.
 
 ---
 
+### Fixed: the directional shadow map lacked TRANSFER_DST — the shadow pass had stopped submitting (Aug 2026)
+
+**Third and fourth instance of the same family** as the two entries above (AdaptLum, then
+velocity/DoF) — but this one is the mirror image, `TRANSFER_DST` on a *write* rather than
+`TRANSFER_SRC` on a readback, and it cost an entire feature rather than a diagnostic.
+
+**Defect 1 — `RenderTarget::ShadowMap::createImages()`.** The depth image was created
+`DEPTH_STENCIL_ATTACHMENT | SAMPLED` while the lines directly below it ran
+`transitionImageLayout(UNDEFINED → TRANSFER_DST_OPTIMAL)` → `clearDepthImage(1.0F)` →
+`transitionImageLayout(TRANSFER_DST_OPTIMAL → DEPTH_STENCIL_READ_ONLY_OPTIMAL)`. The clear was
+introduced by `64f71ade`, whose own comment says *"exactly as `DummyShadowTexture` does"* — and
+`DummyShadowTexture` **does** declare `TRANSFER_DST_BIT`. The flag simply was not copied over.
+
+The cascade is the part worth remembering, because only the first VUID names the real fault:
+
+1. `VUID-VkImageMemoryBarrier-oldLayout-01213` ×2 — both barriers invalid.
+2. `VUID-vkCmdClearDepthStencilImage-pRanges-02659/02660` — the clear itself invalid.
+3. The layers therefore never record the transition, so the tracked layout stays `UNDEFINED`.
+4. `VUID-vkCmdDraw-None-09600` at submit → `vkQueueSubmit` returns
+   `VK_ERROR_VALIDATION_FAILED_EXT` → `Unable to submit command buffer for render target
+   'SunLightShadowMapSampler_…'`, **every frame, forever**. The render pass declares
+   `initialLayout = DEPTH_STENCIL_READ_ONLY_OPTIMAL`, which can then never be reached.
+
+**Defect 2 — `TransferManager::downloadImage()` had a fallback that could not work.** When the
+source lacked `TRANSFER_SRC_BIT` it transitioned that source to `VK_IMAGE_LAYOUT_GENERAL` and
+blitted it into a scratch image. `vkCmdBlitImage` requires `TRANSFER_SRC_BIT` on `srcImage`
+(VUID-vkCmdBlitImage-srcImage-00219): **a layout grants a layout, never a usage**, so the path
+was invalid by construction and only ever produced validation errors. It also captured the
+scratch `shared_ptr` in a scope that ended before the submit. Deleted (−130 lines); the function
+now refuses the image up front with a trace naming the missing flag, and
+`RenderTarget::Texture` declares `TRANSFER_SRC_BIT` unconditionally on its **color** image
+(never on depth — `TRANSFER_SRC` is the flag that costs depth-compression metadata on some
+architectures, and nothing reads those depth images back).
+
+> [!CAUTION]
+> **A layout transition can never substitute for a missing usage flag.** Four occurrences in two
+> months across both directions of transfer. The reflex, at the *creation* site: an image that
+> will be cleared or copied INTO needs `TRANSFER_DST_BIT`; an image that will be read back or
+> copied FROM needs `TRANSFER_SRC_BIT`. Grep the creation site before writing the copy.
+
+> [!WARNING]
+> **Every one of these four was silent on the NVIDIA driver.** This one had disabled directional
+> shadows outright — the scene simply rendered without them, and nobody noticed until the
+> validation layers were switched back on. Corrections landed over a period with the layers off
+> are UNVERIFIED, whatever the screenshots showed: turn them on and reload before believing a
+> rendering feature still works.
+
+**Verified (Aug 2026, RTX 3070 Ti, Release + `VK_LAYER_KHRONOS_validation`):** `sponza` loads
+with **zero** VUIDs and shadows are visibly cast again; `offscreen-rendering` +
+`dumpRenderTarget("Security")` writes a correct 1024² PNG with zero VUIDs, exercising the
+rewritten direct download path; `Core.RendererService.screenshot()` unaffected.
+
+**Files:** `Graphics/RenderTarget/ShadowMap.hpp`, `Graphics/RenderTarget/Texture.hpp`,
+`Vulkan/TransferManager.cpp`
+
+---
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

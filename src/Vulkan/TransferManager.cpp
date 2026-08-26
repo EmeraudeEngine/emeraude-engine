@@ -251,6 +251,23 @@ namespace EmEn::Vulkan
 		const auto extent = imageCreateInfo.extent;
 		const auto format = imageCreateInfo.format;
 
+		/* NOTE: Reading an image back is a TRANSFER_SRC operation, and no layout transition can
+		 * substitute for the missing usage: vkCmdCopyImageToBuffer and vkCmdBlitImage both require
+		 * VK_IMAGE_USAGE_TRANSFER_SRC_BIT on the source (VUID-vkCmdCopyImageToBuffer-srcImage-00186,
+		 * VUID-vkCmdBlitImage-srcImage-00219). This used to fall back on "transition the source to
+		 * GENERAL and blit it into a scratch image", which is invalid by construction — GENERAL
+		 * grants a layout, never a usage — and only produced validation errors. Fail here instead:
+		 * an image the engine intends to read back must DECLARE it at creation. */
+		if ( (imageCreateInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0 )
+		{
+			TraceError{ClassId} <<
+				"The image '" << sourceImage.identifier() << "' has not been created with "
+				"VK_IMAGE_USAGE_TRANSFER_SRC_BIT, it cannot be downloaded ! "
+				"Add the usage flag where the image is created.";
+
+			return false;
+		}
+
 		/* Calculate bytes per pixel based on format. */
 		uint32_t bytesPerPixel;
 		ChannelMode channelMode;
@@ -294,9 +311,6 @@ namespace EmEn::Vulkan
 
 		const size_t requiredBytes = extent.width * extent.height * bytesPerPixel;
 
-		/* Check if source image supports direct transfer. */
-		const bool sourceHasTransferSrc = (imageCreateInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
-
 		/* Get staging buffer from transfer operation. */
 		const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
 
@@ -324,44 +338,10 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		VkImage finalSourceImage = sourceImage.handle();
-		VkImageLayout finalSourceLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
-		/* Create intermediate image only if source doesn't have TRANSFER_SRC_BIT. */
-		if ( !sourceHasTransferSrc )
+		/* The source declares TRANSFER_SRC_BIT (verified above): transition it straight to
+		 * TRANSFER_SRC_OPTIMAL, the copy reads it from there. */
+		if ( currentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL )
 		{
-			/* Create intermediate image with proper usage flags. */
-			auto intermediateImage = std::make_shared< Image >(
-				m_device,
-				VK_IMAGE_TYPE_2D,
-				format,
-				extent,
-				VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-			);
-			intermediateImage->setIdentifier(ClassId, "ImageDownload", "IntermediateImage");
-
-			if ( !intermediateImage->createOnHardware() )
-			{
-				TraceError{ClassId} << "Unable to create intermediate image for download !";
-
-				return false;
-			}
-
-			/* Transition intermediate image to TRANSFER_DST_OPTIMAL. */
-			{
-				const Sync::ImageMemoryBarrier barrier{
-					*intermediateImage,
-					VK_ACCESS_NONE,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_UNDEFINED,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					aspectMask
-				};
-				commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-			}
-
-			/* Transition source to GENERAL for blit (compatible with any usage). */
-			VkImageLayout srcOriginalLayout = currentLayout;
 			VkAccessFlags srcAccessMask = VK_ACCESS_NONE;
 			VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
@@ -375,125 +355,24 @@ namespace EmEn::Vulkan
 				srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 				sourceStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 			}
-
+			else if ( currentLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL )
 			{
-				const Sync::ImageMemoryBarrier barrier{
-					sourceImage,
-					srcAccessMask,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					currentLayout,
-					VK_IMAGE_LAYOUT_GENERAL,
-					aspectMask
-				};
-				commandBuffer->pipelineBarrier(barrier, sourceStage, VK_PIPELINE_STAGE_TRANSFER_BIT);
+				srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+				sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			}
 
-			/* Blit from source to intermediate. */
-			VkImageBlit blitRegion{};
-			blitRegion.srcSubresource.aspectMask = aspectMask;
-			blitRegion.srcSubresource.mipLevel = 0;
-			blitRegion.srcSubresource.baseArrayLayer = 0;
-			blitRegion.srcSubresource.layerCount = 1;
-			blitRegion.srcOffsets[0] = {0, 0, 0};
-			blitRegion.srcOffsets[1] = {static_cast< int32_t >(extent.width), static_cast< int32_t >(extent.height), static_cast< int32_t >(extent.depth)};
-			blitRegion.dstSubresource.aspectMask = aspectMask;
-			blitRegion.dstSubresource.mipLevel = 0;
-			blitRegion.dstSubresource.baseArrayLayer = 0;
-			blitRegion.dstSubresource.layerCount = 1;
-			blitRegion.dstOffsets[0] = {0, 0, 0};
-			blitRegion.dstOffsets[1] = {static_cast< int32_t >(extent.width), static_cast< int32_t >(extent.height), static_cast< int32_t >(extent.depth)};
-
-			vkCmdBlitImage(
-				commandBuffer->handle(),
-				sourceImage.handle(),
-				VK_IMAGE_LAYOUT_GENERAL,
-				intermediateImage->handle(),
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				1,
-				&blitRegion,
-				VK_FILTER_NEAREST
-			);
-
-			/* Transition source back to original layout. */
-			{
-				VkAccessFlags dstAccessMask = VK_ACCESS_NONE;
-				VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-
-				if ( srcOriginalLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL || srcOriginalLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR )
-				{
-					dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-					destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-				}
-				else if ( srcOriginalLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL )
-				{
-					dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-					destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-				}
-
-				const Sync::ImageMemoryBarrier barrier{
-					sourceImage,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					dstAccessMask,
-					VK_IMAGE_LAYOUT_GENERAL,
-					srcOriginalLayout,
-					aspectMask
-				};
-				commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, destinationStage);
-			}
-
-			/* Transition intermediate to TRANSFER_SRC_OPTIMAL. */
-			{
-				const Sync::ImageMemoryBarrier barrier{
-					*intermediateImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					aspectMask
-				};
-				commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-			}
-
-			finalSourceImage = intermediateImage->handle();
-			finalSourceLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		}
-		else
-		{
-			/* Source has TRANSFER_SRC_BIT, transition directly to TRANSFER_SRC_OPTIMAL. */
-			if ( currentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL )
-			{
-				VkAccessFlags srcAccessMask = VK_ACCESS_NONE;
-				VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-				if ( currentLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL || currentLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR )
-				{
-					srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-					sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-				}
-				else if ( currentLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL )
-				{
-					srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-					sourceStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-				}
-				else if ( currentLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL )
-				{
-					srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-					sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-				}
-
-				const Sync::ImageMemoryBarrier barrier{
-					sourceImage,
-					srcAccessMask,
-					VK_ACCESS_TRANSFER_READ_BIT,
-					currentLayout,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					aspectMask
-				};
-				commandBuffer->pipelineBarrier(barrier, sourceStage, VK_PIPELINE_STAGE_TRANSFER_BIT);
-			}
+			const Sync::ImageMemoryBarrier barrier{
+				sourceImage,
+				srcAccessMask,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				currentLayout,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				aspectMask
+			};
+			commandBuffer->pipelineBarrier(barrier, sourceStage, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
-		/* Copy final source (either original or intermediate) to staging buffer. */
+		/* Copy the source image into the staging buffer. */
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
 		region.bufferRowLength = 0;
@@ -507,15 +386,15 @@ namespace EmEn::Vulkan
 
 		vkCmdCopyImageToBuffer(
 			commandBuffer->handle(),
-			finalSourceImage,
-			finalSourceLayout,
+			sourceImage.handle(),
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			stagingBuffer->handle(),
 			1,
 			&region
 		);
 
 		/* Transition source back to original layout if we modified it directly. */
-		if ( sourceHasTransferSrc && currentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL )
+		if ( currentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL )
 		{
 			VkAccessFlags dstAccessMask = VK_ACCESS_NONE;
 			VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;

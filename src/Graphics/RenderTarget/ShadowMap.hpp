@@ -700,7 +700,14 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()), /* Should be VK_FORMAT_D32_SFLOAT or VK_FORMAT_D16_UNORM */
 						this->extent(),
-						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+						/* NOTE: TRANSFER_DST is NOT optional here, it is what the initial
+						 * clearDepthImage() below requires. Dropping it makes every barrier and
+						 * the clear itself invalid (VUID-VkImageMemoryBarrier-oldLayout-01213,
+						 * VUID-vkCmdClearDepthStencilImage-pRanges-02659/02660), the image never
+						 * leaves VK_IMAGE_LAYOUT_UNDEFINED, and the shadow pass submit is then
+						 * rejected on EVERY frame (VUID-vkCmdDraw-None-09600). Drivers let that
+						 * slide silently when the validation layers are off. */
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 						flags,
 						1,
 						layerCount
