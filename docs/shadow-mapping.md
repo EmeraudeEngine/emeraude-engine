@@ -289,11 +289,21 @@ rotation plus a translation, so `length(row0)` recovers `1/radius`; the depth ra
 by construction. That keeps the uniform block untouched — its layout is described by hand in **three**
 places and a silent truncation has already shipped from editing one of them.
 
-⚠️ **Two dead bias slots existed; one is now live.** The light-side `CSM_ShadowBiasOffset` is wired.
-The view-side `ViewMatricesCascadedUBO::ShadowBiasOffset` is still dead — written by nobody, exposed
-as `cascadeProperties.y`, read by nothing — and deliberately NOT deleted: removing a member shifts
-every offset after it in a layout maintained by hand in three files. It is inert and waits for a
-change that does the whole layout at once.
+✅ **Two dead bias slots existed; one is live, the other is gone (Aug 2026).** The light-side
+`CSM_ShadowBiasOffset` is wired. The view-side `ViewMatricesCascadedUBO::ShadowBiasOffset` — written
+by nobody, read by nobody, exposed to shaders all the same — has been removed.
+
+⚠️ **It cost nothing, and the note that said otherwise was wrong.** This file previously warned that
+deleting it would shift every offset below it. It would not have: `shadowBias` was lane **.y of the
+`cascadeProperties` vec4**, not a standalone member, so the following offsets never moved
+(`WorldPositionOffset` sits at +8 either way). Verified rather than assumed — the frame comes back
+bit-identical at a pinned pose and exposure (palm shadow band 69.244 → 69.244), which is also the
+proof the slot really was dead. **Check whether a member is a vec4 LANE before pricing its removal.**
+
+⚠️ Lanes .y/.z/.w of `cascadeProperties` are now RESERVED, and both hand-maintained descriptions of
+that layout — the C++ offsets and `Saphir::Generator::Abstract`'s GLSL block — say so. Removing the
+vec4 *itself* remains a different, genuinely offset-shifting change. And do not put a second bias
+back here: two knobs on one quantity is how a compensation stack starts.
 
 ### Normal-offset — IMPLEMENTED, and shipped DISABLED (Aug 2026)
 

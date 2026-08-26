@@ -307,7 +307,7 @@ namespace EmEn::Graphics
 			 * Offset  Size	Content
 			 * 0	   256	 mat4[4] cascadeViewProjectionMatrices
 			 * 256	 16	  vec4 cascadeSplitDistances
-			 * 272	 16	  vec4 (cascadeCount, shadowBias, reserved, reserved)
+			 * 272	 16	  vec4 (cascadeCount, reserved, reserved, reserved)
 			 * 288	 16	  vec4 worldPosition
 			 * 304	 16	  vec4 velocity
 			 * 320	 16	  vec4 viewProperties (width, height, near, far)
@@ -327,16 +327,19 @@ namespace EmEn::Graphics
 			/** @brief Offset of the cascade split distances in the buffer. */
 			static constexpr auto CascadeSplitDistancesOffset{CascadeMatricesJumpOffset + 0UL};
 			/** @brief Offset of the cascade count in the buffer. */
+			/**
+			 * @brief Cascade count, lane .x of the cascadeProperties vec4.
+			 * @note ⚠️ Lane .y used to be a shadowBias, removed Aug 2026: written by nobody, read by
+			 * nobody, exposed to shaders all the same. The per-cascade bias lives on the LIGHT side
+			 * (DirectionalLight::CSM_ShadowBiasOffset), because the light is what owns a user-facing
+			 * setShadowBias(). Do not put a second one back here — two knobs on the same quantity is
+			 * how a compensation stack starts, and this engine has already had to delete one.
+			 * Lanes .y, .z and .w are RESERVED. Removing the vec4 itself is a different change: it
+			 * would shift every offset below it, in a layout maintained by hand here AND in
+			 * Saphir::Generator::Abstract, which is exactly how a silent truncation once shipped.
+			 */
 			static constexpr auto CascadeCountOffset{CascadeMatricesJumpOffset + 4UL};
 			/** @brief Offset of the shadow bias in the buffer. */
-			/* ⚠️ DEAD SLOT. Written by nobody — grep the .cpp — and its only value is the literal in the
-			 * initialiser. It is exposed to shaders as `cascadeProperties.y` and nothing reads that either.
-			 * The per-cascade bias is wired on the LIGHT side instead (`CSM_ShadowBiasOffset`), because the
-			 * light is what owns a user-facing setShadowBias().
-			 * NOT deleted on purpose: removing a member shifts every offset after it, and this block's
-			 * layout is described BY HAND in three separate places — a desync there has already shipped a
-			 * silent truncation. It is inert, so it waits for a change that does the whole layout at once. */
-			static constexpr auto ShadowBiasOffset{CascadeMatricesJumpOffset + 5UL};
 			/** @brief Offset of the world position in the buffer. */
 			static constexpr auto WorldPositionOffset{CascadeMatricesJumpOffset + 8UL};
 			/** @brief Offset of the velocity vector in the buffer. */

@@ -575,7 +575,7 @@ namespace EmEn::Saphir::Generator
 			/* CSM UBO layout (must match ViewMatricesCascadedUBO):
 			 * mat4[4] cascadeViewProjectionMatrices - offset 0
 			 * vec4 cascadeSplitDistances - offset 256
-			 * vec4 (cascadeCount, shadowBias, reserved, reserved) - offset 272
+			 * vec4 (cascadeCount, reserved, reserved, reserved) - offset 272
 			 * vec4 worldPosition - offset 288
 			 * vec4 velocity - offset 304
 			 * vec4 viewProperties - offset 320
@@ -585,7 +585,7 @@ namespace EmEn::Saphir::Generator
 			Declaration::UniformBlock uniformBlock{setIndex, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::CSMView, UniformBlock::View};
 			uniformBlock.addArrayMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CascadeViewProjectionMatrices, 4);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeSplitDistances);
-			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeProperties); /* (cascadeCount, shadowBias, ...) */
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeProperties); /* ⚠️ .x = cascadeCount; .y/.z/.w RESERVED. The .y lane advertised a shadowBias that nothing ever wrote or read — see ViewMatricesCascadedUBO::CascadeCountOffset. */
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
