@@ -914,7 +914,12 @@ namespace EmEn::Scenes::Component
 			"--- Framing ---" "\n"
 			"Focal length: " << obj.focalLength() << " mm on a " << obj.sensorWidth() << " x " << obj.sensorHeight() << " mm sensor\n"
 			"Field of view: " << obj.fieldOfView() << " degrees (DERIVED from the focal length, never set directly)\n"
-			"View distance: " << obj.distance() << " (near " << obj.getNear() << ", far " << obj.getFar() << ")\n"
+			/* ⚠️ getNear()/getFar() are the ORTHOGRAPHIC parameters. Printing them unconditionally read
+			 * as "near 0.0, far 10000.0" on a perspective camera — meaningless there, and misleading
+			 * enough to send a shadow investigation chasing a division by a zero near plane. A
+			 * perspective view DERIVES its near from the field of view in
+			 * ViewMatrices2DUBO::updatePerspectiveViewProperties(); the camera does not carry it. */
+			"View distance: " << obj.distance() << (obj.isPerspectiveProjection() ? " (near DERIVED from the field of view, see ViewMatrices2DUBO)" : " (orthographic near " + std::to_string(obj.getNear()) + ", far " + std::to_string(obj.getFar()) + ")") << "\n"
 			"Projection: " << (obj.isPerspectiveProjection() ? "perspective" : "orthographic") << (obj.isTechnicalCamera() ? ", TECHNICAL (field of view set directly)" : "") << "\n"
 			"--- Exposure ---" "\n"
 			"Auto exposure: " << (obj.isAutoExposureEnabled() ? "ON (meters the whole frame)" : "OFF (pinned)") << "\n"
