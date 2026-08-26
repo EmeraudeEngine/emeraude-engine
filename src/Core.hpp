@@ -1275,20 +1275,6 @@ namespace EmEn
 			 */
 			bool initializeCoreScreen () noexcept;
 
-#ifdef IMGUI_ENABLED
-			/** @brief The physical camera panel, toggled with Shift+F2. */
-			std::shared_ptr< Overlay::ImGUIScreen > m_cameraScreen;
-#endif
-
-			/** @brief The scene of the frame BEING RECORDED, exposed to overlay screens.
-			 * @warning RENDER THREAD ONLY, and only valid inside the shared-scene frame scope:
-			 * it is set/cleared around the render block that already holds the scene manager's
-			 * shared lock. Overlay/ImGui draw callbacks run inside that scope and MUST read
-			 * this instead of calling withSharedActiveScene() again — re-acquiring a
-			 * std::shared_mutex the thread already share-owns is undefined behaviour, and
-			 * deadlocks on Windows SRWLOCK as soon as an exclusive waiter is queued. */
-			Scenes::Scene * m_frameScene{nullptr};
-
 			/**
 			 * @brief Logic thread entry point.
 			 * @details Runs physics simulation, scene updates, and calls onCoreProcessLogics().
@@ -1330,7 +1316,8 @@ namespace EmEn
 			 * @return double
 			 * @see scheduleMainLoopCycle()
 			 */
-			[[nodiscard]] double mainLoopWaitTimeout (double fallbackSeconds) const noexcept;
+			[[nodiscard]]
+			double mainLoopWaitTimeout (double fallbackSeconds) const noexcept;
 
 			/**
 			 * @brief Refreshes the pointer-coordinate scaling according to the current surface content scale.
@@ -1724,6 +1711,18 @@ namespace EmEn
 			std::condition_variable m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested.
 			std::atomic< uint32_t > m_pendingFrames{0}; ///< Frames still owed before the rendering thread may idle (multi-buffer refresh budget).
 			RenderingMode m_renderingMode{RenderingMode::Continuous}; ///< Rendering thread pacing mode. @see setRenderingMode()
+#ifdef IMGUI_ENABLED
+			/** @brief The physical camera panel, toggled with Shift+F2. */
+			std::shared_ptr< Overlay::ImGUIScreen > m_cameraScreen;
+#endif
+			/** @brief The scene of the frame BEING RECORDED, exposed to overlay screens.
+			 * @warning RENDER THREAD ONLY, and only valid inside the shared-scene frame scope:
+			 * it is set/cleared around the render block that already holds the scene manager's
+			 * shared lock. Overlay/ImGui draw callbacks run inside that scope and MUST read
+			 * this instead of calling withSharedActiveScene() again — re-acquiring a
+			 * std::shared_mutex the thread already share-owns is undefined behaviour, and
+			 * deadlocks on Windows SRWLOCK as soon as an exclusive waiter is queued. */
+			Scenes::Scene * m_frameScene{nullptr};
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).

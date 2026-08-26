@@ -711,7 +711,7 @@ namespace EmEn::Graphics
 		 * active scene still needs and leave geometries unable to build their BLAS. */
 		if ( m_device->rayTracingEnabled() && this->isRayTracingSettingEnabled() )
 		{
-			m_accelerationStructureBuilder = std::make_unique< Vulkan::AccelerationStructureBuilder >(m_device);
+			m_accelerationStructureBuilder = std::make_unique< AccelerationStructureBuilder >(m_device);
 
 			if ( !m_accelerationStructureBuilder->initialize() )
 			{
@@ -776,7 +776,7 @@ namespace EmEn::Graphics
 		/* Initialize the GPU profiler if enabled and the device supports timestamp queries. */
 		if ( m_device != nullptr && m_primaryServices.settings().getOrSetDefault< bool >(GraphicsGPUProfilerEnabledKey, DefaultGraphicsGPUProfilerEnabled) )
 		{
-			m_GPUProfiler = std::make_unique< Vulkan::GPUProfiler >(m_device, this->framesInFlight());
+			m_GPUProfiler = std::make_unique< GPUProfiler >(m_device, this->framesInFlight());
 
 			if ( !m_GPUProfiler->createOnHardware() )
 			{
@@ -958,7 +958,7 @@ namespace EmEn::Graphics
 		return m_swapChain->depthStencilFormat();
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSwapChainDepthStencilImage () const noexcept
 	{
 		if ( m_swapChain != nullptr )
@@ -969,7 +969,7 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSceneColorImage () const noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -980,7 +980,7 @@ namespace EmEn::Graphics
 		return this->currentSwapChainColorImage();
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSceneDepthImage () const noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -991,7 +991,7 @@ namespace EmEn::Graphics
 		return this->currentSwapChainDepthStencilImage();
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSceneNormalsImage () const noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -1002,7 +1002,7 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSceneMaterialPropertiesImage () const noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -1013,7 +1013,7 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSceneAlbedoImage () const noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -1024,7 +1024,7 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
-	std::shared_ptr< Vulkan::Image >
+	std::shared_ptr< Image >
 	Renderer::currentSceneVelocityImage () const noexcept
 	{
 		if ( m_sceneTarget != nullptr )
@@ -1477,8 +1477,6 @@ namespace EmEn::Graphics
 				this->renderRenderToTextures(currentFrameScope, *scene, m_graphicsQueue);
 			}
 
-			//this->renderViews(currentFrameScope, *scene, m_graphicsQueue);
-
 			/* Forward any unconsumed primary semaphores (shadow maps) to secondary,
 			 * so the final submit correctly waits on them. */
 			currentFrameScope.promotePrimaryToSecondary();
@@ -1710,8 +1708,6 @@ namespace EmEn::Graphics
 			{
 				this->renderRenderToTextures(currentFrameScope, *scene, m_graphicsQueue);
 			}
-
-			//this->renderViews(currentFrameScope, *scene, m_graphicsQueue);
 
 			/* Forward any unconsumed primary semaphores (shadow maps) to secondary,
 			 * so the final submit correctly waits on them. */
@@ -2039,12 +2035,12 @@ namespace EmEn::Graphics
 		{
 			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
-			const Vulkan::GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
+			const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
 
 			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
 		}
 
-		Vulkan::GPUProfiler * profiler = m_GPUProfiler.get();
+		GPUProfiler * profiler = m_GPUProfiler.get();
 
 		if ( profiler != nullptr )
 		{
@@ -2115,7 +2111,7 @@ namespace EmEn::Graphics
 		 * `enableGrabPass(true)` remains a manual force-on. */
 		if ( ( m_grabPassEnabled || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated() )
 		{
-			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "GrabPass"};
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "GrabPass"};
 
 			const auto * srcDepth = m_grabPass->hasDepth() ? m_sceneTarget->depthStencilImage().get() : nullptr;
 
@@ -2126,7 +2122,7 @@ namespace EmEn::Graphics
 		 * so they can sample the captured scene for refraction effects. */
 		if ( sceneHasContent && scenePtr->hasTranslucentGBObjects() )
 		{
-			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "TranslucentGBPass"};
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "TranslucentGBPass"};
 
 			if ( sceneTargetHasAlbedo && sceneTargetHasVelocity )
 			{
@@ -2134,22 +2130,45 @@ namespace EmEn::Graphics
 			}
 			else if ( sceneTargetHasAlbedo )
 			{
-				const std::array< VkClearValue, 5 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[3], m_clearColors[5]};
+				const std::array< VkClearValue, 5 > cv{
+					m_clearColors[0],
+					m_clearColors[1],
+					m_clearColors[2],
+					m_clearColors[3],
+					m_clearColors[5]
+				};
+
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
 			{
-				const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[5]};
+				const std::array< VkClearValue, 4 > cv{
+					m_clearColors[0],
+					m_clearColors[1],
+					m_clearColors[2],
+					m_clearColors[5]
+				};
+
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else if ( sceneTargetHasNormals )
 			{
-				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[5]};
+				const std::array< VkClearValue, 3 > cv{
+					m_clearColors[0],
+					m_clearColors[1],
+					m_clearColors[5]
+				};
+
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else if ( sceneTargetHasMaterialProperties )
 			{
-				const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[5]};
+				const std::array< VkClearValue, 3 > cv{
+					m_clearColors[0],
+					m_clearColors[2],
+					m_clearColors[5]
+				};
+
 				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
 			}
 			else
@@ -2188,7 +2207,7 @@ namespace EmEn::Graphics
 		 * context (physical camera model: optics, exposure) to the effect chain. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
-			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
 			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr));
 		}
@@ -2210,7 +2229,7 @@ namespace EmEn::Graphics
 		 * (AA, sharpening) followed by the camera lens effects, compiled into one shader.
 		 * Same snapshot-retention contract as the direct swap-chain path: the slot keeps
 		 * the list alive for the in-flight frame. */
-		const auto camera = (scenePtr != nullptr) ? scenePtr->activeCamera() : nullptr;
+		const auto camera = scenePtr != nullptr ? scenePtr->activeCamera() : nullptr;
 		auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
 		lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
 
@@ -2425,12 +2444,6 @@ namespace EmEn::Graphics
 		}
 	}
 
-	void
-	Renderer::renderViews (RendererFrameScope & /*currentFrameScope*/, Scenes::Scene & /*scene*/, const Queue * /*queue*/) const noexcept
-	{
-
-	}
-
 	bool
 	Renderer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
@@ -2610,9 +2623,9 @@ namespace EmEn::Graphics
 		 * Reuses cached requirements — the PostProcessStack is resized by Scene's observer. */
 		if ( m_postProcessor.usable() && m_postProcessingActive )
 		{
-			const auto renderTarget = m_sceneTarget != nullptr
-				? std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget)
-				: std::static_pointer_cast< RenderTarget::Abstract >(m_swapChain);
+			const auto renderTarget = m_sceneTarget != nullptr ?
+				std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget) :
+				std::static_pointer_cast< RenderTarget::Abstract >(m_swapChain);
 
 			if ( !m_postProcessor.configure(
 				renderTarget,
@@ -2694,13 +2707,13 @@ namespace EmEn::Graphics
 
 		m_rtDescriptorSets.resize(frameCount);
 
-		for ( uint32_t i = 0; i < frameCount; ++i )
+		for ( uint32_t index = 0; index < frameCount; ++index )
 		{
-			m_rtDescriptorSets[i] = std::make_unique< DescriptorSet >(m_descriptorPool, m_rtDescriptorSetLayout);
+			m_rtDescriptorSets[index] = std::make_unique< DescriptorSet >(m_descriptorPool, m_rtDescriptorSetLayout);
 
-			if ( !m_rtDescriptorSets[i]->create() )
+			if ( !m_rtDescriptorSets[index]->create() )
 			{
-				TraceError{ClassId} << "Unable to create RT descriptor set for frame " << i << "!";
+				TraceError{ClassId} << "Unable to create RT descriptor set for frame " << index << "!";
 
 				m_rtDescriptorSets.clear();
 				m_rtDescriptorSetLayout.reset();

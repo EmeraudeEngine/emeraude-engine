@@ -1479,15 +1479,6 @@ namespace EmEn::Graphics
 			void renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
 
 			/**
-			 * @brief Updates every off-screen view from the scene.
-			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
-			 * @param scene A reference to the scene.
-			 * @param queue A pointer to the graphics queue to use for submissions.
-			 * @return void
-			 */
-			void renderViews (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
-
-			/**
 			 * @brief Renders a frame directly to the swap-chain (no internal target).
 			 * @note Used when no post-processing and no MSAA is active.
 			 * @param scene A reference to the scene smart pointer.
@@ -1617,7 +1608,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< SceneRenderTarget > m_sceneTarget;
 			Vulkan::DeferredDestructor m_deferredDestructor;
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
-			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope{};
+			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			/** @brief Semaphores signaled by the frame submission and waited on by
 			 * vkQueuePresentKHR(), indexed by ACQUIRED SWAP-CHAIN IMAGE INDEX — never by frame
 			 * index. A binary semaphore cannot be re-signaled while an operation still waits on
@@ -1631,7 +1622,7 @@ namespace EmEn::Graphics
 			 * pending present operations, so destroying them on resize would be a
 			 * destruction-while-in-use. Sized by swap-chain image count in
 			 * createRenderingSystem(). */
-			Base::StaticVector< std::unique_ptr< Vulkan::Sync::Semaphore >, 5 > m_presentSemaphores{};
+			Base::StaticVector< std::unique_ptr< Vulkan::Sync::Semaphore >, 5 > m_presentSemaphores;
 			/** @brief Lens-effect snapshots retained per frame in flight (renderer side of the
 			 * camera's copy-on-write publication contract): the snapshot recorded into frame slot
 			 * N stays referenced until slot N is reused — its fence has passed by then — so a
