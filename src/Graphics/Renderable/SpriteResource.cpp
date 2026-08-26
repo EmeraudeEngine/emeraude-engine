@@ -351,6 +351,22 @@ namespace EmEn::Graphics::Renderable
 				return geometryResource.load(shape);
 			}, flags);
 
+		/* ⚠️ Build the rotation-invariant volumes the billboard actually sweeps. The quad's own
+		 * bounds describe a shape that never exists on screen — see SpriteResource::boundingBox(). */
+		if ( m_geometry != nullptr )
+		{
+			const auto & geometryBox = m_geometry->boundingBox();
+			const auto centre = geometryBox.centroid();
+			const auto halfExtent = (geometryBox.maximum() - geometryBox.minimum()) * 0.5F;
+			const auto radius = Base::Math::Vector< 3, float >{halfExtent[Base::Math::X], halfExtent[Base::Math::Y], halfExtent[Base::Math::Z]}.length();
+
+			m_billboardBoundingSphere = Base::Math::Space3D::Sphere< float >{radius, centre};
+			m_billboardBoundingBox = Base::Math::Space3D::AACuboid< float >{
+				Base::Math::Space3D::Point< float >{centre[Base::Math::X] + radius, centre[Base::Math::Y] + radius, centre[Base::Math::Z] + radius},
+				Base::Math::Space3D::Point< float >{centre[Base::Math::X] - radius, centre[Base::Math::Y] - radius, centre[Base::Math::Z] - radius}
+			};
+		}
+
 		this->setReadyForInstantiation(false);
 
 		return this->addDependency(m_geometry);

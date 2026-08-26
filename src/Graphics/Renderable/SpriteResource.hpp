@@ -159,23 +159,37 @@ namespace EmEn::Graphics::Renderable
 				return nullptr;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox(uint32_t) const */
+			/**
+			 * @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox(uint32_t) const
+			 * @note ⚠️⚠️ NOT the geometry's box. A billboard is re-oriented toward the camera in the
+			 * VERTEX SHADER, so the quad's own bounds — a flat rectangle at Z=0 — describe a shape
+			 * that never exists on screen. Culling against it made every sprite vanish at once when
+			 * the camera rose above the scene: seen from high up, that flat vertical slab fails the
+			 * frustum test while the billboard it stands for is plainly in view.
+			 * The volume returned here is the SWEPT one: a cube enclosing the sphere the quad can
+			 * occupy under any rotation, which is rotation-invariant and therefore correct for every
+			 * camera. It is what lets the render lists cull sprites like anything else instead of
+			 * carrying an exemption that only ONE of the two entity paths ever had.
+			 */
 			[[nodiscard]]
 			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_geometry != nullptr ?
-					m_geometry->boundingBox() :
+					m_billboardBoundingBox :
 					NullBoundingBox;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere(uint32_t) const */
+			/**
+			 * @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere(uint32_t) const
+			 * @note The swept sphere — see boundingBox().
+			 */
 			[[nodiscard]]
 			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_geometry != nullptr ?
-					m_geometry->boundingSphere() :
+					m_billboardBoundingSphere :
 					NullBoundingSphere;
 			}
 
@@ -275,6 +289,10 @@ namespace EmEn::Graphics::Renderable
 			static inline std::mutex s_lockGeometryLoading;
 
 			static constexpr uint32_t MaxFrames{120};
+
+			/** @brief Rotation-invariant volumes covering every orientation the billboard can take. */
+			Base::Math::Space3D::AACuboid< float > m_billboardBoundingBox;
+			Base::Math::Space3D::Sphere< float > m_billboardBoundingSphere;
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
