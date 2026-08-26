@@ -326,13 +326,14 @@ namespace EmEn::Scenes
 	Scene::updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept
 	{
 		const uint32_t readStateIndex = m_frameReadStateIndex;
+		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
 
 		if ( shadowMapEnabled )
 		{
 			if ( !m_renderToShadowMaps.empty() )
 			{
-				this->forEachRenderToShadowMap([readStateIndex] (const auto & renderTarget) {
-					if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+				this->forEachRenderToShadowMap([readStateIndex, frameIndex] (const auto & renderTarget) {
+					if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex, frameIndex) )
 					{
 						TraceError{ClassId} << "Failed to update the video memory of the render target (Shadow map) from readStateIndex #" << readStateIndex << " !";
 					}
@@ -342,8 +343,8 @@ namespace EmEn::Scenes
 
 		if ( renderToTextureEnabled && !m_renderToTextures.empty() )
 		{
-			this->forEachRenderToTexture([readStateIndex] (const auto & renderTarget) {
-				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+			this->forEachRenderToTexture([readStateIndex, frameIndex] (const auto & renderTarget) {
+				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex, frameIndex) )
 				{
 					TraceError{ClassId} << "Failed to update the video memory of the render target (Texture) from readStateIndex #" << readStateIndex << " !";
 				}
@@ -351,14 +352,14 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: There should be at least the swap chain! */
-		this->forEachRenderToView([readStateIndex] (const auto & renderTarget) {
-			if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+		this->forEachRenderToView([readStateIndex, frameIndex] (const auto & renderTarget) {
+			if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex, frameIndex) )
 			{
 				TraceError{ClassId} << "Failed to update the video memory of the render target (View) from readStateIndex #" << readStateIndex << " !";
 			}
 		});
 
-		if ( !m_lightSet.updateVideoMemory(readStateIndex, m_AVConsoleManager.graphicsRenderer().currentFrameIndex()) )
+		if ( !m_lightSet.updateVideoMemory(readStateIndex, frameIndex) )
 		{
 			Tracer::error(ClassId, "Unable to update the light set data to the video memory !");
 		}

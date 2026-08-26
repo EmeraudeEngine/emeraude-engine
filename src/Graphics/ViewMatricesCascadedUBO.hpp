@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <vector>
 #include <cstddef>
 #include <memory>
 #include <mutex>
@@ -154,7 +155,15 @@ namespace EmEn::Graphics
 			const Vulkan::DescriptorSet *
 			descriptorSet () const noexcept override
 			{
-				return m_descriptorSet.get();
+				/* ⚠️ The set of the region this frame's updateVideoMemory() just wrote. Binding any
+				 * other one would address memory another frame-in-flight is still reading, which is
+				 * the whole reason these regions exist. */
+				if ( m_currentFrameRegion >= m_descriptorSets.size() )
+				{
+					return nullptr;
+				}
+
+				return m_descriptorSets[m_currentFrameRegion].get();
 			}
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
@@ -176,7 +185,7 @@ namespace EmEn::Graphics
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateVideoMemory(uint32_t) const */
-			bool updateVideoMemory (uint32_t readStateIndex) const noexcept override;
+			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::destroy() */
 			void destroy () noexcept override;
@@ -391,8 +400,24 @@ namespace EmEn::Graphics
 
 			DataState m_logicState; /**< Current logic state (write). */
 			std::array< DataState, 2 > m_renderState; /**< Double-buffered render states (read). */
-			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet; /**< Vulkan descriptor set. */
+			/**
+			 * @brief One GPU region per frame-in-flight, and the descriptor set that addresses it.
+			 * @note ⚠️ This payload STARTS with the four cascade view-projection matrices, refit to the
+			 * camera frustum on every logic tick — the definition of frame-varying. A single region
+			 * meant the host overwrote, at frame begin, the bytes that up to framesInFlight() - 1
+			 * submitted frames were still reading. Unlike the light UBO, this is not a dynamic-offset
+			 * buffer, so the frame dimension is carried by separate buffers and sets rather than by
+			 * an offset; a cascaded view exists only for a CSM directional light, so there are very
+			 * few of them and the extra allocations are negligible.
+			 */
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			/**
+			 * @brief Region the descriptor set currently addresses.
+			 * @note Set by updateVideoMemory(), which is const on this interface — hence mutable, the
+			 * same idiom ViewMatrices2DUBO uses for its jittered projection.
+			 */
+			mutable uint32_t m_currentFrameRegion{0};
 			mutable std::mutex m_GPUBufferAccessLock; /**< Mutex for GPU buffer access synchronization. */
 			uint32_t m_cascadeCount{MaxCascadeCount}; /**< Number of active cascades. */
 			float m_lambda{DefaultCascadeLambda}; /**< Split calculation blend factor. */

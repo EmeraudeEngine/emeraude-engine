@@ -26,6 +26,10 @@
 
 #include "ViewMatricesCascadedUBO.hpp"
 
+#include <string>
+
+#include <algorithm>
+
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
@@ -485,35 +489,63 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_uniformBufferObject = std::make_unique< UniformBufferObject >(renderer.device(), ViewUBOSize);
-		m_uniformBufferObject->setIdentifier(ClassId, instanceID, "UniformBufferObject");
+		/* ⚠️ framesInFlight() is the swap-chain image count and reads ZERO until
+		 * Renderer::createRenderingSystem() has run. A cascaded view is only ever created for a CSM
+		 * directional light, i.e. during scene load, long after — but a silent zero here would
+		 * produce a single-region buffer and put the write-after-read defect straight back, so it is
+		 * caught and said out loud rather than clamped in silence. */
+		const auto frameCount = std::max(1U, renderer.framesInFlight());
 
-		if ( !m_uniformBufferObject->createOnHardware() )
+		if ( renderer.framesInFlight() == 0 )
 		{
-			Tracer::error(ClassId, "Unable to get an uniform buffer object for cascaded view !");
-
-			m_uniformBufferObject.reset();
-
-			return false;
+			TraceError{ClassId} << "The renderer reports ZERO frames in flight while creating the cascaded view '" << instanceID << "' ! Falling back to a single region — the frame race is NOT closed.";
 		}
 
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
-		m_descriptorSet->setIdentifier(ClassId, instanceID, "DescriptorSet");
+		m_uniformBufferObjects.reserve(frameCount);
+		m_descriptorSets.reserve(frameCount);
 
-		if ( !m_descriptorSet->create() )
+		for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
 		{
-			m_descriptorSet.reset();
+			const auto regionID = instanceID + "Frame" + std::to_string(frameIndex);
 
-			Tracer::error(ClassId, "Unable to create the cascaded view descriptor set !");
+			auto uniformBufferObject = std::make_unique< UniformBufferObject >(renderer.device(), ViewUBOSize);
+			uniformBufferObject->setIdentifier(ClassId, regionID, "UniformBufferObject");
 
-			return false;
-		}
+			if ( !uniformBufferObject->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to get an uniform buffer object for cascaded view region #" << frameIndex << " !";
 
-		if ( !m_descriptorSet->writeUniformBufferObject(0, *m_uniformBufferObject) )
-		{
-			Tracer::error(ClassId, "Unable to setup the cascaded view descriptor set !");
+				m_uniformBufferObjects.clear();
+				m_descriptorSets.clear();
 
-			return false;
+				return false;
+			}
+
+			auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
+			descriptorSet->setIdentifier(ClassId, regionID, "DescriptorSet");
+
+			if ( !descriptorSet->create() )
+			{
+				TraceError{ClassId} << "Unable to create the cascaded view descriptor set for region #" << frameIndex << " !";
+
+				m_uniformBufferObjects.clear();
+				m_descriptorSets.clear();
+
+				return false;
+			}
+
+			if ( !descriptorSet->writeUniformBufferObject(0, *uniformBufferObject) )
+			{
+				TraceError{ClassId} << "Unable to setup the cascaded view descriptor set for region #" << frameIndex << " !";
+
+				m_uniformBufferObjects.clear();
+				m_descriptorSets.clear();
+
+				return false;
+			}
+
+			m_uniformBufferObjects.emplace_back(std::move(uniformBufferObject));
+			m_descriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
 		return true;
@@ -536,30 +568,26 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ViewMatricesCascadedUBO::updateVideoMemory (uint32_t readStateIndex) const noexcept
+	ViewMatricesCascadedUBO::updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept
 	{
-		if constexpr ( IsDebug )
+		if ( readStateIndex >= m_renderState.size() || frameIndex >= m_uniformBufferObjects.size() )
 		{
-			if ( readStateIndex >= m_renderState.size() )
-			{
-				Tracer::error(ClassId, "Index overflow !");
+			Tracer::error(ClassId, "Index overflow !");
 
-				return false;
-			}
-
-			if ( m_uniformBufferObject == nullptr )
-			{
-				Tracer::error(ClassId, "The cascaded view uniform buffer object is not initialized !");
-
-				return false;
-			}
+			return false;
 		}
+
+		/* ⚠️ Published BEFORE any early return: descriptorSet() reads it for every bind of this
+		 * frame, and a stale value would address a region another frame-in-flight is still using. */
+		m_currentFrameRegion = frameIndex;
 
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
 
-		auto * pointer = m_uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
+		auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
+
+		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
 
 		if ( pointer == nullptr )
 		{
@@ -568,7 +596,7 @@ namespace EmEn::Graphics
 
 		std::memcpy(pointer, m_renderState[readStateIndex].bufferData.data(), m_renderState[readStateIndex].bufferData.size() * sizeof(float));
 
-		m_uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
+		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
 	}
@@ -580,8 +608,8 @@ namespace EmEn::Graphics
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
 
-		m_descriptorSet.reset();
-		m_uniformBufferObject.reset();
+		m_descriptorSets.clear();
+		m_uniformBufferObjects.clear();
 	}
 
 	std::ostream &

@@ -178,6 +178,19 @@ namespace EmEn::Graphics
 			 * @param elementIndex The global element index.
 			 * @return VkDeviceSize The byte offset within the UBO.
 			 */
+			/**
+			 * @brief Returns how many frame-in-flight regions each bank is split into.
+			 * @note ⚠️ Consumers MUST bound their region index with this, not with a compile-time
+			 * maximum: addressing a region beyond it lands past the end of the buffer.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			frameCount () const noexcept
+			{
+				return m_frameCount;
+			}
+
 			[[nodiscard]]
 			VkDeviceSize
 			getByteOffsetForElement (uint32_t elementIndex, uint32_t frameIndex = 0) const noexcept

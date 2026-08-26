@@ -382,10 +382,20 @@ namespace EmEn::Graphics
 			 * @brief Updates the video memory.
 			 * @note This is done just before a rendering.
 			 * @param readStateIndex The render state-valid index to read data.
+			 * @param frameIndex The frame-in-flight region to write, and the one descriptorSet()
+			 * will address until the next call.
+			 * @note ⚠️ A view UBO whose payload changes every frame MUST honour frameIndex with one
+			 * GPU region per frame-in-flight. The host writes this memory at frame begin while up to
+			 * framesInFlight() - 1 submitted frames are still reading it, so a single region is a
+			 * write-after-read hazard — see the [CAUTION] block in ViewMatrices2DUBO::updateVideoMemory().
+			 * `ViewMatricesCascadedUBO` honours it: its whole leading payload is the cascade matrices,
+			 * refit to the camera every logic tick. The 2D and 3D views keep ONE region because they
+			 * deliberately carry no frame-varying value; if that ever changes, they must be converted
+			 * too, and the caution block says so.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool updateVideoMemory (uint32_t readStateIndex) const noexcept = 0;
+			virtual bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept = 0;
 
 			/**
 			 * @brief Destroys buffer in the video memory.

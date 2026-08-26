@@ -386,7 +386,10 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ViewMatrices2DUBO::updateVideoMemory (uint32_t readStateIndex) const noexcept
+	/* NOTE: frameIndex is deliberately ignored — the 2D view keeps ONE region because it carries no
+	 * frame-varying value, which is exactly what the [CAUTION] block below enforces. The day one
+	 * is added, this must gain its per-frame regions like ViewMatricesCascadedUBO did. */
+	ViewMatrices2DUBO::updateVideoMemory (uint32_t readStateIndex, uint32_t /*frameIndex*/) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{

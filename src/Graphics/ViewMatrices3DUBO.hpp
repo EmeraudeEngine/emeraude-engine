@@ -161,7 +161,7 @@ namespace EmEn::Graphics
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateVideoMemory(uint32_t) const */
-			bool updateVideoMemory (uint32_t readStateIndex) const noexcept override;
+			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::destroy() */
 			void destroy () noexcept override;

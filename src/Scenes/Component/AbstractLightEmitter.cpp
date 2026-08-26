@@ -26,6 +26,8 @@
 
 #include "AbstractLightEmitter.hpp"
 
+#include <algorithm>
+
 /* Local inclusions. */
 #include "Scenes/BindlessTextureSet.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
@@ -128,15 +130,30 @@ namespace EmEn::Scenes::Component
 			this->publishStateForRendering(slot);
 		}
 
-		/* EVERY frame region must hold valid bytes from the first frame on, not just the one the
+		if ( m_sharedUniformBuffer == nullptr )
+		{
+			return true;
+		}
+
+		/* ⚠️⚠️ Bound by the buffer's REAL region count, never by MaxFrameRegionCount — that constant
+		 * only sizes the bookkeeping array. Looping to it wrote past the end of the buffer and left
+		 * the cursor on region 7 of a 3-region buffer, so every subsequent bind carried a dynamic
+		 * offset outside the allocation: caught by
+		 * VUID-vkCmdBindDescriptorSets-pDescriptorSets-01979, on a frame that still looked correct.
+		 * EVERY existing region must hold valid bytes from the first frame on, not just the one the
 		 * next frame happens to use. */
-		for ( uint32_t region = 0; region < MaxFrameRegionCount; ++region )
+		const auto regionCount = std::min< uint32_t >(m_sharedUniformBuffer->frameCount(), MaxFrameRegionCount);
+
+		for ( uint32_t region = 0; region < regionCount; ++region )
 		{
 			if ( !this->updateVideoMemory(0, region) )
 			{
 				return false;
 			}
 		}
+
+		/* Leave the cursor on a region the next frame can legally bind, whatever the loop ended on. */
+		m_currentFrameRegion = 0;
 
 		return true;
 	}
@@ -147,6 +164,13 @@ namespace EmEn::Scenes::Component
 		if ( readStateIndex >= m_publishedBlocks.size() || frameIndex >= MaxFrameRegionCount )
 		{
 			Tracer::error(this->getComponentType(), "Index overflow !");
+
+			return false;
+		}
+
+		if ( m_sharedUniformBuffer != nullptr && frameIndex >= m_sharedUniformBuffer->frameCount() )
+		{
+			Tracer::error(this->getComponentType(), "Frame region beyond what the shared uniform buffer carries !");
 
 			return false;
 		}
