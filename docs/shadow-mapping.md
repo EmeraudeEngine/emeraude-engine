@@ -306,11 +306,29 @@ exactly what the warning forbids. Point-light cubemap shadows share the shape (6
 
 | # | Defect | Status |
 |---|---|---|
-| A2 | The cascaded view UBO **and** the light UBO (`SharedUniformBuffer`) are single-instance and written by the render thread **before** the frame's in-flight fence is waited on. Write-after-read against up to `framesInFlight()-1` frames still executing. | **OPEN — CONFIRMED ON SCREEN** (flashlight halo cut by a straight chord) |
-| A1 | **CONFIRMED ON SCREEN.** Not CSM-only: EVERY light's sampling matrix is outside the contract. The CSM matrix exists **twice, on two different regimes**: the rasterising copy is published (`m_renderState[readStateIndex]`), the sampling copy (`DirectionalLight::m_CSMBuffer`) is not. `cascadeViewProjectionMatrix()` has **no `readStateIndex` overload** and serves `m_logicState`, unlike every other accessor in that class. **No light emitter has ever overridden `publishStateForRendering()`** — the contract covers entities and render targets only. | **OPEN** |
-| A3 | `m_renderStateIndex` was loaded **independently three times** inside one rendered frame (upload, `castShadows`, `prepareRender`). A frame straddling a publish rasterises the shadow map with tick N and the colour buffer with tick N+1. | **OPEN** (needs the per-frame latch) |
-| A4 | `m_CSMBuffer` is written by the logic thread and memcpy'd by the render thread with no lock, no atomic and no release/acquire edge on the dirty flag. | **OPEN** |
+| A2 | The light UBO (`SharedUniformBuffer`) was single-instance, host-written every frame while up to `framesInFlight()-1` submitted frames were still reading it; and the scene upload ran **before** the frame's in-flight fence. | **FIXED** — one UBO region per frame-in-flight, folded into the existing dynamic offset; the upload moved behind the fence. ⚠️ The cascaded VIEW UBO is **still single-instance**: harmless while nothing but CSM writes it per tick, but it is the same shape and it is the next one to convert. |
+| A1 | **FIXED.** Not CSM-only: EVERY light's sampling matrix was outside the contract. The CSM matrix existed **twice, on two different regimes**: the rasterising copy is published (`m_renderState[readStateIndex]`), the sampling copy (`DirectionalLight::m_CSMBuffer`) is not. `cascadeViewProjectionMatrix()` has **no `readStateIndex` overload** and serves `m_logicState`, unlike every other accessor in that class. **No light emitter has ever overridden `publishStateForRendering()`** — the contract covers entities and render targets only. | **OPEN** |
+| A3 | `m_renderStateIndex` was loaded **independently four times** inside one rendered frame. A frame straddling a publish rasterised the shadow map with tick N and the colour buffer with tick N+1. | **FIXED** — `Scene::beginRenderFrame()` latches once, every consumer reads the latch |
+| A4 | `m_CSMBuffer` was written by the logic thread and memcpy'd by the render thread with no synchronisation. | **FIXED** by A1 — the render thread now reads a published slot, and the publish/`m_renderStateIndex` release-acquire pair is the edge |
 | A5 | `Scene::updateCSMCascades()` tested a mutex-guarded container, released the lock, then walked `LightSet::directionalLights()` **unguarded**. | **FIXED** — `LightSet::forEachDirectionalLight()` |
+
+### ✅ FIXED (Aug 2026) — and what the measurement taught
+
+> **Acceptance test, passed:** `global-illumination`, flashlight on (**F**), maximum movement speed.
+> The lit pool on a wall **stays round**. Validation layers on, zero VUID.
+
+⚠️⚠️⚠️ **The CPU half alone did NOT fix it, and that is the load-bearing lesson.** With the light's
+block correctly published — the two-state contract finally covering lights — the halo still cut. What
+closed it was the GPU half: the light UBO was a single instance, host-written every frame while
+frames in flight were still reading it. **Publishing a value coherently is worthless if the memory it
+is uploaded into is overwritten under the GPU's feet.** Anyone reasoning about a temporal artefact in
+this engine has to check both sides of the contract, not just the CPU one.
+
+⚠️ **`screenshot()` cannot capture this class of artefact.** The capture lands after the console
+command is processed, with the camera already parked for at least a frame and everything reconverged.
+A 20-pose sweep at 1 cm steps and a series of teleport-and-capture runs all came back clean while the
+defect was plainly visible to the eye. For a temporal artefact the instruments are
+`Core.toggleRecording()` or a human watching the screen — not a still.
 
 ### ⚠️⚠️ CONFIRMED ON SCREEN: any light that MOVES desyncs, classic map included
 
