@@ -1637,15 +1637,31 @@ removed it (see `TODO.md` § "Photometric lighting"), the generated falloff is t
 > identical shape. **The correct JSON is `"Data": x`, not `"Amount": x`** — an earlier revision of
 > this file documented the wrong key.
 >
-> 🔴 **OPEN, NOT DIAGNOSED.** Authoring `"Reflection": { "Type": "Value", "Data": 0.0 }` on
-> `Grounds/Pavement005` makes that material's ROUGHNESS fall from its authored 0.8 to the 0.5
-> default — measured in the normals attachment, where the 1,050,417-pixel floor group at packed
-> 0.800 vanishes into the 0.500 group, and returns exactly when the key is removed. The material
-> loads without error, and a JSON round-trip of the file is byte-identical, so neither a parse
-> failure nor the rewrite explains it. Whatever it is, it predates the flag/UBO change above: that
-> change is verified NEUTRAL on existing content (no material and no C++ call site uses the `Value`
-> path, and the baseline capture is identical pixel-count for pixel-count). **Reproduce with that
-> one key before trusting the `Value` path.**
+> ⚠️ **DIAGNOSED AND FIXED (2026-08-26) — it was a FLAG BIT COLLISION, and it was introduced by the
+> commit above, not inherited.** `PostProcessReflectivityEnabled` was first written as `1U << 17`,
+> the value `UnlitEnabled` already held. Nothing checks these values: a duplicate compiles silently,
+> and `enableFlag(PostProcessReflectivityEnabled)` therefore also set `UnlitEnabled` — so declaring a
+> post-process reflectivity on a material silently made it **UNLIT**.
+>
+> The symptom surfaced far from the cause. Authoring `"Reflection": { "Type": "Value", "Data": 0.0 }`
+> on `Grounds/Pavement005` made that material's authored roughness of 0.8 read as the 0.5 default in
+> the normals attachment — the 1,050,417-pixel floor group at packed 0.800 vanishing into the 0.500
+> group — because the unlit codegen path does not declare roughness the same way. The material loaded
+> without error and a JSON round-trip of the file was byte-identical, which is what made it look like
+> a parsing mystery.
+>
+> ⚠️ **The mistake that produced it: "the enum" was read, but not to its closing brace.** The free-bit
+> survey stopped at `AlphaTestEnabled = 1U << 16` and never reached `UnlitEnabled` further down. A
+> `NEXT FREE BIT` marker now sits at the end of `MaterialFlagBits` — keep it current, and add new bits
+> there.
+>
+> ⚠️ **And the earlier claim that the defect "predates this change" was FALSE.** It was asserted in a
+> commit message without being tested: the `Value` path had never once been exercised against the
+> ORIGINAL code, because the first attempt used the wrong JSON key and failed to load.
+>
+> Verified after moving the flag to `1U << 18`, same scene and pose: the floor's packed roughness is
+> back to **0.800** (1,049,893 px) and its published reflectivity is exactly **0.0000** — which is
+> also the first end-to-end validation that the `Value` path honours its authored parameter at all.
 
 > [!CAUTION]
 > **The material-properties A channel had TWO consumers and NO producer until Aug 2026.**

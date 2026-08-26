@@ -122,12 +122,6 @@ namespace EmEn::Graphics::Material
 		 * instead would push the layer out of the opaque list and buy sorting nobody needs.
 		 */
 		AlphaTestEnabled = 1U << 16,
-		/** @brief The material publishes a post-process-only reflectivity (no cubemap, no sampler):
-		 * the SCALAR lives in the material UBO at ReflectionAmount, this bit only says the codegen
-		 * must route it to the reflectivity ladder. Splitting it this way is deliberate — the
-		 * program caches key on the descriptor layout and on these FLAG BITS, never on plain
-		 * values, so a value baked as a GLSL literal is not part of the key. */
-		PostProcessReflectivityEnabled = 1U << 17,
 		/**
 		 * @brief The material declares it must NOT be lit — its colour IS its emitted radiance
 		 * (glTF KHR_materials_unlit semantics).
@@ -137,7 +131,22 @@ namespace EmEn::Graphics::Material
 		 * emissionMultiplier()`, so the material's luminance still applies — without it a
 		 * skybox writes its raw [0,1] texel and reads black under photometric exposure.
 		 */
-		UnlitEnabled = 1U << 17
+		UnlitEnabled = 1U << 17,
+		/** @brief The material publishes a post-process-only reflectivity (no cubemap, no sampler):
+		 * the SCALAR lives in the material UBO at ReflectionAmount, this bit only says the codegen
+		 * must route it to the reflectivity ladder. Splitting it this way is deliberate — the
+		 * program caches key on the descriptor layout and on these FLAG BITS, never on plain
+		 * values, so a value baked as a GLSL literal is not part of the key. */
+		PostProcessReflectivityEnabled = 1U << 18
+
+		/* ⚠️ NEXT FREE BIT: 19. Keep this marker up to date and add new bits HERE, at the end.
+		 * Nothing checks these values: a duplicate compiles silently and every enableFlag() of one
+		 * name then sets the other. That happened — PostProcessReflectivityEnabled was first written
+		 * as `1U << 17`, the value UnlitEnabled already had, so declaring a post-process reflectivity
+		 * on a material silently made it UNLIT. The symptom surfaced far from the cause: the
+		 * material's authored roughness of 0.8 was replaced by the 0.5 default in the normals
+		 * G-buffer, because the unlit codegen path does not declare roughness the same way. Reading
+		 * "the enum" is not enough — read it to its CLOSING BRACE, or diff the bit values. */
 	};
 
 	/**
