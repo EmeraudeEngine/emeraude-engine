@@ -26,6 +26,8 @@
 
 #include "Abstract.hpp"
 
+#include <algorithm>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -41,6 +43,12 @@ namespace EmEn::Graphics::RenderTarget
 	using namespace Vulkan;
 
 	constexpr auto TracerTag{"RenderTarget"};
+
+	uint32_t
+	Abstract::frameRegionCount (Renderer & renderer) const noexcept
+	{
+		return renderer.framesInFlight();
+	}
 
 	bool
 	Abstract::createRenderTarget (Renderer & renderer) noexcept
@@ -78,7 +86,14 @@ namespace EmEn::Graphics::RenderTarget
 		 * only updates the matrices DATA (see updateDeviceFromCoordinates()).
 		 * ownViewMatrices() (not viewMatrices()) keeps the lifecycle on the OWNED resource
 		 * even when the render-time accessor delegates to a shared source. */
-		if ( !this->ownViewMatrices().create(renderer, this->id()) )
+		/* ⚠️ Asked of the TARGET, and only now: onCreate() above is what builds the swap-chain
+		 * images, so imageCount() is meaningless before it, and framesInFlight() is zero for every
+		 * target created before createRenderingSystem(). See frameRegionCount().
+		 * Getting this wrong is not subtle but it IS silent — "Frame region overflow: asked for
+		 * region #1 but only 1 exist", the update refused, the UBO left stale for the whole run. */
+		const auto regionCount = std::max(1U, this->frameRegionCount(renderer));
+
+		if ( !this->ownViewMatrices().create(renderer, this->id(), regionCount) )
 		{
 			Tracer::error(TracerTag, "Unable to create the render target view matrices! Destroying it...");
 

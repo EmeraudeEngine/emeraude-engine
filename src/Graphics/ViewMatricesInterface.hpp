@@ -350,7 +350,17 @@ namespace EmEn::Graphics
 			 * @param instanceID A reference to a string.
 			 * @return bool
 			 */
-			virtual bool create (Renderer & renderer, const std::string & instanceID) noexcept = 0;
+			/**
+			 * @note ⚠️⚠️ frameCount is PASSED IN, never read from Renderer::framesInFlight(). That
+			 * accessor returns the frame-scope count, which is still ZERO here for the two targets
+			 * created BEFORE Renderer::createRenderingSystem(): the swap chain (which knows its own
+			 * imageCount() at that point) and the windowless view. A view UBO sized from a zero would
+			 * allocate no region at all for the MAIN camera, and it never self-heals — SwapChain::recreate()
+			 * does not re-run createRenderTarget(). Hence an explicit parameter rather than an ambient
+			 * global read at an unspecified time.
+			 * @param frameCount Number of frame-in-flight regions the view UBO must carry.
+			 */
+			virtual bool create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept = 0;
 
 			/**
 			 * @brief Copies local data for a stable render.

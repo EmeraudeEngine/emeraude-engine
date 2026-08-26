@@ -179,7 +179,7 @@ namespace EmEn::Graphics
 			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
-			bool create (Renderer & renderer, const std::string & instanceID) noexcept override;
+			bool create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::publishStateForRendering(uint32_t) */
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;

@@ -131,6 +131,19 @@ namespace EmEn::Graphics::RenderTarget
 			bool createRenderTarget (Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Returns how many frame-in-flight regions this target's view UBO must carry.
+			 * @note ⚠️ Evaluated INSIDE createRenderTarget(), AFTER onCreate() — never by the caller.
+			 * The swap chain builds its images in onCreate(), so its imageCount() is meaningless
+			 * before that; and Renderer::framesInFlight() is still ZERO for every target created
+			 * before createRenderingSystem(). Asking the target itself, at the one moment both are
+			 * settled, removes the whole class of ordering bug rather than one instance of it.
+			 * @param renderer A reference to the renderer.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			virtual uint32_t frameRegionCount (Renderer & renderer) const noexcept;
+
+			/**
 			 * @brief Destroys the render target objects from the video memory.
 			 * @return bool
 			 */

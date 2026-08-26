@@ -526,7 +526,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ViewMatricesCascadedUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
+	ViewMatricesCascadedUBO::create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept
 	{
 		auto descriptorSetLayout = RenderTarget::Abstract::getDescriptorSetLayout(renderer.layoutManager());
 
@@ -535,22 +535,12 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* ⚠️ framesInFlight() is the swap-chain image count and reads ZERO until
-		 * Renderer::createRenderingSystem() has run. A cascaded view is only ever created for a CSM
-		 * directional light, i.e. during scene load, long after — but a silent zero here would
-		 * produce a single-region buffer and put the write-after-read defect straight back, so it is
-		 * caught and said out loud rather than clamped in silence. */
-		const auto frameCount = std::max(1U, renderer.framesInFlight());
+		const auto regionCount = std::max(1U, frameCount);
 
-		if ( renderer.framesInFlight() == 0 )
-		{
-			TraceError{ClassId} << "The renderer reports ZERO frames in flight while creating the cascaded view '" << instanceID << "' ! Falling back to a single region — the frame race is NOT closed.";
-		}
+		m_uniformBufferObjects.reserve(regionCount);
+		m_descriptorSets.reserve(regionCount);
 
-		m_uniformBufferObjects.reserve(frameCount);
-		m_descriptorSets.reserve(frameCount);
-
-		for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+		for ( uint32_t frameIndex = 0; frameIndex < regionCount; ++frameIndex )
 		{
 			const auto regionID = instanceID + "Frame" + std::to_string(frameIndex);
 

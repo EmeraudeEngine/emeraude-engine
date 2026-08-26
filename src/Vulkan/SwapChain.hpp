@@ -94,6 +94,20 @@ namespace EmEn::Vulkan
 				return true;
 			}
 
+			/**
+			 * @copydoc EmEn::Graphics::RenderTarget::Abstract::frameRegionCount()
+			 * @note ⚠️ The swap chain is created BEFORE Renderer::createRenderingSystem(), so
+			 * framesInFlight() is still zero for it — its own image count is the number the renderer
+			 * will be built from a moment later. Valid only after onCreate(), which is exactly when
+			 * createRenderTarget() asks.
+			 */
+			[[nodiscard]]
+			uint32_t
+			frameRegionCount (Graphics::Renderer & /*renderer*/) const noexcept override
+			{
+				return this->imageCount();
+			}
+
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::destroyFromHardware() noexcept */
 			bool
 			destroyFromHardware () noexcept override

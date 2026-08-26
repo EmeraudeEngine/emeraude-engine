@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <array>
 #include <memory>
+#include <vector>
 #include <mutex>
 
 /* Local inclusions for inheritances. */
@@ -191,7 +192,12 @@ namespace EmEn::Graphics
 			const Vulkan::DescriptorSet *
 			descriptorSet () const noexcept override
 			{
-				return m_descriptorSet.get();
+				if ( m_currentFrameRegion >= m_descriptorSets.size() )
+				{
+					return nullptr;
+				}
+
+				return m_descriptorSets[m_currentFrameRegion].get();
 			}
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
@@ -207,7 +213,7 @@ namespace EmEn::Graphics
 			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
-			bool create (Renderer & renderer, const std::string & instanceID) noexcept override;
+			bool create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::publishStateForRendering(uint32_t) */
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
@@ -317,8 +323,18 @@ namespace EmEn::Graphics
 			PreviousFrameState m_previousState; /**< View state of the previous rendered frame (render thread only). */
 			Base::Math::Vector< 2, float > m_currentJitter; /**< NDC projection jitter of the frame being rendered (render thread only). */
 			mutable Base::Math::Matrix< 4, float > m_jitteredProjection; /**< Jittered projection served by projectionMatrix(readStateIndex) while jitter is enabled (render thread only). */
-			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet; /**< Vulkan descriptor set. */
+			/**
+			 * @brief One GPU region per frame-in-flight, and the descriptor set addressing it.
+			 * @note ⚠️ The payload carries the camera WORLD POSITION and its VELOCITY, both of which
+			 * change every frame while the camera moves — exactly what the [CAUTION] block in
+			 * updateVideoMemory() forbids in a single-buffered UBO. They are read by reflection,
+			 * refraction and parallax occlusion mapping, so a single region let the raster of one
+			 * frame read what the host had already written for the next.
+			 */
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			/** @brief Region the descriptor set currently addresses. Set by updateVideoMemory(), which is const. */
+			mutable uint32_t m_currentFrameRegion{0};
 			mutable std::mutex m_GPUBufferAccessLock; /**< Mutex for GPU buffer access synchronization. */
 			bool m_projectionJitterEnabled{false}; /**< Whether the sub-pixel projection jitter is active (TAA). */
 	};

@@ -804,9 +804,18 @@ the previous frame's data.
 > |----------|-------|------------------------|--------|
 > | Light UBOs | `Graphics::SharedUniformBuffer` (`LightSet`) | **YES for ANY light that moves** — a carried torch, a lamp on a vehicle, an animated sun, and every CSM light by construction | **FIXED** — one region per frame-in-flight, folded **into the existing dynamic offset** (separate descriptor sets would re-open the offset-blind dedup defect) |
 > | Cascaded view UBO | `ViewMatricesCascadedUBO` | **YES, entirely** — its first 256 bytes are `mat4[4] cascadeViewProjectionMatrices`, refit to the camera frustum every tick | **FIXED** — one buffer + one descriptor set per frame-in-flight (not a dynamic-offset buffer) |
-> | 2D / 3D view UBOs | `ViewMatrices2DUBO`, `ViewMatrices3DUBO` | Mostly no — but `WorldPosition` and `VelocityVector` **are** frame-varying while the camera moves | **ONE region, deliberately.** They take the frame index and declare it ignored. ⚠️ The two frame-varying fields are a latent hole: they feed reflection/refraction/POM, not shadows |
+> | 2D / 3D view UBOs | `ViewMatrices2DUBO`, `ViewMatrices3DUBO` | **YES** — `WorldPosition` and `VelocityVector` change every frame while the camera moves, and they feed reflection, refraction and parallax occlusion mapping | **FIXED** — one buffer + one descriptor set per frame-in-flight, like the cascaded view |
 
 > [!IMPORTANT]
+> **Ask the TARGET for its region count, never the caller.** `RenderTarget::Abstract::createRenderTarget()`
+> resolves it through the virtual `frameRegionCount()`, evaluated AFTER `onCreate()`. Both obvious
+> sources are zero at the wrong moment: `Renderer::framesInFlight()` for every target created before
+> `createRenderingSystem()`, and `SwapChain::imageCount()` before `onCreate()` builds the images —
+> and `createRenderTarget()` is the FIRST thing `SwapChain::createOnHardware()` calls. Passing the
+> count as a parameter looks like it fixes this and does not: the caller can only evaluate it too
+> early. The failure is silent — *"Frame region overflow: asked for region #1 but only 1 exist"*, the
+> update refused, the UBO left stale for the whole run, with zero VUID and a plausible image.
+>
 > **The region index must be bounded by the buffer's REAL region count**, never by a compile-time
 > maximum that only sizes bookkeeping. Getting that wrong wrote past the end of the buffer and left
 > every bind with a dynamic offset outside the allocation — while the frame still rendered plausibly.

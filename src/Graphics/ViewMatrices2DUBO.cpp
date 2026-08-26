@@ -26,6 +26,10 @@
 
 #include "ViewMatrices2DUBO.hpp"
 
+#include <string>
+
+#include <algorithm>
+
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
@@ -295,7 +299,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ViewMatrices2DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
+	ViewMatrices2DUBO::create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept
 	{
 		auto descriptorSetLayout = RenderTarget::Abstract::getDescriptorSetLayout(renderer.layoutManager());
 
@@ -304,35 +308,43 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_uniformBufferObject = std::make_unique< UniformBufferObject >(renderer.device(), ViewUBOSize);
-		m_uniformBufferObject->setIdentifier(ClassId, instanceID, "UniformBufferObject");
+		const auto regionCount = std::max(1U, frameCount);
 
-		if ( !m_uniformBufferObject->createOnHardware() )
+		m_uniformBufferObjects.reserve(regionCount);
+		m_descriptorSets.reserve(regionCount);
+
+		for ( uint32_t frameIndex = 0; frameIndex < regionCount; ++frameIndex )
 		{
-			Tracer::error(ClassId, "Unable to get an uniform buffer object for close view !");
+			const auto regionID = instanceID + "Frame" + std::to_string(frameIndex);
 
-			m_uniformBufferObject.reset();
+			auto uniformBufferObject = std::make_unique< UniformBufferObject >(renderer.device(), ViewUBOSize);
+			uniformBufferObject->setIdentifier(ClassId, regionID, "UniformBufferObject");
 
-			return false;
-		}
+			if ( !uniformBufferObject->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to get an uniform buffer object for the close view region #" << frameIndex << " !";
 
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
-		m_descriptorSet->setIdentifier(ClassId, instanceID, "DescriptorSet");
+				m_uniformBufferObjects.clear();
+				m_descriptorSets.clear();
 
-		if ( !m_descriptorSet->create() )
-		{
-			m_descriptorSet.reset();
+				return false;
+			}
 
-			Tracer::error(ClassId, "Unable to create the close view descriptor set !");
+			auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
+			descriptorSet->setIdentifier(ClassId, regionID, "DescriptorSet");
 
-			return false;
-		}
+			if ( !descriptorSet->create() || !descriptorSet->writeUniformBufferObject(0, *uniformBufferObject) )
+			{
+				TraceError{ClassId} << "Unable to set up the close view descriptor set for region #" << frameIndex << " !";
 
-		if ( !m_descriptorSet->writeUniformBufferObject(0, *m_uniformBufferObject) )
-		{
-			Tracer::error(ClassId, "Unable to setup the close view descriptor set !");
+				m_uniformBufferObjects.clear();
+				m_descriptorSets.clear();
 
-			return false;
+				return false;
+			}
+
+			m_uniformBufferObjects.emplace_back(std::move(uniformBufferObject));
+			m_descriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
 		return true;
@@ -386,10 +398,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	/* NOTE: frameIndex is deliberately ignored — the 2D view keeps ONE region because it carries no
-	 * frame-varying value, which is exactly what the [CAUTION] block below enforces. The day one
-	 * is added, this must gain its per-frame regions like ViewMatricesCascadedUBO did. */
-	ViewMatrices2DUBO::updateVideoMemory (uint32_t readStateIndex, uint32_t /*frameIndex*/) const noexcept
+	ViewMatrices2DUBO::updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -400,19 +409,25 @@ namespace EmEn::Graphics
 				return false;
 			}
 
-			if ( m_uniformBufferObject == nullptr )
-			{
-				Tracer::error(ClassId, "The view uniform buffer object is not initialized !");
-
-				return false;
-			}
 		}
 
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
 
-		auto * pointer = m_uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
+		if ( frameIndex >= m_uniformBufferObjects.size() )
+		{
+			TraceError{ClassId} << "Frame region overflow: asked for region #" << frameIndex << " but only " << m_uniformBufferObjects.size() << " exist !";
+
+			return false;
+		}
+
+		/* ⚠️ Published BEFORE the mapping: every bind of this frame reads it. */
+		m_currentFrameRegion = frameIndex;
+
+		auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
+
+		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
 
 		if ( pointer == nullptr )
 		{
@@ -430,7 +445,7 @@ namespace EmEn::Graphics
 		 * that collapsed the TAA history and corrupted the RTGI reprojection. The jitter is now
 		 * a per-draw push constant applied to gl_Position only. */
 
-		m_uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
+		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
 	}
@@ -442,8 +457,8 @@ namespace EmEn::Graphics
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
 
-		m_descriptorSet.reset();
-		m_uniformBufferObject.reset();
+		m_descriptorSets.clear();
+		m_uniformBufferObjects.clear();
 	}
 
 	std::ostream &
