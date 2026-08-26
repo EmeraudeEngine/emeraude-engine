@@ -271,10 +271,20 @@ namespace EmEn::Graphics::Renderable
 				const auto Ua = flip ? 1.0F : 0.0F;
 				const auto Ub = flip ? 0.0F : 1.0F;
 
-				const Vector< 3, float > positionA{-0.5F, centerAtBottom ? -1.0F : -0.5F, 0.0F};
-				const Vector< 3, float > positionB{-0.5F, centerAtBottom ?  0.0F :  0.5F, 0.0F};
-				const Vector< 3, float > positionC{ 0.5F, centerAtBottom ? -1.0F : -0.5F, 0.0F};
-				const Vector< 3, float > positionD{ 0.5F, centerAtBottom ?  0.0F :  0.5F, 0.0F};
+				/* ⚠️⚠️ AUTHORED FOR Y-UP. A and C are the BOTTOM edge, B and D the TOP one, and V is 1 at
+				 * the bottom because Vulkan puts V=0 at the top of an image.
+				 * Before the Y-up migration this read `centerAtBottom ? -1 : -0.5` for the bottom
+				 * pair, with V=0 on it. That was correct while getSpriteModelMatrix() built its frame
+				 * with a DOWNWARD Y column: model -Y then pointed to world UP, so the quad rose from
+				 * its anchor. The migration renamed that column to UPWARD — preserving handedness,
+				 * which is why no mirror test caught it — and the quad silently turned over: it hung
+				 * BELOW its anchor and, with CenterAtBottom, a sprite anchored on the ground was
+				 * buried under it. Invisible at any exposure, no error anywhere, the renderable
+				 * present and drawn. It also rendered upside down, which the burial hid. */
+				const Vector< 3, float > positionA{-0.5F, centerAtBottom ? 0.0F : -0.5F, 0.0F};
+				const Vector< 3, float > positionB{-0.5F, centerAtBottom ? 1.0F :  0.5F, 0.0F};
+				const Vector< 3, float > positionC{ 0.5F, centerAtBottom ? 0.0F : -0.5F, 0.0F};
+				const Vector< 3, float > positionD{ 0.5F, centerAtBottom ? 1.0F :  0.5F, 0.0F};
 
 				if ( isAnimated )
 				{
@@ -284,20 +294,33 @@ namespace EmEn::Graphics::Renderable
 
 						builder.newGroup();
 
+				/* ⚠️⚠️ EMISSION ORDER IS A, C, B, D — NOT A, B, C, D, and it is the SECOND half of the
+				 * Y-up fallout. The strip's first triangle is emitted in the order given, so A, B, C
+				 * yields (B-A) x (C-A) = -Z: a geometric front face opposite to the declared global
+				 * normal (+Z). The billboard turns the frame's +Z toward the camera, so that front
+				 * face looked away from it and back-face culling removed EVERY sprite, from every
+				 * angle — the quad rotates with the camera, so no viewpoint could catch its far side.
+				 * It survived for years because the pre-Y-up projection was MIRRORED, and a mirrored
+				 * projection reverses on-screen winding: the wrong winding cancelled the mirror. The
+				 * Y-up migration removed the mirror and the compensation became the defect, exactly
+				 * like the loader winding swaps deleted at the time — this one just lives here.
+				 * Measured, not reasoned: reverting to A, B, C, D makes every sprite vanish again.
+				 * A, C, B, D covers the same two triangles with the winding matching the normal, and
+				 * each vertex keeps its own UV so the mapping is untouched. */
 						builder.setPosition(positionA);
-						builder.setTextureCoordinates(Ua, 0.0F, depth);
-						builder.newVertex();
-
-						builder.setPosition(positionB);
 						builder.setTextureCoordinates(Ua, 1.0F, depth);
 						builder.newVertex();
 
 						builder.setPosition(positionC);
-						builder.setTextureCoordinates(Ub, 0.0F, depth);
+						builder.setTextureCoordinates(Ub, 1.0F, depth);
+						builder.newVertex();
+
+						builder.setPosition(positionB);
+						builder.setTextureCoordinates(Ua, 0.0F, depth);
 						builder.newVertex();
 
 						builder.setPosition(positionD);
-						builder.setTextureCoordinates(Ub, 1.0F, depth);
+						builder.setTextureCoordinates(Ub, 0.0F, depth);
 						builder.newVertex();
 					}
 				}
@@ -305,20 +328,21 @@ namespace EmEn::Graphics::Renderable
 				{
 					builder.newGroup();
 
+					/* ⚠️ A, C, B, D — see the note in the animated branch above. */
 					builder.setPosition(positionA);
-					builder.setTextureCoordinates(Ua, 0.0F, 0.0F);
-					builder.newVertex();
-
-					builder.setPosition(positionB);
 					builder.setTextureCoordinates(Ua, 1.0F, 0.0F);
 					builder.newVertex();
 
 					builder.setPosition(positionC);
-					builder.setTextureCoordinates(Ub, 0.0F, 0.0F);
+					builder.setTextureCoordinates(Ub, 1.0F, 0.0F);
+					builder.newVertex();
+
+					builder.setPosition(positionB);
+					builder.setTextureCoordinates(Ua, 0.0F, 0.0F);
 					builder.newVertex();
 
 					builder.setPosition(positionD);
-					builder.setTextureCoordinates(Ub, 1.0F, 0.0F);
+					builder.setTextureCoordinates(Ub, 0.0F, 0.0F);
 					builder.newVertex();
 				}
 

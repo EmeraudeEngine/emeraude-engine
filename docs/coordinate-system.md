@@ -343,3 +343,41 @@ difference at all, the change had not reached the renderer and the test would ha
 
 ⚠️ Reproducing the Sponza witness: `setPosition(-6.072286, 4.461862, 0.853897)` then
 `lookAt(-15.878870, 3.595881, -0.901378)`.
+
+## ⚠️⚠️ Y-UP RESIDUE FOUND Aug 2026 — SPRITES, invisible everywhere
+
+**Symptom:** no sprite rendered in any demo. No error, no warning, no failed shader, the renderable
+present in the scene graph, the draw issued. Invisible at every exposure — measured with an exposure
+sweep, the sprite region tracked the background with the same standard deviation.
+
+**Two independent halves, both Y-up fallout, and the first hides the second:**
+
+1. **The quad's WINDING.** `SpriteResource::prepareGeometry()` emitted its triangle strip as
+   A, B, C, D, whose first triangle gives `(B-A) x (C-A) = -Z` — a geometric front face OPPOSITE to
+   the declared global normal `+Z`. The billboard turns the frame's `+Z` toward the camera, so the
+   front face pointed away from it and back-face culling removed the sprite from **every** angle: the
+   quad rotates with the camera, so no viewpoint could ever catch its far side.
+   It survived for years because the pre-Y-up projection was **mirrored**, and a mirrored projection
+   reverses on-screen winding — the wrong winding cancelled the mirror. Removing the mirror turned
+   the compensation into the defect, exactly like the loader winding swaps deleted at the time. This
+   one just lived in the sprite, not in a loader. Now A, C, B, D.
+
+2. **The quad's Y EXTENT and its V mapping.** `getSpriteModelMatrix()` built its frame with a
+   **downward** Y column before the migration; the rename made it **upward**, *preserving
+   handedness* — which is why no determinant or mirror test caught it. The quad, still authored for
+   the old convention (`centerAtBottom` spanning `y ∈ [-1, 0]`, V=0 on the bottom pair), silently
+   turned over: it hung BELOW its anchor, so a `CenterAtBottom` sprite standing on the ground was
+   **buried under it**, and it rendered upside down. Now `y ∈ [0, +1]` with V=1 at the bottom.
+
+**How it was proved, since neither half is provable by reading:** raising the node above ground made
+the sprite appear — upside down and hanging — which confirmed half 2 outright; and reverting the
+winding to A, B, C, D made every sprite vanish again, which confirmed half 1.
+
+⚠️ **What this cost, and the lesson.** The material merge to PBR was suspected first, by everyone. It
+was exonerated by its own commit message: `a1619516` recorded an A/B of the sprite demo
+("blown-out look is PRE-EXISTING, 7.92% saturated before, 4.17% after"), which proves sprites still
+rendered after the merge. **`git log -S` and the commit messages narrowed the window in one step,
+after a long and fruitless static trace of the render path.** Reach for the history earlier.
+
+⚠️ Related, NOT fixed here because it is demo data rather than engine: the `sprite` demo scatters its
+fires over `y ∈ [-1.75, 0]`, which was above ground under Y-down and is below it now.
