@@ -84,3 +84,29 @@ Reuse the `renderable` for multiple nodes. The engine automatically batches them
 -   **Resize**: Dynamic Viewport/Scissor prevents pipeline recreation.
 -   **Opacity logic**: `Material::Interface::isOpaque()` returns `false` when `requiresGrabPass()` is `true`, ensuring automatic correct sorting.
 -   **Alpha test is NOT translucency**: a material carrying `MaterialFlagBits::AlphaTestEnabled` (via `BasicResource::enableAlphaTest()`) is a binary **cutout** — the fragment shader discards below a fixed 0.5 cutoff and the material **stays in the Opaque list**, depth write kept, no distance sort, state-sorted batching preserved. `isOpaque()` deliberately ignores that flag: making it return `false` would move the cutout into the translucent list **and** enable colour blending (`Vulkan::GraphicsPipeline::configureColorBlendState()` keys on that predicate). Use alpha test for a coverage mask, `enableBlending()` for a genuine gradient, and a grab pass for refraction. Full contract: [`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § 5, "Alpha Test — the Binary Cutout Contract".
+
+
+## Sprites and lighting — `"Lit": true` (Aug 2026)
+
+A sprite is UNLIT by default, and until Aug 2026 the code said that was the contract: *"a sprite
+shows a PICTURE: it must never be lit"*. **That reading was wrong about the intent.** The project
+owner authored it as a WORKAROUND: in an older engine a sprite could not be lit like an ordinary
+mesh, so it was made self-illuminating simply to be visible, and a later comment rationalised the
+symptom as a design decision.
+
+The default stays unlit, because it is genuinely right for a sprite whose texel already IS the final
+colour — fire, explosions, anything self-luminous. But a sprite standing in a scene as an ACTOR wants
+the light of the geometry around it, and now asks for it with `"Lit": true` in its manifest.
+
+Nothing else changes: frame animation, billboard orientation, alpha cutout and geometry are
+untouched. The only difference is that `enableUnlit()` and the forced AutoIllumination component are
+skipped, so the ordinary light passes apply.
+
+⚠️ When a sprite IS unlit, the AutoIllumination COMPONENT must be created BEFORE `enableUnlit()`: the
+unlit path writes `fragmentColor().rgb * emissionMultiplier()` and that multiplier only exists when
+the component does. Without it the sprite writes its raw [0,1] colour and reads black under the
+photometric exposure.
+
+⚠️ A sprite billboards because of the `Renderable::IsSprite` FLAG, not because of the SpriteResource
+class — a `MultiLayerMeshResource` created with that flag faces the camera too. Facing the camera and
+being lit were always separable; only the material choice tied them together.

@@ -138,15 +138,23 @@ namespace EmEn::Graphics::Renderable
 					return materialResource.setManualLoadSuccess(false);
 				}
 
-				/* A sprite shows a PICTURE: it must never be lit. The ambient and light passes would
-				 * add their own contribution on top of a texel that already IS the final colour. The
-				 * unlit path writes `fragmentColor().rgb * emissionMultiplier()`, and that multiplier
-				 * only exists when an AutoIllumination component is present: without it the sprite
-				 * writes its raw [0,1] colour and reads black under the photometric exposure. So the
-				 * component comes FIRST, then the flag; the amount and the emissive strength below
-				 * only refine the luminance it carries. */
-				materialResource.setAutoIlluminationComponent(1.0F);
-				materialResource.enableUnlit();
+				/* ⚠️⚠️ "Lit": true opts a sprite INTO the lighting passes, and it exists because the
+				 * unlit default was never a design decision — it was a WORKAROUND. In an older engine
+				 * a sprite could not be lit like an ordinary mesh, so it was made self-illuminating
+				 * just to be visible at all, and a later comment here rationalised that as "a sprite
+				 * shows a picture, it must never be lit". That reading was wrong about the intent.
+				 * The default stays unlit because it is right for most sprites — fire, explosions,
+				 * anything whose texel already IS the final colour — but a sprite standing in a scene
+				 * as an actor wants the same light as the geometry around it, and can now ask for it.
+				 * ⚠️ When unlit, the AutoIllumination COMPONENT must be created BEFORE enableUnlit():
+				 * the unlit path writes `fragmentColor().rgb * emissionMultiplier()` and that
+				 * multiplier only exists when the component does. Without it the sprite writes its raw
+				 * [0,1] colour and reads black under the photometric exposure. */
+				if ( !FastJSON::getValue< bool >(data, JKLit).value_or(false) )
+				{
+					materialResource.setAutoIlluminationComponent(1.0F);
+					materialResource.enableUnlit();
+				}
 
 				/* Check the blending mode. */
 				materialResource.enableBlendingFromJson(data);

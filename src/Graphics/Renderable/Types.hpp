@@ -48,6 +48,15 @@ namespace EmEn::Graphics::Renderable
 	static constexpr auto JKUniformScale{"UniformScale"};
 	static constexpr auto JKScale{"Scale"};
 	static constexpr auto JKCenterAtBottom{"CenterAtBottom"};
+	/**
+	 * @brief Opts a sprite INTO the lighting passes, so it receives light like ordinary geometry.
+	 * @note ⚠️ Default false, and the unlit default is NOT a design decision — it is a workaround from
+	 * an older engine where a sprite could not be lit at all, kept because it is genuinely right for
+	 * a sprite whose texel already IS the final colour (fire, explosions). A sprite standing in a
+	 * scene as an actor wants the light of the geometry around it, and asks for it with this key.
+	 * Everything else about the sprite is unchanged: frame animation, billboard, cutout, geometry.
+	 */
+	static constexpr auto JKLit{"Lit"};
 	static constexpr auto JKFlip{"Flip"};
 	static constexpr auto JKGridSize{"GridSize"};
 	static constexpr auto JKGridDivision{"GridDivision"};
