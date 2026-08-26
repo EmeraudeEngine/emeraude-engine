@@ -297,7 +297,10 @@ namespace EmEn::Graphics
 			 * @return Base::Math::Matrix< 4, float >
 			 */
 			[[nodiscard]]
-			static Base::Math::Matrix< 4, float > computeCascadeProjection (size_t cascadeIndex, const Base::Math::Vector< 3, float > & lightDirection, const std::array< Base::Math::Vector< 3, float >, 8 > & cascadeCorners) noexcept;
+			/* NOTE: No longer static — it reads the shadow map resolution from the view properties to
+			 * size a texel, which is what the snapping needs. */
+			[[nodiscard]]
+			Base::Math::Matrix< 4, float > computeCascadeProjection (size_t cascadeIndex, const Base::Math::Vector< 3, float > & lightDirection, const std::array< Base::Math::Vector< 3, float >, 8 > & cascadeCorners) const noexcept;
 
 			/*
 			 * UBO Layout (std140):

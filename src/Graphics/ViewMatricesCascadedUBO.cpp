@@ -413,9 +413,31 @@ namespace EmEn::Graphics
 	}
 
 	Matrix< 4, float >
-	ViewMatricesCascadedUBO::computeCascadeProjection (size_t /*cascadeIndex*/, const Vector< 3, float > & lightDirection, const std::array< Vector< 3, float >, 8 > & cascadeCorners) noexcept
+	ViewMatricesCascadedUBO::computeCascadeProjection (size_t /*cascadeIndex*/, const Vector< 3, float > & lightDirection, const std::array< Vector< 3, float >, 8 > & cascadeCorners) const noexcept
 	{
-		/* Step 1: Compute the center of the frustum slice (centroid of 8 corners). */
+		/* ⚠️⚠️ STABILITY IS THE POINT OF THIS FUNCTION, not tightness.
+		 * A cascade refit to the camera frustum every logic tick with a light-space AABB and no
+		 * snapping makes every shadow edge re-quantise on every tick: the edges crawl and shimmer
+		 * while the camera moves and freeze the instant it stops. Two independent causes, one fix:
+		 *   - an AABB of a rotating frustum slice is NOT rotation-invariant, so the world size of a
+		 *     texel changed as the camera merely turned;
+		 *   - nothing aligned the light-space origin to the texel grid, so the whole grid slid
+		 *     continuously under the geometry.
+		 * The remedy is the standard one: fit each slice with its BOUNDING SPHERE — whose radius is
+		 * invariant under camera rotation and constant for a fixed FOV and split — then round the
+		 * light-space centre down to a whole texel.
+		 * References (technique only, nothing integrated):
+		 *   - Michal Valient, "Stable Rendering of Cascaded Shadow Maps", ShaderX6 (2008) — the
+		 *     origin of the sphere fit plus texel snapping.
+		 *   - Microsoft, "Cascaded Shadow Maps" D3D sample —
+		 *     https://learn.microsoft.com/en-us/windows/win32/dxtecharts/cascaded-shadow-maps
+		 *     documents fit-to-scene vs fit-to-cascade and the same snapping trick.
+		 * Cost, stated honestly: a sphere wastes map area against a tight AABB — up to ~1 - 2/π per
+		 * axis in the worst case. It is bought back with cascadeScale, and an edge that holds still
+		 * is worth more than texels spent on an edge that crawls. */
+
+		/* Step 1: the slice centroid — computed here since the very first revision, and never used
+		 * until now, while a comment three lines below claimed the light camera was positioned. */
 		Vector< 3, float > frustumCenter{0.0F, 0.0F, 0.0F};
 
 		for ( const auto & corner : cascadeCorners )
@@ -425,55 +447,79 @@ namespace EmEn::Graphics
 
 		frustumCenter /= 8.0F;
 
-		/* Step 2: Build light view matrix centered on frustum. */
-		CartesianFrame< float > cascadeFrame;
-		cascadeFrame.setBackwardVector(-lightDirection);
-
-		/* Position light camera far enough behind to see the whole frustum. */
-		const auto lightView = cascadeFrame.getViewMatrix();
-
-		/* Step 3: Transform corners to light space and find AABB. */
-		float minX = std::numeric_limits< float >::max();
-		float maxX = std::numeric_limits< float >::lowest();
-		float minY = std::numeric_limits< float >::max();
-		float maxY = std::numeric_limits< float >::lowest();
-		float minZ = std::numeric_limits< float >::max();
-		float maxZ = std::numeric_limits< float >::lowest();
+		/* Step 2: the enclosing sphere. Its radius depends only on the slice geometry, so it does
+		 * not change when the camera turns — which is exactly what the AABB failed to guarantee. */
+		float radius = 0.0F;
 
 		for ( const auto & corner : cascadeCorners )
 		{
-			const auto lightSpaceCorner = lightView * Vector< 4, float >(corner.x(), corner.y(), corner.z(), 1.0F);
-
-			minX = std::min(minX, lightSpaceCorner.x());
-			maxX = std::max(maxX, lightSpaceCorner.x());
-			minY = std::min(minY, lightSpaceCorner.y());
-			maxY = std::max(maxY, lightSpaceCorner.y());
-			minZ = std::min(minZ, lightSpaceCorner.z());
-			maxZ = std::max(maxZ, lightSpaceCorner.z());
+			radius = std::max(radius, Vector< 3, float >::distance(corner, frustumCenter));
 		}
 
-		/* Step 4: Build tight orthographic projection from AABB.
-		 * Add margin for shadow casters behind the frustum. */
-		constexpr float zMargin = 100.0F;
+		/* Quantise the radius so floating-point wobble in the split maths cannot make the texel size
+		 * breathe from one tick to the next — a moving texel size defeats the snapping below. */
+		radius = std::ceil(radius * 16.0F) / 16.0F;
 
-		/* ⚠️⚠️ minZ / maxZ are view-space Z COORDINATES — negative in front of the light camera,
-		 * because the camera looks down -Z. orthographicProjection() wants positive DISTANCES:
-		 * its Vulkan mapping is z_ndc = (d - near) / (far - near) with d = -z_eye. Feeding it the
-		 * raw coordinates mixed the two conventions and put the whole cascade OUTSIDE [0,1]:
-		 * casters were clipped out of the map at render time, and at sampling time the
-		 * `projCoords.z >= 0 && <= 1` guard failed, leaving shadowFactor = 1.0. No shadow, ever —
-		 * measured on reflexion-debug, where the palm lost the shadow it has in classic mode.
-		 * The nearest point is the LARGEST coordinate, hence -maxZ for the near distance: sign AND
-		 * order are inverted. The near margin pulls the plane back TOWARDS the light so casters
-		 * standing between the light and the frustum slice still make it into the map; depthClamp
-		 * on the cast pass now backs that up rather than replacing it. */
-		const auto nearDistance = -maxZ - zMargin;
-		const auto farDistance = -minZ + zMargin;
+		if ( radius <= 0.0F )
+		{
+			return Matrix< 4, float >{};
+		}
 
+		/* Step 3: snap the centre to a whole texel, in the light's own frame.
+		 * The rotation-only frame is what defines the texel grid; snapping in it and only then
+		 * translating is what keeps the grid still while the camera moves. */
+		CartesianFrame< float > rotationFrame;
+		rotationFrame.setBackwardVector(-lightDirection);
+
+		const auto lightRotation = rotationFrame.getViewMatrix();
+
+		const auto resolution = m_logicState.bufferData[ViewWidthOffset];
+
+		if ( resolution > 0.0F )
+		{
+			const auto worldUnitsPerTexel = (2.0F * radius) / resolution;
+
+			const auto centerLightSpace = lightRotation * Vector< 4, float >(frustumCenter.x(), frustumCenter.y(), frustumCenter.z(), 1.0F);
+
+			const auto snappedLightSpace = Vector< 4, float >{
+				std::floor(centerLightSpace.x() / worldUnitsPerTexel) * worldUnitsPerTexel,
+				std::floor(centerLightSpace.y() / worldUnitsPerTexel) * worldUnitsPerTexel,
+				centerLightSpace.z(),
+				1.0F
+			};
+
+			const auto snappedWorld = lightRotation.inverse() * snappedLightSpace;
+
+			frustumCenter = Vector< 3, float >{snappedWorld.x(), snappedWorld.y(), snappedWorld.z()};
+		}
+		else
+		{
+			Tracer::error(ClassId, "The cascaded view has no resolution ! Texel snapping is disabled and the shadow edges WILL crawl.");
+		}
+
+		/* Step 4: anchor the light camera on the snapped centre, pushed back far enough that the
+		 * whole sphere sits in front of it, plus a margin for casters standing BETWEEN the light and
+		 * the slice. The margin is a fraction of the cascade rather than a fixed number of metres:
+		 * the previous hard-coded 100 m was roughly five times too large for cascade 0 and far too
+		 * small to mean anything for cascade 3, and it made the depth range breathe with the fit.
+		 * With margin = radius the depth range is exactly 3 * radius, a pure function of the split. */
+		const auto casterMargin = radius;
+
+		CartesianFrame< float > cascadeFrame;
+		cascadeFrame.setBackwardVector(-lightDirection);
+		cascadeFrame.setPosition(frustumCenter - lightDirection * (radius + casterMargin));
+
+		const auto lightView = cascadeFrame.getViewMatrix();
+
+		/* ⚠️ orthographicProjection() takes positive DISTANCES from the camera, not view-space Z
+		 * coordinates — mixing the two once put whole cascades outside [0,1], clipping every caster
+		 * out of the map and failing the sampling guard, so no shadow at all. Anchoring the camera
+		 * ourselves makes the range trivial and removes that trap entirely: the near plane is the
+		 * camera itself, the far plane is the far side of the sphere plus the margin. */
 		const auto lightProjection = Matrix< 4, float >::orthographicProjection(
-			minX, maxX,
-			minY, maxY,
-			nearDistance, farDistance
+			-radius, radius,
+			-radius, radius,
+			0.0F, (2.0F * radius) + casterMargin
 		);
 
 		return lightProjection * lightView;
