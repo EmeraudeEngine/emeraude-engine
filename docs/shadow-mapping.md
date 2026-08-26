@@ -216,9 +216,14 @@ configurable on purpose — the reasons live with the flag's contract in
 > Still missing, and what a polish pass owes: texel snapping (the camera-motion shimmer),
 > inter-cascade
 > blending, a per-cascade depth bias, `depthClamp` on the cast pass, and a single source of truth for
-> the light-space transform (today it is computed at three sites that must agree — see
-> `DirectionalLight::updateLightSpaceMatrix()`, `DirectionalLight::move()` and
-> `ViewMatrices2DUBO::updateOrthographicViewProperties()`).
+> the light-space transform. ⚠️ That last one is computed at **FOUR** sites, not three as this line
+> claimed until Aug 2026: `DirectionalLight::updateLightSpaceMatrix()`, `DirectionalLight::move()`,
+> `ViewMatrices2DUBO::updateOrthographicViewProperties()` **and `DirectionalLight::createOnHardware()`**,
+> which open-codes the same frame recipe a second time with a *different* coverage fallback
+> (`m_coverageSize > 0.0F ? m_coverageSize : getDistanceOrFar() * 0.5F`). Latent on top of that:
+> `updateLightSpaceMatrix()` hard-codes `-m_coverageSize, m_coverageSize` while
+> `ViewMatrices2DUBO` computes `halfSide = (far * 0.5F) * getAspectRatio()` — the two agree **iff the
+> map is square**, which every map is today. A non-square shadow map would silently misregister.
 >
 > `Toolkit::generateDirectionalLight` selects CSM purely by ARGUMENT COUNT — `(name, colour, lux,
 > 2048, 4, 0.5F)` is CSM, `(name, colour, lux, 2048, 140.0F)` is the classic map. The two are
@@ -269,6 +274,117 @@ no explicit bias and relies on the hardware comparison sampler); only the non-PC
 cubemap path apply `max(ShadowBias, 0.005)`. The shadow-map render pass itself uses
 `ProgramType::ShadowCasting` with `RenderPassType::SimplePass`, which leaves `depthBiasEnable` off
 unless the material's options ask for it.
+
+## Temporal coherence — where the two-state contract stops (Aug 2026)
+
+> [!CRITICAL]
+> **The two-state system freezes VALUES on the CPU. It does not freeze the GPU memory those values
+> are uploaded into, and the shadow path is the only place in the engine where that difference is
+> visible.** Investigated after a report of "shadow maps flicker, and only when the camera moves".
+
+### The asymmetry that explains "why only the shadows"
+
+The main pass carries its matrices in **push constants**, read from `m_renderState[readStateIndex]`
+and baked into the command buffer at record time (`RenderableInstance/Unique.cpp`). Once recorded,
+the GPU cannot see them change. The 2D view UBO deliberately holds no frame-varying value and says
+so in `ViewMatrices2DUBO.cpp`:
+
+```
+/* [CAUTION] NEVER write a frame-varying value in here. This uniform buffer object is
+ * SINGLE-buffered (one UBO, not framesInFlight() copies), so a value that changes every
+ * frame races the GPU: the raster of frame N can read what frame N±1 wrote. ... */
+```
+
+CSM **cannot** use push constants: multiview indexes the cascades by `gl_ViewIndex` from a UBO
+(`RenderableInstance/Abstract.cpp`, the `PerView` set is bound for a CSM target *because* of it). So
+the cascade matrices are read **at GPU execution time**, out of `ViewMatricesCascadedUBO`, whose
+first 256 bytes are `mat4[4] cascadeViewProjectionMatrices` — refit to the camera frustum on every
+logic tick. It is the same single-buffer upload path as the 2D UBO, minus the warning, carrying
+exactly what the warning forbids. Point-light cubemap shadows share the shape (6 views from a UBO).
+
+### The four defects, ranked (OPEN unless marked)
+
+| # | Defect | Status |
+|---|---|---|
+| A2 | The cascaded view UBO **and** the light UBO (`SharedUniformBuffer`) are single-instance and written by the render thread **before** the frame's in-flight fence is waited on. Write-after-read against up to `framesInFlight()-1` frames still executing. | **OPEN — CONFIRMED ON SCREEN** (flashlight halo cut by a straight chord) |
+| A1 | **CONFIRMED ON SCREEN.** Not CSM-only: EVERY light's sampling matrix is outside the contract. The CSM matrix exists **twice, on two different regimes**: the rasterising copy is published (`m_renderState[readStateIndex]`), the sampling copy (`DirectionalLight::m_CSMBuffer`) is not. `cascadeViewProjectionMatrix()` has **no `readStateIndex` overload** and serves `m_logicState`, unlike every other accessor in that class. **No light emitter has ever overridden `publishStateForRendering()`** — the contract covers entities and render targets only. | **OPEN** |
+| A3 | `m_renderStateIndex` was loaded **independently three times** inside one rendered frame (upload, `castShadows`, `prepareRender`). A frame straddling a publish rasterises the shadow map with tick N and the colour buffer with tick N+1. | **OPEN** (needs the per-frame latch) |
+| A4 | `m_CSMBuffer` is written by the logic thread and memcpy'd by the render thread with no lock, no atomic and no release/acquire edge on the dirty flag. | **OPEN** |
+| A5 | `Scene::updateCSMCascades()` tested a mutex-guarded container, released the lock, then walked `LightSet::directionalLights()` **unguarded**. | **FIXED** — `LightSet::forEachDirectionalLight()` |
+
+### ⚠️⚠️ CONFIRMED ON SCREEN: any light that MOVES desyncs, classic map included
+
+> **The acceptance test for this whole chapter:** in `global-illumination`, with the player's
+> flashlight on (key **F**), move violently. **The lit pool on a wall must stay ROUND.** When it is
+> cut by a straight chord — a crescent instead of a disc — the sampling matrix and the map disagree.
+> That straight edge IS the boundary of the stale light frustum. Reproduced and captured Aug 2026.
+
+The player's flashlight is a `Component::SpotLight` parented to the **head node**
+(`projet-alpha/src/Actor/Player.cpp`, a 512² map), so it moves *exactly as fast as the camera*,
+every logic tick. That makes it the fastest reproducer in the project — much faster than any sun.
+
+**Negative control, run Aug 2026 — the colour projection is EXONERATED.** `updateLightSpaceMatrix()`
+is called when `isShadowCastingEnabled() || hasColorProjectionTexture()`, and the flashlight has
+**both**, so the same stale matrix feeds two consumers: the shadow lookup and the projected cookie.
+Either could cut a beam with a straight edge. With `Core/Graphics/ShadowMapping/Enabled = false` and
+nothing else changed, the owner moved as fast as he could and **the halo stayed perfectly round** —
+while the cookie projection was still running on the same stale matrix. The cut is therefore the
+**shadow depth comparison**, not the projection. (⚠️ The control is not perfectly symmetric — the
+scene is brighter without shadows — but "round at maximum speed" is not a contrast effect.)
+
+The mechanism, end to end:
+
+| | Path | Thread | State |
+|---|---|---|---|
+| Rasterises the map | shadow render target's view matrices | render | **published**, `readStateIndex` |
+| Samples the map | `SpotLight::m_buffer[LightMatrixOffset]`, written by `updateLightSpaceMatrix()` from `move()` | written on **logic**, uploaded on **render** by `LightSet::updateVideoMemory()` | **live logic state, no index, no publish** |
+
+`onVideoMemoryUpdate()` does `UBO.writeElementData(...)` into a **single-instance** `SharedUniformBuffer`,
+before the frame's in-flight fence. So the two matrices come from **different logic ticks** the moment
+the light moves. Where the two frusta still overlap the depth comparison passes; past the divergence
+it fails and the region reads as shadowed. Hence a straight-edged bite out of a round beam, moving
+frame to frame — what reads to the eye as *"zone-wise z-fighting between a light and a dark version"*.
+
+⚠️ **The invariant is about the LIGHT, not the map type.** An earlier revision of this section said a
+classic map's image "cannot change when only the camera moves" and invited the conclusion that
+classic maps were exempt. That is true **only for a STATIC light** — and a head-mounted torch is the
+opposite of static. Restated correctly:
+
+- **Static light, static geometry, camera moves:** the map's *content* genuinely cannot change (light
+  frame anchored and rewritten only on light movement; the pass re-cleared and re-rendered
+  unconditionally every frame; ambient never reaches a shadow map — `Scene::refreshAmbientLightProperties`
+  walks views and textures only; every field of both UBO blocks constant). Look at the sampling side.
+- **Light that moves — a torch, a lamp on a vehicle, an animated sun, ANY CSM light (refit to the
+  camera every tick by construction):** the sampling matrix is outside the publish contract, so it
+  desyncs. This is A1 + A2, and it is the confirmed cause.
+
+**When the light is static and the artefact is still there, look at:**
+
+1. **The main-pass cull reading the LIVE logic state** — `populateRenderLists()` used the
+   no-argument `position()` / `frustum(0)` overloads, which serve `m_logicState`, while the logic
+   thread rewrote it every tick. A torn frustum culled entities in and out for single frames,
+   **only while the camera moved**. **FIXED** — both render lists now read `readStateIndex`.
+2. **The PCF kernel rotation is a screen-space hash** — `LightGenerator.ShadowMap.cpp`,
+   `fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453)`, in the 2D VogelDisk and
+   PoissonDisk paths and in the three cubemap paths. **No frame index or time is mixed in**, so the
+   field is *fixed in screen space*: surfaces slide **through** a stationary noise pattern, giving
+   **crawl/swim, not flicker** — and **TAA is structurally unable to attenuate it**, because
+   averaging a value that is constant in time returns that constant. `generateCSMShadowMapCode()`
+   does **not** use it. Engine default is PCF *off*; a machine that enables it opts into this.
+3. **The stochastic screen-space stack.** TAA, RT ContactShadows, RTAO, RTGI (animated noise), RT
+   Reflection, motion blur and DoF are all temporally-accumulated estimators that converge on a
+   parked camera and boil under motion. **ContactShadows is itself a shadow term** and is
+   indistinguishable by eye from shadow-map flicker. Eliminate this confound **first**, one effect
+   at a time, before blaming anything above.
+
+### Amplitude laws — how to tell the classes apart on screen
+
+- **Class B (unsnapped cascade fit):** amplitude = one shadow texel, ∝ 1/resolution, **independent
+  of camera speed**, deterministic in camera pose. Halve the resolution and the staircase doubles.
+- **Class A (state desync):** amplitude = camera displacement per logic tick, ∝ camera speed,
+  **independent of resolution**, non-deterministic frame to frame.
+- **The PCF hash:** fixed in screen space; freezes the instant the camera parks, crawls the instant
+  it moves, and survives TAA.
 
 ## Per-Light Shadow Configuration
 

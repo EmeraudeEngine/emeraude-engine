@@ -786,8 +786,35 @@ the previous frame's data.
 | RT mesh metadata SSBOs | `SceneMetaData` | `m_currentFrameIndex` |
 | RT material data SSBOs | `SceneMetaData` | `m_currentFrameIndex` |
 | RT descriptor sets | `Renderer` | `m_currentFrameIndex` |
-| Light UBOs | `LightSet` | Dynamic offset |
 | Instance transforms SSBOs | `SceneInstanceTransforms` | `m_currentFrameIndex` |
+
+> [!CAUTION]
+> **NOT double-buffered, contrary to what this table claimed until Aug 2026 — and this is an OPEN
+> defect, not a design choice.** The row `| Light UBOs | LightSet | Dynamic offset |` was **false**.
+> `SharedUniformBuffer::getByteOffsetForElement()` returns
+> `(elementIndex % m_maxElementCountPerUBO) * m_blockAlignedSize`: the dynamic offset partitions the
+> buffer **per light**, never per frame, and the class has no frame dimension anywhere. That line
+> sat two lines above the rule it contradicted, and it is why the hole survived unnoticed.
+>
+> Still single-instance today, all written by the render thread **before** the frame's in-flight
+> fence is waited on (`Core.cpp` `updateVideoMemory()` runs before `Renderer::renderFrame()`, whose
+> first synchronisation is `inFlightFence()->wait()`):
+>
+> | Resource | Owner | Frame-varying content? |
+> |----------|-------|------------------------|
+> | Light UBOs | `Graphics::SharedUniformBuffer` (`LightSet`) | **YES for a CSM light** — `updateCascades()` refits the cascade matrices and raises the dirty flag on **every logic tick** |
+> | Cascaded view UBO | `ViewMatricesCascadedUBO` | **YES, entirely** — its first 256 bytes are `mat4[4] cascadeViewProjectionMatrices`, refit to the camera frustum every tick |
+> | 2D / 3D view UBOs | `ViewMatrices2DUBO`, `ViewMatrices3DUBO` | Mostly no — but `WorldPosition` and `VelocityVector` **are** frame-varying while the camera moves |
+>
+> ⚠️ `ViewMatrices2DUBO.cpp` carries the rule in its own words — *"NEVER write a frame-varying value
+> in here. This uniform buffer object is SINGLE-buffered … the raster of frame N can read what frame
+> N±1 wrote."* — written after a TAA-jitter incident. The cascaded UBO is a byte-for-byte copy of
+> that upload path **minus the warning**, and its whole payload is frame-varying.
+>
+> **Why the main image stays stable while shadows do not:** the main pass carries its matrices in
+> **push constants**, baked into the command buffer at record time, so the GPU cannot see them
+> change. CSM and cubemap shadows **cannot** — multiview indexes their matrices by `gl_ViewIndex`
+> from a UBO, read at execution time. That is the entire asymmetry.
 
 ### Rules When Adding New GPU Data
 
