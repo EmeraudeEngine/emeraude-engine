@@ -510,11 +510,11 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t)
+			 * @copydoc EmEn::Scenes::AbstractEntity::onPublishStateForRendering(uint32_t)
 			 * @note Publishes the current logic state coordinates to the specified render state buffer for thread-safe access by the rendering system.
 			 */
 			void
-			publishStateForRendering (uint32_t writeStateIndex) noexcept override
+			onPublishStateForRendering (uint32_t writeStateIndex) noexcept override
 			{
 				if constexpr ( IsDebug )
 				{

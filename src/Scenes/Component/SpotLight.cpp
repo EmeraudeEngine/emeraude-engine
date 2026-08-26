@@ -259,7 +259,7 @@ namespace EmEn::Scenes::Component
 			}
 		}
 
-		return this->updateVideoMemory();
+		return this->primeVideoMemory();
 	}
 
 	void
@@ -465,13 +465,13 @@ namespace EmEn::Scenes::Component
 		std::copy_n(matrix.data(), 16, m_buffer.data() + LightMatrixOffset);
 	}
 
-	bool
-	SpotLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
+	void
+	SpotLight::writeUniformBlock (float * destination) noexcept
 	{
 		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
 		m_buffer[ColorProjectionBoostOffset] = this->colorProjectionBoost();
 
-		return UBO.writeElementData(index, m_buffer.data());
+		std::copy_n(m_buffer.data(), m_buffer.size(), destination);
 	}
 
 	std::ostream &

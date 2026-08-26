@@ -96,18 +96,83 @@ namespace EmEn::Scenes::Component
 		m_sharedUniformBuffer.reset();
 	}
 
-	bool
-	AbstractLightEmitter::updateVideoMemory () noexcept
+	void
+	AbstractLightEmitter::publishStateForRendering (uint32_t writeStateIndex) noexcept
 	{
-		if ( this->isFlagEnabled(VideoMemoryUpdateRequested) )
+		if constexpr ( IsDebug )
 		{
-			this->disableFlag(VideoMemoryUpdateRequested);
+			if ( writeStateIndex >= m_publishedBlocks.size() )
+			{
+				Tracer::error(this->getComponentType(), "Index overflow !");
 
-			if ( m_sharedUniformBuffer == nullptr || !this->onVideoMemoryUpdate(*m_sharedUniformBuffer, m_sharedUBOIndex) )
+				return;
+			}
+		}
+
+		/* Nothing changed since this slot was last filled. */
+		if ( m_publishedGeneration[writeStateIndex] == m_logicGeneration )
+		{
+			return;
+		}
+
+		this->writeUniformBlock(m_publishedBlocks[writeStateIndex].data());
+
+		m_publishedGeneration[writeStateIndex] = m_logicGeneration;
+	}
+
+	bool
+	AbstractLightEmitter::primeVideoMemory () noexcept
+	{
+		for ( uint32_t slot = 0; slot < m_publishedBlocks.size(); ++slot )
+		{
+			this->publishStateForRendering(slot);
+		}
+
+		/* EVERY frame region must hold valid bytes from the first frame on, not just the one the
+		 * next frame happens to use. */
+		for ( uint32_t region = 0; region < MaxFrameRegionCount; ++region )
+		{
+			if ( !this->updateVideoMemory(0, region) )
 			{
 				return false;
 			}
 		}
+
+		return true;
+	}
+
+	bool
+	AbstractLightEmitter::updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) noexcept
+	{
+		if ( readStateIndex >= m_publishedBlocks.size() || frameIndex >= MaxFrameRegionCount )
+		{
+			Tracer::error(this->getComponentType(), "Index overflow !");
+
+			return false;
+		}
+
+		/* ⚠️ Set BEFORE the early returns: every bind of this frame reads it, whether or not this
+		 * light needed an upload. Leaving it stale would point the dynamic offset at another
+		 * frame's region — the very memory this partitioning exists to stop sharing. */
+		m_currentFrameRegion = frameIndex;
+
+		if ( m_sharedUniformBuffer == nullptr )
+		{
+			return true;
+		}
+
+		/* This region already holds exactly this generation. */
+		if ( m_uploadedGeneration[frameIndex] == m_publishedGeneration[readStateIndex] )
+		{
+			return true;
+		}
+
+		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, frameIndex, m_publishedBlocks[readStateIndex].data()) )
+		{
+			return false;
+		}
+
+		m_uploadedGeneration[frameIndex] = m_publishedGeneration[readStateIndex];
 
 		return true;
 	}
@@ -119,7 +184,7 @@ namespace EmEn::Scenes::Component
 
 		if ( state )
 		{
-			this->enableFlag(VideoMemoryUpdateRequested);
+			++m_logicGeneration;
 		}
 	}
 
@@ -134,7 +199,8 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->enableFlag(Enabled);
-		this->enableFlag(VideoMemoryUpdateRequested);
+
+		++m_logicGeneration;
 
 		return true;
 	}
@@ -184,7 +250,7 @@ namespace EmEn::Scenes::Component
 		 * soon as a scene held more lights of one type than a single 64 KiB bank can carry, pushing
 		 * the dynamic offset past the end of the buffer (VUID-vkCmdBindDescriptorSets-pDynamicOffsets)
 		 * or, worse, silently onto another light's block. */
-		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex));
+		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex, m_currentFrameRegion));
 	}
 
 	const Vulkan::DescriptorSet *
@@ -203,7 +269,9 @@ namespace EmEn::Scenes::Component
 	{
 		if ( this->isEnabled() )
 		{
-			this->enableFlag(VideoMemoryUpdateRequested);
+			/* ⚠️ A generation, not a flag — see m_logicGeneration. Overflow is a non-issue: the
+			 * comparison is for EQUALITY, so a wrap only ever costs one redundant re-publish. */
+			++m_logicGeneration;
 		}
 	}
 
@@ -226,7 +294,7 @@ namespace EmEn::Scenes::Component
 			}
 		}
 
-		this->enableFlag(VideoMemoryUpdateRequested);
+		++m_logicGeneration;
 	}
 
 	void

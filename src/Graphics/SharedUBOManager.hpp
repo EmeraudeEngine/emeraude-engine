@@ -85,7 +85,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount = 0, uint32_t frameCount = 1) noexcept;
 
 			/**
 			 * @brief Creates a shared dynamic buffer uniform.
@@ -96,7 +96,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0, uint32_t frameCount = 1) noexcept;
 
 			/**
 			 * @brief Returns the named shared buffer uniform, creating it if it does not exist yet.

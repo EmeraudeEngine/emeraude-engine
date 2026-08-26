@@ -67,7 +67,7 @@ namespace EmEn::Graphics
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of elements to hold in one UBO. Default, compute the maximum according to structure size and UBO properties. Default is the max limit.
 			 */
-			SharedUniformBuffer (const std::shared_ptr< Vulkan::Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			SharedUniformBuffer (const std::shared_ptr< Vulkan::Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount = 0, uint32_t frameCount = 1) noexcept;
 
 			/**
 			 * @brief Constructs a shared uniform buffer with a unique descriptor set.
@@ -79,7 +79,7 @@ namespace EmEn::Graphics
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of elements to hold in one UBO. Default, compute the maximum according to structure size and UBO properties. Default is the max limit.
 			 */
-			SharedUniformBuffer (const std::shared_ptr< Vulkan::Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			SharedUniformBuffer (const std::shared_ptr< Vulkan::Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0, uint32_t frameCount = 1) noexcept;
 
 			/**
 			 * @brief Returns whether the shared uniform buffer is usable.
@@ -158,7 +158,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool writeElementData (uint32_t index, const void * data) noexcept;
+			bool writeElementData (uint32_t index, uint32_t frameIndex, const void * data) noexcept;
 
 			/**
 			 * @brief Returns the element aligned size in the UBO.
@@ -180,12 +180,19 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			VkDeviceSize
-			getByteOffsetForElement (uint32_t elementIndex) const noexcept
+			getByteOffsetForElement (uint32_t elementIndex, uint32_t frameIndex = 0) const noexcept
 			{
 				/* NOTE: When multiple UBOs exist, convert global index to local index within that UBO.
-				 * Example: With maxElementCountPerUBO=256, element 300 is at local index 44 in UBO #1. */
+				 * Example: With maxElementCountPerUBO=256, element 300 is at local index 44 in UBO #1.
+				 * ⚠️ The FRAME dimension lives INSIDE this offset, deliberately. Every light of a
+				 * scene shares ONE descriptor set and only the dynamic offset tells them apart, so
+				 * giving each frame-in-flight its own descriptor set instead would re-open the
+				 * defect recorded at RenderableInstance/Abstract.cpp — a redundancy check blind to
+				 * the offset made a single light light the whole scene. Folded in here, the existing
+				 * offset comparison keeps working untouched. */
 				const auto localIndex = elementIndex % m_maxElementCountPerUBO;
-				return static_cast< VkDeviceSize >(localIndex) * m_blockAlignedSize;
+
+				return static_cast< VkDeviceSize >(frameIndex) * m_frameStride + static_cast< VkDeviceSize >(localIndex) * m_blockAlignedSize;
 			}
 
 			/**
@@ -240,6 +247,14 @@ namespace EmEn::Graphics
 			uint32_t m_uniformBlockSize;
 			uint32_t m_maxElementCountPerUBO{0};
 			uint32_t m_blockAlignedSize{0};
+			/**
+			 * @brief Number of frame-in-flight regions each bank is split into.
+			 * @note 1 means "not frame-partitioned", which is what every non-light user wants: their
+			 * content does not change while the GPU reads it.
+			 */
+			uint32_t m_frameCount{1};
+			/** @brief Byte distance between two frame regions of the same bank. */
+			uint32_t m_frameStride{0};
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::vector< const void * > m_elements;

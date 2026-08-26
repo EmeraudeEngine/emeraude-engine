@@ -1585,7 +1585,9 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, m_materialProperties.data()) )
+		/* NOTE: Frame region 0 — a material UBO is not frame-partitioned; its content does not
+		 * change while the GPU reads it. */
+		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, 0, m_materialProperties.data()) )
 		{
 			return false;
 		}
@@ -2452,7 +2454,7 @@ namespace EmEn::Graphics::Material
 		 * binds this today (a material owns its own descriptor set, written from
 		 * getDescriptorInfoForElement(), which already applies the modulo), but the formula was the
 		 * broken one and would have failed silently the day a dynamic bind started using it. */
-		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex));
+		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex, 0));
 	}
 
 	const DescriptorSet *

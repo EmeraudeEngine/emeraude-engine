@@ -889,7 +889,21 @@ namespace EmEn::Scenes
 			 * @note This implements the double-buffering mechanism for thread-safe rendering.
 			 * @see getWorldCoordinatesStateForRendering()
 			 */
-			virtual void publishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
+			void
+			publishStateForRendering (uint32_t writeStateIndex) noexcept
+			{
+				this->onPublishStateForRendering(writeStateIndex);
+
+				/* ⚠️ Components publish too. This dispatch is NOT optional: a light emitter rebuilds
+				 * its uniform block (light-space matrix included) on the logic thread on every
+				 * move(), and without this the render thread read it live while the shadow map was
+				 * rasterised from the published state — one tick apart. This method is non-virtual
+				 * and the per-class part moved to onPublishStateForRendering() precisely so that no
+				 * entity can override it and silently drop the component half again. */
+				this->forEachComponent([writeStateIndex] (Component::Abstract & component) {
+					component.publishStateForRendering(writeStateIndex);
+				});
+			}
 
 			/**
 			 * @brief Returns the world coordinates of the entity for rendering (read from stable buffer).
@@ -907,6 +921,15 @@ namespace EmEn::Scenes
 			virtual const Base::Math::CartesianFrame< float > & getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept = 0;
 
 		protected:
+
+			/**
+			 * @brief Publishes the entity's own coordinates into a render state slot.
+			 * @note The per-class half of publishStateForRendering(), which is non-virtual so the
+			 * component dispatch can never be dropped by an override.
+			 * @param writeStateIndex The render state-free index to write to.
+			 * @return void
+			 */
+			virtual void onPublishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
 
 			/* Friend declarations */
 			template< typename component_t >

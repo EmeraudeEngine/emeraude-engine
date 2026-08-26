@@ -789,7 +789,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Node::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	Node::onPublishStateForRendering (uint32_t writeStateIndex) noexcept
 	{
 		if constexpr ( IsDebug )
 		{

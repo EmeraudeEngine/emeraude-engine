@@ -406,6 +406,26 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			virtual bool shouldBeRemoved () const noexcept = 0;
 
+			/**
+			 * @brief Publishes the component's logic state into a render state slot (double-buffering).
+			 * @note ⚠️ A COMPONENT CAN CARRY RENDER STATE. This hook exists because light emitters
+			 * did — their light-space matrix and their whole uniform block are rebuilt on the logic
+			 * thread on every move() — and nothing was publishing it: the two-state contract covered
+			 * entities and render targets only, so the render thread read a light's matrix live while
+			 * the shadow map it addresses had been rasterised from the PUBLISHED state. One tick
+			 * apart, and a moving light's shadow lands beside its caster.
+			 * Dispatched by AbstractEntity::publishStateForRendering(), on the logic thread, inside
+			 * Scene::publishStateForRendering(). The default does nothing.
+			 * @param writeStateIndex The render state-free index to write to.
+			 * @return void
+			 */
+			virtual
+			void
+			publishStateForRendering (uint32_t /*writeStateIndex*/) noexcept
+			{
+
+			}
+
 		protected:
 
 			/**

@@ -521,11 +521,13 @@ namespace EmEn::Scenes
 			void removeAllLights () noexcept;
 
 			/**
-			 * @brief Updates all light UBO.
+			 * @brief Uploads every light's PUBLISHED uniform block to the GPU.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @param frameIndex The frame-in-flight region to write.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateVideoMemory () const noexcept;
+			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept;
 
 			/**
 			 * @brief Returns the RT light SSBO for binding in descriptor sets.

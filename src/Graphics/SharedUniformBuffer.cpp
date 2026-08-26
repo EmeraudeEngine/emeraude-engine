@@ -26,6 +26,8 @@
 
 #include "SharedUniformBuffer.hpp"
 
+#include <algorithm>
+
 /* STL inclusions. */
 #include <mutex>
 #include <ranges>
@@ -42,10 +44,12 @@ namespace EmEn::Graphics
 	using namespace Base;
 	using namespace Vulkan;
 
-	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 		: m_device{device},
 		m_uniformBlockSize{uniformBlockSize}
 	{
+		m_frameCount = std::max(1U, frameCount);
+
 		const auto bufferCount = this->computeBlockAlignment(maxElementCount);
 
 		for ( uint32_t index = 0; index < bufferCount; index++ )
@@ -57,10 +61,12 @@ namespace EmEn::Graphics
 		}
 	}
 
-	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 		: m_device(device),
 		m_uniformBlockSize(uniformBlockSize)
 	{
+		m_frameCount = std::max(1U, frameCount);
+
 		const auto bufferCount = this->computeBlockAlignment(maxElementCount);
 
 		for ( uint32_t index = 0; index < bufferCount; index++ )
@@ -81,7 +87,14 @@ namespace EmEn::Graphics
 		const auto minUBOAlignment = limits.minUniformBufferOffsetAlignment;
 
 		m_blockAlignedSize = static_cast< uint32_t >(minUBOAlignment) * Math::alignCount(m_uniformBlockSize, static_cast< uint32_t >(minUBOAlignment));
-		m_maxElementCountPerUBO = maxUBOSize / m_blockAlignedSize;
+
+		/* ⚠️ Each bank is split into m_frameCount regions, so a frame-in-flight never writes the
+		 * bytes another one is still reading. The capacity per bank drops by the same factor; past
+		 * it the class allocates another bank on its own, so this costs elements, never correctness.
+		 * m_frameStride stays a multiple of m_blockAlignedSize (itself a multiple of
+		 * minUniformBufferOffsetAlignment), so the resulting dynamic offset remains legally aligned. */
+		m_maxElementCountPerUBO = (maxUBOSize / m_frameCount) / m_blockAlignedSize;
+		m_frameStride = m_maxElementCountPerUBO * m_blockAlignedSize;
 
 		/*TraceInfo{ClassId} <<
 			"Shared uniform buffer data :" "\n"
@@ -211,7 +224,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	SharedUniformBuffer::writeElementData (uint32_t index, const void * data) noexcept
+	SharedUniformBuffer::writeElementData (uint32_t index, uint32_t frameIndex, const void * data) noexcept
 	{
 		const auto bufferIndex = this->bufferIndex(index);
 
@@ -225,7 +238,7 @@ namespace EmEn::Graphics
 		/* NOTE: Use LOCAL offset within the specific UBO, not global offset.
 		 * Example: Element 300 with maxElementCountPerUBO=256 is at local index 44 in UBO #1.
 		 * The byte offset is 44 * blockAlignedSize, not 300 * blockAlignedSize! */
-		const auto byteOffset = static_cast< uint32_t >(this->getByteOffsetForElement(index));
+		const auto byteOffset = static_cast< uint32_t >(this->getByteOffsetForElement(index, frameIndex));
 
 		return m_uniformBufferObjects.at(bufferIndex)->writeData({data, m_uniformBlockSize, byteOffset});
 	}

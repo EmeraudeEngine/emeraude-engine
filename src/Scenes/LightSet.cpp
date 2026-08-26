@@ -115,6 +115,23 @@ namespace EmEn::Scenes
 		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
+		/* ⚠️⚠️ A LIGHT UBO IS FRAME-VARYING BY NATURE and must therefore carry one region per
+		 * frame-in-flight: a light that moves rebuilds its whole block — light-space matrix
+		 * included — on every logic tick, and the host was overwriting the bytes that up to
+		 * framesInFlight() - 1 submitted frames were still reading. On screen that is a straight
+		 * chord bitten out of a spot's lit pool, moving frame to frame, and it SURVIVES publishing
+		 * the block correctly, because the race is on the GPU side of the contract.
+		 * ⚠️ framesInFlight() is the swap-chain image count and is ZERO until
+		 * Renderer::createRenderingSystem() has run. It has, by the time a scene initialises its
+		 * light set — but the guard stays, because a zero here would silently produce a
+		 * single-region buffer and put the defect straight back. */
+		const auto frameCount = std::max(1U, renderer.framesInFlight());
+
+		if ( renderer.framesInFlight() == 0 )
+		{
+			Tracer::error(ClassId, "The renderer reports ZERO frames in flight while initializing the light set ! Light UBOs fall back to a single region — the frame race is NOT closed.");
+		}
+
 		/* Generate directional light shared uniform buffer.
 		 * NOTE: Always allocate with maximum layout (shadow=true, colorProjection=true) to ensure
 		 * the UBO size matches DirectionalLight::m_buffer which always includes all fields.
@@ -129,7 +146,7 @@ namespace EmEn::Scenes
 			const auto uniformBlockCSM = LightGenerator::getUniformBlockCSM(0, 0);
 			const auto elementSize = std::max(uniformBlock.bytes(), uniformBlockCSM.bytes());
 
-			m_directionalLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, elementSize);
+			m_directionalLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, elementSize, 0, frameCount);
 
 			if ( m_directionalLightUBO == nullptr )
 			{
@@ -156,7 +173,7 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, true, true);
 
-			m_pointLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes());
+			m_pointLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes(), 0, frameCount);
 
 			if ( m_pointLightUBO == nullptr )
 			{
@@ -183,7 +200,7 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, true, true);
 
-			m_spotLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes());
+			m_spotLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes(), 0, frameCount);
 
 			if ( m_spotLightUBO == nullptr )
 			{
@@ -472,7 +489,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	LightSet::updateVideoMemory () const noexcept
+	LightSet::updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -485,7 +502,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & light : m_directionalLights )
 		{
-			if ( !light->updateVideoMemory() )
+			if ( !light->updateVideoMemory(readStateIndex, frameIndex) )
 			{
 				errors++;
 			}
@@ -493,7 +510,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & light : m_pointLights )
 		{
-			if ( !light->updateVideoMemory() )
+			if ( !light->updateVideoMemory(readStateIndex, frameIndex) )
 			{
 				errors++;
 			}
@@ -501,7 +518,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & light : m_spotLights )
 		{
-			if ( !light->updateVideoMemory() )
+			if ( !light->updateVideoMemory(readStateIndex, frameIndex) )
 			{
 				errors++;
 			}

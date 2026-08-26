@@ -277,9 +277,8 @@ namespace EmEn::Scenes::Component
 				return false;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
-			[[nodiscard]]
-			bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override;
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::writeUniformBlock(float *) */
+			void writeUniformBlock (float * destination) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
 			void onColorChange (const Base::PixelFactory::Color< float > & color) noexcept override;

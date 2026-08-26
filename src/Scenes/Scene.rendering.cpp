@@ -358,7 +358,7 @@ namespace EmEn::Scenes
 			}
 		});
 
-		if ( !m_lightSet.updateVideoMemory() )
+		if ( !m_lightSet.updateVideoMemory(readStateIndex, m_AVConsoleManager.graphicsRenderer().currentFrameIndex()) )
 		{
 			Tracer::error(ClassId, "Unable to update the light set data to the video memory !");
 		}

@@ -54,6 +54,7 @@ namespace EmEn::Graphics
 			return sharedUniformBufferIt->second;
 		}
 
+		/* NOTE: One region — a material's block does not change while the GPU reads it. */
 		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, uniformBlockSize, maxElementCount);
 
 		if ( !sharedUniformBuffer->usable() )
@@ -67,7 +68,7 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< SharedUniformBuffer >
-	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
@@ -91,7 +92,7 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< SharedUniformBuffer >
-	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
@@ -102,7 +103,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, m_renderer, descriptorSetCreator, uniformBlockSize, maxElementCount);
+		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, m_renderer, descriptorSetCreator, uniformBlockSize, maxElementCount, frameCount);
 
 		if ( !sharedUniformBuffer->usable() )
 		{

@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <string>
 
@@ -228,10 +229,45 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Updates the UBO with the light data.
+			 * @brief Uploads the PUBLISHED uniform block to the shared UBO.
+			 * @note ⚠️ Reads the render state slot, never the logic-side block. Before Aug 2026 this
+			 * uploaded the live logic block straight from the render thread, so a light that moves
+			 * (a carried torch, a lamp on a vehicle, an animated sun, or any CSM light — refit to the
+			 * camera every tick by construction) had its SAMPLING matrix one tick ahead of the map it
+			 * addresses. On screen: a straight-edged bite out of a spot's lit pool, moving frame to
+			 * frame. See docs/shadow-mapping.md § Temporal coherence.
+			 * @param readStateIndex The render state-valid index to read data.
 			 * @return bool
 			 */
-			bool updateVideoMemory () noexcept;
+			/**
+			 * @brief Element count of the LARGEST light uniform block (the CSM one).
+			 * @note Keep in sync with DirectionalLight::CSM_BufferSize — LightSet sizes the shared
+			 * UBO on the same maximum.
+			 */
+			static constexpr auto MaxUniformBlockElementCount{84UL};
+
+			/**
+			 * @brief Upper bound on frame-in-flight regions a light UBO can be split into.
+			 * @note The real count is the swap-chain image count; this only sizes the per-region
+			 * bookkeeping.
+			 */
+			static constexpr auto MaxFrameRegionCount{8UL};
+
+			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) noexcept;
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering(uint32_t) */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
+
+			/**
+			 * @brief Fills EVERY render state slot and uploads one, at creation time.
+			 * @note ⚠️ Creation happens outside the publish/render cadence, so without this the
+			 * shared UBO would hold uninitialised bytes until the first logic tick published and the
+			 * first frame uploaded — a window the engine has already paid for once, as a CSM light
+			 * whose only upload ever performed was the one from createOnHardware() with an all-zero
+			 * buffer (black colour, zero intensity, null matrices).
+			 * @return bool
+			 */
+			bool primeVideoMemory () noexcept;
 
 			/**
 			 * @brief Enables the shadow casting.
@@ -628,13 +664,18 @@ namespace EmEn::Scenes::Component
 			virtual bool isOrthographicProjection () const noexcept = 0;
 
 			/**
-			 * @brief Event when the video memory is updating.
-			 * @param UBO A reference to the shared uniform buffer object.
-			 * @param index The light index in the shared uniform buffer object.
-			 * @return bool
+			 * @brief Writes this light's uniform block into a destination buffer.
+			 * @note ⚠️ Runs on the LOGIC thread, during publishStateForRendering() — it must not
+			 * touch anything the render thread owns. It replaced onVideoMemoryUpdate(), which wrote
+			 * straight into the GPU buffer from the render thread and was the reason a light's data
+			 * never went through the two-state contract.
+			 * @warning The destination holds MaxUniformBlockElementCount floats; the shared UBO's
+			 * block is sized on the LARGEST light layout, so a shorter block simply leaves the tail
+			 * untouched.
+			 * @param destination Where to write the block.
+			 * @return void
 			 */
-			[[nodiscard]]
-			virtual bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept = 0;
+			virtual void writeUniformBlock (float * destination) noexcept = 0;
 
 			/**
 			 * @brief Event when the color light changes.
@@ -652,13 +693,40 @@ namespace EmEn::Scenes::Component
 
 			/* Flag names */
 			static constexpr auto Enabled{UnusedFlag + 0UL};
-			static constexpr auto VideoMemoryUpdateRequested{UnusedFlag + 1UL};
+			/* NOTE: VideoMemoryUpdateRequested was retired in Aug 2026 — a single dirty flag cannot
+			 * drive N render state slots without leaving one of them stale. See m_logicGeneration. */
 			static constexpr auto ShadowMapEnabled{UnusedFlag + 2UL};
 
 			Base::PixelFactory::Color< float > m_color{DefaultColor};
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;
+			/** @brief Published copies of the uniform block, one per render state slot. */
+			std::array< std::array< float, MaxUniformBlockElementCount >, 2 > m_publishedBlocks{};
+			/** @brief Logic generation each published slot was filled from. */
+			std::array< uint32_t, 2 > m_publishedGeneration{};
+			/**
+			 * @brief Bumped by requestVideoMemoryUpdate() on the logic thread.
+			 * @note ⚠️ A GENERATION, not a boolean. A single dirty flag consumed by the first
+			 * publish would leave the OTHER slot holding the previous value for ever — the classic
+			 * 1-in-N staleness a naive double-buffering fix manufactures. Each slot compares against
+			 * this counter, so each one refreshes the first time it is published after a change.
+			 * Starts at 1 so slot generation 0 forces the initial fill.
+			 */
+			uint32_t m_logicGeneration{1};
+			/**
+			 * @brief Published generation last uploaded, PER frame-in-flight region.
+			 * @note ⚠️ Per region, not global: each region is a distinct piece of GPU memory and
+			 * needs its own copy of a change. One shared counter would upload the first region and
+			 * leave the others on the previous value.
+			 */
+			std::array< uint32_t, MaxFrameRegionCount > m_uploadedGeneration{};
+			/**
+			 * @brief Frame region this light's dynamic offset currently addresses.
+			 * @note Set by updateVideoMemory() at frame begin, so UBOOffset() cannot address a
+			 * region other than the one this frame actually wrote. Render thread only.
+			 */
+			uint32_t m_currentFrameRegion{0};
 			uint32_t m_sharedUBOIndex{0};
 			std::shared_ptr< Vulkan::TextureInterface > m_colorProjectionTexture;
 			uint32_t m_colorProjectionBindlessIndex{NoColorProjectionTexture};

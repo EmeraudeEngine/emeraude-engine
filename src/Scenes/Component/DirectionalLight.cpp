@@ -290,7 +290,7 @@ namespace EmEn::Scenes::Component
 			}
 		}
 
-		return this->updateVideoMemory();
+		return this->primeVideoMemory();
 	}
 
 	void
@@ -497,18 +497,20 @@ namespace EmEn::Scenes::Component
 		std::copy_n(matrix.data(), 16, m_buffer.data() + LightMatrixOffset);
 	}
 
-	bool
-	DirectionalLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
+	void
+	DirectionalLight::writeUniformBlock (float * destination) noexcept
 	{
 		if ( m_usesCSM )
 		{
-			return UBO.writeElementData(index, m_CSMBuffer.data());
+			std::copy_n(m_CSMBuffer.data(), m_CSMBuffer.size(), destination);
+
+			return;
 		}
 
 		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
 		m_buffer[ColorProjectionBoostOffset] = this->colorProjectionBoost();
 
-		return UBO.writeElementData(index, m_buffer.data());
+		std::copy_n(m_buffer.data(), m_buffer.size(), destination);
 	}
 
 	std::ostream &

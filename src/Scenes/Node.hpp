@@ -485,10 +485,10 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) noexcept
+			 * @copydoc EmEn::Scenes::AbstractEntity::onPublishStateForRendering(uint32_t) noexcept
 			 * @note Computes world coordinates and stores them in the render state array for double-buffering.
 			 */
-			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
+			void onPublishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
 			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const noexcept */
 			[[nodiscard]]
