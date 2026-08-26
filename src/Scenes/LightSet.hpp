@@ -35,6 +35,8 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <type_traits>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "ObservableTrait.hpp"
@@ -415,6 +417,32 @@ namespace EmEn::Scenes
 			directionalLights () const noexcept
 			{
 				return m_directionalLights;
+			}
+
+			/**
+			 * @brief Executes a function on every directional light, under the light-set mutex.
+			 * @note ⚠️ This is the ONLY safe way to walk the directional lights from a thread other
+			 * than the one calling add()/remove(). directionalLights() hands out a reference to a
+			 * std::set that LightSet::add()/remove() mutate under m_lightsAccess; iterating it
+			 * without the guard is an unsynchronised traversal of a container someone else's mutex
+			 * protects. Modelled on Scene::forEachRenderToShadowMap().
+			 * @warning The callback runs UNDER m_lightsAccess: it must not add or remove a light, and
+			 * must not call anything that would.
+			 * @tparam function_t Callable with signature: void(const std::shared_ptr< Component::DirectionalLight > &)
+			 * @param process Callback receiving each directional light.
+			 * @return void
+			 */
+			template< typename function_t >
+			void
+			forEachDirectionalLight (function_t && process) const noexcept
+				requires (std::is_invocable_v< function_t, const std::shared_ptr< Component::DirectionalLight > & >)
+			{
+				const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+				for ( const auto & light : m_directionalLights )
+				{
+					std::forward< function_t >(process)(light);
+				}
 			}
 
 			/**

@@ -100,6 +100,16 @@ namespace EmEn::Scenes
 			return true;
 		}
 
+		/* ⚠️⚠️ [LOCK ORDERING] This setup path calls light->createOnHardware(scene) further down, WHILE
+		 * HOLDING m_lightsAccess, and that reaches Scene::createRenderToShadowMap() /
+		 * createRenderToCascadedShadowMap(), which take m_renderToShadowMapAccess. The engine's lock
+		 * order is therefore established here as:
+		 *
+		 *     m_lightsAccess  →  m_renderToShadowMapAccess
+		 *
+		 * Never acquire them the other way round. It is written down because it is NOT obvious from
+		 * either call site, and because the logic thread already takes m_renderToShadowMapAccess every
+		 * tick (Scene::publishStateForRendering → forEachRenderToShadowMap). */
 		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
@@ -292,14 +302,20 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
-
-		m_lights.emplace(light);
-		m_directionalLights.emplace(light);
-
-		if ( m_mainDirectionalLight.expired() )
+		/* ⚠️ [LOCKING] The guard covers the container mutation and NOTHING else: the engine rule is
+		 * that no notification is ever emitted, and no hardware call ever made, while a mutex a
+		 * handler could take is held. Emitting under m_lightsAccess is inert only for as long as
+		 * nothing observes the light set — which is not a property anyone can rely on. */
 		{
-			m_mainDirectionalLight = light;
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+			m_lights.emplace(light);
+			m_directionalLights.emplace(light);
+
+			if ( m_mainDirectionalLight.expired() )
+			{
+				m_mainDirectionalLight = light;
+			}
 		}
 
 		this->notify(DirectionalLightAdded, light);
@@ -316,10 +332,13 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		/* ⚠️ [LOCKING] Container mutation only — see add(DirectionalLight). */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
-		m_lights.emplace(light);
-		m_pointLights.emplace(light);
+			m_lights.emplace(light);
+			m_pointLights.emplace(light);
+		}
 
 		this->notify(PointLightAdded, light);
 	}
@@ -335,10 +354,13 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		/* ⚠️ [LOCKING] Container mutation only — see add(DirectionalLight). */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
-		m_lights.emplace(light);
-		m_spotLights.emplace(light);
+			m_lights.emplace(light);
+			m_spotLights.emplace(light);
+		}
 
 		this->notify(SpotLightAdded, light);
 	}
@@ -346,10 +368,15 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		/* ⚠️ [LOCKING] destroyFromHardware() is a full Vulkan teardown; it ran UNDER m_lightsAccess,
+		 * which also serialised it against every other light operation in the engine. Both it and
+		 * the notification belong outside the guard — see the add() overloads above. */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
-		m_lights.erase(light);
-		m_directionalLights.erase(light);
+			m_lights.erase(light);
+			m_directionalLights.erase(light);
+		}
 
 		this->notify(DirectionalLightRemoved, light);
 
@@ -359,10 +386,13 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		/* ⚠️ [LOCKING] Container mutation only — see remove(DirectionalLight). */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
-		m_lights.erase(light);
-		m_pointLights.erase(light);
+			m_lights.erase(light);
+			m_pointLights.erase(light);
+		}
 
 		this->notify(PointLightRemoved, light);
 
@@ -372,10 +402,13 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		/* ⚠️ [LOCKING] Container mutation only — see remove(DirectionalLight). */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
-		m_lights.erase(light);
-		m_spotLights.erase(light);
+			m_lights.erase(light);
+			m_spotLights.erase(light);
+		}
 
 		this->notify(SpotLightRemoved, light);
 

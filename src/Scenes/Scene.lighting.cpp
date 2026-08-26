@@ -189,13 +189,13 @@ namespace EmEn::Scenes
 	void
 	Scene::updateCSMCascades (const std::shared_ptr< RenderTarget::Abstract > & mainRenderTarget) const noexcept
 	{
+		/* ⚠️ The guarded emptiness test that used to stand here was a check-then-act: the lock was
+		 * released before anything was done with what it protected, so it decided nothing it could
+		 * enforce. It is not replaced — an empty shadow-map list simply means every light below fails
+		 * its own usesCSM() / isShadowCastingEnabled() test, at no measurable cost. */
+		if ( mainRenderTarget == nullptr )
 		{
-			const std::scoped_lock lock{m_renderToShadowMapAccess};
-
-			if ( mainRenderTarget == nullptr || m_renderToShadowMaps.empty() )
-			{
-				return;
-			}
+			return;
 		}
 
 		/* Get frustum corners from the View's matrices (which come from the connected camera). */
@@ -207,14 +207,16 @@ namespace EmEn::Scenes
 		const float farPlane = viewMatrices.farPlane();
 
 		/* Update all CSM-enabled directional lights with the camera frustum.
-		 * NOTE: We iterate through lights because they know their direction. */
-		for ( const auto & light : m_lightSet.directionalLights() )
-		{
+		 * NOTE: We iterate through lights because they know their direction.
+		 * ⚠️ Through forEachDirectionalLight(), NOT directionalLights(): this runs on the LOGIC thread
+		 * every tick while LightSet::add()/remove() may mutate that std::set from another thread. The
+		 * raw accessor walked it with no guard at all. */
+		m_lightSet.forEachDirectionalLight([&frustumCorners, nearPlane, farPlane] (const auto & light) {
 			if ( light->usesCSM() && light->isShadowCastingEnabled() )
 			{
 				light->updateCascades(frustumCorners, nearPlane, farPlane);
 			}
-		}
+		});
 	}
 
 	void
