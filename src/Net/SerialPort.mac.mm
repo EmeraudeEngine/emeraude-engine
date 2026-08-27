@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <optional>
 
 /* POSIX inclusions (shared with Linux for I/O). */
 #include <fcntl.h>
@@ -36,10 +37,11 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 
-/* macOS IOKit for port enumeration. */
+/* macOS IOKit for port enumeration, and IOSSIOSPEED for the arbitrary baud rates. */
 #import <Foundation/Foundation.h>
 #import <IOKit/IOKitLib.h>
 #import <IOKit/serial/IOSerialKeys.h>
+#import <IOKit/serial/ioss.h>
 #import <IOKit/usb/IOUSBLib.h>
 
 namespace EmEn::Net
@@ -245,7 +247,17 @@ namespace EmEn::Net
 	 * Baud Rate Mapping (POSIX - shared with Linux)
 	 * ======================================================================= */
 
-	static speed_t
+	/**
+	 * @brief Converts a numeric baud rate to a POSIX termios speed constant.
+	 * @note ⚠️ Returns nothing for a rate termios has no constant for — 250000, the default of
+	 * Marlin-based 3D printers, is one of them, and macOS stops at B230400 where Linux carries
+	 * constants up to B4000000. Falling back to B9600 and reporting success made the port open
+	 * at the wrong speed with every reply unreadable and no diagnostic; such a rate goes through
+	 * the IOSSIOSPEED path below instead.
+	 * @param baudRate The baud rate value.
+	 * @return std::optional< speed_t >
+	 */
+	static std::optional< speed_t >
 	toBaudConstant (uint32_t baudRate) noexcept
 	{
 		switch ( baudRate )
@@ -262,16 +274,38 @@ namespace EmEn::Net
 			case 1800 : return B1800;
 			case 2400 : return B2400;
 			case 4800 : return B4800;
+			case 7200 : return B7200;
 			case 9600 : return B9600;
+			case 14400 : return B14400;
 			case 19200 : return B19200;
+			case 28800 : return B28800;
 			case 38400 : return B38400;
 			case 57600 : return B57600;
+			case 76800 : return B76800;
 			case 115200 : return B115200;
 			case 230400 : return B230400;
 
 			default :
-				return B9600;
+				return std::nullopt;
 		}
+	}
+
+	/**
+	 * @brief Applies an arbitrary baud rate the termios constants cannot express (macOS only).
+	 * @note The counterpart of Linux's TCSETS2 + BOTHER. ⚠️ MUST run AFTER tcsetattr(): that call
+	 * reprograms the line from the termios speed and would undo this one.
+	 * @warning Honoured by the driver, not by the kernel: a chip that cannot divide down to the
+	 * asked rate refuses here, which is the whole point — the caller learns it.
+	 * @param fd The open descriptor.
+	 * @param baudRate The wanted rate.
+	 * @return bool
+	 */
+	static bool
+	applyCustomBaudRate (int fd, uint32_t baudRate) noexcept
+	{
+		speed_t speed = baudRate;
+
+		return ::ioctl(fd, IOSSIOSPEED, &speed) != -1;
 	}
 
 	/* =========================================================================
@@ -302,9 +336,12 @@ namespace EmEn::Net
 			return false;
 		}
 
+		/* Set baud rate. A rate with no termios constant is applied after tcsetattr(), through
+		 * the IOSSIOSPEED path; the standard constant is used meanwhile. */
 		const auto baudConstant = toBaudConstant(config.baudRate);
-		cfsetispeed(&tty, baudConstant);
-		cfsetospeed(&tty, baudConstant);
+
+		cfsetispeed(&tty, baudConstant.value_or(B9600));
+		cfsetospeed(&tty, baudConstant.value_or(B9600));
 
 		tty.c_cflag &= ~CSIZE;
 
@@ -370,6 +407,14 @@ namespace EmEn::Net
 
 		if ( tcsetattr(m_fd, TCSANOW, &tty) != 0 )
 		{
+			this->close();
+
+			return false;
+		}
+
+		if ( !baudConstant.has_value() && !applyCustomBaudRate(m_fd, config.baudRate) )
+		{
+			/* The adapter cannot do that rate: say so instead of running at 9600 silently. */
 			this->close();
 
 			return false;

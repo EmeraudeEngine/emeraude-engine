@@ -139,6 +139,29 @@ namespace EmEn::Net
 		return setsockopt(sock, level, optionName, reinterpret_cast< const char * >(value), static_cast< socklen_t >(size)) == 0;
 	}
 
+	/* ⚠️ The value type of IP_MULTICAST_TTL and IP_MULTICAST_LOOP is NOT the same on the three
+	 * stacks, and the option is rejected outright when the length does not match what the stack
+	 * expects — a refused TTL silently leaves it at 1, which is a discovery that finds nothing
+	 * beyond the local link and reports no error whatsoever.
+	 *
+	 *  | Stack                     | Documented type | Reference                          |
+	 *  |---------------------------|-----------------|-----------------------------------|
+	 *  | macOS / BSD               | u_char (1 byte) | ip(4) — "u_char" for both options |
+	 *  | Linux                     | int (4 bytes)   | ip(7) — "int" for both options    |
+	 *  | Windows (WinSock)         | DWORD (4 bytes) | IPPROTO_IP socket options         |
+	 *
+	 * Measured on macOS 26 / arm64 (2026-08-28): that kernel happens to accept BOTH widths, as
+	 * does Linux. Do NOT take that as licence to send one type everywhere — the leniency is an
+	 * implementation detail of the current kernels, not a contract, and it is absent from the
+	 * documentation of every one of them. Each platform gets what its own manual specifies. */
+#if defined(_WIN32)
+	using MulticastOptionValue = DWORD;
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+	using MulticastOptionValue = unsigned char;
+#else
+	using MulticastOptionValue = int;
+#endif
+
 	static std::string
 	toDottedDecimal (const struct in_addr & address) noexcept
 	{
@@ -159,22 +182,72 @@ namespace EmEn::Net
 		return ( ntohl(address.s_addr) & 0xF0000000U ) == 0xE0000000U;
 	}
 
+	/* Length of one select() slice. Bounds how long close() waits for a parked receive() to
+	 * notice it, and nothing else: a datagram arriving mid-slice still returns immediately. */
+	static constexpr uint32_t PollSliceMs{50};
+
 	/* Returns true when the socket has data to read.
 	 * ⚠️ timeoutMs == 0 means NON-BLOCKING, as the header states: a zero timeval polls and
 	 * returns immediately. It used to return true without looking, so the following recvfrom()
-	 * on a blocking socket parked the calling thread forever with no way to wake it. */
+	 * on a blocking socket parked the calling thread forever with no way to wake it.
+	 * ⚠️ The wait is SLICED, and that is not an optimisation: shutdown() cannot wake a reader
+	 * on an unconnected datagram socket (ENOTCONN / WSAENOTCONN — Linux is the one stack
+	 * lenient enough to do it anyway), so close() signals through 'closing' and the reader has
+	 * to come up for air to see it. See the m_closing comment in the header. */
 	static bool
-	waitReadable (SocketType sock, uint32_t timeoutMs) noexcept
+	waitReadable (SocketType sock, uint32_t timeoutMs, const std::atomic_bool * closing) noexcept
 	{
-		fd_set readFds;
-		FD_ZERO(&readFds);
-		FD_SET(sock, &readFds);
+		/* ⚠️ The remaining time is recomputed from a DEADLINE, never by subtracting the nominal
+		 * slice. A select() slice returns after *at least* its timeout, never exactly it, so
+		 * counting slices accumulates the scheduling error: measured +13.8% on a 3 s wait, and the
+		 * shorter the slice the worse the ratio. The caller's timeout is a contract — the JS side
+		 * builds watchdogs and scan budgets on it — so it stays honest to within one slice. */
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeoutMs};
 
-		struct timeval tv{};
-		tv.tv_sec = static_cast< long >(timeoutMs / 1000);
-		tv.tv_usec = static_cast< long >((timeoutMs % 1000) * 1000);
+		while ( true )
+		{
+			if ( closing != nullptr && closing->load(std::memory_order_acquire) )
+			{
+				return false;
+			}
 
-		return select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv) > 0;
+			const auto now = std::chrono::steady_clock::now();
+			const auto remainingMs = now >= deadline
+				? int64_t{0}
+				: std::chrono::duration_cast< std::chrono::milliseconds >(deadline - now).count();
+
+			const auto sliceMs = static_cast< uint32_t >(std::min< int64_t >(remainingMs, PollSliceMs));
+
+			fd_set readFds;
+			FD_ZERO(&readFds);
+			FD_SET(sock, &readFds);
+
+			struct timeval tv{};
+			tv.tv_sec = static_cast< long >(sliceMs / 1000);
+			tv.tv_usec = static_cast< long >((sliceMs % 1000) * 1000);
+
+			const auto ready = select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv);
+
+			if ( ready > 0 )
+			{
+				return true;
+			}
+
+			/* An error will not sort itself out by waiting: report it as the single-shot
+			 * version did, rather than spinning until the timeout runs out.
+			 * ⚠️ EINTR lands here and truncates the wait — pre-existing behaviour, unchanged by
+			 * the slicing, and deliberately left alone rather than widened in this pass. */
+			if ( ready < 0 )
+			{
+				return false;
+			}
+
+			/* Covers timeoutMs == 0 too: the poll above was the single non-blocking look. */
+			if ( remainingMs == 0 )
+			{
+				return false;
+			}
+		}
 	}
 
 	/* ---- SSDP helpers (kept private to this TU) ---- */
@@ -275,6 +348,7 @@ namespace EmEn::Net
 
 	UDPClient::UDPClient (UDPClient && other) noexcept
 		: m_handleMutex(std::move(other.m_handleMutex)),
+		m_closing(std::move(other.m_closing)),
 		m_multicastMemberships(std::move(other.m_multicastMemberships)),
 #ifdef _WIN32
 		m_socket(std::exchange(other.m_socket, ~uintptr_t{0})),
@@ -296,6 +370,7 @@ namespace EmEn::Net
 			close();
 
 			m_handleMutex = std::move(other.m_handleMutex);
+			m_closing = std::move(other.m_closing);
 			m_multicastMemberships = std::move(other.m_multicastMemberships);
 			other.m_multicastMemberships.clear();
 
@@ -317,6 +392,24 @@ namespace EmEn::Net
 		if ( isOpen() )
 		{
 			return true;
+		}
+
+		/* A moved-from instance gave away its guards. Re-arm them rather than running the
+		 * socket unguarded, so that reusing such an instance is not a silent trap. */
+		if ( m_handleMutex == nullptr )
+		{
+			m_handleMutex = std::make_unique< std::shared_mutex >();
+		}
+
+		if ( m_closing == nullptr )
+		{
+			m_closing = std::make_unique< std::atomic_bool >(false);
+		}
+		else
+		{
+			/* Clear the flag left by a previous close(), or this socket would refuse to
+			 * wait for a single datagram. */
+			m_closing->store(false, std::memory_order_release);
 		}
 
 #ifdef _WIN32
@@ -410,6 +503,13 @@ namespace EmEn::Net
 	void
 	UDPClient::close () noexcept
 	{
+		/* A moved-from instance owns neither guard, and its destructor still runs this:
+		 * dereferencing the mutex below would be a null read. There is nothing to close. */
+		if ( m_handleMutex == nullptr )
+		{
+			return;
+		}
+
 		/* The kernel releases the memberships with the socket, and the next open() starts
 		 * from a clean slate: keeping them recorded would make join() a silent no-op on a
 		 * group this socket is no longer part of. */
@@ -417,8 +517,16 @@ namespace EmEn::Net
 
 		m_datagramInfoEnabled = false;
 
-		/* Phase 1 — shared lock: shutdown() wakes a thread parked in recvfrom()/select() on this
-		 * descriptor, while the handle is still valid. */
+		/* Raised BEFORE anything else: this, not the shutdown() below, is what returns a
+		 * parked receive() — see the m_closing comment in the header. */
+		if ( m_closing != nullptr )
+		{
+			m_closing->store(true, std::memory_order_release);
+		}
+
+		/* Phase 1 — shared lock: shutdown() also wakes a thread parked in recvfrom()/select()
+		 * on this descriptor, while the handle is still valid. Kept because it is immediate
+		 * where the stack honours it, and free where it does not. */
 		{
 			const std::shared_lock< std::shared_mutex > wakeLock{*m_handleMutex};
 
@@ -498,6 +606,11 @@ namespace EmEn::Net
 	int
 	UDPClient::send (const std::string & host, uint16_t port, const void * data, size_t length) noexcept
 	{
+		if ( m_handleMutex == nullptr )
+		{
+			return -1;
+		}
+
 		const std::shared_lock< std::shared_mutex > handleLock{*m_handleMutex};
 
 		if ( !isOpen() )
@@ -546,6 +659,11 @@ namespace EmEn::Net
 	int
 	UDPClient::receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs) noexcept
 	{
+		if ( m_handleMutex == nullptr )
+		{
+			return -1;
+		}
+
 		/* Shared lock for the WHOLE call: close() cannot invalidate the descriptor between
 		 * the readiness test and the recv. */
 		const std::shared_lock< std::shared_mutex > handleLock{*m_handleMutex};
@@ -562,9 +680,9 @@ namespace EmEn::Net
 #endif
 
 		/* Apply timeout using select(). */
-		if ( !waitReadable(sock, timeoutMs) )
+		if ( !waitReadable(sock, timeoutMs, m_closing.get()) )
 		{
-			return 0; /* Timeout or error. */
+			return 0; /* Timeout, close() from another thread, or error. */
 		}
 
 		struct sockaddr_in sender{};
@@ -674,6 +792,11 @@ namespace EmEn::Net
 	int
 	UDPClient::receive (void * buffer, size_t maxLength, DatagramInfo & info, uint32_t timeoutMs) noexcept
 	{
+		if ( m_handleMutex == nullptr )
+		{
+			return -1;
+		}
+
 		const std::shared_lock< std::shared_mutex > handleLock{*m_handleMutex};
 
 		if ( !isOpen() || !enableDatagramInfo() )
@@ -687,9 +810,9 @@ namespace EmEn::Net
 		const auto sock = m_fd;
 #endif
 
-		if ( !waitReadable(sock, timeoutMs) )
+		if ( !waitReadable(sock, timeoutMs, m_closing.get()) )
 		{
-			return 0; /* Timeout or error. */
+			return 0; /* Timeout, close() from another thread, or error. */
 		}
 
 		info = {};
@@ -933,12 +1056,12 @@ namespace EmEn::Net
 
 #ifdef _WIN32
 		const auto sock = static_cast< SocketType >(m_socket);
-		const DWORD value = ttl;
 #else
 		const auto sock = m_fd;
-		/* BSD-derived stacks expect a single byte here, not an int. */
-		const unsigned char value = ttl;
 #endif
+
+		/* Per-platform width — see the MulticastOptionValue comment above. */
+		const MulticastOptionValue value = ttl;
 
 		return setSocketOption(sock, IPPROTO_IP, IP_MULTICAST_TTL, &value, sizeof(value));
 	}
@@ -953,12 +1076,12 @@ namespace EmEn::Net
 
 #ifdef _WIN32
 		const auto sock = static_cast< SocketType >(m_socket);
-		const DWORD value = enable ? 1 : 0;
 #else
 		const auto sock = m_fd;
-		/* Same one-byte expectation as IP_MULTICAST_TTL. */
-		const unsigned char value = enable ? 1 : 0;
 #endif
+
+		/* Same per-platform width as IP_MULTICAST_TTL. */
+		const MulticastOptionValue value = enable ? 1 : 0;
 
 		return setSocketOption(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &value, sizeof(value));
 	}
@@ -1024,20 +1147,15 @@ namespace EmEn::Net
 		int reuse = 1;
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast< const char * >(&reuse), sizeof(reuse));
 
-		/* Set multicast TTL. */
-		/* ⚠️ BSD-derived stacks (macOS included) expect a single byte here, not an int —
-		 * setMulticastTTL() below says so and uses the right type. Passing an int makes the
-		 * option fail with EINVAL, the TTL stays 1, and discovery silently misses every device
-		 * one hop away. */
-#ifdef _WIN32
-		const DWORD ttl = 2;
-#else
-		const unsigned char ttl = 2;
-#endif
-		/* NOTE: this unit reports through return values only — it deliberately depends on nothing
+		/* Set multicast TTL, with the width the platform documents — see the
+		 * MulticastOptionValue comment at the top of this file. A rejected option leaves the
+		 * TTL at 1, and discovery then silently misses every device one hop away.
+		 * NOTE: this unit reports through return values only — it deliberately depends on nothing
 		 * but emeraude_export.hpp, so there is no tracer here. A refused TTL only costs the
 		 * one-hop-away devices. */
-		static_cast< void >(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, reinterpret_cast< const char * >(&ttl), sizeof(ttl)));
+		const MulticastOptionValue ttl = 2;
+
+		static_cast< void >(setSocketOption(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)));
 
 		/* Bind to any address (to receive unicast responses). */
 		struct sockaddr_in bindAddr{};

@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -123,6 +124,10 @@ namespace EmEn::Net
 			 * @brief Closes the socket.
 			 * @note Drops the recorded multicast memberships, mirroring the kernel which
 			 * releases them when the socket goes away.
+			 * @note Interrupts a receive() parked on another thread and waits for it to
+			 * return before invalidating the handle. The wait is bounded by one poll slice
+			 * (50 ms), NOT by the timeout that receive() was given.
+			 * @note Safe on a moved-from instance, where there is nothing left to close.
 			 * @return void
 			 */
 			void close () noexcept;
@@ -288,10 +293,20 @@ namespace EmEn::Net
 			/* ⚠️ Guards the socket handle for the whole duration of a syscall. Without it,
 			 * close() from another thread while receive() is in select()/recvfrom() lets the
 			 * kernel recycle the descriptor: the receiver then reads from an unrelated file.
-			 * Same two-phase close as TCPClient — shutdown() wakes the receiver, close()
+			 * Same two-phase close as TCPClient — the receiver is woken, then close()
 			 * invalidates the handle only once every in-flight call released the lock.
 			 * Held by pointer so the class stays movable. */
 			std::unique_ptr< std::shared_mutex > m_handleMutex{std::make_unique< std::shared_mutex >()};
+
+			/* ⚠️ What actually wakes a parked receive() — NOT shutdown(), unlike TCPClient.
+			 * A datagram socket is unconnected, and POSIX makes shutdown() fail with ENOTCONN
+			 * there (Winsock: WSAENOTCONN), waking nobody. Linux is the lenient outlier, which
+			 * is why this went unnoticed: measured on macOS 26, close() waited out the full
+			 * receive() timeout instead of returning, and since UDPModule binds close() as a
+			 * SYNCHRONOUS method, that stall lands on the renderer's main thread.
+			 * So receive() polls in slices and watches this flag rather than trusting the
+			 * kernel for the wake-up. Held by pointer, like the mutex, to stay movable. */
+			std::unique_ptr< std::atomic_bool > m_closing{std::make_unique< std::atomic_bool >(false)};
 
 			/* Joined multicast groups, as (group, interface) pairs in network byte order.
 			 * Held to make join/leave idempotent without having to read errno. */

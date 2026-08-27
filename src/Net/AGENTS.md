@@ -162,10 +162,65 @@ Console check of the whole chain: drop a store JSON with an `ExternalData` entry
 
 ## Cross-platform status — read before trusting anything here
 
-⚠️⚠️ **Everything in this directory is Linux-verified only.** The Windows and macOS legs compile and
-have **never been executed**, including — since 2026-08-27 — the resource downloading the engine now
-depends on. Two todo items carry the handover checklist, and they are meant to be run in one sitting
-on those machines:
+⚠️⚠️ **Windows has still never executed a single line of this directory.** macOS has, since
+**2026-08-28** — partially, and it cost three bugs (below). Assume nothing about Windows.
+
+| Leg | Linux | macOS | Windows |
+|---|---|---|---|
+| `UDPClient` multicast / mDNS round trip | ✅ 2026-08-26 | ✅ 2026-08-28 | ❌ never run |
+| `NetworkInterfaces` IPv4+IPv6+MAC | ✅ | ✅ 2026-08-28 (`AF_LINK`) | ❌ never run |
+| Trust store + hermetic & live TLS suites | ✅ | ✅ 2026-08-28 | ❌ never run |
+| `Net::Manager` downloader, `ExternalData` chain | ✅ | ❌ not yet | ❌ never run |
+| `SerialPort` against real hardware | ✅ | ❌ no adapter available | ❌ never run |
+
+### What macOS taught us (2026-08-28)
+
+Three bugs, all fixed in the same sitting. The first two are **not macOS quirks** — they were
+latent everywhere and only macOS made them visible:
+
+1. ⚠️⚠️ **`shutdown()` does not wake a reader on an unconnected datagram socket.** POSIX makes it
+   fail with `ENOTCONN`; **Linux is the lenient outlier** that wakes the reader anyway. Measured:
+   `close()` waited out the receive() timeout **in full** (10 s) instead of returning. Since
+   app_system binds `UDP.close()` as a *synchronous* WebModule method, that stall lands on the
+   renderer's main thread. `UDPClient` no longer trusts the kernel for the wake-up — `close()`
+   raises a flag and `receive()` polls in 50 ms slices (`PollSliceMs`). **Winsock returns
+   `WSAENOTCONN` in the same case, so Windows was almost certainly affected too** — the fix is
+   platform-neutral, but nobody has confirmed the symptom there.
+   `TCPClient` is *not* concerned (it shuts down a **connected** socket, which works everywhere),
+   and neither is `TCPServer` (Asio `acceptor->cancel()`). Verified on this machine: unconnected
+   UDP → not woken; connected UDP → woken in 203 ms; listening TCP → not woken.
+2. ⚠️ **A moved-from `UDPClient` crashed on destruction**, on every platform: the move handed away
+   `m_handleMutex`, and `close()` — unlike `TCPClient::close()` — dereferenced it with no null
+   check. Caught by AddressSanitizer. `close()`/`send()`/`receive()` now guard, and `open()`
+   re-arms the guards so a moved-from instance is reusable rather than a silent trap.
+3. ⚠️ **`SerialPort.mac.mm` ran at 9600 bauds without telling anyone.** `toBaudConstant()` fell
+   back to `B9600` in its `default:` branch and `open()` returned **true** — measured on a pty:
+   `open(250000)` → `true`, line at 9600. macOS stops at `B230400` where Linux carries constants
+   to `B4000000`, so **250000 (Marlin's default) hit that branch every time**. Now mirrors the
+   Linux `BOTHER` design with `ioctl(IOSSIOSPEED)` (`<IOKit/serial/ioss.h>`, applied **after**
+   `tcsetattr` or it is undone), and `open()` returns **false** when the adapter refuses the rate.
+   The macOS switch also gained `B7200`/`B14400`/`B28800`/`B76800`, which it simply lacked.
+
+Two findings that are **not** bugs but invalidate a written assumption:
+
+- The `IP_MULTICAST_TTL` byte-type story does **not** reproduce on macOS 26 / arm64: this kernel
+  accepts the `int` form as readily as the `unsigned char` one. "The TTL silently stayed at 1 and
+  devices one hop away went missing" is not an explanation that holds here — do not hunt that ghost.
+  Since that leniency is an undocumented implementation detail, the width is now taken from each
+  platform's own manual through **`MulticastOptionValue`** (top of `UDPClient.cpp`), applied to
+  `IP_MULTICAST_TTL` **and** `IP_MULTICAST_LOOP` in `setMulticastTTL()`, `setMulticastLoopback()`
+  and `ssdpDiscover()`: `unsigned char` on macOS/BSD (`ip(4)`), `int` on Linux (`ip(7)`), `DWORD`
+  on Windows. ⚠️ This **changed the Linux leg** from `unsigned char` to `int`, and Linux has not
+  been re-run since — very low risk (it is the documented type, and both widths measured as
+  accepted), but it is a change to a platform that was green.
+- `SerialPort.mac.mm` never claims the port: Linux does `ioctl(TIOCEXCL)` ("a second process
+  opening the same adapter mid-print is a corrupted stream nobody can diagnose"), macOS does not,
+  though the ioctl exists there. Left alone deliberately — exclusive open is a behaviour change,
+  not a bug fix.
+
+### The remaining handover
+
+Two todo items carry the checklist, and they are meant to be run in one sitting on those machines:
 
 - [`emeraude-base/docs/todo/tls-stack-windows-macos-validation.md`](../../dependencies/emeraude-base/docs/todo/tls-stack-windows-macos-validation.md)
   — the trust store per platform, the hermetic and live suites, the downloader from the console, the
@@ -191,6 +246,13 @@ on those machines:
 > g++ -std=c++20 -I<engine>/src my_check.cpp \
 >     <engine>/src/Net/UDPClient.cpp <engine>/src/Net/NetworkInterfaces.cpp -o my_check
 > ```
+>
+> **Do not write that harness from scratch — one is in the tree**:
+> [`tools/net-check/`](../../tools/net-check/README.md) builds on Linux, macOS and Windows and runs
+> 47 assertions over `UDPClient` + `NetworkInterfaces` (interfaces and MACs, multicast option width,
+> non-blocking receive, `close()` waking a parked reader, moved-from safety, a real mDNS round trip,
+> SSDP). `shutdown_semantics.cpp` next to it answers "does `shutdown()` wake a reader on this
+> kernel?" for the three socket shapes — that is the probe that found the 2026-08-28 bug.
 
 ## Hardware & Discovery Utilities
 
@@ -266,15 +328,31 @@ namespace EmEn::Net
 blocking `recvfrom` with no way out, parking the calling thread forever while the header promised the
 opposite (2026-08-27).
 
-⚠️ **`close()` is safe against a parked reader**, like `TCPClient`: a `shared_mutex` covers each
-syscall, `close()` does `shutdown()` under a shared lock to wake the reader, then takes the exclusive
-lock before invalidating the descriptor. Without it, a `close()` from another thread let the kernel
-recycle the fd under a `recvfrom` still in flight — the reader then read from an unrelated file.
+⚠️ **`close()` is safe against a parked reader**, but NOT the way `TCPClient` is. A `shared_mutex`
+covers each syscall and `close()` takes the exclusive lock before invalidating the descriptor —
+without it, a `close()` from another thread let the kernel recycle the fd under a `recvfrom` still in
+flight, and the reader then read from an unrelated file. What actually **returns** the reader is
+`m_closing`, an atomic flag `waitReadable()` checks between poll slices: `shutdown()` is called too,
+but it fails with `ENOTCONN` on an unconnected datagram socket everywhere except Linux, so it cannot
+be relied on. See § *What macOS taught us* above. Do not delete the flag as redundant.
+
+> [!WARNING]
+> **Known hole, pre-existing and NOT fixed (2026-08-28)**: the wake-up only covers a reader parked in
+> `select()`. A reader that cleared `select()` and is inside the blocking `recvfrom()`/`recvmsg()`
+> holds the shared lock and nothing returns it — `close()` then waits on its exclusive lock
+> indefinitely. Reachable: `SO_REUSEPORT` is always on and `UDP.receive()` is bound as an async
+> method, so two concurrent receives on one socket both see "readable", one takes the datagram and
+> the other blocks forever. The real fix is a non-blocking socket (`FIONBIO` / `O_NONBLOCK`) with
+> `EWOULDBLOCK` treated as "no data" — it was scoped out of the macOS pass rather than bundled into
+> it. Verified as a genuine mechanism, ruled pre-existing.
 
 ⚠️ **`ssdpDiscover()` refuses a search target holding a control character**: it is interpolated into
 the `M-SEARCH` request line, so a `\r\n` in it emitted an attacker-shaped datagram from the host. Its
-multicast TTL is set with the platform's byte type — as an `int` the option failed on BSD/macOS, the
-TTL stayed 1, and every device more than one hop away silently went missing.
+multicast TTL is set through `MulticastOptionValue`, the width each platform's own manual documents
+(`u_char` on macOS/BSD, `int` on Linux, `DWORD` on Windows) — a rejected option leaves the TTL at 1
+and discovery then misses every device more than one hop away. ⚠️ Note the earlier claim that an
+`int` is *refused* on BSD/macOS did **not** reproduce on macOS 26 (that kernel accepts both widths);
+the per-platform width is kept because the leniency is undocumented, not because it was observed.
 
 **Platform**: Cross-platform (BSD sockets on Linux/macOS, Winsock on Windows). No external dependencies.
 
@@ -628,7 +706,18 @@ and `canonical()` used to kill the application.
 Marlin-based 3D printers — has no `B250000`; it goes through `TCSETS2` + `BOTHER` (the kernel's
 `termios2`, whose layout is mirrored in the TU because `<asm/termbits.h>` collides with `<termios.h>`;
 the rebuilt ioctl numbers were checked against the kernel's). A rate the driver refuses now fails
-`open()` instead of running at 9600 with unreadable replies. The port is also claimed with `TIOCEXCL`.
+`open()` instead of running at 9600 with unreadable replies.
+
+**macOS got the same contract on 2026-08-28**, through `ioctl(IOSSIOSPEED)` (`<IOKit/serial/ioss.h>`,
+applied **after** `tcsetattr`, which would otherwise undo it) — it stops at `B230400` where Linux
+carries constants to `B4000000`, so 250000 used to hit the silent `B9600` fallback there. ⚠️ Never
+exercised against a real adapter: a pty refuses `IOSSIOSPEED` for every rate, so only the *failure*
+branch has run. **The Windows leg has not even been looked at** — do not assume it is correct; the
+other two both turned out to be silently wrong.
+
+⚠️ `TIOCEXCL` (claiming the port, so a second process cannot corrupt the stream mid-print) is
+**Linux-only** — `SerialPort.mac.mm` does not do it, though the ioctl exists on macOS. Deliberately
+left alone: exclusive open is a behaviour change, not a bug fix.
 
 **Platform details**:
 | Platform | Enumeration | I/O | Dependencies |
