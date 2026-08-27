@@ -68,9 +68,24 @@ The failure images name the defect, which is what turns a capture into a fix.
   drawn and under-exposed.
 - **The hue of a near-grey pixel is noise.** The iridescence grids report a 130° hue spread at a
   saturation of 0.03. Report the saturation.
-- **A control exonerates the instrument.** Before blaming a material, capture `MetalRoughSpheres`
-  in the same run: if its mirror-to-diffuse progression reads correctly, the IBL and the exposure
-  are not the cause.
+- **A control exonerates the instrument — and nothing else.** Before blaming a material, capture
+  `MetalRoughSpheres` in the same run: if its mirror-to-diffuse progression reads correctly, the
+  IBL and the exposure are not the cause. That is *all* it says. It carries a **single** material,
+  so two bench runs used it to close questions it cannot answer — per-material data reaching the
+  shader among them. Read what a control declares before letting it clear anything.
+- **A reference screenshot shot in a dark studio is not a criterion.** `EmissiveStrengthTest` looks
+  like a failure next to its reference — none of the cubes glows — purely because `+ModelViewer`
+  meters a daylight sky at sunny-sixteen. On the RATIOS between cubes it passes cleanly (2.21,
+  2.28, 1.97, 1.59 against a declared 1-2-4-8-16 doubling, the last compressed by the tone curve).
+  The same caveat applies to `SheenCloth`, `AnisotropyStrengthTest` and both iridescence grids,
+  which Khronos all shoot on black.
+- **Variation along a test's axis is not proof the axis works.** The anisotropy grid varies 14.3 %
+  down its anisotropy axis at roughness 0 and 2.8 % at roughness 1 — exactly what a sky gradient
+  over spheres at different heights produces, with no anisotropy at all. Measure the highlight
+  SHAPE (aspect ratio of the brightest pixels), not its level: reference 3.65 → 1.62 across the
+  axis, ours 3.29 → 2.67.
+- **The iridescence models are 3-D grids of spheres.** A dead-on `front` view collapses them into
+  overlapping rows and reads nothing. They need a three-quarter view, as their reference does.
 - **`AlphaBlendModeTest` declares itself conforming even when it is not.** Its on-model check
   marks turn green because the red "X" decal has zero alpha and is discarded. Never read the
   ticks — measure the alpha ramp.
