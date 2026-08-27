@@ -175,18 +175,6 @@ namespace EmEn::Resources
 			Base::Network::URL url () const noexcept;
 
 			/**
-			 * @brief Checks if the resource download is currently in progress.
-			 *
-			 * Returns true if this is an external data request with a positive download ticket,
-			 * indicating the download has been submitted to the network manager but not yet completed.
-			 *
-			 * @return True if download is active, false otherwise.
-			 * @version 0.8.40
-			 */
-			[[nodiscard]]
-			bool isDownloading () const noexcept;
-
-			/**
 			 * @brief Assigns a download manager ticket to this request.
 			 *
 			 * Updates the request's download ticket after successfully submitting it to the network

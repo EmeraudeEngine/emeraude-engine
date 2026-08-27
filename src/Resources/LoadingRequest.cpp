@@ -99,27 +99,6 @@ namespace EmEn::Resources
 		return Network::URL{m_baseInformation.data().asString()};
 	}
 
-	bool
-	LoadingRequest::isDownloading () const noexcept
-	{
-		if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
-		{
-			Tracer::error(ClassId, "This request is not external !");
-
-			return false;
-		}
-
-		/* NOTE: Check the networkManager ticket.
-		 * If it's still present, the download
-		 * is not yet finished. */
-		if ( m_downloadTicket >= 0 )
-		{
-			return false;
-		}
-
-		return true;
-	}
-
 	void
 	LoadingRequest::setDownloadTicket (int ticket) noexcept
 	{

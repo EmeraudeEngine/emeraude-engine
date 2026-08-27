@@ -274,6 +274,25 @@ Both new commands (2026-08-27) go through two `ContainerInterface` virtuals, `re
 and `resourceStatus(name)`, so the console never needs the container type — code keeps using the
 typed `getResource()`.
 
+### Loading queue — three rules the 2026-08-27 audit had to restore
+
+1. **`asyncLoad` means asynchronous, everywhere.** `checkLoadedResource()` passed `!asyncLoad` to
+   `pushInLoadingQueue()` while the two other call sites passed it unchanged, so
+   `getOrCreateResource()` (the async variant) loaded **synchronously** and
+   `getOrCreateResourceSync()` asynchronously. Fixed; never "compensate" a flag at one call site.
+2. **Never run a load — and never notify — under `m_resourcesAccess`.** The synchronous branch
+   called `loadingTask()` with the container mutex held, and `loadingTask()` emits
+   `LoadingProcessStarted` / `ResourceLoaded` / `LoadingProcessFinished`. An observer reacting to
+   `ResourceLoaded` by asking the same container for another resource (a Material fetching its
+   Texture) re-entered `getResource()` on a **non-recursive** mutex — undefined behaviour, and by
+   defect 1 that was the default path. The load is now carried by `Container::DeferredSyncLoad`,
+   declared **before** the `scoped_lock` in every public entry point: destruction order (reverse of
+   declaration) unlocks first, then loads.
+3. **An `ExternalData` resource cannot be loaded synchronously.** There is no synchronous download
+   path: the request used to reach `loadingTask()`'s "should be downloaded first" branch, which
+   only traced — the resource stayed non-terminal forever. It is now failed explicitly, with a
+   message telling the caller to ask asynchronously.
+
 ## Async Lambda Capture Safety (CRITICAL)
 
 > [!CRITICAL]

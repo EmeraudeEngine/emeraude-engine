@@ -413,6 +413,52 @@ namespace EmEn::Resources
 		public:
 
 			/**
+			 * @brief Runs a synchronous load AFTER the container mutex was released.
+			 * @details Declared **before** the scoped_lock in every public entry point, so
+			 * destruction order (reverse of declaration) unlocks first and loads second.
+			 * @note ⚠️ loadingTask() emits LoadingProcessStarted / ResourceLoaded /
+			 * LoadingProcessFinished. Emitting them under m_resourcesAccess — a non-recursive
+			 * mutex — meant that any observer reacting to ResourceLoaded by asking the same
+			 * container for another resource (a Material fetching its Texture) re-entered
+			 * getResource() and hit undefined behaviour. Never notify under that lock.
+			 */
+			class DeferredSyncLoad final
+			{
+				public:
+
+					explicit
+					DeferredSyncLoad (Container & container) noexcept
+						: m_container{container}
+					{
+
+					}
+
+					DeferredSyncLoad (const DeferredSyncLoad &) = delete;
+					DeferredSyncLoad (DeferredSyncLoad &&) = delete;
+					DeferredSyncLoad & operator= (const DeferredSyncLoad &) = delete;
+					DeferredSyncLoad & operator= (DeferredSyncLoad &&) = delete;
+
+					~DeferredSyncLoad ()
+					{
+						if ( m_request.has_value() )
+						{
+							m_container.loadingTask(*m_request);
+						}
+					}
+
+					void
+					set (LoadingRequest request) noexcept
+					{
+						m_request = std::move(request);
+					}
+
+				private:
+
+					Container & m_container;
+					std::optional< LoadingRequest > m_request;
+			};
+
+			/**
 			 * @enum NotificationCode
 			 * @brief Observable event codes for resource lifecycle notifications.
 			 *
@@ -923,6 +969,9 @@ namespace EmEn::Resources
 			bool
 			preloadResource (const std::string & resourceName, bool asyncLoad = true)
 			{
+				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
+				DeferredSyncLoad deferredSyncLoad{*this};
+
 				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				/* NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
@@ -944,7 +993,7 @@ namespace EmEn::Resources
 					return false;
 				}
 
-				return this->pushInLoadingQueue(resourceIt->second, asyncLoad) != nullptr;
+				return this->pushInLoadingQueue(resourceIt->second, asyncLoad, deferredSyncLoad) != nullptr;
 			}
 
 			/**
@@ -1030,6 +1079,9 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getResource (const std::string & resourceName, bool asyncLoad = true) noexcept
 			{
+				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
+				DeferredSyncLoad deferredSyncLoad{*this};
+
 				const std::scoped_lock scopeLock{m_resourcesAccess};
 
 				if ( resourceName == Default )
@@ -1070,7 +1122,7 @@ namespace EmEn::Resources
 				}
 
 				/* Returns the smart pointer to the future loaded resource. */
-				return this->pushInLoadingQueue(resourceIt->second, asyncLoad);
+				return this->pushInLoadingQueue(resourceIt->second, asyncLoad, deferredSyncLoad);
 			}
 
 			/**
@@ -1093,9 +1145,12 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getOrCreateUnloadedResource (const std::string & resourceName, uint32_t resourceFlags = 0, bool asyncLoad = true) noexcept
 			{
+				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
+				DeferredSyncLoad deferredSyncLoad{*this};
+
 				const std::scoped_lock scopeLock{m_resourcesAccess};
 
-				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, asyncLoad);
+				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, asyncLoad, deferredSyncLoad);
 
 				if ( alreadyLoadedResource != nullptr )
 				{
@@ -1131,9 +1186,12 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getOrCreateResourceSync (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
+				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
+				DeferredSyncLoad deferredSyncLoad{*this};
+
 				const std::scoped_lock scopeLock{m_resourcesAccess};
 
-				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, false);
+				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, false, deferredSyncLoad);
 
 				if ( alreadyLoadedResource != nullptr )
 				{
@@ -1207,9 +1265,12 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getOrCreateResource (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
+				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
+				DeferredSyncLoad deferredSyncLoad{*this};
+
 				const std::scoped_lock scopeLock{m_resourcesAccess};
 
-				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, true);
+				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, true, deferredSyncLoad);
 
 				if ( alreadyLoadedResource != nullptr )
 				{
@@ -1531,7 +1592,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			checkLoadedResource (const std::string & resourceName, bool asyncLoad) noexcept
+			checkLoadedResource (const std::string & resourceName, bool asyncLoad, DeferredSyncLoad & deferredSyncLoad) noexcept
 			{
 				if ( resourceName == Default )
 				{
@@ -1551,12 +1612,16 @@ namespace EmEn::Resources
 				{
 					if ( const auto resourceIt = m_localStore->find(resourceName); resourceIt != m_localStore->cend() )
 					{
-						return this->pushInLoadingQueue(resourceIt->second, !asyncLoad);
+						/* ⚠️ This used to pass !asyncLoad — the two other call sites pass it
+						 * unchanged — so getOrCreateResource() loaded synchronously and
+						 * getOrCreateResourceSync() asynchronously. */
+						return this->pushInLoadingQueue(resourceIt->second, asyncLoad, deferredSyncLoad);
 					}
 				}
 
 				return nullptr;
 			}
+
 
 			/**
 			 * @brief Internal: Enqueues a resource for loading.
@@ -1576,7 +1641,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			pushInLoadingQueue (const BaseInformation & baseInformation, bool asyncLoad) noexcept
+			pushInLoadingQueue (const BaseInformation & baseInformation, bool asyncLoad, DeferredSyncLoad & deferredSyncLoad) noexcept
 			{
 				const auto & name = baseInformation.name();
 
@@ -1644,12 +1709,21 @@ namespace EmEn::Resources
 						}
 					}
 				}
+				else if ( baseInformation.sourceType() == SourceType::ExternalData )
+				{
+					/* There is no synchronous download path: loading this request would reach
+					 * loadingTask()'s "should be downloaded first" branch and leave the resource
+					 * in a non-terminal state forever. Fail it here, explicitly. */
+					TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << name << "' comes from an URL and cannot be loaded synchronously; ask for it asynchronously.";
+
+					this->failResource(request);
+				}
 				else
 				{
 					newResource->setDirectLoadingHint();
 
-					/* Call directly the loading function on the manager thread. */
-					this->loadingTask(request);
+					/* Runs on this thread, but only once the caller released m_resourcesAccess. */
+					deferredSyncLoad.set(request);
 				}
 
 				return newResource;
