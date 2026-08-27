@@ -6,6 +6,14 @@ Guide pour interagir avec une application Emeraude-Engine en cours d'exécution 
 
 Le moteur expose une console de commandes via **TCP port 7777** (configurable via le setting `Core/Console/RemoteListenerPort`). Toute application construite sur Emeraude-Engine hérite de cette interface.
 
+> ⚠️⚠️ **Le port est FERMÉ PAR DÉFAUT** (depuis 2026-08-27). Le listener ne démarre que si
+> **`Core/Console/EnableRemoteListener` vaut `true`** dans le `settings.json` de l'application ; il
+> se lie alors à **`Core/Console/RemoteListenerAddress`** (défaut `127.0.0.1`, loopback seul —
+> `0.0.0.0` pour piloter depuis une autre machine). Un `Connection refused` sur 7777 signifie que
+> l'instance a été lancée sans la clé : **activer la clé et relancer, ne pas insister** — rien
+> n'ouvrira le port tant que l'instance tourne. Log au démarrage dans ce cas :
+> `Remote console disabled (Core/Console/EnableRemoteListener = false)`.
+
 ### Connexion
 
 ```bash
@@ -32,7 +40,7 @@ Les réponses sont en texte brut ou JSON, sans codes ANSI ni préfixes de log. C
 
 La console est prête dès que le log affiche :
 ```
-[Info][RemoteListener] Starting ASIO AI Remote Console on port 7777.
+[Info][RemoteListener] Starting ASIO AI Remote Console on 127.0.0.1:7777.
 ```
 
 ## 2. Découverte des services

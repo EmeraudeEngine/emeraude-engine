@@ -67,9 +67,13 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Constructs the remote listener service.
+			 * @note The listener is an unauthenticated command channel. It binds to
+			 * loopback by default; an address that does not parse is reported and
+			 * replaced by loopback — never by the any-address.
+			 * @param address The IP address to bind to. Default "127.0.0.1".
 			 * @param port The TCP port to listen on. Default 7777.
 			 */
-			explicit RemoteListener (uint16_t port = DefaultConsoleRemoteListenerPort) noexcept;
+			explicit RemoteListener (const std::string & address = DefaultConsoleRemoteListenerAddress, uint16_t port = DefaultConsoleRemoteListenerPort) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -157,6 +161,7 @@ namespace EmEn::Console
 			 */
 			void removeClient (const std::shared_ptr< asio::ip::tcp::socket > & socket) noexcept;
 
+			std::string m_address;
 			uint16_t m_port;
 			asio::io_context m_ioContext;
 			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;

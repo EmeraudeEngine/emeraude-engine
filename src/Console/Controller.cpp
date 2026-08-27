@@ -45,9 +45,22 @@ namespace EmEn::Console
 	bool
 	Controller::onInitialize () noexcept
 	{
-		const auto remoteListenerPort = m_primaryServices.settings().getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
+		auto & settings = m_primaryServices.settings();
 
-		m_remoteListener = std::make_unique< RemoteListener >(remoteListenerPort);
+		/* NOTE: all three keys are read (and written on first run) even when the listener stays
+		 * off, so an operator finds them in settings.json without reading the source. */
+		const auto remoteListenerEnabled = settings.getOrSetDefault< bool >(ConsoleEnableRemoteListenerKey, DefaultConsoleEnableRemoteListener);
+		const auto remoteListenerAddress = settings.getOrSetDefault< std::string >(ConsoleRemoteListenerAddressKey, DefaultConsoleRemoteListenerAddress);
+		const auto remoteListenerPort = settings.getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
+
+		if ( !remoteListenerEnabled )
+		{
+			TraceInfo{ClassId} << "Remote console disabled (" << ConsoleEnableRemoteListenerKey << " = false). Set it to true to drive the application over TCP.";
+
+			return true;
+		}
+
+		m_remoteListener = std::make_unique< RemoteListener >(remoteListenerAddress, remoteListenerPort);
 
 		if ( !m_remoteListener->isRunning() )
 		{

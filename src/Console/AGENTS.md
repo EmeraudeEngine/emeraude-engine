@@ -6,7 +6,21 @@ The Console system provides **runtime command execution** for the engine. It is 
 
 ### Remote Console (TCP)
 
-A TCP server listens on a configurable port (default **7777**, setting: `Core/Console/RemoteListenerPort`). Any AI agent or external tool can connect and:
+A TCP server listens on a configurable port (default **7777**, setting: `Core/Console/RemoteListenerPort`).
+
+> [!WARNING]
+> **Closed by default.** `Controller::onInitialize()` creates the `RemoteListener` only when
+> **`Core/Console/EnableRemoteListener`** is `true` (default **`false`**, 2026-08-27). It then binds
+> to **`Core/Console/RemoteListenerAddress`** (default **`127.0.0.1`** — loopback only; `0.0.0.0`,
+> a NIC address or `::` to accept other machines; an unparsable value falls back to loopback, never
+> to any-address). All three keys are written to `settings.json` on first run even when the console
+> stays off, so an operator can find them. When disabled the log says
+> `Remote console disabled (Core/Console/EnableRemoteListener = false)` — an AI seeing
+> `Connection refused` must **enable the key and relaunch**, not retry. Why: the channel has **no
+> authentication** and reaches `Core.quit()`, settings, scene loading and screenshots; applications
+> built on the engine ship to end users.
+
+Once enabled, any AI agent or external tool on an allowed host can connect and:
 
 1. **Send commands** — one per line, newline-terminated (`\n`)
 2. **Receive clean responses** — command outputs are sent directly to the requesting client (no Tracer noise)
@@ -351,8 +365,9 @@ TCP lines starting with `{` are routed to a registered JSON handler (not the nor
 ## Critical Points
 
 - **Do not confuse** with AVConsole (`src/Scenes/AVConsole/`) which is the Audio/Video virtual device system
-- **Port 7777** is configurable via `Core/Console/RemoteListenerPort` setting
-- **No authentication** — the remote console is currently open
+- **Closed by default** — `Core/Console/EnableRemoteListener` (default `false`) gates the whole listener; **bind address** `Core/Console/RemoteListenerAddress` (default `127.0.0.1`); **port** `Core/Console/RemoteListenerPort` (default 7777)
+- **No authentication** — which is exactly why the two defaults above are off and loopback. Anyone who can reach the socket owns the application
+- **Bounded queue** — `RemoteListener::MaxPendingCommands = 256` pending commands; beyond that new lines are dropped with a warning. Clients are unlimited
 - **Clean responses** — TCP responses contain only command output, no Tracer logs
 - **JSON routing** — lines starting with `{` bypass the command parser and go to the JSON handler
 - **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) for the complete AI operator reference

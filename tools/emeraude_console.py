@@ -101,7 +101,10 @@ class Console:
         :param host: Host running the engine.
         :param port: Remote console port.
         :param timeout: Default quiet period for :meth:`run`, in seconds.
-        :raises ConnectionRefusedError: The engine is not listening.
+        :raises ConnectionRefusedError: The engine is not listening — either it is not running, or the
+            remote console is disabled (it is CLOSED BY DEFAULT: setting
+            ``Core/Console/EnableRemoteListener`` must be true, and the bind address
+            ``Core/Console/RemoteListenerAddress`` defaults to 127.0.0.1). Retrying does not help.
         """
         self.sock = socket.create_connection((host, port), timeout=CONNECT_TIMEOUT)
         self.timeout = timeout

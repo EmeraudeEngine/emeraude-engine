@@ -100,6 +100,10 @@ def main() -> None:
             interactive_mode(host, port)
     except ConnectionRefusedError:
         print(f"Error: Cannot connect to {host}:{port}. Is the engine running?", file=sys.stderr)
+        print("Note: the remote console is CLOSED BY DEFAULT. It starts only when the setting "
+              "Core/Console/EnableRemoteListener is true (bind address: Core/Console/RemoteListenerAddress, "
+              "default 127.0.0.1). Enable it in the application's settings.json and relaunch; do not retry "
+              "against a running instance that never opened the port.", file=sys.stderr)
         sys.exit(1)
     except (socket.timeout, TimeoutError):
         print(f"Error: Connection to {host}:{port} timed out.", file=sys.stderr)

@@ -160,6 +160,15 @@ and the AI executes, measures, and iterates at industrial speed.
 > **MUST** use it. This is not optional — it is the primary tool for understanding what
 > the engine is doing at runtime.
 >
+> ⚠️⚠️ **THE PORT IS CLOSED BY DEFAULT (since 2026-08-27).** The listener starts only when the
+> setting **`Core/Console/EnableRemoteListener` is `true`** in the application's `settings.json`,
+> and it then binds to **`Core/Console/RemoteListenerAddress`** (default `127.0.0.1`, loopback
+> only). A `Connection refused` on 7777 means the instance was launched without the key —
+> **enable it and relaunch; do NOT keep retrying, polling or waiting on a running instance that
+> never opened the port.** The engine logs `Remote console disabled (Core/Console/EnableRemoteListener = false)`
+> at startup in that case. Rationale: the console is an unauthenticated command channel
+> (`Core.quit()`, settings, scenes, screenshots) and downstream applications are shipped to end users.
+>
 > **Cross-platform tool (required on Windows):** Use `tools/remote-console.py` — works on Windows, Linux, and macOS:
 > ```bash
 > python3 tools/remote-console.py "COMMAND"

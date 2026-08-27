@@ -29,7 +29,12 @@ The AI connects to a running engine instance via TCP and sends commands to disco
 
 ## Connection
 
-The engine listens on **TCP port 7777** (configurable via `Core/Console/RemoteListenerPort`).
+The engine listens on **TCP port 7777** (configurable via `Core/Console/RemoteListenerPort`) — **but only
+when `Core/Console/EnableRemoteListener` is `true`; the port is CLOSED BY DEFAULT.** The bind address is
+`Core/Console/RemoteListenerAddress` (default `127.0.0.1`: same host only). If the connection is refused,
+the running instance was launched without the key: **set it in `settings.json`, relaunch, and do not retry
+against that instance** — nothing will open the port while it runs. Startup log when off:
+`Remote console disabled (Core/Console/EnableRemoteListener = false)`.
 
 **Cross-platform (Python, recommended — required on Windows where `nc` is not available):**
 ```bash

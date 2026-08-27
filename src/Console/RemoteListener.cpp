@@ -116,12 +116,28 @@ namespace EmEn::Console
 			asio::streambuf m_buffer;
 	};
 
-	RemoteListener::RemoteListener (uint16_t port) noexcept
-		: m_port{port},
+	RemoteListener::RemoteListener (const std::string & address, uint16_t port) noexcept
+		: m_address{address},
+		m_port{port},
 		m_acceptor{std::make_unique< asio::ip::tcp::acceptor >(m_ioContext)}
 	{
 		asio::error_code ec;
-		const asio::ip::tcp::endpoint endpoint(asio::ip::tcp::v4(), m_port);
+
+		/* The bind address decides who can reach an unauthenticated command channel:
+		 * loopback = this host only, "0.0.0.0" / "::" = every peer on the network. A
+		 * value that does not parse must therefore fall back to the SAFE side. */
+		auto bindAddress = asio::ip::make_address(m_address, ec);
+
+		if ( ec )
+		{
+			TraceWarning{ClassId} << "Invalid remote console bind address '" << m_address << "' (" << ec.message() << "), falling back to loopback.";
+
+			bindAddress = asio::ip::address_v4::loopback();
+			m_address = bindAddress.to_string();
+			ec.clear();
+		}
+
+		const asio::ip::tcp::endpoint endpoint(bindAddress, m_port);
 
 		m_acceptor->open(endpoint.protocol(), ec);
 
@@ -144,7 +160,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceError{ClassId} << "Failed to bind to port " << m_port << ": " << ec.message();
+			TraceError{ClassId} << "Failed to bind to " << m_address << ':' << m_port << ": " << ec.message();
 
 			return;
 		}
@@ -153,7 +169,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceError{ClassId} << "Failed to listen on port " << m_port << ": " << ec.message();
+			TraceError{ClassId} << "Failed to listen on " << m_address << ':' << m_port << ": " << ec.message();
 
 			return;
 		}
@@ -163,7 +179,7 @@ namespace EmEn::Console
 		this->accept();
 
 		m_networkThread = std::thread([this] () {
-			TraceInfo{ClassId} << "Starting ASIO AI Remote Console on port " << m_port << ".";
+			TraceInfo{ClassId} << "Starting ASIO AI Remote Console on " << m_address << ':' << m_port << ".";
 
 			static_cast< void >(m_ioContext.run());
 

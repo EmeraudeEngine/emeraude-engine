@@ -72,6 +72,16 @@ namespace EmEn
 		constexpr auto DefaultTracerLogFormat{"Text"};
 
 		/* Console */
+		/* Whether the remote console (TCP, AI runtime control) is started at all. Default FALSE:
+		 * the listener is an unauthenticated command channel (quit, settings, scene, screenshots),
+		 * so a shipped application must not open it unless the operator asks for it. */
+		constexpr auto ConsoleEnableRemoteListenerKey{"Core/Console/EnableRemoteListener"};
+		constexpr auto DefaultConsoleEnableRemoteListener{false};
+		/* Address the remote console binds to. Default loopback: only processes of the same host
+		 * can connect. Set "0.0.0.0" (or a NIC address, or "::" for IPv6) to drive the application
+		 * from another machine. An unparsable value falls back to loopback, never to any-address. */
+		constexpr auto ConsoleRemoteListenerAddressKey{"Core/Console/RemoteListenerAddress"};
+		constexpr auto DefaultConsoleRemoteListenerAddress{"127.0.0.1"};
 		/* TCP port the remote console listens on for live commands (AI runtime control). */
 		constexpr auto ConsoleRemoteListenerPortKey{"Core/Console/RemoteListenerPort"};
 		constexpr auto DefaultConsoleRemoteListenerPort{static_cast< uint16_t >(7777)};
