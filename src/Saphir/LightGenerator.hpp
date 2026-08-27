@@ -135,10 +135,13 @@ namespace EmEn::Saphir
 			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, const char * fragmentColor = FragmentColor) noexcept
 				: m_renderPassType{renderPassType},
 				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSamplesKey, DefaultGraphicsShadowMappingPCFSamples)},
-				m_PCFMethod{stringToPCFMethod(settings.getOrSetDefault< std::string >(GraphicsShadowMappingPCFMethodKey, DefaultGraphicsShadowMappingPCFMethod))},
-				m_fragmentColor{fragmentColor},
+				/* NOTE: the initialiser order must follow the declaration order (-Wreorder, an
+				 * error in the Debug configuration): m_cascadeBlendRatio and m_normalOffsetScale
+				 * are declared before m_PCFMethod and m_fragmentColor. */
 				m_cascadeBlendRatio{std::clamp(settings.getOrSetDefault< float >(GraphicsShadowMappingCascadeBlendRatioKey, DefaultGraphicsShadowMappingCascadeBlendRatio), 0.0F, 0.5F)},
 				m_normalOffsetScale{std::max(0.0F, settings.getOrSetDefault< float >(GraphicsShadowMappingNormalOffsetScaleKey, DefaultGraphicsShadowMappingNormalOffsetScale))},
+				m_PCFMethod{stringToPCFMethod(settings.getOrSetDefault< std::string >(GraphicsShadowMappingPCFMethodKey, DefaultGraphicsShadowMappingPCFMethod))},
+				m_fragmentColor{fragmentColor},
 				m_PCFEnabled{settings.getOrSetDefault< bool >(GraphicsShadowMappingEnablePCFKey, DefaultGraphicsShadowMappingEnablePCF)}
 			{
 

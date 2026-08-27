@@ -2280,6 +2280,21 @@ statement above still holds for every KTX2 texture that actually comes from disk
 
 ---
 
+### A sound with no buffer used to kill the engine (fixed 2026-08-27)
+
+`Audio::Source::play()` called `m_currentPlayableInterface->buffer()->identifier()` — and
+`PlayableInterface::buffer()` returns **null while the sound resource is not loaded, or failed to
+load**. The first collision of a scene whose sound was not ready dereferenced a null pointer inside
+`AbstractObject::identifier()` (`this = 0x0`) and took the whole application down.
+
+**Reproducer**: `--load-demo lighten-marbles`, ~10 s in, when the first marble lands
+(`Marble::onCollision` → `SoundEmitter::replay` → `Source::play`). The demo is rarely started, which
+is why a null-dereference survived there. `basic-scenery` and a launch without a demo were unaffected.
+
+Both buffer paths (streaming queue and single buffer) now check for null and cancel the playback with
+a warning. ⚠️ **A resource that is not ready is a normal state in an asynchronous loader — never
+dereference what a resource accessor returns without checking it.**
+
 ## Build / Compiler
 
 ### CMake must be RECONFIGURED after a source file is renamed, moved or removed (`GLOB_RECURSE`)

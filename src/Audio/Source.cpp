@@ -668,6 +668,10 @@ namespace EmEn::Audio
 			/* Checks if the sample is streamable or not. */
 			const auto bufferCount = m_currentPlayableInterface->streamable();
 
+			/* ⚠️ PlayableInterface::buffer() returns null while the sound resource is not loaded
+			 * (or failed to load): dereferencing it crashed the engine on the first collision of
+			 * a scene whose sound was not ready — a null `this` in AbstractObject::identifier().
+			 * A sound that cannot be played is not a reason to kill the application. */
 			if ( bufferCount > 0 )
 			{
 				std::vector< ALuint > identifiers{};
@@ -677,14 +681,32 @@ namespace EmEn::Audio
 
 				for ( size_t index = 0; index < bufferCount; index++ )
 				{
-					identifiers.push_back(m_currentPlayableInterface->buffer(index)->identifier());
+					const auto buffer = m_currentPlayableInterface->buffer(index);
+
+					if ( buffer == nullptr )
+					{
+						TraceWarning{ClassId} << "The playable interface has no buffer #" << index << " yet, playback cancelled.";
+
+						return false;
+					}
+
+					identifiers.push_back(buffer->identifier());
 				}
 
 				alSourceQueueBuffers(this->identifier(), static_cast< ALsizei >(bufferCount), identifiers.data());
 			}
 			else
 			{
-				alSourcei(this->identifier(), AL_BUFFER, static_cast< ALint >(m_currentPlayableInterface->buffer()->identifier()));
+				const auto buffer = m_currentPlayableInterface->buffer();
+
+				if ( buffer == nullptr )
+				{
+					TraceWarning{ClassId} << "The playable interface has no buffer yet, playback cancelled.";
+
+					return false;
+				}
+
+				alSourcei(this->identifier(), AL_BUFFER, static_cast< ALint >(buffer->identifier()));
 			}
 
 			/* Let's play the source. */
