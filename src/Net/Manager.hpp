@@ -93,6 +93,7 @@ namespace EmEn::Net
 				DownloadingStarted,		/* The first transfer of a batch began (payload: its ticket). */
 				FileDownloaded,			/* A ticket reached Done or Error — read downloadStatus(ticket). */
 				DownloadingFinished,	/* No transfer is left in flight (no payload). */
+				Progress,				/* A transferring ticket advanced — read downloadProgress(ticket). At most one per ticket per cycle. */
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -171,6 +172,14 @@ namespace EmEn::Net
 			 */
 			[[nodiscard]]
 			std::filesystem::path downloadedFilepath (int ticket) const noexcept;
+
+			/**
+			 * @brief Returns the progress of a ticket: bytes received, expected total (0 when unknown) [Thread-safe].
+			 * @param ticket A ticket from download().
+			 * @return std::pair< uint64_t, uint64_t > {0, 0} for an unknown ticket.
+			 */
+			[[nodiscard]]
+			std::pair< uint64_t, uint64_t > downloadProgress (int ticket) const noexcept;
 
 			/**
 			 * @brief Emits the pending lifecycle notifications and persists the cache index.

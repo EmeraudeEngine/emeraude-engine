@@ -95,6 +95,63 @@ namespace EmEn::Net
 			}
 
 			/**
+			 * @brief Returns the body bytes received so far (the final size once Done).
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			bytesReceived () const noexcept
+			{
+				return m_bytesReceived;
+			}
+
+			/**
+			 * @brief Returns the expected total in bytes, 0 when the server did not announce it.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			bytesTotal () const noexcept
+			{
+				return m_bytesTotal;
+			}
+
+			/**
+			 * @brief Returns whether a progress update was recorded since the last Progress notification.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPendingProgress () const noexcept
+			{
+				return m_progressPending;
+			}
+
+			/**
+			 * @brief Records a progress update from the transfer thread.
+			 * @param received Body bytes received so far.
+			 * @param total Expected total, 0 when unknown.
+			 * @return void
+			 */
+			void
+			setProgress (uint64_t received, uint64_t total) noexcept
+			{
+				m_bytesReceived = received;
+				m_bytesTotal = total;
+				m_progressPending = true;
+			}
+
+			/**
+			 * @brief Clears the pending-progress flag once the Progress notification went out.
+			 * @return void
+			 */
+			void
+			clearPendingProgress () noexcept
+			{
+				m_progressPending = false;
+			}
+
+			/**
 			 * @brief Returns the status.
 			 * @return DownloadStatus
 			 */
@@ -124,6 +181,9 @@ namespace EmEn::Net
 			setDone (uint64_t bytes) noexcept
 			{
 				m_bytes = bytes;
+				m_bytesReceived = bytes;
+				m_bytesTotal = bytes;
+				m_progressPending = false;
 				m_status = DownloadStatus::Done;
 			}
 
@@ -135,6 +195,7 @@ namespace EmEn::Net
 			setError () noexcept
 			{
 				m_bytes = 0;
+				m_progressPending = false;
 				m_status = DownloadStatus::Error;
 			}
 
@@ -143,6 +204,9 @@ namespace EmEn::Net
 			Base::Network::URI m_url;
 			std::filesystem::path m_filepath;
 			uint64_t m_bytes{0};
+			uint64_t m_bytesReceived{0};
+			uint64_t m_bytesTotal{0};
 			DownloadStatus m_status{DownloadStatus::Pending};
+			bool m_progressPending{false};
 	};
 }

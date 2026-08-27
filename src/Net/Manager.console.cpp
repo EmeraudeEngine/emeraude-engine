@@ -76,12 +76,15 @@ namespace EmEn::Net
 				json << ",\"filepath\":\"" << this->downloadedFilepath(ticket).string() << "\"";
 			}
 
+			const auto [received, total] = this->downloadProgress(ticket);
+			json << ",\"bytesReceived\":" << received << ",\"bytesTotal\":" << total;
+
 			json << ",\"remaining\":" << this->fileRemainingCount() << "}";
 
 			outputs.emplace_back(Severity::Info, json.str());
 
 			return true;
-		}, "Returns a ticket status as JSON (status, filepath when Done, transfers remaining). Usage: status(ticket)");
+		}, "Returns a ticket status as JSON (status, filepath when Done, bytesReceived, bytesTotal — 0 when unknown —, transfers remaining). Usage: status(ticket)");
 
 		this->bindCommand("listCache", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			std::stringstream json;

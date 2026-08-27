@@ -877,7 +877,8 @@ python3 tools/remote-console.py "Core.NetManagerService.isEnabled()"
 python3 tools/remote-console.py "Core.NetManagerService.download(https://raw.githubusercontent.com/EmeraudeEngine/emeraude-base/main/README.md)"
 #   -> Ticket #1 (Transferring). Poll with status(1).
 python3 tools/remote-console.py "Core.NetManagerService.status(1)"
-#   -> {"ticket":1,"status":"Done","filepath":"~/.cache/<app>/downloads/<hash>.md","remaining":0}
+#   -> {"ticket":1,"status":"Done","filepath":"~/.cache/<app>/downloads/<hash>.md","bytesReceived":13566,"bytesTotal":13566,"remaining":0}
+#      (while Transferring: bytesReceived grows, bytesTotal is the Content-Length or 0 when unknown)
 python3 tools/remote-console.py "Core.NetManagerService.listCache()"
 python3 tools/remote-console.py "Core.NetManagerService.clearCache()"
 ```

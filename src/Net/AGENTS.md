@@ -38,7 +38,8 @@ void dispatchCompleted () noexcept;                                // main threa
 size_t fileCount () const; size_t fileRemainingCount () const;     // tickets issued / transfers in flight
 bool isDownloadEnabled () const; bool clearCache ();
 std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > > cachedFiles () const;
-enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished }; // payload: ticket (int), none for Finished
+std::pair< uint64_t, uint64_t > downloadProgress (int ticket) const noexcept;  // {received, total (0 = unknown)}
+enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished, Progress }; // payload: ticket (int), none for Finished
 ```
 
 1. **One code path for the consumer.** `download(url)` always returns a ticket to wait on. A URL
@@ -66,9 +67,14 @@ enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished 
    `InvalidTicket` and the resource falls back to its default; `Core/Net/CABundleFile` (default
    empty) — a PEM bundle added to the system store for private CAs. Both written on first run.
    ⚠️ The old `Core/Resources/DownloadEnabled` was inert and is gone.
-6. **No progress.** `HTTPSClient::download()` has no progress hook (a base feature, frozen —
-   emeraude-base `docs/todo/httpsclient-progress-callback.md`), so there is no `Progress`
-   notification and no byte counters until then; `DownloadItem::bytes()` is the final size.
+6. **Progress, throttled to one notification per ticket per cycle.** `HTTPSClient::download()`
+   takes a `DownloadProgress` hook (first post-freeze feature of emeraude-base, 2026-08-27); the
+   manager's hook runs on the worker and only records `bytesReceived` / `bytesTotal` (0 when the
+   server sent no `Content-Length` — chunked or read-until-close) under the items mutex and raises
+   a pending flag. `dispatchCompleted()` then emits **at most one `Progress` per ticket per
+   main-loop cycle** (payload: the ticket; read `downloadProgress(ticket)`), whatever the
+   transport read granularity (16 KiB reads on a 100 MB file would otherwise mean ~6 000
+   notifications). `Done` sets received = total = final size.
 
 ### Verified (Linux, 2026-08-27, validation layers on, 0 VUID)
 
@@ -93,7 +99,7 @@ is neither copyable nor movable: observers and workers hold its address.
 
 ```bash
 python3 tools/remote-console.py "Core.NetManagerService.download(https://raw.githubusercontent.com/EmeraudeEngine/emeraude-base/main/README.md)"
-python3 tools/remote-console.py "Core.NetManagerService.status(1)"        # {"ticket":1,"status":"Done","filepath":"...","remaining":0}
+python3 tools/remote-console.py "Core.NetManagerService.status(1)"        # {"ticket":1,"status":"Transferring","bytesReceived":1048576,"bytesTotal":13566000,"remaining":1}
 python3 tools/remote-console.py "Core.NetManagerService.listCache()"
 python3 tools/remote-console.py "Core.NetManagerService.clearCache()"
 python3 tools/remote-console.py "Core.NetManagerService.isEnabled()"
@@ -629,4 +635,4 @@ Related systems:
 - @src/Resources/AGENTS.md - Fail-safe loading system, `ExternalData` source type, the `ServiceAccess` firewall
 - @docs/resource-management.md - Resources architecture
 - emeraude-base `src/Network/` (`HTTPSClient`, `TLSConnection`, `TrustStore`, `URI`) - the HTTPS stack the manager runs on
-- emeraude-base `docs/todo/httpsclient-progress-callback.md` - why there is no Progress notification yet
+- emeraude-base `src/Network/HTTPSClient.hpp` `DownloadProgress` - the hook behind the Progress notification

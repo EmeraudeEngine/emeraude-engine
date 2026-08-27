@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <system_error>
@@ -411,7 +412,17 @@ namespace EmEn::Net
 		partialFilepath += PartialSuffix;
 
 		uint64_t bytes = 0;
-		bool success = m_impl->client->download(url, partialFilepath);
+
+		/* The hook runs on this worker: it only records the counters under the items mutex and
+		 * raises the pending flag; dispatchCompleted() turns that into ONE Progress notification
+		 * per ticket per main-loop cycle, whatever the read granularity. */
+		const auto progressHook = [this, ticket] (uint64_t received, std::optional< uint64_t > total) {
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			m_items[static_cast< size_t >(ticket) - 1].setProgress(received, total.value_or(0));
+		};
+
+		bool success = m_impl->client->download(url, partialFilepath, progressHook);
 
 		if ( success )
 		{
@@ -473,12 +484,26 @@ namespace EmEn::Net
 		{
 			const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
-			if ( m_events.empty() )
+			events.swap(m_events);
+		}
+
+		if ( events.empty() )
+		{
+			/* Nothing terminal this cycle: only the throttled Progress notifications may be due. */
+			bool anyPending = false;
+
+			{
+				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+				anyPending = m_inFlight > 0 && std::ranges::any_of(m_items, [] (const DownloadItem & item) {
+					return item.hasPendingProgress();
+				});
+			}
+
+			if ( !anyPending )
 			{
 				return;
 			}
-
-			events.swap(m_events);
 		}
 
 		/* NOTE: The mutexes are released here: an observer may call back into download(). */
@@ -488,11 +513,21 @@ namespace EmEn::Net
 		}
 
 		bool finished = false;
+		std::vector< int > progressed;
 
 		{
 			const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
 			finished = m_inFlight == 0;
+
+			for ( size_t index = 0; index < m_items.size(); ++index )
+			{
+				if ( m_items[index].hasPendingProgress() && m_items[index].status() == DownloadStatus::Transferring )
+				{
+					m_items[index].clearPendingProgress();
+					progressed.push_back(static_cast< int >(index) + 1);
+				}
+			}
 
 			if ( m_indexDirty )
 			{
@@ -507,10 +542,30 @@ namespace EmEn::Net
 			}
 		}
 
+		for ( const auto ticket : progressed )
+		{
+			this->notify(Progress, ticket);
+		}
+
 		if ( finished )
 		{
 			this->notify(DownloadingFinished);
 		}
+	}
+
+	std::pair< uint64_t, uint64_t >
+	Manager::downloadProgress (int ticket) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
+		{
+			return {0, 0};
+		}
+
+		const auto & item = m_items[static_cast< size_t >(ticket) - 1];
+
+		return {item.bytesReceived(), item.bytesTotal()};
 	}
 
 	/* ---- Queries ---- */

@@ -2465,6 +2465,7 @@ namespace EmEn
 				case Net::Manager::DownloadingStarted :
 				case Net::Manager::FileDownloaded :
 				case Net::Manager::DownloadingFinished :
+				case Net::Manager::Progress :
 					break;
 
 				default:
