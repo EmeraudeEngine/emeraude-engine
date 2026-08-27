@@ -79,12 +79,24 @@ namespace EmEn::Net
 			const auto [received, total] = this->downloadProgress(ticket);
 			json << ",\"bytesReceived\":" << received << ",\"bytesTotal\":" << total;
 
+			if ( status == DownloadStatus::Error )
+			{
+				const auto [outcome, statusCode] = this->downloadFailure(ticket);
+
+				json << ",\"reason\":\"" << Base::Network::to_cstring(outcome) << "\"";
+
+				if ( statusCode > 0 )
+				{
+					json << ",\"httpStatus\":" << statusCode;
+				}
+			}
+
 			json << ",\"remaining\":" << this->fileRemainingCount() << "}";
 
 			outputs.emplace_back(Severity::Info, json.str());
 
 			return true;
-		}, "Returns a ticket status as JSON (status, filepath when Done, bytesReceived, bytesTotal — 0 when unknown —, transfers remaining). Usage: status(ticket)");
+		}, "Returns a ticket status as JSON (status, filepath when Done, bytesReceived/bytesTotal, reason + httpStatus when Error, transfers remaining). Usage: status(ticket)");
 
 		this->bindCommand("listCache", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			std::stringstream json;
@@ -125,7 +137,19 @@ namespace EmEn::Net
 		}, "Removes every downloaded file from the cache and rewrites its index.");
 
 		this->bindCommand("isEnabled", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, this->isDownloadEnabled() ? "true" : "false");
+			/* A bare "false" says nothing: the setting, the cache directory and the trust store can
+			 * each disable downloads, and only the log said which. */
+			std::stringstream json;
+			json << "{\"enabled\":" << ( this->isDownloadEnabled() ? "true" : "false" );
+
+			if ( !this->isDownloadEnabled() )
+			{
+				json << ",\"reason\":\"" << this->disabledReason() << "\"";
+			}
+
+			json << ",\"cacheBudgetBytes\":" << this->cacheBudget() << "}";
+
+			outputs.emplace_back(Severity::Info, json.str());
 
 			return true;
 		}, "Returns whether downloads are enabled (setting, cache directory and trust store all OK).");

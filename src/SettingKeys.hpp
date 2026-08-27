@@ -75,6 +75,13 @@ namespace EmEn
 		/* Whether Net::Manager may download files (https only) for ExternalData resources. */
 		constexpr auto NetDownloadEnabledKey{"Core/Net/DownloadEnabled"};
 		constexpr auto DefaultNetDownloadEnabled{true};
+		/* Ceiling of the download cache, in bytes. The least recently used files are dropped past
+		 * it, except those a completed ticket still points at. 0 disables eviction. */
+		constexpr auto NetCacheMaxBytesKey{"Core/Net/CacheMaxBytes"};
+		constexpr auto DefaultNetCacheMaxBytes{static_cast< uint64_t >(2ULL * 1024 * 1024 * 1024)};
+		/* Total budget of one download, in seconds, including every redirect hop. */
+		constexpr auto NetDownloadTimeoutKey{"Core/Net/DownloadTimeoutSeconds"};
+		constexpr auto DefaultNetDownloadTimeout{120U};
 		/* Optional PEM bundle added to the system trust store (corporate / private CA). Empty = none. */
 		constexpr auto NetCABundleFileKey{"Core/Net/CABundleFile"};
 		constexpr auto DefaultNetCABundleFile{""};

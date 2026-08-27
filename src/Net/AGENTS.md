@@ -42,6 +42,11 @@ std::pair< uint64_t, uint64_t > downloadProgress (int ticket) const noexcept;  /
 enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished, Progress }; // payload: ticket (int), none for Finished
 ```
 
+0. **A failure says why.** `downloadFailure(ticket)` returns a `Base::Network::DownloadOutcome`
+   (`BadScheme`, `Unreachable`, `TLSFailure`, `Timeout`, `Protocol`, `HTTPStatus`, `LocalIO`) plus
+   the HTTP status when the exchange completed. `status(ticket)` prints them. A bare "Error" could
+   not tell a 404 from an expired certificate, and neither could the consumer.
+
 1. **One code path for the consumer.** `download(url)` always returns a ticket to wait on. A URL
    already in the cache, a URL already in flight (shared ticket) and a fresh transfer all end the
    same way: a `FileDownloaded` notification carrying the ticket, after which `downloadStatus()`
@@ -57,16 +62,44 @@ enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished,
    `asio::ssl::context` loaded with `TrustStore::applySystemTrustStore()` (plus
    `Core/Net/CABundleFile` when set). Certificate or hostname mismatch = `Error`. `http://` is
    refused at `download()` with a trace (there is no cleartext client in the base, by decision).
+3b. **A failed URL is retried, not replayed.** Asking again for a URL whose ticket is `Error`
+   restarts the transfer on that same ticket (the old behaviour re-queued the terminal `Error`
+   forever: a texture that failed while the network was down could not be obtained again without
+   restarting the process). A URL already in flight still shares its ticket.
+
+3c. **The cache is bounded and swept.** `Core/Net/CacheMaxBytes` (default 2 GiB, 0 disables) evicts
+   **strictly least-recently-used** entries after each successful download and at startup. ⚠️ Nothing
+   is pinned: pinning the files of completed tickets was tried and makes the budget unenforceable —
+   a ticket stays `Done` for the whole process lifetime, so every file would be pinned. What makes
+   that safe is that the file just downloaded carries the highest use counter (evicted last) and
+   `downloadedFilepath()` checks the file still exists before naming it. `.part` files left by a
+   crash are removed at startup, and `clearCache()` walks the **directory**, not the index — an
+   orphan is invisible to the map and would otherwise never be reclaimed.
+
 4. **The cache is the manager's, keyed by URL.** `cacheDirectory("downloads")/<FNV-1a of the URL,
    16 hex>.<ext>` + `index.json` (`Files: [{URL, Filename, Bytes}]`). Two URLs sharing a basename
    never collide; the extension is kept because loaders sniff it. The transfer streams into
    `<file>.part` then renames, so a reader never sees a partial file and a failure leaves nothing
    under the final name. The index is loaded at init (entries whose file vanished are dropped) and
-   written from `dispatchCompleted()` when dirty.
-5. **Settings**: `Core/Net/DownloadEnabled` (default `true`) — off, every `download()` returns
+   serialised under the lock and **written outside it**, atomically (temporary file + rename): a
+   crash mid-write used to leave a truncated index, which orphaned every file it named, and the
+   write itself was a disk I/O performed on the main loop while holding a mutex a worker needed.
+   The URL→ticket lookup is a map: the previous linear scan re-serialised every tracked URL on
+   every request.
+5. **Settings**: `Core/Net/CacheMaxBytes`, `Core/Net/DownloadTimeoutSeconds` (default 120, the
+   whole budget of one download including redirects), `Core/Net/DownloadEnabled` (default `true`) — off, every `download()` returns
    `InvalidTicket` and the resource falls back to its default; `Core/Net/CABundleFile` (default
    empty) — a PEM bundle added to the system store for private CAs. Both written on first run.
    ⚠️ The old `Core/Resources/DownloadEnabled` was inert and is gone.
+5b. **`isEnabled()` says why it is not.** Three independent things disable downloads (the setting,
+   an unusable cache directory, a trust store that would not load) and only the log used to name
+   which: the console answers `{"enabled":false,"reason":"..."}`.
+
+5c. **`DownloadingStarted` / `DownloadingFinished` are edges**, tracked with a flag: they used to
+   key on `m_inFlight == 0`, so every cache hit — which never increments it — emitted `Finished`
+   for a transfer that never happened. `Pending` is a real observable state now: the ticket is
+   `Pending` until a worker picks it up, `Transferring` after.
+
 6. **Progress, throttled to one notification per ticket per cycle.** `HTTPSClient::download()`
    takes a `DownloadProgress` hook (first post-freeze feature of emeraude-base, 2026-08-27); the
    manager's hook runs on the worker and only records `bytesReceived` / `bytesTotal` (0 when the

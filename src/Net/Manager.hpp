@@ -174,6 +174,16 @@ namespace EmEn::Net
 			std::filesystem::path downloadedFilepath (int ticket) const noexcept;
 
 			/**
+			 * @brief Returns why a ticket failed, and the HTTP status when the exchange completed.
+			 * @note Error is not a cause: a 404 and an expired certificate need different words
+			 * from a consumer. Meaningful once the status is Error.
+			 * @param ticket A ticket from download().
+			 * @return std::pair< Base::Network::DownloadOutcome, uint16_t >
+			 */
+			[[nodiscard]]
+			std::pair< Base::Network::DownloadOutcome, uint16_t > downloadFailure (int ticket) const noexcept;
+
+			/**
 			 * @brief Returns the progress of a ticket: bytes received, expected total (0 when unknown) [Thread-safe].
 			 * @param ticket A ticket from download().
 			 * @return std::pair< uint64_t, uint64_t > {0, 0} for an unknown ticket.
@@ -198,6 +208,28 @@ namespace EmEn::Net
 			isDownloadEnabled () const noexcept
 			{
 				return m_downloadEnabled;
+			}
+
+			/**
+			 * @brief Returns why downloads are disabled, empty when they are enabled.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			disabledReason () const noexcept
+			{
+				return m_disabledReason;
+			}
+
+			/**
+			 * @brief Returns the cache ceiling in bytes, 0 when eviction is disabled.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			cacheBudget () const noexcept
+			{
+				return m_cacheBudget;
 			}
 
 			/**
@@ -244,6 +276,8 @@ namespace EmEn::Net
 			{
 				std::string filename;
 				uint64_t bytes{0};
+				/* Monotonic use counter: the eviction order without depending on a clock. */
+				uint64_t lastUse{0};
 			};
 
 			/** @brief A lifecycle event queued by any thread, emitted by dispatchCompleted(). */
@@ -274,7 +308,20 @@ namespace EmEn::Net
 			 * @brief Writes the cache index. Caller holds m_itemsAccess.
 			 * @return bool
 			 */
-			bool saveCacheIndex () const noexcept;
+			/**
+			 * @brief Serialises the cache index. Caller holds m_itemsAccess.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string serializeCacheIndex () const noexcept;
+
+			/**
+			 * @brief Writes a serialised index to disk, atomically (temporary file + rename).
+			 * @note Must NOT be called with m_itemsAccess held: this is disk I/O on the main loop.
+			 * @param content The serialised index.
+			 * @return bool
+			 */
+			bool writeCacheIndex (const std::string & content) const noexcept;
 
 			/**
 			 * @brief Worker body: fetches one ticket and records the outcome.
@@ -283,6 +330,21 @@ namespace EmEn::Net
 			 */
 			void performDownload (int ticket) noexcept;
 
+			/**
+			 * @brief Drops the least recently used cached files until the budget is met.
+			 * @note Caller holds m_itemsAccess. A file a live Done ticket still points at is kept,
+			 * whatever its age.
+			 * @return void
+			 */
+			void enforceCacheBudget () noexcept;
+
+			/**
+			 * @brief Removes partial files left by a crash or a kill.
+			 * @note They are invisible to the index, so nothing else would ever reclaim them.
+			 * @return void
+			 */
+			void sweepPartialFiles () const noexcept;
+
 			static constexpr auto CacheDirectory{"downloads"};
 			static constexpr auto CacheIndexFilename{"index.json"};
 			static constexpr auto PartialSuffix{".part"};
@@ -290,6 +352,7 @@ namespace EmEn::Net
 			static constexpr auto URLKey{"URL"};
 			static constexpr auto FilenameKey{"Filename"};
 			static constexpr auto BytesKey{"Bytes"};
+			static constexpr auto LastUseKey{"LastUse"};
 
 			FileSystem & m_fileSystem;
 			Settings & m_settings;
@@ -299,9 +362,15 @@ namespace EmEn::Net
 			mutable std::mutex m_itemsAccess;
 			std::vector< DownloadItem > m_items;
 			std::map< std::string, CacheEntry > m_cache;
+			/* URL -> ticket, so a repeat request does not re-serialise every tracked URL. */
+			std::map< std::string, int > m_ticketByURL;
 			std::mutex m_eventsAccess;
 			std::vector< Event > m_events;
 			size_t m_inFlight{0};
+			std::string m_disabledReason;
+			uint64_t m_cacheBudget{0};
+			uint64_t m_useCounter{0};
+			bool m_transferRunning{false};
 			bool m_indexDirty{false};
 			bool m_downloadEnabled{false};
 			bool m_shuttingDown{false};

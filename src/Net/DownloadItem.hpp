@@ -36,6 +36,7 @@
 #include <utility>
 
 /* Local inclusions for usages. */
+#include "Network/HTTPSClient.hpp"
 #include "Network/URI.hpp"
 #include "Types.hpp"
 
@@ -188,6 +189,50 @@ namespace EmEn::Net
 			}
 
 			/**
+			 * @brief Returns why the transfer failed, and the HTTP status when there was one.
+			 * @return std::pair< Base::Network::DownloadOutcome, uint16_t >
+			 */
+			[[nodiscard]]
+			std::pair< Base::Network::DownloadOutcome, uint16_t >
+			failure () const noexcept
+			{
+				return {m_outcome, m_statusCode};
+			}
+
+			/**
+			 * @brief Puts the item back in the queue for another attempt.
+			 * @note A URL that failed used to keep its terminal ticket forever: the same request
+			 * after the network came back replayed the old Error instead of retrying.
+			 * @return void
+			 */
+			void
+			resetForRetry () noexcept
+			{
+				m_bytes = 0;
+				m_bytesReceived = 0;
+				m_bytesTotal = 0;
+				m_statusCode = 0;
+				m_outcome = Base::Network::DownloadOutcome::Success;
+				m_progressPending = false;
+				m_status = DownloadStatus::Pending;
+			}
+
+			/**
+			 * @brief Marks the item as failed; no file is left behind.
+			 * @param outcome Why it failed.
+			 * @param statusCode The HTTP status when the exchange completed, 0 otherwise.
+			 * @return void
+			 */
+			void
+			setError (Base::Network::DownloadOutcome outcome, uint16_t statusCode) noexcept
+			{
+				m_outcome = outcome;
+				m_statusCode = statusCode;
+
+				this->setError();
+			}
+
+			/**
 			 * @brief Marks the item as failed; no file is left behind.
 			 * @return void
 			 */
@@ -206,7 +251,9 @@ namespace EmEn::Net
 			uint64_t m_bytes{0};
 			uint64_t m_bytesReceived{0};
 			uint64_t m_bytesTotal{0};
+			Base::Network::DownloadOutcome m_outcome{Base::Network::DownloadOutcome::Success};
 			DownloadStatus m_status{DownloadStatus::Pending};
+			uint16_t m_statusCode{0};
 			bool m_progressPending{false};
 	};
 }

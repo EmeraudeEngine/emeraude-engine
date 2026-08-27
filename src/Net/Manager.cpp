@@ -87,12 +87,16 @@ namespace EmEn::Net
 		{
 			TraceInfo{ClassId} << "Downloads disabled (" << NetDownloadEnabledKey << " = false).";
 
+			m_disabledReason = "the setting Core/Net/DownloadEnabled is false";
+
 			return true;
 		}
 
 		if ( !IO::isDirectoryUsable(m_cacheDirectory) )
 		{
 			TraceError{ClassId} << "The download cache directory '" << m_cacheDirectory << "' is not usable, downloads disabled.";
+
+			m_disabledReason = "the download cache directory is not usable";
 
 			return true;
 		}
@@ -103,6 +107,8 @@ namespace EmEn::Net
 		{
 			TraceError{ClassId} << "Unable to load the system trust store, downloads disabled.";
 
+			m_disabledReason = "the system trust store could not be loaded";
+
 			return true;
 		}
 
@@ -111,14 +117,27 @@ namespace EmEn::Net
 			TraceWarning{ClassId} << "Unable to load the CA bundle '" << bundleFile << "' (" << NetCABundleFileKey << "), continuing with the system trust store alone.";
 		}
 
+		m_cacheBudget = m_settings.getOrSetDefault< uint64_t >(NetCacheMaxBytesKey, DefaultNetCacheMaxBytes);
+
 		Network::HTTPSClientOptions options;
 		options.userAgent = DefaultUserAgent;
+		options.totalTimeout = std::chrono::seconds{m_settings.getOrSetDefault< uint32_t >(NetDownloadTimeoutKey, DefaultNetDownloadTimeout)};
 
 		m_impl->client = std::make_unique< Network::HTTPSClient >(m_impl->tlsContext, options);
 
 		if ( !this->loadCacheIndex() )
 		{
 			TraceWarning{ClassId} << "The download cache index could not be read, starting with an empty cache.";
+		}
+
+		/* A kill during a transfer leaves a .part file nothing else would ever reclaim: the index
+		 * does not know about it, and clearCache() only walks the index. */
+		this->sweepPartialFiles();
+
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			this->enforceCacheBudget();
 		}
 
 		m_downloadEnabled = true;
@@ -144,7 +163,7 @@ namespace EmEn::Net
 		 * before the services terminate, so nothing is in flight here. */
 		const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-		if ( m_indexDirty && !this->saveCacheIndex() )
+		if ( m_indexDirty && !this->writeCacheIndex(this->serializeCacheIndex()) )
 		{
 			return false;
 		}
@@ -206,6 +225,9 @@ namespace EmEn::Net
 			CacheEntry entry;
 			entry.filename = file[FilenameKey].asString();
 			entry.bytes = file[BytesKey].asLargestUInt();
+			entry.lastUse = file.isMember(LastUseKey) && file[LastUseKey].isIntegral() ? file[LastUseKey].asLargestUInt() : 0;
+
+			m_useCounter = std::max(m_useCounter, entry.lastUse);
 
 			if ( !IO::fileExists(m_cacheDirectory / entry.filename) )
 			{
@@ -222,8 +244,8 @@ namespace EmEn::Net
 		return true;
 	}
 
-	bool
-	Manager::saveCacheIndex () const noexcept
+	std::string
+	Manager::serializeCacheIndex () const noexcept
 	{
 		Json::Value root{Json::objectValue};
 		root[FilesKey] = Json::arrayValue;
@@ -234,6 +256,7 @@ namespace EmEn::Net
 			item[URLKey] = url;
 			item[FilenameKey] = entry.filename;
 			item[BytesKey] = static_cast< Json::UInt64 >(entry.bytes);
+			item[LastUseKey] = static_cast< Json::UInt64 >(entry.lastUse);
 
 			root[FilesKey].append(item);
 		}
@@ -242,7 +265,144 @@ namespace EmEn::Net
 		builder["commentStyle"] = "None";
 		builder["indentation"] = "\t";
 
-		return IO::filePutContents(m_cacheDirectory / CacheIndexFilename, Json::writeString(builder, root));
+		return Json::writeString(builder, root);
+	}
+
+	bool
+	Manager::writeCacheIndex (const std::string & content) const noexcept
+	{
+
+		/* ⚠️ Written to a sibling then renamed: filePutContents() truncates in place, so a crash
+		 * mid-write left a truncated index — and every already-downloaded file became an orphan,
+		 * since the entries that name them were gone. */
+		const auto finalPath = m_cacheDirectory / CacheIndexFilename;
+		auto temporaryPath = finalPath;
+		temporaryPath += ".tmp";
+
+		if ( !IO::filePutContents(temporaryPath, content) )
+		{
+			return false;
+		}
+
+		std::error_code error;
+
+		std::filesystem::rename(temporaryPath, finalPath, error);
+
+		if ( error )
+		{
+			std::filesystem::remove(temporaryPath, error);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	void
+	Manager::sweepPartialFiles () const noexcept
+	{
+		std::error_code error;
+
+		std::filesystem::directory_iterator iterator{m_cacheDirectory, error};
+
+		if ( error )
+		{
+			return;
+		}
+
+		size_t removed = 0;
+
+		for ( const auto & entry : iterator )
+		{
+			if ( entry.path().extension() != PartialSuffix )
+			{
+				continue;
+			}
+
+			std::filesystem::remove(entry.path(), error);
+
+			if ( !error )
+			{
+				removed++;
+			}
+
+			error.clear();
+		}
+
+		if ( removed > 0 )
+		{
+			TraceInfo{ClassId} << removed << " partial download file(s) left by a previous run removed.";
+		}
+	}
+
+	void
+	Manager::enforceCacheBudget () noexcept
+	{
+		if ( m_cacheBudget == 0 || m_cache.empty() )
+		{
+			return;
+		}
+
+		uint64_t total = 0;
+
+		for ( const auto & entry : std::views::values(m_cache) )
+		{
+			total += entry.bytes;
+		}
+
+		if ( total <= m_cacheBudget )
+		{
+			return;
+		}
+
+		/* ⚠️ Eviction is strictly least-recently-used, with NOTHING pinned. Pinning the files of
+		 * completed tickets was tried first and makes the budget unenforceable: a ticket stays Done
+		 * for the whole process lifetime, so in a long session every file would be pinned and the
+		 * cache would grow without bound — the very thing the budget exists to prevent.
+		 * What makes that safe: the file just downloaded carries the highest use counter, so it is
+		 * the last candidate, and downloadedFilepath() checks the file still exists before naming
+		 * it. The residual window — a file evicted between its FileDownloaded notification and the
+		 * loading task reading it — needs the cache to overflow within those few milliseconds. */
+		std::vector< std::pair< uint64_t, std::string > > candidates;
+		candidates.reserve(m_cache.size());
+
+		for ( const auto & [url, entry] : m_cache )
+		{
+			candidates.emplace_back(entry.lastUse, url);
+		}
+
+		std::ranges::sort(candidates);
+
+		size_t evicted = 0;
+
+		for ( const auto & [lastUse, url] : candidates )
+		{
+			if ( total <= m_cacheBudget )
+			{
+				break;
+			}
+
+			const auto entryIt = m_cache.find(url);
+
+			if ( entryIt == m_cache.end() )
+			{
+				continue;
+			}
+
+			std::error_code error;
+
+			std::filesystem::remove(m_cacheDirectory / entryIt->second.filename, error);
+
+			total -= std::min(total, entryIt->second.bytes);
+			m_cache.erase(entryIt);
+			m_indexDirty = true;
+			evicted++;
+		}
+
+		if ( evicted > 0 )
+		{
+			TraceInfo{ClassId} << evicted << " cached file(s) evicted, the cache is back under " << m_cacheBudget << " bytes.";
+		}
 	}
 
 	std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > >
@@ -268,22 +428,42 @@ namespace EmEn::Net
 
 		bool success = true;
 
-		for ( const auto & entry : std::views::values(m_cache) )
+		/* ⚠️ The directory is walked, not the index: a .part file left by a crash, or a file whose
+		 * index entry was lost, is invisible to the map and would never be reclaimed — while the
+		 * header promises "every cached file". The index itself is kept. */
+		std::error_code error;
+
+		std::filesystem::directory_iterator iterator{m_cacheDirectory, error};
+
+		if ( error )
 		{
-			const auto filepath = m_cacheDirectory / entry.filename;
+			return false;
+		}
 
-			if ( IO::fileExists(filepath) && !IO::eraseFile(filepath) )
+		for ( const auto & entry : iterator )
+		{
+			if ( entry.path().filename() == CacheIndexFilename )
 			{
-				TraceError{ClassId} << "Unable to remove the cached file '" << filepath << "'.";
+				continue;
+			}
 
+			std::filesystem::remove(entry.path(), error);
+
+			if ( error )
+			{
+				TraceError{ClassId} << "Unable to remove the cached file '" << entry.path() << "': " << error.message();
+
+				error.clear();
 				success = false;
 			}
 		}
 
 		m_cache.clear();
-		m_indexDirty = true;
+		m_indexDirty = false;
 
-		return this->saveCacheIndex() && success;
+		/* Tickets already Done still name files that are gone: downloadedFilepath() checks
+		 * existence, so they answer empty rather than a dangling path. */
+		return this->writeCacheIndex(this->serializeCacheIndex()) && success;
 	}
 
 	/* ---- Requests ---- */
@@ -325,37 +505,65 @@ namespace EmEn::Net
 		{
 			const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-			/* Same URL already tracked: share its ticket. A terminal one still has to complete
-			 * for this new consumer; an in-flight one will, through its running worker. */
-			for ( size_t index = 0; index < m_items.size(); ++index )
+			/* Same URL already tracked: O(1) now — the linear scan re-serialised every tracked
+			 * URL on every request. */
+			if ( const auto known = m_ticketByURL.find(urlString); known != m_ticketByURL.end() )
 			{
-				if ( to_string(m_items[index].url()) == urlString )
+				ticket = known->second;
+
+				auto & item = m_items[static_cast< size_t >(ticket) - 1];
+
+				switch ( item.status() )
 				{
-					ticket = static_cast< int >(index) + 1;
+					case DownloadStatus::Done :
+						/* Serve it again, and mark the cache entry as freshly used. */
+						if ( const auto cacheIt = m_cache.find(urlString); cacheIt != m_cache.end() )
+						{
+							cacheIt->second.lastUse = ++m_useCounter;
+							m_indexDirty = true;
+						}
 
-					const auto status = m_items[index].status();
-					completeNow = status == DownloadStatus::Done || status == DownloadStatus::Error;
+						completeNow = true;
+						break;
 
-					break;
+					case DownloadStatus::Error :
+						/* ⚠️ A failed URL used to keep its terminal ticket forever: the same
+						 * request after the network came back replayed the old Error instead of
+						 * trying again. A new attempt is started on the same ticket. */
+						TraceInfo{ClassId} << "'" << url << "' failed before; retrying on ticket #" << ticket << ".";
+
+						item.resetForRetry();
+
+						startWorker = true;
+						firstInFlight = m_inFlight++ == 0;
+						break;
+
+					case DownloadStatus::Pending :
+					case DownloadStatus::Transferring :
+						/* A worker is already on it; its completion serves this caller too. */
+						break;
 				}
 			}
-
-			if ( ticket == InvalidTicket )
+			else
 			{
 				const auto cacheIt = m_cache.find(urlString);
 				const auto filename = cacheIt != m_cache.end() ? cacheIt->second.filename : cacheFilenameFor(url);
 
 				m_items.emplace_back(url, m_cacheDirectory / filename);
 				ticket = static_cast< int >(m_items.size());
+				m_ticketByURL.emplace(urlString, ticket);
 
 				if ( cacheIt != m_cache.end() )
 				{
 					m_items.back().setDone(cacheIt->second.bytes);
+
+					cacheIt->second.lastUse = ++m_useCounter;
+					m_indexDirty = true;
+
 					completeNow = true;
 				}
 				else
 				{
-					m_items.back().setTransferring();
 					startWorker = true;
 					firstInFlight = m_inFlight++ == 0;
 				}
@@ -376,6 +584,8 @@ namespace EmEn::Net
 			return ticket;
 		}
 
+		/* ⚠️ The edge, not the count: a cache hit never increments m_inFlight, so keying on it
+		 * emitted DownloadingStarted/Finished for transfers that never happened. */
 		if ( firstInFlight )
 		{
 			const std::lock_guard< std::mutex > lock{m_eventsAccess};
@@ -383,7 +593,7 @@ namespace EmEn::Net
 			m_events.emplace_back(Event{ticket, DownloadingStarted});
 		}
 
-		const auto & threadPool = m_threadPool;
+		auto threadPool = m_threadPool;
 
 		if ( threadPool == nullptr )
 		{
@@ -392,7 +602,7 @@ namespace EmEn::Net
 			{
 				const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-				m_items[static_cast< size_t >(ticket) - 1].setError();
+				m_items[static_cast< size_t >(ticket) - 1].setError(Network::DownloadOutcome::LocalIO, 0);
 				--m_inFlight;
 			}
 
@@ -413,7 +623,7 @@ namespace EmEn::Net
 			{
 				const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-				m_items[static_cast< size_t >(ticket) - 1].setError();
+				m_items[static_cast< size_t >(ticket) - 1].setError(Network::DownloadOutcome::LocalIO, 0);
 				--m_inFlight;
 			}
 
@@ -455,6 +665,13 @@ namespace EmEn::Net
 			}
 		}
 
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			/* Pending until a worker actually picks it up — the state exists to be observable. */
+			m_items[static_cast< size_t >(ticket) - 1].setTransferring();
+		}
+
 		TraceInfo{ClassId} << "Downloading '" << url << "' (ticket #" << ticket << ") ...";
 
 		/* Stream into a side file, then rename: a reader never sees a half-written cache file,
@@ -473,7 +690,9 @@ namespace EmEn::Net
 			m_items[static_cast< size_t >(ticket) - 1].setProgress(received, total.value_or(0));
 		};
 
-		bool success = m_impl->client->download(url, partialFilepath, progressHook);
+		Network::DownloadReport report;
+
+		bool success = m_impl->client->download(url, partialFilepath, progressHook, &report);
 
 		if ( success )
 		{
@@ -497,7 +716,7 @@ namespace EmEn::Net
 		}
 		else
 		{
-			TraceError{ClassId} << "Download of '" << url << "' (ticket #" << ticket << ") failed.";
+			TraceError{ClassId} << "Download of '" << url << "' (ticket #" << ticket << ") failed: " << Network::to_cstring(report.outcome) << ( report.statusCode > 0 ? " (HTTP " + std::to_string(report.statusCode) + ")" : std::string{} ) << ".";
 		}
 
 		{
@@ -509,14 +728,16 @@ namespace EmEn::Net
 			{
 				item.setDone(bytes);
 
-				m_cache[to_string(url)] = CacheEntry{filepath.filename().string(), bytes};
+				m_cache[to_string(url)] = CacheEntry{filepath.filename().string(), bytes, ++m_useCounter};
 				m_indexDirty = true;
+
+				this->enforceCacheBudget();
 
 				TraceSuccess{ClassId} << "'" << url << "' downloaded (" << bytes << " bytes) into '" << filepath << "'.";
 			}
 			else
 			{
-				item.setError();
+				item.setError(report.outcome, report.statusCode);
 			}
 
 			--m_inFlight;
@@ -564,12 +785,16 @@ namespace EmEn::Net
 		}
 
 		bool finished = false;
+		std::string indexContent;
 		std::vector< int > progressed;
 
 		{
 			const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-			finished = m_inFlight == 0;
+			/* ⚠️ The 1 -> 0 edge, not the value: a cache hit carries events without ever having
+			 * been in flight, and used to emit DownloadingFinished on every one of them. */
+			finished = m_transferRunning && m_inFlight == 0;
+			m_transferRunning = m_inFlight > 0;
 
 			for ( size_t index = 0; index < m_items.size(); ++index )
 			{
@@ -580,22 +805,33 @@ namespace EmEn::Net
 				}
 			}
 
+			/* ⚠️ Serialised HERE, under the lock; the disk write happens after it is released.
+			 * Reading m_cache outside the lock would race with a worker completing a download. */
 			if ( m_indexDirty )
 			{
-				if ( this->saveCacheIndex() )
-				{
-					m_indexDirty = false;
-				}
-				else
-				{
-					TraceError{ClassId} << "Unable to write the download cache index.";
-				}
+				indexContent = this->serializeCacheIndex();
 			}
 		}
 
 		for ( const auto ticket : progressed )
 		{
 			this->notify(Progress, ticket);
+		}
+
+		/* ⚠️ Written outside m_itemsAccess: this runs on the main loop, and saveCacheIndex()
+		 * does real disk I/O — holding the mutex made a worker wait on a frame's write. */
+		if ( !indexContent.empty() )
+		{
+			if ( this->writeCacheIndex(indexContent) )
+			{
+				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+				m_indexDirty = false;
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to write the download cache index.";
+			}
 		}
 
 		if ( finished )
@@ -646,7 +882,35 @@ namespace EmEn::Net
 
 		const auto & item = m_items[static_cast< size_t >(ticket) - 1];
 
-		return item.status() == DownloadStatus::Done ? item.filepath() : std::filesystem::path{};
+		if ( item.status() != DownloadStatus::Done )
+		{
+			return {};
+		}
+
+		/* ⚠️ clearCache() (or a user emptying the directory) can delete the file a completed
+		 * ticket names. Answering the path anyway made the consumer rewrite its resource onto
+		 * something that no longer exists, and fail later with an unrelated message. */
+		std::error_code error;
+
+		if ( !std::filesystem::exists(item.filepath(), error) || error )
+		{
+			return {};
+		}
+
+		return item.filepath();
+	}
+
+	std::pair< Base::Network::DownloadOutcome, uint16_t >
+	Manager::downloadFailure (int ticket) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
+		{
+			return {Base::Network::DownloadOutcome::Success, 0};
+		}
+
+		return m_items[static_cast< size_t >(ticket) - 1].failure();
 	}
 
 	size_t
