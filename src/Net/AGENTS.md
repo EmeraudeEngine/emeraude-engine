@@ -162,16 +162,22 @@ Console check of the whole chain: drop a store JSON with an `ExternalData` entry
 
 ## Cross-platform status — read before trusting anything here
 
-⚠️⚠️ **Windows has still never executed a single line of this directory.** macOS has, since
-**2026-08-28** — partially, and it cost three bugs (below). Assume nothing about Windows.
+**All three platforms have now executed this directory** (2026-08-28). That is new — it had been
+Linux-only for its whole life — and it cost four bugs in two days. Read the two subsections below
+before touching anything here.
 
 | Leg | Linux | macOS | Windows |
 |---|---|---|---|
-| `UDPClient` multicast / mDNS round trip | ✅ 2026-08-26 | ✅ 2026-08-28 | ❌ never run |
-| `NetworkInterfaces` IPv4+IPv6+MAC | ✅ | ✅ 2026-08-28 (`AF_LINK`) | ❌ never run |
-| Trust store + hermetic & live TLS suites | ✅ | ✅ 2026-08-28 | ❌ never run |
-| `Net::Manager` downloader, `ExternalData` chain | ✅ | ❌ not yet | ❌ never run |
-| `SerialPort` against real hardware | ✅ | ❌ no adapter available | ❌ never run |
+| `UDPClient` multicast / mDNS round trip | ✅ 2026-08-26 | ✅ 2026-08-28 | ✅ 2026-08-28 (6 LAN hosts answered) |
+| `NetworkInterfaces` IPv4+IPv6+MAC | ✅ | ✅ 2026-08-28 (`AF_LINK`) | ✅ 2026-08-28 (`GetAdaptersAddresses`) |
+| Trust store + hermetic & live TLS suites | ✅ | ✅ 2026-08-28 | ✅ 2026-08-28 (78/78, 43 CAs from `ROOT`) |
+| `Net::Manager` downloader, `ExternalData` chain | ✅ | ❌ not yet | ⚠️ download ✅, `ExternalData` chain ❌ |
+| `SerialPort` against real hardware | ✅ | ❌ no adapter available | ❌ no adapter, but see below |
+
+⚠️ Depth is **not** uniform, and the table flattens that. macOS was exercised through an
+out-of-tree harness on this directory's sources; Windows through app_system's own JS path
+(`--mode=test`, dev-check fixtures over CDP), which is the layer macOS has never run. Neither
+substitutes for the other.
 
 ### What macOS taught us (2026-08-28)
 
@@ -183,9 +189,11 @@ latent everywhere and only macOS made them visible:
    `close()` waited out the receive() timeout **in full** (10 s) instead of returning. Since
    app_system binds `UDP.close()` as a *synchronous* WebModule method, that stall lands on the
    renderer's main thread. `UDPClient` no longer trusts the kernel for the wake-up — `close()`
-   raises a flag and `receive()` polls in 50 ms slices (`PollSliceMs`). **Winsock returns
-   `WSAENOTCONN` in the same case, so Windows was almost certainly affected too** — the fix is
-   platform-neutral, but nobody has confirmed the symptom there.
+   raises a flag and `receive()` polls in 50 ms slices (`PollSliceMs`). **Confirmed on Windows the
+   same day, by measurement rather than inference**: the pre-fix symptom was visible there
+   (~107 ms `close()`, one drain-loop block), and after the fix `close()` returns in **62 ms with a
+   `receive()` parked on a 3000 ms timeout — and the same 62 ms at 1000 ms**, i.e. bounded by the
+   poll slice and independent of the receive timeout, which is exactly the contract.
    `TCPClient` is *not* concerned (it shuts down a **connected** socket, which works everywhere),
    and neither is `TCPServer` (Asio `acceptor->cancel()`). Verified on this machine: unconnected
    UDP → not woken; connected UDP → woken in 203 ms; listening TCP → not woken.
@@ -200,6 +208,37 @@ latent everywhere and only macOS made them visible:
    Linux `BOTHER` design with `ioctl(IOSSIOSPEED)` (`<IOKit/serial/ioss.h>`, applied **after**
    `tcsetattr` or it is undone), and `open()` returns **false** when the adapter refuses the rate.
    The macOS switch also gained `B7200`/`B14400`/`B28800`/`B76800`, which it simply lacked.
+
+### What Windows added (2026-08-28, same day, app_system's JS path)
+
+Windows was validated through `--mode=test` and the dev-check fixtures, i.e. the layer **macOS has
+never run**. What it contributed to this directory:
+
+- **The `close()` fix is measured, not inferred** — see point 1 above.
+- **The deadline-based timeout accounting holds**: 201/200, 1001/1000, 3013/3000 ms
+  (+0.4%, +0.1%, +0.4%). None of the slice-counting drift it was written to avoid.
+- **`MulticastOptionValue`'s `DWORD` branch works** — TTL 255 and loopback both took.
+- ⚠️ **`SerialPort.windows.cpp` needs no baud work at all**, and this closes the question the other
+  two platforms opened: it assigns `dcb.BaudRate = config.baudRate` directly — an arbitrary `DWORD`,
+  with **no `CBR_*` constant table** to fall out of. The Linux `termios2`/`BOTHER` and macOS
+  `IOSSIOSPEED` problem structurally cannot arise there. Still untested against real hardware, but
+  there is no lookup to be silently wrong.
+- ⚠️ **A dead interface aborts a naive join loop, and Windows always has dead interfaces.**
+  `IP_ADD_MEMBERSHIP` fails on an APIPA address (`169.254.x.x`), and a Windows host routinely
+  exposes 4+ of them (disconnected Wi-Fi, Bluetooth PAN, Hyper-V/VPN) where a Linux dev box has
+  none. `joinMulticastGroup()` correctly returns `false`; it is the **consumer** that must treat
+  that as "skip this interface", never "abort discovery". Enumerating on
+  `family == IPv4 && !internal` does **not** exclude them — APIPA is not flagged internal.
+- Still open on Windows: the `ExternalData` resource chain, and `TCPServer` binding `"::"`, which
+  opens a v6-only socket there so IPv4 peers are silently refused (long-standing trap, unfixed).
+
+> [!NOTE]
+> The bug the Windows run actually surfaced first was **not in this directory**: app_system's
+> `SharedDataManager::createJob<>()` locked a non-recursive mutex twice, which MS-STL turns into a
+> `std::system_error` inside a `noexcept` binding — instant renderer death on every
+> `JobInterface` module. glibc self-deadlocks instead of throwing, so Linux would have hung rather
+> than crashed. Fixed in app_system; recorded here only because it is why the Windows network run
+> could not start.
 
 Two findings that are **not** bugs but invalidate a written assumption:
 
@@ -712,8 +751,12 @@ the rebuilt ioctl numbers were checked against the kernel's). A rate the driver 
 applied **after** `tcsetattr`, which would otherwise undo it) — it stops at `B230400` where Linux
 carries constants to `B4000000`, so 250000 used to hit the silent `B9600` fallback there. ⚠️ Never
 exercised against a real adapter: a pty refuses `IOSSIOSPEED` for every rate, so only the *failure*
-branch has run. **The Windows leg has not even been looked at** — do not assume it is correct; the
-other two both turned out to be silently wrong.
+branch has run.
+
+**Windows needs nothing here** (checked 2026-08-28): `SerialPort.windows.cpp` assigns
+`dcb.BaudRate = config.baudRate` — an arbitrary `DWORD`, no `CBR_*` table — so the silent-fallback
+class of bug that hit both POSIX legs cannot occur. Untested against hardware, but there is no
+lookup table to be wrong.
 
 ⚠️ `TIOCEXCL` (claiming the port, so a second process cannot corrupt the stream mid-print) is
 **Linux-only** — `SerialPort.mac.mm` does not do it, though the ioctl exists on macOS. Deliberately

@@ -115,8 +115,19 @@ at the next occasion.
   layer was exercised.
 - [ ] ⚠️ **Linux, a RE-RUN**: the multicast option width changed there on 2026-08-28
   (`unsigned char` → `int`, see the TTL section above). It is the type `ip(7)` documents and the
-  risk is very low, but Linux was green and has not run since.
-- [ ] The Windows leg of everything above — still nothing at all (see the companion checklist).
+  risk is very low, but Linux was green and has not run since. **This is now the only platform
+  carrying an unverified change.**
+- [x] **Windows — done 2026-08-28**, through app_system's JS path (`--mode=test`, dev-check mDNS
+  fixture over CDP): bind `0.0.0.0:5353`, TTL 255 + loopback, join on the real NIC, DNS-SD
+  enumeration answered by **6 LAN hosts**, idempotent re-join, tolerant drop, `close(cb)` +
+  `"close"` event. The `DWORD` branch of `MulticastOptionValue` is therefore exercised. It also
+  **measured the `close()` fix** (62 ms with a `receive()` parked on 3000 ms, and the same 62 ms at
+  1000 ms) and the deadline-based timeout accounting (+0.4% at worst) — both of which this item had
+  only inferred for Winsock.
+  ⚠️ Two Windows-specific lessons, recorded in `app_system/src/WebModules/UDPModule/AGENTS.md`: a
+  double-locked mutex in app_system's job registry had to be fixed before anything could run, and
+  **an APIPA interface makes `addMembership` fail** — a consumer joining all interfaces inside one
+  `try` block loses every interface after the first dead one, and Windows always has dead ones.
 
 ## ⚠️ Traps (paid on Linux, re-checked on macOS)
 
