@@ -160,6 +160,22 @@ Console check of the whole chain: drop a store JSON with an `ExternalData` entry
 `Core.ResourcesManagerService.loadResource(ImageResource, MyPicture)` and poll
 `Core.ResourcesManagerService.resourceStatus(ImageResource, MyPicture)` until `Loaded`.
 
+## Cross-platform status — read before trusting anything here
+
+⚠️⚠️ **Everything in this directory is Linux-verified only.** The Windows and macOS legs compile and
+have **never been executed**, including — since 2026-08-27 — the resource downloading the engine now
+depends on. Two todo items carry the handover checklist, and they are meant to be run in one sitting
+on those machines:
+
+- [`emeraude-base/docs/todo/tls-stack-windows-macos-validation.md`](../../dependencies/emeraude-base/docs/todo/tls-stack-windows-macos-validation.md)
+  — the trust store per platform, the hermetic and live suites, the downloader from the console, the
+  `ExternalData` chain, and the traps (MS-STL's throwing `path::string()` under `-fno-exceptions`,
+  the MSVC-only `#pragma comment(lib, …)`, the `IOKit` link that arrives through hwloc, the
+  `v6_only` default on Windows).
+- [`docs/todo/udp-multicast-macos-verification.md`](../../docs/todo/udp-multicast-macos-verification.md)
+  — multicast/mDNS, the IPv6+MAC enumeration, the non-blocking receive and the SSDP TTL type, plus
+  the macOS 15 *Local Network* permission (test a **signed, packaged** binary, never a console run).
+
 ## Development Commands
 
 > [!WARNING]
