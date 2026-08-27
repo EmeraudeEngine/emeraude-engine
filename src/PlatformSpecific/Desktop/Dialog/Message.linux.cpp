@@ -56,7 +56,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	Message::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
+	Message::execute (Window & window, bool /*parentToWindow*/) noexcept
 	{
 		std::string command;
 
@@ -180,7 +180,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* Execute the command and get the result. */
 		int exitCode = 0;
-		const std::string output = executeCommand(command, exitCode);
+		const std::string output = executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
 
 		/* Parse the result based on the tool and button layout. */
 		if ( useKdialog )

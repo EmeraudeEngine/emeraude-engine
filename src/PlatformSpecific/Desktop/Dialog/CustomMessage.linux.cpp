@@ -56,7 +56,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	CustomMessage::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
+	CustomMessage::execute (Window & window, bool /*parentToWindow*/) noexcept
 	{
 		if ( m_buttons.empty() )
 		{
@@ -146,7 +146,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			/* Execute and parse kdialog result. */
 			int exitCode = 0;
-			(void)executeCommand(command, exitCode);
+			(void)executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
 
 			if ( m_buttons.size() == 1 )
 			{
@@ -202,7 +202,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			/* Execute and parse zenity result. */
 			int exitCode = 0;
-			const std::string output = executeCommand(command, exitCode);
+			const std::string output = executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
 
 			/* In switch mode, zenity outputs the button label that was clicked. */
 			m_clickedIndex = -1;

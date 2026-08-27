@@ -64,7 +64,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	}
 
 	bool
-	OpenFile::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
+	OpenFile::execute (Window & window, bool /*parentToWindow*/) noexcept
 	{
 		std::string command;
 
@@ -148,7 +148,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* Execute the command and get the result. */
 		int exitCode = 0;
-		const std::string output = executeCommand(command, exitCode);
+		const std::string output = executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
 
 		/* Parse the result. */
 		if ( exitCode != 0 || output.empty() )

@@ -615,6 +615,8 @@ namespace EmEn
 			 * waited on: keep that operation on a worker thread and this call on the main one.
 			 *
 			 * @see Scenes::Loaders::Interface::loadAsync()
+			 * @see PlatformSpecific::executeCommandPumpingEvents(), which applies this to the Linux
+			 * native dialogs: without it a zenity/kdialog box gets the application force-quit prompt.
 			 */
 			void
 			pumpEvents () const noexcept

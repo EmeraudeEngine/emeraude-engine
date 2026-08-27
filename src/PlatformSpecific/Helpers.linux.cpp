@@ -27,8 +27,10 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <future>
 
 namespace EmEn::PlatformSpecific
 {
@@ -133,6 +135,52 @@ namespace EmEn::PlatformSpecific
 		}
 
 		return output;
+	}
+
+	std::string
+	executeCommandPumpingEvents (const std::string & command, int & exitCode, const std::function< void () > & pumpEvents) noexcept
+	{
+		/* One frame at 60Hz: often enough for the compositor's ping, cheap enough to be invisible. */
+		constexpr auto PumpIntervalMS = 16;
+
+		/* A pumped callback can legitimately open a second dialog. Pumping again from inside would
+		 * nest one event loop into another, so the inner call just blocks: it is already covered by
+		 * the outer pump, which keeps answering the compositor. */
+		static thread_local bool isPumping = false;
+
+		if ( !pumpEvents || isPumping )
+		{
+			return executeCommand(command, exitCode);
+		}
+
+		int childExitCode = -1;
+		std::future< std::string > pendingOutput;
+
+		try
+		{
+			pendingOutput = std::async(std::launch::async, [&command, &childExitCode] () {
+				return executeCommand(command, childExitCode);
+			});
+		}
+		catch ( const std::exception & )
+		{
+			/* No worker thread available. The child was never spawned, so falling back to the
+			 * blocking form only costs the unresponsive-window prompt, never a lost dialog. */
+			return executeCommand(command, exitCode);
+		}
+
+		isPumping = true;
+
+		while ( pendingOutput.wait_for(std::chrono::milliseconds{PumpIntervalMS}) != std::future_status::ready )
+		{
+			pumpEvents();
+		}
+
+		isPumping = false;
+
+		exitCode = childExitCode;
+
+		return pendingOutput.get();
 	}
 
 	std::string

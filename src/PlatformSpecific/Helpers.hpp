@@ -35,6 +35,7 @@
 	#include <functional>
 	#include <map>
 #endif
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -254,6 +255,29 @@ namespace EmEn::PlatformSpecific
 	 */
 	[[nodiscard]]
 	EMEN_API std::string executeCommand (const std::string & command, int & exitCode) noexcept;
+
+	/**
+	 * @brief Executes a command that owns the screen - a zenity/kdialog box - without letting the
+	 * caller's window die.
+	 * @details executeCommand() parks the calling thread in read() for as long as the child lives.
+	 * When that thread is the main one, nothing drains the window event queue any more, and a
+	 * Wayland compositor that stops receiving its xdg_wm_base pong declares the application
+	 * unresponsive: the user is offered "Force quit / Wait" over a perfectly healthy program.
+	 * This variant runs the child on a worker thread and calls @a pumpEvents on the caller's thread
+	 * until it exits - the very pattern Window::pumpEvents() documents for long operations.
+	 * @note Only Linux needs this. The native modal dialogs of Windows and macOS pump the OS event
+	 * loop themselves; spawning a helper process pumps nothing.
+	 * @warning @a pumpEvents delivers window callbacks, so whatever it invokes runs re-entrantly
+	 * with respect to the dialog being waited on. A nested call (a callback opening a second dialog)
+	 * falls back to the plain blocking executeCommand() instead of nesting one pump inside another.
+	 * @param command The command to execute.
+	 * @param exitCode Output parameter for the command's exit code.
+	 * @param pumpEvents Called repeatedly on the caller's thread while the child runs. An empty
+	 * function falls back to executeCommand().
+	 * @return std::string The command's stdout output with trailing newlines removed.
+	 */
+	[[nodiscard]]
+	EMEN_API std::string executeCommandPumpingEvents (const std::string & command, int & exitCode, const std::function< void () > & pumpEvents) noexcept;
 
 	/**
 	 * @brief Builds zenity file filter arguments from extension filters.

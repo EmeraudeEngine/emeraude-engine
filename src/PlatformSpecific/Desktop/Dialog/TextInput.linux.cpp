@@ -33,7 +33,7 @@
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	bool
-	TextInput::execute (Window & /*window*/, bool /*parentToWindow*/) noexcept
+	TextInput::execute (Window & window, bool /*parentToWindow*/) noexcept
 	{
 		std::string command;
 
@@ -115,7 +115,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* Execute the command and get the result. */
 		int exitCode = 0;
-		const std::string output = executeCommand(command, exitCode);
+		const std::string output = executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
 
 		/* Parse the result. */
 		if ( exitCode != 0 )
