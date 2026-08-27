@@ -70,8 +70,9 @@ namespace EmEn::Resources
 	 * Container is a header-only template, so every expression in its method bodies that does
 	 * **not** depend on `resource_t` is analysed at template *definition* time — which would
 	 * force `Net/Manager.hpp`, `FileSystem.hpp` and `ThreadPool.hpp` to be complete right here,
-	 * in a header parsed by a large part of the engine (`Net::Manager` alone drags in the whole
-	 * `Console/` subtree, since it is a `ControllableTrait`).
+	 * in a header parsed by a large part of the engine (`Net::Manager` alone pulls `FileSystem`,
+	 * `ThreadPool`, `Network/URL` and the JSON layer behind its cache database — it is NOT a
+	 * `ControllableTrait`, an earlier version of this comment said so wrongly).
 	 *
 	 * These free functions are declared here and implemented in `Container.cpp`, so the heavy
 	 * service headers stay in that single translation unit. Add a function here rather than

@@ -53,7 +53,7 @@ namespace EmEn::Net::WiFiScanner
 
 	/**
 	 * @brief Scans for available WiFi networks.
-	 * @note Platform-specific: uses nmcli (Linux), netsh (Windows), CoreWLAN (macOS).
+	 * @note Platform-specific: uses nmcli (Linux), the native WLAN API — WlanScan / WlanGetNetworkBssList (Windows), CoreWLAN (macOS).
 	 * @return std::vector< Network > List of discovered networks.
 	 */
 	[[nodiscard]]
@@ -61,7 +61,7 @@ namespace EmEn::Net::WiFiScanner
 
 	/**
 	 * @brief Returns the currently connected WiFi network(s).
-	 * @note Platform-specific: uses nmcli (Linux), netsh (Windows), CoreWLAN (macOS).
+	 * @note Platform-specific: uses nmcli (Linux), the native WLAN API — WlanScan / WlanGetNetworkBssList (Windows), CoreWLAN (macOS).
 	 * @return std::vector< Network > Current connection(s), empty if not connected via WiFi.
 	 */
 	[[nodiscard]]

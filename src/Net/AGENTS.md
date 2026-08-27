@@ -1,61 +1,104 @@
 # Net System
 
-Context for developing the Emeraude Engine network download system.
+Context for the Emeraude Engine `src/Net/` directory: the hardware & discovery utilities (production surface) and the resource download manager (semi-stub).
 
 ## Module Overview
 
-Network resource download system based on ASIO. Seamless integration with the Resources system for loading assets from URLs.
+Two unrelated things live under `src/Net/`:
 
-## Net-Specific Rules
+1. **`Net::Manager`, the resource download manager** — a `ServiceInterface` owned by
+   `PrimaryServices`, meant to fetch `ExternalData` resources for the `Resources` system.
+   ⚠️ **It is a semi-stub: the chain does not work end to end and has no consumer.** Read the
+   section below before touching it or believing any older description of it.
+2. **The hardware & discovery utilities** (`UDPClient`, `NetworkInterfaces`, `TCPClient`,
+   `TCPServer`, `SerialPort`, `WiFiScanner`) — standalone, `noexcept`, cross-platform classes
+   with no dependency on the manager. These are the **production surface** of this directory:
+   they are consumed by downstream applications through scripting bridges (TCP/UDP/serial/WiFi
+   modules). Documented in § Hardware & Discovery Utilities.
 
-### Main Objective
-- **Resource download**: Download assets/files from URLs
-- **NOT multiplayer**: Net is not for gameplay networking
-- **Resources integration**: Seamless workflow with loading system
+**Not multiplayer**: nothing here is gameplay networking, and nothing should become it without
+an owner decision.
 
-### ASIO Architecture
-- **ASIO-based**: Boost.Asio or standalone for network management
-- **Supported protocols**: HTTP/HTTPS and other ASIO protocols
-- **Asynchronous**: Non-blocking downloads
-- **Internal management**: ASIO handles timeouts, retries, network errors
+## Download manager (`Net::Manager`) — real state, 2026-08-27
 
-### Resources Integration
+**Files**: `Manager.hpp/.cpp`, `DownloadItem.hpp`, `CachedDownloadItem.hpp/.cpp`, `Types.hpp`.
 
-**Automatic workflow**:
-```
-1. Resource load() detects a URL instead of a file path
-2. Resources delegates to Net for download
-3. Net downloads asynchronously
-4. Net returns downloaded file to Resources
-5. Resources finalizes loading normally
-```
+**Identity**: `class Manager final : public ServiceInterface, public Base::ObservableTrait`,
+`ClassId = "Net::ManagerService"`. It is **not** a `Console::ControllableTrait` — no console
+command reaches it. Constructed in `PrimaryServices` with the `FileSystem` and the shared
+`Base::ThreadPool`; `Core` observes it (`Core.cpp`, `onNotification`) with a handler whose
+every `case` is an empty `break`.
 
-**Transparent for client**:
+**Real API** (header-verified — the methods older docs advertised, `requestDownload()`,
+`isCached()`, `clearCache()`, `forceDownload()`, **do not exist**):
 ```cpp
-// Client code identical, whether local file or URL
-auto texture = resources.container<TextureResource>()->getResource("logo.png");
-// or
-auto texture = resources.container<TextureResource>()->getResource("https://example.com/logo.png");
-
-// Net automatically handles download if URL detected
+int download (const Network::URL & url, const std::filesystem::path & output, bool replaceExistingFile) noexcept; // returns a ticket
+DownloadStatus downloadStatus (int ticket) const noexcept;
+size_t fileCount () const noexcept;
+size_t fileRemainingCount () const noexcept;
+size_t totalBytesTotal () const noexcept;   // accumulators, see header for exact names
+void showProgressionInConsole (bool state) noexcept;
+enum class NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished, Progress };
 ```
 
-### Local Cache System
-- **Automatic cache**: Downloaded resources saved locally
-- **Avoids re-downloads**: Cache check before download
-- **Transparent management**: Cache automatically managed by Net
+**Transport**: `download()` enqueues **one lambda per request on the shared thread pool**
+(no thread of its own, no `io_context`) which calls the **legacy** emeraude-base free function
+`Base::Network::download(uri, path, verbose)` — plaintext HTTP over Asio. The engine
+references **none** of emeraude-base's production-grade HTTPS stack (`HTTPSClient`,
+`TLSConnection`, `TrustStore`), so:
+- an `https://` URL resolves port 443 and then **speaks cleartext** to it — HTTPS cannot work;
+- the legacy function uses the throwing Asio overloads under `ASIO_NO_EXCEPTIONS`: a DNS
+  failure is a **`std::abort()`**, inside a function declared `noexcept`;
+- there is no timeout, no retry, no redirect following, no chunked transfer.
 
-### Asynchronous Downloads
-- **Non-blocking**: No freeze during downloads
-- **Async Resources integration**: Compatible with Resources async loading
-- **Status tracking**: Resources can track progress via observables
+**Verified defects (read the code, not this list, before fixing)**:
+| Where | What |
+|---|---|
+| `grep notify src/Net/` → nothing | **No notification is ever emitted.** The four `NotificationCode`s are dead; `DownloadItem::setStatus()`/`setProgression()` are never called, every item stays `Pending` forever. |
+| `Manager.cpp`, the pool lambda | Passes `true` as the third argument of `Base::Network::download()` — that parameter is `verbose`, not `replaceExistingFile`. The flag the caller asked for is dropped. |
+| `Manager::download()` | `m_downloadItems.emplace_back()` without a mutex while pool workers hold `const auto & item = m_downloadItems.at(ticket)` — a reallocation dangles the worker's reference. |
+| `Manager::download()` | Returns ticket `0` for "already queued", indistinguishable from a real ticket 0 and colliding with `Resources::ServiceAccess::DownloadCacheHit == 0`. |
+| Cache | `m_downloadCache` is filled only from `downloads_db.json` at startup; `download()` never inserts. `clearDownloadCache()` is private and never called. `m_downloadEnabled`, `m_showProgression`, `m_nextCacheItemId` are written, never read. |
+
+**Cache on disk**: `FileSystem::cacheDirectory("downloads")` for the files (`dlcached_<id>`),
+`cacheDirectory("downloads_db.json")` for the index (written **next to** the directory, not
+inside). ⚠️ `Resources` uses a **different** scheme — `cacheDirectory()/data/<ResourceClassId>/<filename>`
+(`LoadingRequest::cacheFilepath()`). The two never meet.
+
+### Resources integration — what exists and where it breaks
+
+A resource is downloadable only when its store entry says so: **`"Source": "ExternalData"`**
+(`BaseInformation::parseSource`); the data string is then validated with `Network::URL::isURL()`.
+⚠️ There is **no URL sniffing on the resource name** — `getResource("https://…")` does nothing
+special, whatever older docs said.
+
+Chain: `Container` observes the manager in its constructor → on an async load of an
+`ExternalData` resource calls `ServiceAccess::startDownload()` and parks the request under its
+ticket → `Container::onNotification()` waits for `FileDownloaded`, checks `downloadStatus()`,
+then enqueues the loading task. It breaks in four places:
+1. `FileDownloaded` is never emitted (above) → **an `ExternalData` resource never loads**.
+2. Cache hit (`DownloadCacheHit`): the request is marked processed and **no loading task is
+   enqueued** (`Container.hpp`, comment "fix separately").
+3. `DownloadStatus::Error` is handled by `markDownloadProcessed(..., true)`: **a failure
+   rewrites the `BaseInformation` to a cache file that was never written** (`FIXME` in code).
+4. `Core/Resources/DownloadEnabled` (`SettingKeys.hpp`) is read into
+   `Resources::Manager::m_downloadingAllowed`, which **nothing consults**. The setting is inert.
+
+**Consumers**: none in the engine beyond this dead chain; none in any downstream application
+(they download from their scripting layer). One test application binds a debug key to
+`netManager().download()` with hard-coded paths — not a use case.
+
+**Fate**: an **open owner decision**, tracked in
+[`docs/todo/net-manager-download-chain-broken.md`](../../docs/todo/net-manager-download-chain-broken.md)
+— either rewire onto `Base::Network::HTTPSClient` and repair the chain, or remove the manager,
+the `ExternalData` path and the legacy `Network.cpp`. **Do not build on the manager, and do not
+write a workaround in a consumer, until that decision is taken.**
 
 ## Development Commands
 
 > [!WARNING]
-> **There is no test target in the engine.** This section used to advertise `ctest -R Net`
-> and `./test --filter="*Net*"`; neither exists — the engine `CMakeLists.txt` declares no
-> `add_test()`, and the only unit suite in the cascade lives in **emeraude-base**
+> **There is no test target in the engine.** The engine `CMakeLists.txt` declares no
+> `add_test()`; the only unit suite in the cascade lives in **emeraude-base**
 > (`EmeraudeBaseUnitTests`).
 >
 > To exercise a `Net` utility, compile it out-of-tree: the hardware utilities depend on
@@ -66,54 +109,6 @@ auto texture = resources.container<TextureResource>()->getResource("https://exam
 > g++ -std=c++20 -I<engine>/src my_check.cpp \
 >     <engine>/src/Net/UDPClient.cpp <engine>/src/Net/NetworkInterfaces.cpp -o my_check
 > ```
-
-## Important Files
-
-- `Manager.cpp/.hpp` - Main manager, download requests
-- Local cache (location to be documented)
-- `@docs/resource-management.md` - Resources integration
-
-## Development Patterns
-
-### Usage via Resources (automatic)
-```cpp
-// Resources detects URL and uses Net automatically
-auto mesh = resources.container<MeshResource>()->getResource(
-    "https://cdn.example.com/assets/character.obj"
-);
-
-// Mesh starts Loading (download in progress)
-// When download complete → parsing → Loaded
-// If download fails → Default mesh (fail-safe)
-```
-
-### Explicit Request (rare, advanced usage)
-```cpp
-// If direct download control needed
-netManager.requestDownload(
-    "https://example.com/file.dat",
-    "/local/cache/path",
-    [](bool success, const std::string& localPath) {
-        if (success) {
-            // File available at localPath
-        } else {
-            // Download failed
-        }
-    }
-);
-```
-
-### Cache Management
-```cpp
-// Check if resource is cached
-bool cached = netManager.isCached("https://example.com/texture.png");
-
-// Clear cache (maintenance)
-netManager.clearCache();
-
-// Force re-download (ignore cache)
-netManager.forceDownload(url, callback);
-```
 
 ## Hardware & Discovery Utilities
 
@@ -569,32 +564,39 @@ namespace EmEn::Net::WiFiScanner
 
 ## Critical Points
 
-- **ASIO handles complexity**: Timeouts, retries, network errors handled by ASIO
-- **Thread safety**: ASIO handles threading, Net thread-safe by design
-- **Local cache**: Check available disk space for cache
-- **URLs in stores**: Resources stores can contain URLs instead of paths
-- **Fail-safe integration**: Download failure → Resources returns neutral resource
-- **No multiplayer**: Net is for assets, not gameplay networking
-- **Hardware utilities are standalone**: UDPClient, NetworkInterfaces, SerialPort, WiFiScanner have no dependency on Net::Manager or ASIO. TCPClient/TCPServer use ASIO internally but expose a simple blocking-with-timeout API — consumers never see ASIO types.
-- **noexcept everywhere**: All hardware utility functions are noexcept, errors return false/empty containers (ASIO is configured with `ASIO_NO_EXCEPTIONS`).
+- **The hardware utilities are the production surface; the download manager is not.** See
+  § Download manager for its real state before touching `Resources`' `ExternalData` path.
+- **Hardware utilities are standalone**: `UDPClient`, `NetworkInterfaces`, `SerialPort`,
+  `WiFiScanner` have no dependency on `Net::Manager` nor on Asio. `TCPClient`/`TCPServer` use
+  Asio internally (connect / accept only) behind a blocking-with-timeout API — consumers never
+  see Asio types, and since 2026-08-27 **`TCPServer.hpp` no longer includes `asio.hpp`** (the
+  io_context and the acceptor live in a private `Impl` defined in the TU).
+- **noexcept everywhere**: all hardware utility functions are noexcept, errors return
+  false/empty containers (Asio is configured with `ASIO_NO_EXCEPTIONS`). ⚠️ That guarantee is
+  honest only where the `error_code` overloads are used — the legacy `Base::Network::download()`
+  the manager calls is not (see above).
 - ⚠️⚠️ **Socket options that feed `bind()` or `recvmsg()` must be set at `open()` time, never lazily.** Measured on Linux 6.x: arming `IP_PKTINFO` at the first `receive(DatagramInfo)` instead of at `open()` still yields a correct destination address — it sits in the IP header — but the receiving interface index comes back as **0** for any datagram already queued. The structure looks perfectly plausible and the index is silently wrong, which is exactly what breaks per-interface attribution on a multi-homed host. Same family as `SO_REUSEADDR`/`SO_REUSEPORT`, which `bind()` reads once and ignores forever after.
-- ⚠️ **A green compile proves nothing about a socket.** The multicast surface was validated by an out-of-tree binary compiled straight from `UDPClient.cpp` + `NetworkInterfaces.cpp` (they depend on nothing but `emeraude_export.hpp`), doing a real round-trip and a real DNS-SD exchange. Reuse that technique rather than trusting the build.
+- ⚠️ **A green compile proves nothing about a socket.** The multicast surface and the
+  IPv4/IPv6/MAC enumeration were validated by out-of-tree binaries compiled straight from
+  `UDPClient.cpp` / `NetworkInterfaces.cpp` (they depend on nothing but `emeraude_export.hpp`),
+  doing a real round-trip, a real DNS-SD exchange, a real enumeration. Reuse that technique
+  rather than trusting the build.
 
 ## Important Files
 
-- `Manager.cpp/.hpp` - Main manager, download requests
+- `Manager.cpp/.hpp`, `DownloadItem.hpp`, `CachedDownloadItem.hpp/.cpp`, `Types.hpp` - Download manager (semi-stub, see § Download manager)
 - `UDPClient.hpp/.cpp` - UDP client, IPv4 multicast and SSDP discovery
 - `NetworkInterfaces.hpp/.cpp` - Local IPv4/IPv6 address enumeration with MAC (feeds the multicast API and scripting bridges)
 - `TCPClient.hpp/.cpp` - TCP client (Asio-based, blocking-with-timeout API)
 - `TCPServer.hpp/.cpp` - TCP server (Asio-based, accept returns owned TCPClient)
 - `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction
 - `WiFiScanner.hpp` + `.{linux,mac,windows}.cpp` - WiFi scanning
-- Local cache (location to be documented)
-- `@docs/resource-management.md` - Resources integration
+- Download cache: `cacheDirectory("downloads")` + `cacheDirectory("downloads_db.json")` (manager); `cacheDirectory()/data/<ClassId>/` (Resources) — disjoint
 
 ## Detailed Documentation
 
 Related systems:
-- @docs/resource-management.md - Automatic integration with Resources
-- @src/Resources/AGENTS.md - Fail-safe loading system
-- ASIO documentation - Protocol details and network management
+- @docs/todo/net-manager-download-chain-broken.md - The open decision on the download manager
+- @src/Resources/AGENTS.md - Fail-safe loading system, `ExternalData` source type
+- @docs/resource-management.md - Resources architecture (carries the same warning on downloads)
+- emeraude-base `src/Network/` (`HTTPSClient`, `TLSConnection`, `TrustStore`, `URI`) - the production-grade HTTPS stack the engine does not use yet

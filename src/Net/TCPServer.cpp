@@ -30,14 +30,24 @@
 #include <chrono>
 #include <utility>
 
+/* Third-party inclusions. */
+#include "Network/asio_throw_exception.hpp"
+#include "asio.hpp"
+
 namespace EmEn::Net
 {
+	struct TCPServer::Impl
+	{
+		asio::io_context ioContext;
+		std::unique_ptr< asio::ip::tcp::acceptor > acceptor;
+	};
+
 	const int TCPServer::DefaultBacklog{asio::socket_base::max_listen_connections};
 
 	/* ---- Lifecycle ---- */
 
 	TCPServer::TCPServer () noexcept
-		: m_ioContext{std::make_unique< asio::io_context >()}
+		: m_impl{std::make_unique< Impl >()}
 	{
 
 	}
@@ -48,8 +58,7 @@ namespace EmEn::Net
 	}
 
 	TCPServer::TCPServer (TCPServer && other) noexcept
-		: m_ioContext{std::move(other.m_ioContext)},
-		m_acceptor{std::move(other.m_acceptor)},
+		: m_impl{std::move(other.m_impl)},
 		m_lastError{std::exchange(other.m_lastError, std::error_code{})}
 	{
 
@@ -62,8 +71,7 @@ namespace EmEn::Net
 		{
 			this->close();
 
-			m_ioContext = std::move(other.m_ioContext);
-			m_acceptor = std::move(other.m_acceptor);
+			m_impl = std::move(other.m_impl);
 			m_lastError = std::exchange(other.m_lastError, std::error_code{});
 		}
 
@@ -75,7 +83,8 @@ namespace EmEn::Net
 	bool
 	TCPServer::listen (uint16_t port, int backlog, const std::string & address) noexcept
 	{
-		if ( m_ioContext == nullptr )
+		/* A moved-from server has no implementation left. */
+		if ( m_impl == nullptr )
 		{
 			m_lastError = std::make_error_code(std::errc::bad_file_descriptor);
 
@@ -108,16 +117,18 @@ namespace EmEn::Net
 			endpoint = asio::ip::tcp::endpoint(addr, port);
 		}
 
-		m_acceptor = std::make_unique< asio::ip::tcp::acceptor >(*m_ioContext);
+		auto & acceptor = m_impl->acceptor;
+
+		acceptor = std::make_unique< asio::ip::tcp::acceptor >(m_impl->ioContext);
 
 		asio::error_code ec;
 
-		m_acceptor->open(endpoint.protocol(), ec);
+		acceptor->open(endpoint.protocol(), ec);
 
 		if ( ec )
 		{
 			m_lastError = ec;
-			m_acceptor.reset();
+			acceptor.reset();
 
 			return false;
 		}
@@ -125,30 +136,30 @@ namespace EmEn::Net
 		/* Best-effort: SO_REUSEADDR. Failure is non-fatal — the kernel may
 		 * still bind, and the option is irrelevant on a clean port. */
 		asio::error_code reuseEc;
-		m_acceptor->set_option(asio::socket_base::reuse_address(true), reuseEc);
+		acceptor->set_option(asio::socket_base::reuse_address(true), reuseEc);
 
-		m_acceptor->bind(endpoint, ec);
+		acceptor->bind(endpoint, ec);
 
 		if ( ec )
 		{
 			m_lastError = ec;
 
 			asio::error_code closeEc;
-			m_acceptor->close(closeEc);
-			m_acceptor.reset();
+			acceptor->close(closeEc);
+			acceptor.reset();
 
 			return false;
 		}
 
-		m_acceptor->listen(backlog, ec);
+		acceptor->listen(backlog, ec);
 
 		if ( ec )
 		{
 			m_lastError = ec;
 
 			asio::error_code closeEc;
-			m_acceptor->close(closeEc);
-			m_acceptor.reset();
+			acceptor->close(closeEc);
+			acceptor.reset();
 
 			return false;
 		}
@@ -159,25 +170,29 @@ namespace EmEn::Net
 	void
 	TCPServer::close () noexcept
 	{
-		if ( m_acceptor != nullptr )
+		if ( m_impl == nullptr || m_impl->acceptor == nullptr )
 		{
-			if ( m_acceptor->is_open() )
-			{
-				asio::error_code cancelEc;
-				m_acceptor->cancel(cancelEc);
-
-				asio::error_code closeEc;
-				m_acceptor->close(closeEc);
-			}
-
-			m_acceptor.reset();
+			return;
 		}
+
+		auto & acceptor = m_impl->acceptor;
+
+		if ( acceptor->is_open() )
+		{
+			asio::error_code cancelEc;
+			acceptor->cancel(cancelEc);
+
+			asio::error_code closeEc;
+			acceptor->close(closeEc);
+		}
+
+		acceptor.reset();
 	}
 
 	bool
 	TCPServer::isListening () const noexcept
 	{
-		return m_acceptor != nullptr && m_acceptor->is_open();
+		return m_impl != nullptr && m_impl->acceptor != nullptr && m_impl->acceptor->is_open();
 	}
 
 	/* ---- Accept ---- */
@@ -191,31 +206,31 @@ namespace EmEn::Net
 		}
 
 		asio::error_code acceptEc = asio::error::would_block;
-		asio::ip::tcp::socket peerSocket{*m_ioContext};
+		asio::ip::tcp::socket peerSocket{m_impl->ioContext};
 
-		m_acceptor->async_accept(peerSocket,
+		m_impl->acceptor->async_accept(peerSocket,
 			[&acceptEc] (const asio::error_code & ec) noexcept {
 				acceptEc = ec;
 			}
 		);
 
-		m_ioContext->restart();
+		m_impl->ioContext.restart();
 
 		if ( timeoutMs > 0 )
 		{
-			static_cast< void >(m_ioContext->run_for(std::chrono::milliseconds(timeoutMs)));
+			static_cast< void >(m_impl->ioContext.run_for(std::chrono::milliseconds(timeoutMs)));
 		}
 		else
 		{
-			static_cast< void >(m_ioContext->run());
+			static_cast< void >(m_impl->ioContext.run());
 		}
 
 		if ( acceptEc == asio::error::would_block )
 		{
 			/* Deadline elapsed before any client arrived: cancel and drain. */
 			asio::error_code cancelEc;
-			m_acceptor->cancel(cancelEc);
-			static_cast< void >(m_ioContext->run());
+			m_impl->acceptor->cancel(cancelEc);
+			static_cast< void >(m_impl->ioContext.run());
 
 			return std::nullopt;
 		}
@@ -257,7 +272,7 @@ namespace EmEn::Net
 		}
 
 		asio::error_code ec;
-		const auto endpoint = m_acceptor->local_endpoint(ec);
+		const auto endpoint = m_impl->acceptor->local_endpoint(ec);
 
 		if ( ec )
 		{

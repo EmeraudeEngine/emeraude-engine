@@ -237,7 +237,7 @@ and the AI executes, measures, and iterates at industrial speed.
 | | AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) | Virtual devices. |
 | | Scene Editor | [`src/Scenes/Editor/AGENTS.md`](src/Scenes/Editor/AGENTS.md) | Picking, gizmos, entity manipulation. |
 | | Tool | [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) | Editor tools. |
-| **Net** | Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) | HTTP/Download, UDP/SSDP, Serial, WiFi. |
+| **Net** | Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) | UDP/multicast/SSDP, interface enumeration, TCP client/server, Serial, WiFi. HTTP download manager = semi-stub (see its AGENTS.md). |
 
 ## 3. Core Axioms
 

@@ -36,10 +36,6 @@
 #include <string>
 #include <system_error>
 
-/* Third-party inclusions. */
-#include "asio.hpp"
-#include "Network/asio_throw_exception.hpp"
-
 /* Local inclusions for usages. */
 #include "TCPClient.hpp"
 
@@ -56,6 +52,9 @@ namespace EmEn::Net
 	 * services each accepted client in-place or hands it off to another
 	 * thread / connection manager. This pattern fits both the WebModule
 	 * polling consumer and a LAN-game accept loop.
+	 * @note Asio never reaches this header: the io_context and the acceptor live
+	 * in a private implementation defined in the translation unit, so a consumer
+	 * pays neither the asio.hpp parse nor its exception-hook prerequisites.
 	 */
 	class EMEN_LEAN_API TCPServer final
 	{
@@ -137,8 +136,10 @@ namespace EmEn::Net
 
 		private:
 
-			std::unique_ptr< asio::io_context > m_ioContext;
-			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;
+			/** @brief Asio-backed state (io_context + acceptor), confined to the TU. */
+			struct Impl;
+
+			std::unique_ptr< Impl > m_impl;
 			std::error_code m_lastError;
 	};
 }

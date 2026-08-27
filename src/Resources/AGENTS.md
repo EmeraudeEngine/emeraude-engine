@@ -28,7 +28,8 @@ Fail-safe resource system that guarantees NEVER returning nullptr and always pro
 > It is a header-only template, so any expression in a method body that does *not* depend on
 > `resource_t` is analysed at template **definition** time — pulling `Net/Manager.hpp`,
 > `FileSystem.hpp` or `ThreadPool.hpp` into every consumer. `Net::Manager` is the worst offender:
-> being a `ControllableTrait`, it drags the whole `Console/` subtree along.
+> it pulls `FileSystem`, `ThreadPool`, `Network/URL` and the JSON layer behind its cache database
+> (it is NOT a `ControllableTrait` — this note said so wrongly until 2026-08-27).
 >
 > Two mechanisms keep the header thin (2026-07, measured: 42 headers / 12 826 LOC → **20 / 6 834**):
 >
@@ -345,7 +346,7 @@ For complete resources system architecture:
 - @docs/resource-management.md - Fail-safe, dependencies, detailed lifecycle, thread safety, future suggestions
 
 Related systems:
-- @src/Net/AGENTS.md - Resource download from URLs
+- @src/Net/AGENTS.md - Resource download from URLs (⚠️ chain not functional today — § Download manager there, decision in `docs/todo/net-manager-download-chain-broken.md`)
 - @src/Graphics/AGENTS.md - Geometry, Material, Texture as resources
 - @src/Audio/AGENTS.md - SoundResource, MusicResource
 - @src/Libs/AGENTS.md - Observer/Observable pattern
