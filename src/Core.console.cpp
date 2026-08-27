@@ -42,6 +42,48 @@ namespace EmEn
 	void
 	Core::onRegisterToConsole () noexcept
 	{
+		this->bindCommand("remoteConsoleStatus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			if ( m_consoleController.isRemoteListenerRunning() )
+			{
+				outputs.emplace_back(Severity::Info, std::stringstream{} << "{\"running\":true,\"endpoint\":\"" << m_consoleController.remoteListenerEndpoint() << "\"}");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Info, "{\"running\":false}");
+			}
+
+			return true;
+		}, "Returns the remote console state as JSON (running, endpoint).");
+
+		this->bindCommand("restartRemoteConsole", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: restartRemoteConsole(port) or restartRemoteConsole(address:port)");
+
+				return false;
+			}
+
+			/* NOTE: "7778" reaches the console as an Integer argument, "0.0.0.0:7778" as a String;
+			 * asString() on an Integer is empty, so read the type first. */
+			const auto endpointText = arguments[0].type() == Console::ArgumentType::Integer ? std::to_string(arguments[0].asInteger()) : arguments[0].asString();
+
+			std::string address;
+			uint16_t port = 0;
+
+			if ( !Console::Controller::parseEndpoint(endpointText, m_consoleController.defaultRemoteListenerAddress(), address, port) )
+			{
+				outputs.emplace_back(Severity::Error, "Invalid endpoint. Expected a port (1-65535), address:port or [ipv6]:port.");
+
+				return false;
+			}
+
+			m_consoleController.requestRemoteListenerRestart(address, port);
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "The remote console will move to " << address << ':' << port << " on the next cycle; this connection closes. Reconnect there.");
+
+			return true;
+		}, "Moves the remote console to another endpoint on the next cycle (this connection is closed). Usage: restartRemoteConsole(port | address:port)");
+
 		this->bindCommand("toggleRecording", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			/* RushMaker toggle (same as Shift+Ctrl+F12), for AI-driven capture sessions. */
 			if ( m_graphicsRenderer.recorder().isRecording() )

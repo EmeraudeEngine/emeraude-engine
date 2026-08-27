@@ -1388,6 +1388,16 @@ namespace EmEn
 			void displayCoreMessages () noexcept;
 
 			/**
+			 * @brief Shift+F10: opens the remote console live, or closes it, after a native dialog.
+			 * @note Closed: a text-input dialog pre-filled with the configured port asks for "port" or
+			 * "address:port", then the listener starts on it — for this session only, the settings are
+			 * not written. Open: a Yes/No dialog offers to stop it. Every outcome is shown in a message
+			 * dialog and traced.
+			 * @return void
+			 */
+			void toggleRemoteConsoleFromKeyboard () noexcept;
+
+			/**
 			 * @brief Consumes an opened file when it is a resource store index.
 			 * @details First stage of openFiles() : a JSON file whose root carries the
 			 * Resources::Manager::StoresKey object completes the resource stores at

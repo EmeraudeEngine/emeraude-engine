@@ -11,7 +11,8 @@ Le moteur expose une console de commandes via **TCP port 7777** (configurable vi
 > se lie alors à **`Core/Console/RemoteListenerAddress`** (défaut `127.0.0.1`, loopback seul —
 > `0.0.0.0` pour piloter depuis une autre machine). Un `Connection refused` sur 7777 signifie que
 > l'instance a été lancée sans la clé : **activer la clé et relancer, ne pas insister** — rien
-> n'ouvrira le port tant que l'instance tourne. Log au démarrage dans ce cas :
+> n'ouvrira le port tant que l'instance tourne, sauf un humain qui presse **Shift+F10** dans la
+> fenêtre (dialogue demandant le port, session seulement). Log au démarrage dans ce cas :
 > `Remote console disabled (Core/Console/EnableRemoteListener = false)`.
 
 ### Connexion

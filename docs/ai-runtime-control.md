@@ -33,8 +33,11 @@ The engine listens on **TCP port 7777** (configurable via `Core/Console/RemoteLi
 when `Core/Console/EnableRemoteListener` is `true`; the port is CLOSED BY DEFAULT.** The bind address is
 `Core/Console/RemoteListenerAddress` (default `127.0.0.1`: same host only). If the connection is refused,
 the running instance was launched without the key: **set it in `settings.json`, relaunch, and do not retry
-against that instance** — nothing will open the port while it runs. Startup log when off:
-`Remote console disabled (Core/Console/EnableRemoteListener = false)`.
+against that instance** — nothing will open the port while it runs, except a human pressing
+**Shift+F10** in the window (dialog asking the port, session only). Startup log when off:
+`Remote console disabled (Core/Console/EnableRemoteListener = false)`. Once connected,
+`Core.remoteConsoleStatus()` shows the endpoint and `Core.restartRemoteConsole(port | address:port)`
+moves the console (the current connection closes; reconnect on the new endpoint).
 
 **Cross-platform (Python, recommended — required on Windows where `nc` is not available):**
 ```bash

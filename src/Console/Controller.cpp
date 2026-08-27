@@ -27,7 +27,9 @@
 #include "Controller.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <ranges>
+#include <sstream>
 
 /* Local inclusions. */
 #include "String.hpp"
@@ -50,24 +52,130 @@ namespace EmEn::Console
 		/* NOTE: all three keys are read (and written on first run) even when the listener stays
 		 * off, so an operator finds them in settings.json without reading the source. */
 		const auto remoteListenerEnabled = settings.getOrSetDefault< bool >(ConsoleEnableRemoteListenerKey, DefaultConsoleEnableRemoteListener);
-		const auto remoteListenerAddress = settings.getOrSetDefault< std::string >(ConsoleRemoteListenerAddressKey, DefaultConsoleRemoteListenerAddress);
-		const auto remoteListenerPort = settings.getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
+		m_remoteListenerAddress = settings.getOrSetDefault< std::string >(ConsoleRemoteListenerAddressKey, DefaultConsoleRemoteListenerAddress);
+		m_remoteListenerPort = settings.getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
 
 		if ( !remoteListenerEnabled )
 		{
-			TraceInfo{ClassId} << "Remote console disabled (" << ConsoleEnableRemoteListenerKey << " = false). Set it to true to drive the application over TCP.";
+			TraceInfo{ClassId} << "Remote console disabled (" << ConsoleEnableRemoteListenerKey << " = false). Set it to true, or press Shift+F10 in the application, to drive it over TCP.";
 
 			return true;
 		}
 
-		m_remoteListener = std::make_unique< RemoteListener >(remoteListenerAddress, remoteListenerPort);
+		if ( !this->startRemoteListener(m_remoteListenerAddress, m_remoteListenerPort) )
+		{
+			TraceWarning{ClassId} << "Remote listener failed to initialize, remote console will be unavailable.";
+		}
+
+		return true;
+	}
+
+	bool
+	Controller::startRemoteListener (const std::string & address, uint16_t port) noexcept
+	{
+		this->stopRemoteListener();
+
+		m_remoteListener = std::make_unique< RemoteListener >(address, port);
 
 		if ( !m_remoteListener->isRunning() )
 		{
 			m_remoteListener.reset();
 
-			TraceWarning{ClassId} << "Remote listener failed to initialize, remote console will be unavailable.";
+			return false;
 		}
+
+		return true;
+	}
+
+	void
+	Controller::stopRemoteListener () noexcept
+	{
+		if ( m_remoteListener != nullptr )
+		{
+			TraceInfo{ClassId} << "Stopping the remote console on " << this->remoteListenerEndpoint() << ".";
+
+			m_remoteListener.reset();
+		}
+	}
+
+	std::string
+	Controller::remoteListenerEndpoint () const noexcept
+	{
+		if ( !this->isRemoteListenerRunning() )
+		{
+			return {};
+		}
+
+		std::stringstream endpoint;
+		endpoint << m_remoteListener->address() << ':' << m_remoteListener->port();
+
+		return endpoint.str();
+	}
+
+	void
+	Controller::requestRemoteListenerRestart (const std::string & address, uint16_t port) noexcept
+	{
+		m_pendingRemoteListenerRestart = std::make_pair(address, port);
+	}
+
+	bool
+	Controller::parseEndpoint (const std::string & input, const std::string & defaultAddress, std::string & address, uint16_t & port) noexcept
+	{
+		const auto text = String::trim(input);
+
+		if ( text.empty() )
+		{
+			return false;
+		}
+
+		std::string portText;
+
+		/* "[::1]:7777" — bracketed IPv6 literal. */
+		if ( text.front() == '[' )
+		{
+			const auto closing = text.find(']');
+
+			if ( closing == std::string::npos || closing + 1 >= text.size() || text[closing + 1] != ':' )
+			{
+				return false;
+			}
+
+			address = text.substr(1, closing - 1);
+			portText = text.substr(closing + 2);
+		}
+		else if ( const auto colon = text.rfind(':'); colon != std::string::npos )
+		{
+			/* "0.0.0.0:7777" — one colon only, otherwise it is a bare IPv6 literal without a port. */
+			if ( text.find(':') != colon )
+			{
+				return false;
+			}
+
+			address = text.substr(0, colon);
+			portText = text.substr(colon + 1);
+		}
+		else
+		{
+			/* "7777" — the port alone, on the configured address. */
+			address = defaultAddress;
+			portText = text;
+		}
+
+		if ( address.empty() || portText.empty() || portText.size() > 5 || !std::ranges::all_of(portText, [] (char character) {
+			return character >= '0' && character <= '9';
+		}) )
+		{
+			return false;
+		}
+
+		const auto value = std::stoul(portText);
+
+		if ( value < 1 || value > 65535 )
+		{
+			return false;
+		}
+
+		port = static_cast< uint16_t >(value);
 
 		return true;
 	}
@@ -207,6 +315,24 @@ namespace EmEn::Console
 	void
 	Controller::poll () noexcept
 	{
+		/* A restart asked by a console command is applied here, before draining: the command's
+		 * response already left on the previous listener. */
+		if ( m_pendingRemoteListenerRestart )
+		{
+			const auto [address, port] = *m_pendingRemoteListenerRestart;
+
+			m_pendingRemoteListenerRestart.reset();
+
+			if ( this->startRemoteListener(address, port) )
+			{
+				TraceSuccess{ClassId} << "Remote console restarted on " << this->remoteListenerEndpoint() << ".";
+			}
+			else
+			{
+				TraceError{ClassId} << "Remote console restart on " << address << ':' << port << " failed, the console is now closed.";
+			}
+		}
+
 		if ( m_remoteListener != nullptr )
 		{
 			RemoteListener::PendingCommand pending;

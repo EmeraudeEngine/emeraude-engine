@@ -14,7 +14,13 @@ A TCP server listens on a configurable port (default **7777**, setting: `Core/Co
 > to **`Core/Console/RemoteListenerAddress`** (default **`127.0.0.1`** — loopback only; `0.0.0.0`,
 > a NIC address or `::` to accept other machines; an unparsable value falls back to loopback, never
 > to any-address). All three keys are written to `settings.json` on first run even when the console
-> stays off, so an operator can find them. When disabled the log says
+> stays off, so an operator can find them. **Live activation: Shift+F10** (engine-level shortcut,
+> replaced the old "suspend 3 s") — closed: a native `TextInput` dialog pre-filled with the configured
+> port accepts `7777`, `0.0.0.0:7777` or `[::1]:7777`, then `Controller::startRemoteListener()` runs
+> for **this session only** (settings untouched); open: a Yes/No dialog stops it. From the console
+> itself: `Core.remoteConsoleStatus()` and `Core.restartRemoteConsole(port | address:port)` — the
+> move is applied at the start of the next `poll()` so the response reaches the client first; that
+> connection then closes and you reconnect on the new endpoint. When disabled the log says
 > `Remote console disabled (Core/Console/EnableRemoteListener = false)` — an AI seeing
 > `Connection refused` must **enable the key and relaunch**, not retry. Why: the channel has **no
 > authentication** and reaches `Core.quit()`, settings, scene loading and screenshots; applications
@@ -366,6 +372,7 @@ TCP lines starting with `{` are routed to a registered JSON handler (not the nor
 
 - **Do not confuse** with AVConsole (`src/Scenes/AVConsole/`) which is the Audio/Video virtual device system
 - **Closed by default** — `Core/Console/EnableRemoteListener` (default `false`) gates the whole listener; **bind address** `Core/Console/RemoteListenerAddress` (default `127.0.0.1`); **port** `Core/Console/RemoteListenerPort` (default 7777)
+- **Live control** — `Controller::startRemoteListener(address, port)` / `stopRemoteListener()` / `isRemoteListenerRunning()` / `remoteListenerEndpoint()`; `requestRemoteListenerRestart()` defers to the next `poll()` (never replace the listener while draining its own queue: the response socket dies). `parseEndpoint()` is the single parser for the dialog and the command. Shift+F10 in `Core::toggleRemoteConsoleFromKeyboard()`; the loop is paused around the modal native dialogs like `displayCoreMessages()`
 - **No authentication** — which is exactly why the two defaults above are off and loopback. Anyone who can reach the socket owns the application
 - **Bounded queue** — `RemoteListener::MaxPendingCommands = 256` pending commands; beyond that new lines are dropped with a warning. Clients are unlimited
 - **Clean responses** — TCP responses contain only command output, no Tracer logs

@@ -166,7 +166,8 @@ and the AI executes, measures, and iterates at industrial speed.
 > only). A `Connection refused` on 7777 means the instance was launched without the key —
 > **enable it and relaunch; do NOT keep retrying, polling or waiting on a running instance that
 > never opened the port.** The engine logs `Remote console disabled (Core/Console/EnableRemoteListener = false)`
-> at startup in that case. Rationale: the console is an unauthenticated command channel
+> at startup in that case. A human at the keyboard can open it live with **Shift+F10** (dialog asking
+> the port, session only) — an AI cannot press that key, so it edits the setting and relaunches. Rationale: the console is an unauthenticated command channel
 > (`Core.quit()`, settings, scenes, screenshots) and downstream applications are shipped to end users.
 >
 > **Cross-platform tool (required on Windows):** Use `tools/remote-console.py` — works on Windows, Linux, and macOS:

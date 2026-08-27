@@ -113,6 +113,28 @@ namespace EmEn::Console
 				return m_running;
 			}
 
+			/**
+			 * @brief Returns the address the listener is bound to.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			address () const noexcept
+			{
+				return m_address;
+			}
+
+			/**
+			 * @brief Returns the port the listener is bound to.
+			 * @return uint16_t
+			 */
+			[[nodiscard]]
+			uint16_t
+			port () const noexcept
+			{
+				return m_port;
+			}
+
 			/** @brief A pending command with its originating client socket. */
 			struct PendingCommand
 			{

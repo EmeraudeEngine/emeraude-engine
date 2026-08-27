@@ -29,6 +29,11 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <optional>
+#include <string>
+#include <utility>
+
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "ObservableTrait.hpp"
@@ -123,6 +128,85 @@ namespace EmEn::Console
 			{
 				return classUID == getClassUID();
 			}
+
+			/**
+			 * @brief Starts the remote listener on an endpoint, replacing a running one.
+			 * @note The boot-time policy is Core/Console/EnableRemoteListener; this is the live
+			 * path (Shift+F10 dialog, restartRemoteConsole console command). Nothing is written to
+			 * the settings: the console is closed again at the next launch.
+			 * @param address The bind address ("127.0.0.1", "0.0.0.0", "::" ...).
+			 * @param port The TCP port.
+			 * @return bool True when the listener is up on that endpoint.
+			 */
+			bool startRemoteListener (const std::string & address, uint16_t port) noexcept;
+
+			/**
+			 * @brief Stops the remote listener, if any. Clients are disconnected.
+			 * @return void
+			 */
+			void stopRemoteListener () noexcept;
+
+			/**
+			 * @brief Returns whether the remote listener is up.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRemoteListenerRunning () const noexcept
+			{
+				return m_remoteListener != nullptr && m_remoteListener->isRunning();
+			}
+
+			/**
+			 * @brief Returns the endpoint the remote listener is bound to, "address:port", empty when down.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string remoteListenerEndpoint () const noexcept;
+
+			/**
+			 * @brief Returns the bind address configured in the settings (Core/Console/RemoteListenerAddress).
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			defaultRemoteListenerAddress () const noexcept
+			{
+				return m_remoteListenerAddress;
+			}
+
+			/**
+			 * @brief Returns the port configured in the settings (Core/Console/RemoteListenerPort).
+			 * @return uint16_t
+			 */
+			[[nodiscard]]
+			uint16_t
+			defaultRemoteListenerPort () const noexcept
+			{
+				return m_remoteListenerPort;
+			}
+
+			/**
+			 * @brief Schedules a restart of the remote listener for the beginning of the next poll().
+			 * @note For a command executed BY the listener: replacing it while poll() is draining its
+			 * queue would destroy the socket the response goes to. The response is sent on the current
+			 * endpoint, the switch happens one cycle later.
+			 * @param address The bind address.
+			 * @param port The TCP port.
+			 * @return void
+			 */
+			void requestRemoteListenerRestart (const std::string & address, uint16_t port) noexcept;
+
+			/**
+			 * @brief Parses a user-typed endpoint: "7777", "0.0.0.0:7777" or "[::1]:7777".
+			 * @param input The typed text.
+			 * @param defaultAddress The address used when the input holds a bare port.
+			 * @param address [out] The bind address.
+			 * @param port [out] The port (1-65535).
+			 * @return bool False when the text is not a valid endpoint.
+			 */
+			[[nodiscard]]
+			static bool parseEndpoint (const std::string & input, const std::string & defaultAddress, std::string & address, uint16_t & port) noexcept;
 
 			/**
 			 * @brief Adds a controllable object to the console.
@@ -245,8 +329,11 @@ namespace EmEn::Console
 			std::map< std::string, ControllableTrait * > m_consoleObjects;
 			std::vector< std::string > m_history;
 			std::unique_ptr< RemoteListener > m_remoteListener;
-			bool m_directInputWasEnabled{false};
+			std::string m_remoteListenerAddress;
+			std::optional< std::pair< std::string, uint16_t > > m_pendingRemoteListenerRestart;
 			JsonHandler m_jsonHandler;
+			uint16_t m_remoteListenerPort{0};
+			bool m_directInputWasEnabled{false};
 			bool m_pointerWasLocked{false};
 	};
 }

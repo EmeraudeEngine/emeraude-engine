@@ -72,6 +72,7 @@
 #include "PlatformSpecific/Desktop/Commands.hpp"
 #include "PlatformSpecific/Desktop/Dialog/CustomMessage.hpp"
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
+#include "PlatformSpecific/Desktop/Dialog/TextInput.hpp"
 #include "SettingKeys.hpp"
 #include "Tool/GeometryDataPrinter.hpp"
 #include "Tool/ShowVulkanInformation.hpp"
@@ -583,6 +584,96 @@ namespace EmEn
 		this->resume();
 	}
 
+	void
+	Core::toggleRemoteConsoleFromKeyboard () noexcept
+	{
+		using namespace PlatformSpecific::Desktop::Dialog;
+
+		/* The dialogs are modal and native: the main loop is paused around them exactly like
+		 * displayCoreMessages() does. */
+		this->pause();
+
+		if ( m_consoleController.isRemoteListenerRunning() )
+		{
+			const auto endpoint = m_consoleController.remoteListenerEndpoint();
+
+			Message question{
+				"Remote console",
+				"The remote console is listening on " + endpoint + ".\n\nClose it ? Connected clients will be disconnected.",
+				ButtonLayout::YesNo,
+				MessageType::Question
+			};
+
+			question.execute(this->window());
+
+			if ( question.getUserAnswer() == Answer::Yes )
+			{
+				m_consoleController.stopRemoteListener();
+
+				TraceInfo{ClassId} << "Remote console closed from the keyboard (was " << endpoint << ").";
+			}
+
+			this->resume();
+
+			return;
+		}
+
+		std::stringstream prompt;
+		prompt <<
+			"The remote console is closed.\n\n"
+			"Enter the TCP port to listen on, or an address and a port to accept other machines "
+			"(e.g. 0.0.0.0:" << m_consoleController.defaultRemoteListenerPort() << ").\n"
+			"A bare port listens on " << m_consoleController.defaultRemoteListenerAddress() << " (same host only).\n\n"
+			"The console has no authentication: anyone reaching the socket controls the application. "
+			"This applies to the current session only, the settings are not changed.";
+
+		TextInput input{
+			"Open the remote console",
+			prompt.str(),
+			InputMode::SingleLine,
+			std::to_string(m_consoleController.defaultRemoteListenerPort())
+		};
+
+		input.execute(this->window());
+
+		if ( input.hasBeenCanceled() )
+		{
+			this->resume();
+
+			return;
+		}
+
+		std::string address;
+		uint16_t port = 0;
+
+		if ( !Console::Controller::parseEndpoint(input.text(), m_consoleController.defaultRemoteListenerAddress(), address, port) )
+		{
+			Message error{"Remote console", "'" + input.text() + "' is not a valid port nor address:port. The console stays closed.", ButtonLayout::OK, MessageType::Error};
+			error.execute(this->window());
+
+			this->resume();
+
+			return;
+		}
+
+		if ( m_consoleController.startRemoteListener(address, port) )
+		{
+			const auto endpoint = m_consoleController.remoteListenerEndpoint();
+
+			TraceSuccess{ClassId} << "Remote console opened from the keyboard on " << endpoint << " (this session only).";
+
+			Message info{"Remote console", "Listening on " + endpoint + ".\n\nExample: python3 tools/remote-console.py --host " + address + " --port " + std::to_string(port) + " \"Core.RendererService.getStatus()\"", ButtonLayout::OK, MessageType::Info};
+			info.execute(this->window());
+		}
+		else
+		{
+			Message error{"Remote console", "Unable to listen on " + address + ":" + std::to_string(port) + " (port in use, or address not local). See the log.", ButtonLayout::OK, MessageType::Error};
+			error.execute(this->window());
+		}
+
+		this->resume();
+	}
+
 	bool
 	Core::initializeBaseLevel () noexcept
 	{
@@ -639,7 +730,7 @@ namespace EmEn
 			m_coreHelp.registerShortcut("Open file explorer to application cache directory.", KeyF7, ModKeyShift);
 			m_coreHelp.registerShortcut("Open file explorer to application user data directory.", KeyF8, ModKeyShift);
 			m_coreHelp.registerShortcut("Clean up unused resources from managers.", KeyF9, ModKeyShift);
-			m_coreHelp.registerShortcut("Suspend core thread execution for 3 seconds.", KeyF10, ModKeyShift);
+			m_coreHelp.registerShortcut("Open the remote console (TCP) live on a port asked in a dialog, or close it.", KeyF10, ModKeyShift);
 			m_coreHelp.registerShortcut("Toggle the window fullscreen mode.", KeyF11, ModKeyShift);
 			m_coreHelp.registerShortcut("Take a screenshot.", KeyF12, ModKeyShift);
 			m_coreHelp.registerShortcut("Toggle video recording.", KeyF12, ModKeyShift | ModKeyControl);
@@ -1950,13 +2041,7 @@ namespace EmEn
 					return true;
 
 				case KeyF10 :
-				{
-					this->notifyUser("Core engine paused for 3 seconds ...");
-
-					std::this_thread::sleep_for(std::chrono::seconds(3));
-
-					this->notifyUser("Core engine wake-up.");
-				}
+					this->toggleRemoteConsoleFromKeyboard();
 					return true;
 
 				case KeyF11 :
