@@ -24,10 +24,13 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+
 #include "NetworkInterfaces.hpp"
 
 /* STL inclusions. */
 #include <array>
+#include <cstdio>
+#include <map>
 #include <utility>
 
 /* Third-party inclusions. */
@@ -52,78 +55,261 @@
 	#include <arpa/inet.h>
 	#include <ifaddrs.h>
 	#include <net/if.h>
+
+	/* The hardware address travels in a family of its own: AF_PACKET on Linux, AF_LINK on
+	 * the BSD family (macOS included). */
+	#if defined(__linux__)
+		#include <netpacket/packet.h>
+	#else
+		#include <net/if_dl.h>
+	#endif
 #endif
 
 namespace EmEn::Net::NetworkInterfaces
 {
+	namespace
+	{
+		constexpr size_t MACLength{6};
+
+		/**
+		 * @brief Formats a 48-bit hardware address as lowercase "aa:bb:cc:dd:ee:ff".
+		 * @note Anything but 6 bytes (InfiniBand's 20, tunnels' 0) yields an empty string,
+		 * and so does an all-zero address: Linux reports one for the loopback (AF_PACKET,
+		 * sll_halen 6, every byte 0). The struct contract is "empty when unknown", never a
+		 * zero placeholder.
+		 */
+		std::string
+		formatMAC (const uint8_t * bytes, size_t length) noexcept
+		{
+			if ( bytes == nullptr || length != MACLength )
+			{
+				return {};
+			}
+
+			bool allZero = true;
+
+			for ( size_t index = 0; index < MACLength; ++index )
+			{
+				if ( bytes[index] != 0 )
+				{
+					allZero = false;
+
+					break;
+				}
+			}
+
+			if ( allZero )
+			{
+				return {};
+			}
+
+			std::array< char, 18 > buffer{};
+
+			std::snprintf(buffer.data(), buffer.size(), "%02x:%02x:%02x:%02x:%02x:%02x", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]);
+
+			return buffer.data();
+		}
+
+		/**
+		 * @brief Prints an IPv4 or IPv6 address in its textual form.
+		 * @param family AF_INET or AF_INET6.
+		 * @param rawAddress Pointer to the in_addr / in6_addr.
+		 */
+		std::string
+		toText (int family, const void * rawAddress) noexcept
+		{
+			if ( rawAddress == nullptr )
+			{
+				return {};
+			}
+
+			std::array< char, INET6_ADDRSTRLEN > buffer{};
+
+			if ( inet_ntop(family, rawAddress, buffer.data(), static_cast< socklen_t >(buffer.size())) == nullptr )
+			{
+				return {};
+			}
+
+			return buffer.data();
+		}
+
+		/**
+		 * @brief Derives the CIDR prefix length from a netmask given as raw bytes.
+		 * @note A non-contiguous mask (ones after a zero) has no CIDR form and yields
+		 * PrefixLengthUnknown rather than a misleading count.
+		 */
+		uint8_t
+		prefixLengthFromMask (const uint8_t * bytes, size_t length) noexcept
+		{
+			uint8_t prefixLength = 0;
+			bool zeroSeen = false;
+
+			for ( size_t index = 0; index < length; ++index )
+			{
+				for ( int bit = 7; bit >= 0; --bit )
+				{
+					const bool one = ( bytes[index] >> bit & 1U ) != 0;
+
+					if ( one )
+					{
+						if ( zeroSeen )
+						{
+							return PrefixLengthUnknown;
+						}
+
+						++prefixLength;
+					}
+					else
+					{
+						zeroSeen = true;
+					}
+				}
+			}
+
+			return prefixLength;
+		}
+
+		/**
+		 * @brief Reads the netmask of a socket address, as text plus CIDR prefix length.
+		 * @return std::pair< std::string, uint8_t > Empty text and PrefixLengthUnknown when absent.
+		 */
+		std::pair< std::string, uint8_t >
+		netmaskOf (const struct sockaddr * mask) noexcept
+		{
+			if ( mask == nullptr )
+			{
+				return {{}, PrefixLengthUnknown};
+			}
+
+			if ( mask->sa_family == AF_INET )
+			{
+				const auto & inet = reinterpret_cast< const struct sockaddr_in * >(mask)->sin_addr;
+
+				return {toText(AF_INET, &inet), prefixLengthFromMask(reinterpret_cast< const uint8_t * >(&inet), sizeof(inet))};
+			}
+
+			if ( mask->sa_family == AF_INET6 )
+			{
+				const auto & inet6 = reinterpret_cast< const struct sockaddr_in6 * >(mask)->sin6_addr;
+
+				return {toText(AF_INET6, &inet6), prefixLengthFromMask(reinterpret_cast< const uint8_t * >(&inet6), sizeof(inet6))};
+			}
+
+			return {{}, PrefixLengthUnknown};
+		}
+
+		/**
+		 * @brief Fills the address-dependent part of an entry from a socket address.
+		 * @return bool False when the family is neither AF_INET nor AF_INET6.
+		 */
+		bool
+		fillAddress (Interface & item, const struct sockaddr * address) noexcept
+		{
+			if ( address == nullptr )
+			{
+				return false;
+			}
+
+			if ( address->sa_family == AF_INET )
+			{
+				const auto * inet = reinterpret_cast< const struct sockaddr_in * >(address);
+
+				item.family = AddressFamily::IPv4;
+				item.address = toText(AF_INET, &inet->sin_addr);
+				item.scopeId = 0;
+
+				return !item.address.empty();
+			}
+
+			if ( address->sa_family == AF_INET6 )
+			{
+				const auto * inet6 = reinterpret_cast< const struct sockaddr_in6 * >(address);
+
+				item.family = AddressFamily::IPv6;
+				item.address = toText(AF_INET6, &inet6->sin6_addr);
+				item.scopeId = inet6->sin6_scope_id;
+
+				return !item.address.empty();
+			}
+
+			return false;
+		}
+
 #ifdef _WIN32
-	static std::string
-	toUTF8 (const wchar_t * value) noexcept
-	{
-		if ( value == nullptr )
+		std::string
+		toUTF8 (const wchar_t * value) noexcept
 		{
-			return {};
+			if ( value == nullptr )
+			{
+				return {};
+			}
+
+			const auto length = WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+
+			/* A length of 1 is the terminating null alone, i.e. an empty name. */
+			if ( length <= 1 )
+			{
+				return {};
+			}
+
+			std::string output(static_cast< size_t >(length) - 1, '\0');
+
+			WideCharToMultiByte(CP_UTF8, 0, value, -1, output.data(), length, nullptr, nullptr);
+
+			return output;
 		}
 
-		const auto length = WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
-
-		/* A length of 1 is the terminating null alone, i.e. an empty name. */
-		if ( length <= 1 )
+		/**
+		 * @brief Builds the textual netmask from a prefix length.
+		 * @note Windows exposes only the prefix (OnLinkPrefixLength); the mask is derived
+		 * so both fields are always filled, like on POSIX.
+		 */
+		std::string
+		netmaskFromPrefix (AddressFamily family, uint8_t prefixLength) noexcept
 		{
-			return {};
+			const size_t byteCount = family == AddressFamily::IPv4 ? 4 : 16;
+
+			if ( prefixLength > byteCount * 8 )
+			{
+				return {};
+			}
+
+			std::array< uint8_t, 16 > mask{};
+			auto remaining = static_cast< int >(prefixLength);
+
+			for ( size_t index = 0; index < byteCount; ++index )
+			{
+				if ( remaining >= 8 )
+				{
+					mask[index] = 0xFF;
+				}
+				else if ( remaining > 0 )
+				{
+					mask[index] = static_cast< uint8_t >(0xFFU << (8 - remaining));
+				}
+
+				remaining -= 8;
+			}
+
+			return toText(family == AddressFamily::IPv4 ? AF_INET : AF_INET6, mask.data());
 		}
-
-		std::string output(static_cast< size_t >(length) - 1, '\0');
-
-		WideCharToMultiByte(CP_UTF8, 0, value, -1, output.data(), length, nullptr, nullptr);
-
-		return output;
-	}
-
-	static std::string
-	prefixToNetmask (uint8_t prefixLength) noexcept
-	{
-		if ( prefixLength > 32 )
-		{
-			return {};
-		}
-
-		/* Shifting a 32-bit value by 32 is undefined, hence the explicit zero case. */
-		const uint32_t mask = prefixLength == 0 ? 0 : 0xFFFFFFFFU << (32U - prefixLength);
-
-		struct in_addr address{};
-		address.s_addr = htonl(mask);
-
-		std::array< char, INET_ADDRSTRLEN > buffer{};
-
-		if ( inet_ntop(AF_INET, &address, buffer.data(), buffer.size()) == nullptr )
-		{
-			return {};
-		}
-
-		return buffer.data();
-	}
-#else
-	static std::string
-	toDottedDecimal (const struct sockaddr * address) noexcept
-	{
-		if ( address == nullptr || address->sa_family != AF_INET )
-		{
-			return {};
-		}
-
-		const auto * inetAddress = reinterpret_cast< const struct sockaddr_in * >(address);
-
-		std::array< char, INET_ADDRSTRLEN > buffer{};
-
-		if ( inet_ntop(AF_INET, &inetAddress->sin_addr, buffer.data(), buffer.size()) == nullptr )
-		{
-			return {};
-		}
-
-		return buffer.data();
-	}
 #endif
+	}
+
+	const char *
+	to_cstring (AddressFamily family) noexcept
+	{
+		switch ( family )
+		{
+			case AddressFamily::IPv4 :
+				return "IPv4";
+
+			case AddressFamily::IPv6 :
+				return "IPv6";
+		}
+
+		return "IPv4";
+	}
 
 	std::vector< Interface >
 	enumerate () noexcept
@@ -144,7 +330,7 @@ namespace EmEn::Net::NetworkInterfaces
 		{
 			buffer.resize(size);
 
-			result = GetAdaptersAddresses(AF_INET, Flags, nullptr, reinterpret_cast< IP_ADAPTER_ADDRESSES * >(buffer.data()), &size);
+			result = GetAdaptersAddresses(AF_UNSPEC, Flags, nullptr, reinterpret_cast< IP_ADAPTER_ADDRESSES * >(buffer.data()), &size);
 		}
 
 		if ( result != NO_ERROR )
@@ -154,27 +340,25 @@ namespace EmEn::Net::NetworkInterfaces
 
 		for ( const auto * adapter = reinterpret_cast< const IP_ADAPTER_ADDRESSES * >(buffer.data()); adapter != nullptr; adapter = adapter->Next )
 		{
+			const auto name = toUTF8(adapter->FriendlyName);
+			const auto mac = formatMAC(adapter->PhysicalAddress, adapter->PhysicalAddressLength);
+
 			for ( const auto * unicast = adapter->FirstUnicastAddress; unicast != nullptr; unicast = unicast->Next )
 			{
-				if ( unicast->Address.lpSockaddr == nullptr || unicast->Address.lpSockaddr->sa_family != AF_INET )
-				{
-					continue;
-				}
-
-				const auto * inetAddress = reinterpret_cast< const struct sockaddr_in * >(unicast->Address.lpSockaddr);
-
-				std::array< char, INET_ADDRSTRLEN > addressBuffer{};
-
-				if ( inet_ntop(AF_INET, &inetAddress->sin_addr, addressBuffer.data(), addressBuffer.size()) == nullptr )
-				{
-					continue;
-				}
-
 				Interface item;
-				item.name = toUTF8(adapter->FriendlyName);
-				item.address = addressBuffer.data();
-				item.netmask = prefixToNetmask(unicast->OnLinkPrefixLength);
-				item.index = adapter->IfIndex;
+
+				if ( !fillAddress(item, unicast->Address.lpSockaddr) )
+				{
+					continue;
+				}
+
+				item.name = name;
+				item.mac = mac;
+				item.prefixLength = unicast->OnLinkPrefixLength;
+				item.netmask = netmaskFromPrefix(item.family, item.prefixLength);
+				/* An adapter carries one index per family; they are equal on every stack
+				 * seen so far but the API keeps them distinct, so read the right one. */
+				item.index = item.family == AddressFamily::IPv6 ? adapter->Ipv6IfIndex : adapter->IfIndex;
 				item.loopback = adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK;
 				item.up = adapter->OperStatus == IfOperStatusUp;
 				item.multicastCapable = ( adapter->Flags & IP_ADAPTER_NO_MULTICAST ) == 0;
@@ -190,30 +374,58 @@ namespace EmEn::Net::NetworkInterfaces
 			return interfaces;
 		}
 
+		/* First pass: the hardware address lives in its own entry per interface
+		 * (AF_PACKET / AF_LINK), keyed by name for the address entries to pick up. */
+		std::map< std::string, std::string > macByName;
+
 		for ( const auto * entry = list; entry != nullptr; entry = entry->ifa_next )
 		{
-			if ( entry->ifa_addr == nullptr || entry->ifa_addr->sa_family != AF_INET )
+			if ( entry->ifa_addr == nullptr || entry->ifa_name == nullptr )
 			{
 				continue;
 			}
 
-			auto address = toDottedDecimal(entry->ifa_addr);
-
-			if ( address.empty() )
+	#if defined(__linux__)
+			if ( entry->ifa_addr->sa_family == AF_PACKET )
 			{
-				continue;
-			}
+				const auto * link = reinterpret_cast< const struct sockaddr_ll * >(entry->ifa_addr);
 
+				macByName[entry->ifa_name] = formatMAC(link->sll_addr, link->sll_halen);
+			}
+	#else
+			if ( entry->ifa_addr->sa_family == AF_LINK )
+			{
+				const auto * link = reinterpret_cast< const struct sockaddr_dl * >(entry->ifa_addr);
+
+				macByName[entry->ifa_name] = formatMAC(reinterpret_cast< const uint8_t * >(LLADDR(link)), link->sdl_alen);
+			}
+	#endif
+		}
+
+		/* Second pass: one entry per IPv4/IPv6 address. */
+		for ( const auto * entry = list; entry != nullptr; entry = entry->ifa_next )
+		{
 			Interface item;
+
+			if ( !fillAddress(item, entry->ifa_addr) )
+			{
+				continue;
+			}
 
 			if ( entry->ifa_name != nullptr )
 			{
 				item.name = entry->ifa_name;
 				item.index = if_nametoindex(entry->ifa_name);
+
+				if ( const auto macIt = macByName.find(item.name); macIt != macByName.end() )
+				{
+					item.mac = macIt->second;
+				}
 			}
 
-			item.address = std::move(address);
-			item.netmask = toDottedDecimal(entry->ifa_netmask);
+			auto [netmask, prefixLength] = netmaskOf(entry->ifa_netmask);
+			item.netmask = std::move(netmask);
+			item.prefixLength = prefixLength;
 			item.loopback = ( entry->ifa_flags & IFF_LOOPBACK ) != 0;
 			/* IFF_UP is the administrative state, IFF_RUNNING the operational one. A NIC
 			 * with no cable is up but not running, and joining a group on it buys nothing. */
@@ -235,7 +447,7 @@ namespace EmEn::Net::NetworkInterfaces
 		auto interfaces = enumerate();
 
 		std::erase_if(interfaces, [] (const Interface & item) noexcept {
-			return !item.up || !item.multicastCapable || item.address.empty();
+			return item.family != AddressFamily::IPv4 || !item.up || !item.multicastCapable || item.address.empty();
 		});
 
 		return interfaces;

@@ -229,36 +229,67 @@ Any macOS spike must therefore test a **signed, packaged binary**, never a conso
 
 **File**: `NetworkInterfaces.hpp/.cpp`
 
-Enumeration of the local IPv4 interfaces. Exists because the multicast API takes interface
-*addresses*: without it, every consumer would have to write its own `getifaddrs` /
-`GetAdaptersAddresses` `#ifdef` block — platform divergence leaking downstream, which the
+Enumeration of the local IP addresses, **IPv4 and IPv6**, with the hardware address. Exists
+because (a) the multicast API takes interface *addresses*, and (b) every scripting bridge
+wants the Node.js `os.networkInterfaces()` shape — without this unit each consumer would
+write its own `getifaddrs` / `GetAdaptersAddresses` `#ifdef` block (one downstream
+application did, ~310 lines, now deleted): platform divergence leaking downstream, which the
 co-development doctrine forbids.
 
 **API**:
 ```cpp
 namespace EmEn::Net::NetworkInterfaces
 {
+    enum class AddressFamily : uint8_t { IPv4, IPv6 };
+
+    constexpr uint8_t PrefixLengthUnknown{0xFF};
+
     struct Interface {
         std::string name;              // "eth0", "en0", "Ethernet 2" — informative only
-        std::string address;           // dotted-decimal, THIS is what the multicast API wants
-        std::string netmask;
+        std::string address;           // dotted-decimal or RFC 5952; THIS is what the multicast API wants (IPv4)
+        std::string netmask;           // same notation as the address, empty when not reported
+        std::string mac;               // lowercase "aa:bb:cc:dd:ee:ff", EMPTY when none (loopback, tunnels)
         uint32_t index{0};
+        uint32_t scopeId{0};           // IPv6 sin6_scope_id, always 0 for IPv4
+        uint8_t prefixLength{PrefixLengthUnknown};   // CIDR length derived from the netmask
+        AddressFamily family{AddressFamily::IPv4};
         bool loopback{false};
         bool up{false};
         bool multicastCapable{false};
     };
 
-    std::vector< Interface > enumerate () noexcept;
-    std::vector< Interface > enumerateMulticastCapable () noexcept;
+    std::vector< Interface > enumerate () noexcept;                  // IPv4 + IPv6
+    std::vector< Interface > enumerateMulticastCapable () noexcept;  // IPv4 only, up, multicast-capable
+    const char * to_cstring (AddressFamily) noexcept;                // "IPv4" / "IPv6"
 }
 ```
 
-One entry **per IPv4 address**: an interface holding several addresses yields several entries
-sharing a name and an index.
+One entry **per address**: an interface holding several addresses (typically one IPv4 plus
+one link-local IPv6) yields several entries sharing name, index and MAC. The shape is the
+flat Node.js entry on purpose, so a bridge only renames fields (`loopback` → `internal`,
+`to_cstring(family)` → `family`, `address + "/" + prefixLength` → `cidr`) and never
+re-enumerates.
 
-**Platform**: `getifaddrs()` on Linux/macOS, `GetAdaptersAddresses()` on Windows (links
-`Iphlpapi`). Unlike `SerialPort` and `WiFiScanner`, this unit is **not** split per OS — a
-single TU with one Windows branch, because `getifaddrs()` covers Linux and macOS identically.
+**Contract on absence, deliberately different from Node.js**: `mac` is **empty** when the OS
+reports no hardware address — Linux hands out an all-zero 6-byte `AF_PACKET` address for
+`lo`, and it is folded to empty too. The `"00:00:00:00:00:00"` placeholder Node prints belongs
+to the bridge, not to the engine. `prefixLength` is `PrefixLengthUnknown` when there is no
+netmask **or when the mask is non-contiguous** (no CIDR form exists), never a misleading count.
+
+**Platform**: `getifaddrs()` on Linux/macOS — the MAC comes from the `AF_PACKET` (Linux) /
+`AF_LINK` (BSD, macOS) entry of the same name, collected in a first pass;
+`GetAdaptersAddresses(AF_UNSPEC)` on Windows (links `Iphlpapi`), MAC from `PhysicalAddress`,
+netmask **derived** from `OnLinkPrefixLength` so both fields are filled like on POSIX, index
+read per family (`IfIndex` vs `Ipv6IfIndex`). Unlike `SerialPort` and `WiFiScanner`, this
+unit is **not** split per OS — a single TU with one Windows branch and a Linux/BSD
+sub-branch for the hardware-address family.
+
+**Verified (Linux 6.x, 2026-08-27)** with an out-of-tree binary compiled straight from
+`NetworkInterfaces.cpp`: 3 interfaces × 2 families, `/8` `/24` `/64` `/128` prefixes, IPv6
+scope ids equal to the interface index, MACs on both NICs, empty MAC on `lo`,
+`enumerateMulticastCapable()` returning the two NICs' IPv4 addresses only.
+⚠️ **macOS and Windows: compile-only** for the IPv6 and MAC paths (`AF_LINK`, `AF_UNSPEC`),
+same standing as the multicast surface — see `docs/todo/udp-multicast-macos-verification.md`.
 
 **Traps**:
 - ⚠️ On Linux, **loopback carries no `IFF_MULTICAST` flag**. `lo` is therefore absent from
@@ -271,6 +302,8 @@ single TU with one Windows branch, because `getifaddrs()` covers Linux and macOS
 - ⚠️ The kernel caps memberships per socket — **20 by default on Linux**
   (`net.ipv4.igmp_max_memberships`). Joining every interface of a host running containers or
   VPNs can reach the cap, and the join then fails.
+- ⚠️ Feed the multicast API with `enumerateMulticastCapable()`, never with a filter you wrote
+  over `enumerate()`: the IPv6 entries carry addresses `joinMulticastGroup()` cannot parse.
 
 ---
 
@@ -551,7 +584,7 @@ namespace EmEn::Net::WiFiScanner
 
 - `Manager.cpp/.hpp` - Main manager, download requests
 - `UDPClient.hpp/.cpp` - UDP client, IPv4 multicast and SSDP discovery
-- `NetworkInterfaces.hpp/.cpp` - Local IPv4 interface enumeration (feeds the multicast API)
+- `NetworkInterfaces.hpp/.cpp` - Local IPv4/IPv6 address enumeration with MAC (feeds the multicast API and scripting bridges)
 - `TCPClient.hpp/.cpp` - TCP client (Asio-based, blocking-with-timeout API)
 - `TCPServer.hpp/.cpp` - TCP server (Asio-based, accept returns owned TCPClient)
 - `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction

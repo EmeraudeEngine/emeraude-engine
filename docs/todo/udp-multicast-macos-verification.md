@@ -13,7 +13,11 @@ tags: [network, macos, mdns]
 ## Why
 
 IPv4 multicast was added to `EmEn::Net::UDPClient` plus the new `EmEn::Net::NetworkInterfaces`
-module (engine, `develop`, commit `bdb1ebca`, not pushed), for mDNS/DNS-SD discovery.
+module (engine, `develop`, commit `bdb1ebca`, pushed), for mDNS/DNS-SD discovery.
+
+`NetworkInterfaces` was then extended to IPv4+IPv6 with the hardware address (2026-08-27):
+the `AF_LINK` (MAC) and IPv6 paths of `NetworkInterfaces.cpp` are in the same standing as the
+multicast surface — **verified on Linux, compile-only on macOS**.
 
 **Verified on Linux 6.x (2026-08-26)**: full multicast round trip, bind of **5353 alongside
 avahi-daemon**, join of `224.0.0.251` on 2 NICs, a real DNS-SD query, answers from 4 LAN devices,
