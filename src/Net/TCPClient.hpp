@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <shared_mutex>
@@ -120,6 +121,20 @@ namespace EmEn::Net
 			 */
 			[[nodiscard]]
 			bool isConnected () const noexcept;
+
+			/**
+			 * @brief Returns whether the peer closed the connection gracefully.
+			 * @note receive() returns 0 both on a timeout and at the end of stream — this is what
+			 * tells the two apart. Set once the peer's FIN was read; cleared by close() and by a
+			 * new connect().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			peerClosed () const noexcept
+			{
+				return m_peerClosed;
+			}
 
 			/**
 			 * @brief Sends raw data to the remote host (blocking).
@@ -246,5 +261,7 @@ namespace EmEn::Net
 			std::unique_ptr< std::shared_mutex > m_handleMutex;
 			native_handle_type m_handle{InvalidHandle};
 			std::error_code m_lastError;
+			/* Set when the peer's FIN was read: receive() returns 0 for that and for a timeout alike. */
+			std::atomic< bool > m_peerClosed{false};
 	};
 }

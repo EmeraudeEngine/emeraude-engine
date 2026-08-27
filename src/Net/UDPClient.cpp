@@ -27,6 +27,10 @@
 #include "UDPClient.hpp"
 
 /* STL inclusions. */
+#include <mutex>
+#include <shared_mutex>
+
+/* STL inclusions. */
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -155,15 +159,13 @@ namespace EmEn::Net
 		return ( ntohl(address.s_addr) & 0xF0000000U ) == 0xE0000000U;
 	}
 
-	/* Returns true when the socket has data to read, or when no timeout was requested. */
+	/* Returns true when the socket has data to read.
+	 * ⚠️ timeoutMs == 0 means NON-BLOCKING, as the header states: a zero timeval polls and
+	 * returns immediately. It used to return true without looking, so the following recvfrom()
+	 * on a blocking socket parked the calling thread forever with no way to wake it. */
 	static bool
 	waitReadable (SocketType sock, uint32_t timeoutMs) noexcept
 	{
-		if ( timeoutMs == 0 )
-		{
-			return true;
-		}
-
 		fd_set readFds;
 		FD_ZERO(&readFds);
 		FD_SET(sock, &readFds);
@@ -180,6 +182,21 @@ namespace EmEn::Net
 	static constexpr auto SSDPMulticastAddress{"239.255.255.250"};
 	static constexpr uint16_t SSDPMulticastPort{1900};
 	static constexpr int MaxMX{3};
+
+	/* The search target is interpolated into a request line: anything that could start a new
+	 * header (CR, LF, NUL, or any control character) makes the datagram attacker-shaped. */
+	static bool
+	isValidSearchTarget (const std::string & searchTarget) noexcept
+	{
+		if ( searchTarget.empty() || searchTarget.size() > 256 )
+		{
+			return false;
+		}
+
+		return std::ranges::none_of(searchTarget, [] (char character) {
+			return static_cast< unsigned char >(character) < 0x20 || static_cast< unsigned char >(character) == 0x7F;
+		});
+	}
 
 	static std::string
 	buildMSearchPacket (const std::string & searchTarget, int mx) noexcept
@@ -257,7 +274,8 @@ namespace EmEn::Net
 	}
 
 	UDPClient::UDPClient (UDPClient && other) noexcept
-		: m_multicastMemberships(std::move(other.m_multicastMemberships)),
+		: m_handleMutex(std::move(other.m_handleMutex)),
+		m_multicastMemberships(std::move(other.m_multicastMemberships)),
 #ifdef _WIN32
 		m_socket(std::exchange(other.m_socket, ~uintptr_t{0})),
 #else
@@ -277,6 +295,7 @@ namespace EmEn::Net
 		{
 			close();
 
+			m_handleMutex = std::move(other.m_handleMutex);
 			m_multicastMemberships = std::move(other.m_multicastMemberships);
 			other.m_multicastMemberships.clear();
 
@@ -398,6 +417,28 @@ namespace EmEn::Net
 
 		m_datagramInfoEnabled = false;
 
+		/* Phase 1 — shared lock: shutdown() wakes a thread parked in recvfrom()/select() on this
+		 * descriptor, while the handle is still valid. */
+		{
+			const std::shared_lock< std::shared_mutex > wakeLock{*m_handleMutex};
+
+#ifdef _WIN32
+			if ( m_socket != ~uintptr_t{0} )
+			{
+				::shutdown(static_cast< SocketType >(m_socket), SD_BOTH);
+			}
+#else
+			if ( m_fd != -1 )
+			{
+				::shutdown(m_fd, SHUT_RDWR);
+			}
+#endif
+		}
+
+		/* Phase 2 — exclusive lock: waits for every in-flight call to release its shared lock,
+		 * then invalidates the handle. */
+		const std::unique_lock< std::shared_mutex > handleLock{*m_handleMutex};
+
 #ifdef _WIN32
 		if ( m_socket != ~uintptr_t{0} )
 		{
@@ -457,6 +498,8 @@ namespace EmEn::Net
 	int
 	UDPClient::send (const std::string & host, uint16_t port, const void * data, size_t length) noexcept
 	{
+		const std::shared_lock< std::shared_mutex > handleLock{*m_handleMutex};
+
 		if ( !isOpen() )
 		{
 			return -1;
@@ -503,6 +546,10 @@ namespace EmEn::Net
 	int
 	UDPClient::receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs) noexcept
 	{
+		/* Shared lock for the WHOLE call: close() cannot invalidate the descriptor between
+		 * the readiness test and the recv. */
+		const std::shared_lock< std::shared_mutex > handleLock{*m_handleMutex};
+
 		if ( !isOpen() )
 		{
 			return -1;
@@ -627,6 +674,8 @@ namespace EmEn::Net
 	int
 	UDPClient::receive (void * buffer, size_t maxLength, DatagramInfo & info, uint32_t timeoutMs) noexcept
 	{
+		const std::shared_lock< std::shared_mutex > handleLock{*m_handleMutex};
+
 		if ( !isOpen() || !enableDatagramInfo() )
 		{
 			return -1;
@@ -947,6 +996,13 @@ namespace EmEn::Net
 	std::vector< SSDPDevice >
 	UDPClient::ssdpDiscover (const std::string & searchTarget, int timeoutSeconds) noexcept
 	{
+		/* ⚠️ The search target is interpolated into the M-SEARCH request line: a CR or LF in it
+		 * would let the caller append arbitrary headers to a datagram sent from this host. */
+		if ( !isValidSearchTarget(searchTarget) )
+		{
+			return {};
+		}
+
 		std::vector< SSDPDevice > devices;
 
 #ifdef _WIN32
@@ -969,8 +1025,19 @@ namespace EmEn::Net
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast< const char * >(&reuse), sizeof(reuse));
 
 		/* Set multicast TTL. */
-		int ttl = 2;
-		setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, reinterpret_cast< const char * >(&ttl), sizeof(ttl));
+		/* ⚠️ BSD-derived stacks (macOS included) expect a single byte here, not an int —
+		 * setMulticastTTL() below says so and uses the right type. Passing an int makes the
+		 * option fail with EINVAL, the TTL stays 1, and discovery silently misses every device
+		 * one hop away. */
+#ifdef _WIN32
+		const DWORD ttl = 2;
+#else
+		const unsigned char ttl = 2;
+#endif
+		/* NOTE: this unit reports through return values only — it deliberately depends on nothing
+		 * but emeraude_export.hpp, so there is no tracer here. A refused TTL only costs the
+		 * one-hop-away devices. */
+		static_cast< void >(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, reinterpret_cast< const char * >(&ttl), sizeof(ttl)));
 
 		/* Bind to any address (to receive unicast responses). */
 		struct sockaddr_in bindAddr{};

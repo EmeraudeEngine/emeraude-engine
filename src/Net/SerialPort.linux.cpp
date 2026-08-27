@@ -28,6 +28,9 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <charconv>
+#include <optional>
+#include <system_error>
 #include <filesystem>
 #include <fstream>
 
@@ -35,6 +38,35 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <termios.h>
+#include <sys/ioctl.h>
+
+/* NOTE: an arbitrary baud rate needs the kernel's termios2 (TCSETS2 + BOTHER). <asm/termbits.h>,
+ * which declares it, collides with <termios.h>, so the layout is mirrored here under our own name.
+ * It matches asm-generic/termbits.h and has been stable for the whole 2.6/3.x/4.x/5.x/6.x line. */
+#ifndef BOTHER
+	#define BOTHER 0010000
+#endif
+
+namespace
+{
+	struct KernelTermios2
+	{
+		tcflag_t c_iflag;
+		tcflag_t c_oflag;
+		tcflag_t c_cflag;
+		tcflag_t c_lflag;
+		cc_t c_line;
+		cc_t c_cc[19];
+		speed_t c_ispeed;
+		speed_t c_ospeed;
+	};
+
+	/* The system's TCGETS2 / TCSETS2 macros encode sizeof(struct termios2), a type we cannot
+	 * include: the same request numbers are rebuilt from the mirrored layout, which has the
+	 * same size by construction. */
+	constexpr unsigned long KernelTCGETS2{_IOR('T', 0x2A, KernelTermios2)};
+	constexpr unsigned long KernelTCSETS2{_IOW('T', 0x2B, KernelTermios2)};
+}
 #include <unistd.h>
 
 namespace EmEn::Net
@@ -116,7 +148,20 @@ namespace EmEn::Net
 			return 0;
 		}
 
-		return static_cast< uint16_t >(std::stoul(str, nullptr, 16));
+		/* ⚠️ std::stoul throws on a non-hex or oversized value, and this function is noexcept
+		 * inside a -fno-exceptions build: a driver exposing a malformed idVendor would have
+		 * terminated the process. from_chars reports it as a value. */
+		uint32_t value = 0;
+
+		const auto * begin = str.data();
+		const auto * end = str.data() + str.size();
+
+		if ( std::from_chars(begin, end, value, 16).ec != std::errc{} || value > 0xFFFFU )
+		{
+			return 0;
+		}
+
+		return static_cast< uint16_t >(value);
 	}
 
 	std::vector< SerialPortInfo >
@@ -126,18 +171,33 @@ namespace EmEn::Net
 
 		const std::filesystem::path sysClassTty{"/sys/class/tty"};
 
-		if ( !std::filesystem::exists(sysClassTty) )
+		/* ⚠️ Every std::filesystem call here takes its error_code overload. The throwing ones
+		 * terminate the process in a noexcept function, and this whole walk races with the user:
+		 * a USB adapter unplugged between the iteration and canonical() leaves a dangling symlink
+		 * that would have killed the application. */
+		std::error_code error;
+
+		if ( !std::filesystem::exists(sysClassTty, error) || error )
 		{
 			return ports;
 		}
 
-		for ( const auto & entry : std::filesystem::directory_iterator(sysClassTty) )
+		std::filesystem::directory_iterator iterator{sysClassTty, error};
+
+		if ( error )
+		{
+			return ports;
+		}
+
+		for ( const auto & entry : iterator )
 		{
 			const auto devicePath = entry.path() / "device";
 
 			/* Only include entries that have a device symlink (filters out virtual ttys). */
-			if ( !std::filesystem::exists(devicePath) )
+			if ( !std::filesystem::exists(devicePath, error) || error )
 			{
+				error.clear();
+
 				continue;
 			}
 
@@ -145,20 +205,37 @@ namespace EmEn::Net
 			auto subsystem = readSysfsAttribute(devicePath / "subsystem");
 
 			/* Resolve the subsystem symlink to get the subsystem name. */
-			if ( std::filesystem::is_symlink(devicePath / "subsystem") )
+			if ( std::filesystem::is_symlink(devicePath / "subsystem", error) && !error )
 			{
-				subsystem = std::filesystem::read_symlink(devicePath / "subsystem").filename().string();
+				const auto target = std::filesystem::read_symlink(devicePath / "subsystem", error);
+
+				if ( !error )
+				{
+					subsystem = target.filename().string();
+				}
 			}
+
+			error.clear();
 
 			SerialPortInfo info;
 			info.path = "/dev/" + entry.path().filename().string();
 
 			/* Walk up the device tree to find USB info. */
-			auto usbDevicePath = std::filesystem::canonical(devicePath);
+			auto usbDevicePath = std::filesystem::canonical(devicePath, error);
+
+			if ( error )
+			{
+				/* The device vanished mid-walk: keep the port, drop the USB details. */
+				error.clear();
+
+				ports.emplace_back(std::move(info));
+
+				continue;
+			}
 
 			for ( int depth = 0; depth < 5; depth++ )
 			{
-				if ( std::filesystem::exists(usbDevicePath / "idVendor") )
+				if ( std::filesystem::exists(usbDevicePath / "idVendor", error) && !error )
 				{
 					info.vendorId = readSysfsHex(usbDevicePath / "idVendor");
 					info.productId = readSysfsHex(usbDevicePath / "idProduct");
@@ -196,7 +273,16 @@ namespace EmEn::Net
 	 * @param baudRate The baud rate value.
 	 * @return speed_t The termios constant, or B9600 as fallback.
 	 */
-	static speed_t
+	/**
+	 * @brief Converts a numeric baud rate to a POSIX termios speed constant.
+	 * @note ⚠️ Returns nothing for a rate POSIX has no constant for — 250000, the default of
+	 * Marlin-based 3D printers, is one of them. Falling back to B9600 and reporting success made
+	 * the port open at the wrong speed with every reply unreadable and no diagnostic; such a rate
+	 * goes through the BOTHER path below instead.
+	 * @param baudRate The baud rate value.
+	 * @return std::optional< speed_t >
+	 */
+	static std::optional< speed_t >
 	toBaudConstant (uint32_t baudRate) noexcept
 	{
 		switch ( baudRate )
@@ -233,8 +319,34 @@ namespace EmEn::Net
 			case 4000000 : return B4000000;
 
 			default :
-				return B9600;
+				return std::nullopt;
 		}
+	}
+
+	/**
+	 * @brief Applies an arbitrary baud rate the termios constants cannot express (Linux only).
+	 * @note TCSETS2 + BOTHER take the rate as a number in c_ispeed / c_ospeed. This is how
+	 * 250000 (Marlin), 76800 and the odd rates of some USB adapters are reached.
+	 * @param fd The open descriptor.
+	 * @param baudRate The wanted rate.
+	 * @return bool
+	 */
+	static bool
+	applyCustomBaudRate (int fd, uint32_t baudRate) noexcept
+	{
+		KernelTermios2 tty2{};
+
+		if ( ::ioctl(fd, KernelTCGETS2, &tty2) != 0 )
+		{
+			return false;
+		}
+
+		tty2.c_cflag &= ~CBAUD;
+		tty2.c_cflag |= BOTHER;
+		tty2.c_ispeed = baudRate;
+		tty2.c_ospeed = baudRate;
+
+		return ::ioctl(fd, KernelTCSETS2, &tty2) == 0;
 	}
 
 	/* =========================================================================
@@ -266,10 +378,12 @@ namespace EmEn::Net
 			return false;
 		}
 
-		/* Set baud rate. */
+		/* Set baud rate. A rate with no termios constant is applied after tcsetattr(), through
+		 * the BOTHER path; the standard constant is used meanwhile. */
 		const auto baudConstant = toBaudConstant(config.baudRate);
-		cfsetispeed(&tty, baudConstant);
-		cfsetospeed(&tty, baudConstant);
+
+		cfsetispeed(&tty, baudConstant.value_or(B9600));
+		cfsetospeed(&tty, baudConstant.value_or(B9600));
 
 		/* Data bits. */
 		tty.c_cflag &= ~CSIZE;
@@ -348,6 +462,18 @@ namespace EmEn::Net
 
 			return false;
 		}
+
+		if ( !baudConstant.has_value() && !applyCustomBaudRate(m_fd, config.baudRate) )
+		{
+			/* The adapter cannot do that rate: say so instead of running at 9600 silently. */
+			this->close();
+
+			return false;
+		}
+
+		/* Claim the port: a second process opening the same adapter mid-print is a corrupted
+		 * stream nobody can diagnose. Best effort — not every driver implements it. */
+		static_cast< void >(::ioctl(m_fd, TIOCEXCL));
 
 		/* Flush any pending data. */
 		tcflush(m_fd, TCIOFLUSH);

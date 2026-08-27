@@ -32,6 +32,8 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <map>
+#include <memory>
+#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -157,7 +159,7 @@ namespace EmEn::Net
 			 * @param maxLength Maximum number of bytes to receive.
 			 * @param senderAddress [out] The sender's IP address.
 			 * @param senderPort [out] The sender's port.
-			 * @param timeoutMs Receive timeout in milliseconds (0 = non-blocking).
+			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
 			 * @return int Number of bytes received, 0 if timeout/no data, or -1 on error.
 			 */
 			int receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
@@ -171,7 +173,7 @@ namespace EmEn::Net
 			 * @param buffer The buffer to read into.
 			 * @param maxLength Maximum number of bytes to receive.
 			 * @param info [out] The delivery information of the received datagram.
-			 * @param timeoutMs Receive timeout in milliseconds (0 = non-blocking).
+			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
 			 * @return int Number of bytes received, 0 if timeout/no data, or -1 on error.
 			 */
 			int receive (void * buffer, size_t maxLength, DatagramInfo & info, uint32_t timeoutMs = 0) noexcept;
@@ -181,7 +183,7 @@ namespace EmEn::Net
 			 * @param maxLength Maximum number of bytes to receive.
 			 * @param senderAddress [out] The sender's IP address.
 			 * @param senderPort [out] The sender's port.
-			 * @param timeoutMs Receive timeout in milliseconds (0 = non-blocking).
+			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
 			 * @return std::string The data received (may be empty if no data available).
 			 */
 			[[nodiscard]]
@@ -282,6 +284,14 @@ namespace EmEn::Net
 			 * @return bool True if the socket now reports the delivery information.
 			 */
 			bool enableDatagramInfo () noexcept;
+
+			/* ⚠️ Guards the socket handle for the whole duration of a syscall. Without it,
+			 * close() from another thread while receive() is in select()/recvfrom() lets the
+			 * kernel recycle the descriptor: the receiver then reads from an unrelated file.
+			 * Same two-phase close as TCPClient — shutdown() wakes the receiver, close()
+			 * invalidates the handle only once every in-flight call released the lock.
+			 * Held by pointer so the class stays movable. */
+			std::unique_ptr< std::shared_mutex > m_handleMutex{std::make_unique< std::shared_mutex >()};
 
 			/* Joined multicast groups, as (group, interface) pairs in network byte order.
 			 * Held to make join/leave idempotent without having to read errno. */

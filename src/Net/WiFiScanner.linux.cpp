@@ -30,6 +30,8 @@
 #include <array>
 #include <cstdio>
 #include <sstream>
+#include <optional>
+#include <charconv>
 
 namespace EmEn::Net::WiFiScanner
 {
@@ -103,49 +105,83 @@ namespace EmEn::Net::WiFiScanner
 	 * @param line The nmcli output line.
 	 * @return Network The parsed network.
 	 */
+	/**
+	 * @brief Parses a decimal number out of untrusted text, without ever throwing.
+	 * @tparam number_t The wanted integral type.
+	 * @param text The text to read.
+	 * @return std::optional< number_t > Empty when the text is not a plain number.
+	 */
+	template< typename number_t >
+	static std::optional< number_t >
+	parseNumber (const std::string & text) noexcept
+	{
+		number_t value{0};
+
+		const auto * begin = text.data();
+		const auto * end = text.data() + text.size();
+
+		if ( std::from_chars(begin, end, value).ec != std::errc{} )
+		{
+			return std::nullopt;
+		}
+
+		return value;
+	}
+
 	static Network
 	parseLine (const std::string & line) noexcept
 	{
 		Network network;
 
-		/* Replace escaped colons in BSSID with a placeholder. */
-		std::string processed = line;
-		const std::string escaped{"\\:"};
-		const std::string placeholder{"\x01"};
-
-		for ( auto pos = processed.find(escaped); pos != std::string::npos; pos = processed.find(escaped, pos + placeholder.size()) )
-		{
-			processed.replace(pos, escaped.size(), placeholder);
-		}
-
-		/* Split on unescaped colons. */
+		/* ⚠️ nmcli's terse output escapes BOTH ':' and '\\' with a backslash. Scanning for "\\:"
+		 * alone mis-reads an SSID that ends with a backslash ("Free\\" becomes "Free\\:", whose
+		 * trailing "\\:" was eaten as an escape): every field then shifted left and a text field
+		 * reached std::stoi. The unescaping is done in one left-to-right pass instead, which is the
+		 * only way to honour "\\\\" before "\\:". */
 		std::vector< std::string > fields;
-		std::istringstream stream(processed);
 		std::string field;
 
-		while ( std::getline(stream, field, ':') )
+		for ( size_t index = 0; index < line.size(); ++index )
 		{
-			/* Restore colons from placeholder. */
-			for ( auto pos = field.find(placeholder); pos != std::string::npos; pos = field.find(placeholder, pos + 1) )
+			const auto character = line[index];
+
+			if ( character == '\\' && index + 1 < line.size() )
 			{
-				field.replace(pos, placeholder.size(), ":");
+				/* The escaped character is taken verbatim, whatever it is. */
+				field += line[index + 1];
+				++index;
+
+				continue;
 			}
 
-			fields.emplace_back(field);
+			if ( character == ':' )
+			{
+				fields.emplace_back(field);
+				field.clear();
+
+				continue;
+			}
+
+			field += character;
 		}
+
+		fields.emplace_back(field);
 
 		/* Parse fields: SSID, BSSID, SIGNAL, FREQ, SECURITY, MODE */
 		if ( fields.size() >= 6 )
 		{
 			network.ssid = fields[0];
 			network.bssid = fields[1];
-			network.quality = std::stoi(fields[2]);
+			/* ⚠️ std::stoi / std::stoul throw on text, and this function is noexcept in a
+			 * -fno-exceptions build: a neighbour's SSID was enough to terminate the process.
+			 * from_chars reports it as a value, and a malformed line is simply dropped. */
+			network.quality = parseNumber< int32_t >(fields[2]).value_or(0);
 			network.signalLevel = (network.quality / 2) - 100; /* Approximate dBm. */
 
 			/* Parse frequency: "2412 MHz" → 2412 */
 			const auto freqStr = fields[3];
 			const auto spacePos = freqStr.find(' ');
-			network.frequency = static_cast< uint32_t >(std::stoul(spacePos != std::string::npos ? freqStr.substr(0, spacePos) : freqStr));
+			network.frequency = parseNumber< uint32_t >(spacePos != std::string::npos ? freqStr.substr(0, spacePos) : freqStr).value_or(0);
 			network.channel = frequencyToChannel(network.frequency);
 
 			network.security = fields[4];

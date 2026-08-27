@@ -213,6 +213,20 @@ namespace EmEn::Net
 
 **Design**: RAII (closes in destructor), movable, non-copyable, all functions `noexcept`. The `ssdpDiscover()` static method creates a temporary socket internally for UDP multicast M-SEARCH (239.255.255.250:1900).
 
+⚠️ **`receive(timeoutMs = 0)` is NON-BLOCKING** — it polls and returns 0 at once. It used to run a
+blocking `recvfrom` with no way out, parking the calling thread forever while the header promised the
+opposite (2026-08-27).
+
+⚠️ **`close()` is safe against a parked reader**, like `TCPClient`: a `shared_mutex` covers each
+syscall, `close()` does `shutdown()` under a shared lock to wake the reader, then takes the exclusive
+lock before invalidating the descriptor. Without it, a `close()` from another thread let the kernel
+recycle the fd under a `recvfrom` still in flight — the reader then read from an unrelated file.
+
+⚠️ **`ssdpDiscover()` refuses a search target holding a control character**: it is interpolated into
+the `M-SEARCH` request line, so a `\r\n` in it emitted an attacker-shaped datagram from the host. Its
+multicast TTL is set with the platform's byte type — as an `int` the option failed on BSD/macOS, the
+TTL stayed 1, and every device more than one hop away silently went missing.
+
 **Platform**: Cross-platform (BSD sockets on Linux/macOS, Winsock on Windows). No external dependencies.
 
 #### IPv4 multicast
@@ -395,6 +409,15 @@ namespace EmEn::Net
 - Hostname resolution supports both IPv4 and IPv6 endpoints.
 - Move-only via `std::unique_ptr< std::shared_mutex >` + raw handle.
 
+⚠️ **`receive()` returns 0 for a timeout AND at the end of stream** — `peerClosed()` (2026-08-27)
+tells them apart. Without it a polling consumer could never learn the peer had gone: it polled
+forever, leaking its job and the descriptor.
+
+⚠️ **`TCPServer::accept()` returns `std::nullopt` for a timeout and for a failure** —
+`lastAcceptTimedOut()` tells them apart, and `lastError()` is cleared on entry: a stale error used to
+be re-reported on every subsequent timeout, i.e. several spurious errors per second in a 200 ms
+accept loop.
+
 #### Why we bypass Asio for the runtime I/O path
 
 > **Asio is not "bad" — its thread-safety model is just very precise.** The official doc says *"Distinct objects: Safe. Shared objects: Unsafe."*: two threads can use two different sockets in parallel, but never the same socket simultaneously, even when one thread reads and the other writes. The intended way to do full-duplex with Asio is **one** I/O thread driving `io_context::run()`, with every operation posted via `asio::strand` (which serialises completion handlers on that thread). Application threads doing send/recv post a lambda onto the strand and wait on a `std::future` if they need a synchronous answer. This is how Boost.Beast, gRPC and Crow are built.
@@ -547,6 +570,17 @@ namespace EmEn::Net
 }
 ```
 
+⚠️ **Enumeration cannot abort (2026-08-27).** Every `std::filesystem` call takes its `error_code`
+overload and the USB ids are read with `from_chars`: the throwing forms terminate the process in a
+`noexcept` function, and the walk races with the user — a USB adapter unplugged between the iteration
+and `canonical()` used to kill the application.
+
+⚠️ **A baud rate with no POSIX constant is applied, not silently downgraded.** 250000 — the default of
+Marlin-based 3D printers — has no `B250000`; it goes through `TCSETS2` + `BOTHER` (the kernel's
+`termios2`, whose layout is mirrored in the TU because `<asm/termbits.h>` collides with `<termios.h>`;
+the rebuilt ioctl numbers were checked against the kernel's). A rate the driver refuses now fails
+`open()` instead of running at 9600 with unreadable replies. The port is also claimed with `TIOCEXCL`.
+
 **Platform details**:
 | Platform | Enumeration | I/O | Dependencies |
 |----------|-------------|-----|--------------|
@@ -592,6 +626,12 @@ namespace EmEn::Net::WiFiScanner
 | Windows | WLAN API (WlanScan, WlanGetNetworkBssList) | wlanapi.lib |
 
 **Note**: Windows was migrated from `netsh` shell parsing to the native WLAN API for reliability and performance.
+
+⚠️ **The Linux parser cannot be killed by a neighbour's SSID (2026-08-27).** nmcli's terse output
+escapes **both** `:` and `\` with a backslash: scanning for `\:` alone mis-read an SSID ending with a
+backslash, every field shifted left, and a text field reached `std::stoi` — `std::terminate` in a
+`noexcept` function. Unescaping is now a single left-to-right pass and the numbers are read with
+`from_chars`; a malformed line yields zeros instead of dying.
 
 ---
 

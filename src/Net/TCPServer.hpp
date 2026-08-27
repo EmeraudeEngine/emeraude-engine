@@ -116,6 +116,20 @@ namespace EmEn::Net
 			std::optional< TCPClient > accept (uint32_t timeoutMs = 0) noexcept;
 
 			/**
+			 * @brief Returns whether the last accept() returned empty because its deadline expired.
+			 * @note accept() answers std::nullopt for a timeout and for a failure alike; this tells
+			 * the two apart, so a polling loop does not report a timeout as an error. Meaningful
+			 * right after an empty accept().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			lastAcceptTimedOut () const noexcept
+			{
+				return m_lastAcceptTimedOut;
+			}
+
+			/**
 			 * @brief Retrieves the local address and port the server is bound to.
 			 * @param address [out] The bound IP address.
 			 * @param port [out] The bound port (resolved if listen() was called with port = 0).
@@ -141,5 +155,6 @@ namespace EmEn::Net
 
 			std::unique_ptr< Impl > m_impl;
 			std::error_code m_lastError;
+			bool m_lastAcceptTimedOut{false};
 	};
 }

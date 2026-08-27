@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <limits>
 #include <utility>
@@ -265,6 +266,8 @@ namespace EmEn::Net
 	bool
 	TCPClient::connect (const std::string & host, uint16_t port, uint32_t timeoutMs) noexcept
 	{
+		m_peerClosed.store(false, std::memory_order_release);
+
 		/* Drop any previous connection first. */
 		this->close();
 
@@ -358,6 +361,8 @@ namespace EmEn::Net
 	void
 	TCPClient::close () noexcept
 	{
+		m_peerClosed.store(false, std::memory_order_release);
+
 		if ( m_handleMutex == nullptr )
 		{
 			return;
@@ -552,7 +557,12 @@ namespace EmEn::Net
 
 		if ( n == 0 )
 		{
-			/* Peer gracefully closed the connection. */
+			/* ⚠️ A graceful close and a timeout both used to return 0, so a consumer polling this
+			 * socket could never learn the peer had gone: it polled forever, leaking the job and
+			 * the descriptor. The end of stream is recorded, so isConnected() answers false and
+			 * peerClosed() names the reason. */
+			m_peerClosed.store(true, std::memory_order_release);
+
 			return 0;
 		}
 

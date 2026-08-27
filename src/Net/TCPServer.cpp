@@ -200,6 +200,12 @@ namespace EmEn::Net
 	std::optional< TCPClient >
 	TCPServer::accept (uint32_t timeoutMs) noexcept
 	{
+		/* ⚠️ Cleared on entry: a stale error from a previous call used to be reported by the
+		 * caller on every subsequent timeout, i.e. several spurious errors per second in a
+		 * 200 ms accept loop. */
+		m_lastError.clear();
+		m_lastAcceptTimedOut = false;
+
 		if ( !this->isListening() )
 		{
 			return std::nullopt;
@@ -228,6 +234,8 @@ namespace EmEn::Net
 		if ( acceptEc == asio::error::would_block )
 		{
 			/* Deadline elapsed before any client arrived: cancel and drain. */
+			m_lastAcceptTimedOut = true;
+
 			asio::error_code cancelEc;
 			m_impl->acceptor->cancel(cancelEc);
 			static_cast< void >(m_impl->ioContext.run());
