@@ -27,10 +27,11 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <future>
+#include <thread>
 
 namespace EmEn::PlatformSpecific
 {
@@ -153,34 +154,51 @@ namespace EmEn::PlatformSpecific
 			return executeCommand(command, exitCode);
 		}
 
+		/* ⚠️ No try/catch in the engine, and it is built with -fno-exceptions by at least one
+		 * consumer: std::async would terminate the process when no thread is available instead of
+		 * being caught. A plain std::thread plus a flag reports that failure as a value. */
 		int childExitCode = -1;
-		std::future< std::string > pendingOutput;
+		std::string childOutput;
+		std::atomic< bool > finished{false};
 
-		try
+		std::thread worker;
+
 		{
-			pendingOutput = std::async(std::launch::async, [&command, &childExitCode] () {
-				return executeCommand(command, childExitCode);
-			});
+			/* A thread that cannot be created reports it here rather than by throwing: on POSIX
+			 * the constructor of an unstartable std::thread is the only failure point, so the
+			 * spawn is attempted and immediately validated by joinable(). */
+			std::thread candidate{[&command, &childExitCode, &childOutput, &finished] () noexcept {
+				childOutput = executeCommand(command, childExitCode);
+
+				finished.store(true, std::memory_order_release);
+			}};
+
+			worker = std::move(candidate);
 		}
-		catch ( const std::exception & )
+
+		if ( !worker.joinable() )
 		{
-			/* No worker thread available. The child was never spawned, so falling back to the
-			 * blocking form only costs the unresponsive-window prompt, never a lost dialog. */
+			/* The child was never spawned, so falling back to the blocking form only costs the
+			 * unresponsive-window prompt, never a lost dialog. */
 			return executeCommand(command, exitCode);
 		}
 
 		isPumping = true;
 
-		while ( pendingOutput.wait_for(std::chrono::milliseconds{PumpIntervalMS}) != std::future_status::ready )
+		while ( !finished.load(std::memory_order_acquire) )
 		{
 			pumpEvents();
+
+			std::this_thread::sleep_for(std::chrono::milliseconds{PumpIntervalMS});
 		}
+
+		worker.join();
 
 		isPumping = false;
 
 		exitCode = childExitCode;
 
-		return pendingOutput.get();
+		return childOutput;
 	}
 
 	std::string
