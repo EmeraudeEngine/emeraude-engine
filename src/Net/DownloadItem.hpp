@@ -24,144 +24,78 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+
 #pragma once
 
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
-#include <string>
+#include <utility>
 
 /* Local inclusions for usages. */
-#include "Network/URL.hpp"
-#include "Tracer.hpp"
+#include "Network/URI.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Net
 {
 	/**
-	 * @brief The DownloadItem class
+	 * @brief One download request tracked by Net::Manager, addressed by its ticket.
+	 * @note Plain data guarded by the manager's mutex; it carries no logic of its own.
 	 */
 	class EMEN_API DownloadItem final
 	{
 		public:
 
-			/** @brief Class identifier. */
-			static constexpr auto ClassId{"DownloadItem"};
-
 			/**
-			 * @brief Constructs an item to download.
-			 * @param url The download URL [std::move].
-			 * @param output A reference to a filesystem path [std::move].
-			 * @param replaceExistingFile Erase the file on exists if true.
+			 * @brief Constructs a download item.
+			 * @param url The source URL [std::move].
+			 * @param filepath The final location of the file in the download cache [std::move].
 			 */
-			DownloadItem (Base::Network::URL url, std::filesystem::path output, bool replaceExistingFile = true) noexcept
+			DownloadItem (Base::Network::URI url, std::filesystem::path filepath) noexcept
 				: m_url{std::move(url)},
-				m_output{std::move(output)},
-				m_replaceExistingFile{replaceExistingFile}
+				m_filepath{std::move(filepath)}
 			{
 
 			}
 
 			/**
-			 * @brief Sets the current status.
-			 * @param status The status.
-			 * @return void
-			 */
-			void
-			setStatus (DownloadStatus status) noexcept
-			{
-				switch ( status )
-				{
-					case DownloadStatus::Pending :
-						Tracer::error(ClassId, "Cannot reset a download process to 'Pending' status, use 'OnHold' instead !");
-						break;
-
-					case DownloadStatus::Transferring :
-					case DownloadStatus::OnHold :
-					case DownloadStatus::Error :
-					case DownloadStatus::Done :
-						m_status = status;
-						break;
-				}
-			}
-
-			/**
-			 * @brief Sets the downloading progression.
-			 * @TODO Split up the total and received bytes.
-			 * @param total
-			 * @param received
-			 * @return void
-			 */
-			void
-			setProgression (uint64_t total, uint64_t received) noexcept
-			{
-				m_bytesTotal = total;
-				m_bytesReceived = received;
-
-				if ( m_bytesReceived >= m_bytesTotal )
-				{
-					m_status = DownloadStatus::Done;
-				}
-			}
-
-			/**
-			 * @brief Returns the URL of the downloaded item.
-			 * @return const Libraries::Network::URL &
+			 * @brief Returns the source URL.
+			 * @return const Base::Network::URI &
 			 */
 			[[nodiscard]]
-			const Base::Network::URL &
+			const Base::Network::URI &
 			url () const noexcept
 			{
 				return m_url;
 			}
 
 			/**
-			 * @brief Returns the path to the file on disk.
+			 * @brief Returns where the file lives once the status is Done.
 			 * @return const std::filesystem::path &
 			 */
 			[[nodiscard]]
 			const std::filesystem::path &
-			output () const noexcept
+			filepath () const noexcept
 			{
-				return m_output;
+				return m_filepath;
 			}
 
 			/**
-			 * @brief Returns the download response header.
-			 * @return std::string &
-			 */
-			std::string &
-			header () noexcept
-			{
-				return m_header;
-			}
-
-			/**
-			 * @brief Returns the total bytes of the item.
+			 * @brief Returns the size of the downloaded file in bytes, 0 until Done.
 			 * @return uint64_t
 			 */
 			[[nodiscard]]
 			uint64_t
-			bytesTotal () const noexcept
+			bytes () const noexcept
 			{
-				return m_bytesTotal;
+				return m_bytes;
 			}
 
 			/**
-			 * @brief Returns the actual bytes of the item downloaded.
-			 * @return uint64_t
-			 */
-			[[nodiscard]]
-			uint64_t
-			bytesReceived () const noexcept
-			{
-				return m_bytesReceived;
-			}
-
-			/**
-			 * @brief Returns the download status.
+			 * @brief Returns the status.
 			 * @return DownloadStatus
 			 */
 			[[nodiscard]]
@@ -172,24 +106,43 @@ namespace EmEn::Net
 			}
 
 			/**
-			 * @brief Returns whether the download item will replace an existing file on the disk.
-			 * @return bool
+			 * @brief Marks the item as being fetched by a worker.
+			 * @return void
 			 */
-			[[nodiscard]]
-			bool
-			replaceExistingFile () const noexcept
+			void
+			setTransferring () noexcept
 			{
-				return m_replaceExistingFile;
+				m_status = DownloadStatus::Transferring;
+			}
+
+			/**
+			 * @brief Marks the item as complete, the file being at filepath().
+			 * @param bytes The file size.
+			 * @return void
+			 */
+			void
+			setDone (uint64_t bytes) noexcept
+			{
+				m_bytes = bytes;
+				m_status = DownloadStatus::Done;
+			}
+
+			/**
+			 * @brief Marks the item as failed; no file is left behind.
+			 * @return void
+			 */
+			void
+			setError () noexcept
+			{
+				m_bytes = 0;
+				m_status = DownloadStatus::Error;
 			}
 
 		private:
 
-			Base::Network::URL m_url;
-			std::filesystem::path m_output;
-			std::string m_header;
-			uint64_t m_bytesTotal{0};
-			uint64_t m_bytesReceived{0};
+			Base::Network::URI m_url;
+			std::filesystem::path m_filepath;
+			uint64_t m_bytes{0};
 			DownloadStatus m_status{DownloadStatus::Pending};
-			bool m_replaceExistingFile;
 	};
 }

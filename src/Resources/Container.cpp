@@ -30,8 +30,8 @@
 #include <utility>
 
 /* Local inclusions. */
-#include "IO/IO.hpp"
 #include "Net/Manager.hpp"
+#include "Network/URL.hpp"
 #include "PrimaryServices.hpp"
 #include "ThreadPool.hpp"
 
@@ -75,26 +75,23 @@ namespace EmEn::Resources::ServiceAccess
 			return DownloadNotStarted;
 		}
 
-		/* NOTE: Check the cache system before downloading. */
-		const auto cacheFile = request.cacheFilepath(primaryServices.fileSystem());
+		const auto ticket = primaryServices.netManager().download(request.url());
 
-		if ( Base::IO::fileExists(cacheFile) )
+		if ( ticket == Net::Manager::InvalidTicket )
 		{
-			request.setDownloadProcessed(primaryServices.fileSystem(), true);
+			request.setDownloadFailed();
 
-			return DownloadCacheHit;
+			return DownloadNotStarted;
 		}
-
-		const auto ticket = primaryServices.netManager().download(request.url(), cacheFile, false);
 
 		request.setDownloadTicket(ticket);
 
 		return ticket;
 	}
 
-	void
-	markDownloadProcessed (PrimaryServices & primaryServices, LoadingRequest & request, bool success) noexcept
+	std::filesystem::path
+	downloadedFilepath (const PrimaryServices & primaryServices, int ticket) noexcept
 	{
-		request.setDownloadProcessed(primaryServices.fileSystem(), success);
+		return primaryServices.netManager().downloadedFilepath(ticket);
 	}
 }

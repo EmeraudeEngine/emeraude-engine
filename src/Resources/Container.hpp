@@ -38,6 +38,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <tuple>
@@ -82,11 +83,8 @@ namespace EmEn::Resources
 	 */
 	namespace ServiceAccess
 	{
-		/** @brief startDownload() result: the request was not downloadable, the caller must fail. */
+		/** @brief startDownload() result: the request was refused, the caller must fail the resource. */
 		constexpr int DownloadNotStarted{-1};
-
-		/** @brief startDownload() result: the file was already cached locally, no ticket was issued. */
-		constexpr int DownloadCacheHit{0};
 
 		/**
 		 * @brief Returns the network manager as an observable, to be passed to ObserverTrait::observe().
@@ -128,26 +126,27 @@ namespace EmEn::Resources
 		EMEN_LEAN_API void enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
 
 		/**
-		 * @brief Starts the download of an external resource, using the local cache when possible.
+		 * @brief Submits the download of an external resource to the network manager.
 		 *
-		 * When the file is already present in the cache, the request is marked as processed and
-		 * DownloadCacheHit is returned without contacting the network manager.
+		 * The manager owns the download cache: a URL already cached completes like a fresh one,
+		 * through the FileDownloaded notification, so the caller always parks the request under
+		 * the returned ticket and waits.
 		 *
 		 * @param primaryServices A reference to the primary services.
-		 * @param request A reference to the loading request, updated in place.
-		 * @return The download ticket, or DownloadCacheHit (0) when already cached,
-		 * or DownloadNotStarted (-1) when the request is not downloadable.
+		 * @param request A reference to the loading request, updated in place with its ticket.
+		 * @return The download ticket (>= 1), or DownloadNotStarted when the request is not
+		 * downloadable or the manager refused it (downloads disabled, not https).
 		 */
-		[[nodiscard]]
 		EMEN_LEAN_API int startDownload (PrimaryServices & primaryServices, LoadingRequest & request) noexcept;
 
 		/**
-		 * @brief Marks a download as processed on the request, resolving the filesystem for it.
+		 * @brief Returns the local file produced for a ticket in Done status.
 		 * @param primaryServices A reference to the primary services.
-		 * @param request A reference to the loading request, updated in place.
-		 * @param success Whether the download succeeded.
+		 * @param ticket The download ticket.
+		 * @return std::filesystem::path Empty unless the download is Done.
 		 */
-		EMEN_API void markDownloadProcessed (PrimaryServices & primaryServices, LoadingRequest & request, bool success) noexcept;
+		[[nodiscard]]
+		EMEN_API std::filesystem::path downloadedFilepath (const PrimaryServices & primaryServices, int ticket) noexcept;
 	}
 
 	/**
@@ -237,6 +236,25 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			virtual void setVerbosity (bool state) noexcept = 0;
+
+			/**
+			 * @brief Requests the asynchronous loading of a resource by name, without typing the container.
+			 * @note Console and tooling entry point: the typed getResource() is the API for code.
+			 * @param name The resource name as declared in the store.
+			 * @return bool False when the store holds no resource of that name.
+			 * @version 0.9.61
+			 */
+			virtual bool requestResource (const std::string & name) noexcept = 0;
+
+			/**
+			 * @brief Returns the loading status of a resource by name, without typing the container.
+			 * @param name The resource name.
+			 * @return std::optional< Status > std::nullopt when the name is neither loaded nor in the store;
+			 * Status::Unloaded when it is in the store but was never requested.
+			 * @version 0.9.61
+			 */
+			[[nodiscard]]
+			virtual std::optional< Status > resourceStatus (const std::string & name) const noexcept = 0;
 
 			/**
 			 * @brief Initializes the container and prepares it for resource management.
@@ -579,6 +597,44 @@ namespace EmEn::Resources
 			resourceClassId () const noexcept override
 			{
 				return resource_t::ClassId;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::requestResource() */
+			bool
+			requestResource (const std::string & name) noexcept override
+			{
+				{
+					const std::scoped_lock scopeLock{m_resourcesAccess};
+
+					if ( !m_resources.contains(name) && ( m_localStore == nullptr || !m_localStore->contains(name) ) )
+					{
+						return false;
+					}
+				}
+
+				static_cast< void >(this->getResource(name, true));
+
+				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::resourceStatus() */
+			[[nodiscard]]
+			std::optional< Status >
+			resourceStatus (const std::string & name) const noexcept override
+			{
+				const std::scoped_lock scopeLock{m_resourcesAccess};
+
+				if ( const auto resourceIt = m_resources.find(name); resourceIt != m_resources.cend() )
+				{
+					return resourceIt->second->status();
+				}
+
+				if ( m_localStore != nullptr && m_localStore->contains(name) )
+				{
+					return Status::Unloaded;
+				}
+
+				return std::nullopt;
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::memoryOccupied() const noexcept */
@@ -1260,45 +1316,53 @@ namespace EmEn::Resources
 
 						const auto downloadTicket = std::any_cast< int >(data);
 
-						auto requestIt = m_externalResources.find(downloadTicket);
+						const auto [rangeBegin, rangeEnd] = m_externalResources.equal_range(downloadTicket);
 
-						if ( requestIt != m_externalResources.end() )
+						if ( rangeBegin != rangeEnd )
 						{
 							switch ( ServiceAccess::downloadStatus(m_primaryServices, downloadTicket) )
 							{
 								case Net::DownloadStatus::Pending :
 								case Net::DownloadStatus::Transferring :
-								case Net::DownloadStatus::OnHold :
+									/* Not terminal yet: keep the requests parked. */
 									return true;
 
 								case Net::DownloadStatus::Done :
 								{
-									Tracer::success(resource_t::ClassId, "Resource downloaded.");
+									const auto localFilepath = ServiceAccess::downloadedFilepath(m_primaryServices, downloadTicket);
 
-									ServiceAccess::markDownloadProcessed(m_primaryServices, requestIt->second, true);
+									for ( auto requestIt = rangeBegin; requestIt != rangeEnd; ++requestIt )
+									{
+										auto request = requestIt->second;
 
-									/* Enqueue the resource loading in the thread pool. */
-									auto request = requestIt->second;
+										request.setDownloadProcessed(localFilepath);
 
-									ServiceAccess::enqueueTask(m_primaryServices, [this, request] {
-										this->loadingTask(request);
-									});
+										if ( m_verboseEnabled )
+										{
+											TraceSuccess{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << request.baseInformation().name() << "' is downloaded, loading it ...";
+										}
+
+										/* Enqueue the resource loading in the thread pool. */
+										ServiceAccess::enqueueTask(m_primaryServices, [this, request] {
+											this->loadingTask(request);
+										});
+									}
 								}
 									break;
 
 								case Net::DownloadStatus::Error :
-									Tracer::error(resource_t::ClassId, "Resource failed to download.");
+									for ( auto requestIt = rangeBegin; requestIt != rangeEnd; ++requestIt )
+									{
+										TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << requestIt->second.baseInformation().name() << "' failed to download.";
 
-									/* FIXME: passes 'true' on a failed download, so the request is marked
-									 * as DownloadSuccess and its BaseInformation is rewritten to point at a
-									 * cache file that was never written. Behaviour preserved verbatim from
-									 * before the ServiceAccess extraction — fix separately. */
-									ServiceAccess::markDownloadProcessed(m_primaryServices, requestIt->second, true);
+										requestIt->second.setDownloadFailed();
+
+										this->failResource(requestIt->second);
+									}
 									break;
 							}
 
-							/* Removes the loading request. */
-							m_externalResources.erase(requestIt);
+							m_externalResources.erase(rangeBegin, rangeEnd);
 						}
 					}
 
@@ -1527,7 +1591,7 @@ namespace EmEn::Resources
 				/* Gets a reference to the smart pointer of the new resource. */
 				auto & newResource = result.first->second;
 
-				LoadingRequest request{baseInformation, newResource, resource_t::ClassId};
+				LoadingRequest request{baseInformation, newResource};
 
 				if ( asyncLoad )
 				{
@@ -1538,18 +1602,17 @@ namespace EmEn::Resources
 
 						if ( ticket == ServiceAccess::DownloadNotStarted )
 						{
-							return nullptr;
+							TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << name << "' cannot be downloaded, it fails.";
+
+							this->failResource(request);
+
+							return newResource;
 						}
 
-						if ( ticket != ServiceAccess::DownloadCacheHit )
-						{
-							m_externalResources.emplace(ticket, request);
-						}
-
-						/* NOTE: On a cache hit the request is already marked as processed and no
-						 * loading task is enqueued, so the resource stays unloaded until something
-						 * asks for it again. Behaviour preserved verbatim from before the
-						 * ServiceAccess extraction — fix separately. */
+						/* NOTE: A cached URL completes the same way as a fresh one — through the
+						 * FileDownloaded notification of that ticket, on the next main-loop cycle.
+						 * Several resources may share a ticket (same URL), hence the multimap. */
+						m_externalResources.emplace(ticket, request);
 					}
 					else
 					{
@@ -1568,6 +1631,24 @@ namespace EmEn::Resources
 				}
 
 				return newResource;
+			}
+
+			/**
+			 * @brief Puts a resource that cannot be loaded into its terminal Failed state.
+			 * @note The fail-safe contract: observers receive LoadFailed and consumers get the
+			 * default resource, exactly as for a local file that fails to parse.
+			 * @param request The loading request whose resource fails.
+			 * @return void
+			 */
+			void
+			failResource (const LoadingRequest & request) noexcept
+			{
+				if ( !request.resource()->failLoading() )
+				{
+					TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << request.baseInformation().name() << "' could not be put in the Failed state (already loading or loaded).";
+				}
+
+				this->notify(LoadingProcessFinished);
 			}
 
 			/**
@@ -1657,7 +1738,7 @@ namespace EmEn::Resources
 			AbstractServiceProvider & m_serviceProvider;										  ///< Service provider for resource loading operations.
 			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;  ///< Shared store of available resource metadata (name -> BaseInformation).
 			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;		///< Map of loaded resources (name -> resource).
-			std::unordered_map< int, LoadingRequest > m_externalResources;					 ///< Active download requests (ticket -> request).
+			std::unordered_multimap< int, LoadingRequest > m_externalResources;				 ///< Parked download requests (ticket -> request; several resources may share a URL).
 			mutable std::mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
 			bool m_verboseEnabled{false};														 ///< Verbose logging flag for detailed trace output.
 	};

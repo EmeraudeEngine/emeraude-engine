@@ -861,3 +861,37 @@ Prefer this over `kill` or `timeout` — it lets the engine clean up resources p
 ---
 
 <!-- NOTE: CEF integration is handled at the application level (projet-alpha), not in the engine. -->
+
+## Downloads (`Core.NetManagerService`) and on-demand resource loading
+
+The engine downloads `https://` files through `Net::Manager` (emeraude-base `HTTPSClient`, TLS
+verified against the system trust store) into a URL-keyed cache. Settings: `Core/Net/DownloadEnabled`
+(default `true`), `Core/Net/CABundleFile` (default empty). Completion is reported on the next
+main-loop cycle — poll `status(ticket)`.
+
+```bash
+python3 tools/remote-console.py "Core.NetManagerService.isEnabled()"
+python3 tools/remote-console.py "Core.NetManagerService.download(https://raw.githubusercontent.com/EmeraudeEngine/emeraude-base/main/README.md)"
+#   -> Ticket #1 (Transferring). Poll with status(1).
+python3 tools/remote-console.py "Core.NetManagerService.status(1)"
+#   -> {"ticket":1,"status":"Done","filepath":"~/.cache/<app>/downloads/<hash>.md","remaining":0}
+python3 tools/remote-console.py "Core.NetManagerService.listCache()"
+python3 tools/remote-console.py "Core.NetManagerService.clearCache()"
+```
+
+A resource declared with `"Source": "ExternalData"` in a store is downloaded the same way, then
+loaded. To exercise the chain from the console, drop a store and request the resource by name:
+
+```bash
+cat > /tmp/store.json <<'JSON'
+{"Stores":{"Images":[{"Name":"RemotePicture","Source":"ExternalData","Data":"https://raw.githubusercontent.com/pnggroup/libpng/libpng16/contrib/pngsuite/basn6a08.png"}]}}
+JSON
+python3 tools/remote-console.py 'Core.openFiles("/tmp/store.json")'
+python3 tools/remote-console.py "Core.ResourcesManagerService.loadResource(ImageResource, RemotePicture)"
+python3 tools/remote-console.py "Core.ResourcesManagerService.resourceStatus(ImageResource, RemotePicture)"
+#   -> Loading, then Loaded (or Failed: the default resource is served — the fail-safe contract)
+```
+
+`http://` URLs are refused (HTTPS only, by decision). A refused download fails the resource
+immediately; a certificate error fails it after the handshake. Both leave nothing in the cache.
+

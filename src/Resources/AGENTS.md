@@ -28,21 +28,21 @@ Fail-safe resource system that guarantees NEVER returning nullptr and always pro
 > It is a header-only template, so any expression in a method body that does *not* depend on
 > `resource_t` is analysed at template **definition** time — pulling `Net/Manager.hpp`,
 > `FileSystem.hpp` or `ThreadPool.hpp` into every consumer. `Net::Manager` is the worst offender:
-> it pulls `FileSystem`, `ThreadPool`, `Network/URL` and the JSON layer behind its cache database
-> (it is NOT a `ControllableTrait` — this note said so wrongly until 2026-08-27).
+> it pulls `FileSystem`, `ThreadPool`, `Network/URI`, `Console/ControllableTrait` (it is console-driven
+> since 2026-08-27) and the JSON layer behind its cache index.
 >
 > Two mechanisms keep the header thin (2026-07, measured: 42 headers / 12 826 LOC → **20 / 6 834**):
 >
 > 1. **`ServiceAccess` free functions** (declared in `Container.hpp`, implemented in `Container.cpp`)
 >    wrap every touch of a heavy service: `netManagerObservable()`, `isNetManagerObservable()`,
->    `fileDownloadedNotificationCode()`, `downloadStatus()`, `enqueueTask()`, `startDownload()`,
->    `markDownloadProcessed()`. **Need a new service call? Add a function there** — do not include
+>    `fileDownloadedNotificationCode()`, `downloadStatus()`, `downloadedFilepath()`, `enqueueTask()`,
+>    `startDownload()`. **Need a new service call? Add a function there** — do not include
 >    the service header.
 > 2. **`LoadingRequest` is deliberately not a template.** It only ever needs the polymorphic
->    `ResourceTrait` (`load()` is virtual) plus the resource's `ClassId`, passed as a `const char *`
->    at construction. That lets every heavy body (`cacheFilepath`, `url`, `setDownloadProcessed`)
->    live in `LoadingRequest.cpp`, keeping `FileSystem`, `Network/URL`, `String` and `IO` out of the
->    header. Consequence: it stores a `shared_ptr< ResourceTrait >`, so `Container::loadingTask()`
+>    `ResourceTrait` (`load()` is virtual). That lets every heavy body (`url`, `setDownloadProcessed`,
+>    `setDownloadFailed`) live in `LoadingRequest.cpp`, keeping `Network/URL` out of the header. It
+>    computes no cache path any more: the downloaded file's location comes from `Net::Manager`
+>    (`ServiceAccess::downloadedFilepath(ticket)`), which owns the download cache. Consequence: it stores a `shared_ptr< ResourceTrait >`, so `Container::loadingTask()`
 >    downcasts with `static_cast< resource_t * >` before publishing the `ResourceLoaded`
 >    notification (safe — no virtual inheritance of `ResourceTrait` anywhere).
 >
@@ -255,11 +255,24 @@ bool onDependenciesLoaded() noexcept override {
 
 ## Development Commands
 
-```bash
-# Resources tests
-ctest -R Resources
-./test --filter="*Resource*"
-```
+> [!WARNING]
+> **There is no test target in the engine** (`ctest -R Resources` and `./test --filter=...`,
+> advertised here until 2026-08-27, never existed). The only unit suite of the cascade is
+> emeraude-base's `EmeraudeBaseUnitTests`. Resources behaviour is verified at runtime through the
+> console commands below, with the Vulkan validation layers on.
+
+### Console (`Core.ResourcesManagerService`)
+
+| Command | Role |
+|---|---|
+| `listContainers()` | Containers as JSON (class id, name, resource count). |
+| `listResources(containerName)` | Names available in a container (`ImageResource`, `MeshResource`, …). |
+| `loadResource(containerName, resourceName)` | Requests the asynchronous loading of a store resource — an `ExternalData` one is downloaded first by `Net::Manager`. Fails when the name is not in the store. |
+| `resourceStatus(containerName, resourceName)` | `Unloaded` / `Enqueuing` / `ManualEnqueuing` / `Loading` / `Loaded` / `Failed`; error when the name is unknown. Poll it after `loadResource()`. |
+
+Both new commands (2026-08-27) go through two `ContainerInterface` virtuals, `requestResource(name)`
+and `resourceStatus(name)`, so the console never needs the container type — code keeps using the
+typed `getResource()`.
 
 ## Async Lambda Capture Safety (CRITICAL)
 
@@ -346,7 +359,7 @@ For complete resources system architecture:
 - @docs/resource-management.md - Fail-safe, dependencies, detailed lifecycle, thread safety, future suggestions
 
 Related systems:
-- @src/Net/AGENTS.md - Resource download from URLs (⚠️ chain not functional today — § Download manager there, decision in `docs/todo/net-manager-download-chain-broken.md`)
+- @src/Net/AGENTS.md - Resource download from URLs (`"Source": "ExternalData"`): the manager's contract, the `FileDownloaded`-on-main-thread rule, the console check of the whole chain
 - @src/Graphics/AGENTS.md - Geometry, Material, Texture as resources
 - @src/Audio/AGENTS.md - SoundResource, MusicResource
 - @src/Libs/AGENTS.md - Observer/Observable pattern

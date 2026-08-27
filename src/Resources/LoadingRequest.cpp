@@ -40,10 +40,9 @@ namespace EmEn::Resources
 {
 	using namespace Base;
 
-	LoadingRequest::LoadingRequest (BaseInformation baseInformation, std::shared_ptr< ResourceTrait > resource, const char * resourceClassId) noexcept
+	LoadingRequest::LoadingRequest (BaseInformation baseInformation, std::shared_ptr< ResourceTrait > resource) noexcept
 		: m_baseInformation{std::move(baseInformation)},
-		m_resource{std::move(resource)},
-		m_resourceClassId{resourceClassId}
+		m_resource{std::move(resource)}
 	{
 		switch ( m_baseInformation.sourceType() )
 		{
@@ -74,17 +73,6 @@ namespace EmEn::Resources
 			case SourceType::DirectData :
 				break;
 		}
-	}
-
-	std::filesystem::path
-	LoadingRequest::cacheFilepath (const FileSystem & fileSystem) const noexcept
-	{
-		std::filesystem::path filepath{fileSystem.cacheDirectory()};
-		filepath.append("data");
-		filepath.append(m_resourceClassId);
-		filepath.append(String::extractFilename(m_baseInformation.data().asString()));
-
-		return filepath;
 	}
 
 	bool
@@ -153,7 +141,7 @@ namespace EmEn::Resources
 	}
 
 	void
-	LoadingRequest::setDownloadProcessed (const FileSystem & fileSystem, bool success) noexcept
+	LoadingRequest::setDownloadProcessed (const std::filesystem::path & localFilepath) noexcept
 	{
 		if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
 		{
@@ -162,16 +150,30 @@ namespace EmEn::Resources
 			return;
 		}
 
-		/* Invalidate the networkManager ticket. */
-		if ( success ) [[likely]]
+		if ( localFilepath.empty() ) [[unlikely]]
 		{
-			m_downloadTicket = DownloadSuccess;
+			Tracer::error(ClassId, "A processed download must come with its local file path !");
 
-			m_baseInformation.updateFromDownload(this->cacheFilepath(fileSystem));
-		}
-		else
-		{
 			m_downloadTicket = DownloadError;
+
+			return;
 		}
+
+		m_downloadTicket = DownloadSuccess;
+
+		m_baseInformation.updateFromDownload(localFilepath);
+	}
+
+	void
+	LoadingRequest::setDownloadFailed () noexcept
+	{
+		if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "This request is not external !");
+
+			return;
+		}
+
+		m_downloadTicket = DownloadError;
 	}
 }

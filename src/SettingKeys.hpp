@@ -71,6 +71,14 @@ namespace EmEn
 		constexpr auto TracerLogFormatKey{"Core/Tracer/LogFormat"};
 		constexpr auto DefaultTracerLogFormat{"Text"};
 
+		/* Net */
+		/* Whether Net::Manager may download files (https only) for ExternalData resources. */
+		constexpr auto NetDownloadEnabledKey{"Core/Net/DownloadEnabled"};
+		constexpr auto DefaultNetDownloadEnabled{true};
+		/* Optional PEM bundle added to the system trust store (corporate / private CA). Empty = none. */
+		constexpr auto NetCABundleFileKey{"Core/Net/CABundleFile"};
+		constexpr auto DefaultNetCABundleFile{""};
+
 		/* Console */
 		/* Whether the remote console (TCP, AI runtime control) is started at all. Default FALSE:
 		 * the listener is an unauthenticated command channel (quit, settings, scene, screenshots),
@@ -96,8 +104,6 @@ namespace EmEn
 		constexpr auto ResourcesShowInformationKey{"Core/Resources/ShowInformation"};
 		constexpr auto DefaultResourcesShowInformation{false};
 		/* Allow downloading missing resources from remote stores. */
-		constexpr auto ResourcesDownloadEnabledKey{"Core/Resources/DownloadEnabled"};
-		constexpr auto DefaultResourcesDownloadEnabled{true};
 		/* Suppress per-resource conversion log spam. */
 		constexpr auto ResourcesQuietConversionKey{"Core/Resources/QuietConversion"};
 		constexpr auto DefaultResourcesQuietConversion{true};

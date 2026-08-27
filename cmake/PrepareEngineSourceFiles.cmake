@@ -1,7 +1,6 @@
 # Base files
 set(EMERAUDE_HEADER_FILES
     # Net
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/CachedDownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/DownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/NetworkInterfaces.hpp
@@ -36,6 +35,7 @@ set(EMERAUDE_HEADER_FILES
 set(EMERAUDE_SOURCE_FILES
     # Net
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/NetworkInterfaces.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPClient.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/TCPServer.cpp

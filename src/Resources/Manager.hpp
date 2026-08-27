@@ -519,8 +519,6 @@ namespace EmEn::Resources
 			mutable std::mutex m_localStoresAccess;
 			/** @brief Flag indicating whether verbose logging is enabled for resource operations. */
 			bool m_showInformation{false};
-			/** @brief Flag indicating whether downloading resources from remote sources is allowed. */
-			bool m_downloadingAllowed{false};
 			/** @brief Flag indicating whether resource conversion should suppress output messages. */
 			bool m_quietConversion{false};
 			/** @brief Flag indicating whether dynamic directory scanning is used instead of JSON indexing. */

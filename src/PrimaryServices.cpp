@@ -87,7 +87,7 @@ namespace EmEn
 			Settings m_settings;
 			PlatformSpecific::SystemInfo m_systemInfo{m_arguments, m_settings};
 			std::shared_ptr< Base::ThreadPool > m_threadPool;
-			Net::Manager m_networkManager{m_fileSystem, m_threadPool};
+			Net::Manager m_networkManager{m_fileSystem, m_settings, m_threadPool};
 			std::vector< ServiceInterface * > m_servicesEnabled;
 			bool m_childProcess{false};
 			bool m_showInformation{false};

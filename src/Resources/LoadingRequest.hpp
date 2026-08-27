@@ -73,7 +73,7 @@ namespace EmEn::Resources
 	 * - DirectData: Load from in-memory JSON data
 	 *
 	 * The request automatically determines the cache filepath for external resources and handles
-	 * the conversion from external URLs to cached local files after successful downloads.
+	 * the conversion from external URLs to the local file the network manager downloaded.
 	 *
 	 * @note This class is deliberately **not** a template: it only ever needs the polymorphic
 	 * ResourceTrait interface (ResourceTrait::load() is virtual) plus the resource type's ClassId,
@@ -95,33 +95,14 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Constructs a loading request with resource metadata.
-			 *
 			 * Initializes the loading request and sets the appropriate download ticket state based
 			 * on the source type. For external data sources, validates the URL and sets the ticket
 			 * to DownloadPending if valid, or DownloadError if invalid.
-			 *
 			 * @param baseInformation Resource metadata including source type and data location [std::move].
 			 * @param resource Shared pointer to the target resource object that will be populated [std::move].
-			 * @param resourceClassId The ClassId of the concrete resource type, used to build the cache path.
-			 * Must be a string with static storage duration (a resource's `ClassId` constant).
-			 * @version 0.8.40
+			 * @version 0.9.61
 			 */
-			LoadingRequest (BaseInformation baseInformation, std::shared_ptr< ResourceTrait > resource, const char * resourceClassId) noexcept;
-
-			/**
-			 * @brief Returns the cache file path for downloaded external resources.
-			 *
-			 * Constructs the filesystem path where downloaded external resources are cached locally.
-			 * The path structure is: `[cache_dir]/data/[resource_type]/[filename]`
-			 *
-			 * Example: `~/.cache/emeraude/data/Texture2D/albedo.png`
-			 *
-			 * @param fileSystem Reference to the filesystem service for cache directory location.
-			 * @return Full filesystem path to the cached resource file.
-			 * @version 0.8.40
-			 */
-			[[nodiscard]]
-			std::filesystem::path cacheFilepath (const FileSystem & fileSystem) const noexcept;
+			LoadingRequest (BaseInformation baseInformation, std::shared_ptr< ResourceTrait > resource) noexcept;
 
 			/**
 			 * @brief Returns the base information metadata for this request.
@@ -220,19 +201,21 @@ namespace EmEn::Resources
 			void setDownloadTicket (int ticket) noexcept;
 
 			/**
-			 * @brief Marks the download as completed (successfully or with error).
-			 *
-			 * Updates the request state after download completion. On success, updates the base
-			 * information to point to the cached local file instead of the original URL. On failure,
-			 * sets the ticket to DownloadError state.
-			 *
-			 * @param fileSystem Reference to filesystem service for cache path resolution.
-			 * @param success True if download succeeded, false if it failed.
-			 * @post On success: ticket becomes DownloadSuccess, baseInformation updated to cache path.
-			 * @post On failure: ticket becomes DownloadError.
-			 * @version 0.8.40
+			 * @brief Marks the download as completed: the base information now points at the local file.
+			 * The network manager owns the download cache; the local path it produced replaces the URL,
+			 * so the request loads exactly like a LocalData one from here on.
+			 * @param localFilepath The downloaded file, as reported by the network manager. Must not be empty.
+			 * @post Ticket becomes DownloadSuccess, baseInformation becomes LocalData on localFilepath.
+			 * @version 0.9.61
 			 */
-			void setDownloadProcessed (const FileSystem & fileSystem, bool success) noexcept;
+			void setDownloadProcessed (const std::filesystem::path & localFilepath) noexcept;
+
+			/**
+			 * @brief Marks the download as failed. The resource must then be put in its Failed state by the caller.
+			 * @post Ticket becomes DownloadError.
+			 * @version 0.9.61
+			 */
+			void setDownloadFailed () noexcept;
 
 		private:
 
@@ -244,7 +227,6 @@ namespace EmEn::Resources
 
 			BaseInformation m_baseInformation;
 			std::shared_ptr< ResourceTrait > m_resource;
-			const char * m_resourceClassId;
 			int m_downloadTicket{DownloadNotRequested};
 	};
 }

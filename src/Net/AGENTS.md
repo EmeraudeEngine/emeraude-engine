@@ -1,98 +1,125 @@
 # Net System
 
-Context for the Emeraude Engine `src/Net/` directory: the hardware & discovery utilities (production surface) and the resource download manager (semi-stub).
+Context for the Emeraude Engine `src/Net/` directory: the download manager (HTTPS, for `ExternalData` resources) and the hardware & discovery utilities.
 
 ## Module Overview
 
-Two unrelated things live under `src/Net/`:
+Two things live under `src/Net/`:
 
-1. **`Net::Manager`, the resource download manager** — a `ServiceInterface` owned by
-   `PrimaryServices`, meant to fetch `ExternalData` resources for the `Resources` system.
-   ⚠️ **It is a semi-stub: the chain does not work end to end and has no consumer.** Read the
-   section below before touching it or believing any older description of it.
+1. **`Net::Manager`, the download manager** — a service that fetches `https://` files into a
+   URL-keyed cache through emeraude-base's `HTTPSClient`, for the `Resources` system
+   (`"Source": "ExternalData"` entries) and for anything else that needs a file from the network.
+   Drivable from the console (`Core.NetManagerService.*`). Rebuilt 2026-08-27 on the owner's
+   decision — until then it was a semi-stub that never completed a download.
 2. **The hardware & discovery utilities** (`UDPClient`, `NetworkInterfaces`, `TCPClient`,
    `TCPServer`, `SerialPort`, `WiFiScanner`) — standalone, `noexcept`, cross-platform classes
-   with no dependency on the manager. These are the **production surface** of this directory:
-   they are consumed by downstream applications through scripting bridges (TCP/UDP/serial/WiFi
-   modules). Documented in § Hardware & Discovery Utilities.
+   with no dependency on the manager, consumed by downstream applications through scripting
+   bridges (TCP/UDP/serial/WiFi modules). Documented in § Hardware & Discovery Utilities.
 
 **Not multiplayer**: nothing here is gameplay networking, and nothing should become it without
 an owner decision.
 
-## Download manager (`Net::Manager`) — real state, 2026-08-27
+## Download manager (`Net::Manager`)
 
-**Files**: `Manager.hpp/.cpp`, `DownloadItem.hpp`, `CachedDownloadItem.hpp/.cpp`, `Types.hpp`.
+**Files**: `Manager.hpp/.cpp` (+ `Manager.console.cpp`), `DownloadItem.hpp`, `Types.hpp`.
 
-**Identity**: `class Manager final : public ServiceInterface, public Base::ObservableTrait`,
-`ClassId = "Net::ManagerService"`. It is **not** a `Console::ControllableTrait` — no console
-command reaches it. Constructed in `PrimaryServices` with the `FileSystem` and the shared
-`Base::ThreadPool`; `Core` observes it (`Core.cpp`, `onNotification`) with a handler whose
-every `case` is an empty `break`.
+**Identity**: `class Manager final : public ServiceInterface, public Base::ObservableTrait,
+public Console::ControllableTrait`, `ClassId = "NetManagerService"` (console path
+`Core.NetManagerService`). Constructed in `PrimaryServices` with the `FileSystem`, the `Settings`
+and the shared `Base::ThreadPool`; registered to the console by `Core` next to Settings.
 
-**Real API** (header-verified — the methods older docs advertised, `requestDownload()`,
-`isCached()`, `clearCache()`, `forceDownload()`, **do not exist**):
+### Contract
+
 ```cpp
-int download (const Network::URL & url, const std::filesystem::path & output, bool replaceExistingFile) noexcept; // returns a ticket
-DownloadStatus downloadStatus (int ticket) const noexcept;
-size_t fileCount () const noexcept;
-size_t fileRemainingCount () const noexcept;
-size_t totalBytesTotal () const noexcept;   // accumulators, see header for exact names
-void showProgressionInConsole (bool state) noexcept;
-enum class NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished, Progress };
+int download (const Base::Network::URI & url) noexcept;             // ticket >= 1, or InvalidTicket (0)
+DownloadStatus downloadStatus (int ticket) const noexcept;         // Pending | Transferring | Error | Done
+std::filesystem::path downloadedFilepath (int ticket) const noexcept; // empty unless Done
+void dispatchCompleted () noexcept;                                // main thread, called by Core each cycle
+size_t fileCount () const; size_t fileRemainingCount () const;     // tickets issued / transfers in flight
+bool isDownloadEnabled () const; bool clearCache ();
+std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > > cachedFiles () const;
+enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished }; // payload: ticket (int), none for Finished
 ```
 
-**Transport**: `download()` enqueues **one lambda per request on the shared thread pool**
-(no thread of its own, no `io_context`) which calls the **legacy** emeraude-base free function
-`Base::Network::download(uri, path, verbose)` — plaintext HTTP over Asio. The engine
-references **none** of emeraude-base's production-grade HTTPS stack (`HTTPSClient`,
-`TLSConnection`, `TrustStore`), so:
-- an `https://` URL resolves port 443 and then **speaks cleartext** to it — HTTPS cannot work;
-- the legacy function uses the throwing Asio overloads under `ASIO_NO_EXCEPTIONS`: a DNS
-  failure is a **`std::abort()`**, inside a function declared `noexcept`;
-- there is no timeout, no retry, no redirect following, no chunked transfer.
+1. **One code path for the consumer.** `download(url)` always returns a ticket to wait on. A URL
+   already in the cache, a URL already in flight (shared ticket) and a fresh transfer all end the
+   same way: a `FileDownloaded` notification carrying the ticket, after which `downloadStatus()`
+   is terminal (`Done` → `downloadedFilepath()` is the file; `Error` → nothing on disk). There is
+   **no** synchronous "cache hit" return to special-case.
+2. **Observers run on the main thread.** Workers never call `notify()`: they push an event, and
+   `Core::executeMainLoopCycle()` calls `dispatchCompleted()` right after the console poll, which
+   emits the queued notifications and persists the cache index. This is the same deferral scheme
+   as `Console::Controller::poll()` and what the architecture rule "never emit from a worker or
+   under a mutex" requires. Consequence: even a cache hit completes **one cycle later**, never
+   inside `download()`.
+3. **HTTPS only, verified.** The transfer is `Base::Network::HTTPSClient::download()` over a
+   `asio::ssl::context` loaded with `TrustStore::applySystemTrustStore()` (plus
+   `Core/Net/CABundleFile` when set). Certificate or hostname mismatch = `Error`. `http://` is
+   refused at `download()` with a trace (there is no cleartext client in the base, by decision).
+4. **The cache is the manager's, keyed by URL.** `cacheDirectory("downloads")/<FNV-1a of the URL,
+   16 hex>.<ext>` + `index.json` (`Files: [{URL, Filename, Bytes}]`). Two URLs sharing a basename
+   never collide; the extension is kept because loaders sniff it. The transfer streams into
+   `<file>.part` then renames, so a reader never sees a partial file and a failure leaves nothing
+   under the final name. The index is loaded at init (entries whose file vanished are dropped) and
+   written from `dispatchCompleted()` when dirty.
+5. **Settings**: `Core/Net/DownloadEnabled` (default `true`) — off, every `download()` returns
+   `InvalidTicket` and the resource falls back to its default; `Core/Net/CABundleFile` (default
+   empty) — a PEM bundle added to the system store for private CAs. Both written on first run.
+   ⚠️ The old `Core/Resources/DownloadEnabled` was inert and is gone.
+6. **No progress.** `HTTPSClient::download()` has no progress hook (a base feature, frozen —
+   emeraude-base `docs/todo/httpsclient-progress-callback.md`), so there is no `Progress`
+   notification and no byte counters until then; `DownloadItem::bytes()` is the final size.
 
-**Verified defects (read the code, not this list, before fixing)**:
-| Where | What |
-|---|---|
-| `grep notify src/Net/` → nothing | **No notification is ever emitted.** The four `NotificationCode`s are dead; `DownloadItem::setStatus()`/`setProgression()` are never called, every item stays `Pending` forever. |
-| `Manager.cpp`, the pool lambda | Passes `true` as the third argument of `Base::Network::download()` — that parameter is `verbose`, not `replaceExistingFile`. The flag the caller asked for is dropped. |
-| `Manager::download()` | `m_downloadItems.emplace_back()` without a mutex while pool workers hold `const auto & item = m_downloadItems.at(ticket)` — a reallocation dangles the worker's reference. |
-| `Manager::download()` | Returns ticket `0` for "already queued", indistinguishable from a real ticket 0 and colliding with `Resources::ServiceAccess::DownloadCacheHit == 0`. |
-| Cache | `m_downloadCache` is filled only from `downloads_db.json` at startup; `download()` never inserts. `clearDownloadCache()` is private and never called. `m_downloadEnabled`, `m_showProgression`, `m_nextCacheItemId` are written, never read. |
+### Verified (Linux, 2026-08-27, validation layers on, 0 VUID)
 
-**Cache on disk**: `FileSystem::cacheDirectory("downloads")` for the files (`dlcached_<id>`),
-`cacheDirectory("downloads_db.json")` for the index (written **next to** the directory, not
-inside). ⚠️ `Resources` uses a **different** scheme — `cacheDirectory()/data/<ResourceClassId>/<filename>`
-(`LoadingRequest::cacheFilepath()`). The two never meet.
+Through the console, on a live instance: a 13 566-byte file fetched over TLS (150 system CAs
+loaded), ticket `Done` with its cache path; the same URL requested again returns the **same
+ticket** and completes again; `http://` refused at `download()`; an `ExternalData` PNG store entry
+requested with `loadResource()` reaches **`Loaded`** (184 bytes downloaded, then decoded); an
+`http://` store entry and an expired-certificate host (`expired.badssl.com`) both reach
+**`Failed`** with nothing left in the cache directory; `index.json` lists exactly the two
+successes; a second launch serves the PNG from the cache — `Loaded` with **zero** `Downloading`
+trace.
 
-### Resources integration — what exists and where it breaks
+### Threading
 
-A resource is downloadable only when its store entry says so: **`"Source": "ExternalData"`**
-(`BaseInformation::parseSource`); the data string is then validated with `Network::URL::isURL()`.
-⚠️ There is **no URL sniffing on the resource name** — `getResource("https://…")` does nothing
-special, whatever older docs said.
+`m_itemsAccess` guards the tickets vector (`m_items`, ticket = index + 1), the cache map and
+`m_inFlight`; `m_eventsAccess` guards the event queue. `download()` may be called from any thread
+(a resource loading task on the pool may request a dependency). `dispatchCompleted()` releases
+both mutexes before notifying, because an observer may call back into `download()`. The manager
+is neither copyable nor movable: observers and workers hold its address.
 
-Chain: `Container` observes the manager in its constructor → on an async load of an
-`ExternalData` resource calls `ServiceAccess::startDownload()` and parks the request under its
-ticket → `Container::onNotification()` waits for `FileDownloaded`, checks `downloadStatus()`,
-then enqueues the loading task. It breaks in four places:
-1. `FileDownloaded` is never emitted (above) → **an `ExternalData` resource never loads**.
-2. Cache hit (`DownloadCacheHit`): the request is marked processed and **no loading task is
-   enqueued** (`Container.hpp`, comment "fix separately").
-3. `DownloadStatus::Error` is handled by `markDownloadProcessed(..., true)`: **a failure
-   rewrites the `BaseInformation` to a cache file that was never written** (`FIXME` in code).
-4. `Core/Resources/DownloadEnabled` (`SettingKeys.hpp`) is read into
-   `Resources::Manager::m_downloadingAllowed`, which **nothing consults**. The setting is inert.
+### Console
 
-**Consumers**: none in the engine beyond this dead chain; none in any downstream application
-(they download from their scripting layer). One test application binds a debug key to
-`netManager().download()` with hard-coded paths — not a use case.
+```bash
+python3 tools/remote-console.py "Core.NetManagerService.download(https://raw.githubusercontent.com/EmeraudeEngine/emeraude-base/main/README.md)"
+python3 tools/remote-console.py "Core.NetManagerService.status(1)"        # {"ticket":1,"status":"Done","filepath":"...","remaining":0}
+python3 tools/remote-console.py "Core.NetManagerService.listCache()"
+python3 tools/remote-console.py "Core.NetManagerService.clearCache()"
+python3 tools/remote-console.py "Core.NetManagerService.isEnabled()"
+```
 
-**Fate**: an **open owner decision**, tracked in
-[`docs/todo/net-manager-download-chain-broken.md`](../../docs/todo/net-manager-download-chain-broken.md)
-— either rewire onto `Base::Network::HTTPSClient` and repair the chain, or remove the manager,
-the `ExternalData` path and the legacy `Network.cpp`. **Do not build on the manager, and do not
-write a workaround in a consumer, until that decision is taken.**
+### Resources integration
+
+A resource is downloadable when its store entry says **`"Source": "ExternalData"`** with a
+`https://` URL in `"Data"` (`BaseInformation::parseSource`, validated with `URL::isURL()`).
+⚠️ There is **no URL sniffing on the resource name**.
+
+Chain (all in `Container.hpp`, behind the non-template `ServiceAccess` firewall implemented in
+`Container.cpp`): `getResource(name, async)` → `ServiceAccess::startDownload()` →
+`netManager().download(url)` → the request is parked in `m_externalResources`
+(**multimap**: two resources may share a URL, hence a ticket) → `Container::onNotification()`
+receives `FileDownloaded` on the main thread → `Done`: `LoadingRequest::setDownloadProcessed(
+downloadedFilepath)` rewrites the `BaseInformation` to `LocalData` on the cached file and the
+usual `loadingTask` is enqueued; `Error` (or a refused `download()`): `LoadingRequest::setDownloadFailed()`
++ `ResourceTrait::failLoading()` — the fail-safe contract, observers get `LoadFailed` and the
+consumer keeps the default resource. `LoadingRequest` no longer computes a cache path: the
+manager owns the file.
+
+Console check of the whole chain: drop a store JSON with an `ExternalData` entry
+(`Core.openFiles("/abs/path/store.json")`), then
+`Core.ResourcesManagerService.loadResource(ImageResource, MyPicture)` and poll
+`Core.ResourcesManagerService.resourceStatus(ImageResource, MyPicture)` until `Loaded`.
 
 ## Development Commands
 
@@ -564,8 +591,10 @@ namespace EmEn::Net::WiFiScanner
 
 ## Critical Points
 
-- **The hardware utilities are the production surface; the download manager is not.** See
-  § Download manager for its real state before touching `Resources`' `ExternalData` path.
+- **The download manager completes on the main thread, one cycle later, always through
+  `FileDownloaded`.** Never special-case a cache hit in a consumer, never expect the callback
+  inside `download()`, never call `notify()` from a worker — push an event and let
+  `dispatchCompleted()` emit it. See § Download manager.
 - **Hardware utilities are standalone**: `UDPClient`, `NetworkInterfaces`, `SerialPort`,
   `WiFiScanner` have no dependency on `Net::Manager` nor on Asio. `TCPClient`/`TCPServer` use
   Asio internally (connect / accept only) behind a blocking-with-timeout API — consumers never
@@ -573,8 +602,9 @@ namespace EmEn::Net::WiFiScanner
   io_context and the acceptor live in a private `Impl` defined in the TU).
 - **noexcept everywhere**: all hardware utility functions are noexcept, errors return
   false/empty containers (Asio is configured with `ASIO_NO_EXCEPTIONS`). ⚠️ That guarantee is
-  honest only where the `error_code` overloads are used — the legacy `Base::Network::download()`
-  the manager calls is not (see above).
+  honest because every Asio call in the cascade uses the `error_code` overloads — the legacy
+  `Base::Network::download()`, which used the throwing ones (abort on a DNS failure), was removed
+  from emeraude-base on 2026-08-27.
 - ⚠️⚠️ **Socket options that feed `bind()` or `recvmsg()` must be set at `open()` time, never lazily.** Measured on Linux 6.x: arming `IP_PKTINFO` at the first `receive(DatagramInfo)` instead of at `open()` still yields a correct destination address — it sits in the IP header — but the receiving interface index comes back as **0** for any datagram already queued. The structure looks perfectly plausible and the index is silently wrong, which is exactly what breaks per-interface attribution on a multi-homed host. Same family as `SO_REUSEADDR`/`SO_REUSEPORT`, which `bind()` reads once and ignores forever after.
 - ⚠️ **A green compile proves nothing about a socket.** The multicast surface and the
   IPv4/IPv6/MAC enumeration were validated by out-of-tree binaries compiled straight from
@@ -584,19 +614,19 @@ namespace EmEn::Net::WiFiScanner
 
 ## Important Files
 
-- `Manager.cpp/.hpp`, `DownloadItem.hpp`, `CachedDownloadItem.hpp/.cpp`, `Types.hpp` - Download manager (semi-stub, see § Download manager)
+- `Manager.cpp/.hpp` + `Manager.console.cpp`, `DownloadItem.hpp`, `Types.hpp` - Download manager (HTTPS, URL-keyed cache, main-thread notifications)
 - `UDPClient.hpp/.cpp` - UDP client, IPv4 multicast and SSDP discovery
 - `NetworkInterfaces.hpp/.cpp` - Local IPv4/IPv6 address enumeration with MAC (feeds the multicast API and scripting bridges)
 - `TCPClient.hpp/.cpp` - TCP client (Asio-based, blocking-with-timeout API)
 - `TCPServer.hpp/.cpp` - TCP server (Asio-based, accept returns owned TCPClient)
 - `SerialPort.hpp` + `.{linux,mac,windows}.cpp` - Serial port abstraction
 - `WiFiScanner.hpp` + `.{linux,mac,windows}.cpp` - WiFi scanning
-- Download cache: `cacheDirectory("downloads")` + `cacheDirectory("downloads_db.json")` (manager); `cacheDirectory()/data/<ClassId>/` (Resources) — disjoint
+- Download cache: `cacheDirectory("downloads")/<hash>.<ext>` + `downloads/index.json` — owned by the manager, the only one
 
 ## Detailed Documentation
 
 Related systems:
-- @docs/todo/net-manager-download-chain-broken.md - The open decision on the download manager
-- @src/Resources/AGENTS.md - Fail-safe loading system, `ExternalData` source type
-- @docs/resource-management.md - Resources architecture (carries the same warning on downloads)
-- emeraude-base `src/Network/` (`HTTPSClient`, `TLSConnection`, `TrustStore`, `URI`) - the production-grade HTTPS stack the engine does not use yet
+- @src/Resources/AGENTS.md - Fail-safe loading system, `ExternalData` source type, the `ServiceAccess` firewall
+- @docs/resource-management.md - Resources architecture
+- emeraude-base `src/Network/` (`HTTPSClient`, `TLSConnection`, `TrustStore`, `URI`) - the HTTPS stack the manager runs on
+- emeraude-base `docs/todo/httpsclient-progress-callback.md` - why there is no Progress notification yet

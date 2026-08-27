@@ -715,6 +715,7 @@ namespace EmEn
 			m_primaryServices.arguments().registerToObject(*this);
 			m_primaryServices.fileSystem().registerToObject(*this);
 			m_primaryServices.settings().registerToObject(*this);
+			m_primaryServices.netManager().registerToObject(*this);
 
 			this->observe(&m_consoleController);
 		}
@@ -1306,6 +1307,9 @@ namespace EmEn
 	{
 		/* Let the console execute pending remote commands. */
 		m_consoleController.poll();
+
+		/* Emit the download lifecycle notifications on this thread, whatever thread finished the transfers. */
+		m_primaryServices.netManager().dispatchCompleted();
 
 		/* NOTE: External cycle-scheduling contract (scheduleMainLoopCycle()): the cycle
 		 * about to run satisfies a due request. CAS — if a fresher request landed
@@ -2376,7 +2380,6 @@ namespace EmEn
 				case Net::Manager::DownloadingStarted :
 				case Net::Manager::FileDownloaded :
 				case Net::Manager::DownloadingFinished :
-				case Net::Manager::Progress :
 					break;
 
 				default:

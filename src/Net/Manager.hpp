@@ -24,76 +24,98 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+
 #pragma once
 
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cstddef>
-#include <algorithm>
+#include <cstdint>
+#include <filesystem>
 #include <map>
-#include <numeric>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "ObservableTrait.hpp"
+#include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "CachedDownloadItem.hpp"
 #include "DownloadItem.hpp"
-#include "Network/URL.hpp"
+#include "Network/URI.hpp"
 #include "ThreadPool.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
 	class FileSystem;
+	class Settings;
 }
 
 namespace EmEn::Net
 {
 	/**
-	 * @brief The network manager service class.
+	 * @brief The download manager service: fetches files over HTTPS into a URL-keyed cache.
+	 * @details A consumer calls download(url) and receives a ticket. The transfer runs on the
+	 * shared thread pool through emeraude-base's HTTPSClient (TLS verified against the system
+	 * trust store); completion is notified to observers **on the main thread**, when Core calls
+	 * dispatchCompleted() at the top of each loop cycle — a URL already in the cache completes the
+	 * same way, one cycle later, so a consumer has a single code path. The downloaded file is
+	 * then available at downloadedFilepath(ticket).
+	 * @note HTTPS only: plaintext http:// is refused (the base client has no cleartext path by
+	 * decision). Governed by Core/Net/DownloadEnabled and Core/Net/CABundleFile.
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Base::ObservableTrait This service is observable
+	 * @extends EmEn::Base::ObservableTrait Emits the download lifecycle notifications.
+	 * @extends EmEn::Console::ControllableTrait Drivable from the console (download, status, listCache, clearCache).
 	 */
-	class EMEN_LEAN_API Manager final : public ServiceInterface, public Base::ObservableTrait
+	class EMEN_LEAN_API Manager final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"Net::ManagerService"};
+			static constexpr auto ClassId{"NetManagerService"};
 
-			/** @brief Observable notification codes. */
-			enum NotificationCode : std::uint8_t
+			/** @brief download() result when the request was refused; valid tickets are >= 1. */
+			static constexpr int InvalidTicket{0};
+
+			/** @brief Observable notification codes. Payload: the ticket (int), except DownloadingFinished. */
+			enum NotificationCode : uint8_t
 			{
 				Unknown,
-				DownloadingStarted,
-				FileDownloaded,
-				DownloadingFinished,
-				Progress,
+				DownloadingStarted,		/* The first transfer of a batch began (payload: its ticket). */
+				FileDownloaded,			/* A ticket reached Done or Error — read downloadStatus(ticket). */
+				DownloadingFinished,	/* No transfer is left in flight (no payload). */
 				/* Enumeration boundary. */
 				MaxEnum
 			};
 
 			/**
-			 * @brief Constructs the network manager.
-			 * @param fileSystem A reference to the file system services.
-			 * @param threadPool A reference to the thread pool smart-pointer.
+			 * @brief Constructs the download manager.
+			 * @param fileSystem A reference to the file system service (cache directory).
+			 * @param settings A reference to the settings service.
+			 * @param threadPool A reference to the OWNER's thread pool smart-pointer. It is kept by
+			 * reference, not copied: PrimaryServices creates the pool in initialize(), after this
+			 * constructor ran — a weak_ptr taken here would be empty forever (the bug that kept
+			 * every download from starting until 2026-08-27).
 			 */
-			explicit
-			Manager (FileSystem & fileSystem, const std::shared_ptr< Base::ThreadPool > & threadPool) noexcept
-				: ServiceInterface{ClassId},
-				m_fileSystem{fileSystem},
-				m_threadPool{threadPool}
-			{
+			Manager (FileSystem & fileSystem, Settings & settings, const std::shared_ptr< Base::ThreadPool > & threadPool) noexcept;
 
-			}
+			/** @brief Non-copyable, non-movable: observers and workers hold its address. */
+			Manager (const Manager &) = delete;
+			Manager (Manager &&) = delete;
+			Manager & operator= (const Manager &) = delete;
+			Manager & operator= (Manager &&) = delete;
+
+			/** @brief Destructor (the TLS state lives behind a private implementation). */
+			~Manager () override;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
@@ -123,101 +145,79 @@ namespace EmEn::Net
 			}
 
 			/**
-			 * @brief Adds a download request and returns a ticket.
-			 * @param url A reference to the item url to download.
-			 * @param output A reference to a path to set where to save the file.
-			 * @param replaceExistingFile A switch to replace on exists file.
-			 * @return int
+			 * @brief Requests a file and returns its ticket [Thread-safe].
+			 * @note A URL already in flight returns the ticket of that transfer; a URL already in
+			 * the cache returns a ticket that completes on the next dispatchCompleted(). In every
+			 * case the consumer waits for FileDownloaded carrying that ticket.
+			 * @param url The https:// URL.
+			 * @return int The ticket (>= 1), or InvalidTicket when downloads are disabled, the URL
+			 * is not https, or no thread pool is available.
 			 */
-			int download (const Base::Network::URL & url, const std::filesystem::path & output, bool replaceExistingFile = true) noexcept;
+			[[nodiscard]]
+			int download (const Base::Network::URI & url) noexcept;
 
 			/**
-			 * @brief Gets the download status using a ticket got from Net::Manager::newDownloadRequest().
-			 * @param ticket The download ticket.
-			 * @return DownloadStatus
+			 * @brief Returns the status of a ticket [Thread-safe].
+			 * @param ticket A ticket from download().
+			 * @return DownloadStatus Error for an unknown ticket.
 			 */
 			[[nodiscard]]
 			DownloadStatus downloadStatus (int ticket) const noexcept;
 
 			/**
-			 * @brief Returns the total number of files.
-			 * @return size_t
+			 * @brief Returns the local file of a completed ticket [Thread-safe].
+			 * @param ticket A ticket from download().
+			 * @return std::filesystem::path Empty unless the status is Done.
 			 */
 			[[nodiscard]]
-			size_t
-			fileCount () const noexcept
+			std::filesystem::path downloadedFilepath (int ticket) const noexcept;
+
+			/**
+			 * @brief Emits the pending lifecycle notifications and persists the cache index.
+			 * @note Called by Core at the top of every main-loop cycle: this is what makes the
+			 * observers run on the main thread, whatever thread finished the transfer.
+			 * @return void
+			 */
+			void dispatchCompleted () noexcept;
+
+			/**
+			 * @brief Returns whether downloads are allowed (setting + usable cache + trust store).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDownloadEnabled () const noexcept
 			{
-				return m_downloadItems.size();
+				return m_downloadEnabled;
 			}
 
 			/**
-			 * @brief Returns the total number of files with a filter.
-			 * @param filter The status of the file.
+			 * @brief Returns the number of tickets issued since startup [Thread-safe].
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t
-			fileCount (DownloadStatus filter) const noexcept
-			{
-				return std::ranges::count_if(m_downloadItems, [filter] (const auto & request){
-					return request.status() == filter;
-				});
-			}
+			size_t fileCount () const noexcept;
 
 			/**
-			 * @brief Returns the total number of files currently in downloading.
+			 * @brief Returns the number of tickets not yet terminal [Thread-safe].
 			 * @return size_t
 			 */
 			[[nodiscard]]
 			size_t fileRemainingCount () const noexcept;
 
 			/**
-			 * @brief Returns the total bytes to wait.
-			 * @return uint64_t
+			 * @brief Returns the cache content as (URL, file path, bytes) tuples [Thread-safe].
+			 * @return std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > >
 			 */
 			[[nodiscard]]
-			uint64_t
-			totalBytesTotal () const noexcept
-			{
-				return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), static_cast< uint64_t >(0), [] (uint64_t sum, const auto & item) {
-					return sum + item.bytesTotal();
-				});
-			}
+			std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > > cachedFiles () const noexcept;
 
 			/**
-			 * @brief Return the total bytes received.
-			 * @return uint64_t
-			 */
-			[[nodiscard]]
-			uint64_t
-			totalBytesReceived () const noexcept
-			{
-				return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), static_cast< uint64_t >(0), [] (uint64_t sum, const auto & item) {
-					return sum + item.bytesReceived();
-				});
-			}
-
-			/**
-			 * @brief Controls download information output from Net::Manager in the console.
-			 * @param state The state of the option.
-			 * @return void
-			 */
-			void
-			showProgressionInConsole (bool state) noexcept
-			{
-				m_showProgression = state;
-			}
-
-			/**
-			 * @brief Returns whether the Net::Manager is printing download information in the console.
+			 * @brief Removes every cached file and rewrites the index [Thread-safe].
+			 * @note Tickets already Done keep pointing at files that no longer exist.
 			 * @return bool
 			 */
-			[[nodiscard]]
-			bool
-			showProgressionInConsole () const noexcept
-			{
-				return m_showProgression;
-			}
+			bool clearCache () noexcept;
 
 		private:
 
@@ -227,56 +227,73 @@ namespace EmEn::Net
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole() */
+			void onRegisterToConsole () noexcept override;
+
+			/** @brief One cache index entry, keyed by the URL string in m_cache. */
+			struct CacheEntry
+			{
+				std::string filename;
+				uint64_t bytes{0};
+			};
+
+			/** @brief A lifecycle event queued by any thread, emitted by dispatchCompleted(). */
+			struct Event
+			{
+				int ticket{InvalidTicket};
+				NotificationCode code{Unknown};
+			};
+
+			/** @brief TLS context + HTTPS client, confined to the TU. */
+			struct Impl;
+
 			/**
-			 * @brief Returns the download cache db filepath.
-			 * @return std::filesystem::path
+			 * @brief Builds the cache file name of a URL: hash of the URL plus its extension.
+			 * @param url The URL.
+			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::filesystem::path getDownloadCacheDBFilepath () const noexcept;
+			static std::string cacheFilenameFor (const Base::Network::URI & url) noexcept;
 
 			/**
-			 * @brief Returns the downloaded item filepath.
-			 * @param cacheId The downloaded item ID.
-			 * @return std::filesystem::path
-			 */
-			[[nodiscard]]
-			std::filesystem::path getDownloadedCacheFilepath (size_t cacheId) const noexcept;
-
-			/**
-			 * @brief Updates the download cache db file.
+			 * @brief Loads the cache index, dropping entries whose file vanished.
 			 * @return bool
 			 */
-			[[nodiscard]]
-			bool updateDownloadCacheDBFile () const noexcept;
+			bool loadCacheIndex () noexcept;
 
 			/**
-			 * @brief Checks the download cache.
+			 * @brief Writes the cache index. Caller holds m_itemsAccess.
 			 * @return bool
 			 */
-			 [[nodiscard]]
-			bool checkDownloadCacheDBFile () noexcept;
+			bool saveCacheIndex () const noexcept;
 
 			/**
-			 * @brief Removes downloaded files from the cache directory.
-			 * @return bool
+			 * @brief Worker body: fetches one ticket and records the outcome.
+			 * @param ticket The ticket.
+			 * @return void
 			 */
-			bool clearDownloadCache () noexcept;
+			void performDownload (int ticket) noexcept;
 
-			static constexpr auto DownloadCacheDirectory{"downloads"};
-			static constexpr auto DownloadCacheDBFilename{"downloads_db.json"};
-			static constexpr auto FileDataBaseKey{"FileDataBase"};
-			static constexpr auto FileURLKey{"FileURL"};
-			static constexpr auto CacheIdKey{"CacheId"};
+			static constexpr auto CacheDirectory{"downloads"};
+			static constexpr auto CacheIndexFilename{"index.json"};
+			static constexpr auto PartialSuffix{".part"};
+			static constexpr auto FilesKey{"Files"};
+			static constexpr auto URLKey{"URL"};
 			static constexpr auto FilenameKey{"Filename"};
-			static constexpr auto FilesizeKey{"Filesize"};
+			static constexpr auto BytesKey{"Bytes"};
 
 			FileSystem & m_fileSystem;
-			std::weak_ptr< Base::ThreadPool > m_threadPool;
-			std::filesystem::path m_downloadCacheDirectory;
-			std::map< std::string, CachedDownloadItem > m_downloadCache;
-			size_t m_nextCacheItemId{1};
-			std::vector< DownloadItem > m_downloadItems;
+			Settings & m_settings;
+			const std::shared_ptr< Base::ThreadPool > & m_threadPool;
+			std::unique_ptr< Impl > m_impl;
+			std::filesystem::path m_cacheDirectory;
+			mutable std::mutex m_itemsAccess;
+			std::vector< DownloadItem > m_items;
+			std::map< std::string, CacheEntry > m_cache;
+			std::mutex m_eventsAccess;
+			std::vector< Event > m_events;
+			size_t m_inFlight{0};
+			bool m_indexDirty{false};
 			bool m_downloadEnabled{false};
-			bool m_showProgression{false};
 	};
 }

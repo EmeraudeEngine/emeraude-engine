@@ -495,7 +495,6 @@ namespace EmEn::Resources
 		m_showInformation = settings.getOrSetDefault< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation) ||
 			arguments.isSwitchPresent("--show-all-infos") ||
 			arguments.isSwitchPresent("--show-resources-infos");
-		m_downloadingAllowed = settings.getOrSetDefault< bool >(ResourcesDownloadEnabledKey, DefaultResourcesDownloadEnabled);
 		m_quietConversion = settings.getOrSetDefault< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
 		m_useDynamicScan = settings.getOrSetDefault< bool >(ResourcesUseDynamicScanKey, DefaultResourcesUseDynamicScan);
 

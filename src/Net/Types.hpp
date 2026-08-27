@@ -24,6 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+
 #pragma once
 
 /* STL inclusions. */
@@ -31,13 +32,40 @@
 
 namespace EmEn::Net
 {
-	/** @brief Download status for download item. */
+	/** @brief Lifecycle of one download request held by Net::Manager. */
 	enum class DownloadStatus : uint8_t
 	{
-		Pending,
-		Transferring,
-		OnHold,
-		Error,
-		Done
+		Pending,		/* Accepted, not yet picked by a worker. */
+		Transferring,	/* A worker is fetching it. */
+		Error,			/* Terminal: refused, transport or filesystem failure — the file is absent. */
+		Done			/* Terminal: the file sits at DownloadItem::filepath(). */
 	};
+
+	/**
+	 * @brief Returns the textual name of a download status.
+	 * @param status The status.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	constexpr
+	const char *
+	to_cstring (DownloadStatus status) noexcept
+	{
+		switch ( status )
+		{
+			case DownloadStatus::Pending :
+				return "Pending";
+
+			case DownloadStatus::Transferring :
+				return "Transferring";
+
+			case DownloadStatus::Error :
+				return "Error";
+
+			case DownloadStatus::Done :
+				return "Done";
+		}
+
+		return "Unknown";
+	}
 }

@@ -601,6 +601,32 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Puts a resource that will never get its data into the terminal Failed state.
+			 * The automatic protocol in one step: the resource enters the loading stage and fails it
+			 * at once, so observers receive LoadFailed and dependants see a Failed dependency, exactly
+			 * as when a local file fails to parse. Meant for the stages that precede load() — a
+			 * download that could not complete, a source that cannot be resolved.
+			 * @return true if the resource is now Failed, false if it was already Loading, Loaded or Failed.
+			 * @pre Resource status must be Unloaded
+			 * @post Resource status becomes Failed
+			 * @see beginLoading(), setLoadSuccess()
+			 */
+			bool
+			failLoading () noexcept
+			{
+				if ( !this->beginLoading() )
+				{
+					return false;
+				}
+
+				/* NOTE: setLoadSuccess() echoes its argument, so its 'false' here is the
+				 * expected outcome, not a failure to apply it. */
+				static_cast< void >(this->setLoadSuccess(false));
+
+				return true;
+			}
+
+			/**
 			 * @brief Completes manual loading by setting the final status.
 			 *
 			 * This method transitions the resource from ManualEnqueuing to either Loaded or Failed.

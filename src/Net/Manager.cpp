@@ -24,44 +24,105 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+
 #include "Manager.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
 #include <ranges>
-#include <tuple>
-#include <utility>
+#include <sstream>
+#include <system_error>
+
+/* Third-party inclusions. */
+#include "Network/asio_throw_exception.hpp"
+#include "asio/ssl.hpp"
 
 /* Local inclusions. */
+#include "emeraude_base_config.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
-#include "Network/Network.hpp"
-#include "Network/URI.hpp"
-#include "Network/URL.hpp"
-#include "PrimaryServices.hpp"
+#include "Network/HTTPSClient.hpp"
+#include "Network/TrustStore.hpp"
+#include "Settings.hpp"
+#include "SettingKeys.hpp"
+#include "String.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Net
 {
 	using namespace Base;
 
+	struct Manager::Impl
+	{
+		asio::ssl::context tlsContext{asio::ssl::context::tls_client};
+		std::unique_ptr< Network::HTTPSClient > client;
+	};
+
+	Manager::Manager (FileSystem & fileSystem, Settings & settings, const std::shared_ptr< Base::ThreadPool > & threadPool) noexcept
+		: ServiceInterface{ClassId},
+		ControllableTrait{ClassId},
+		m_fileSystem{fileSystem},
+		m_settings{settings},
+		m_threadPool{threadPool},
+		m_impl{std::make_unique< Impl >()}
+	{
+
+	}
+
+	Manager::~Manager () = default;
+
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_downloadCacheDirectory = m_fileSystem.cacheDirectory(DownloadCacheDirectory);
+		const auto enabledBySetting = m_settings.getOrSetDefault< bool >(NetDownloadEnabledKey, DefaultNetDownloadEnabled);
+		const auto bundleFile = m_settings.getOrSetDefault< std::string >(NetCABundleFileKey, DefaultNetCABundleFile);
 
-		if ( IO::isDirectoryUsable(m_downloadCacheDirectory) )
+		m_cacheDirectory = m_fileSystem.cacheDirectory(CacheDirectory);
+
+		if ( !enabledBySetting )
 		{
-			m_downloadEnabled = true;
+			TraceInfo{ClassId} << "Downloads disabled (" << NetDownloadEnabledKey << " = false).";
 
-			return this->checkDownloadCacheDBFile();
+			return true;
 		}
 
-		TraceWarning{ClassId} << "Unable to get the cache directory '" << m_downloadCacheDirectory << "' for download !";
-
-		if ( !Network::hasInternetConnexion() )
+		if ( !IO::isDirectoryUsable(m_cacheDirectory) )
 		{
-			TraceWarning{ClassId} << "There is no internet connexion yet.";
+			TraceError{ClassId} << "The download cache directory '" << m_cacheDirectory << "' is not usable, downloads disabled.";
+
+			return true;
 		}
+
+		/* The trust store decides what a "valid" server certificate is: without it every
+		 * handshake fails, so downloads stay disabled rather than silently unverified. */
+		if ( !Network::TrustStore::applySystemTrustStore(m_impl->tlsContext) )
+		{
+			TraceError{ClassId} << "Unable to load the system trust store, downloads disabled.";
+
+			return true;
+		}
+
+		if ( !bundleFile.empty() && !Network::TrustStore::applyCABundleFile(m_impl->tlsContext, bundleFile) )
+		{
+			TraceWarning{ClassId} << "Unable to load the CA bundle '" << bundleFile << "' (" << NetCABundleFileKey << "), continuing with the system trust store alone.";
+		}
+
+		Network::HTTPSClientOptions options;
+		options.userAgent = DefaultUserAgent;
+
+		m_impl->client = std::make_unique< Network::HTTPSClient >(m_impl->tlsContext, options);
+
+		if ( !this->loadCacheIndex() )
+		{
+			TraceWarning{ClassId} << "The download cache index could not be read, starting with an empty cache.";
+		}
+
+		m_downloadEnabled = true;
+
+		TraceInfo{ClassId} << "Downloads enabled, " << m_cache.size() << " file(s) in cache (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates).";
 
 		return true;
 	}
@@ -69,274 +130,432 @@ namespace EmEn::Net
 	bool
 	Manager::onTerminate () noexcept
 	{
-		return this->updateDownloadCacheDBFile();
+		/* Workers still running hold `this`: the thread pool is drained by PrimaryServices
+		 * before the services terminate, so nothing is in flight here. */
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		if ( m_indexDirty && !this->saveCacheIndex() )
+		{
+			return false;
+		}
+
+		m_impl->client.reset();
+
+		return true;
 	}
 
-	std::filesystem::path
-	Manager::getDownloadCacheDBFilepath () const noexcept
+	/* ---- Cache ---- */
+
+	std::string
+	Manager::cacheFilenameFor (const Network::URI & url) noexcept
 	{
-		return m_fileSystem.cacheDirectory(DownloadCacheDBFilename);
-	}
+		/* The file name is the hash of the whole URL: two URLs sharing a basename never collide,
+		 * and the same URL always lands on the same file. The extension is kept because several
+		 * loaders sniff the format from it. */
+		std::stringstream name;
+		name << std::hex << std::setw(16) << std::setfill('0') << Hash::FNV1a(to_string(url));
 
-	std::filesystem::path
-	Manager::getDownloadedCacheFilepath (size_t cacheId) const noexcept
-	{
-		std::stringstream filename;
-		filename << "dlcached_" << cacheId;
+		auto extension = std::filesystem::path{url.path()}.extension().string();
 
-		auto filepath = m_downloadCacheDirectory;
-		filepath.append(filename.str());
+		if ( extension.size() > 1 && extension.size() <= 16 && std::ranges::all_of(extension.begin() + 1, extension.end(), [] (char character) {
+			return std::isalnum(static_cast< unsigned char >(character)) != 0;
+		}) )
+		{
+			name << String::toLower(extension);
+		}
 
-		return filepath;
+		return name.str();
 	}
 
 	bool
-	Manager::updateDownloadCacheDBFile () const noexcept
+	Manager::loadCacheIndex () noexcept
 	{
-		const auto filepath = this->getDownloadCacheDBFilepath();
+		const auto indexFilepath = m_cacheDirectory / CacheIndexFilename;
 
-		Json::Value root{};
-		root[FileDataBaseKey] = Json::arrayValue;
-
-		if ( !m_downloadCache.empty() )
+		if ( !IO::fileExists(indexFilepath) )
 		{
-			auto & fileDataBase = root[FileDataBaseKey];
-
-			for ( const auto & [url, downloadedItem] : m_downloadCache )
-			{
-				TraceInfo{ClassId} << "Cached downloaded file ID #" << downloadedItem.cacheId() << " '" << downloadedItem.originalFilename() << "' (" << downloadedItem.filesize() << " bytes) registered.";
-
-				Json::Value DBEntry = Json::objectValue;
-				DBEntry[FileURLKey] = Json::Value{url.c_str()};
-				DBEntry[CacheIdKey] = Json::Value{static_cast< Json::UInt64 >(downloadedItem.cacheId())};
-				DBEntry[FilenameKey] = Json::Value{downloadedItem.originalFilename().c_str()};
-				DBEntry[FilesizeKey] = Json::Value{static_cast< Json::UInt64 >(downloadedItem.filesize())};
-
-				fileDataBase.append(DBEntry);
-			}
+			return true;
 		}
 
-		Json::StreamWriterBuilder builder{};
+		const auto rootCheck = FastJSON::getRootFromFile(indexFilepath);
+
+		if ( !rootCheck || !rootCheck->isMember(FilesKey) || !(*rootCheck)[FilesKey].isArray() )
+		{
+			return false;
+		}
+
+		for ( const auto & file : (*rootCheck)[FilesKey] )
+		{
+			if ( !file.isMember(URLKey) || !file.isMember(FilenameKey) || !file.isMember(BytesKey) || !file[URLKey].isString() || !file[FilenameKey].isString() || !file[BytesKey].isIntegral() )
+			{
+				TraceWarning{ClassId} << "Malformed entry in the download cache index, skipped.";
+
+				continue;
+			}
+
+			CacheEntry entry;
+			entry.filename = file[FilenameKey].asString();
+			entry.bytes = file[BytesKey].asLargestUInt();
+
+			if ( !IO::fileExists(m_cacheDirectory / entry.filename) )
+			{
+				TraceWarning{ClassId} << "Cached file '" << entry.filename << "' vanished, entry dropped.";
+
+				m_indexDirty = true;
+
+				continue;
+			}
+
+			m_cache.emplace(file[URLKey].asString(), std::move(entry));
+		}
+
+		return true;
+	}
+
+	bool
+	Manager::saveCacheIndex () const noexcept
+	{
+		Json::Value root{Json::objectValue};
+		root[FilesKey] = Json::arrayValue;
+
+		for ( const auto & [url, entry] : m_cache )
+		{
+			Json::Value item{Json::objectValue};
+			item[URLKey] = url;
+			item[FilenameKey] = entry.filename;
+			item[BytesKey] = static_cast< Json::UInt64 >(entry.bytes);
+
+			root[FilesKey].append(item);
+		}
+
+		Json::StreamWriterBuilder builder;
 		builder["commentStyle"] = "None";
-		builder["indentation"] =  "\t";
-		builder["enableYAMLCompatibility"] = false;
-		builder["dropNullPlaceholders"] = true;
-		builder["useSpecialFloats"] = true;
-		builder["precision"] = 8;
-		builder["precisionType"] = "significant";
-		builder["emitUTF8"] = true;
+		builder["indentation"] = "\t";
 
-		const auto jsonString = Json::writeString(builder, root);
+		return IO::filePutContents(m_cacheDirectory / CacheIndexFilename, Json::writeString(builder, root));
+	}
 
-		if ( jsonString.empty() )
+	std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > >
+	Manager::cachedFiles () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > > files;
+		files.reserve(m_cache.size());
+
+		for ( const auto & [url, entry] : m_cache )
 		{
-			TraceError{ClassId} << "Unable to write the download cache db file '" << filepath << "' !";
-
-			return false;
+			files.emplace_back(url, m_cacheDirectory / entry.filename, entry.bytes);
 		}
 
-		return IO::filePutContents(filepath, jsonString);
+		return files;
 	}
 
 	bool
-	Manager::checkDownloadCacheDBFile () noexcept
+	Manager::clearCache () noexcept
 	{
-		const auto filepath = this->getDownloadCacheDBFilepath();
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-		/* Create an empty file if it doesn't exist. */
-		if ( !IO::fileExists(filepath) )
+		bool success = true;
+
+		for ( const auto & entry : std::views::values(m_cache) )
 		{
-			return this->updateDownloadCacheDBFile();
-		}
+			const auto filepath = m_cacheDirectory / entry.filename;
 
-		/* Read the JSON content. */
-		const auto rootCheck = FastJSON::getRootFromFile(filepath);
-
-		if ( !rootCheck )
-		{
-			TraceError{ClassId} << "Unable to read the download cache db file '" << filepath << "' !";
-
-			return false;
-		}
-
-		const auto & root = rootCheck.value();
-
-		/* Check the root node of the JSON for a file array. */
-		if ( !root.isMember(FileDataBaseKey) )
-		{
-			TraceError{ClassId} << "The download cache db file do not have '" << FileDataBaseKey << "' key !";
-
-			return false;
-		}
-
-		const auto & files = root[FileDataBaseKey];
-
-		if ( !files.isArray() )
-		{
-			TraceError{ClassId} << "The '" << FileDataBaseKey << "' key in the download cache db file is not an array !";
-
-			return false;
-		}
-
-		size_t highestCacheItemId = 0;
-
-		for ( const auto & file : files )
-		{
-			/* Check the file item JSON keys presence. */
-			if ( !file.isMember(FileURLKey) || !file.isMember(CacheIdKey) || !file.isMember(FilenameKey) || !file.isMember(FilesizeKey) )
+			if ( IO::fileExists(filepath) && !IO::eraseFile(filepath) )
 			{
-				TraceWarning{ClassId} << "A file description in the download cache db file has not the required keys !";
+				TraceError{ClassId} << "Unable to remove the cached file '" << filepath << "'.";
 
-				continue;
-			}
-
-			/* Check file item JSON keys value. */
-			const auto & _fileURL = file[FileURLKey];
-			const auto & _cacheId = file[CacheIdKey];
-			const auto & _filename = file[FilenameKey];
-			const auto & _filesize = file[FilesizeKey];
-
-			if ( !_fileURL.isString() || !_cacheId.isIntegral() || !_filename.isString() || !_filesize.isIntegral() )
-			{
-				TraceWarning{ClassId} << "A file description in the download cache db file is invalid !";
-
-				continue;
-			}
-
-			const auto fileURL = _fileURL.asString();
-			const auto cacheId = static_cast< size_t >(_cacheId.asLargestUInt());
-			const auto filename = _filename.asString();
-			const auto filesize = static_cast< size_t >(_filesize.asLargestUInt());
-
-			/* NOTE: Check the existence of the file in the directory cache. */
-			const auto cacheFilepath = this->getDownloadedCacheFilepath(cacheId);
-
-			if ( !IO::fileExists(cacheFilepath) )
-			{
-				TraceWarning{ClassId} << "The cached downloaded file ID #" << cacheId << " '" << cacheFilepath << "' no more exists !";
-
-				continue;
-			}
-
-			TraceInfo{ClassId} << "Cached downloaded file ID #" << cacheId << " '" << filename << "' (" << filesize << " bytes) registered.";
-
-			m_downloadCache.emplace(
-				std::piecewise_construct,
-				std::forward_as_tuple(fileURL),
-				std::forward_as_tuple(cacheId, filename, filesize)
-			);
-
-			if ( cacheId > highestCacheItemId )
-			{
-				highestCacheItemId = cacheId;
+				success = false;
 			}
 		}
 
-		m_nextCacheItemId = highestCacheItemId + 1;
+		m_cache.clear();
+		m_indexDirty = true;
 
-		return true;
+		return this->saveCacheIndex() && success;
 	}
 
-	bool
-	Manager::clearDownloadCache () noexcept
-	{
-		for ( const auto & downloadedItem : std::ranges::views::values(m_downloadCache) )
-		{
-			const auto cacheFilepath = this->getDownloadedCacheFilepath(downloadedItem.cacheId());
-
-			if ( !IO::fileExists(cacheFilepath) )
-			{
-				continue;
-			}
-
-			if ( !IO::eraseFile(cacheFilepath) )
-			{
-				TraceError{ClassId} << "Unable to remove file ID #" << downloadedItem.cacheId() << " '" << cacheFilepath << "' no more exists !";
-
-				return false;
-			}
-		}
-
-		m_downloadCache.clear();
-
-		return true;
-	}
+	/* ---- Requests ---- */
 
 	int
-	Manager::download (const Network::URL & url, const std::filesystem::path & output, bool replaceExistingFile) noexcept
+	Manager::download (const Network::URI & url) noexcept
 	{
-		/* 1. Check if the download request is not already in the queue. */
-		int ticket = 0;
-
-		for ( const auto & downloadRequest : m_downloadItems )
+		if ( !m_downloadEnabled )
 		{
-			if ( to_string(url) == to_string(downloadRequest.url()) )
-			{
-				TraceInfo{ClassId} << url << " is already in downloading queue !";
+			TraceWarning{ClassId} << "Downloads are disabled, '" << url << "' refused.";
 
-				return ticket;
-			}
-
-			ticket++;
+			return InvalidTicket;
 		}
 
-		/* 2. If not, we create a new task. */
-		ticket = static_cast< int >(m_downloadItems.size());
+		if ( String::toLower(url.scheme()) != "https" )
+		{
+			TraceError{ClassId} << "Only https:// URLs are downloadable, '" << url << "' refused.";
 
-		m_downloadItems.emplace_back(url, output, replaceExistingFile);
+			return InvalidTicket;
+		}
 
-		auto threadPool = m_threadPool.lock();
+		const auto urlString = to_string(url);
+		int ticket = InvalidTicket;
+		bool completeNow = false;
+		bool startWorker = false;
+		bool firstInFlight = false;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			/* Same URL already tracked: share its ticket. A terminal one still has to complete
+			 * for this new consumer; an in-flight one will, through its running worker. */
+			for ( size_t index = 0; index < m_items.size(); ++index )
+			{
+				if ( to_string(m_items[index].url()) == urlString )
+				{
+					ticket = static_cast< int >(index) + 1;
+
+					const auto status = m_items[index].status();
+					completeNow = status == DownloadStatus::Done || status == DownloadStatus::Error;
+
+					break;
+				}
+			}
+
+			if ( ticket == InvalidTicket )
+			{
+				const auto cacheIt = m_cache.find(urlString);
+				const auto filename = cacheIt != m_cache.end() ? cacheIt->second.filename : cacheFilenameFor(url);
+
+				m_items.emplace_back(url, m_cacheDirectory / filename);
+				ticket = static_cast< int >(m_items.size());
+
+				if ( cacheIt != m_cache.end() )
+				{
+					m_items.back().setDone(cacheIt->second.bytes);
+					completeNow = true;
+				}
+				else
+				{
+					m_items.back().setTransferring();
+					startWorker = true;
+					firstInFlight = m_inFlight++ == 0;
+				}
+			}
+		}
+
+		if ( completeNow )
+		{
+			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+
+			m_events.emplace_back(Event{ticket, FileDownloaded});
+
+			return ticket;
+		}
+
+		if ( !startWorker )
+		{
+			return ticket;
+		}
+
+		if ( firstInFlight )
+		{
+			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+
+			m_events.emplace_back(Event{ticket, DownloadingStarted});
+		}
+
+		const auto & threadPool = m_threadPool;
 
 		if ( threadPool == nullptr )
 		{
-			Tracer::error(ClassId, "Unable to get the thread pool !");
+			TraceError{ClassId} << "No thread pool available, '" << url << "' fails.";
 
-			return -1;
+			{
+				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+				m_items[static_cast< size_t >(ticket) - 1].setError();
+				--m_inFlight;
+			}
+
+			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+
+			m_events.emplace_back(Event{ticket, FileDownloaded});
+
+			return ticket;
 		}
 
 		threadPool->enqueue([this, ticket] {
-			TraceInfo{ClassId} << "Launching the downloading task (" << ticket << ") ...";
-
-			const auto & item = m_downloadItems.at(ticket);
-
-			return Network::download(item.url(), item.output(), true);
+			this->performDownload(ticket);
 		});
 
 		return ticket;
 	}
 
-	size_t
-	Manager::fileRemainingCount () const noexcept
+	void
+	Manager::performDownload (int ticket) noexcept
 	{
-		size_t count = 0;
+		Network::URI url;
+		std::filesystem::path filepath;
 
-		for ( const auto & request : m_downloadItems )
 		{
-			switch ( request.status() )
-			{
-				case DownloadStatus::Pending :
-				case DownloadStatus::Transferring :
-				case DownloadStatus::OnHold :
-					count++;
-					break;
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
 
-				case DownloadStatus::Error :
-				case DownloadStatus::Done :
-					break;
+			const auto & item = m_items[static_cast< size_t >(ticket) - 1];
+			url = item.url();
+			filepath = item.filepath();
+		}
+
+		TraceInfo{ClassId} << "Downloading '" << url << "' (ticket #" << ticket << ") ...";
+
+		/* Stream into a side file, then rename: a reader never sees a half-written cache file,
+		 * and a failed transfer leaves nothing under the final name. */
+		auto partialFilepath = filepath;
+		partialFilepath += PartialSuffix;
+
+		uint64_t bytes = 0;
+		bool success = m_impl->client->download(url, partialFilepath);
+
+		if ( success )
+		{
+			std::error_code error;
+
+			bytes = std::filesystem::file_size(partialFilepath, error);
+
+			if ( !error )
+			{
+				std::filesystem::rename(partialFilepath, filepath, error);
+			}
+
+			if ( error )
+			{
+				TraceError{ClassId} << "Unable to install '" << partialFilepath << "' as '" << filepath << "': " << error.message();
+
+				std::filesystem::remove(partialFilepath, error);
+
+				success = false;
+			}
+		}
+		else
+		{
+			TraceError{ClassId} << "Download of '" << url << "' (ticket #" << ticket << ") failed.";
+		}
+
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			auto & item = m_items[static_cast< size_t >(ticket) - 1];
+
+			if ( success )
+			{
+				item.setDone(bytes);
+
+				m_cache[to_string(url)] = CacheEntry{filepath.filename().string(), bytes};
+				m_indexDirty = true;
+
+				TraceSuccess{ClassId} << "'" << url << "' downloaded (" << bytes << " bytes) into '" << filepath << "'.";
+			}
+			else
+			{
+				item.setError();
+			}
+
+			--m_inFlight;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_eventsAccess};
+
+		m_events.emplace_back(Event{ticket, FileDownloaded});
+	}
+
+	void
+	Manager::dispatchCompleted () noexcept
+	{
+		std::vector< Event > events;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+
+			if ( m_events.empty() )
+			{
+				return;
+			}
+
+			events.swap(m_events);
+		}
+
+		/* NOTE: The mutexes are released here: an observer may call back into download(). */
+		for ( const auto & event : events )
+		{
+			this->notify(event.code, event.ticket);
+		}
+
+		bool finished = false;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			finished = m_inFlight == 0;
+
+			if ( m_indexDirty )
+			{
+				if ( this->saveCacheIndex() )
+				{
+					m_indexDirty = false;
+				}
+				else
+				{
+					TraceError{ClassId} << "Unable to write the download cache index.";
+				}
 			}
 		}
 
-		return count;
+		if ( finished )
+		{
+			this->notify(DownloadingFinished);
+		}
 	}
+
+	/* ---- Queries ---- */
 
 	DownloadStatus
 	Manager::downloadStatus (int ticket) const noexcept
 	{
-		if ( ticket >= static_cast< int >(m_downloadItems.size()) )
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
 			return DownloadStatus::Error;
 		}
 
-		return m_downloadItems[ticket].status();
+		return m_items[static_cast< size_t >(ticket) - 1].status();
+	}
+
+	std::filesystem::path
+	Manager::downloadedFilepath (int ticket) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
+		{
+			return {};
+		}
+
+		const auto & item = m_items[static_cast< size_t >(ticket) - 1];
+
+		return item.status() == DownloadStatus::Done ? item.filepath() : std::filesystem::path{};
+	}
+
+	size_t
+	Manager::fileCount () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		return m_items.size();
+	}
+
+	size_t
+	Manager::fileRemainingCount () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+		return m_inFlight;
 	}
 }
