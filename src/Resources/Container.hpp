@@ -123,7 +123,8 @@ namespace EmEn::Resources
 		 * @param primaryServices A reference to the primary services.
 		 * @param task The task to execute [std::move].
 		 */
-		EMEN_LEAN_API void enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
+		[[nodiscard]]
+		EMEN_LEAN_API bool enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
 
 		/**
 		 * @brief Submits the download of an external resource to the network manager.
@@ -510,18 +511,25 @@ namespace EmEn::Resources
 			bool
 			terminate () noexcept override
 			{
-				if ( m_localStore == nullptr )
-				{
-					return true;
-				}
-
-				if ( m_verboseEnabled )
+				if ( m_verboseEnabled && m_localStore != nullptr )
 				{
 					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() << " entries in the local store to check for unload.";
 				}
 
+				/* NOTE: the cleanup runs even without a local store — a container fed by
+				 * createResource() alone still holds resources and download requests. */
 				{
 					const std::scoped_lock scopeLock{m_resourcesAccess};
+
+					/* ⚠️ A request still waiting for its download must reach a terminal state here:
+					 * dropping it silently leaves observers waiting on a resource that will never
+					 * be Loaded nor Failed. */
+					for ( const auto & request : std::ranges::views::values(m_externalResources) )
+					{
+						TraceWarning{resource_t::ClassId} << "'" << request.baseInformation().name() << "' was still downloading at shutdown, failing it.";
+
+						this->failResource(request);
+					}
 
 					m_externalResources.clear();
 					m_resources.clear();
@@ -1216,7 +1224,7 @@ namespace EmEn::Resources
 					return this->getDefaultResourceUnlocked();
 				}
 
-				ServiceAccess::enqueueTask(m_primaryServices, [createFunction, newResource] {
+				if ( !ServiceAccess::enqueueTask(m_primaryServices, [createFunction, newResource] {
 					if ( createFunction(*newResource) ) {
 						switch ( newResource->status() )
 						{
@@ -1236,7 +1244,15 @@ namespace EmEn::Resources
 					{
 						TraceError{resource_t::ClassId} << "The manual loading function has return an error !";
 					}
-				});
+				}) )
+				{
+					TraceError{resource_t::ClassId} << "The thread pool refused the manual creation of '" << newResource->name() << "'.";
+
+					if ( !newResource->failLoading() )
+					{
+						TraceError{resource_t::ClassId} << "'" << newResource->name() << "' could not be put in the Failed state.";
+					}
+				}
 
 				return newResource;
 			}
@@ -1343,9 +1359,12 @@ namespace EmEn::Resources
 										}
 
 										/* Enqueue the resource loading in the thread pool. */
-										ServiceAccess::enqueueTask(m_primaryServices, [this, request] {
-											this->loadingTask(request);
-										});
+										if ( !ServiceAccess::enqueueTask(m_primaryServices, [this, request] { this->loadingTask(request); }) )
+										{
+											TraceError{resource_t::ClassId} << "The thread pool refused to load '" << request.baseInformation().name() << "'.";
+
+											this->failResource(request);
+										}
 									}
 								}
 									break;
@@ -1617,9 +1636,12 @@ namespace EmEn::Resources
 					else
 					{
 						/* Enqueue the resource loading into the thread pool. */
-						ServiceAccess::enqueueTask(m_primaryServices, [this, request] {
-							this->loadingTask(request);
-						});
+						if ( !ServiceAccess::enqueueTask(m_primaryServices, [this, request] { this->loadingTask(request); }) )
+						{
+							TraceError{resource_t::ClassId} << "The thread pool refused to load '" << name << "'.";
+
+							this->failResource(request);
+						}
 					}
 				}
 				else

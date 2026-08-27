@@ -28,6 +28,13 @@
 
 /* STL inclusions. */
 #include <istream>
+#include <string_view>
+
+/* Third-party inclusions. */
+#ifndef _WIN32
+	#include <sys/socket.h>
+	#include <sys/time.h>
+#endif
 
 /* Local inclusions. */
 #include "Tracer.hpp"
@@ -62,7 +69,9 @@ namespace EmEn::Console
 			start () noexcept
 			{
 				asio::error_code ec;
-				static_cast< void >(asio::write(*m_socket, asio::buffer("Welcome to Emeraude-Engine AI Remote Console\n"), ec));
+
+				/* NOTE: a char-array buffer would send the terminating NUL too. */
+				static_cast< void >(asio::write(*m_socket, asio::buffer(std::string_view{"Welcome to Emeraude-Engine AI Remote Console\n"}), ec));
 
 				if ( ec )
 				{
@@ -106,6 +115,15 @@ namespace EmEn::Console
 					}
 					else
 					{
+						/* A line longer than the buffer trips not_found: the peer is either broken
+						 * or feeding us bytes to grow the buffer. Say so, then drop it. */
+						if ( ec == asio::error::not_found )
+						{
+							TraceWarning{RemoteListener::ClassId} << "A client sent a line longer than " << RemoteListener::MaxLineLength << " bytes, disconnecting it.";
+
+							m_listener.respond(m_socket, "ERROR: line too long");
+						}
+
 						m_listener.removeClient(m_socket);
 					}
 				});
@@ -113,7 +131,9 @@ namespace EmEn::Console
 
 			std::shared_ptr< asio::ip::tcp::socket > m_socket;
 			RemoteListener & m_listener;
-			asio::streambuf m_buffer;
+			/* Bounded: an unbounded streambuf lets a peer that never sends a newline grow the
+			 * process until the OOM killer fires — on an unauthenticated port. */
+			asio::streambuf m_buffer{RemoteListener::MaxLineLength};
 	};
 
 	RemoteListener::RemoteListener (const std::string & address, uint16_t port) noexcept
@@ -196,11 +216,16 @@ namespace EmEn::Console
 
 		m_running = false;
 
-		m_ioContext.stop();
-
-		if ( m_networkThread.joinable() )
+		/* ⚠️ Order matters: the acceptor and every client socket are closed BEFORE stopping the
+		 * context and joining. io_context::stop() does not interrupt a handler that is already
+		 * running, and a write to a peer that stopped reading only ends when its socket dies —
+		 * closing after the join is how the whole process used to hang on exit. */
+		if ( m_acceptor != nullptr && m_acceptor->is_open() )
 		{
-			m_networkThread.join();
+			asio::error_code ec;
+
+			m_acceptor->cancel(ec);
+			m_acceptor->close(ec);
 		}
 
 		{
@@ -210,10 +235,18 @@ namespace EmEn::Console
 			{
 				asio::error_code ec;
 
+				client->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 				client->close(ec);
 			}
 
 			m_clients.clear();
+		}
+
+		m_ioContext.stop();
+
+		if ( m_networkThread.joinable() )
+		{
+			m_networkThread.join();
 		}
 
 		m_acceptor.reset();
@@ -283,16 +316,64 @@ namespace EmEn::Console
 		auto socket = std::make_shared< asio::ip::tcp::socket >(m_ioContext);
 
 		m_acceptor->async_accept(*socket, [this, socket] (const asio::error_code & error) {
-			if (!error)
+			if ( !error )
 			{
-				TraceInfo{ClassId} << "New AI client connected to Remote Console.";
+				size_t clientCount = 0;
 
 				{
-					std::lock_guard< std::mutex > lock(m_clientsMutex);
-					m_clients.insert(socket);
+					const std::lock_guard< std::mutex > lock{m_clientsMutex};
+
+					clientCount = m_clients.size();
 				}
 
-				std::make_shared< Session >(socket, *this)->start();
+				if ( clientCount >= MaxClients )
+				{
+					TraceWarning{ClassId} << "Refusing a client: " << MaxClients << " already connected.";
+
+					asio::error_code ec;
+					static_cast< void >(asio::write(*socket, asio::buffer(std::string_view{"ERROR: too many clients\n"}), ec));
+					socket->close(ec);
+				}
+				else
+				{
+					/* A send timeout is what keeps a peer that stops reading from blocking the io
+					 * thread (banner) or the main thread (respond()) forever. */
+					asio::error_code optionError;
+
+#ifdef _WIN32
+					const DWORD sendTimeout = static_cast< DWORD >(SendTimeoutMilliseconds);
+#else
+					timeval sendTimeout{};
+					sendTimeout.tv_sec = static_cast< time_t >(SendTimeoutMilliseconds / 1000);
+					sendTimeout.tv_usec = 0;
+#endif
+					static_cast< void >(::setsockopt(socket->native_handle(), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast< const char * >(&sendTimeout), sizeof(sendTimeout)));
+
+					socket->set_option(asio::ip::tcp::no_delay{true}, optionError);
+
+					TraceInfo{ClassId} << "New AI client connected to Remote Console.";
+
+					{
+						const std::lock_guard< std::mutex > lock{m_clientsMutex};
+
+						m_clients.insert(socket);
+					}
+
+					std::make_shared< Session >(socket, *this)->start();
+				}
+			}
+			else if ( error != asio::error::operation_aborted )
+			{
+				/* Never re-arm blindly: a permanent failure (EMFILE) would spin this thread at
+				 * 100 % with no trace of why. */
+				TraceError{ClassId} << "Remote console accept failed: " << error.message() << ".";
+
+				if ( error == asio::error::no_descriptors || error == asio::error::no_memory )
+				{
+					TraceError{ClassId} << "Stopping the accept loop; the remote console is now unreachable.";
+
+					m_running = false;
+				}
 			}
 
 			if ( m_running )
@@ -305,16 +386,29 @@ namespace EmEn::Console
 	void
 	RemoteListener::enqueueCommand (const std::string & command, const std::shared_ptr< asio::ip::tcp::socket > & client) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_queueMutex};
+		bool dropped = false;
 
-		if ( m_commandsQueue.size() >= MaxPendingCommands )
+		{
+			const std::lock_guard< std::mutex > lock{m_queueMutex};
+
+			if ( m_commandsQueue.size() >= MaxPendingCommands )
+			{
+				dropped = true;
+			}
+			else
+			{
+				m_commandsQueue.push({command, client});
+			}
+		}
+
+		if ( dropped )
 		{
 			TraceWarning{ClassId} << "Command queue full (" << MaxPendingCommands << "), dropping command.";
 
-			return;
+			/* NOTE: answered outside the queue lock — respond() writes to the socket, and the
+			 * client must not be left waiting for an answer that will never come. */
+			this->respond(client, "ERROR: command queue full, command dropped");
 		}
-
-		m_commandsQueue.push({command, client});
 	}
 
 	void

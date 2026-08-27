@@ -73,16 +73,19 @@ namespace EmEn::Console
 	bool
 	Controller::startRemoteListener (const std::string & address, uint16_t port) noexcept
 	{
-		this->stopRemoteListener();
+		/* ⚠️ Bind the new listener BEFORE dropping the working one: a refused bind (privileged
+		 * port, address in use) used to leave the console closed with no way back in on a
+		 * headless host. */
+		auto candidate = std::make_unique< RemoteListener >(address, port);
 
-		m_remoteListener = std::make_unique< RemoteListener >(address, port);
-
-		if ( !m_remoteListener->isRunning() )
+		if ( !candidate->isRunning() )
 		{
-			m_remoteListener.reset();
-
 			return false;
 		}
+
+		this->stopRemoteListener();
+
+		m_remoteListener = std::move(candidate);
 
 		return true;
 	}
@@ -164,6 +167,17 @@ namespace EmEn::Console
 		if ( address.empty() || portText.empty() || portText.size() > 5 || !std::ranges::all_of(portText, [] (char character) {
 			return character >= '0' && character <= '9';
 		}) )
+		{
+			return false;
+		}
+
+		/* The address must be an IP literal: make_address() does not resolve names, so a hostname
+		 * or a typo would silently fall back to loopback while the caller is told it succeeded. */
+		asio::error_code addressError;
+
+		static_cast< void >(asio::ip::make_address(address, addressError));
+
+		if ( addressError )
 		{
 			return false;
 		}
@@ -329,7 +343,7 @@ namespace EmEn::Console
 			}
 			else
 			{
-				TraceError{ClassId} << "Remote console restart on " << address << ':' << port << " failed, the console is now closed.";
+				TraceError{ClassId} << "Remote console restart on " << address << ':' << port << " failed (port in use, privileged or address not local); staying on " << ( this->isRemoteListenerRunning() ? this->remoteListenerEndpoint() : std::string{"nothing — the console is closed"} ) << ".";
 			}
 		}
 

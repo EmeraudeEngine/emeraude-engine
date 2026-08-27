@@ -304,5 +304,6 @@ namespace EmEn::Net
 			size_t m_inFlight{0};
 			bool m_indexDirty{false};
 			bool m_downloadEnabled{false};
+			bool m_shuttingDown{false};
 	};
 }

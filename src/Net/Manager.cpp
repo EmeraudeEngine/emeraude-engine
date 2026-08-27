@@ -131,6 +131,15 @@ namespace EmEn::Net
 	bool
 	Manager::onTerminate () noexcept
 	{
+		/* ⚠️ ThreadPool::wait() does not prevent a concurrent enqueue, and the other services
+		 * terminate inside that window: a download() landing here would hand a worker a client
+		 * that is about to be destroyed. From now on every request is refused. */
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			m_shuttingDown = true;
+		}
+
 		/* Workers still running hold `this`: the thread pool is drained by PrimaryServices
 		 * before the services terminate, so nothing is in flight here. */
 		const std::lock_guard< std::mutex > lock{m_itemsAccess};
@@ -284,9 +293,20 @@ namespace EmEn::Net
 	{
 		if ( !m_downloadEnabled )
 		{
-			TraceWarning{ClassId} << "Downloads are disabled, '" << url << "' refused.";
+			TraceDebug{ClassId} << "Downloads are disabled, '" << url << "' refused.";
 
 			return InvalidTicket;
+		}
+
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			if ( m_shuttingDown )
+			{
+				TraceDebug{ClassId} << "The service is shutting down, '" << url << "' refused.";
+
+				return InvalidTicket;
+			}
 		}
 
 		if ( String::toLower(url.scheme()) != "https" )
@@ -383,9 +403,24 @@ namespace EmEn::Net
 			return ticket;
 		}
 
-		threadPool->enqueue([this, ticket] {
-			this->performDownload(ticket);
-		});
+		/* ⚠️ enqueue() returns false when the pool is stopping, and it is not [[nodiscard]]:
+		 * ignoring it left the ticket Transferring forever and the resource waiting on it never
+		 * reached a terminal state. */
+		if ( !threadPool->enqueue([this, ticket] { this->performDownload(ticket); }) )
+		{
+			TraceError{ClassId} << "The thread pool refused the task, '" << url << "' fails.";
+
+			{
+				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+				m_items[static_cast< size_t >(ticket) - 1].setError();
+				--m_inFlight;
+			}
+
+			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+
+			m_events.emplace_back(Event{ticket, FileDownloaded});
+		}
 
 		return ticket;
 	}
@@ -402,6 +437,22 @@ namespace EmEn::Net
 			const auto & item = m_items[static_cast< size_t >(ticket) - 1];
 			url = item.url();
 			filepath = item.filepath();
+		}
+
+		{
+			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+
+			if ( m_shuttingDown || m_impl->client == nullptr )
+			{
+				m_items[static_cast< size_t >(ticket) - 1].setError();
+				--m_inFlight;
+
+				const std::lock_guard< std::mutex > eventsLock{m_eventsAccess};
+
+				m_events.emplace_back(Event{ticket, FileDownloaded});
+
+				return;
+			}
 		}
 
 		TraceInfo{ClassId} << "Downloading '" << url << "' (ticket #" << ticket << ") ...";

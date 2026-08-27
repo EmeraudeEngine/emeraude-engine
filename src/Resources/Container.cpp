@@ -61,10 +61,12 @@ namespace EmEn::Resources::ServiceAccess
 		return primaryServices.netManager().downloadStatus(ticket);
 	}
 
-	void
+	bool
 	enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept
 	{
-		primaryServices.threadPool()->enqueue(std::move(task));
+		/* NOTE: false when the pool is stopping — the caller must then fail the resource instead of
+		 * waiting for a task that will never run. */
+		return primaryServices.threadPool()->enqueue(std::move(task));
 	}
 
 	int

@@ -65,6 +65,15 @@ namespace EmEn::Console
 			/** @brief Maximum number of pending commands in the queue before dropping new ones. */
 			static constexpr size_t MaxPendingCommands{256};
 
+			/** @brief Maximum length of a single command line; a longer line disconnects the client. */
+			static constexpr size_t MaxLineLength{8192};
+
+			/** @brief Maximum number of simultaneous clients; further connections are refused. */
+			static constexpr size_t MaxClients{8};
+
+			/** @brief Send timeout, so a peer that stops reading cannot block a write forever. */
+			static constexpr uint32_t SendTimeoutMilliseconds{2000};
+
 			/**
 			 * @brief Constructs the remote listener service.
 			 * @note The listener is an unauthenticated command channel. It binds to

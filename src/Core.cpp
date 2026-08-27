@@ -590,7 +590,10 @@ namespace EmEn
 		using namespace PlatformSpecific::Desktop::Dialog;
 
 		/* The dialogs are modal and native: the main loop is paused around them exactly like
-		 * displayCoreMessages() does. */
+		 * displayCoreMessages() does. ⚠️ resume() is unconditional, so a pause the user had
+		 * deliberately set (the Pause key) must not be lifted on the way out. */
+		const auto wasPaused = m_paused.load(std::memory_order_acquire);
+
 		this->pause();
 
 		if ( m_consoleController.isRemoteListenerRunning() )
@@ -613,7 +616,10 @@ namespace EmEn
 				TraceInfo{ClassId} << "Remote console closed from the keyboard (was " << endpoint << ").";
 			}
 
-			this->resume();
+			if ( !wasPaused )
+			{
+				this->resume();
+			}
 
 			return;
 		}
@@ -638,7 +644,10 @@ namespace EmEn
 
 		if ( input.hasBeenCanceled() )
 		{
-			this->resume();
+			if ( !wasPaused )
+			{
+				this->resume();
+			}
 
 			return;
 		}
@@ -651,7 +660,10 @@ namespace EmEn
 			Message error{"Remote console", "'" + input.text() + "' is not a valid port nor address:port. The console stays closed.", ButtonLayout::OK, MessageType::Error};
 			error.execute(this->window());
 
-			this->resume();
+			if ( !wasPaused )
+			{
+				this->resume();
+			}
 
 			return;
 		}
@@ -671,7 +683,10 @@ namespace EmEn
 			error.execute(this->window());
 		}
 
-		this->resume();
+		if ( !wasPaused )
+		{
+			this->resume();
+		}
 	}
 
 	bool
