@@ -208,8 +208,18 @@ the FBX path whose keys changed identically.
   read path — `FileFormatNative` writes vertices as a raw blob, so a size change with an unchanged
   version is silent corruption. New base tests: `test_VertexFactoryShapeVertex.cpp` (6 cases,
   including a `sizeof` pin) + a v1-rejection case; base suite 2029 → **2036**.
-- [ ] `COLOR_0` not multiplied: zero occurrences in the loader, and the capture shows the README's
-  literal failure signature — a cyan X on the red check, magenta on the green, yellow on the blue.
+- [x] **`COLOR_0` — READ 2026-08-28. `VertexColorTest` PASSES.** The README's literal failure
+  signature is gone: the test tiles went Red 39.8 % red + **58.1 % cyan** → **97.4 % red, zero
+  cyan**; Green 37.6 % + **59.9 % magenta** → **97.4 % green, zero magenta**; Blue **60.5 % yellow**
+  + 39.5 % → **100 % blue, zero yellow**, while the reference tiles stayed 100 % pure. Every other
+  capture in the lot is **bit-exact** (0 px, delta 0) — `COLOR_0` is the only thing that changed.
+  Sponza's 136 meshes load with **zero VUID**, which is what proves the material-variant split
+  correct on its 17 shared materials.
+  ⚠️ Design consequence, deliberate: a `…-vc` material variant, because `UseVertexColors` changes
+  the shader contract while the attribute belongs to the geometry. The architecture is upside down
+  and is recorded as
+  [`vertex-attribute-presence-belongs-to-geometry.md`](vertex-attribute-presence-belongs-to-geometry.md);
+  `TEXCOORD_1+` will hit the same wall.
 - [ ] **Full conformance re-judgement against each model's README is NOT done.** The 2026-08-28
   pass closed the resource-key collapse and re-attributed the five affected verdicts; it did not
   re-read all nineteen READMEs and re-derive PASS/FAIL from scratch. The headline count above is

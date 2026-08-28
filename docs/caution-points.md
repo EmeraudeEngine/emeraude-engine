@@ -1415,6 +1415,25 @@ finally matching the frame it was authored against.
   validation can pass on a wrong stride. The size is pinned by a unit test so the failure is a red
   test rather than a corrupt file.
 
+### `Shape::build()` CLEARS the shape, and its callback is not handed the vertex colours (Aug 2026)
+
+> [!CAUTION]
+> `VertexFactory::Shape::build(callback)` begins with `this->clear()`, and the callback receives
+> only `(groups, vertices, triangles)` — **not** `m_vertexColors`. So anything written into
+> `shape->vertexColors()` **before** `build()` is silently wiped, and the colour vector is left
+> EMPTY. The first write into it from inside the callback then indexes an empty vector: **segfault**,
+> hit exactly this way while wiring glTF `COLOR_0`.
+
+Size and fill the colours from **inside** the callback, through the captured shape, after the clear
+has run. The trap is that the callback's parameters look like the complete set of what a shape holds,
+and they are not: colours (and edges) live outside them.
+
+⚠️ Related, same subsystem: `ShapeTriangle`'s vertex-**colour** indexes are a list separate from its
+vertex indexes — a face-varying attribute, which OBJ and FBX genuinely need — and they default to
+`{0, 0, 0}`. A loader that fills `m_vertexColors` but forgets `setVertexColorIndex()` paints every
+triangle with colour 0, which renders as a plausible flat tint rather than as an error. Formats whose
+colours share the position indexing (glTF) must still set them, to the same values.
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)

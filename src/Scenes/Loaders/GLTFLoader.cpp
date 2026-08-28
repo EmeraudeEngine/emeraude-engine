@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -830,7 +831,30 @@ namespace EmEn::Scenes::Loaders
 	GLTFLoader::loadMaterials (const fastgltf::Asset & asset) noexcept
 	{
 		m_materials.resize(asset.materials.size());
+		m_materialsVertexColor.resize(asset.materials.size());
 		m_textures.resize(asset.textures.size());
+
+		/* Which materials does a COLOR_0 primitive actually use?
+		 *
+		 * glTF's `COLOR_0` MULTIPLIES the base colour, and the engine implements that by a material
+		 * flag whose codegen declares a vertex INPUT ATTRIBUTE. So the flag cannot be set on a
+		 * material shared with a colourless primitive: that primitive's geometry carries no such
+		 * attribute and its shader would read one. ⚠️ This is the majority case, not an edge — on
+		 * the reference Sponza, 17 of the 22 colour-using materials are also used by colourless
+		 * primitives. A separate `…-vc` resource is therefore created for those, and only those:
+		 * an asset without COLOR_0 pays nothing. */
+		std::unordered_set< size_t > materialsUsedWithVertexColor;
+
+		for ( const auto & glTFMesh : asset.meshes )
+		{
+			for ( const auto & primitive : glTFMesh.primitives )
+			{
+				if ( primitive.findAttribute("COLOR_0") != primitive.attributes.end() && primitive.materialIndex.has_value() )
+				{
+					materialsUsedWithVertexColor.insert(primitive.materialIndex.value());
+				}
+			}
+		}
 
 		bool allSuccess = true;
 
@@ -1381,6 +1405,30 @@ namespace EmEn::Scenes::Loaders
 			{
 				m_materials[materialIndex] = std::move(material);
 			}
+
+			/* The vertex-colour variant: same configuration, plus the flag. `configure` is copied
+			 * rather than moved because the plain material above already consumed it, and it is
+			 * self-contained by contract (no `this`, no references) so a copy is safe on the
+			 * thread pool. */
+			if ( materialsUsedWithVertexColor.contains(materialIndex) )
+			{
+				auto vertexColorMaterial = std::static_pointer_cast< Material::Interface >(
+					m_resources.container< Material::StandardResource >()->getOrCreateResource(name + "-vc", [configure] (auto & materialResource) {
+						materialResource.enableVertexColor();
+
+						return configure(materialResource);
+					})
+				);
+
+				if ( vertexColorMaterial == nullptr )
+				{
+					TraceWarning{ClassId} << "Material " << materialIndex << " ('" << name << "-vc') vertex-colour variant failed to create, falling back to the plain one — its COLOR_0 will be ignored.";
+				}
+				else
+				{
+					m_materialsVertexColor[materialIndex] = std::move(vertexColorMaterial);
+				}
+			}
 		}
 
 		return allSuccess;
@@ -1504,10 +1552,44 @@ namespace EmEn::Scenes::Loaders
 				TraceWarning{ClassId} << "Mesh '" << glTFMesh.name << "': only some primitives declare TANGENT — recomputing tangents for the whole mesh, the authored ones are discarded.";
 			}
 
+			/* Vertex colours (glTF `COLOR_0`), which MULTIPLY the base colour.
+			 *
+			 * ⚠️ Unlike the tangents above this is NOT all-or-nothing, because vertex colour HAS a
+			 * neutral: white. So a mesh where only some primitives declare COLOR_0 carries the
+			 * attribute and the others get white — and their PRIMITIVE picks the plain material
+			 * variant, which ignores the attribute entirely. An unused vertex input attribute is
+			 * legal; a shader reading an absent one is not, which is the whole reason for the
+			 * `…-vc` material variant. */
+			bool anyPrimitiveHasVertexColors = false;
+
+			for ( const auto & primitive : glTFMesh.primitives )
+			{
+				if ( primitive.findAttribute("COLOR_0") != primitive.attributes.end() )
+				{
+					anyPrimitiveHasVertexColors = true;
+
+					break;
+				}
+			}
+
+			/* ⚠️⚠️ The colour vector is sized INSIDE `Shape::build()` below, never here:
+			 * `build()` starts with `clear()`, which wipes `m_vertexColors`, and its callback is
+			 * handed only the groups, the vertices and the triangles — the colours have to be
+			 * reached through the shape itself, after the clear. Sizing them before `build()`
+			 * silently produced an EMPTY vector and the first colour write segfaulted. */
+
 			/* Second pass: fill vertices and triangles directly into pre-allocated vectors. */
 			const bool buildSuccess = shape->build([&] (auto & groups, auto & vertices, auto & triangles) {
 				vertices.resize(totalVertexCount);
 				triangles.reserve(totalTriangleCount);
+
+				if ( anyPrimitiveHasVertexColors )
+				{
+					/* Sized on the vertex count and pre-filled WHITE — the neutral multiplier — so
+					 * a primitive that declares no COLOR_0, or an accessor shorter than the
+					 * primitive, leaves the base colour untouched instead of black. */
+					shape->vertexColors().assign(totalVertexCount, Vector< 4, float >{1.0F, 1.0F, 1.0F, 1.0F});
+				}
 
 				uint32_t globalVertexOffset = 0;
 				bool firstPrimitive = true;
@@ -1586,6 +1668,42 @@ namespace EmEn::Scenes::Loaders
 						}
 					}
 
+					/* Read vertex colours (glTF COLOR_0).
+					 *
+					 * ⚠️ The accessor may be **VEC3 or VEC4**, and normalised ubyte/ushort as well
+					 * as float — the reference Sponza uses VEC4 ubyte-normalised, the Khronos
+					 * VertexColorTest VEC4 float. fastgltf converts a normalised integer accessor
+					 * to [0,1] floats on read, so only the component COUNT needs dispatching: a
+					 * VEC3 asset read through a vec4 iterator would take its alpha from whatever
+					 * followed in the buffer. Absent alpha means OPAQUE, and the white pre-fill
+					 * above already provides it. */
+					if ( anyPrimitiveHasVertexColors )
+					{
+						const auto * const colorIt = glTFPrimitive.findAttribute("COLOR_0");
+
+						if ( colorIt != glTFPrimitive.attributes.end() )
+						{
+							const auto & colorAccessor = asset.accessors[colorIt->accessorIndex];
+							auto & colors = shape->vertexColors();
+							size_t index = 0;
+
+							if ( colorAccessor.type == fastgltf::AccessorType::Vec3 )
+							{
+								fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, colorAccessor, [&] (const fastgltf::math::fvec3 & v) {
+									colors[globalVertexOffset + index] = {v.x(), v.y(), v.z(), 1.0F};
+									index++;
+								}, adapter);
+							}
+							else
+							{
+								fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, colorAccessor, [&] (const fastgltf::math::fvec4 & v) {
+									colors[globalVertexOffset + index] = {v.x(), v.y(), v.z(), v.w()};
+									index++;
+								}, adapter);
+							}
+						}
+					}
+
 					/* Read texture coordinates directly into vertex array. */
 					const auto * const textureCoordinatesIt = glTFPrimitive.findAttribute("TEXCOORD_0");
 
@@ -1657,7 +1775,19 @@ namespace EmEn::Scenes::Loaders
 
 							if ( triangleSlot == 3 )
 							{
-								triangles.emplace_back(triangleBuffer[0], triangleBuffer[1], triangleBuffer[2]);
+								auto & triangle = triangles.emplace_back(triangleBuffer[0], triangleBuffer[1], triangleBuffer[2]);
+
+								/* ⚠️ `ShapeTriangle`'s vertex-COLOUR indexes are a SEPARATE list from
+								 * its vertex indexes (a face-varying attribute, as OBJ and FBX need)
+								 * and they default to {0, 0, 0}. Leaving them alone would paint every
+								 * triangle with colour 0. glTF's COLOR_0 shares POSITION's indexing,
+								 * so the two index sets are simply equal here. */
+								if ( anyPrimitiveHasVertexColors )
+								{
+									triangle.setVertexColorIndex(0, triangleBuffer[0]);
+									triangle.setVertexColorIndex(1, triangleBuffer[1]);
+									triangle.setVertexColorIndex(2, triangleBuffer[2]);
+								}
 
 								triangleSlot = 0;
 							}
@@ -1710,6 +1840,13 @@ namespace EmEn::Scenes::Loaders
 				geometryFlags |= EnableInfluence | EnableWeight;
 			}
 
+			/* The attribute goes into the VBO for the whole mesh as soon as ONE of its primitives
+			 * declares COLOR_0 — the shape and its buffer are per mesh, not per primitive. */
+			if ( anyPrimitiveHasVertexColors )
+			{
+				geometryFlags |= EnableVertexColor;
+			}
+
 			/* Phase 2: Tangent computation + GPU upload on thread pool.
 			 *
 			 * ⚠️ The computation is SKIPPED when the asset authored its tangents — glTF requires
@@ -1752,7 +1889,17 @@ namespace EmEn::Scenes::Loaders
 				{
 					const auto materialIndex = primitive.materialIndex.value();
 
-					if ( materialIndex < m_materials.size() && m_materials[materialIndex] != nullptr )
+					/* ⚠️ The choice is PER PRIMITIVE, because COLOR_0 is: the same glTF material may
+					 * serve a coloured primitive and a colourless one, and only the first may carry
+					 * the `UseVertexColors` flag (whose codegen reads a vertex input attribute).
+					 * The `…-vc` variant exists only for the materials a COLOR_0 primitive uses. */
+					const auto primitiveHasVertexColors = primitive.findAttribute("COLOR_0") != primitive.attributes.end();
+
+					if ( primitiveHasVertexColors && materialIndex < m_materialsVertexColor.size() && m_materialsVertexColor[materialIndex] != nullptr )
+					{
+						materialList.push_back(m_materialsVertexColor[materialIndex]);
+					}
+					else if ( materialIndex < m_materials.size() && m_materials[materialIndex] != nullptr )
 					{
 						materialList.push_back(m_materials[materialIndex]);
 					}

@@ -180,6 +180,15 @@ namespace EmEn::Scenes::Loaders
 			 * index alone let the first usage impose its colour space on every other one. */
 			std::vector< std::array< std::shared_ptr< Graphics::TextureResource::Texture2D >, 2 > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
+			/* ⚠️ The VERTEX-COLOUR VARIANT of each material, non-null only for the materials a
+			 * COLOR_0 primitive actually uses. `UseVertexColors` changes the material's SHADER
+			 * CONTRACT — the vertex shader declares a vertex input attribute for it — so a material
+			 * that modulates by vertex colour is a DIFFERENT resource, keyed `…-vc`. glTF makes
+			 * this unavoidable: COLOR_0 is per-primitive while the material is shared, and on the
+			 * reference Sponza 17 of 22 colour-using materials are ALSO used by colourless
+			 * primitives. Enabling the flag on the shared resource would make the shader read an
+			 * attribute those primitives' geometry does not provide. */
+			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materialsVertexColor;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
 			std::vector< std::shared_ptr< Base::VertexFactory::Shape< float > > > m_shapes;
 			/* Skeletal animation data — indexed by glTF skin index. */

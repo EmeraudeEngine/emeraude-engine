@@ -498,7 +498,7 @@ but it forfeits the entire benefit — this is a safety net, not a supported tar
 #### Known gaps (glTF 2.0)
 
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
-`TRIANGLES` is the only primitive mode read; no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
+`TRIANGLES` is the only primitive mode read; no `TEXCOORD_1+` (no multi-UV), no `JOINTS_1/WEIGHTS_1`
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) except its `texCoord` override, which is the multi-UV gap;
@@ -507,6 +507,37 @@ the code look supportive of them; the clearcoat, sheen, transmission and iridesc
 read only their scalar factors, never their textures; animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
 impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**`COLOR_0` is READ since 2026-08-28**, and it MULTIPLIES the base colour (the glTF contract).
+⚠️⚠️ **The material carries a `…-vc` VARIANT, and that is not a workaround.** `UseVertexColors`
+changes the material's shader contract — the codegen declares a vertex INPUT ATTRIBUTE for it —
+while the attribute's presence is decided by the GEOMETRY. glTF declares `COLOR_0` per **primitive**
+and shares materials across primitives, so the disagreement is the NORMAL case: measured on
+`Sponza.ktx2.glb`, 67 of 448 primitives declare it and **17 of the 22 colour-using materials are also
+used by colourless primitives**. Setting the flag on the shared resource would make those
+primitives' shaders read an attribute their geometry does not provide. So the loader creates
+`<name>-<index>-vc` for exactly the materials a `COLOR_0` primitive uses, and picks it **per
+primitive**. An asset without `COLOR_0` pays nothing.
+⚠️ The attribute itself is **per MESH** (the shape and its VBO are), pre-filled **white** — the
+neutral multiplier — so a mesh with mixed primitives is coherent: the colourless ones take the plain
+material and simply ignore the attribute. An unused vertex input attribute is legal; a shader input
+with no attribute is not, and that asymmetry is what makes the split safe.
+⚠️ `ShapeTriangle`'s vertex-COLOUR indexes are a separate list from its vertex indexes (a
+face-varying attribute, as OBJ and FBX need) and default to `{0,0,0}` — leaving them alone paints
+every triangle with colour 0. glTF shares POSITION's indexing, so the two sets are simply equal.
+⚠️ The accessor may be **VEC3 or VEC4** and normalised ubyte/ushort as well as float (Sponza: VEC4
+ubyte-normalised; `VertexColorTest`: VEC4 float). fastgltf converts a normalised accessor to [0,1]
+floats, so only the component COUNT needs dispatching — reading a VEC3 through a vec4 iterator takes
+its alpha from whatever follows in the buffer.
+Measured: `VertexColorTest`'s three test tiles lose the complement-coloured X that is the README's
+own failure signature — Red 39.8 % red + **58.1 % cyan** → **97.4 % red, zero cyan**; Green 37.6 % +
+**59.9 % magenta** → **97.4 % green, zero magenta**; Blue **60.5 % yellow** + 39.5 % → **100 % blue,
+zero yellow** — while the reference tiles stay 100 % pure. Sponza loads its 136 meshes with **zero
+VUID**, which is the real proof the variant split is right: a material/geometry mismatch would fail
+the vertex input state on those 17 shared materials.
+⚠️ **The architecture is still upside down** and it is recorded as such:
+[`docs/todo/vertex-attribute-presence-belongs-to-geometry.md`](../../docs/todo/vertex-attribute-presence-belongs-to-geometry.md).
+The next optional attribute (`TEXCOORD_1+`, a second joint set) will hit exactly this wall.
 
 **Authored `TANGENT` is READ since 2026-08-28** (it was ignored and always recomputed, and the
 bitangent handedness did not exist). glTF's `TANGENT` is a **vec4** whose W is the bitangent
