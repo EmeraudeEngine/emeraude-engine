@@ -827,6 +827,19 @@ namespace EmEn::Net
   `SO_REUSEADDR` it is **not** best-effort: a stack refusing it fails the `listen()`, because a
   socket that is up while invisible to half the network is the outcome worth refusing outright.
   Bind `"0.0.0.0"` for a deliberate IPv4-only listen.
+- ⚠️⚠️ **`close()` drains the io_context, and `accept()` never reports `operation_aborted`.** Both
+  since 2026-08-28, and each guards a different half of the same defect. `acceptor->cancel()` only
+  *schedules* the pending `async_accept` handler with `operation_aborted`; it does not run it. That
+  handler used to survive in the shared io_context and be executed by the **next** `accept()`,
+  before its own — which then read a stale cancellation as a real error. Consequence, measured on
+  Linux through the dev-check TCP card: calling `listen()` a second time on the same server (which
+  closes internally first) left it **permanently unable to accept**. `isListening()` answered
+  `true`, the binding reported `Listening 0.0.0.0:<port>`, and every single `accept()` failed with
+  `operation_aborted` forever — a server that is up and can never take a client. `close()` now
+  drains, and `accept()` treats `operation_aborted` as "no peer this round" (`timedOut`) rather than
+  an error, since that code is *always* the completion of a cancel the class issued itself and is
+  never the caller's business. ⚠️ A polling consumer must therefore key on `timedOut` /
+  `notListening`, never on "an error appeared".
 
 **Expected usage pattern**:
 ```cpp

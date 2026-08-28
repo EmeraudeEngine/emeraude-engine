@@ -218,6 +218,15 @@ namespace EmEn::Net
 
 			asio::error_code closeEc;
 			acceptor->close(closeEc);
+
+			/* ⚠️ Drain the cancellation completions HERE. cancel() only *schedules* the pending
+			 * async_accept handler with operation_aborted; it does not run it. Without this drain
+			 * the handler survives in the shared io_context, and the next accept() executes it
+			 * before its own — reading a stale operation_aborted as a real error. Measured on
+			 * Linux: a server re-listening after a close reported "Listening" while every single
+			 * accept() failed with it, forever, so the server could never take a client. */
+			m_impl->ioContext.restart();
+			static_cast< void >(m_impl->ioContext.poll());
 		}
 
 		acceptor.reset();
@@ -273,6 +282,18 @@ namespace EmEn::Net
 			asio::error_code cancelEc;
 			m_impl->acceptor->cancel(cancelEc);
 			static_cast< void >(m_impl->ioContext.run());
+
+			return std::nullopt;
+		}
+
+		/* ⚠️ operation_aborted is never the caller's business: it is the completion of a cancel
+		 * WE issued, from the timeout path above or from close(). Surfacing it as an error gave a
+		 * polling loop an error stream it could not act on — and, worse, one it could not tell
+		 * from a real failure. Report it as "no peer this round", like a timeout. The drain in
+		 * close() removes the usual source; this keeps the contract honest if another appears. */
+		if ( acceptEc == asio::error::operation_aborted )
+		{
+			m_lastAcceptTimedOut = true;
 
 			return std::nullopt;
 		}
