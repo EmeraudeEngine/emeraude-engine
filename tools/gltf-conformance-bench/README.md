@@ -4,7 +4,11 @@ Captures the Khronos [glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-S
 test models through the engine, under the framing each test's README imposes, so the renderer's
 glTF 2.0 conformance can be **measured** rather than eyeballed.
 
-The assets are vendored as a sparse checkout under `dependencies/glTF-Sample-Assets`.
+The assets are vendored as a sparse checkout under `dependencies/glTF-Sample-Assets`. A second,
+much smaller tree — `assets/`, next to this script — holds **our own** probes for the gaps Khronos
+does not cover; `pick_asset()` searches it first. Every asset in it must be produced by a versioned
+generator (today: `make-volume-probe.py`), because a binary blob nobody can regenerate is worse
+than no test at all.
 
 ## Running it
 
@@ -72,6 +76,16 @@ The failure images name the defect, which is what turns a capture into a fix.
   `KHR_materials_*`. When a whole grid renders as one cell, dump the asset's names before touching
   a shader: `python3 -c "import json;a=json.load(open(f));print([m.get('name') for m in a['meshes']])"`.
   Fixed in the engine (`Scenes::Loaders::buildResourceKey()`); the assets did not change.
+- **⚠️ `VolumeAbsorptionProbe` is OURS, not Khronos'**, and it is the only asset here that
+  exercises `KHR_materials_volume` at all. Of the 60 glTF files in reach, 15 materials declare the
+  extension, 2 declare an `attenuationColor` and **zero** declare an `attenuationDistance` — whose
+  default is **+infinity** — so the absorption of every Khronos model is the identity whether the
+  feature works or not. Three identical transmissive balls differing only in the volume they
+  declare; the control lives inside the single capture, which beats a before/after because it
+  cannot drift. Read the share of disc pixels where green exceeds red by more than 25/255:
+  **0.0 % / 0.0 % / 34.2 %** left to right. ⚠️ The MIDDLE ball being 0.0 % is the point — a colour
+  *without* a distance must NOT tint, and that is the rule a well-meaning fix would break.
+  Regenerate with `./make-volume-probe.py`; never hand-drop a binary nobody can rebuild.
 - **⚠️ Verify a loader-wide change with a PIXEL DIFF against the previous run, partitioned by the
   property you changed.** The captures of a previous pass are kept under
   `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-<date>/`, and the framing is
