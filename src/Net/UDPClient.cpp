@@ -657,8 +657,13 @@ namespace EmEn::Net
 	}
 
 	int
-	UDPClient::receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs) noexcept
+	UDPClient::receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs, bool * timedOut) noexcept
 	{
+		if ( timedOut != nullptr )
+		{
+			*timedOut = false;
+		}
+
 		if ( m_handleMutex == nullptr )
 		{
 			return -1;
@@ -682,7 +687,14 @@ namespace EmEn::Net
 		/* Apply timeout using select(). */
 		if ( !waitReadable(sock, timeoutMs, m_closing.get()) )
 		{
-			return 0; /* Timeout, close() from another thread, or error. */
+			/* ⚠️ Returning 0 alone is ambiguous, because a zero-length datagram is legal in UDP
+			 * and returns 0 too. Report the difference to whoever asked for it. */
+			if ( timedOut != nullptr )
+			{
+				*timedOut = true;
+			}
+
+			return 0; /* Nothing arrived: timeout, close() from another thread, or error. */
 		}
 
 		struct sockaddr_in sender{};
@@ -697,7 +709,9 @@ namespace EmEn::Net
 			&senderLen
 		);
 
-		if ( bytesRead > 0 )
+		/* >= 0, not > 0: a zero-length datagram IS a datagram and has a sender. Gating on > 0
+		 * left the caller with an empty address for something that genuinely arrived. */
+		if ( bytesRead >= 0 )
 		{
 			std::array< char, INET_ADDRSTRLEN > addrStr{};
 			inet_ntop(AF_INET, &sender.sin_addr, addrStr.data(), addrStr.size());
@@ -812,7 +826,12 @@ namespace EmEn::Net
 
 		if ( !waitReadable(sock, timeoutMs, m_closing.get()) )
 		{
-			return 0; /* Timeout, close() from another thread, or error. */
+			/* Reset here too: info used to be left UNTOUCHED on this path, so a caller reusing
+			 * the struct read the PREVIOUS datagram's sender as if it had just arrived. */
+			info = {};
+			info.timedOut = true;
+
+			return 0; /* Nothing arrived: timeout, close() from another thread, or error. */
 		}
 
 		info = {};
@@ -927,7 +946,8 @@ namespace EmEn::Net
 		const auto bytesRead = static_cast< int >(received);
 #endif
 
-		if ( bytesRead > 0 )
+		/* >= 0: same reason as the plain overload - a zero-length datagram has a sender. */
+		if ( bytesRead >= 0 )
 		{
 			info.senderAddress = toDottedDecimal(sender.sin_addr);
 			info.senderPort = ntohs(sender.sin_port);

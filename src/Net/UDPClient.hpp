@@ -66,6 +66,7 @@ namespace EmEn::Net
 		uint32_t interfaceIndex{0};			/* Index of the receiving interface, 0 when unavailable. */
 		uint16_t senderPort{0};				/* Source port. */
 		bool multicast{false};				/* The destination address belongs to 224.0.0.0/4. */
+		bool timedOut{false};				/* The wait ended with NO datagram: a timeout, or a concurrent close(). */
 	};
 
 	/**
@@ -165,9 +166,16 @@ namespace EmEn::Net
 			 * @param senderAddress [out] The sender's IP address.
 			 * @param senderPort [out] The sender's port.
 			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
-			 * @return int Number of bytes received, 0 if timeout/no data, or -1 on error.
+			 * @param timedOut [out] Optional. Set to true when the wait ended with NO datagram.
+			 * ⚠️ Without it, a return of 0 is AMBIGUOUS: a zero-length datagram is legal in UDP and
+			 * also returns 0. Measured through app_system's JS path, a timeout and a received 0-byte
+			 * datagram were byte-for-byte indistinguishable. It does NOT separate a timeout from a
+			 * concurrent close() - both mean "nothing arrived"; a closed socket is observable through
+			 * isOpen(), and the next call returns -1.
+			 * @return int Number of bytes received (0 for a zero-length datagram), 0 if nothing
+			 * arrived - use @a timedOut to tell those apart - or -1 on error.
 			 */
-			int receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs = 0) noexcept;
+			int receive (void * buffer, size_t maxLength, std::string & senderAddress, uint16_t & senderPort, uint32_t timeoutMs = 0, bool * timedOut = nullptr) noexcept;
 
 			/**
 			 * @brief Receives data from the socket along with its delivery information.
@@ -179,7 +187,11 @@ namespace EmEn::Net
 			 * @param maxLength Maximum number of bytes to receive.
 			 * @param info [out] The delivery information of the received datagram.
 			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
-			 * @return int Number of bytes received, 0 if timeout/no data, or -1 on error.
+			 * @note @a info is ALWAYS reset by this call, and carries `timedOut` when the wait ended
+			 * with no datagram - which is what tells a timeout from a legal zero-length datagram,
+			 * both of which return 0.
+			 * @return int Number of bytes received (0 for a zero-length datagram), 0 if nothing
+			 * arrived - see `info.timedOut` - or -1 on error.
 			 */
 			int receive (void * buffer, size_t maxLength, DatagramInfo & info, uint32_t timeoutMs = 0) noexcept;
 
@@ -189,6 +201,8 @@ namespace EmEn::Net
 			 * @param senderAddress [out] The sender's IP address.
 			 * @param senderPort [out] The sender's port.
 			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
+			 * @note ⚠️ This overload CANNOT tell a timeout from a zero-length datagram: both give an
+			 * empty string. Use the buffer overload with @a timedOut when the difference matters.
 			 * @return std::string The data received (may be empty if no data available).
 			 */
 			[[nodiscard]]
