@@ -1,6 +1,6 @@
 ---
 id: udp-multicast-macos-verification
-title: UDP multicast / mDNS — macOS run; packaged bundle + a Linux re-run left
+title: "UDP multicast / mDNS — packaged macOS bundle + the JS path on macOS left"
 status: open
 priority: low
 scope: Net
@@ -8,7 +8,7 @@ opened: 2026-08-26
 tags: [network, macos, mdns]
 ---
 
-# UDP multicast / mDNS — macOS run; packaged bundle + a Linux re-run left
+# UDP multicast / mDNS — packaged macOS bundle + the JS path on macOS left
 
 ## Why
 
@@ -74,11 +74,10 @@ alike, in `setMulticastTTL()`, `setMulticastLoopback()` and `ssdpDiscover()`:
 | Linux | `int` | `ip(7)` |
 | Windows | `DWORD` | WinSock `IPPROTO_IP` options |
 
-⚠️ **The Linux leg therefore changed from `unsigned char` to `int` (2026-08-28) and has NOT been
-re-run on Linux** — it is the type `ip(7)` documents and the form nearly all Linux multicast code
-uses, and both widths were measured as accepted, so the risk is very low; it is still a change to
-a platform that was green. All three branches were compile-checked. Re-run the Linux mDNS fixture
-at the next occasion.
+The Linux leg therefore changed from `unsigned char` to `int` (2026-08-28). ✅ **Replayed on Linux
+the same day**: the `int` width is accepted and the TTL reads back as 255 through it — and that
+kernel, like macOS 26, accepts both widths, which is why the leniency is treated as an
+implementation detail and each platform keeps the type its own manual specifies.
 
 ## Bugs found in this sitting (all fixed 2026-08-28)
 
@@ -113,10 +112,25 @@ at the next occasion.
   machine, which is precisely why it proves nothing.
 - [ ] The app's own JS path on macOS (`--mode=test` → the dev-check mDNS card). Only the engine
   layer was exercised.
-- [ ] ⚠️ **Linux, a RE-RUN**: the multicast option width changed there on 2026-08-28
-  (`unsigned char` → `int`, see the TTL section above). It is the type `ip(7)` documents and the
-  risk is very low, but Linux was green and has not run since. **This is now the only platform
-  carrying an unverified change.**
+- [x] ⚠️ **Linux, a RE-RUN — done 2026-08-28**, `tools/net-check`: **48 pass / 0 fail / 1 warn**,
+  identical under `-fsanitize=address,undefined`. The `int` width is accepted and the TTL reads
+  back as **255** through it; this kernel accepts **both** widths, like macOS 26. The replay also
+  covered the shared-path changes of that same commit, which nothing had measured on Linux:
+  `close()` returns a parked `receive()` (300 ms, bounded by the poll slice), the deadline-based
+  accounting shows **0 % drift over 1200 ms**, and the moved-from instance is safe and reusable.
+  `shutdown_semantics` re-confirms Linux as the lenient outlier (`ENOTCONN` **and** reader woken).
+  ⚠️ It also surfaced **one defect of its own**, unrelated to the macOS work and as old as
+  `NetworkInterfaces`: `enumerateMulticastCapable()` dropped `lo` on Linux, because the filter
+  trusted `IFF_MULTICAST` and Linux never sets it on loopback — while supporting multicast there
+  all the same (measured: join + `IP_MULTICAST_IF` on `127.0.0.1` accepted, datagram round trip).
+  On a machine with no link that list came back **empty**, silently disabling every discovery loop
+  built on it. Fixed the same day, `#if defined(__linux__)`-scoped, with the harness assertion
+  aligned (hence 48 and no longer 47). See `src/Net/AGENTS.md § Network Interfaces`.
+- [ ] ❓ **Windows, one datum left on this subject**: does `enumerateMulticastCapable()` keep the
+  loopback pseudo-interface there, and can `127.0.0.1` actually be joined? The Linux fix was
+  deliberately **not** extended to Windows without that measurement — an entry that cannot be
+  joined is exactly the dead-interface trap recorded below. The `[ OK ]/[FAIL] loopback is kept`
+  line of `net_check.exe` answers it in one run.
 - [x] **Windows — done 2026-08-28**, through app_system's JS path (`--mode=test`, dev-check mDNS
   fixture over CDP): bind `0.0.0.0:5353`, TTL 255 + loopback, join on the real NIC, DNS-SD
   enumeration answered by **6 LAN hosts**, idempotent re-join, tolerant drop, `close(cb)` +

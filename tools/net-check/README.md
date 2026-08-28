@@ -7,7 +7,7 @@ proves nothing about a socket option the kernel silently refuses.
 
 | File | Answers |
 |---|---|
-| `net_check.cpp` | Does `UDPClient` + `NetworkInterfaces` actually work on this OS? 47 assertions. |
+| `net_check.cpp` | Does `UDPClient` + `NetworkInterfaces` actually work on this OS? 48 assertions. |
 | `shutdown_semantics.cpp` | Does `shutdown()` wake a reader on *this* kernel? Three socket shapes. |
 
 ## Build & run

@@ -446,8 +446,34 @@ namespace EmEn::Net::NetworkInterfaces
 	{
 		auto interfaces = enumerate();
 
+		/* ⚠️ Loopback must survive this filter — it is the only way to exercise multicast on a
+		 * single machine — but IFF_MULTICAST does not say so on every platform:
+		 *  - macOS/BSD sets it on 'lo0', so the flag alone keeps it. Nothing to do.
+		 *  - Linux NEVER sets it on 'lo' (<LOOPBACK,UP,LOWER_UP>) although the kernel carries
+		 *    multicast there perfectly well — measured 2026-08-28: IP_ADD_MEMBERSHIP and
+		 *    IP_MULTICAST_IF on 127.0.0.1 are both accepted, and the datagram makes the round
+		 *    trip. Requiring the flag dropped a usable interface, and on a machine with no link
+		 *    it left this list EMPTY: every "join on each interface" loop then did nothing at
+		 *    all, and reported no error doing it. Hence the exemption below — Linux only.
+		 *  - Windows is deliberately NOT exempted: neither the flag reported on the loopback
+		 *    pseudo-interface nor the outcome of a join on 127.0.0.1 has been measured there,
+		 *    and an interface that cannot be joined is exactly the trap that run documented
+		 *    (a dead APIPA entry aborting a naive join loop). Measure before widening this.
+		 * Do NOT infer multicast support on Linux from IFF_MULTICAST alone. */
 		std::erase_if(interfaces, [] (const Interface & item) noexcept {
-			return item.family != AddressFamily::IPv4 || !item.up || !item.multicastCapable || item.address.empty();
+			if ( item.family != AddressFamily::IPv4 || !item.up || item.address.empty() )
+			{
+				return true;
+			}
+
+#if defined(__linux__)
+			if ( item.loopback )
+			{
+				return false;
+			}
+#endif
+
+			return !item.multicastCapable;
 		});
 
 		return interfaces;

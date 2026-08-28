@@ -240,6 +240,30 @@ never run**. What it contributed to this directory:
 > than crashed. Fixed in app_system; recorded here only because it is why the Windows network run
 > could not start.
 
+### What the Linux replay closed (2026-08-28)
+
+Linux was re-run right after the macOS sitting, because that sitting had changed shared code on a
+platform that was green. `tools/net-check` — **48 pass / 0 fail / 1 warn**, same result under
+`-fsanitize=address,undefined`:
+
+- ✅ **The `MulticastOptionValue` width change is good**: `int` accepted, TTL reads back 255.
+- ✅ **The shared-path changes replay too**, which the commit message did not claim and nobody had
+  measured here: `close()` returns a parked `receive()` (300 ms, bounded by the poll slice), the
+  deadline-based accounting shows **0 % drift over 1200 ms**, and the moved-from instance is safe
+  and reusable. `shutdown_semantics` re-confirms Linux as the lenient outlier — `ENOTCONN` on an
+  unconnected UDP socket **and the reader woken anyway**, which is exactly why the bug could hide
+  here for the directory's whole life.
+- ⚠️ **It also found one defect of its own**, unrelated to the macOS work and present since
+  `NetworkInterfaces` existed: `enumerateMulticastCapable()` dropped `lo` on Linux — see the
+  loopback trap under [§ Network Interfaces](#network-interfaces-netnetworkinterfaces). Fixed the
+  same day, Linux-scoped.
+
+> [!NOTE]
+> The lesson is the one the macOS sitting already paid for once, in the other direction: **a fix
+> proven on one platform is a change on every other one.** Two of the three items above are shared
+> code that no per-platform reasoning would have flagged, and the third was found only because the
+> replay ran the whole harness instead of the one assertion the commit pointed at.
+
 Two findings that are **not** bugs but invalidate a written assumption:
 
 - The `IP_MULTICAST_TTL` byte-type story does **not** reproduce on macOS 26 / arm64: this kernel
@@ -249,9 +273,10 @@ Two findings that are **not** bugs but invalidate a written assumption:
   platform's own manual through **`MulticastOptionValue`** (top of `UDPClient.cpp`), applied to
   `IP_MULTICAST_TTL` **and** `IP_MULTICAST_LOOP` in `setMulticastTTL()`, `setMulticastLoopback()`
   and `ssdpDiscover()`: `unsigned char` on macOS/BSD (`ip(4)`), `int` on Linux (`ip(7)`), `DWORD`
-  on Windows. ⚠️ This **changed the Linux leg** from `unsigned char` to `int`, and Linux has not
-  been re-run since — very low risk (it is the documented type, and both widths measured as
-  accepted), but it is a change to a platform that was green.
+  on Windows. This **changed the Linux leg** from `unsigned char` to `int`; ✅ **replayed on Linux
+  2026-08-28** — the `int` width is accepted and the TTL reads back as 255 through it. That kernel
+  also accepts both widths, exactly like macOS 26, which is why the leniency is treated as an
+  implementation detail rather than a contract.
 - `SerialPort.mac.mm` never claims the port: Linux does `ioctl(TIOCEXCL)` ("a second process
   opening the same adapter mid-print is a corrupted stream nobody can diagnose"), macOS does not,
   though the ioctl exists there. Left alone deliberately — exclusive open is a behaviour change,
@@ -288,7 +313,7 @@ Two todo items carry the checklist, and they are meant to be run in one sitting 
 >
 > **Do not write that harness from scratch — one is in the tree**:
 > [`tools/net-check/`](../../tools/net-check/README.md) builds on Linux, macOS and Windows and runs
-> 47 assertions over `UDPClient` + `NetworkInterfaces` (interfaces and MACs, multicast option width,
+> 48 assertions over `UDPClient` + `NetworkInterfaces` (interfaces and MACs, multicast option width,
 > non-blocking receive, `close()` waking a parked reader, moved-from safety, a real mDNS round trip,
 > SSDP). `shutdown_semantics.cpp` next to it answers "does `shutdown()` wake a reader on this
 > kernel?" for the three socket shapes — that is the probe that found the 2026-08-28 bug.
@@ -492,17 +517,27 @@ read per family (`IfIndex` vs `Ipv6IfIndex`). Unlike `SerialPort` and `WiFiScann
 unit is **not** split per OS — a single TU with one Windows branch and a Linux/BSD
 sub-branch for the hardware-address family.
 
-**Verified (Linux 6.x, 2026-08-27)** with an out-of-tree binary compiled straight from
-`NetworkInterfaces.cpp`: 3 interfaces × 2 families, `/8` `/24` `/64` `/128` prefixes, IPv6
-scope ids equal to the interface index, MACs on both NICs, empty MAC on `lo`,
-`enumerateMulticastCapable()` returning the two NICs' IPv4 addresses only.
+**Verified (Linux 6.x, 2026-08-27, re-run 2026-08-28)** with an out-of-tree binary compiled
+straight from `NetworkInterfaces.cpp`: 3 interfaces × 2 families, `/8` `/24` `/64` `/128`
+prefixes, IPv6 scope ids equal to the interface index, MACs on both NICs, empty MAC on `lo`,
+`enumerateMulticastCapable()` returning the two NICs **and `lo`** since the loopback fix below.
 ⚠️ **macOS and Windows: compile-only** for the IPv6 and MAC paths (`AF_LINK`, `AF_UNSPEC`),
 same standing as the multicast surface — see `docs/todo/udp-multicast-macos-verification.md`.
 
 **Traps**:
-- ⚠️ On Linux, **loopback carries no `IFF_MULTICAST` flag**. `lo` is therefore absent from
-  `enumerateMulticastCapable()`, and a multicast self-test on one machine must go through a
-  real NIC with `setMulticastLoopback(true)`.
+- ⚠️ On Linux, **loopback carries no `IFF_MULTICAST` flag** (`lo` is `<LOOPBACK,UP,LOWER_UP>`
+  where macOS `lo0` does carry it) — **and the flag is wrong**: the kernel supports multicast on
+  `lo` perfectly well. Measured 2026-08-28: `IP_ADD_MEMBERSHIP` and `IP_MULTICAST_IF` on
+  `127.0.0.1` are both accepted, and the datagram makes the round trip. Until that date
+  `enumerateMulticastCapable()` filtered on the flag alone, so `lo` was dropped **on Linux only**,
+  in contradiction with its own documented contract ("loopback is deliberately kept"); on a
+  machine with no link the list came back **empty**, and every "join on each interface" loop then
+  did nothing at all without reporting an error. The filter now exempts loopback from the flag,
+  `#if defined(__linux__)` only. **Never infer multicast support on Linux from `IFF_MULTICAST`.**
+  macOS needs no exemption (flag present). ❓ **Windows is deliberately left alone**: neither the
+  flag its loopback pseudo-interface reports (`IP_ADAPTER_NO_MULTICAST`) nor the outcome of a join
+  on `127.0.0.1` has been measured, and a non-joinable entry in that list is exactly the dead-
+  interface trap the Windows run documented. Measure before widening the exemption.
 - ⚠️ `up` requires `IFF_UP` **and** `IFF_RUNNING`: a NIC with no cable is up but not running,
   and joining a group on it buys nothing.
 - ⚠️ The result is a snapshot. Interfaces appear and vanish at runtime (VPN, hotplug,

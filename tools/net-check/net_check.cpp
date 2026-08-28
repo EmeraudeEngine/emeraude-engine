@@ -396,12 +396,15 @@ testInterfaceEnumeration ()
 		std::cout << "         " << std::left << std::setw(12) << entry.name << entry.address << '\n';
 
 		if ( entry.family != NetworkInterfaces::AddressFamily::IPv4 ) { onlyIPv4 = false; }
-		if ( !entry.up || !entry.multicastCapable ) { onlyUp = false; }
+		/* Loopback is exempt from IFF_MULTICAST on purpose: Linux never sets it on 'lo' while
+		 * carrying multicast there all the same. Requiring the flag here is what made this
+		 * harness demand a filter that emptied the list on a Linux machine with no link. */
+		if ( !entry.up || !( entry.multicastCapable || entry.loopback ) ) { onlyUp = false; }
 		if ( entry.loopback ) { loopbackKept = true; }
 	}
 
 	check(onlyIPv4, "IPv4 only, as the multicast API requires");
-	check(onlyUp, "every entry is up and multicast-capable");
+	check(onlyUp, "every entry is up, and multicast-capable or loopback");
 	check(loopbackKept, "loopback is kept (single-machine multicast)");
 
 	return multicast;

@@ -87,9 +87,15 @@ namespace EmEn::Net::NetworkInterfaces
 
 	/**
 	 * @brief Enumerates the local IPv4 addresses usable to join a multicast group.
-	 * @note Keeps the IPv4 entries that are up, multicast-capable and carry a valid address.
-	 * IPv4 only by construction: UDPClient's multicast API is IPv4 only. Loopback is
-	 * deliberately kept: it is the only way to exercise multicast on a single machine.
+	 * @note Keeps the IPv4 entries that are up, carry a valid address, and are either
+	 * multicast-capable or loopback. IPv4 only by construction: UDPClient's multicast API is
+	 * IPv4 only. Loopback is deliberately kept: it is the only way to exercise multicast on a
+	 * single machine.
+	 * @warning On Linux, loopback is kept regardless of IFF_MULTICAST: the kernel never sets it
+	 * on 'lo' although it supports multicast there. Requiring the flag emptied this list on a
+	 * Linux machine with no link, silently disabling every discovery loop built on it. macOS
+	 * needs no such exemption (it sets the flag), and Windows is deliberately left alone until
+	 * its loopback pseudo-interface is measured.
 	 * @see enumerate() for the platform notes and the snapshot warning.
 	 * @return std::vector< Interface > The multicast-capable interfaces, empty on failure.
 	 */
