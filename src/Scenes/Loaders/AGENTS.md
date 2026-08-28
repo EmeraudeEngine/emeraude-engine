@@ -500,12 +500,37 @@ but it forfeits the entire benefit — this is a safety net, not a supported tar
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
 `TRIANGLES` is the only primitive mode read; authored `TANGENT` is ignored and always recomputed
 (the bitangent `w` is lost); no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
-(4 influences max); no morph targets; glTF samplers (`wrapS/T`, filters) and the per-`TextureInfo`
-`texCoord` index are ignored; **`KHR_materials_specular`, `ior`,
-`anisotropy` and `volume` are enabled on the parser and never read**, which makes the code look
-supportive of them; animation channels targeting a node that is not a joint of `skins[0]` are
-dropped, so rigid-node animation (doors, platforms, props) is impossible; `instanceSets` is never
-populated (`EXT_mesh_gpu_instancing` not enabled).
+(4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
+filters are not, nor is the per-`TextureInfo` `texCoord` index; `KHR_texture_transform`'s
+**rotation** is parsed and dropped with a warning (offset and scale are applied);
+**`KHR_materials_anisotropy` and `volume` are enabled on the parser and never read**, which makes
+the code look supportive of them; the clearcoat, sheen, transmission and iridescence extensions
+read only their scalar factors, never their textures; animation channels targeting a node that is
+not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
+impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**`KHR_materials_specular` + `KHR_materials_ior` — FACTORS WIRED 2026-08-28, textures still not.**
+⚠️⚠️ Their **GPU side was already complete and spec-exact**, and had been for an unknown number of
+sessions: `LightGenerator.PBR.cpp:589-590` computes
+`dielectricF0 = ((ior-1)/(ior+1))²` then
+`F0 = mix(min(dielectricF0 · specularColor · specularFactor, 1), albedo, metalness)`, the material
+UBO carries all three slots, and `StandardResource` declares them to the `LightGenerator` for every
+material. **Only the loader's read was missing**, so every asset silently got the identity.
+Measured on `SpecularTest` (whose 35 spheres declare `baseColorFactor [0,0,0,1]`, `metallicFactor 0`,
+`roughnessFactor 0`, leaving the extension as the only thing that can light them): its four factor
+rows go from flat (axis spread ≤ 0.17 / 255) to monotone (2.36 to 3.35), the sphere declaring
+`specularFactor 0` now renders **exactly 0** — the spec's F0 = 0 — and the three *texture* rows stay
+**bit-identical**, which is the built-in control. On `TransmissionRoughnessTest` the IOR axis goes
+from **1.46** (noise) to **4.24 / 255 and monotone** in the right direction (diamond darkest, air
+brightest: more F0 means more reflection and less of the bright backdrop transmitted).
+⚠️ The two textures (`specularTexture` **A** channel, `specularColorTexture` **RGB**) are logged and
+ignored: the material has a single `ComponentType::Specular` slot and the two glTF maps need two.
+⚠️ `setIOR()` clamps to [1.0, 3.0]; that spans the whole glTF range and happens to render the spec's
+`ior = 0` special case correctly (0 clamps to 1, and ((1−1)/(1+1))² is 0 = the F0 = 0 it asks for).
+⚠️ **`FBXLoader` reads neither**, deliberately: ufbx's `pbr.specular_factor`/`specular_color` mean
+the dielectric specular weight on an OpenPBR/Standard-Surface material but the **Phong** specular on
+a legacy `FbxSurfacePhong`, and the engine's legacy specular is a glossiness path — mapping one onto
+the other needs the semantics settled first, not a copy of the glTF code.
 
 > [!NOTE]
 > Two of those gaps are **live on the compressed Sponza**, which is now the reference asset:

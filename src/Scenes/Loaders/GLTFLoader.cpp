@@ -1097,6 +1097,62 @@ namespace EmEn::Scenes::Loaders
 				iridescenceFactor = static_cast< float >(glTFMaterial.iridescence->iridescenceFactor);
 			}
 
+			/* Specular (KHR_materials_specular) — scales and TINTS the dielectric F0.
+			 *
+			 * The GPU side is already spec-exact and has been for a while
+			 * (`LightGenerator.PBR.cpp`): `F0 = mix(min(dielectricF0 * specularColor *
+			 * specularFactor, 1), albedo, metalness)`. Only this read was missing, so every
+			 * asset got the identity (factor 1, white) — measured on the Khronos `SpecularTest`,
+			 * whose 35 spheres declare `baseColorFactor [0,0,0,1]`, `metallicFactor 0` and
+			 * `roughnessFactor 0`: with nothing but the extension able to light them, they all
+			 * rendered between 3.65 and 3.83 out of 255.
+			 *
+			 * ⚠️ `specularColorFactor` is LINEAR in glTF, and the shader multiplies F0 with it
+			 * directly — so it must NOT be gamma-converted on the way in, despite the engine's
+			 * "a name ending in Color is sRGB" convention. Same treatment as `baseColorFactor`
+			 * above. The textures (`specularTexture` A channel, `specularColorTexture` RGB) are
+			 * NOT read yet: the material has a single `ComponentType::Specular` slot and the two
+			 * glTF maps would need two. */
+			/* NOTE: The defaults are the SPEC's, not the engine's — glTF declares
+			 * `specularFactor` 1.0 and `specularColorFactor` [1,1,1], which are the identity of
+			 * the F0 expression above, so an asset without the extension is untouched. Stating
+			 * them here rather than borrowing `StandardResource`'s private constants keeps the
+			 * loader answerable to the format it reads. */
+			float specularFactor = 1.0F;
+			Color< float > specularColor{1.0F, 1.0F, 1.0F, 1.0F};
+
+			if ( glTFMaterial.specular != nullptr )
+			{
+				specularFactor = static_cast< float >(glTFMaterial.specular->specularFactor);
+
+				const auto & scf = glTFMaterial.specular->specularColorFactor;
+
+				specularColor = Color< float >{
+					static_cast< float >(scf[0]),
+					static_cast< float >(scf[1]),
+					static_cast< float >(scf[2]),
+					1.0F
+				};
+
+				if ( glTFMaterial.specular->specularTexture.has_value() || glTFMaterial.specular->specularColorTexture.has_value() )
+				{
+					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_materials_specular textures are not supported yet (factors applied), ignored.";
+				}
+			}
+
+			/* IOR (KHR_materials_ior) — drives the dielectric F0 itself:
+			 * `dielectricF0 = ((ior - 1) / (ior + 1))^2`, already in the shader. glTF's default is
+			 * 1.5, which is exactly the engine's `DefaultIOR`, so an asset that declares nothing
+			 * keeps the behaviour it had.
+			 *
+			 * ⚠️ `setIOR()` clamps to [1.0, 3.0]. That covers the whole glTF range (the spec's
+			 * minimum is 1.0; diamond, the highest value in the conformance assets, is 2.42) AND
+			 * it happens to render the spec's `ior = 0` special case correctly: 0 clamps to 1,
+			 * and ((1-1)/(1+1))^2 is 0 — which is the F0 = 0 that special case asks for. So the
+			 * value goes through verbatim, including 0.
+			 * fastgltf already initialises `Material::ior` to the spec default 1.5. */
+			const auto materialIOR = static_cast< float >(glTFMaterial.ior);
+
 			/* Alpha mode (OPAQUE, MASK, BLEND). */
 			const bool isAlphaBlend = glTFMaterial.alphaMode == fastgltf::AlphaMode::Blend;
 			const bool isAlphaMask = glTFMaterial.alphaMode == fastgltf::AlphaMode::Mask;
@@ -1117,6 +1173,7 @@ namespace EmEn::Scenes::Loaders
 					sheenColor, sheenRoughness,
 					transmissionFactor,
 					iridescenceFactor,
+					specularFactor, specularColor, materialIOR,
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
 				] (auto & materialResource) {
@@ -1243,6 +1300,15 @@ namespace EmEn::Scenes::Loaders
 					{
 						materialResource.setIridescenceComponent(iridescenceFactor);
 					}
+
+					/* Specular (KHR_materials_specular) and IOR (KHR_materials_ior).
+					 * Both are ALWAYS applied, never gated on a "is it non-default" test: they
+					 * scale and tint the dielectric F0 of every material, and their defaults are
+					 * the identity (factor 1, white, IOR 1.5 == glTF's own default). Gating them
+					 * would leave a material that deliberately declares the default carrying
+					 * whatever the resource was constructed with. */
+					materialResource.setSpecularComponent(specularFactor, specularColor);
+					materialResource.setIOR(materialIOR);
 
 					/* Alpha blending (glTF alphaMode: BLEND). */
 					if ( isAlphaBlend )

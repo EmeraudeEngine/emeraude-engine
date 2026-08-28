@@ -129,17 +129,28 @@ the FBX path whose keys changed identically.
 
 ## What remains
 
-- [ ] **`KHR_materials_specular` + `KHR_materials_ior`: declared, NEVER READ.** ⚠️ **Re-measured
-  2026-08-28 on 35 genuinely distinct renderables and the verdict is unchanged — the capture is
-  BIT-IDENTICAL to the pre-fix one.** That is the strongest form this finding can take: every
-  `SpecularTest` material declares `baseColorFactor [0,0,0,1]`, `metallicFactor 0` and
-  `roughnessFactor 0`, so nothing but the extension can light those spheres, and they still span
-  2.70‥4.57 / 255 (std 0.52, zero exactly-black pixels) — drawn, then unlit. `ior` measured
-  separately on `TransmissionRoughnessTest`: **1.46 / 255** across a declared 1.00 → 2.42, against
-  15.42 on the roughness axis of the same grid. Wiring, not implementation. fastgltf mask at
-  `GLTFLoader.cpp:482`, but no access to `glTFMaterial.specular` — the only other occurrence is a
-  comment at `:1194`. `setSpecularComponent/Factor/Color` exist on `Material::StandardResource` and
-  are called NOWHERE else in the cascade. `ior`: zero occurrences. Wiring, not implementation.
+- [x] **`KHR_materials_specular` + `KHR_materials_ior`: FACTORS WIRED 2026-08-28.** The GPU side
+  was already complete and spec-exact (`LightGenerator.PBR.cpp:589-590`); only the loader's read
+  was missing, and the identity defaults hid it. `SpecularTest`'s four factor rows go from flat
+  (spread ≤ 0.17 / 255) to monotone (2.36‥3.35), `specularFactor 0` renders exactly 0, the three
+  texture rows stay bit-identical (built-in control), and the controls `MetalRoughSpheres` /
+  `WaterBottle` move by 1 and 0. `TransmissionRoughnessTest`'s IOR axis: **1.46 → 4.24 / 255,
+  monotone** (diamond darkest, air brightest). Zero VUID. Details and traps in
+  [`docs/caution-points.md`](../caution-points.md) § *An IDENTITY default makes an unwired feature
+  indistinguishable from a disabled one*.
+  - [ ] **Remaining: the two specular TEXTURES** — `specularTexture` (**A** channel, scales the
+    factor) and `specularColorTexture` (**RGB**, tints F0). They are logged and ignored today.
+    Blocking design point: the material has a single `ComponentType::Specular` slot and glTF needs
+    two, so a new `ComponentType` must be added (plus its `to_cstring`/`to_ComponentType` entries),
+    two texture overloads on `StandardResource`, and a conditional in
+    `declareSurfaceKHRSpecular()` following the established
+    `componentIt != cend() ? variableName() : MaterialUB(...)` pattern used by Transmission.
+    These are `SpecularTest`'s remaining 3 rows out of 7 (15 spheres of 35).
+  - [ ] **`FBXLoader` reads neither, on purpose.** ufbx's `pbr.specular_factor`/`specular_color`
+    mean the dielectric specular weight on an OpenPBR/Standard-Surface material but the **Phong**
+    specular on a legacy `FbxSurfacePhong`, and the engine's legacy specular is a glossiness path.
+    The semantics must be settled before any code is copied across — see
+    `project_specular_normalisation_glossiness` reasoning in the specular/glossiness work.
   Measured symptom: the 35 spheres all sit between **3.65 and 3.83 out of 255** (total spread 0.18)
   with **zero exactly-black pixels** — drawn, then crushed, not absent.
 - [ ] **Iridescence**: `GLTFLoader.cpp:1119-1125` reads only `iridescenceFactor`;

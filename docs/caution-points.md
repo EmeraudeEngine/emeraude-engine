@@ -1324,6 +1324,35 @@ Details: [`src/Scenes/Loaders/AGENTS.md`](../src/Scenes/Loaders/AGENTS.md) § *T
 an asset name is not an identity*, and the numbers per model in
 [`docs/todo/gltf-conformance-loader-gaps.md`](todo/gltf-conformance-loader-gaps.md).
 
+### An IDENTITY default makes an unwired feature indistinguishable from a disabled one (Aug 2026)
+
+> [!CAUTION]
+> `KHR_materials_specular` and `KHR_materials_ior` were implemented **completely and spec-exactly
+> on the GPU** — `LightGenerator.PBR.cpp:589-590` computes `dielectricF0 = ((ior-1)/(ior+1))²` and
+> `F0 = mix(min(dielectricF0 · specularColor · specularFactor, 1), albedo, metalness)`, the material
+> UBO carries the three slots, and `StandardResource` declares them for every material. The glTF
+> loader never filled them. Because the defaults are the **identity** (factor 1, white, IOR 1.5 =
+> glTF's own default), nothing looked broken: no warning, no black frame, no validation error —
+> just a feature that quietly did nothing on every asset, for an unknown number of sessions.
+
+**Why it hid so well.** An identity default is the right engineering choice — it makes an
+un-declared extension a no-op — but it also removes every symptom of the wiring being absent. The
+only way to see it is to read the two ends and check they meet: a setter that exists and is called
+from nowhere is a signal, not a curiosity. `grep -rn setSpecularComponent src/` returned only the
+declaration and its own definition, and that was the whole diagnosis.
+
+**How it was confirmed** (2026-08-28, after wiring the factors in `GLTFLoader`): `SpecularTest`'s
+four *factor* rows went from flat (axis spread ≤ 0.17 / 255) to monotone (2.36 to 3.35), the sphere
+declaring `specularFactor 0` now renders **exactly 0**, and its three *texture* rows — which were
+deliberately left unwired — came out **bit-identical**. That last part is the control: a change
+that also moved the rows it must not touch would have been a different bug.
+
+⚠️ **The corollary for auditing.** "The extension is enabled on the parser" and "the shader has the
+formula" are each worth nothing alone. Check the full path — asset → loader → material UBO → codegen
+— before recording a feature as present OR as missing. The bench item had guessed "wiring, not
+implementation" for this one; nobody had verified the GPU end, so the estimate could have been off
+by a full BRDF.
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)
