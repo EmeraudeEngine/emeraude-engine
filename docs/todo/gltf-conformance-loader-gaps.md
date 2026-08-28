@@ -154,6 +154,23 @@ the FBX path whose keys changed identically.
     `project_specular_normalisation_glossiness` reasoning in the specular/glossiness work.
   Measured symptom: the 35 spheres all sit between **3.65 and 3.83 out of 255** (total spread 0.18)
   with **zero exactly-black pixels** — drawn, then crushed, not absent.
+- [x] **`KHR_materials_volume` — READ 2026-08-28.** Declared on the parser and never read; the
+  shader already had the Beer-Lambert formula. ⚠️ **The real finding is that the engine's defaults
+  are not the spec's** — `thicknessFactor` 1.0 vs 0 (thin-walled) and `attenuationDistance` 1.0 m vs
+  +infinity — harmless only while `attenuationColor` stays white, and an invented absorption the
+  moment it does not. The loader now states the spec defaults.
+  ⚠️ **Unverifiable on real content, and that was checked FIRST**: over 60 glTF files, 15 materials
+  declare the extension, 2 declare `attenuationColor`, **zero** declare `attenuationDistance`, so per
+  spec none of them absorbs anything either before or after. Measured on a purpose-built probe
+  instead (three spheres, identical but for the declared volume, in ONE capture — a stronger control
+  than a before/after since it is immune to temporal variation): rim green-over-red **1.005** with no
+  volume, **1.004** with colour but no distance, **1.174** with both, peak green excess **147/255**.
+  Zero VUID.
+  - [ ] `thicknessTexture` (G channel) is logged and ignored — needs a new `ComponentType`, as the
+    specular maps did. Used by `IridescentDishWithOlives`' `glassCover`.
+  - [ ] Consider promoting the probe into the bench: it is the only thing in reach that exercises
+    volume absorption at all, and the `attenuationColor`-without-`attenuationDistance` rule is
+    exactly the kind of subtlety a regression would silently undo.
 - [ ] **Iridescence**: `GLTFLoader.cpp:1119-1125` reads only `iridescenceFactor`;
   `iridescenceIor` and the film thickness (min/max/texture) are never parsed — and those are the
   two axes both test models sweep. The test CANNOT pass as it stands.

@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <limits>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
@@ -1115,6 +1116,53 @@ namespace EmEn::Scenes::Loaders
 				transmissionFactor = static_cast< float >(glTFMaterial.transmission->transmissionFactor);
 			}
 
+			/* Volume (KHR_materials_volume) — the ABSORPTION inside a transmissive surface, which is
+			 * what turns clear glass into coloured or thick glass. Beer-Lambert, and the shader
+			 * already implements the extension's formula verbatim
+			 * (`LightGenerator.PBR.cpp`): `exp(log(attenuationColor) / attenuationDistance * thickness)`.
+			 * Only this read was missing.
+			 *
+			 * ⚠️⚠️ THE SPEC'S DEFAULTS ARE NOT THE ENGINE'S, and that matters more than the read
+			 * itself. glTF says `thicknessFactor` **0** (0 means THIN-WALLED: no volume at all) and
+			 * `attenuationDistance` **+INFINITY** (no absorption), while `StandardResource` defaults
+			 * them to 1.0 and 1.0 m. Those engine defaults are harmless only because
+			 * `attenuationColor` also defaults to white — `log(1)` is 0, so the product is zero and
+			 * absorption is the identity whatever the distance. The moment a colour is set without a
+			 * distance, the engine would invent an absorption over 1 m that the asset never asked
+			 * for. So the SPEC defaults are stated here and passed unconditionally.
+			 *
+			 * ⚠️ Infinity travels through correctly and deliberately: `setAttenuationDistance()`
+			 * clamps with `max(0.0001, value)`, which leaves it intact, and the shader's
+			 * `log(colour) / inf` is 0, i.e. no absorption. `attenuationColor` is clamped away from
+			 * zero in the shader so `log()` never returns -inf, so no NaN can appear. */
+			float volumeThicknessFactor = 0.0F;
+			auto volumeAttenuationDistance = std::numeric_limits< float >::infinity();
+			Color< float > volumeAttenuationColor{1.0F, 1.0F, 1.0F, 1.0F};
+
+			if ( glTFMaterial.volume != nullptr )
+			{
+				volumeThicknessFactor = static_cast< float >(glTFMaterial.volume->thicknessFactor);
+				volumeAttenuationDistance = static_cast< float >(glTFMaterial.volume->attenuationDistance);
+
+				const auto & ac = glTFMaterial.volume->attenuationColor;
+
+				volumeAttenuationColor = Color< float >{
+					static_cast< float >(ac[0]),
+					static_cast< float >(ac[1]),
+					static_cast< float >(ac[2]),
+					1.0F
+				};
+
+				/* ⚠️ The thickness MAP (G channel, multiplying the factor) is not read: the material
+				 * has no `ComponentType` for a volume thickness — `SubsurfaceThickness` exists but
+				 * means something else — so it would need a new one, exactly as the two specular maps
+				 * did. One asset in the collection uses it (IridescentDishWithOlives' glassCover). */
+				if ( glTFMaterial.volume->thicknessTexture.has_value() )
+				{
+					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_materials_volume thicknessTexture is not supported yet (the factor is applied), ignored.";
+				}
+			}
+
 			/* Iridescence (KHR_materials_iridescence). */
 			float iridescenceFactor = 0.0F;
 
@@ -1217,6 +1265,7 @@ namespace EmEn::Scenes::Loaders
 					transmissionFactor,
 					iridescenceFactor,
 					specularFactor, specularColor, materialIOR,
+					volumeThicknessFactor, volumeAttenuationDistance, volumeAttenuationColor,
 					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex),
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
@@ -1338,6 +1387,17 @@ namespace EmEn::Scenes::Loaders
 					{
 						materialResource.setTransmissionComponentFromGrabPass(transmissionFactor);
 					}
+
+					/* Volume (KHR_materials_volume). Applied UNCONDITIONALLY, like specular and IOR:
+					 * the spec's defaults ARE the no-volume case (thickness 0, distance infinite),
+					 * so a material that declares nothing must get those rather than whatever the
+					 * resource was constructed with — which is a 1 m attenuation distance.
+					 * ⚠️ Note the order: `setTransmissionComponentFromGrabPass()` above also writes
+					 * these three slots from ITS defaults, so the volume must be applied AFTER it or
+					 * it would be overwritten. */
+					materialResource.setThicknessFactor(volumeThicknessFactor);
+					materialResource.setAttenuationDistance(volumeAttenuationDistance);
+					materialResource.setAttenuationColor(volumeAttenuationColor);
 
 					/* Iridescence (KHR_materials_iridescence). */
 					if ( iridescenceFactor > 0.0F )

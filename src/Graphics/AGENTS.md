@@ -455,8 +455,8 @@ in an 80-float array (320 bytes, std140):
 | 30 | anisotropyRotation | float | 0.0-1.0 (0.0) |
 | 31 | transmissionFactor | float | 0.0-1.0 (0.0) |
 | 32-35 | attenuationColor | vec4 | Volume attenuation |
-| 36 | attenuationDistance | float | 0.0+ |
-| 37 | thicknessFactor | float | 0.0+ |
+| 36 | attenuationDistance | float | 0.0+ — engine default **1.0 m**, glTF's is **+INFINITY** (see below) |
+| 37 | thicknessFactor | float | 0.0+ — engine default **1.0**, glTF's is **0** (thin-walled) |
 | 38 | heightScale | float | 0.0+ (0.02) — POM depth |
 | 39 | iridescenceFactor | float | 0.0-1.0 (0.0) |
 | 40 | iridescenceIOR | float | 1.0+ (1.3) |
@@ -490,6 +490,17 @@ The GLSL struct is generated to match this layout exactly.
 >
 > ⚠️ There are **six** UV transform slots and they do not cover the specular maps: a
 > `KHR_texture_transform` on `specularTexture` / `specularColorTexture` is logged and dropped.
+
+> [!CAUTION]
+> **Slots 32-37 (the KHR_materials_volume group) carry ENGINE defaults that are NOT glTF's.**
+> `attenuationDistance` defaults to 1.0 m here and to **+infinity** in the extension;
+> `thicknessFactor` to 1.0 here and to **0** — thin-walled, no volume — in the extension. The
+> divergence is invisible only because `attenuationColor` defaults to WHITE and the absorption is
+> `exp(log(colour) / distance * thickness)`: `log(1)` is 0, so the whole product is 0 and the
+> transmittance is 1 whatever the other two say. **Set a colour without setting a distance and the
+> engine invents an absorption over one metre.** `GLTFLoader` states the spec's defaults explicitly
+> for that reason; the JSON material format still uses these, so any new consumer must decide which
+> contract it is honouring rather than assume they agree.
 
 ### Material Opacity and GrabPass
 

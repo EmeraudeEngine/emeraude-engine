@@ -502,11 +502,46 @@ Not a wish list — these are silent today, so a diagnosis that assumes them pre
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) except its `texCoord` override, which is the multi-UV gap;
-**`KHR_materials_anisotropy` and `volume` are enabled on the parser and never read**, which makes
-the code look supportive of them; the clearcoat, sheen, transmission and iridescence extensions
+**`KHR_materials_anisotropy` is enabled on the parser and never read**, which makes
+the code look supportive of it; the clearcoat, sheen, transmission and iridescence extensions
 read only their scalar factors, never their textures; animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
 impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**`KHR_materials_volume` is READ since 2026-08-28** — the absorption inside a transmissive surface,
+which is what turns clear glass into coloured or thick glass. The shader already implemented the
+extension's Beer-Lambert formula verbatim (`LightGenerator.PBR.cpp`:
+`exp(log(attenuationColor) / attenuationDistance * thickness)`); only the read was missing.
+
+> [!CAUTION]
+> **THE SPEC'S DEFAULTS ARE NOT THE ENGINE'S, and that is the real finding of this lot.** glTF says
+> `thicknessFactor` **0** — 0 means THIN-WALLED, no volume — and `attenuationDistance` **+INFINITY**,
+> no absorption. `StandardResource` defaults them to **1.0** and **1.0 m**. Those engine defaults are
+> harmless *today* only because `attenuationColor` also defaults to white: `log(1)` is 0, so the
+> product is zero and the absorption is the identity whatever the distance. **The moment a colour is
+> set without a distance, the engine invents an absorption over 1 m that the asset never asked for.**
+> The glTF loader therefore states the SPEC defaults and applies all three unconditionally; the
+> engine-side defaults are left alone because they belong to the JSON material format, but they
+> diverge, and anything reading `DefaultAttenuationDistance` should know it is not glTF's.
+
+⚠️ Order matters: `setTransmissionComponentFromGrabPass()` also writes those three slots from its own
+defaults, so the volume must be applied **after** it or it is overwritten.
+⚠️ **Infinity travels through on purpose.** `setAttenuationDistance()` clamps with
+`max(0.0001, value)`, which leaves `+inf` intact, and the shader's `log(colour) / inf` is 0 — no
+absorption. `attenuationColor` is clamped away from zero in the shader so `log()` never returns
+`-inf`, so `-inf / inf` (a NaN) cannot arise.
+⚠️ **NOT verifiable on any asset in the collection**, and that was measured before writing the code:
+across **60 glTF files** (the vendored Khronos set plus projet-alpha's), 15 materials declare
+`KHR_materials_volume`, **2** declare `attenuationColor` and **ZERO** declare `attenuationDistance` —
+so per spec every one of them has no absorption, before the wiring and after it. Verified instead on a
+purpose-built probe (three transmissive spheres identical but for their declared volume, generated
+into the scratchpad, not a repo asset): body/rim green-over-red ratios **1.001 / 1.005** with no
+volume, **1.001 / 1.004** with a colour but NO distance — the spec's `+inf` rule, and a genuinely
+counter-intuitive one — and **1.008 / 1.174** with both, peaking at **147/255** of green excess at the
+rim where the optical path is longest. Zero VUID.
+⚠️ The thickness MAP (G channel) is logged and ignored: there is no `ComponentType` for a volume
+thickness (`SubsurfaceThickness` means something else), so it needs a new one exactly as the two
+specular maps did. One asset uses it — `IridescentDishWithOlives`' `glassCover`.
 
 **`COLOR_0` is READ since 2026-08-28**, and it MULTIPLIES the base colour (the glTF contract).
 ⚠️⚠️ **The material carries a `…-vc` VARIANT, and that is not a workaround.** `UseVertexColors`
