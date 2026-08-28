@@ -166,10 +166,31 @@ the FBX path whose keys changed identically.
   the coat normal map), which is why the `Partial coating`, `Base normal map`, `Shared normal map`
   and `Coat normal map` rows still cannot be conformant. **`ClearCoatTest` stays FAIL on that
   residual**, and the base-colour half of its failure is closed.
-- [ ] **`KHR_texture_transform` rotation**: offset ✓ and scale ✓ and clamp ✓ — **rotation ✗** is
-  now the SOLE remaining cause of this model's failure. The loader logs it and drops it
-  (`GLTFLoader.cpp:997`); the asset declares 0.39270 rad and the arrow lands on the yellow
-  "not applied" marker instead of the green one.
+- [x] **`KHR_texture_transform` rotation — DONE 2026-08-28. `TextureTransformTest` PASSES**:
+  offset ✓ scale ✓ clamp ✓ **rotation ✓**. The value was already parsed and thrown away with a
+  warning; it now reaches the material UBO as **(cos, sin)** in a second block of 6 vec4 (offsets
+  80-103, neutral (1,0,0,0)), the trig resolved ONCE per material on the CPU rather than per
+  fragment. The shader composes `mat2(cos, -sin, sin, cos) * (uv * scale) + offset`.
+  ⚠️ Two sign/order traps, both specified by the extension and both able to produce a
+  plausible-but-wrong result: the composition is `translation * rotation * scale` (rotating the
+  offset lands the texture elsewhere), and the extension's matrix is `[cos, sin ; -sin, cos]` —
+  the minus on the BOTTOM-LEFT, a clockwise UV rotation, the opposite of the usual maths
+  convention — which in GLSL's column-major `mat2` is written `mat2(cos, -sin, sin, cos)`.
+  **Measured on the test's own markers**: the `Rotation` quad's arrow moved off the yellow
+  "not applied" marker onto the **green ✓**, and the `All` quad (offset + rotation + scale) now
+  lands on its green ✓ too. The `Scale` quad, which declares no rotation, is untouched.
+  **Control**: the rotation is the ONLY thing in the whole bench that declares one, and every
+  other capture is **bit-exact** (`AlphaBlendModeTest`, `BoomBox`, `WaterBottle` exactly 0 px;
+  `MetalRoughSpheres` delta 1 = temporal dither) — the neutral `mat2(1,0,0,1)` is the identity.
+  Zero VUID. Material UBO grows 80 → 104 floats (320 → 416 bytes).
+  ⚠️ Still missing from this extension: the per-`TextureInfo` **`texCoord` override**, which is
+  the multi-UV gap, and any transform on the two **specular** maps (no UV slot for those
+  component types).
+- [ ] ⚠️ **A measurement trap this lot re-paid.** Marker boxes placed on GUESSED pixel
+  coordinates read 85.9 % ink both before and after — the box was saturated and could not
+  discriminate. Locate the changed region first (`np.where` on the diff mask, then group the
+  columns into bands) and crop THAT; the two rotated quads showed up as two clean column bands
+  with the untouched `Scale` quad between them, which is what identified them.
 - [x] **Supplied tangents — READ 2026-08-28** (`NormalTangentMirrorTest`). The accessor was not
   read at all, and the bitangent handedness did not exist anywhere in the cascade:
   `ShapeVertex::biNormal()` was a bare `cross(normal, tangent)`, so mirrored UV islands got a

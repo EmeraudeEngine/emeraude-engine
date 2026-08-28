@@ -276,7 +276,7 @@ texel. Each loader owns the translation from its format's semantics:
   `Core/Graphics/Texture/*Filtering` settings — a known gap, and the reason an asset that disables
   mipmapping on purpose does not get it.
 - **`KHR_texture_transform`** (per-texture-info UV scale/offset) is read by `GLTFLoader` and
-  lands on the material through `setComponentUVWTransform(componentType, scale, offset)` —
+  lands on the material through `setComponentUVWTransform(componentType, scale, offset, rotation)` —
   one glTF metallic-roughness texture info feeds BOTH the Roughness and Metalness components.
   The transform travels as a **material UBO vec4 (scale.xy, offset.zw)**, identity neutral,
   applied UNCONDITIONALLY at the sampling sites (shader program cache contract — values through
@@ -500,8 +500,8 @@ but it forfeits the entire benefit — this is a safety net, not a supported tar
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
 `TRIANGLES` is the only primitive mode read; no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
-filters are not, nor is the per-`TextureInfo` `texCoord` index; `KHR_texture_transform`'s
-**rotation** is parsed and dropped with a warning (offset and scale are applied);
+filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
+(offset, scale **and rotation**) except its `texCoord` override, which is the multi-UV gap;
 **`KHR_materials_anisotropy` and `volume` are enabled on the parser and never read**, which makes
 the code look supportive of them; the clearcoat, sheen, transmission and iridescence extensions
 read only their scalar factors, never their textures; animation channels targeting a node that is

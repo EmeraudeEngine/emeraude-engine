@@ -941,14 +941,20 @@ namespace EmEn::Scenes::Loaders
 
 			const auto & PBRData = glTFMaterial.pbrData;
 
-			/* KHR_texture_transform: per-texture-info UV scale/offset (the tiling of tire
-			 * treads, brake discs, car paint flakes...). Ignoring it does not fail — the
+			/* KHR_texture_transform: per-texture-info UV scale, rotation and offset (the tiling of
+			 * tire treads, brake discs, car paint flakes...). Ignoring it does not fail — the
 			 * texture renders STRETCHED over the whole UV range (measured on CarConcept).
-			 * The rotation part and a texCoordIndex override are NOT supported: logged. */
+			 * The rotation was parsed and DROPPED with a warning until 2026-08-28; it is now
+			 * carried through to the material UBO as (cos, sin) — see
+			 * `StandardResource::transformedTexCoords()` for the composition order and the sign
+			 * convention, both of which the extension specifies and both of which are easy to
+			 * invert into a plausible-looking wrong result.
+			 * A texCoordIndex override is still NOT supported: logged. */
 			struct UVTransform
 			{
 				Vector< 2, float > scale{1.0F, 1.0F};
 				Vector< 2, float > offset{0.0F, 0.0F};
+				float rotation{0.0F};
 				bool present{false};
 			};
 
@@ -963,12 +969,8 @@ namespace EmEn::Scenes::Loaders
 				const auto & transform = *textureInfoOpt->transform;
 				out.scale = {transform.uvScale.x(), transform.uvScale.y()};
 				out.offset = {transform.uvOffset.x(), transform.uvOffset.y()};
+				out.rotation = static_cast< float >(transform.rotation);
 				out.present = true;
-
-				if ( transform.rotation != 0.0F )
-				{
-					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform rotation is not supported, ignored.";
-				}
 
 				if ( transform.texCoordIndex.has_value() && *transform.texCoordIndex != 0 )
 				{
@@ -1207,7 +1209,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( albedoUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Albedo, albedoUVTransform.scale, albedoUVTransform.offset);
+							materialResource.setComponentUVWTransform(ComponentType::Albedo, albedoUVTransform.scale, albedoUVTransform.offset, albedoUVTransform.rotation);
 						}
 					}
 					else
@@ -1229,8 +1231,8 @@ namespace EmEn::Scenes::Loaders
 						/* ONE glTF texture info, TWO engine components: same transform on both. */
 						if ( metallicRoughnessUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Roughness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset);
-							materialResource.setComponentUVWTransform(ComponentType::Metalness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset);
+							materialResource.setComponentUVWTransform(ComponentType::Roughness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset, metallicRoughnessUVTransform.rotation);
+							materialResource.setComponentUVWTransform(ComponentType::Metalness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset, metallicRoughnessUVTransform.rotation);
 						}
 					}
 					else
@@ -1260,7 +1262,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( normalUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Normal, normalUVTransform.scale, normalUVTransform.offset);
+							materialResource.setComponentUVWTransform(ComponentType::Normal, normalUVTransform.scale, normalUVTransform.offset, normalUVTransform.rotation);
 						}
 					}
 
@@ -1271,7 +1273,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( aoUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::AmbientOcclusion, aoUVTransform.scale, aoUVTransform.offset);
+							materialResource.setComponentUVWTransform(ComponentType::AmbientOcclusion, aoUVTransform.scale, aoUVTransform.offset, aoUVTransform.rotation);
 						}
 					}
 
@@ -1282,7 +1284,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( emissiveUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::AutoIllumination, emissiveUVTransform.scale, emissiveUVTransform.offset);
+							materialResource.setComponentUVWTransform(ComponentType::AutoIllumination, emissiveUVTransform.scale, emissiveUVTransform.offset, emissiveUVTransform.rotation);
 						}
 					}
 					else if ( hasEmissiveColor )

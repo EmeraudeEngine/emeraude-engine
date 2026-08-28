@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <ranges>
 #include <sstream>
@@ -1389,16 +1390,23 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::syncComponentUVWTransforms () noexcept
 	{
-		static constexpr std::pair< ComponentType, size_t > slots[] = {
-			{ComponentType::Albedo, AlbedoUVWTransformOffset},
-			{ComponentType::Roughness, RoughnessUVWTransformOffset},
-			{ComponentType::Metalness, MetalnessUVWTransformOffset},
-			{ComponentType::Normal, NormalUVWTransformOffset},
-			{ComponentType::AmbientOcclusion, AmbientOcclusionUVWTransformOffset},
-			{ComponentType::AutoIllumination, AutoIlluminationUVWTransformOffset}
+		struct Slot
+		{
+			ComponentType componentType;
+			size_t transformOffset;
+			size_t rotationOffset;
 		};
 
-		for ( const auto & [componentType, offset] : slots )
+		static constexpr Slot slots[] = {
+			{ComponentType::Albedo, AlbedoUVWTransformOffset, AlbedoUVWRotationOffset},
+			{ComponentType::Roughness, RoughnessUVWTransformOffset, RoughnessUVWRotationOffset},
+			{ComponentType::Metalness, MetalnessUVWTransformOffset, MetalnessUVWRotationOffset},
+			{ComponentType::Normal, NormalUVWTransformOffset, NormalUVWRotationOffset},
+			{ComponentType::AmbientOcclusion, AmbientOcclusionUVWTransformOffset, AmbientOcclusionUVWRotationOffset},
+			{ComponentType::AutoIllumination, AutoIlluminationUVWTransformOffset, AutoIlluminationUVWRotationOffset}
+		};
+
+		for ( const auto & [componentType, offset, rotationOffset] : slots )
 		{
 			const auto componentIt = m_components.find(componentType);
 
@@ -1413,11 +1421,21 @@ namespace EmEn::Graphics::Material
 			m_materialProperties[offset + 1] = textureComponent->UVWScale()[1];
 			m_materialProperties[offset + 2] = textureComponent->UVWOffset()[0];
 			m_materialProperties[offset + 3] = textureComponent->UVWOffset()[1];
+
+			/* ⚠️ The trig is resolved HERE, once per material, not per fragment: the angle is a
+			 * material constant, so a sin/cos in the shader would be paid on every pixel of every
+			 * frame for a value that never changes. */
+			const auto radians = textureComponent->UVWRotation();
+
+			m_materialProperties[rotationOffset] = std::cos(radians);
+			m_materialProperties[rotationOffset + 1] = std::sin(radians);
+			m_materialProperties[rotationOffset + 2] = 0.0F;
+			m_materialProperties[rotationOffset + 3] = 0.0F;
 		}
 	}
 
 	bool
-	StandardResource::setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset) noexcept
+	StandardResource::setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset, float rotation) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -1438,6 +1456,7 @@ namespace EmEn::Graphics::Material
 		auto * textureComponent = static_cast< Texture * >(componentIt->second.get());
 		textureComponent->setUVWScale({scale[0], scale[1], 1.0F});
 		textureComponent->setUVWOffset({offset[0], offset[1], 0.0F});
+		textureComponent->setUVWRotation(rotation);
 
 		return true;
 	}
@@ -1597,10 +1616,10 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
-	const std::array< float, 80 > &
+	const std::array< float, 104 > &
 	StandardResource::neutralMaterialProperties () noexcept
 	{
-		static const std::array< float, 80 > properties{
+		static const std::array< float, 104 > properties{
 				/* Albedo color (4) */
 				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
 				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
@@ -1636,7 +1655,16 @@ namespace EmEn::Graphics::Material
 				1.0F, 1.0F, 0.0F, 0.0F,
 				1.0F, 1.0F, 0.0F, 0.0F,
 				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F
+				1.0F, 1.0F, 0.0F, 0.0F,
+				/* Per-component UV ROTATIONS (6 x vec4 = cos, sin, 0, 0), identity neutral, same
+				 * component order. ⚠️ (1, 0) is cos(0)/sin(0): the neutral rotation, which is what
+				 * keeps every non-rotating material bit-exact. */
+				1.0F, 0.0F, 0.0F, 0.0F,
+				1.0F, 0.0F, 0.0F, 0.0F,
+				1.0F, 0.0F, 0.0F, 0.0F,
+				1.0F, 0.0F, 0.0F, 0.0F,
+				1.0F, 0.0F, 0.0F, 0.0F,
+				1.0F, 0.0F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -2523,6 +2551,12 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientOcclusionUVWTransform);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWTransform);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWRotation);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWRotation);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::MetalnessUVWRotation);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWRotation);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientOcclusionUVWRotation);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWRotation);
 
 		return block;
 	}
@@ -2725,31 +2759,38 @@ namespace EmEn::Graphics::Material
 		}
 
 		const char * transformKey = nullptr;
+		const char * rotationKey = nullptr;
 
 		switch ( componentType )
 		{
 			case ComponentType::Albedo :
 				transformKey = UniformBlock::Component::AlbedoUVWTransform;
+				rotationKey = UniformBlock::Component::AlbedoUVWRotation;
 				break;
 
 			case ComponentType::Roughness :
 				transformKey = UniformBlock::Component::RoughnessUVWTransform;
+				rotationKey = UniformBlock::Component::RoughnessUVWRotation;
 				break;
 
 			case ComponentType::Metalness :
 				transformKey = UniformBlock::Component::MetalnessUVWTransform;
+				rotationKey = UniformBlock::Component::MetalnessUVWRotation;
 				break;
 
 			case ComponentType::Normal :
 				transformKey = UniformBlock::Component::NormalUVWTransform;
+				rotationKey = UniformBlock::Component::NormalUVWRotation;
 				break;
 
 			case ComponentType::AmbientOcclusion :
 				transformKey = UniformBlock::Component::AmbientOcclusionUVWTransform;
+				rotationKey = UniformBlock::Component::AmbientOcclusionUVWRotation;
 				break;
 
 			case ComponentType::AutoIllumination :
 				transformKey = UniformBlock::Component::AutoIlluminationUVWTransform;
+				rotationKey = UniformBlock::Component::AutoIlluminationUVWRotation;
 				break;
 
 			default :
@@ -2757,8 +2798,28 @@ namespace EmEn::Graphics::Material
 				return textCoords(component);
 		}
 
+		/* KHR_texture_transform composes its matrix as translation * rotation * scale, so the
+		 * order below is SCALE, then ROTATE, then OFFSET — swapping rotation and offset rotates
+		 * the offset too and lands the texture somewhere else entirely.
+		 *
+		 * ⚠️ The extension's rotation matrix is [cos, sin ; -sin, cos] — note the sign is on the
+		 * BOTTOM-LEFT, which is a clockwise rotation in UV space, the opposite of the usual maths
+		 * convention. GLSL's mat2 is COLUMN-major, so that matrix is written mat2(cos, -sin, sin,
+		 * cos): first pair is column 0. Getting either of those backwards produces a rotation of
+		 * the right magnitude in the wrong direction — which looks like a plausible result.
+		 *
+		 * The cos/sin come from the UBO, resolved once per material on the CPU, never as a
+		 * per-fragment trig call nor as a GLSL literal (shader program cache contract: the cache
+		 * keys on the descriptor layout, never on values, so a value-dependent variant could serve
+		 * one material's program to another).
+		 *
+		 * A neutral rotation is (1, 0), i.e. mat2(1, 0, 0, 1) — the identity, so a material that
+		 * declares no rotation computes `1*x + 0*y` and comes out unchanged. */
 		std::stringstream expression;
-		expression << "(" << textCoords(component) << " * " << MaterialUB(transformKey) << ".xy + " << MaterialUB(transformKey) << ".zw)";
+		expression <<
+			"(mat2(" << MaterialUB(rotationKey) << ".x, -" << MaterialUB(rotationKey) << ".y, " << MaterialUB(rotationKey) << ".y, " << MaterialUB(rotationKey) << ".x)"
+			" * (" << textCoords(component) << " * " << MaterialUB(transformKey) << ".xy)"
+			" + " << MaterialUB(transformKey) << ".zw)";
 
 		return expression.str();
 	}

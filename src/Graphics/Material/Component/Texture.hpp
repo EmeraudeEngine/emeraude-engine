@@ -211,8 +211,32 @@ namespace EmEn::Graphics::Material::Component
 			}
 
 			/**
-			 * @brief Scales the texture coordinates.
-			 * @param UVWScale A reference to a vector to scale the texture coordinates.
+			 * @brief Rotates the texture coordinates.
+			 * @param radians The rotation in radians (KHR_texture_transform's `rotation`).
+			 * @return void
+			 */
+			void
+			setUVWRotation (float radians) noexcept
+			{
+				m_UVWRotation = radians;
+			}
+
+			/**
+			 * @brief Returns the UVW rotation, in radians.
+			 * @note KHR_texture_transform's `rotation`, applied AFTER the scale and BEFORE the
+			 * offset — the extension composes its matrix as translation * rotation * scale.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			UVWRotation () const noexcept
+			{
+				return m_UVWRotation;
+			}
+
+			/**
+			 * @brief Sets the UVW scale.
+			 * @param UVWScale A reference to a vector.
 			 * @return void
 			 */
 			void
@@ -414,6 +438,7 @@ namespace EmEn::Graphics::Material::Component
 			uint32_t m_UVWChannel{0};
 			uint32_t m_binding{0};
 			Base::PixelFactory::Channel m_sourceChannel{Base::PixelFactory::Channel::Red};
+			float m_UVWRotation{0.0F};
 			bool m_alphaEnabled{false};
 	};
 

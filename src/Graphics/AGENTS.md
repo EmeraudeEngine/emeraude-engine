@@ -472,6 +472,7 @@ in an 80-float array (320 bytes, std140):
 | 53 | refractionAmount | float | 0.0-1.0 (**1.0**) — artistic override; the neutral 1.0 leaves the blend Fresnel-controlled |
 | 54-55 | padding | float | std140 alignment |
 | 56-79 | UVW transforms | 6 × vec4 | Albedo/Roughness/Metalness/Normal/AmbientOcclusion/AutoIllumination, `(scale.xy, offset.zw)`, neutral (1,1,0,0) |
+| 80-103 | UVW rotations | 6 × vec4 | same component order, `(cos, sin, 0, 0)`, neutral **(1,0,0,0)** — KHR_texture_transform's `rotation`, trig resolved once on the CPU |
 
 The GLSL struct is generated to match this layout exactly.
 

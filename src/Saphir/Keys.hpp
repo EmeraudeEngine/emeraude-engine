@@ -805,6 +805,15 @@ namespace EmEn::Saphir
 				constexpr auto NormalUVWTransform{"normalUVWTransform"};
 				constexpr auto AmbientOcclusionUVWTransform{"ambientOcclusionUVWTransform"};
 				constexpr auto AutoIlluminationUVWTransform{"autoIlluminationUVWTransform"};
+				/* KHR_texture_transform's ROTATION half, kept in its own vec4 as (cos, sin, 0, 0).
+				 * The trig is done ONCE on the CPU: a per-fragment sin/cos for a value that is
+				 * constant per material would be pure waste. Neutral is (1, 0, 0, 0). */
+				constexpr auto AlbedoUVWRotation{"albedoUVWRotation"};
+				constexpr auto RoughnessUVWRotation{"roughnessUVWRotation"};
+				constexpr auto MetalnessUVWRotation{"metalnessUVWRotation"};
+				constexpr auto NormalUVWRotation{"normalUVWRotation"};
+				constexpr auto AmbientOcclusionUVWRotation{"ambientOcclusionUVWRotation"};
+				constexpr auto AutoIlluminationUVWRotation{"autoIlluminationUVWRotation"};
 				constexpr auto DiffuseUVWTransform{"diffuseUVWTransform"};
 				constexpr auto OpacityUVWTransform{"opacityUVWTransform"};
 				/* Material specific (PBR) */

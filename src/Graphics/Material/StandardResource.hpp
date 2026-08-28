@@ -424,7 +424,7 @@ namespace EmEn::Graphics::Material
 			 * @param offset The UV offsets.
 			 * @return bool True when the component exists as a texture and supports a transform slot.
 			 */
-			bool setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset) noexcept;
+			bool setComponentUVWTransform (ComponentType componentType, const Base::Math::Vector< 2, float > & scale, const Base::Math::Vector< 2, float > & offset, float rotation = 0.0F) noexcept;
 
 			/**
 			 * @brief Sets the normal component as a texture.
@@ -1574,6 +1574,16 @@ namespace EmEn::Graphics::Material
 			static constexpr auto NormalUVWTransformOffset{68UL};
 			static constexpr auto AmbientOcclusionUVWTransformOffset{72UL};
 			static constexpr auto AutoIlluminationUVWTransformOffset{76UL};
+			/* KHR_texture_transform's ROTATION, one vec4 per component as (cos, sin, 0, 0).
+			 * ⚠️ Kept in its own block rather than widened into the transform vec4 above: the
+			 * existing four slots are fully used (scale.xy, offset.zw), and an additive block whose
+			 * neutral is (1, 0, 0, 0) leaves every non-rotating material BIT-EXACT. */
+			static constexpr auto AlbedoUVWRotationOffset{80UL};
+			static constexpr auto RoughnessUVWRotationOffset{84UL};
+			static constexpr auto MetalnessUVWRotationOffset{88UL};
+			static constexpr auto NormalUVWRotationOffset{92UL};
+			static constexpr auto AmbientOcclusionUVWRotationOffset{96UL};
+			static constexpr auto AutoIlluminationUVWRotationOffset{100UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -1634,12 +1644,12 @@ namespace EmEn::Graphics::Material
 			 * reflection amount 0, and every UV transform at scale 0, which collapses each texture
 			 * lookup onto a single texel. A duplicated initialiser list for a fixed-offset UBO is a
 			 * defect waiting on the next field; never reintroduce the second copy.
-			 * @return const std::array< float, 80 > &
+			 * @return const std::array< float, 104 > &
 			 */
 			[[nodiscard]]
-			static const std::array< float, 80 > & neutralMaterialProperties () noexcept;
+			static const std::array< float, 104 > & neutralMaterialProperties () noexcept;
 
-			std::array< float, 80 > m_materialProperties{neutralMaterialProperties()};
+			std::array< float, 104 > m_materialProperties{neutralMaterialProperties()};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
