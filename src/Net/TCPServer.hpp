@@ -89,11 +89,13 @@ namespace EmEn::Net
 			 * for any interface, IPv4). Pass an explicit IPv6 address
 			 * (e.g. "::") to listen in IPv6.
 			 * @note Binding the IPv6 any-address ("::") requests a DUAL-STACK
-			 * socket explicitly (IPV6_V6ONLY off), so IPv4 peers are accepted
-			 * on every platform rather than only on those whose kernel happens
-			 * to default that way. If the stack refuses, the listen FAILS
-			 * instead of coming up IPv6-only and silently refusing half the
-			 * network; bind "0.0.0.0" for a deliberate IPv4-only listen.
+			 * socket explicitly (IPV6_V6ONLY off), so IPv4 peers being accepted
+			 * is stated by this class rather than inherited from Asio, which
+			 * clears that option itself on Windows. Measured: no platform ever
+			 * exhibited the "IPv4 silently refused" symptom on this path - that
+			 * one belongs to raw Winsock. If a stack refuses the option the
+			 * listen FAILS rather than coming up IPv6-only; bind "0.0.0.0" for
+			 * a deliberate IPv4-only listen.
 			 * @return bool True if the server is listening.
 			 */
 			bool listen (uint16_t port, int backlog = DefaultBacklog, const std::string & address = {}) noexcept;

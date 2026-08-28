@@ -355,10 +355,14 @@ never run**. What it contributed to this directory:
   none. `joinMulticastGroup()` correctly returns `false`; it is the **consumer** that must treat
   that as "skip this interface", never "abort discovery". Enumerating on
   `family == IPv4 && !internal` does **not** exclude them — APIPA is not flagged internal.
-- Still open on Windows: the `ExternalData` resource chain. The other long-standing Windows trap,
-  `TCPServer` binding `"::"` opening a v6-only socket, is **fixed since 2026-08-28** (see the
-  dual-stack note under § TCP Server) but **not yet measured there** — the fix was written and
-  compiled on macOS, whose kernel never exhibited the symptom.
+- ⚠️ **The long-standing Windows trap "`TCPServer` binding `"::"` opens a v6-only socket" was
+  never real on this code path — measured 2026-08-28, and the claim is retracted.** The pre-fix
+  acceptor already accepted an IPv4 peer on `"::"` there (4/4): Asio clears `IPV6_V6ONLY` on every
+  `AF_INET6` socket it creates on Windows, and the option reads 0 before any `bind()`. A raw
+  `::socket(AF_INET6)` on Windows *does* default to 1, which is where the trap genuinely lives —
+  raw Winsock, not `TCPServer`. The explicit call added that day is kept for stating the intent
+  instead of depending on an Asio internal, but it fixes nothing observable. Recorded so nobody
+  hunts the symptom again.
 
 > [!NOTE]
 > The bug the Windows run actually surfaced first was **not in this directory**: app_system's
@@ -814,14 +818,15 @@ namespace EmEn::Net
 - `accept(timeoutMs)` uses `async_accept` + `run_for(timeout)` and returns `std::nullopt` on timeout/error.
 - On a successful accept, the underlying socket is **detached** from the server's io_context (`socket.release()`) and **migrated** onto a fresh io_context owned by the returned `TCPClient` (`socket.assign()`). This decouples the lifetimes — destroying the server does not affect already-accepted clients.
 - `SO_REUSEADDR` is enabled on a best-effort basis.
-- ⚠️ **Binding `"::"` asks for a dual-stack socket EXPLICITLY** (`IPV6_V6ONLY` off), since
-  2026-08-28. Whether IPv4 peers reach an IPv6 any-address listener is a **kernel policy, not a
-  contract**: Windows defaults to v6-only and refuses them *silently*, while Linux (`bindv6only`)
-  and macOS (`net.inet6.ip6.v6only`, measured at 0 on macOS 26 — a tunable, not a guarantee) both
-  accept them. This is the same shape as the multicast option widths: a default read as a promise.
-  Unlike `SO_REUSEADDR` this one is **not** best-effort — a stack that refuses the option fails the
-  `listen()`, because a socket that is up while invisible to half the network is precisely the bug
-  being prevented. Bind `"0.0.0.0"` for a deliberate IPv4-only listen.
+- **Binding `"::"` asks for a dual-stack socket EXPLICITLY** (`IPV6_V6ONLY` off), since 2026-08-28.
+  ⚠️ Read the honest version of why: it corrects **nothing observable**. No platform exhibited the
+  "IPv4 peers silently refused" symptom on this path — Windows included, measured, because Asio
+  clears that option itself on every `AF_INET6` socket; Linux and macOS default their sysctl
+  (`bindv6only` / `net.inet6.ip6.v6only`) to 0. What the call buys is independence from that Asio
+  internal, which is not ours to rely on, and an intent stated in our own code. Unlike
+  `SO_REUSEADDR` it is **not** best-effort: a stack refusing it fails the `listen()`, because a
+  socket that is up while invisible to half the network is the outcome worth refusing outright.
+  Bind `"0.0.0.0"` for a deliberate IPv4-only listen.
 
 **Expected usage pattern**:
 ```cpp

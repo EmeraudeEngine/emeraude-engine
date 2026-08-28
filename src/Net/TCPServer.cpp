@@ -133,17 +133,24 @@ namespace EmEn::Net
 			return false;
 		}
 
-		/* Binding the IPv6 any-address must ask EXPLICITLY for a dual-stack
-		 * socket. Whether IPv4 peers are accepted through it is a kernel
-		 * policy, not a contract: Windows defaults to v6-only and refuses
-		 * them SILENTLY, while Linux and macOS accept them (both default
-		 * net.inet6.ip6.v6only / bindv6only to 0 - measured on macOS 26,
-		 * and it is a tunable sysctl there, not a guarantee). Same trap as
-		 * the multicast option widths: never read a default as a promise.
-		 * Failing the listen here is deliberate - a socket that is up but
-		 * invisible to half the network is exactly the bug being prevented,
-		 * so a stack refusing the option must say so instead of silently
-		 * reproducing it. Bind "0.0.0.0" to listen on IPv4 only. */
+		/* Binding the IPv6 any-address asks EXPLICITLY for a dual-stack socket,
+		 * so whether IPv4 peers get through is stated here rather than inherited.
+		 *
+		 * ⚠️ It corrects no observable bug on this path, and the older claim that
+		 * it did is wrong - keep the honest version. Measured 2026-08-28: the
+		 * PRE-fix acceptor already accepted an IPv4 peer on "::" on Windows (4/4),
+		 * because Asio clears IPV6_V6ONLY on every AF_INET6 socket it creates
+		 * there; the option reads 0 before any bind(). A raw ::socket(AF_INET6)
+		 * on Windows does default to 1, and that is where the "IPv4 peers are
+		 * silently refused" trap really lives - raw Winsock, not this code.
+		 * Linux and macOS default the sysctl (bindv6only / net.inet6.ip6.v6only)
+		 * to 0 and never showed it either.
+		 *
+		 * What the call buys is independence from that Asio internal, which is an
+		 * implementation detail we do not control. The failure is deliberately
+		 * hard rather than best-effort: a socket that is up while invisible to
+		 * half the network is the outcome worth refusing outright. Bind "0.0.0.0"
+		 * to listen on IPv4 only. */
 		if ( endpoint.address().is_v6() && endpoint.address().is_unspecified() )
 		{
 			acceptor->set_option(asio::ip::v6_only(false), ec);
