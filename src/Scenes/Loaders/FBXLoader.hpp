@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -166,7 +167,12 @@ namespace EmEn::Scenes::Loaders
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;
 			std::vector< std::shared_ptr< Graphics::ImageResource > > m_images;
-			std::vector< std::shared_ptr< Graphics::TextureResource::Texture2D > > m_textures;
+			/* ⚠️ TWO slots per FBX texture, indexed by colour space (0 = linear data, 1 = sRGB).
+			 * The sRGB flag is baked into the resource when it is created and comes from the
+			 * USAGE, not from the asset: one image may serve as an sRGB albedo for one material
+			 * and as a linear roughness map for another. A cache keyed on the texture index alone
+			 * let the first usage impose its colour space on every other one. */
+			std::vector< std::array< std::shared_ptr< Graphics::TextureResource::Texture2D >, 2 > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
 			/* Meshes are indexed by ufbx mesh_element_id (stable across the scene). */
 			std::unordered_map< uint32_t, std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;

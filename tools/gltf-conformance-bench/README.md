@@ -60,6 +60,33 @@ The failure images name the defect, which is what turns a capture into a fix.
 
 ## Traps this bench has already paid for
 
+- **⚠️⚠️ Duplicate names in an asset are the norm, and they used to collapse whole grids.**
+  Neither glTF nor FBX imposes uniqueness on names; the identity of a mesh or a material is its
+  INDEX. Until 2026-08-28 the loaders keyed their resources on the name, so the second mesh named
+  `Sphere` received the first one's geometry AND material, silently. `ClearCoatTest` ships
+  **eighteen meshes named `ClearCoatSampleMesh`** with eighteen different materials and rendered as
+  eighteen copies of material 0; `MetalRoughSpheresNoTextures` has `Sphere` ×98, `SpecularTest`
+  `OneSample` ×20, `TransmissionTest` `Sphere` ×12 plus three different materials all named
+  `BlueTransWithMask`, `TransmissionRoughnessTest` two different images both named `RoughnessGrid`.
+  **It reads exactly like an un-wired extension**, and three bench runs charged it to
+  `KHR_materials_*`. When a whole grid renders as one cell, dump the asset's names before touching
+  a shader: `python3 -c "import json;a=json.load(open(f));print([m.get('name') for m in a['meshes']])"`.
+  Fixed in the engine (`Scenes::Loaders::buildResourceKey()`); the assets did not change.
+- **⚠️ Verify a loader-wide change with a PIXEL DIFF against the previous run, partitioned by the
+  property you changed.** The captures of a previous pass are kept under
+  `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-<date>/`, and the framing is
+  deterministic, so a full-frame diff is available and it is far stronger than re-reading
+  individual captures. For the 2026-08-28 resource-key fix it gave: models with **unique** names,
+  32 captures, max delta **≤ 2 / 255** (ordinary temporal dither) — the change is a bit-exact
+  **no-op** where it must be; models with **duplicate** names, 12 captures, max delta **243 / 255**
+  and up to 15.1 % of pixels. Change if and only if predicted. Without that partition, "13 % of
+  the frame changed" says nothing about whether the change was the intended one.
+- **⚠️ Never sample a small grid on guessed pixel coordinates.** On
+  `MetalRoughSpheresNoTextures` (5.5 % of frame height) a guessed 7×7 window reported a per-cell
+  std of 51.97 on a capture where all 98 spheres were provably identical — the window had drifted
+  into the sky, and the number was plausible enough to publish. Fit the lattice to the image
+  first: high-pass (subtract a Gaussian blur), then brute-force the pitch and offset that maximise
+  the row and column profiles.
 - **The framing is calculated, never guessed.** Bounds come from walking the glTF node hierarchy
   *with* its transformations (`gltf_bounds.py`); the mesh bbox alone lies —
   `MetalRoughSpheresNoTextures` is one sphere instanced 123 times, and its mesh bbox is ~0.

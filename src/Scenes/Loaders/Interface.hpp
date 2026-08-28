@@ -34,6 +34,7 @@
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -57,6 +58,49 @@ namespace EmEn
 
 namespace EmEn::Scenes::Loaders
 {
+	/**
+	 * @brief Builds a resource container key that cannot alias another one from the same asset.
+	 * @warning ⚠⚠ THE ASSET NAME IS NOT AN IDENTITY. Neither glTF nor FBX imposes any
+	 * uniqueness on the names they carry — the identity of a mesh, a material, a texture or an
+	 * image is its INDEX in the asset. A resource container keyed on the name alone returns the
+	 * FIRST homonym to every later caller, silently: the second mesh named 'Sphere' gets the
+	 * first one's geometry AND its material, and nothing is reported.
+	 * @note Measured on the Khronos conformance assets (2026-08-28): ClearCoatTest carries
+	 * eighteen meshes all named 'ClearCoatSampleMesh' with eighteen different materials, so the
+	 * whole grid rendered material 0's red; MetalRoughSpheresNoTextures has ninety-eight named
+	 * 'Sphere'; SpecularTest twenty named 'OneSample'; TransmissionTest twelve named 'Sphere' plus
+	 * three genuinely different materials all named 'BlueTransWithMask'; TransmissionRoughnessTest
+	 * two different images both named 'RoughnessGrid'.
+	 * @param prefix The loader's per-asset resource prefix (already ends with a separator).
+	 * @param category The resource category segment, ending with '/' (e.g. "Mesh/").
+	 * @param assetName The name the asset declares, possibly empty and possibly a duplicate.
+	 * @param assetIndex The index of the item in its asset array — the real identity.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	buildResourceKey (const std::string & prefix, std::string_view category, std::string_view assetName, size_t assetIndex) noexcept
+	{
+		const auto indexString = std::to_string(assetIndex);
+
+		std::string key;
+		key.reserve(prefix.size() + category.size() + assetName.size() + indexString.size() + 1);
+		key = prefix;
+		key += category;
+
+		/* An unnamed item keeps the bare index it always had. */
+		if ( !assetName.empty() )
+		{
+			key += assetName;
+			key += '-';
+		}
+
+		key += indexString;
+
+		return key;
+	}
+
 	/**
 	 * @brief Declares what a loader implementation actually delivers in a SceneData.
 	 * @note This describes THE LOADER, not the file format. FBX can carry lights and cameras;

@@ -6,6 +6,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 - [Graphics/Material System](#graphicsmaterial-system)
 - [Ray Tracing / Acceleration Structures](#ray-tracing--acceleration-structures)
+- [Resources / Loaders](#resources--loaders)
 - [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
 - [Build / Compiler](#build--compiler)
@@ -1258,6 +1259,8 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 
 ---
 
+## Resources / Loaders
+
 ### Critical: Resource getOrCreateResource Lambdas Run on Loading Threads — Capture By VALUE
 
 > [!CRITICAL]
@@ -1268,6 +1271,58 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 > to hard segfaults. **Move buffers into the lambda** (`[pixels = std::move(rgba)]`,
 > `[shape]`, `[geometry, materialList, ...]`). Caught while writing `Scenes::Loaders::WADLoader`
 > (Jul 2026); GLTFLoader/FBXLoader already follow the rule — keep it that way.
+
+### Fixed: an asset NAME was used as a resource identity — 18 meshes, 1 renderable (Aug 2026)
+
+> [!CRITICAL]
+> **The identity of a mesh, a material, a texture or an image inside an asset is its INDEX, never
+> its name.** Neither glTF nor FBX imposes uniqueness on names. `GLTFLoader` and `FBXLoader` keyed
+> every resource on `{prefix}{Category}/{name}`, so `getOrCreateResource()` handed the **first
+> homonym to every later caller** — the second mesh named `Sphere` got the first one's geometry
+> **and its material**. Silent: no error path, no warning, and the result is
+> indistinguishable from an un-wired material feature.
+
+**Measured on the Khronos conformance assets (2026-08-28).** `ClearCoatTest` ships **eighteen
+meshes all named `ClearCoatSampleMesh`** bound to eighteen different materials; all eighteen cells
+rendered material 0's red (linear ratio `1 : 0.045 : 0.029` against material 0's declared
+`1 : 0.04 : 0.02`), and the `Base layer` / `Coated` / `Coating Only` columns showed no separation
+because they were **the same renderable**. Also: `MetalRoughSpheresNoTextures` `Sphere` ×98,
+`SpecularTest` `OneSample` ×20, `TransmissionTest` `Sphere` ×12 plus three genuinely different
+materials all named `BlueTransWithMask`, `TransmissionRoughnessTest` two different **images** both
+named `RoughnessGrid`.
+
+**Fix:** every key goes through `Scenes::Loaders::buildResourceKey()` →
+`{prefix}{Category}/{name}-{index}`, the bare `{index}` when the asset declares no name.
+`USDLoader` already used that convention; the two others were aligned onto it.
+
+⚠️ **Traps this one carried:**
+- **It looks exactly like an un-wired extension.** The failures of `ClearCoatTest`,
+  `TransmissionTest` and `SpecularTest` were charged to `KHR_materials_*` for three bench runs.
+  Read what the asset DECLARES before charging a defect to a feature.
+- **A control only exonerates what it exercises.** `MetalRoughSpheres` cleared "the IBL and the
+  exposure" across two runs and could never have caught this: it carries exactly **one** material.
+- **An unnamed item was already safe**, because the loaders fell back to the index. That is why
+  `AnisotropyStrengthTest` and both iridescence models — whose meshes and materials are unnamed —
+  are genuinely un-wired extensions and must NOT be re-attributed to this defect.
+- **The colour space belongs in the key, the addressing does not.** `sRGB` comes from the USAGE
+  (one image = an sRGB albedo here, a linear roughness map there), so one asset texture yields up
+  to two engine resources (`-srgb` / `-data`) and the loaders' texture cache needs **two slots per
+  index**. The wrap modes belong to the asset texture itself, so the old `-<U><V>` name suffix
+  became redundant once the index was in the key.
+
+**How it was verified**, because a loader-wide change needs a control and not just a nice capture:
+a full-frame pixel diff of all 44 bench captures against the previous run, partitioned by whether
+the asset carries duplicate names. Models with **unique** names: 32 captures, max delta
+**≤ 2 / 255** — the change is a **bit-exact no-op** where it must be. Models with **duplicate**
+names: 12 captures, max delta **243 / 255**, up to 15.1 % of pixels. `SpecularTest` has duplicate
+names and came out at delta **0**, because its 24 materials declare identical
+baseColour/metallic/roughness and differ only in an unread extension — change if and only if
+predicted. Runtime consumers re-verified in `animation-debug` (zero VUID): the Fox through the
+renamed `glTF:Fox/Mesh/fox1-0`, both Paladins through the FBX path.
+
+Details: [`src/Scenes/Loaders/AGENTS.md`](../src/Scenes/Loaders/AGENTS.md) § *The resource key —
+an asset name is not an identity*, and the numbers per model in
+[`docs/todo/gltf-conformance-loader-gaps.md`](todo/gltf-conformance-loader-gaps.md).
 
 ## Scene Rendering
 

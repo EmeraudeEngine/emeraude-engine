@@ -43,11 +43,100 @@ Iridescence ×2, AnisotropyStrengthTest.
 
 **Undecided (2)**: `MetalRoughSpheresNoTextures` (5.5 % of frame height, blocked by
 `hardcoded-near-plane`), `SheenCloth` (the viewer's daylight sky cannot isolate a sheen rim —
-Khronos shoots it on black).
+Khronos shoots it on black). ⚠️ `MetalRoughSpheresNoTextures` was undecided for TWO independent
+reasons and only one of them was known: the framing, and the fact that its 98 spheres were one
+sphere. The second is fixed (see the 2026-08-28 section); the framing still stands.
+
+> [!CAUTION]
+> **2026-08-28 — FIVE OF THOSE VERDICTS ARE VOID, and one of the undecided with them.** The root
+> cause found that day is not in this loader's material handling at all: the loaders keyed every
+> resource on the asset's **name**, which neither glTF nor FBX makes unique, so a grid of meshes
+> sharing a name collapsed onto ONE renderable — one geometry, one material. Fixed in
+> `Scenes::Loaders::buildResourceKey()`; see
+> [`docs/caution-points.md`](../caution-points.md) § *Fixed: an asset NAME was used as a resource
+> identity* (the item file that tracked it is gone — the work is done).
+>
+> | verdict | duplicate names it was measured through | re-judged 2026-08-28 |
+> |---|---|---|
+> | `ClearCoatTest` FAIL | `ClearCoatSampleMesh` ×18 | **the collapse WAS the whole failure** — see below |
+> | `TransmissionTest` FAIL | `Sphere` ×12 + 3 different materials named `BlueTransWithMask` | **the collapse WAS the whole failure** |
+> | `MetalRoughSpheresNoTextures` undecided | `Sphere` ×98 | **now renders its grid** — see below |
+> | `TransmissionRoughnessTest` FAIL | `RoughnessSamples` ×6, images `RoughnessGrid` ×2 | **still FAIL**, cause re-attributed to `ior` |
+> | `SpecularTest` FAIL | `OneSample` ×20, `FiveSamples` ×3 | **still FAIL, capture BIT-IDENTICAL** — the collapse was invisible here |
+>
+> ⚠️ **The other verdicts stand.** `AnisotropyStrengthTest` and both iridescence models have
+> **unnamed** meshes and materials, so the index fallback already protected them: their failures
+> are genuine extension gaps. `NormalTangentMirrorTest`, `TextureTransformTest`, `VertexColorTest`
+> and all seven PASS models carry unique names and were never affected.
+
+## Re-run 2026-08-28 — the resource-key fix, measured (44 captures, ZERO VUID)
+
+Captures: `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-20260828/`. Same script, same
+framing as the 2026-08-27 run, whose captures **survive on disk** — so this pass is a true pixel
+A/B, not a re-description.
+
+**⚠️⚠️ THE METHOD THAT DECIDED IT — a full-frame pixel diff against the previous run, partitioned
+by whether the asset has duplicate names.** This is what a loader-wide change must be verified
+with, and it is far stronger than re-reading individual captures:
+
+| group | captures | changed pixels | max delta |
+|---|---|---|---|
+| models with **unique** names | 32 | 0.000 % … 1.322 % | **≤ 2 / 255** |
+| models with **duplicate** names | 12 | 0.000 % … **15.137 %** | **243 / 255** |
+
+The ≤2 LSB on the unique-name group is ordinary temporal dither: **the fix is a bit-exact no-op
+wherever names are unique**, which is the control this change needed. Change happens if and only
+if an asset has duplicate names AND the aliased materials actually differ.
+
+**Per-model numbers:**
+
+- `ClearCoatTest`: std across the 18 cell colours **R 2.32 → 46.79**, G 0.96 → 11.19,
+  B 1.04 → 28.47; the red channel's range over the grid goes from 159.8‥168.9 (i.e. one colour,
+  eighteen times) to 5.5‥167.4. Row 1 now measures a linear **1.000 : 0.033 : 0.022** against a
+  declared 1.000 : 0.040 : 0.020, rows 2-6 **0.15 : 0.21 : 1.000** against 0.119 : 0.203 : 1.000,
+  and the whole `Coating Only` column its declared **black** (mean sRGB 5.5‥15.4, the residual
+  being the sky's specular on the coat — physically required). **The three columns separate.**
+- `TransmissionTest`: hues of the saturated spheres
+  **[16,16,16,16,17,17,17,17,17,17] → [16,16,17,61,61,61,123,127,128,194]** — one hue became the
+  four declared ones (6° red, 62° yellow, 124° green, 210° blue).
+- `MetalRoughSpheresNoTextures`: with a 7×7 lattice **fitted to the image** (guessed coordinates
+  produce garbage at this framing — see the trap below), cell-mean std **6.43 → 35.22** (×5.5),
+  spread 23.98 → 163.84, and the **metallic axis is now strictly monotone over its seven steps**
+  (116.3 → 127.2 → 140.9 → 155.8 → 169.9 → 177.4 → 189.2). Before, all 49 sampled cells read
+  180 ± 1. The roughness axis peaks at column 5 and falls — physically expected (a smooth metal
+  mirrors the dark forest, a rough one scatters the bright sky, then the lobe widens past it), not
+  a defect. ⚠️ Still only **5.5 % of frame height** (`hardcoded-near-plane`), so per-cell
+  photometry stays coarse; the axis monotonicity is what carries the verdict.
+- `SpecularTest`: **capture bit-identical, 0.000 % of pixels changed.** Its 24 materials all
+  declare `baseColorFactor [0,0,0,1]`, `metallicFactor 0`, `roughnessFactor 0` and differ ONLY in
+  `KHR_materials_specular` — which is never read. So the aliasing had nothing to alias, and the
+  35 cell means still span 2.70‥4.57 / 255 (std 0.52) with zero exactly-black pixels. **FAIL
+  confirmed, and now correctly attributed to the unread extension rather than to the key.**
+- `TransmissionRoughnessTest`: the 6 spheres are now 6 distinct renderables (0.87 % of pixels
+  changed), and the failure is isolated: over the declared IOR range 1.00 → 2.42 the five rows
+  move by **1.46 / 255** — noise — while the roughness axis moves by **15.42**. `ior` does
+  nothing, exactly as the code says (zero occurrences). **FAIL, cause pinned.**
+
+⚠️ **A trap this re-run added.** Sampling a small grid on **guessed** pixel coordinates produced a
+*plausible but wrong* measurement — a per-cell std of 51.97 on the BEFORE capture of
+`MetalRoughSpheresNoTextures`, which is impossible for 98 identical spheres and was the sampling
+window drifting into the sky. Fit the lattice to the image (high-pass, then a brute-forced
+pitch/offset over the row and column profiles) before reporting any per-cell number.
+
+**Consumers re-verified at runtime** (`animation-debug`, zero VUID): the Fox renders with its
+texture and shadow through the renamed `glTF:Fox/Mesh/fox1-0`, and both Paladins render through
+the FBX path whose keys changed identically.
 
 ## What remains
 
-- [ ] **`KHR_materials_specular` + `KHR_materials_ior`: declared, NEVER READ.** fastgltf mask at
+- [ ] **`KHR_materials_specular` + `KHR_materials_ior`: declared, NEVER READ.** ⚠️ **Re-measured
+  2026-08-28 on 35 genuinely distinct renderables and the verdict is unchanged — the capture is
+  BIT-IDENTICAL to the pre-fix one.** That is the strongest form this finding can take: every
+  `SpecularTest` material declares `baseColorFactor [0,0,0,1]`, `metallicFactor 0` and
+  `roughnessFactor 0`, so nothing but the extension can light those spheres, and they still span
+  2.70‥4.57 / 255 (std 0.52, zero exactly-black pixels) — drawn, then unlit. `ior` measured
+  separately on `TransmissionRoughnessTest`: **1.46 / 255** across a declared 1.00 → 2.42, against
+  15.42 on the roughness axis of the same grid. Wiring, not implementation. fastgltf mask at
   `GLTFLoader.cpp:482`, but no access to `glTFMaterial.specular` — the only other occurrence is a
   comment at `:1194`. `setSpecularComponent/Factor/Color` exist on `Material::StandardResource` and
   are called NOWHERE else in the cascade. `ior`: zero occurrences. Wiring, not implementation.
@@ -57,9 +146,14 @@ Khronos shoots it on black).
   `iridescenceIor` and the film thickness (min/max/texture) are never parsed — and those are the
   two axes both test models sweep. The test CANNOT pass as it stands.
 - [ ] **Clearcoat / transmission / sheen**: only the scalar factors are read, no texture (nor coat
-  normal map). ClearCoatTest shows **no separation at all** between its `Base layer`, `Coated` and
-  `Coating Only` columns, so the factor→shading wiring must be verified too — but see
-  `material-basecolor-factor-collapse.md` first: part of what that model shows is not this loader.
+  normal map). ⚠️ **The scalar factor IS wired and now measurable** (2026-08-28): the `Coated`
+  column is brighter than `Base layer` on all six rows, with the top-5 % highlight up **+6.7 to
+  +17.3** out of 255. The 2026-08-27 claim of "**no separation at all**" was the resource-key
+  collapse, not the shading — those three columns were literally the same renderable. What remains
+  is therefore narrower than it looked: the clearcoat **textures** (factor/roughness texture and
+  the coat normal map), which is why the `Partial coating`, `Base normal map`, `Shared normal map`
+  and `Coat normal map` rows still cannot be conformant. **`ClearCoatTest` stays FAIL on that
+  residual**, and the base-colour half of its failure is closed.
 - [ ] **`KHR_texture_transform` rotation**: offset ✓ and scale ✓ and clamp ✓ — **rotation ✗** is
   now the SOLE remaining cause of this model's failure. The loader logs it and drops it
   (`GLTFLoader.cpp:997`); the asset declares 0.39270 rad and the arrow lands on the yellow
@@ -70,6 +164,10 @@ Khronos shoots it on black).
   reflection is rotated, not merely flipped.
 - [ ] `COLOR_0` not multiplied: zero occurrences in the loader, and the capture shows the README's
   literal failure signature — a cyan X on the red check, magenta on the green, yellow on the blue.
+- [ ] **Full conformance re-judgement against each model's README is NOT done.** The 2026-08-28
+  pass closed the resource-key collapse and re-attributed the five affected verdicts; it did not
+  re-read all nineteen READMEs and re-derive PASS/FAIL from scratch. The headline count above is
+  still the 2026-08-27 one. Do not quote it as current.
 - [ ] Anisotropy produces no elongation. Measured as the aspect ratio of the top 5 % brightest
   pixels: reference **3.65** at anisotropy 1.0 against **1.62** at 0.0 (ratio **2.26**); ours
   **2.67** against **3.29** (ratio **0.81**, inside the noise and pointing the wrong way).

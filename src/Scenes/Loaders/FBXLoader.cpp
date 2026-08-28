@@ -411,19 +411,9 @@ namespace EmEn::Scenes::Loaders
 				continue;
 			}
 
-			std::string name;
-			name.reserve(m_resourcePrefix.size() + 7 + tex.name.length);
-			name = m_resourcePrefix;
-			name += "Image/";
-
-			if ( tex.name.length == 0 )
-			{
-				name += std::to_string(textureIndex);
-			}
-			else
-			{
-				name.append(tex.name.data, tex.name.length);
-			}
+			/* ⚠️ Keyed on the INDEX, not on the name — an FBX name is not an identity, and
+			 * duplicate node/material names are the norm in that format. See buildResourceKey(). */
+			const auto name = buildResourceKey(m_resourcePrefix, "Image/", {tex.name.data, tex.name.length}, textureIndex);
 
 			std::shared_ptr< ImageResource > image;
 
@@ -536,19 +526,8 @@ namespace EmEn::Scenes::Loaders
 		{
 			const ufbx_material & fbxMaterial = *scene.materials.data[materialIndex];
 
-			std::string name;
-			name.reserve(m_resourcePrefix.size() + 10 + fbxMaterial.name.length);
-			name = m_resourcePrefix;
-			name += "Material/";
-
-			if ( fbxMaterial.name.length == 0 )
-			{
-				name += std::to_string(materialIndex);
-			}
-			else
-			{
-				name.append(fbxMaterial.name.data, fbxMaterial.name.length);
-			}
+			/* ⚠️ Keyed on the INDEX, not on the name. See buildResourceKey(). */
+			const auto name = buildResourceKey(m_resourcePrefix, "Material/", {fbxMaterial.name.data, fbxMaterial.name.length}, materialIndex);
 
 			/* Resolve a ufbx_texture to a Texture2D resource, creating it on demand.
 			 * Cached in m_textures by the texture's typed_id so each engine texture
@@ -566,9 +545,16 @@ namespace EmEn::Scenes::Loaders
 					return nullptr;
 				}
 
-				if ( m_textures[texIdx] != nullptr )
+				/* ⚠️ TWO slots per FBX texture, selected by the colour space. The sRGB flag is
+				 * baked into the resource at creation and comes from the USAGE, not from the
+				 * asset: the same image legitimately serves as an sRGB albedo for one material
+				 * and as a linear data map for another. Caching on the texture index alone let
+				 * whichever usage resolved FIRST impose its colour space on the other. */
+				const auto colourSpaceSlot = sRGB ? 1U : 0U;
+
+				if ( m_textures[texIdx][colourSpaceSlot] != nullptr )
 				{
-					return m_textures[texIdx];
+					return m_textures[texIdx][colourSpaceSlot];
 				}
 
 				if ( texIdx >= m_images.size() || m_images[texIdx] == nullptr )
@@ -576,19 +562,11 @@ namespace EmEn::Scenes::Loaders
 					return nullptr;
 				}
 
-				std::string texName;
-				texName.reserve(m_resourcePrefix.size() + 9 + tex->name.length);
-				texName = m_resourcePrefix;
-				texName += "Texture/";
-
-				if ( tex->name.length == 0 )
-				{
-					texName += std::to_string(texIdx);
-				}
-				else
-				{
-					texName.append(tex->name.data, tex->name.length);
-				}
+				/* The index makes the key unique per FBX texture; the colour space stays part of
+				 * it because one texture legitimately yields two engine resources. Same
+				 * convention as the glTF and USD loaders. */
+				std::string texName = buildResourceKey(m_resourcePrefix, "Texture/", {tex->name.data, tex->name.length}, texIdx);
+				texName += sRGB ? "-srgb" : "-data";
 
 				auto texture = m_resources.container< TextureResource::Texture2D >()
 					->getOrCreateResource(texName, [image = m_images[texIdx], sRGB] (auto & textureResource) {
@@ -597,7 +575,7 @@ namespace EmEn::Scenes::Loaders
 						return textureResource.load(image);
 					});
 
-				m_textures[texIdx] = texture;
+				m_textures[texIdx][colourSpaceSlot] = texture;
 
 				return texture;
 			};
@@ -792,23 +770,17 @@ namespace EmEn::Scenes::Loaders
 		{
 			const ufbx_mesh & mesh = *scene.meshes.data[meshIndex];
 
-			const std::string baseName = (mesh.name.length == 0)
-				? std::to_string(mesh.element_id)
-				: std::string{mesh.name.data, mesh.name.length};
+			/* ⚠️⚠️ Keyed on the INDEX, not on the name. Duplicate mesh names are ordinary in FBX
+			 * (every instance of the same authored object carries it), and a key built on the name
+			 * alone hands the FIRST homonym's geometry AND material to every later one, silently.
+			 * Measured on the glTF side of the same defect: ClearCoatTest's eighteen meshes named
+			 * 'ClearCoatSampleMesh' all rendered material 0. See buildResourceKey().
+			 * NOTE: mesh.element_id — unique but unrelated to the loop order — was the previous
+			 * fallback for an unnamed mesh; the loop index is what identifies it here. */
+			const std::string_view baseName{mesh.name.data, mesh.name.length};
 
-			std::string geoName;
-			geoName.reserve(m_resourcePrefix.size() + 10 + baseName.size() + flipKey.size());
-			geoName = m_resourcePrefix;
-			geoName += flipKey;
-			geoName += "Geometry/";
-			geoName += baseName;
-
-			std::string meshName;
-			meshName.reserve(m_resourcePrefix.size() + 6 + baseName.size() + flipKey.size());
-			meshName = m_resourcePrefix;
-			meshName += flipKey;
-			meshName += "Mesh/";
-			meshName += baseName;
+			const auto geoName = buildResourceKey(m_resourcePrefix + flipKey, "Geometry/", baseName, meshIndex);
+			const auto meshName = buildResourceKey(m_resourcePrefix + flipKey, "Mesh/", baseName, meshIndex);
 
 			/* Count total triangles (fan triangulation: polygon with N vertices → N-2 triangles).
 			 * Vertex count = triangleCount * 3 because we emit per-corner (attribute layers
@@ -828,7 +800,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( totalTriangleCount == 0 )
 			{
-				TraceWarning{ClassId} << "Mesh '" << baseName << "' has no valid triangle faces, using default.";
+				TraceWarning{ClassId} << "Mesh '" << meshName << "' has no valid triangle faces, using default.";
 
 				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
@@ -1024,7 +996,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( !buildSuccess || !shape->isValid() )
 			{
-				TraceWarning{ClassId} << "Generated shape is invalid for mesh '" << baseName << "', using default.";
+				TraceWarning{ClassId} << "Generated shape is invalid for mesh '" << meshName << "', using default.";
 
 				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
@@ -1055,7 +1027,7 @@ namespace EmEn::Scenes::Loaders
 				shape->computeTriangleNormal(false);
 				shape->computeVertexNormal();
 
-				TraceInfo{ClassId} << "Generated smooth normals for mesh '" << baseName << "' (not provided by FBX).";
+				TraceInfo{ClassId} << "Generated smooth normals for mesh '" << meshName << "' (not provided by FBX).";
 			}
 
 			uint32_t geometryFlags = EnableTangentSpace | EnablePrimaryTextureCoordinates;
@@ -1088,7 +1060,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( geometry == nullptr )
 			{
-				TraceWarning{ClassId} << "Failed to create geometry for mesh '" << baseName << "', using default.";
+				TraceWarning{ClassId} << "Failed to create geometry for mesh '" << meshName << "', using default.";
 
 				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
@@ -1188,7 +1160,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( renderable == nullptr )
 			{
-				TraceWarning{ClassId} << "Failed to create renderable for mesh '" << baseName << "', using default.";
+				TraceWarning{ClassId} << "Failed to create renderable for mesh '" << meshName << "', using default.";
 
 				renderable = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				allSuccess = false;

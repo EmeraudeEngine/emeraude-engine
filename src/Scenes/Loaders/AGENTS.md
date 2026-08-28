@@ -105,6 +105,46 @@ class Interface {
 
 **Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::SceneDataConsumer`.
 
+### The resource key — AN ASSET NAME IS NOT AN IDENTITY (fixed 2026-08-28)
+
+> [!CAUTION]
+> **The identity of a mesh, a material, a texture or an image is its INDEX in the asset, never
+> its name.** Neither glTF nor FBX imposes any uniqueness on names, and a resource container keyed
+> on the name alone returns the **first homonym to every later caller, silently**: the second mesh
+> named `Sphere` receives the first one's geometry **and its material**. Nothing is logged, no
+> error path is taken, and the result looks exactly like an un-wired material feature.
+
+Every loader therefore builds its keys through
+`buildResourceKey(prefix, category, assetName, assetIndex)` (`Interface.hpp`), which yields
+`{prefix}{Category}/{name}-{index}` — and the bare `{index}` when the asset declares no name, so
+unnamed items keep the key they always had. `USDLoader` already used that convention
+(`/mesh/<prim_name>-<index>`); `GLTFLoader` and `FBXLoader` were aligned onto it.
+
+**What the collapse cost, measured on the Khronos conformance assets (2026-08-28).** It had been
+mis-attributed for three bench runs to un-wired material extensions:
+
+| asset | duplicate names | what rendered |
+|---|---|---|
+| `ClearCoatTest` | `ClearCoatSampleMesh` **×18**, materials 0…17 | all eighteen cells wore material 0's red, and the `Base layer` / `Coated` / `Coating Only` columns were **literally the same renderable** |
+| `MetalRoughSpheresNoTextures` | `Sphere` ×98 | ninety-eight spheres, one material |
+| `SpecularTest` | `OneSample` ×20, `FiveSamples` ×3 | thirty-five spheres collapsed to five |
+| `TransmissionTest` | `Sphere` ×12, plus **three genuinely different** materials all named `BlueTransWithMask` | twelve identical spheres |
+| `TransmissionRoughnessTest` | `RoughnessSamples` ×6, **images** `RoughnessGrid` ×2 | the image layer aliases too |
+
+⚠️ `AnisotropyStrengthTest` and both iridescence models were **spared** — their meshes and
+materials are *unnamed*, so the index fallback already saved them. That is why their failures are
+genuinely un-wired extensions and must not be re-attributed to this defect.
+
+⚠️ **The colour space is part of the key, the addressing is not.** The `sRGB` flag is baked into a
+texture resource at creation and comes from the **usage**, not from the asset: the same image
+legitimately serves as an sRGB albedo for one material and as a linear roughness map for another.
+So one asset texture yields up to **two** engine resources, `…-srgb` and `…-data`, and the
+loaders' `m_textures` cache carries **two slots per texture index** for exactly that reason
+(it used to carry one, letting whichever usage resolved first impose its colour space on the
+other — latent, no bench asset exercises it). The wrap modes, on the other hand, belong to the
+asset texture itself: with the index in the key, each asset texture owns its own resource, so the
+old `-<U><V>` suffix became redundant and was removed.
+
 ### Axis flip — `swapX` / `swapY` / `swapZ` (added Aug 2026, **DELETED Aug 2026**)
 
 > [!CAUTION]
@@ -227,8 +267,10 @@ texel. Each loader owns the translation from its format's semantics:
   (measured on the Khronos `TextureTransformTest`). ⚠️ The addressing is baked into the sampler at
   creation, so it is part of the **resource identity**: two glTF textures may share an image AND a
   name while declaring different samplers, and the container returns the EXISTING resource for a
-  known name — the loader therefore appends a `-<U><V>` code to the texture resource name when the
-  modes are not the default. Same reasoning applies one level down to the sampler cache key
+  known name. The loader used to append a `-<U><V>` code to the texture resource name for that
+  reason; since 2026-08-28 the **glTF texture index** is in the key, so each asset texture owns
+  its own resource and the suffix was **removed as redundant** (see *The resource key — an asset
+  name is not an identity*). Same reasoning applies one level down to the sampler cache key
   ([`Graphics/AGENTS.md`](../../Graphics/AGENTS.md) § "The identifier IS the sampler cache key").
   ⚠️ Still NOT read from the sampler: `magFilter` / `minFilter`, which stay driven by the global
   `Core/Graphics/Texture/*Filtering` settings — a known gap, and the reason an asset that disables
@@ -369,7 +411,9 @@ Loads glTF 2.0 / GLB files. Uses `fastgltf` library (vendored, static).
 
 Phases 4-5 skipped when `skipSkinning = true`.
 
-**Resource naming:** `glTF:{stem}/{Category}/{name}` (e.g., `glTF:Fox/Mesh/fox1`)
+**Resource naming:** `glTF:{stem}/{Category}/{name}-{index}` (e.g., `glTF:Fox/Mesh/fox1-0`; an
+unnamed item keeps the bare `glTF:{stem}/{Category}/{index}`). Textures add `-srgb` / `-data`.
+⚠️ The trailing index is **load-bearing**, not decoration — see *The resource key* above.
 
 #### CUBICSPLINE — the output accessor has a STRIDE OF THREE (fixed Aug 2026)
 
@@ -689,7 +733,11 @@ The dislocation bug from étape 4 is **resolved on recent FBX exports**: the Pal
 **Known FBX-exporter quirk — Maya 2022 USD Preview Surface:**
 Maya's USD → FBX converter drops all texture connections. The material still exists under its USD name (`usdPreviewSurface_*`) but `shader_type = UFBX_SHADER_FBX_LAMBERT`, `mat.textures.count = 0`, and all `pbr.base_color.texture` pointers are null. **Not a loader bug** — the texture data is absent from the FBX binary. Blender/Max exports preserve texture connections correctly.
 
-**Resource naming:** `FBX:{stem}/{Category}/{name}` (e.g., `FBX:X Bot/Material/Alpha_Body_MAT`)
+**Resource naming:** `FBX:{stem}/{Category}/{name}-{index}` (e.g.,
+`FBX:X Bot/Material/Alpha_Body_MAT-0`), textures adding `-srgb` / `-data`. ⚠️ Duplicate names are
+*ordinary* in FBX — every instance of an authored object carries the same one — so the index is
+what keeps two instances from sharing one renderable; see *The resource key* above. The unnamed
+fallback is now the **loop index**, no longer `mesh.element_id`.
 
 **Recette assets** (demo `./projet-alpha --load-demo fbx-loader`):
 - **Option 0 — Mixamo X Bot** (`data/data-stores/FBX/Mixamo/X Bot.fbx`): validates materials color path, skinning pipeline (2 skin deformers + 2 meshes), animation clip construction (2 anim stacks). **Still exhibits the legacy dislocation bug** — kept as a regression marker.
@@ -1082,4 +1130,5 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
 3. **Default resource on every error path** — never leave a nullptr slot
 4. **No axis conversion here — and none in the consumer either.** The engine world is Y-up (`+X` right, `+Y` up, `-Z` forward), which is exactly what glTF, USD and FBX carry, so the import is the IDENTITY. The old 180° X rotation and the per-asset `swapX/swapY/swapZ` flip are **both deleted**; read *Axis flip* above before considering either.
 5. **Never add a triangle winding swap** — glTF, FBX and USD keep the authored winding verbatim (with `computeTriangleNormal(false)`). The unconditional swap they used to carry was a mirror compensation; re-adding one renders every face inside-out. `WADLoader` is the documented exception, because its bake genuinely negates Z.
-6. **If an asset looks mirrored, MEASURE before compensating** — the cause is not in the loaders. Protocol in [`docs/coordinate-system.md`](../../../docs/coordinate-system.md).
+6. **Key every resource on the asset INDEX, through `buildResourceKey()`** — a glTF or FBX name is not unique and never was an identity. Keying on the name alone hands the first homonym's geometry AND material to every later one, silently; it cost three bench runs of mis-attribution. See *The resource key* above.
+7. **If an asset looks mirrored, MEASURE before compensating** — the cause is not in the loaders. Protocol in [`docs/coordinate-system.md`](../../../docs/coordinate-system.md).

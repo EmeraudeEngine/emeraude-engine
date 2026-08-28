@@ -647,18 +647,9 @@ namespace EmEn::Scenes::Loaders
 		{
 			const auto & glTFImage = asset.images[imageIndex];
 
-			std::string name;
-			name.reserve(m_resourcePrefix.size() + 7 + glTFImage.name.size());
-			name = m_resourcePrefix;
-			name += "Image/";
-			if ( glTFImage.name.empty() )
-			{
-				name += std::to_string(imageIndex);
-			}
-			else
-			{
-				name.append(glTFImage.name.data(), glTFImage.name.size());
-			}
+			/* ⚠️ Keyed on the INDEX, not on the name: TransmissionRoughnessTest carries two
+			 * different images both named 'RoughnessGrid'. See buildResourceKey(). */
+			const auto name = buildResourceKey(m_resourcePrefix, "Image/", {glTFImage.name.data(), glTFImage.name.size()}, imageIndex);
 
 			/* Builds the right kind of resource from an encoded blob : a KTX2 container
 			 * (KHR_texture_basisu) goes to a CompressedImageResource and stays block-compressed all
@@ -847,18 +838,9 @@ namespace EmEn::Scenes::Loaders
 		{
 			const auto & glTFMaterial = asset.materials[materialIndex];
 
-			std::string name;
-			name.reserve(m_resourcePrefix.size() + 10 + glTFMaterial.name.size());
-			name = m_resourcePrefix;
-			name += "Material/";
-			if ( glTFMaterial.name.empty() )
-			{
-				name += std::to_string(materialIndex);
-			}
-			else
-			{
-				name.append(glTFMaterial.name.data(), glTFMaterial.name.size());
-			}
+			/* ⚠️ Keyed on the INDEX, not on the name: TransmissionTest carries three genuinely
+			 * different materials all named 'BlueTransWithMask'. See buildResourceKey(). */
+			const auto name = buildResourceKey(m_resourcePrefix, "Material/", {glTFMaterial.name.data(), glTFMaterial.name.size()}, materialIndex);
 
 			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand. */
 			const auto resolveTexture = [&] (size_t textureIndex, bool sRGB = false) -> std::shared_ptr< TextureResource::Texture2D > {
@@ -867,10 +849,17 @@ namespace EmEn::Scenes::Loaders
 					return nullptr;
 				}
 
-				/* Return cached texture if already created. */
-				if ( m_textures[textureIndex] != nullptr )
+				/* Return cached texture if already created.
+				 * ⚠️ TWO slots per glTF texture, selected by the colour space. The sRGB flag is
+				 * baked into the resource at creation and comes from the USAGE, not from the
+				 * asset: the same image legitimately serves as an sRGB albedo for one material
+				 * and as a linear data map for another. Caching on the texture index alone let
+				 * whichever usage resolved FIRST impose its colour space on the other. */
+				const auto colourSpaceSlot = sRGB ? 1U : 0U;
+
+				if ( m_textures[textureIndex][colourSpaceSlot] != nullptr )
 				{
-					return m_textures[textureIndex];
+					return m_textures[textureIndex][colourSpaceSlot];
 				}
 
 				const auto & glTFTexture = asset.textures[textureIndex];
@@ -916,31 +905,15 @@ namespace EmEn::Scenes::Loaders
 					wrapV = toWrapMode(glTFSampler.wrapT);
 				}
 
-				/* Build texture resource name. */
-				std::string texName;
-				texName.reserve(m_resourcePrefix.size() + 12 + glTFTexture.name.size());
-				texName = m_resourcePrefix;
-				texName += "Texture/";
-				if ( glTFTexture.name.empty() )
-				{
-					texName += std::to_string(textureIndex);
-				}
-				else
-				{
-					texName.append(glTFTexture.name.data(), glTFTexture.name.size());
-				}
-
-				/* ⚠️ The addressing is baked into the sampler at creation, so it is part of the
-				 * resource's identity: two glTF textures may share an image AND a name while
-				 * declaring different samplers, and the container returns the EXISTING resource
-				 * for a known name — the first one loaded would impose its addressing on the
-				 * other. Only non-default modes extend the name, so existing assets keep theirs. */
-				if ( wrapU != TextureResource::WrapMode::Repeat || wrapV != TextureResource::WrapMode::Repeat )
-				{
-					texName += '-';
-					texName += TextureResource::wrapModeCode(wrapU);
-					texName += TextureResource::wrapModeCode(wrapV);
-				}
+				/* Build texture resource name.
+				 * ⚠️ The index makes the key unique per glTF texture — a name is not an identity
+				 * — which also settles the addressing: each glTF texture owns exactly one
+				 * sampler, so its wrap modes can no longer leak into a homonym's resource. The
+				 * colour space, on the other hand, is NOT a property of the glTF texture but of
+				 * the usage, so it must stay part of the key: one glTF texture legitimately
+				 * yields two engine resources. Same convention as the USD loader. */
+				std::string texName = buildResourceKey(m_resourcePrefix, "Texture/", {glTFTexture.name.data(), glTFTexture.name.size()}, textureIndex);
+				texName += sRGB ? "-srgb" : "-data";
 
 				auto texture = m_resources.container< TextureResource::Texture2D >()
 					->getOrCreateResource(texName, [image, compressedImage, sRGB, wrapU, wrapV] (auto & textureResource) {
@@ -961,7 +934,7 @@ namespace EmEn::Scenes::Loaders
 						return textureResource.load(image);
 					});
 
-				m_textures[textureIndex] = texture;
+				m_textures[textureIndex][colourSpaceSlot] = texture;
 
 				return texture;
 			};
@@ -1338,32 +1311,14 @@ namespace EmEn::Scenes::Loaders
 		{
 			const auto & glTFMesh = asset.meshes[meshIndex];
 
-			const auto suffixSize = (glTFMesh.name.empty() ? size_t{4} : glTFMesh.name.size()) + flipKey.size();
+			/* ⚠️⚠️ Keyed on the INDEX, not on the name. This is the defect that made the whole
+			 * ClearCoatTest grid render material 0's red: eighteen meshes named
+			 * 'ClearCoatSampleMesh', eighteen different materials, ONE renderable resource
+			 * handed to all of them — geometry and material alike. See buildResourceKey(). */
+			const std::string_view glTFMeshName{glTFMesh.name.data(), glTFMesh.name.size()};
 
-			std::string geoName;
-			geoName.reserve(m_resourcePrefix.size() + 10 + suffixSize);
-			geoName = m_resourcePrefix;
-			geoName += flipKey;
-			geoName += "Geometry/";
-
-			std::string meshName;
-			meshName.reserve(m_resourcePrefix.size() + 6 + suffixSize);
-			meshName = m_resourcePrefix;
-			meshName += flipKey;
-			meshName += "Mesh/";
-
-			if ( glTFMesh.name.empty() )
-			{
-				const auto indexString = std::to_string(meshIndex);
-
-				geoName += indexString;
-				meshName += indexString;
-			}
-			else
-			{
-				geoName.append(glTFMesh.name.data(), glTFMesh.name.size());
-				meshName.append(glTFMesh.name.data(), glTFMesh.name.size());
-			}
+			const auto geoName = buildResourceKey(m_resourcePrefix + flipKey, "Geometry/", glTFMeshName, meshIndex);
+			const auto meshName = buildResourceKey(m_resourcePrefix + flipKey, "Mesh/", glTFMeshName, meshIndex);
 
 			/* Phase 1: Build shape using direct vector access (OBJ-style, no per-element reallocation).
 			 * First pass: count total vertices and triangles to pre-allocate. */
