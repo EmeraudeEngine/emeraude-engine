@@ -567,9 +567,28 @@ consumer could not tell "nothing came" from "someone sent me an empty datagram".
   datagram's sender as if it had just arrived.
 
 Related, same sitting: the sender-address fill was gated on `bytesRead > 0`, so a legitimately
-received zero-length datagram came back with an **empty sender**. Now `>= 0` — a zero-length
-datagram is a datagram and has a sender. Measured: timeout → `timedOut=true`, address empty;
-0-byte datagram → `timedOut=false`, `127.0.0.1:64934`.
+received zero-length datagram came back with an **empty sender**.
+
+⚠️⚠️ **But `>= 0` alone is wrong too, and it invents an arrival — a return of 0 has TWO causes.**
+A real zero-length datagram carries a sender the kernel filled in; a **wake-up** (a `close()` from
+another thread making the descriptor readable) returns 0 with `sender` left **untouched**, i.e. still
+zero-initialised. Filling unconditionally published that as *"a datagram from `0.0.0.0:0`"* — a
+plausible-looking sender that never existed, reported as neither a timeout nor an error. That was a
+regression introduced by the zero-length fix itself, and the sixth door onto the same class of bug in
+one day; the Linux instance caught it.
+
+`sin_port` is the discriminator: **port 0 is reserved and can never be a real UDP source**, so a
+non-zero port means the kernel wrote the address. `m_closing` is the known cause of the other case,
+but the structural check also covers any path where the stack returns 0 without filling the sender.
+Both overloads now report that case as `timedOut` and leave the sender empty.
+
+Measured, the three outcomes of a 0-byte return:
+
+| Case | `timedOut` | sender |
+|---|---|---|
+| Timeout, no traffic | `true` | empty |
+| Real zero-length datagram | `false` | `127.0.0.1:50186` |
+| `close()` waking a parked `receive()` | `true` | empty |
 
 ⚠️ `receiveString()` **cannot** express the difference (both give an empty string) and says so in its
 documentation. Use the buffer overload when it matters.

@@ -709,8 +709,32 @@ namespace EmEn::Net
 			&senderLen
 		);
 
-		/* >= 0, not > 0: a zero-length datagram IS a datagram and has a sender. Gating on > 0
-		 * left the caller with an empty address for something that genuinely arrived. */
+		/* ⚠️ A return of 0 has TWO causes and they must not be merged.
+		 *
+		 * A real zero-length datagram (legal in UDP) comes with a sender the kernel filled in.
+		 * A wake-up - close() from another thread making the descriptor readable - returns 0 with
+		 * `sender` LEFT UNTOUCHED, i.e. still zero-initialised. Gating the fill on `bytesRead > 0`
+		 * hid both; gating it on `>= 0` alone published the second one as "a datagram from
+		 * 0.0.0.0:0" - a plausible-looking sender that never existed, and neither a timeout nor an
+		 * error. That phantom arrival was a regression introduced by the zero-length fix itself.
+		 *
+		 * `sin_port` is the reliable test: port 0 is reserved and can never be a real UDP source,
+		 * so a non-zero port means the kernel wrote the address. `m_closing` is the known cause of
+		 * the other case, but the structural check also covers any path where the stack returns 0
+		 * without filling the sender. */
+		const auto senderFilled = sender.sin_port != 0;
+
+		if ( bytesRead == 0 && !senderFilled )
+		{
+			/* Nothing arrived, whatever woke us. Terminal, and reported as such. */
+			if ( timedOut != nullptr )
+			{
+				*timedOut = true;
+			}
+
+			return 0;
+		}
+
 		if ( bytesRead >= 0 )
 		{
 			std::array< char, INET_ADDRSTRLEN > addrStr{};
@@ -946,7 +970,16 @@ namespace EmEn::Net
 		const auto bytesRead = static_cast< int >(received);
 #endif
 
-		/* >= 0: same reason as the plain overload - a zero-length datagram has a sender. */
+		/* Same two-causes-for-zero problem as the plain overload: a wake-up returns 0 with an
+		 * untouched `sender`, and publishing it as 0.0.0.0:0 invents an arrival. */
+		if ( bytesRead == 0 && sender.sin_port == 0 )
+		{
+			info = {};
+			info.timedOut = true;
+
+			return 0;
+		}
+
 		if ( bytesRead >= 0 )
 		{
 			info.senderAddress = toDottedDecimal(sender.sin_addr);
