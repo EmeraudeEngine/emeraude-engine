@@ -293,6 +293,33 @@ typed `getResource()`.
    only traced — the resource stayed non-terminal forever. It is now failed explicitly, with a
    message telling the caller to ask asynchronously.
 
+### ⚠️⚠️ A container binds to its store ONCE, so `getLocalStore()` must never return null
+
+`onInitialize()` runs the boot-time discovery (dynamic scan, or the JSON indexes) and **then**
+registers every container with `this->getLocalStore("<StoreName>")`. That `shared_ptr` is captured
+in `Container::m_localStore` and kept for the container's whole life — there is no rebinding, ever.
+
+Until 2026-08-28 `getLocalStore()` returned `nullptr` for a store the discovery had not produced,
+and the consequence was silent and total:
+
+- Every container born with a null store answers `availableResourceNames()` with `{}` and
+  `isResourceAvailable()` with `false`, permanently.
+- A later `Manager::update(root)` — which is exactly what `Core::openFiles()` does with a resource
+  index — hits `if ( !m_localStores.contains(storeName) )`, creates a **brand new** map under that
+  name, and registers the resources into it. The manager sees them. No container ever will.
+- Nothing logs anything. `Core.openFiles` reports success, `listResources` returns `[]`, and the
+  natural conclusion is that the loader or the network is broken.
+
+**This is not an edge case for an embedding application.** It bites any host whose data directories
+contain no store sub-directory — app_system has none, so on it **all 34 containers were sterile and
+the whole runtime `update()` path was dead**. Found while running the `ExternalData` fixture on
+macOS (`app_system/tools/external-data-check/`), where it is platform-independent: Linux and Windows
+were equally affected and simply had not run that path yet.
+
+`getLocalStore()` now creates the store when absent and is documented as never returning null. The
+cost is one empty map per store name; the benefit is that `update()` works at runtime, which is what
+it exists for.
+
 ## Async Lambda Capture Safety (CRITICAL)
 
 > [!CRITICAL]

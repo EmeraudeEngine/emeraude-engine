@@ -51,6 +51,15 @@ enum NotificationCode { DownloadingStarted, FileDownloaded, DownloadingFinished,
    (`BadScheme`, `Unreachable`, `TLSFailure`, `Timeout`, `Protocol`, `HTTPStatus`, `LocalIO`) plus
    the HTTP status when the exchange completed. `status(ticket)` prints them. A bare "Error" could
    not tell a 404 from an expired certificate, and neither could the consumer.
+   ⚠️ **`TLSFailure` was never actually produced until 2026-08-28** — the value existed, was
+   documented, had a `to_cstring()` entry, and nothing in `HTTPSClient.cpp` ever set it: an expired
+   certificate came back as `Unreachable`, because `TLSConnection::connect()` collapses "TCP never
+   reached" and "handshake refused" into one bool and the caller labelled both the same. That is the
+   exact distinction the enum's own comment says it exists for — a caller retries `Unreachable` and
+   must never retry a refused certificate. `TLSConnection::handshakeRefused()` now reports which
+   phase failed, and `HTTPSClient` maps it. Measured on macOS through the whole chain: the console
+   prints `failed: TLSFailure` where it printed `failed: Unreachable` the run before, with the same
+   `certificate verify failed` line from `Network::TLSConnection` above it.
 
 1. **One code path for the consumer.** `download(url)` always returns a ticket to wait on. A URL
    already in the cache, a URL already in flight (shared ticket) and a fresh transfer all end the
@@ -164,6 +173,19 @@ Console check of the whole chain: drop a store JSON with an `ExternalData` entry
 (`Core.openFiles("/abs/path/store.json")`), then
 `Core.ResourcesManagerService.loadResource(ImageResource, MyPicture)` and poll
 `Core.ResourcesManagerService.resourceStatus(ImageResource, MyPicture)` until `Loaded`.
+
+⚠️ Do not improvise that check — use the replayable fixture,
+`app_system/tools/external-data-check/`, which pins one store, three resources (nominal, expired
+certificate, cleartext) and the same command sequence on the three OSes. Improvising it is how the
+two defects below stayed hidden:
+
+- **`Core.openFiles` on a store whose store name did not exist at boot registered resources no
+  container could ever see** (`Resources::Manager::getLocalStore()` returned null, and a container
+  binds its store once). On a host with no store directories — app_system — *every* container was
+  sterile, so this whole chain was unreachable while reporting success. Fixed engine-side; see
+  [`Resources/AGENTS.md`](../Resources/AGENTS.md) § *A container binds to its store ONCE*.
+- **`TLSFailure` was reported as `Unreachable`** (above), which made the fixture's own
+  discriminator for "is the trust store really refusing?" unusable.
 
 ## Web API client (`Net::APIClient`)
 

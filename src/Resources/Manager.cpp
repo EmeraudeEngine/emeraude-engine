@@ -109,14 +109,23 @@ namespace EmEn::Resources
 	std::shared_ptr< std::unordered_map< std::string, BaseInformation > >
 	Manager::getLocalStore (const std::string & storeName) noexcept
 	{
+		/* NOTE: Create the store when it does not exist yet, NEVER return null.
+		 * Containers capture this shared_ptr once, at registration, and keep it
+		 * for their whole life. Returning null for a store the boot-time scan
+		 * happened not to produce left the container permanently sterile: a
+		 * later update() - which is what Core::openFiles() on a resource index
+		 * calls - would then create a BRAND NEW map under that name, visible to
+		 * the manager and to nothing else. The resources registered fine and
+		 * were unreachable, with no error anywhere. An empty store shared from
+		 * the start costs one allocation and keeps the runtime path working. */
 		const auto it = m_localStores.find(storeName);
 
-		if ( it == m_localStores.cend() )
+		if ( it != m_localStores.cend() )
 		{
-			return nullptr;
+			return it->second;
 		}
 
-		return it->second;
+		return m_localStores[storeName] = std::make_shared< std::unordered_map< std::string, BaseInformation > >();
 	}
 
 	void

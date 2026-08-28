@@ -443,10 +443,13 @@ namespace EmEn::Resources
 			 * with their data sources.
 			 *
 			 * @param storeName The name of the store to retrieve (e.g., "Images", "Sounds", "Meshes").
-			 * @return Shared pointer to the store's resource map, or nullptr if the store doesn't exist.
+			 * @return Shared pointer to the store's resource map. Never null.
 			 *
 			 * @warning This method must be called while holding the m_localStoresAccess mutex lock.
-			 * @note Returns nullptr for non-existent stores without logging an error.
+			 * @note Creates the store when absent, so a container is always bound to a live map.
+			 * It must never return null: a container captures this pointer once and keeps it, so a
+			 * null binding would make every later update() invisible to it - the resources would
+			 * register in a fresh map nothing reads, silently.
 			 *
 			 * @see onInitialize() Where this method is used to connect containers to stores.
 			 *
