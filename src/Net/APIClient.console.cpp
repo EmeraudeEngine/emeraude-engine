@@ -213,7 +213,7 @@ namespace EmEn::Net
 				json << R"(,"httpStatus":)" << this->responseStatusCode(ticket)
 					<< R"(,"contentType":")" << escapeJSON(this->responseHeader(ticket, "Content-Type")) << '"'
 					<< R"(,"bodyBytes":)" << body.size()
-					<< R"(,"jsonParsed":)" << ( [this, ticket] { Json::Value value; return this->responseJSON(ticket, value) ? "true" : "false"; }() )
+					<< R"(,"jsonParsed":)" << [this, ticket] { Json::Value value; return this->responseJSON(ticket, value) ? "true" : "false"; }()
 					<< R"(,"body":")" << escapeJSON(body) << '"';
 			}
 
